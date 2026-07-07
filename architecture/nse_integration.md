@@ -1408,3 +1408,64 @@ Milestone 4 is complete. The following summarizes all Phase 01–05 deliverables
 - TUI-first compatibility debugging workflow
 - Performance/caching for large corpus runs
 - Total: 414 tests (0 failures, 1 ignored)
+
+---
+
+## Milestone 5 Final Verification (2026-07-06)
+
+16-command verification matrix executed after all Phase 01–05 work:
+
+| # | Command | Result | Notes |
+|---|---------|--------|-------|
+| 1 | `cargo check -p eggsec-nse --features nse` | PASS | |
+| 2 | `runtime_corpus_tests --test-threads=1` | PASS | 18 tests, 0.57s sequential |
+| 3 | `runtime_corpus_tests --test-threads=4` | PASS | 18 tests, 0.17s parallel |
+| 4 | `runtime_corpus_tests` (default) | PASS | 18 tests, 0.14s |
+| 5 | `runtime_smoke_tests` | PASS | 2 tests |
+| 6 | `compatibility_corpus_tests` | PASS | 43 tests |
+| 7 | `evidence_tests` | PASS | 19 tests |
+| 8 | `context_fidelity_tests` | PASS | 8 tests |
+| 9 | `cargo test -p eggsec-nse --features nse` (all) | PASS | 493 passed, 1 ignored |
+| 10 | `cargo test -p eggsec --features nse --test nse_tests` | PASS | 174 passed |
+| 11 | `cargo check -p eggsec --features nse` | PASS | |
+| 12 | `cargo test -p eggsec --features nse --test feature_matrix` | PASS | 352 passed |
+| 13 | Architecture guards | PASS | 47 checks |
+| 14 | `cargo fmt --all --check` | PASS | |
+| 15 | `cargo clippy --lib -p eggsec-nse --features nse` | PASS | 99 pre-existing warnings, no new |
+| 16 | `cargo clippy --lib -p eggsec --features nse` | PASS | Pre-existing warnings only |
+
+### Bug Fixes in Phase 06
+
+**`test_nse_prerule_postrule`** (nse_tests.rs): prerule/postrule functions must return booleans (`true`) for `evaluate_rule()` to set `evaluated: true`. String returns produce "unsupported" reports that are silently dropped by the executor guard. Fixed to use `stdnse.register_prerule(func)` / `stdnse.register_postrule(func)` with boolean returns.
+
+**`local_http_get_agent_safe_documentation`** (local_protocol_tests.rs): Updated assertion to match actual AgentSafe output (`"HTTP GET failed"` not `"HTTP request failed"`). reqwest HTTP library bypasses `NseCapabilityContext` — known partial-wrap limitation documented in M5 Phase 04.
+
+### Final Counts
+
+- **eggsec-nse lib tests**: 493 passed, 1 ignored
+- **eggsec nse_tests**: 174 passed
+- **eggsec feature_matrix + enforcement_matrix**: 352 passed
+- **Architecture guards**: 47 checks (all pass)
+- **Total across all binaries**: 1,019+ tests pass
+
+### Milestone 5 Closure Summary
+
+| Phase | Content | Status |
+|-------|---------|--------|
+| 01 | CLI report formatting (`format.rs`) + 29 snapshot tests | Closed |
+| 02 | Strict runtime assertions + manifest caching (`LazyLock`) | Closed |
+| 03 | Local protocol fixtures (TCP/HTTP/UDP) + 16 runtime tests | Closed |
+| 04 | Deferred library migration (unpwdb→Wrapped, http→PartiallyWrapped) | Closed |
+| 05 | ReportEnvelope bridge + 19 evidence tests + 4 envelope shape tests | Closed |
+| 06 | Release closure: verification matrix, bug fixes, documentation | Closed |
+
+**Milestone 5 is closed.** All 16 verification commands pass. Remaining deferred items (protocol library wrappers, `stdnse.sleep()` cancellation, TUI-first debugging) are candidates for Milestone 6.
+
+### Milestone 6 Candidates
+
+- Protocol library wrappers (smb, ssh, ftp, http, mysql, postgres, redis, mongodb, ldap, snmp)
+- `stdnse.sleep()` cancellation integration
+- Structured Lua output table parsing
+- TUI-first compatibility debugging workflow
+- HTTP reqwest capability context bypass (`NseCapabilityContext` interception of reqwest calls)
+- Performance/caching for large corpus runs

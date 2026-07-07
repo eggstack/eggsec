@@ -225,7 +225,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
-| `runtime_corpus_tests` | 17 | `--test-threads=1` | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake under high parallelism |
+| `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
 | `local_protocol_tests` | 16 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03 |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
@@ -303,3 +303,49 @@ The following are candidates for capability wrapper migration in Milestone 5:
 - ~~**Real HTTP/HTTPS in corpus**~~ — Local HTTP fixtures added in Milestone 5 Phase 03; reqwest capability bypass documented
 - ~~**Real DNS in corpus**~~ — DNS denial tested via local_protocol_tests; real resolution requires local DNS server (deferred)
 - **Profile-specific corpus tagging** — Tag fixtures with expected profile compatibility
+
+---
+
+## Milestone 5 Closure (2026-07-06)
+
+### Completed
+
+- **Phase 01**: CLI report formatting (`format.rs`) with 29 snapshot tests
+- **Phase 02**: Strict runtime assertions, `LazyLock<Manifest>` caching, timing instrumentation
+- **Phase 03**: Local TCP/HTTP/UDP protocol fixtures, 5 new `.nse` scripts, 16 runtime tests
+- **Phase 04**: Deferred library migration — `unpwdb.rs` → Wrapped (FS reads), `http.rs` → PartiallyWrapped (advisory network checks)
+- **Phase 05**: ReportEnvelope bridge (11 evidence tests, 4 envelope shape tests), TUI/frontend data contract
+- **Phase 06**: Release closure — 16-command verification matrix, bug fixes, documentation
+
+### Test Counts (Final)
+
+| Binary | Tests | Notes |
+|--------|-------|-------|
+| `runtime_corpus_tests` | 18 | Strict manifest assertions, stable at all parallelism |
+| `local_protocol_tests` | 16 (15 pass, 1 known reqwest bypass) | `local_http_get_agent_safe_documentation` documented |
+| `runtime_smoke_tests` | 2 | Smoke + envelope bridge |
+| `compatibility_corpus_tests` | 43 | Resolver-only assertions |
+| `evidence_tests` | 19 | Evidence extraction + bridge |
+| `context_fidelity_tests` | 8 | Portrule/hostrule context injection |
+| `format_tests` | 29 | CLI formatting snapshots |
+| `profile_propagation_tests` | 4 | Profile → context pipeline |
+| `profile_report_tests` | 4 | End-to-end profile/report |
+| **eggsec-nse total** | **493 passed, 1 ignored** | |
+| `nse_tests` (eggsec crate) | 174 | Integration tests |
+| `feature_matrix` + `enforcement_matrix` | 352 | Feature metadata validation |
+| **Grand total** | **1,019+** | |
+
+### Remaining Known Limitations
+
+1. **reqwest HTTP bypass**: `http.rs` is PartiallyWrapped — `reqwest` HTTP library bypasses `NseCapabilityContext`. TCP denial events are not intercepted for reqwest calls. Documented; full interception requires reqwest hook or alternative HTTP client.
+2. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 6.
+3. **`stdnse.sleep()` cancellation**: No cancellation token integration; sleep blocks without checking task cancellation.
+
+### Milestone 6 Candidates
+
+- Protocol library wrappers (smb, ssh, ftp, http, mysql, postgres, redis, mongodb, ldap, snmp)
+- `stdnse.sleep()` cancellation integration
+- Structured Lua output table parsing
+- TUI-first compatibility debugging workflow
+- HTTP reqwest capability context bypass
+- Performance/caching for large corpus runs

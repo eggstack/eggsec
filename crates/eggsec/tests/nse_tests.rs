@@ -281,7 +281,7 @@ mod tests {
         "#,
         );
         assert!(result.is_ok());
-        let (output, _) = result.unwrap();
+        let (output, _, _rule_reports) = result.unwrap();
         assert!(output.contains("Test action executed"));
     }
 
@@ -290,24 +290,34 @@ mod tests {
         let mut executor = NseExecutor::new().unwrap();
         let result = executor.run_script_with_rules(
             r#"
-            local nmap = require "nmap"
             local stdnse = require "stdnse"
-            
-            stdnse.register_prerule(function()
-                return "prerule executed"
+            local nmap = require "nmap"
+
+            -- Rules must return booleans. A string return is treated as
+            -- "unsupported" by evaluate_rule and silently dropped.
+            stdnse.register_prerule(function(host)
+                return true
             end)
-            
-            stdnse.register_postrule(function()
-                return "postrule executed"
+
+            stdnse.register_postrule(function(host)
+                return true
             end)
-            
-            return "Script loaded"
+
+            stdnse.action(function(host, port)
+                return "test action"
+            end)
         "#,
         );
         assert!(result.is_ok());
-        let (output, _) = result.unwrap();
-        assert!(output.contains("prerule executed"));
-        assert!(output.contains("postrule executed"));
+        let (_output, _, rule_reports) = result.unwrap();
+        assert!(
+            rule_reports.len() >= 2,
+            "prerule and postrule should produce rule evaluation reports, got {}",
+            rule_reports.len()
+        );
+        let kinds: Vec<_> = rule_reports.iter().map(|r| r.kind.as_str()).collect();
+        assert!(kinds.contains(&"prerule"), "should have prerule report");
+        assert!(kinds.contains(&"postrule"), "should have postrule report");
     }
 
     #[test]

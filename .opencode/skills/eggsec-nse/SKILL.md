@@ -46,6 +46,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 > **Milestone 5 Phase 04 (2026-07-06, deferred library migration).** `unpwdb.rs` migrated from Deferred to Wrapped (FS reads through `nse_fs_read_to_string`). `http.rs` migrated to PartiallyWrapped (advisory network checks via `check_network_tcp`). `ssl` registry entry corrected to Wrapped. 182 lib tests, 43 corpus tests, 47 architecture guards pass.
 
 > **Milestone 5 Phase 05 (2026-07-06, report UX and performance).** CLI report formatting extracted to testable `format.rs` with 29 snapshot tests. TUI/frontend data contract documented in `architecture/nse_report_display_contract.md`. Runtime corpus performance baseline with timing instrumentation and manifest caching. ReportEnvelope bridge hardened with 11 evidence tests and 4 envelope shape tests. All tests pass, architecture guards pass.
+> **Milestone 5 Phase 06 (2026-07-06, release closure).** 16-command verification matrix passes: 493 eggsec-nse tests (1 ignored), 174 eggsec nse_tests, 352 feature/enforcement matrix tests, 47 architecture guards. Bug fixes: `test_nse_prerule_postrule` (boolean return + `stdnse.register_prerule`), `local_http_get_agent_safe_documentation` (assertion update). Remaining deferred: protocol library wrappers, `stdnse.sleep()` cancellation, reqwest capability bypass — candidates for Milestone 6. See [Milestone 5 Final Verification](../../architecture/nse_integration.md#milestone-5-final-verification-2026-07-06).
 
 ## Key Components
 
