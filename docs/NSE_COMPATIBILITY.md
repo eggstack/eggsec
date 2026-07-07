@@ -238,6 +238,35 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 ---
 
+## Report UX
+
+### CLI Human-Readable Output
+
+The CLI produces human-readable output via `format_human_report()` in `crates/eggsec-nse/src/format.rs`. The formatter is testable independently of terminal rendering.
+
+**Sections rendered:**
+1. **Header** — target, script, source, profile, elapsed
+2. **Compatibility** — UPPERCASE status (COMPATIBLE, PARTIAL, FAILED, etc.), fidelity with `~` prefix for non-Full
+3. **Rule Evaluation** — per-rule kind, matched/no-match/not-evaluated, exactness, summary
+4. **Libraries** — per-library name, category, loaded/registered/unregistered, side effects, warnings
+5. **Capability Denials** — `[!]` prefix, kind, target, reason
+6. **Evidence** — `[kind]` title, confidence, summary
+7. **Errors** — `- error` list
+8. **Warnings** — `[*] warn` list
+9. **Raw Output** — truncated at 20 lines with `--json for full output` hint
+
+**JSON output** serializes `NseRunReport` directly via `serde_json::to_string_pretty()`.
+
+### TUI/Frontend Data Contract
+
+The display model for TUI and future frontends is defined in `architecture/nse_report_display_contract.md`. It maps `NseRunReport` fields to 7 display sections without forcing immediate implementation. The contract references structured fields, not raw prose parsing. TUI implementation can consume `NseRunReport` or `ReportEnvelope` directly.
+
+### ReportEnvelope Bridge
+
+`bridge.rs` maps `NseRunReport` → `ReportEnvelope` for cross-domain report aggregation. Each `NseEvidenceItem` maps to a `FindingRecord` with associated `EvidenceItem`. Capability denials are informational (`Severity::Info`), not target vulnerabilities. The bridge is tested by 11 evidence tests and 4 envelope shape tests.
+
+---
+
 ## Milestone 5 Candidates
 
 The following are candidates for capability wrapper migration in Milestone 5:

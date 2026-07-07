@@ -645,14 +645,55 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
 
 **Verification:** 0 compilation errors, 27 registry tests pass.
 
+### Milestone 5 Phase 05: Report UX and Runtime Performance (2026-07-06)
+
+**Status:** Complete
+
+Phase 05 polished user-facing report output and improved runtime corpus usability.
+
+#### WS1: CLI Report Formatting
+
+- Created `crates/eggsec-nse/src/format.rs` — testable `format_human_report()` returning `String`
+- Created `crates/eggsec-nse/tests/format_tests.rs` — 29 snapshot-lite tests asserting headings, status labels, visual markers
+- Rewrote `print_human_report()` to delegate to formatter; fixed unused `target_str` bug
+- Visual improvements: UPPERCASE status labels, `[!]` prefix for denials, `[*]` prefix for warnings, `~` prefix for approximate fidelity
+
+#### WS2: TUI/Frontend Data Contract
+
+- Created `architecture/nse_report_display_contract.md` — structured display model mapping `NseRunReport` fields to 7 display sections (Summary, Rules, Libraries, Capability Denials, Evidence, Raw Output, Diagnostics)
+- Defines `ReportEnvelope` mapping for cross-domain aggregation
+- Color/semantic mapping for status and fidelity levels
+
+#### WS3: Runtime Corpus Performance Baseline
+
+- Added `TimingEntry` struct and thread_local timing side channel to `runtime_corpus_tests.rs`
+- Added `corpus_runtime_performance_baseline` test logging per-fixture timing and top 5 slowest
+- Added `LazyLock<Manifest>` for manifest caching (avoids repeated TOML parsing)
+- Replaced all 10 `load_manifest()` calls with `get_manifest()`
+
+#### WS4: Performance Improvements
+
+- Manifest parsed once via `LazyLock` for entire test binary lifetime
+- Per-fixture executor isolation preserved (unique temp dirs via `AtomicU32` counter)
+
+#### WS5: ReportEnvelope Bridge Hardening
+
+- Extended `tests/evidence_tests.rs` (363→693 lines) — 7 new bridge tests: compatible/partial envelopes, denial severity, rule-error/raw-output evidence, weak-evidence-not-high-severity, metadata fields
+- Created `tests/bridge_tests.rs` — 4 envelope shape tests: manifest counts, finding categories, multiple evidence, no circular deps
+
+**Verification:** All tests pass, architecture guards pass, clippy clean.
+
 ### Milestone 5 Boundary
 
-Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence semantics. Candidates for Milestone 5:
+Milestone 5 Phase 05 is complete. Future work should not reopen report formatting, data contract, or performance baseline without a regression.
 
-- CLI/TUI report UX integration (rendering `ReportEnvelope` in TUI tabs, exporting from CLI).
-- Additional upstream fixtures (currently 44 fixtures; representative coverage).
-- Performance/throughput benchmarks for the runtime harness.
-- ~~HTTP library capability integration~~ — Partially addressed in Phase 04 (advisory network checks added; reqwest bypass remains documented).
+Candidates for future milestones:
+
+- TUI rendering implementation (consume `NseRunReport` or `ReportEnvelope` per `nse_report_display_contract.md`)
+- Additional upstream fixtures (currently 39 fixtures; representative coverage)
+- Protocol library wrappers (ssh, smb, mysql, postgres, redis, mongodb, ldap, snmp)
+- `stdnse.sleep()` cancellation integration
+- HTTP library reqwest capability bypass resolution
 
 ## Library Registry
 

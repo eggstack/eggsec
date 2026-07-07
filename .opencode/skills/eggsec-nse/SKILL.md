@@ -45,6 +45,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 > **Milestone 5 Phase 03 (2026-07-06, local protocol fixtures).** Local TCP/HTTP/UDP fixture harness with real listeners, 5 new `.nse` scripts, 16 runtime tests in `local_protocol_tests.rs`. Manifest `local_service` metadata enables runtime harness skip. Architecture guard Check 47. Known limitation: HTTP library (reqwest) bypasses `NseCapabilityContext`. 452 NSE tests pass, 47 architecture guards pass.
 > **Milestone 5 Phase 04 (2026-07-06, deferred library migration).** `unpwdb.rs` migrated from Deferred to Wrapped (FS reads through `nse_fs_read_to_string`). `http.rs` migrated to PartiallyWrapped (advisory network checks via `check_network_tcp`). `ssl` registry entry corrected to Wrapped. 182 lib tests, 43 corpus tests, 47 architecture guards pass.
 
+> **Milestone 5 Phase 05 (2026-07-06, report UX and performance).** CLI report formatting extracted to testable `format.rs` with 29 snapshot tests. TUI/frontend data contract documented in `architecture/nse_report_display_contract.md`. Runtime corpus performance baseline with timing instrumentation and manifest caching. ReportEnvelope bridge hardened with 11 evidence tests and 4 envelope shape tests. All tests pass, architecture guards pass.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -450,4 +452,10 @@ cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests
 cargo test -p eggsec-nse --features nse --test rule_evaluation_tests
 cargo test -p eggsec-nse --features nse --test profile_propagation_tests
 cargo test -p eggsec-nse --features nse --test profile_report_tests
+cargo test -p eggsec-nse --features nse --test format_tests
+cargo test -p eggsec-nse --features nse --test evidence_tests
+cargo test -p eggsec-nse --features nse --test bridge_tests
+cargo test -p eggsec-nse --features nse --test runtime_corpus_tests
+cargo test -p eggsec-nse --features nse --test runtime_smoke_tests
+cargo test -p eggsec-nse --features nse --test local_protocol_tests
 ```
