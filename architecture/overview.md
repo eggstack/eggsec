@@ -563,43 +563,38 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 
 ---
 
-## Module Dependency Map
+## Workspace Dependency Map
 
-### High-Level Dependencies
+### Crate-Level Dependencies
+
+The workspace has 14 crates organized in a layered dependency graph. Arrows indicate "depends on":
 
 ```
-                ┌──────────────┐
-                │ eggsec-core │
-                └──────┬───────┘
-                       │
-                ┌──────┴───────┐
-                │   eggsec    │
-                └──────┬───────┘
-                       │
-         ┌─────────────┼─────────────────┐
-         │             │                 │
-         ▼             ▼                 ▼
-    ┌─────────┐  ┌──────────┐    ┌─────────────┐
-    │  config │  │  scanner │    │  eggsec-nse│
-    └────┬────┘  └────┬─────┘    └─────────────┘
-         │            │
-         └────────────┼─────────────────┘
-                      │
-                      ▼
-               ┌─────────────┐
-               │    tool     │
-               │ (registry)  │
-               └──────┬──────┘
-                      │
-         ┌────────────┼────────────────┐
-         │            │                │
-         ▼            ▼                ▼
-    ┌─────────┐ ┌──────────┐    ┌─────────┐
-    │   waf   │ │ pipeline │    │  agent  │
-    └─────────┘ └──────────┘    └─────────┘
+eggsec-core (leaf — no workspace deps: Severity, SensitiveString, constants)
+    ↑
+    ├── eggsec-tool-core     (core — ToolRequest/Response/Finding/Error DTOs)
+    ├── eggsec-output        (core — report formats, envelope, dedup, trends)
+    ├── eggsec-agent         (core — agent registry, scheduler, lifecycle)
+    │
+    ├── eggsec-runtime       (standalone — no workspace deps, only serde/tokio/tracing)
+    │       ↑
+    │       ├── eggsec-ui-model  (runtime — frontend-neutral view DTOs)
+    │       └── eggsec-daemon    (runtime — persistent sessions, Unix socket IPC)
+    │
+    ├── eggsec-db-lab        (core + output — database pentest domain)
+    ├── eggsec-web-proxy     (core + output — MITM proxy domain)
+    ├── eggsec-mobile-lab    (core + output — mobile analysis domain)
+    ├── eggsec-nse           (core + output — Nmap NSE/Lua VM)
+    │
+    └── eggsec               (ALL above — main engine, lib only)
+            ↑
+            ├── eggsec-tui   (engine + runtime + daemon + ui-model — 33 tabs)
+            └── eggsec-cli   (engine + runtime + ui-model; optional: tui + daemon)
 ```
 
-### Module Group Dependencies
+### Intra-Engine Module Dependencies
+
+Within the `eggsec` crate, modules depend on each other as follows:
 
 | Module | Depends On |
 |--------|------------|
@@ -614,9 +609,20 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 | `agent` | `tool`, `config`, `output`, `ai` (optional) |
 | `distributed` | `tool`, `config` |
 | `output` | `types`, `findings` |
-| `tui` | `config`, `commands`, `output` (in `eggsec-tui`) |
 | `ai` | `config`, `error`, `types` |
 | `nse` | `scanner`, `recon` (via Lua bindings) |
+
+### Dependency Guardrails
+
+The following invariants are enforced by architecture guards in `scripts/check-architecture-guards.sh`:
+
+- `eggsec-core` has no workspace crate dependencies (leaf crate)
+- `eggsec-runtime` has no TUI, transport, or engine dependencies
+- `eggsec-output` has no engine or runtime dependencies
+- `eggsec-daemon` has no TUI or engine dependencies
+- `eggsec-tui` depends on engine + runtime + daemon + ui-model (not directly on core)
+- Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend only on core + output
+- The engine (`eggsec`) depends on all other crates but no crate depends on `eggsec` except the frontends (tui, cli)
 
 ---
 
@@ -698,6 +704,31 @@ MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. C
 - **Sensitive data**: `SensitiveString` with redaction support
 - See [logging.md](logging.md)
 
+### Architecture Guards
+
+CI enforces architectural invariants via `scripts/check-architecture-guards.sh` (requires `ripgrep`). Run before every PR:
+
+```bash
+bash scripts/check-architecture-guards.sh
+```
+
+Key checks enforced:
+
+| Check | Description |
+|-------|-------------|
+| No stale `manual_only` docs | Use `cli_interactive_only` instead |
+| MCP exposure terminology | `mcp_metadata_exposable` vs `mcp_default_visible` split |
+| No raw dispatch in strict surfaces | gRPC, Agent, REST use `EnforcedDispatcher` |
+| `eggsec-runtime` isolation | No TUI or transport dependencies |
+| `eggsec-output` isolation | No engine or runtime dependencies |
+| `eggsec-daemon` isolation | No TUI or engine dependencies |
+| NSE resolver ownership | Script/module loading flows through `ScriptResolver` |
+| HTTP library gating | HTTP library routes through `check_network_tcp()` before reqwest |
+| Runtime persistence isolation | No rusqlite/sqlx dependencies in runtime |
+| Domain crate gate checks | Feature-gated crates compile with correct features |
+
+See [CI_ARCHITECTURE_GUARDS.md](../docs/CI_ARCHITECTURE_GUARDS.md) for the full inventory.
+
 ### Testing
 
 | Test Suite | Command |
@@ -707,6 +738,7 @@ MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. C
 | Integration tests | `cargo test --test scanner_tests -p eggsec` |
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
+| Architecture guards | `bash scripts/check-architecture-guards.sh` |
 
 - **Test count**: ~5098 (includes #[test] + #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
@@ -752,4 +784,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-07-03*
+*Last updated: 2026-07-08*
