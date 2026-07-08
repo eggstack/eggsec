@@ -10,7 +10,7 @@ Intercepting proxy module workflows and patterns for traffic inspection.
 ## Key Types and Patterns
 
 ### Intercepting Proxy
-`proxy/intercept/` - Intercepting proxy with dynamic SSL certificates.
+The intercepting proxy domain code lives in `crates/eggsec-web-proxy/src/intercept/` (separate domain crate), not in `crates/eggsec/src/proxy/`. The main engine's `proxy/` module contains stubs and re-exports gated behind the `web-proxy` feature.
 
 ### Phase 2: Interactive TUI
 - `Tab::Intercept` — TUI tab with live flow inspection, header/body detail panes
@@ -31,10 +31,10 @@ Intercepting proxy module workflows and patterns for traffic inspection.
 
 ### Phase 4: Pipeline, MCP, Evidence, Performance
 - `ScanProfile::WebProxy` / `Stage::WebProxy` — Pipeline profile integration
-- `EvidenceBundle` / `BundleManifest` — Evidence bundle export/import for multi-loadout correlation (`proxy/intercept/bundle.rs`)
-- `FlowBuffer` — Capacity-capped flow buffer (`proxy/intercept/types.rs`)
-- `ProxyMetrics` — Runtime performance telemetry snapshot (`proxy/intercept/types.rs`)
-- `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`proxy/mcp.rs`)
+- `EvidenceBundle` / `BundleManifest` — Evidence bundle export/import for multi-loadout correlation (`crates/eggsec-web-proxy/src/intercept/bundle.rs`)
+- `FlowBuffer` — Capacity-capped flow buffer (`crates/eggsec-web-proxy/src/intercept/types.rs`)
+- `ProxyMetrics` — Runtime performance telemetry snapshot (`crates/eggsec-web-proxy/src/intercept/types.rs`)
+- `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`crates/eggsec-web-proxy/src/mcp.rs`)
 - `ProxyTool` — MCP tool handler implementation (`tool/implementations/proxy.rs`)
 - Real WebSocket (`tokio-tungstenite`) and HTTP/2 (`h2`) protocol backends
 
@@ -99,12 +99,12 @@ Follow existing test patterns in `proxy/` modules, testing interception and safe
 2. MCP tools: `tool/implementations/proxy.rs` (requires `web-proxy-mcp` feature)
 3. Evidence bundles: `proxy/intercept/bundle.rs` (`EvidenceBundle`/`BundleManifest`)
 4. Performance: `proxy/intercept/types.rs` (`FlowBuffer`, `ProxyMetrics`)
-5. gRPC protobuf: `proxy/intercept/protocols.rs` (prost-based encoding/decoding)
+5. gRPC protobuf: `crates/eggsec-web-proxy/src/intercept/protocols.rs` (prost-based encoding/decoding)
 6. Async rules: `EnhancedRuleSet::evaluate_async()` and `evaluate_indexed_async()`
 7. Session resume: `WebProxySessionReport::save_to_file()` / `load_from_file()`
 
 ### Adding a New MCP Proxy Tool
-1. Add the tool action to `ProxyAction` enum in `proxy/mcp.rs`
+1. Add the tool action to `ProxyAction` enum in `crates/eggsec-web-proxy/src/mcp.rs`
 2. Add the handler in `tool/implementations/proxy.rs` `execute()` method
 3. Add tool ID to `classify_tool_risk()` and `infer_tool_category()` in `tool/protocol/mcp/policy.rs`
 4. Add policy entries in `McpProfilePolicy` for tool visibility per profile

@@ -230,9 +230,9 @@ These libraries perform pure computation with no I/O side effects. They require 
 | `sslcert.rs` | SSL certificate parsing and validation | `check_crypto` | Phase 05 |
 | `zlib.rs` | `zlib.compress()`, `zlib.decompress()` | `nse_compress`, `nse_decompress`, `check_compression` | Phase 05 |
 
-### NOT Sandboxed (all others)
+### NOT Sandboxed (remaining)
 
-All network protocol libraries (http, smtp, ssh2, mysql, postgres, etc.) and the `nmap` library's own socket operations bypass sandbox checks entirely. `socket.rs`, `comm.rs`, and `dns.rs` are now migrated to capability context (Phase 04) but remain in the "already sandboxed" category for legacy checks. The `stdnse.sleep()` family blocks the thread without cancellation checks.
+All network protocol libraries (smtp, ssh2, mysql, postgres, etc.) and the `nmap` library's own socket operations bypass sandbox checks entirely. `http` is wrapped via `NseCapabilityContext` (Phase 05) — `register_http_library()` accepts a capability context. `socket.rs`, `comm.rs`, and `dns.rs` are migrated to capability context (Phase 04). The `stdnse.sleep()` family blocks the thread without cancellation checks.
 
 ---
 

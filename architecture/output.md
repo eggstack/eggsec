@@ -85,9 +85,7 @@ The converters (`load_scan_report`, `convert_to_*`) and `ScanReportData` shape a
 
 For a concise cross-module view of the three output models (full pipeline `ScanReportData`; wireless/mobile optional `to_scan_report_data` bridge + auto-bridge; `auth-test` local `Auth*` only with no bridge), see the "Output Models (standalone defense-lab surfaces vs. pipeline)" block in `docs/USAGE.md` (Report Management section). That is the canonical short reference; the per-module architecture docs and WIRELESS/MOBILE/AUTH_LAB.md provide the detailed rationale.
 
-### Session Persistence (`session.rs`)
-
-Persists scan state across TUI sessions:
+`ScanSession` saves/loads tab input state and results to JSON files:
 
 ```rust
 pub struct ScanSession {
@@ -99,7 +97,7 @@ pub struct ScanSession {
 }
 ```
 
-`ScanSession` saves/loads tab input state and results to JSON files. `TabSessionState` tracks per-tab input fields and options via `FxHashMap`.
+`TabSessionState` tracks per-tab input fields and options via `FxHashMap`.
 
 ### AI Output Schema (`ai_schema.rs`)
 

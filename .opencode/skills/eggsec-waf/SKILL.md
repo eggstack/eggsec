@@ -151,7 +151,7 @@ let body = match response.text().await {
 
 ## TUI Integration (WafTab)
 
-When working with WafTab in the TUI (`crates/eggsec/src/tui/tabs/waf.rs`):
+When working with WafTab in the TUI (`crates/eggsec-tui/src/tabs/waf.rs`):
 
 ### Checkbox Bounds Check (Fixed 2026-05-25)
 

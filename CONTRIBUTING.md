@@ -390,10 +390,15 @@ crates/eggsec-tui/src/
 │   ├── mod.rs       # Tab enum, traits (TabState, TabRender, TabInput)
 │   ├── load.rs      # Example: Load testing tab
 │   └── ...
+├── app/             # Application logic and dispatch
+│   ├── mod.rs       # App core
+│   ├── dispatch.rs  # Task dispatch
+│   ├── command.rs   # Command handling
+│   ├── enforcement.rs # Enforcement facade
+│   └── action.rs    # Action handling
 ├── state/           # State management
 │   └── history.rs   # History management
-└── workers/         # Async task execution
-    └── runner.rs    # TaskRunner, TaskConfig, TaskResult
+└── runtime_client/  # Daemon client adapter
 ```
 
 ### Input Modes

@@ -276,10 +276,26 @@ Canonical references for system design:
 | `docs/TOOL_REGISTRATION.md` | Tool registration for MCP/REST/gRPC/agent |
 | `docs/EXTENSIBILITY.md` | Contributor guide for adding operations, domains, commands |
 | `architecture/overview.md` | System-wide architecture, module index |
-| `architecture/tui.md` | TUI event loop, key handling, overlays |
+| `architecture/tui.md` | TUI event loop, key handling, overlays (33 tabs) |
 | `architecture/nse_integration.md` | NSE/Lua integration, milestones, capability wrappers |
 | `architecture/domain_contract.md` | DomainDescriptor contract |
 | `architecture/report_envelope.md` | Normalized report/evidence envelope |
+| `architecture/config.md` | EggsecConfig, Scope, EnforcementContext, ExecutionProfile |
+| `architecture/cli_commands.md` | CLI Commands enum, handler dispatch, policy enforcement |
+| `architecture/scanner.md` | Port scanning, service fingerprinting, endpoint discovery |
+| `architecture/fuzzer.md` | FuzzEngine, payloads, detection algorithms, response filtering |
+| `architecture/waf.md` | WAF detection (34 products), bypass techniques, profiles |
+| `architecture/recon.md` | 17-module recon pipeline, subdomain enum, tech detection |
+| `architecture/auth.md` | Auth testing (brute force, MFA, lockout, session), defense-lab |
+| `architecture/web_proxy.md` | Web proxy domain crate, intercept, MCP proxy surface |
+| `architecture/distributed.md` | Coordinator/worker architecture, command protocol |
+| `architecture/ai_agents.md` | AI client, adaptive fuzzing, WAF bypass, planner |
+| `architecture/evasion.md` | 16 evasion techniques, MITRE ATT&CK mapping |
+| `architecture/c2.md` | C2 simulation, campaign profiles, agent lifecycle |
+| `architecture/mobile.md` | Mobile static/dynamic analysis, Frida integration |
+| `architecture/wireless.md` | WiFi recon, active attacks (root required) |
+| `architecture/daemon.md` | DaemonStore, SQLite schema, lifecycle persistence |
+| `architecture/database_pentest.md` | Database pentest domain, correlation engine |
 
 ## Skills
 
