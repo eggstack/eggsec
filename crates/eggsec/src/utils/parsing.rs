@@ -14,12 +14,19 @@ pub fn parse_ports(port_spec: &str) -> Result<Vec<u16>> {
             }
             let start: u16 = range[0].parse()?;
             let end: u16 = range[1].parse()?;
+            if start == 0 || end == 0 {
+                return Err(anyhow!("Port 0 is not allowed: {}", part));
+            }
             if start > end {
                 return Err(anyhow!("Invalid port range: {} (start > end)", part));
             }
             ports.extend(start..=end);
         } else {
-            ports.insert(part.parse()?);
+            let port: u16 = part.parse()?;
+            if port == 0 {
+                return Err(anyhow!("Port 0 is not allowed"));
+            }
+            ports.insert(port);
         }
     }
 

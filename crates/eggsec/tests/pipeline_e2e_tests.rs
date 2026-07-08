@@ -58,9 +58,9 @@ fn test_eggsec_config_structure() {
 
 #[test]
 fn test_port_parsing_edge_cases() {
-    assert!(parse_ports("0").is_ok());
+    assert!(parse_ports("0").is_err());
     assert!(parse_ports("65535").is_ok());
-    assert!(parse_ports("0-65535").is_ok());
+    assert!(parse_ports("0-65535").is_err());
 
     assert!(parse_ports("-1").is_err());
     assert!(parse_ports("65536").is_err());

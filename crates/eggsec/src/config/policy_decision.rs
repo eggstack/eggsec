@@ -244,6 +244,7 @@ impl EnforcementOutcome {
 /// Structured error returned by [`EnforcementContext::approve`] and
 /// [`EnforcementContext::approve_manual`] when an operation is not authorized.
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::result_large_err)]
 pub enum EnforcementError {
     /// Operation denied by policy (Deny outcome).
     #[error("operation denied by policy")]
@@ -525,6 +526,7 @@ impl EnforcementContext {
     /// `RequireConfirmation`, and `Deny` all fail with [`EnforcementError`].
     ///
     /// Use this for REST, MCP, Agent, and CI surfaces.
+    #[allow(clippy::result_large_err)]
     pub fn approve(
         &self,
         surface: ExecutionSurface,
@@ -560,6 +562,7 @@ impl EnforcementContext {
     /// manual overrides are rejected.
     ///
     /// Use this for CLI and TUI manual dispatch paths.
+    #[allow(clippy::result_large_err)]
     pub fn approve_manual(
         &self,
         surface: ExecutionSurface,
@@ -726,7 +729,7 @@ pub fn preflight_operation(
         decision,
         required_confirmation_classes,
         manual_override_honored,
-        scope_source: enforcement.loaded_scope.source.clone(),
+        scope_source: enforcement.loaded_scope.source,
         scope_path: enforcement.loaded_scope.path.clone(),
         suggested_cli_flags,
     }

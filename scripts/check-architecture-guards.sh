@@ -728,12 +728,12 @@ echo ""
 echo "--- Check 33c: NSE direct network calls outside wrappers (info only) ---"
 NSE_NET_HITS=$(rg -n 'TcpStream::connect|UdpSocket::bind|TcpStream::connect_timeout' \
   --glob='*.rs' crates/eggsec-nse/src/libraries/ \
-  --glob='!wrappers.rs' --glob='!executor_core.rs' --glob='!socket.rs' --glob='!comm.rs' --glob='!dns.rs' --glob='!tests/' 2>/dev/null \
+  --glob='!wrappers.rs' --glob='!executor_core.rs' --glob='!socket.rs' --glob='!comm.rs' --glob='!dns.rs' --glob='!nmap.rs' --glob='!tests/' 2>/dev/null \
   | grep -v 'tests/' | head -20 || true)
 if [[ -n "$NSE_NET_HITS" ]]; then
   echo "$NSE_NET_HITS"
   echo "INFO: Found direct TcpStream/UdpSocket usage in NSE libraries outside wrappers."
-  echo "      socket.rs, comm.rs, and dns.rs are migrated (capability checks before connect)."
+  echo "      socket.rs, comm.rs, dns.rs, and nmap.rs are migrated (capability checks before connect)."
   echo "      Protocol libraries (smb, ssh, ftp, etc.) are not yet migrated."
 else
   echo "PASS: No direct network calls found in NSE libraries outside wrappers."
@@ -1282,6 +1282,31 @@ if [ -f "$SSLCERT_FILE" ]; then
     fi
 else
     echo "SKIP: sslcert.rs not found."
+fi
+
+# 57. Every nmap.rs TcpStream::connect must have a network capability gate within 30 lines
+echo ""
+echo "--- Check 57: Every nmap.rs TcpStream::connect must have a network gate within 30 lines ---"
+NMAP_FILE="crates/eggsec-nse/src/libraries/nmap.rs"
+if [ -f "$NMAP_FILE" ]; then
+    NMAP_BAD_CONNECTS=$(awk '
+    /TcpStream::connect/ {
+      line=NR; text=$0; found=0;
+      for (i=line-30; i<line; i++) { if (i>0 && checks[i]) found=1; }
+      if (!found) print line ": " text;
+    }
+    /check_network_tcp/ { checks[NR]=1 }
+    ' "$NMAP_FILE" 2>/dev/null)
+    if [[ -n "$NMAP_BAD_CONNECTS" ]]; then
+        echo "$NMAP_BAD_CONNECTS"
+        echo "FAIL: Found TcpStream::connect in nmap.rs without a network capability gate within 30 lines."
+        FAIL=$((FAIL + 1))
+    else
+        NMAP_CONNECT_COUNT=$(rg -c "TcpStream::connect" "$NMAP_FILE" 2>/dev/null || echo 0)
+        echo "PASS: All $NMAP_CONNECT_COUNT TcpStream::connect calls in nmap.rs have a network capability gate within 30 lines."
+    fi
+else
+    echo "SKIP: nmap.rs not found."
 fi
 
 echo ""

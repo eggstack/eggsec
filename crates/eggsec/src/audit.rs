@@ -96,7 +96,7 @@ impl ScopeAudit {
     /// Build from a `LoadedScope`.
     pub fn from_loaded_scope(loaded: &LoadedScope) -> Self {
         Self {
-            source: loaded.source.clone(),
+            source: loaded.source,
             path: loaded.path.clone(),
             allow_rule_count: loaded.scope.allowed_targets.len(),
             exclusion_rule_count: loaded.scope.excluded_targets.len(),
@@ -109,6 +109,7 @@ impl ScopeAudit {
 ///
 /// This is the primary builder for recording enforcement decisions at the
 /// point of evaluation, whether from preflight, CLI, TUI, REST, MCP, or agent.
+#[allow(clippy::too_many_arguments)]
 pub fn audit_event_from_enforcement_outcome(
     surface: ExecutionSurface,
     enforcement: &EnforcementContext,

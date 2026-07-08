@@ -96,10 +96,8 @@ fn test_parse_ports_duplicate() {
 
 #[test]
 fn test_port_zero() {
-    // Port 0 is valid for parsing (though usually reserved)
     let result = parse_ports("0");
-    assert!(result.is_ok(), "Should accept port 0");
-    assert_eq!(result.unwrap(), vec![0]);
+    assert!(result.is_err(), "Port 0 should be rejected");
 }
 
 #[test]
