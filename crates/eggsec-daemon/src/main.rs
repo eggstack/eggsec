@@ -133,17 +133,36 @@ async fn main() -> Result<()> {
         });
     }
 
-    // Spawn background task to persist terminal runtime events
+    // Spawn background task to persist terminal runtime events.
+    // Also runs a periodic snapshot sweep as a safety net against broadcast
+    // channel overflow (RecvError::Lagged) which could cause missed events.
     {
         let host = host.clone();
         let shutdown = shutdown.clone();
         tokio::spawn(async move {
             let mut receiver = host.runtime().subscribe().await;
+            let mut sweep_interval = tokio::time::interval(std::time::Duration::from_secs(5));
+            sweep_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
                     _ = shutdown.cancelled() => {
                         tracing::debug!("Event persistence task shutting down");
                         break;
+                    }
+                    _ = sweep_interval.tick() => {
+                        // Periodic sweep: persist snapshots for all non-closed sessions
+                        // with active tasks. This catches any terminal events missed by
+                        // broadcast channel overflow.
+                        let sessions = host.runtime().list_sessions().await;
+                        for summary in &sessions {
+                            if summary.active_count > 0 {
+                                if let Ok(snapshot) = host.runtime().snapshot(summary.session_id).await {
+                                    if let Err(e) = host.store().save_session_snapshot(&snapshot).await {
+                                        tracing::warn!(error = %e, session_id = %summary.session_id, "Failed to persist snapshot during sweep");
+                                    }
+                                }
+                            }
+                        }
                     }
                     event = receiver.recv() => {
                         let event = match event {

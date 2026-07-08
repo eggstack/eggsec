@@ -48,7 +48,11 @@ impl DaemonHost {
     /// Create a host with a no-op executor (all tasks rejected).
     /// Used by the daemon when no real executor is wired yet.
     pub fn new_noop(config: DaemonConfig, store: Arc<dyn DaemonStore>) -> Self {
-        let runtime = Runtime::new(RuntimeConfig::default(), NoopExecutorStub);
+        let runtime_config = RuntimeConfig {
+            capabilities: eggsec_runtime::RuntimeCapabilities::noop(),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(runtime_config, NoopExecutorStub);
         Self {
             runtime: Arc::new(runtime),
             config,
@@ -154,6 +158,19 @@ impl DaemonHost {
                 task.status = eggsec_runtime::TaskStatus::Cancelled;
                 task.last_error = Some("interrupted by daemon restart".into());
                 interrupted_tasks += 1;
+            }
+
+            // Restore access metadata from persisted owner
+            if let Some(owner) = snapshot.owner_client_id {
+                let access = SessionAccess {
+                    owner_client_id: Some(owner),
+                    surface: snapshot.surface.clone(),
+                    ..Default::default()
+                };
+                self.session_access
+                    .lock()
+                    .unwrap()
+                    .insert(snapshot.session_id, access);
             }
 
             match self.runtime().hydrate_session(snapshot).await {
@@ -335,6 +352,10 @@ impl DaemonHost {
                             .lock()
                             .unwrap()
                             .insert(session_id, access);
+                        // Set owner on the runtime session for snapshot persistence
+                        if let Some(owner) = client_id {
+                            let _ = self.runtime().set_session_owner(session_id, owner).await;
+                        }
                         // Persist session snapshot and record audit event
                         let store = self.store.clone();
                         let runtime = self.runtime.clone();
@@ -620,10 +641,39 @@ impl DaemonHost {
                     .await
                     .unwrap_or_else(|e| Err(anyhow::anyhow!("spawn_blocking failed: {}", e)));
                 match result {
-                    Ok(sessions) => ServerMessage::PersistedSessions {
-                        request_id,
-                        sessions,
-                    },
+                    Ok(sessions) => {
+                        // Filter by owner unless the client has an elevated role
+                        let is_elevated = client_id.map_or(false, |cid| {
+                            let registry = self.client_registry.lock().unwrap();
+                            registry.get(&cid).map_or(false, |info| {
+                                matches!(
+                                    info.kind,
+                                    ClientKind::Cli | ClientKind::Tui | ClientKind::DaemonInternal
+                                )
+                            })
+                        });
+                        let filtered = if is_elevated {
+                            sessions
+                        } else {
+                            sessions
+                                .into_iter()
+                                .filter(|s| {
+                                    match (client_id, s.owner_client_id) {
+                                        // No owner info → include (legacy/recovered sessions)
+                                        (_, None) => true,
+                                        // Owner matches → include
+                                        (Some(cid), Some(owner)) => cid == owner,
+                                        // No client ID but session has owner → exclude
+                                        (None, Some(_)) => false,
+                                    }
+                                })
+                                .collect()
+                        };
+                        ServerMessage::PersistedSessions {
+                            request_id,
+                            sessions: filtered,
+                        }
+                    }
                     Err(e) => ServerMessage::Error {
                         request_id,
                         code: ErrorCode::Internal,
@@ -636,18 +686,55 @@ impl DaemonHost {
                 request_id,
                 session_id,
             } => {
-                // Access control: verify the requesting client owns this session
-                // or the session has no owner entry (e.g., recovered from store).
+                // Access control: verify the requesting client owns this session.
+                // Check in-memory access table first, then fall back to snapshot owner.
                 if let Some(client_id) = client_id {
-                    let access = self.session_access.lock().unwrap();
-                    if let Some(session_access) = access.get(&session_id) {
-                        if session_access.owner_client_id != Some(client_id) {
-                            // Check explicit allow list
-                            let allowed = session_access
-                                .allowed_clients
-                                .iter()
-                                .any(|rule| rule.client_id == client_id);
-                            if !allowed {
+                    let in_access_table;
+                    let is_authorized;
+                    {
+                        let access = self.session_access.lock().unwrap();
+                        match access.get(&session_id) {
+                            Some(session_access) => {
+                                in_access_table = true;
+                                is_authorized = session_access.owner_client_id == Some(client_id)
+                                    || session_access
+                                        .allowed_clients
+                                        .iter()
+                                        .any(|rule| rule.client_id == client_id);
+                            }
+                            None => {
+                                in_access_table = false;
+                                is_authorized = false;
+                            }
+                        }
+                    }
+                    // Session in access table but client is not authorized → deny
+                    if in_access_table && !is_authorized {
+                        return ServerMessage::Error {
+                            request_id,
+                            code: ErrorCode::PermissionDenied,
+                            message: format!(
+                                "client {} is not the owner of session {}",
+                                client_id, session_id
+                            ),
+                        };
+                    }
+                    // Session NOT in access table → check snapshot owner (recovered sessions)
+                    if !in_access_table {
+                        let store = self.store.clone();
+                        let sid = session_id;
+                        let snapshot_owner = tokio::task::spawn_blocking(move || {
+                            store
+                                .blocking_get_snapshot(&sid)
+                                .ok()
+                                .flatten()
+                                .and_then(|s| s.owner_client_id)
+                        })
+                        .await
+                        .unwrap_or(None);
+                        match snapshot_owner {
+                            Some(owner) if owner == client_id => { /* owner matches, allow */ }
+                            Some(_) => {
                                 return ServerMessage::Error {
                                     request_id,
                                     code: ErrorCode::PermissionDenied,
@@ -657,9 +744,9 @@ impl DaemonHost {
                                     ),
                                 };
                             }
+                            None => { /* no owner info, allow (legacy session) */ }
                         }
                     }
-                    // Not in session_access → recovered session, allow access
                 }
 
                 let store = self.store.clone();
@@ -770,6 +857,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
             _sink: RuntimeEventSink,
             _cancel: CancellationToken,
         ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
@@ -2287,6 +2375,258 @@ mod tests {
             );
         }
     }
+
+    /// Test: owner can list their own persisted sessions.
+    #[tokio::test]
+    async fn owner_can_list_own_persisted_sessions() {
+        use async_trait::async_trait;
+        use std::sync::Mutex as StdMutex;
+
+        struct OwnerFilterStore {
+            sessions: StdMutex<Vec<eggsec_runtime::SessionSummary>>,
+        }
+
+        #[async_trait]
+        impl crate::store::DaemonStore for OwnerFilterStore {
+            async fn save_session_snapshot(
+                &self,
+                _snapshot: &eggsec_runtime::SessionSnapshot,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn load_session_snapshot(
+                &self,
+                _: eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+            async fn load_all_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSnapshot>> {
+                Ok(vec![])
+            }
+            async fn record_audit_event(
+                &self,
+                _: &crate::store::PersistedAuditEvent,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn delete_session(&self, _: eggsec_runtime::SessionId) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn blocking_list_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
+                Ok(self.sessions.lock().unwrap().clone())
+            }
+            fn blocking_get_snapshot(
+                &self,
+                _: &eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+        }
+
+        let owner_id = eggsec_runtime::ClientId::new();
+        let other_id = eggsec_runtime::ClientId::new();
+
+        let store: Arc<dyn crate::store::DaemonStore> = Arc::new(OwnerFilterStore {
+            sessions: StdMutex::new(vec![
+                eggsec_runtime::SessionSummary {
+                    session_id: eggsec_runtime::SessionId::new(),
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    scope: None,
+                    active_count: 0,
+                    completed_count: 1,
+                    created_at_epoch_secs: 100,
+                    owner_client_id: Some(owner_id),
+                },
+                eggsec_runtime::SessionSummary {
+                    session_id: eggsec_runtime::SessionId::new(),
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    scope: None,
+                    active_count: 0,
+                    completed_count: 1,
+                    created_at_epoch_secs: 200,
+                    owner_client_id: Some(other_id),
+                },
+            ]),
+        });
+
+        let config = DaemonConfig::default();
+        let host = DaemonHost::new(config, TestExecutor, store);
+
+        // Register owner client directly with known ID (use Mcp kind — non-elevated)
+        host.register_client(ClientInfo {
+            client_id: owner_id,
+            kind: ClientKind::Mcp,
+            surface: eggsec_runtime::RuntimeSurface::Unknown,
+            connected_at_secs: 0,
+            label: Some("test-owner".into()),
+        });
+
+        // Owner lists persisted sessions — should see only their own
+        let msg = host
+            .handle_command(
+                ClientCommand::ListPersistedSessions {
+                    request_id: "list-1".into(),
+                },
+                test_ctx(Some(owner_id)),
+            )
+            .await;
+        if let ServerMessage::PersistedSessions { sessions, .. } = msg {
+            assert_eq!(sessions.len(), 1, "owner should see only their own session");
+            assert_eq!(sessions[0].owner_client_id, Some(owner_id));
+        } else {
+            panic!("expected PersistedSessions, got {:?}", msg);
+        }
+    }
+
+    /// Test: unrelated declared client cannot read another's persisted snapshot.
+    #[tokio::test]
+    async fn unrelated_client_cannot_read_other_persisted_snapshot() {
+        let owner_id = eggsec_runtime::ClientId::new();
+        let other_id = eggsec_runtime::ClientId::new();
+
+        let host = test_host();
+
+        // Register owner and other in session_access
+        {
+            let mut access = host.session_access.lock().unwrap();
+            let sid = eggsec_runtime::SessionId::new();
+            access.insert(
+                sid,
+                SessionAccess {
+                    owner_client_id: Some(owner_id),
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    owner_client_kind: ClientKind::Mcp,
+                    ..Default::default()
+                },
+            );
+        }
+
+        // Register other client directly
+        host.register_client(ClientInfo {
+            client_id: other_id,
+            kind: ClientKind::Tui,
+            surface: eggsec_runtime::RuntimeSurface::Unknown,
+            connected_at_secs: 0,
+            label: Some("test-other".into()),
+        });
+
+        // Get the session ID from the access map
+        let sid = {
+            let access = host.session_access.lock().unwrap();
+            access.keys().next().copied().unwrap()
+        };
+
+        // Other client tries to get persisted snapshot — should be denied
+        let msg = host
+            .handle_command(
+                ClientCommand::GetPersistedSnapshot {
+                    request_id: "get-1".into(),
+                    session_id: sid,
+                },
+                test_ctx(Some(other_id)),
+            )
+            .await;
+        if let ServerMessage::Error {
+            code: ErrorCode::PermissionDenied,
+            ..
+        } = msg
+        {
+            // Expected
+        } else {
+            panic!("expected PermissionDenied, got {:?}", msg);
+        }
+    }
+
+    /// Test: recovery restores owner metadata from snapshot.
+    #[tokio::test]
+    async fn recovery_populates_session_access_from_owner() {
+        use async_trait::async_trait;
+        use std::sync::Mutex as StdMutex;
+
+        let owner_id = eggsec_runtime::ClientId::new();
+
+        struct RecoveryStore {
+            owner: StdMutex<Option<eggsec_runtime::ClientId>>,
+        }
+
+        #[async_trait]
+        impl crate::store::DaemonStore for RecoveryStore {
+            async fn save_session_snapshot(
+                &self,
+                _: &eggsec_runtime::SessionSnapshot,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn load_session_snapshot(
+                &self,
+                _: eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+            async fn load_all_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSnapshot>> {
+                let sid = eggsec_runtime::SessionId::new();
+                let owner = *self.owner.lock().unwrap();
+                Ok(vec![eggsec_runtime::SessionSnapshot {
+                    session_id: sid,
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    scope: None,
+                    created_at_epoch_secs: 100,
+                    generation: 0,
+                    active_tasks: vec![],
+                    completed_tasks: vec![],
+                    capabilities: eggsec_runtime::RuntimeCapabilities::default(),
+                    closed: false,
+                    closed_at: None,
+                    owner_client_id: owner,
+                }])
+            }
+            async fn record_audit_event(
+                &self,
+                _: &crate::store::PersistedAuditEvent,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn delete_session(&self, _: eggsec_runtime::SessionId) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn blocking_list_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
+                Ok(vec![])
+            }
+            fn blocking_get_snapshot(
+                &self,
+                _: &eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+        }
+
+        let store: Arc<dyn crate::store::DaemonStore> = Arc::new(RecoveryStore {
+            owner: StdMutex::new(Some(owner_id)),
+        });
+        let config = DaemonConfig {
+            enable_persistence: true,
+            ..Default::default()
+        };
+        let host = DaemonHost::new(config, TestExecutor, store);
+
+        host.recover_persisted_state().await.unwrap();
+
+        // After recovery, session_access should have the owner
+        let access = host.session_access.lock().unwrap();
+        let found = access.values().any(|a| a.owner_client_id == Some(owner_id));
+        assert!(
+            found,
+            "recovery should populate session_access with owner from snapshot"
+        );
+    }
 }
 
 /// No-op executor stub used by `DaemonHost::new_noop`.
@@ -2298,6 +2638,7 @@ impl RuntimeTaskExecutor for NoopExecutorStub {
         &self,
         _task_id: eggsec_runtime::TaskId,
         _request: eggsec_runtime::RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: eggsec_runtime::RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<

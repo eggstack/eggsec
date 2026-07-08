@@ -589,6 +589,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
             _sink: RuntimeEventSink,
             _cancel: CancellationToken,
         ) -> Pin<

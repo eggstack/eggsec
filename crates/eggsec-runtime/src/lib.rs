@@ -19,5 +19,8 @@ pub use runtime::{
     Runtime, RuntimeConfig, RuntimeEventReceiver, RuntimeEventSink, RuntimeTaskExecutor,
     SessionOptions,
 };
-pub use session::{RuntimeSession, SessionScope, SessionSnapshot, SessionSummary, TaskSnapshot};
+pub use session::{
+    RuntimeExecutionContext, RuntimeSession, SessionScope, SessionSnapshot, SessionSummary,
+    TaskSnapshot,
+};
 pub use tokio_util::sync::CancellationToken;

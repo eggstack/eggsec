@@ -64,7 +64,7 @@ Snapshots are written at these `DaemonHost` command handler points (fire-and-for
 | `SubmitTask` | `submit-task` | Yes |
 | `CancelTask` | `cancel-task` | Yes |
 | `CancelActive` | `cancel-active` | Yes |
-| `CloseSession` | `close-session` | No (audit only) |
+| `CloseSession` | `close-session` | Yes (final snapshot with closed=true + cancelled tasks) |
 | `DeclareClient` | `declare-client` | No (audit only) |
 | `ApprovePolicy` | `approve-policy` | No (audit only, unsupported) |
 | Permission denied | `command-denied:{discriminant}` | No (audit only) |
@@ -78,9 +78,35 @@ All persistence operations are guarded by `DaemonConfig::enable_persistence`. Wh
 1. Loads all snapshots from `DaemonStore::load_all_sessions()`
 2. Marks any non-terminal tasks (`Running`, `Queued`) as `Cancelled` with reason `"interrupted by daemon restart"`
 3. Hydrates each snapshot into the runtime via `Runtime::hydrate_session()`
-4. Records a `daemon-recovery` audit event with recovery counts
+4. Populates `session_access` from `snapshot.owner_client_id` for recovered sessions
+5. Records a `daemon-recovery` audit event with recovery counts
 
 Failed session recoveries are logged at warn level and skipped. Active tasks are **never auto-resumed** — they are interrupted and must be resubmitted by clients. The `Cancelled` rewrite is informational only: the runtime's `hydrate_session` preserves only completed task records, so the rewrite is not strictly required for correctness but documents the recovery semantics for downstream consumers.
+
+## Session Ownership & Access Control
+
+### Owner Persistence
+
+Each `SessionSnapshot` and `SessionSummary` includes an optional `owner_client_id: Option<ClientId>` field, set at session creation time via `Runtime::set_session_owner()`. This field is persisted to disk as part of the snapshot JSON and survives daemon restarts.
+
+On `CreateSession`, the daemon stores `SessionAccess` in memory AND calls `set_session_owner()` so the owner is included in the persisted snapshot. On recovery, `session_access` is reconstructed from `snapshot.owner_client_id`.
+
+### Access Control Model
+
+Three-tier access control for `GetPersistedSnapshot`:
+
+1. **In `session_access` + authorized** (owner or allow-listed) → allow
+2. **In `session_access` + NOT authorized** → deny immediately (no fallback)
+3. **NOT in `session_access`** (recovered session) → check `snapshot.owner_client_id`:
+   - Owner matches → allow
+   - Owner present but doesn't match → deny
+   - No owner (legacy) → allow
+
+For `ListPersistedSessions`, elevated client kinds (`Cli`, `Tui`, `DaemonInternal`) see all sessions. Non-elevated clients see only sessions where `owner_client_id` matches their own. Sessions without owner info are included (legacy compatibility).
+
+### Backward Compatibility
+
+The `owner_client_id` field uses `#[serde(default)]` for deserialization, ensuring existing persisted snapshots that lack the field are loaded without error (owner defaults to `None`).
 
 ## Schema Migration
 
@@ -104,6 +130,17 @@ When `create_dir_all` for the data directory fails, or `SqliteStore::new` fails 
 | `enable_persistence` | `bool` | `true` | Enable/disable snapshot persistence |
 
 When `enable_persistence` is `false`, the daemon uses `NoopStore` behavior and recovery is a no-op.
+
+## Capabilities
+
+`RuntimeCapabilities` reflects the daemon's actual execution capacity:
+
+| Executor Mode | Capabilities | Task Kinds |
+|---------------|-------------|------------|
+| Real (`--full-executor`) | `RuntimeCapabilities::full()` | All 29 task kinds |
+| No-op (default) | `RuntimeCapabilities::noop()` | Empty (no task kinds advertised) |
+
+Capabilities are set per-session at creation time via `RuntimeConfig`. Clients can discover capabilities via the `Capabilities` command or `GET /capabilities` HTTP endpoint. The daemon does not advertise task kinds it cannot execute.
 
 ## Protocol Extensions
 

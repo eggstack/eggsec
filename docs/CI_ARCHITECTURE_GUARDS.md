@@ -144,3 +144,7 @@ The CI architecture guards enforce these invariants from Phases 1–14 (23 check
 21. Public network bind (`0.0.0.0`, `::`) requires explicit configuration and emits a warning; default bind is loopback-only.
 22. Runtime is isolated from engine and domain crates (no `eggsec`, `eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy` dependencies).
 23. Output crate has no reverse dependencies (no `eggsec`, `eggsec-tui`, `eggsec-cli`, `eggsec-daemon` dependencies).
+24. `EggsecRuntimeExecutor` does not hardcode `RuntimeSurface::CliManual` — it derives surface from `RuntimeExecutionContext`.
+25. `EggsecRuntimeExecutor` does not hardcode `LoadedScope::default_empty()` — it resolves scope from `RuntimeExecutionContext` (permissive manual surfaces excepted).
+26. Session snapshots include `owner_client_id` for persisted access control.
+27. CloseSession persists final snapshot (with cancelled tasks and closed flag).

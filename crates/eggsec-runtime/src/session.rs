@@ -15,8 +15,31 @@ use tokio_util::sync::CancellationToken;
 
 use crate::capabilities::RuntimeCapabilities;
 use crate::event::{TaskProgress, TaskStatus};
-use crate::ids::{SessionId, TaskId};
+use crate::ids::{ClientId, SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface, TaskKind};
+
+/// Execution context passed to task executors, carrying session-level trust
+/// boundary information.
+///
+/// The runtime constructs this from session state at submission time and
+/// passes it to the executor. Executors in `eggsec` (the engine crate) use
+/// this to resolve the actual [`RuntimeSurface`] and [`SessionScope`] for
+/// enforcement, replacing hardcoded permissive defaults.
+///
+/// # Security invariant
+///
+/// The context's `surface` must match the session's creation surface. The
+/// runtime guarantees this by reading from the session record, not from
+/// the [`RunRequest`].
+#[derive(Debug, Clone)]
+pub struct RuntimeExecutionContext {
+    /// The session this task belongs to.
+    pub session_id: SessionId,
+    /// The execution surface bound at session creation.
+    pub surface: RuntimeSurface,
+    /// Scope metadata bound at session creation, if any.
+    pub scope: Option<SessionScope>,
+}
 
 /// Lightweight scope metadata bound to a session.
 ///
@@ -81,6 +104,11 @@ pub struct RuntimeSession {
     closed: bool,
     /// When the session was closed (seconds since Unix epoch), if closed.
     closed_at: Option<u64>,
+    /// Capabilities advertised by this session, set from runtime config.
+    capabilities: RuntimeCapabilities,
+    /// The client that owns this session. Persisted in snapshots for
+    /// access control after daemon restart.
+    owner_client_id: Option<ClientId>,
 }
 
 impl RuntimeSession {
@@ -98,6 +126,8 @@ impl RuntimeSession {
             task_timeout: None,
             closed: false,
             closed_at: None,
+            capabilities: RuntimeCapabilities::default(),
+            owner_client_id: None,
         }
     }
 
@@ -115,12 +145,29 @@ impl RuntimeSession {
             task_timeout: None,
             closed: false,
             closed_at: None,
+            capabilities: RuntimeCapabilities::default(),
+            owner_client_id: None,
         }
+    }
+
+    /// Set the capabilities advertised by this session.
+    pub fn with_capabilities(mut self, capabilities: RuntimeCapabilities) -> Self {
+        self.capabilities = capabilities;
+        self
     }
 
     /// Set the per-session task timeout override.
     pub fn with_task_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.task_timeout = timeout;
+        self
+    }
+
+    /// Set the owner client for this session.
+    ///
+    /// The owner is persisted in session snapshots and used for
+    /// access control after daemon restart.
+    pub fn with_owner(mut self, owner: ClientId) -> Self {
+        self.owner_client_id = Some(owner);
         self
     }
 
@@ -155,6 +202,16 @@ impl RuntimeSession {
         self.scope.as_ref()
     }
 
+    /// The client that owns this session, if set.
+    pub fn owner_client_id(&self) -> Option<ClientId> {
+        self.owner_client_id
+    }
+
+    /// Set the owner client for this session (mutable).
+    pub fn set_owner(&mut self, owner: ClientId) {
+        self.owner_client_id = Some(owner);
+    }
+
     /// When the session was created (monotonic clock).
     pub fn created_at(&self) -> Instant {
         self.created_at
@@ -175,10 +232,10 @@ impl RuntimeSession {
         self.generation = self.generation.saturating_add(1);
     }
 
-    /// Session-level capabilities. Currently always returns the default
-    /// capability set; future versions may derive this from the surface.
+    /// Session-level capabilities. Returns the capabilities set at session
+    /// creation time, which reflect the runtime's actual executor mode.
     pub fn capabilities(&self) -> RuntimeCapabilities {
-        RuntimeCapabilities::default()
+        self.capabilities.clone()
     }
 
     /// Snapshot of all active (non-terminal) tasks.
@@ -234,6 +291,7 @@ impl RuntimeSession {
             capabilities: self.capabilities(),
             closed: self.closed,
             closed_at: self.closed_at,
+            owner_client_id: self.owner_client_id,
         }
     }
 
@@ -255,6 +313,8 @@ impl RuntimeSession {
             task_timeout: None,
             closed: snapshot.closed,
             closed_at: snapshot.closed_at,
+            capabilities: RuntimeCapabilities::default(),
+            owner_client_id: snapshot.owner_client_id,
         }
     }
 }
@@ -296,6 +356,9 @@ pub struct SessionSnapshot {
     pub closed: bool,
     /// When the session was closed (seconds since Unix epoch), if closed.
     pub closed_at: Option<u64>,
+    /// The client that owns this session, persisted for access control.
+    #[serde(default)]
+    pub owner_client_id: Option<ClientId>,
 }
 
 /// Lightweight summary of a session for listing purposes.
@@ -307,6 +370,9 @@ pub struct SessionSummary {
     pub active_count: usize,
     pub completed_count: usize,
     pub created_at_epoch_secs: u64,
+    /// The client that owns this session (persisted for access control).
+    #[serde(default)]
+    pub owner_client_id: Option<ClientId>,
 }
 
 /// Summary of a task request for snapshot display.
@@ -368,6 +434,7 @@ mod tests {
             capabilities: RuntimeCapabilities::default(),
             closed: false,
             closed_at: None,
+            owner_client_id: None,
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
@@ -395,6 +462,7 @@ mod tests {
             capabilities: RuntimeCapabilities::default(),
             closed: true,
             closed_at: Some(99),
+            owner_client_id: None,
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
@@ -479,6 +547,7 @@ mod tests {
             capabilities: RuntimeCapabilities::default(),
             closed: false,
             closed_at: None,
+            owner_client_id: None,
         };
         let session = RuntimeSession::hydrate_from_snapshot(snapshot.clone());
         assert_eq!(session.id, snapshot.session_id);
@@ -550,6 +619,7 @@ mod tests {
             capabilities: RuntimeCapabilities::default(),
             closed: true,
             closed_at: Some(100),
+            owner_client_id: None,
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
@@ -570,6 +640,7 @@ mod tests {
             capabilities: RuntimeCapabilities::default(),
             closed: true,
             closed_at: Some(200),
+            owner_client_id: None,
         };
         let session = RuntimeSession::hydrate_from_snapshot(snapshot);
         assert!(session.is_closed());

@@ -28,6 +28,7 @@ impl RuntimeTaskExecutor for ImmediateExecutor {
         &self,
         _task_id: TaskId,
         _request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         sink: RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<
@@ -55,6 +56,7 @@ impl RuntimeTaskExecutor for SlowExecutor {
         &self,
         _task_id: TaskId,
         _request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: RuntimeEventSink,
         cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<
@@ -78,6 +80,7 @@ impl RuntimeTaskExecutor for FailingExecutor {
         &self,
         _task_id: TaskId,
         _request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<
@@ -95,6 +98,7 @@ impl RuntimeTaskExecutor for TextOutcomeExecutor {
         &self,
         _task_id: TaskId,
         _request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         sink: RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<
@@ -115,6 +119,7 @@ impl RuntimeTaskExecutor for JsonOutcomeExecutor {
         &self,
         _task_id: TaskId,
         _request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<

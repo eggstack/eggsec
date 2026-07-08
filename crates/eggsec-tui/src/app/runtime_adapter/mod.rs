@@ -226,7 +226,8 @@ impl TuiRuntimeAdapter {
             | RuntimeEvent::SessionCreated { .. }
             | RuntimeEvent::Snapshot { .. }
             | RuntimeEvent::PolicyDecisionRequired { .. }
-            | RuntimeEvent::Audit { .. } => vec![],
+            | RuntimeEvent::Audit { .. }
+            | RuntimeEvent::SessionClosed { .. } => vec![],
         }
     }
 

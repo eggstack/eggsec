@@ -42,6 +42,7 @@ impl RuntimeTaskExecutor for TuiExecutor {
         &self,
         _task_id: TaskId,
         request: RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: RuntimeEventSink,
         _cancel: CancellationToken,
     ) -> std::pin::Pin<

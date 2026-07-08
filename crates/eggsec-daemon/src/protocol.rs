@@ -535,6 +535,7 @@ mod tests {
                 active_count: 1,
                 completed_count: 0,
                 created_at_epoch_secs: 100,
+                owner_client_id: None,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -562,6 +563,7 @@ mod tests {
                 capabilities: RuntimeCapabilities::default(),
                 closed: false,
                 closed_at: None,
+                owner_client_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -996,6 +998,7 @@ mod tests {
                 active_count: 1,
                 completed_count: 0,
                 created_at_epoch_secs: 100,
+                owner_client_id: None,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -1023,6 +1026,7 @@ mod tests {
                 capabilities: RuntimeCapabilities::default(),
                 closed: false,
                 closed_at: None,
+                owner_client_id: None,
             }),
         };
         let json = serde_json::to_string(&msg).unwrap();

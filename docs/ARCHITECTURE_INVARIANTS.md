@@ -77,3 +77,17 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 31. **Runtime bridge direction**: `eggsec` depends on `eggsec-runtime` (not reverse). The `runtime_bridge` module converts `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to engine types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `Unknown` surface always errors. Strict surfaces never honor manual overrides through the bridge.
 
 32. **Daemon engine dependency**: `eggsec-daemon` depends on `eggsec` (engine) only behind the `full-executor` feature flag. Without it, `NoopExecutorStub` rejects all tasks. The `EggsecRuntimeExecutor` must not hold `Arc<Runtime>` to avoid circular ownership.
+
+## Runtime Bridge Invariants
+
+33. **Session-derived surface**: The real daemon executor (`EggsecRuntimeExecutor`) must derive its `ExecutionSurface` from the `RuntimeExecutionContext` provided by the runtime, not from hardcoded defaults. The runtime populates context from the owning `RuntimeSession`, not from client-submitted request fields.
+
+34. **Session-derived scope**: The real daemon executor must resolve scope from `RuntimeExecutionContext.scope`. For strict surfaces, the executor must fail closed if no explicit scope is available. For permissive manual surfaces, `LoadedScope::default_empty()` is permitted.
+
+35. **ApprovedRunRequest bundle**: Dispatch through the runtime bridge must use an `ApprovedRunRequest` bundle that couples the `ApprovedOperation` token with the specific `RunRequest`. The bundle must validate that the approved operation descriptor matches the request's resolved descriptor before dispatching.
+
+36. **Unknown surface never executes**: `RuntimeSurface::Unknown` must not reach execution. It may be resolved to a configured concrete default at session creation, but the executor must reject it.
+
+37. **RuntimeExecutionContext origin**: `RuntimeExecutionContext` must be populated by the runtime from `RuntimeSession` state (surface, scope). Client-submitted `RunRequest.surface` is informational only and must not influence enforcement.
+
+38. **Daemon capabilities reflect executor mode**: `RuntimeCapabilities` must reflect whether the daemon has a real executor (`full()`) or a no-op stub (`noop()`). No-op executors must not advertise task kinds they cannot execute.

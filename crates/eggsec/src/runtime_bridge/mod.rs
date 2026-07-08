@@ -20,11 +20,15 @@
 //! - Any new [`RuntimeSurface`](eggsec_runtime::RuntimeSurface) variant must update
 //!   the conversion tests in [`surface`].
 
+mod bundle;
 mod descriptor;
 mod executor;
 mod manual;
 mod surface;
 
+pub use bundle::{
+    approve_run_request_bundle, dispatch_approved_runtime_request, ApprovedRunRequest,
+};
 pub use descriptor::descriptor_for_run_request;
 pub use executor::EggsecRuntimeExecutor;
 pub use manual::{approve_run_request, preflight_run_request};

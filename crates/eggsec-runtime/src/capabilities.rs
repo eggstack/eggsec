@@ -28,6 +28,13 @@ pub struct RuntimeCapabilities {
 
 impl Default for RuntimeCapabilities {
     fn default() -> Self {
+        Self::full()
+    }
+}
+
+impl RuntimeCapabilities {
+    /// Create capabilities listing all task kinds (for real executors).
+    pub fn full() -> Self {
         Self {
             task_kinds: vec![
                 TaskCapability::new("load-test", "HTTP load testing"),
@@ -60,14 +67,20 @@ impl Default for RuntimeCapabilities {
                 TaskCapability::new("intercept", "Traffic interception"),
                 TaskCapability::new("c2", "C2 simulation"),
             ],
-            // Only transports that are currently implemented. The runtime
-            // executes tasks in-process; no daemon or IPC transports exist yet.
             transports: vec!["in-process".into()],
             supports_cancellation: true,
-            // Sessions are independent (tests prove multiple sessions work).
             supports_multiple_sessions: true,
-            // RuntimeConfig::default() sets max_active_tasks_per_session: 1
-            // and submit() always cancels existing active tasks.
+            supports_multiple_active_tasks: false,
+        }
+    }
+
+    /// Create capabilities for a no-op executor (no task kinds).
+    pub fn noop() -> Self {
+        Self {
+            task_kinds: vec![],
+            transports: vec!["in-process".into()],
+            supports_cancellation: true,
+            supports_multiple_sessions: true,
             supports_multiple_active_tasks: false,
         }
     }

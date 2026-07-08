@@ -1312,6 +1312,44 @@ else
     echo "SKIP: nmap.rs not found."
 fi
 
+# 58. EggsecRuntimeExecutor::execute() must not hardcode RuntimeSurface::CliManual
+# (The resolve_loaded_scope helper legitimately checks for permissive surfaces.)
+echo ""
+echo "--- Check 58: EggsecRuntimeExecutor::execute() does not hardcode CliManual ---"
+EXECUTOR_FILE="crates/eggsec/src/runtime_bridge/executor.rs"
+if [ -f "$EXECUTOR_FILE" ]; then
+    # Extract the execute() method body (from "fn execute" to the next "fn " or end of impl)
+    EXEC_BODY=$(awk '/fn execute\(/{found=1} found{print NR": "$0} found && /^    fn [a-z]/{if(NR>start+1) exit}' start=0 "$EXECUTOR_FILE" 2>/dev/null || true)
+    HITS=$(echo "$EXEC_BODY" | grep 'RuntimeSurface::CliManual' || true)
+    if [[ -n "$HITS" ]]; then
+        echo "$HITS"
+        echo "FAIL: EggsecRuntimeExecutor::execute() hardcodes RuntimeSurface::CliManual. Use session-derived surface from RuntimeExecutionContext."
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: EggsecRuntimeExecutor::execute() does not hardcode RuntimeSurface::CliManual."
+    fi
+else
+    echo "SKIP: executor.rs not found."
+fi
+
+# 59. EggsecRuntimeExecutor::execute() must not hardcode LoadedScope::default_empty()
+# (The resolve_loaded_scope helper legitimately falls back for permissive surfaces.)
+echo ""
+echo "--- Check 59: EggsecRuntimeExecutor::execute() does not hardcode default_empty scope ---"
+if [ -f "$EXECUTOR_FILE" ]; then
+    EXEC_BODY=$(awk '/fn execute\(/{found=1} found{print NR": "$0} found && /^    fn [a-z]/{if(NR>start+1) exit}' start=0 "$EXECUTOR_FILE" 2>/dev/null || true)
+    HITS=$(echo "$EXEC_BODY" | grep 'LoadedScope::default_empty' || true)
+    if [[ -n "$HITS" ]]; then
+        echo "$HITS"
+        echo "FAIL: EggsecRuntimeExecutor::execute() hardcodes LoadedScope::default_empty(). Use scope from RuntimeExecutionContext."
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: EggsecRuntimeExecutor::execute() does not hardcode LoadedScope::default_empty()."
+    fi
+else
+    echo "SKIP: executor.rs not found."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

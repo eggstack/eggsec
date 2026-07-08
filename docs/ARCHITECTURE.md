@@ -255,24 +255,28 @@ cat findings.json | eggsec ci --baseline baseline.json
 
 ```
 DaemonClient → Runtime::submit(RunRequest)
-  → runtime_bridge::preflight_run_request(request, policy, scope)
-    → runtime_surface_to_execution_surface(surface) → ExecutionSurface
-    → descriptor_for_run_request(request) → OperationDescriptor
-    → EnforcementContext::for_surface() → preflight_operation()
-  → PreflightResult (outcome_kind, required_confirmations, suggested flags)
-
-RuntimeTaskExecutor → runtime_bridge::approve_run_request(request, policy, scope, override)
-  → same surface/descriptor conversion
-  → manual surfaces → enforcement.approve_manual(surface, descriptor, override)
-  → strict surfaces → enforcement.approve(surface, descriptor)
-  → ApprovedOperation token → dispatch
+  → Runtime::submit() builds RuntimeExecutionContext from RuntimeSession state
+  → RuntimeTaskExecutor::execute(context, request, sink, cancel)
+  → EggsecRuntimeExecutor:
+      → runtime_surface_to_execution_surface(context.surface) → ExecutionSurface
+      → resolve_loaded_scope(context.scope) → LoadedScope (or fail closed)
+      → approve_run_request_bundle(surface, policy, loaded_scope, request, override)
+        → same surface/descriptor conversion
+        → manual surfaces → enforcement.approve_manual(surface, descriptor, override)
+        → strict surfaces → enforcement.approve(surface, descriptor)
+        → ApprovedRunRequest bundle (couples token + request)
+      → dispatch_approved_runtime_request(bundle, progress_tx)
+        → validates descriptor match (operation + target)
+        → dispatch_inner(request, progress_tx) → TaskResult
+      → task_result_to_outcome() → TaskOutcome
 ```
 
-**Surface**: Derived from `RuntimeSurface` (daemon DTO) → `ExecutionSurface` (engine type). `Unknown` maps to error.
+**Surface**: Derived from `RuntimeExecutionContext.surface` (session-bound) → `ExecutionSurface` (engine type). `Unknown` maps to error.
+**Scope**: Resolved from `RuntimeExecutionContext.scope`. Strict surfaces fail closed without explicit scope. Permissive manual surfaces allow `LoadedScope::default_empty()`.
 **Bridge**: `runtime_bridge/` module converts `eggsec-runtime` DTOs to engine enforcement types. Dependency direction: `eggsec` → `eggsec-runtime` (not reverse).
-**Invariant**: All daemon-dispatched operations must pass through `approve_run_request()` before execution.
+**Invariant**: All daemon-dispatched operations must pass through `approve_run_request_bundle()` before execution. The `ApprovedRunRequest` bundle couples the approval token with the specific request, preventing token reuse.
 
-**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by calling `approve_run_request()` then `dispatch_inner()`. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
+**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
 
 ## 5. Side-Effecting Execution Path Inventory
 
@@ -361,6 +365,9 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 8. **Token uniqueness**: Approval tokens must not be reusable for a different tool or target.
 9. **Type-level dispatch**: Strict surfaces must use `EnforcedDispatcher::dispatch_checked()` with `ApprovedOperation`.
 10. **Regression test guard**: The enforced dispatch regression test must remain green.
+11. **Session-derived surface**: Daemon executor derives surface from `RuntimeSession`, not hardcoded defaults.
+12. **ApprovedRunRequest bundle**: Dispatch through runtime bridge uses coupled approval+request bundle.
+13. **Daemon capabilities reflect mode**: Capabilities advertise only what the executor can actually perform.
 
 ## Appendix: Key File Locations
 

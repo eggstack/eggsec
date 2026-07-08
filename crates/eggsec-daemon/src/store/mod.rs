@@ -74,6 +74,7 @@ mod tests {
             capabilities: eggsec_runtime::RuntimeCapabilities::default(),
             closed: false,
             closed_at: None,
+            owner_client_id: None,
         };
         store.save_session_snapshot(&snapshot).await.unwrap();
         let loaded = store

@@ -7,29 +7,29 @@ use eggsec_runtime::{RuntimeError, RuntimeEventSink, RuntimeTaskExecutor, TaskId
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{ApprovedOperation, ExecutionPolicy, LoadedScope};
+use crate::config::{ExecutionPolicy, LoadedScope};
 use crate::dispatch::TaskResult;
 
-use super::manual::approve_run_request;
+use super::bundle::approve_run_request_bundle;
 
 /// Executor adapter that bridges `eggsec_runtime::RuntimeTaskExecutor` to the
 /// real Eggsec engine dispatch pipeline.
 ///
 /// This replaces the daemon's `NoopExecutorStub` with actual task execution:
 ///
-/// 1. Uses permissive enforcement defaults (CliManual surface, empty scope)
-///    appropriate for a locally-operated daemon.
+/// 1. Uses the **actual** session surface and scope from the runtime context
+///    (never hardcoded permissive defaults).
 /// 2. Runs enforcement via `approve_run_request()`.
 /// 3. Dispatches through `eggsec::dispatch::dispatch_inner()`.
 /// 4. Converts `TaskResult` → `TaskOutcome` for the runtime lifecycle.
 ///
-/// # Design Note
+/// # Trust boundary
 ///
-/// This executor does **not** hold a reference to the `Runtime` to avoid
-/// circular dependency issues (the Runtime owns the executor). Session
-/// context (surface, scope) uses permissive defaults. A future iteration
-/// can pass session context through a shared state object if strict surface
-/// support is needed for daemon-backed sessions.
+/// The executor receives a [`RuntimeExecutionContext`] carrying the session's
+/// creation surface and scope metadata. For strict surfaces (MCP, REST, gRPC,
+/// Agent, CI), the executor **fails closed** if scope cannot be resolved from
+/// the stored path. Manual surfaces (CLI, TUI) fall back to permissive defaults
+/// when no explicit scope is available.
 pub struct EggsecRuntimeExecutor {
     policy: ExecutionPolicy,
 }
@@ -51,6 +51,65 @@ impl EggsecRuntimeExecutor {
     /// Create a new executor with a custom execution policy.
     pub fn with_policy(policy: ExecutionPolicy) -> Self {
         Self { policy }
+    }
+
+    /// Resolve a `LoadedScope` from session scope metadata.
+    ///
+    /// For strict surfaces, if the scope has a path, it attempts to load from
+    /// disk. If no path is available, it returns `None` (caller must fail
+    /// closed). For permissive manual surfaces, it falls back to a default
+    /// empty scope.
+    fn resolve_loaded_scope(
+        scope: &Option<eggsec_runtime::SessionScope>,
+        surface: eggsec_runtime::RuntimeSurface,
+    ) -> Option<LoadedScope> {
+        // Determine if this surface honors manual overrides.
+        let is_permissive = matches!(
+            surface,
+            eggsec_runtime::RuntimeSurface::CliManual | eggsec_runtime::RuntimeSurface::TuiManual
+        );
+
+        match scope {
+            Some(s) if s.is_explicit => {
+                if let Some(ref path) = s.path {
+                    // Attempt to load scope from the stored path.
+                    match crate::config::load_scope(Some(path.as_str())) {
+                        Ok(raw_scope) => Some(LoadedScope::explicit(
+                            raw_scope,
+                            crate::config::ScopeSource::ConfigFile,
+                            Some(path.clone()),
+                        )),
+                        Err(e) => {
+                            tracing::warn!(
+                                path = %path,
+                                error = %e,
+                                "Failed to load scope from stored path; failing closed for strict surface"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    // Explicit scope but no path — cannot resolve.
+                    tracing::warn!(
+                        "Session has explicit scope metadata but no path; cannot resolve LoadedScope"
+                    );
+                    None
+                }
+            }
+            Some(_) | None => {
+                // Non-explicit or no scope. Permissive surfaces get default_empty.
+                if is_permissive {
+                    Some(LoadedScope::default_empty())
+                } else {
+                    // Strict surface without explicit scope — fail closed.
+                    tracing::warn!(
+                        surface = ?surface,
+                        "Strict surface with no explicit scope; failing closed"
+                    );
+                    None
+                }
+            }
+        }
     }
 
     /// Convert a `TaskResult` into a `TaskOutcome` for the runtime lifecycle.
@@ -223,48 +282,82 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
         &self,
         _task_id: TaskId,
         request: RunRequest,
+        context: eggsec_runtime::RuntimeExecutionContext,
         sink: RuntimeEventSink,
-        _cancel: CancellationToken,
+        cancel: CancellationToken,
     ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>> {
         let policy = self.policy.clone();
+        let surface = context.surface.clone();
 
         Box::pin(async move {
-            // Use permissive defaults for a locally-operated daemon:
-            // - CliManual surface: operator-directed, honors overrides
-            // - Empty scope: all targets allowed
-            let surface = eggsec_runtime::request::RuntimeSurface::CliManual;
-            let loaded_scope = LoadedScope::default_empty();
+            // Check cancellation before starting.
+            if cancel.is_cancelled() {
+                return Err(RuntimeError::DispatchFailed("task cancelled".into()));
+            }
 
-            // Run enforcement — get ApprovedOperation or fail.
-            let approved: ApprovedOperation =
-                approve_run_request(surface, policy, loaded_scope, &request, None).map_err(
-                    |e| match e {
-                        super::surface::RuntimeBridgeError::UnsupportedTaskKind { .. } => {
-                            RuntimeError::UnsupportedTaskKind
-                        }
-                        super::surface::RuntimeBridgeError::ManualOverrideRejected { .. } => {
-                            RuntimeError::DispatchFailed(format!("manual override rejected: {e}"))
-                        }
-                        _ => RuntimeError::DispatchFailed(format!("enforcement denied: {e}")),
-                    },
-                )?;
+            // Validate surface is not Unknown.
+            if surface == eggsec_runtime::RuntimeSurface::Unknown {
+                return Err(RuntimeError::DispatchFailed(
+                    "session surface is Unknown; cannot dispatch".into(),
+                ));
+            }
+
+            // Resolve LoadedScope from session context.
+            let loaded_scope = Self::resolve_loaded_scope(&context.scope, surface.clone())
+                .ok_or_else(|| {
+                    RuntimeError::DispatchFailed(format!(
+                        "strict surface {:?} requires explicit scope but none was resolved",
+                        surface
+                    ))
+                })?;
+
+            // Run enforcement — get ApprovedRunRequest or fail.
+            let bundle = approve_run_request_bundle(surface, policy, loaded_scope, request, None)
+                .map_err(|e| match e {
+                super::surface::RuntimeBridgeError::UnsupportedTaskKind { .. } => {
+                    RuntimeError::UnsupportedTaskKind
+                }
+                super::surface::RuntimeBridgeError::ManualOverrideRejected { .. } => {
+                    RuntimeError::DispatchFailed(format!("manual override rejected: {e}"))
+                }
+                _ => RuntimeError::DispatchFailed(format!("enforcement denied: {e}")),
+            })?;
 
             // Log the approved operation for audit.
             sink.log(
                 LogLevel::Info,
                 format!(
                     "dispatching {} (target: {:?})",
-                    approved.descriptor().operation,
-                    approved.descriptor().target,
+                    bundle.approved().descriptor().operation,
+                    bundle.approved().descriptor().target,
                 ),
             );
 
-            // Dispatch through the engine.
-            let (progress_tx, _progress_rx) = mpsc::channel(16);
+            // Dispatch through the engine, racing against cancellation.
+            let (progress_tx, mut progress_rx) = mpsc::channel(16);
 
-            let task_result = crate::dispatch::dispatch_inner(request, progress_tx)
-                .await
-                .map_err(|e| RuntimeError::DispatchFailed(format!("task execution failed: {e}")))?;
+            // Spawn a task to forward dispatch progress to runtime events.
+            let sink_clone = sink.clone();
+            let progress_forwarder = tokio::spawn(async move {
+                while let Some((completed, total)) = progress_rx.recv().await {
+                    sink_clone.progress(completed, Some(total), None);
+                }
+            });
+
+            let dispatch_fut =
+                super::bundle::dispatch_approved_runtime_request(bundle, progress_tx);
+            let task_result = tokio::select! {
+                result = dispatch_fut => {
+                    result.map_err(|e| RuntimeError::DispatchFailed(format!("task execution failed: {e}")))?
+                }
+                _ = cancel.cancelled() => {
+                    progress_forwarder.abort();
+                    return Err(RuntimeError::DispatchFailed("task cancelled during execution".into()));
+                }
+            };
+
+            // Wait for the forwarder to drain remaining progress messages.
+            let _ = progress_forwarder.await;
 
             // Convert TaskResult → TaskOutcome.
             let outcome = Self::task_result_to_outcome(&task_result);

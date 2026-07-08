@@ -6,9 +6,11 @@ use tokio::sync::{broadcast, Mutex};
 use tokio_util::sync::CancellationToken;
 
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress, TaskStatus};
-use crate::ids::{SessionId, TaskId};
+use crate::ids::{ClientId, SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface};
-use crate::session::{RuntimeSession, SessionScope, SessionSnapshot, SessionSummary};
+use crate::session::{
+    RuntimeExecutionContext, RuntimeSession, SessionScope, SessionSnapshot, SessionSummary,
+};
 use crate::RuntimeError;
 
 /// Emit a runtime event best-effort. Logs at trace level if no subscribers
@@ -40,6 +42,10 @@ pub struct RuntimeConfig {
     pub max_active_tasks_per_session: usize,
     /// Capacity of the event broadcast channel.
     pub event_channel_capacity: usize,
+    /// Capabilities advertised by this runtime. Determines which task kinds
+    /// sessions report as available. Use `RuntimeCapabilities::noop()` for
+    /// daemons without a real executor.
+    pub capabilities: crate::capabilities::RuntimeCapabilities,
 }
 
 impl Default for RuntimeConfig {
@@ -48,6 +54,7 @@ impl Default for RuntimeConfig {
             default_task_timeout: Some(Duration::from_secs(300)),
             max_active_tasks_per_session: 1,
             event_channel_capacity: 256,
+            capabilities: crate::capabilities::RuntimeCapabilities::full(),
         }
     }
 }
@@ -71,8 +78,20 @@ impl RuntimeEventReceiver {
     }
 
     /// Receive the next event. Returns `None` if the channel is closed.
+    /// Logs a warning if events were dropped due to broadcast overflow.
     pub async fn recv(&mut self) -> Option<RuntimeEvent> {
-        self.rx.recv().await.ok()
+        match self.rx.recv().await {
+            Ok(event) => Some(event),
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                tracing::warn!(
+                    dropped = n,
+                    "Broadcast event channel overflow, events dropped"
+                );
+                // Return the next available event after the lag
+                self.rx.recv().await.ok()
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
+        }
     }
 
     /// Try to receive an event without blocking.
@@ -82,6 +101,7 @@ impl RuntimeEventReceiver {
 }
 
 /// Sink for task executors to report progress and completion.
+#[derive(Clone)]
 pub struct RuntimeEventSink {
     task_id: TaskId,
     session_id: SessionId,
@@ -167,14 +187,22 @@ impl RuntimeEventSink {
 /// Trait for task executors. Implementations bridge the runtime to actual tool
 /// execution. In Phase 2 the TUI provides an executor that wraps the existing
 /// worker path; in Phase 3 the executor moves into the runtime.
+///
+/// The executor receives a [`RuntimeExecutionContext`] carrying the session's
+/// trust boundary (surface, scope). Executors must use this context — not
+/// hardcoded defaults — for enforcement decisions.
 pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     /// Execute a task. The executor should report progress via `sink` and
     /// return an outcome on success. The `cancel` token is triggered when the
     /// task is cancelled or times out.
+    ///
+    /// The `context` carries the session's execution surface and scope metadata,
+    /// enabling the executor to make trust-boundary-aware enforcement decisions.
     fn execute(
         &self,
         task_id: TaskId,
         request: RunRequest,
+        context: RuntimeExecutionContext,
         sink: RuntimeEventSink,
         cancel: CancellationToken,
     ) -> std::pin::Pin<
@@ -240,11 +268,13 @@ impl Runtime {
     ) -> Result<SessionId, RuntimeError> {
         let session_id = SessionId::new();
         let mut state = self.state.lock().await;
+        let capabilities = state.config.capabilities.clone();
         let session = match scope {
             Some(s) => RuntimeSession::with_scope(session_id, surface, s),
             None => RuntimeSession::new(session_id, surface),
         }
-        .with_task_timeout(options.task_timeout);
+        .with_task_timeout(options.task_timeout)
+        .with_capabilities(capabilities);
         state.sessions.insert(session_id, session);
         emit_event(&state.event_tx, RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
@@ -276,6 +306,24 @@ impl Runtime {
         Ok(session.scope().cloned())
     }
 
+    /// Set the owner client for a session.
+    ///
+    /// Used by the daemon to record which client created the session,
+    /// enabling owner-filtered persisted session access after restart.
+    pub async fn set_session_owner(
+        &self,
+        session_id: SessionId,
+        owner: ClientId,
+    ) -> Result<(), RuntimeError> {
+        let mut state = self.state.lock().await;
+        let session = state
+            .sessions
+            .get_mut(&session_id)
+            .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
+        session.set_owner(owner);
+        Ok(())
+    }
+
     /// List summaries for all active (non-closed) sessions.
     pub async fn list_sessions(&self) -> Vec<SessionSummary> {
         let state = self.state.lock().await;
@@ -290,6 +338,7 @@ impl Runtime {
                 active_count: session.active_tasks().len(),
                 completed_count: session.completed_tasks().len(),
                 created_at_epoch_secs: session.created_at_secs(),
+                owner_client_id: session.owner_client_id(),
             })
             .collect()
     }
@@ -302,7 +351,7 @@ impl Runtime {
     ) -> Result<TaskId, RuntimeError> {
         let task_id = TaskId::new();
 
-        let (cancel_token, timeout_duration, executor_clone, event_tx_clone) = {
+        let (cancel_token, timeout_duration, executor_clone, event_tx_clone, context) = {
             let mut state = self.state.lock().await;
 
             // Validate session exists
@@ -365,6 +414,16 @@ impl Runtime {
                 .and_then(|s| s.task_timeout_override())
                 .or(state.config.default_task_timeout);
 
+            // Build execution context from session state (trust boundary).
+            let context = {
+                let session = state.sessions.get(&session_id).unwrap();
+                RuntimeExecutionContext {
+                    session_id,
+                    surface: session.execution_surface(),
+                    scope: session.scope().cloned(),
+                }
+            };
+
             state.sessions.get_mut(&session_id).unwrap().tasks.insert(
                 task_id,
                 crate::session::TaskRecord {
@@ -392,6 +451,7 @@ impl Runtime {
                 timeout_duration,
                 state.executor.clone(),
                 state.event_tx.clone(),
+                context,
             )
         };
 
@@ -442,6 +502,7 @@ impl Runtime {
                         executor_clone.execute(
                             task_id,
                             request_for_spawn,
+                            context,
                             sink,
                             cancel_for_spawn.clone(),
                         ),
@@ -449,57 +510,59 @@ impl Runtime {
                     .await
                 } else {
                     Ok(executor_clone
-                        .execute(task_id, request_for_spawn, sink, cancel_for_spawn.clone())
+                        .execute(
+                            task_id,
+                            request_for_spawn,
+                            context,
+                            sink,
+                            cancel_for_spawn.clone(),
+                        )
                         .await)
                 };
 
-                // Determine final status
-                let (final_status, error_msg, outcome_value) = match result {
+                // Determine final status from executor result
+                let (final_status, error_msg, outcome_value, terminal_event) = match result {
                     Ok(Ok(outcome)) => {
-                        emit_event(
-                            &event_tx_clone,
-                            RuntimeEvent::TaskCompleted {
-                                session_id,
-                                task_id,
-                                outcome: outcome.clone(),
-                            },
-                        );
-                        (TaskStatus::Completed, None, Some(outcome))
+                        let event = RuntimeEvent::TaskCompleted {
+                            session_id,
+                            task_id,
+                            outcome: outcome.clone(),
+                        };
+                        (TaskStatus::Completed, None, Some(outcome), Some(event))
                     }
                     Ok(Err(e)) => {
                         let msg = e.to_string();
-                        emit_event_critical(
-                            &event_tx_clone,
-                            RuntimeEvent::TaskFailed {
-                                session_id,
-                                task_id,
-                                error: RuntimeErrorInfo {
-                                    message: msg.clone(),
-                                    code: None,
-                                    details: None,
-                                },
+                        let event = RuntimeEvent::TaskFailed {
+                            session_id,
+                            task_id,
+                            error: RuntimeErrorInfo {
+                                message: msg.clone(),
+                                code: None,
+                                details: None,
                             },
-                        );
-                        (TaskStatus::Failed, Some(msg), None)
+                        };
+                        (TaskStatus::Failed, Some(msg), None, Some(event))
                     }
                     Err(_elapsed) => {
                         cancel_for_spawn.cancel();
-                        emit_event_critical(
-                            &event_tx_clone,
-                            RuntimeEvent::TaskCancelled {
-                                session_id,
-                                task_id,
-                                reason: Some("timed out".into()),
-                            },
-                        );
-                        (TaskStatus::TimedOut, Some("task timed out".into()), None)
+                        let event = RuntimeEvent::TaskCancelled {
+                            session_id,
+                            task_id,
+                            reason: Some("timed out".into()),
+                        };
+                        (
+                            TaskStatus::TimedOut,
+                            Some("task timed out".into()),
+                            None,
+                            Some(event),
+                        )
                     }
                 };
 
-                // Update task record — but only if the task is still non-terminal.
-                // A task may have been cancelled, timed out, or superseded by a new
-                // task while the executor was running. In that case, we must not
-                // overwrite its terminal status.
+                // Update task record FIRST — before emitting terminal events.
+                // This ensures snapshot() sees the terminal state before any
+                // subscriber observes the terminal event, preventing the persistence
+                // worker from capturing a stale snapshot.
                 let mut state = state_arc.lock().await;
                 if let Some(session) = state.sessions.get_mut(&session_id) {
                     if let Some(task) = session.tasks.get_mut(&task_id) {
@@ -515,6 +578,21 @@ impl Runtime {
                         task._handle = None;
                     }
                     session.increment_generation();
+                }
+                drop(state);
+
+                // NOW emit terminal event — state is already updated, so any
+                // subscriber (including persistence worker) will see consistent state.
+                if let Some(event) = terminal_event {
+                    let is_critical = matches!(
+                        &event,
+                        RuntimeEvent::TaskFailed { .. } | RuntimeEvent::TaskCancelled { .. }
+                    );
+                    if is_critical {
+                        emit_event_critical(&event_tx_clone, event);
+                    } else {
+                        emit_event(&event_tx_clone, event);
+                    }
                 }
             })
         };
@@ -624,6 +702,8 @@ impl Runtime {
     ///
     /// Returns `Ok(())` on success. Returns `SessionNotFound` if the session
     /// does not exist or is already closed.
+    ///
+    /// All active tasks in the session are cancelled before closing.
     pub async fn close_session(&self, session_id: SessionId) -> Result<(), RuntimeError> {
         let mut state = self.state.lock().await;
         let session = state
@@ -635,8 +715,38 @@ impl Runtime {
             return Err(RuntimeError::SessionNotFound(session_id.to_string()));
         }
 
+        // Cancel all active tasks before closing
+        let active_task_ids: Vec<TaskId> = session
+            .tasks
+            .iter()
+            .filter(|(_, t)| !t.status.is_terminal())
+            .map(|(id, _)| *id)
+            .collect();
+
+        for task_id in &active_task_ids {
+            if let Some(task) = session.tasks.get_mut(task_id) {
+                if let Some(abort) = task.abort.take() {
+                    abort.cancel();
+                }
+                task.status = TaskStatus::Cancelled;
+                task.last_error = Some("session closed".into());
+            }
+        }
+
         session.close();
         session.increment_generation();
+
+        // Emit cancellation events for each active task, then the session closed event
+        for task_id in &active_task_ids {
+            emit_event_critical(
+                &state.event_tx,
+                RuntimeEvent::TaskCancelled {
+                    session_id,
+                    task_id: *task_id,
+                    reason: Some("session closed".into()),
+                },
+            );
+        }
 
         emit_event_critical(&state.event_tx, RuntimeEvent::SessionClosed { session_id });
 
@@ -684,6 +794,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: RunRequest,
+            _context: RuntimeExecutionContext,
             sink: RuntimeEventSink,
             _cancel: CancellationToken,
         ) -> std::pin::Pin<
@@ -710,6 +821,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: RunRequest,
+            _context: RuntimeExecutionContext,
             _sink: RuntimeEventSink,
             cancel: CancellationToken,
         ) -> std::pin::Pin<
@@ -737,6 +849,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: RunRequest,
+            _context: RuntimeExecutionContext,
             _sink: RuntimeEventSink,
             _cancel: CancellationToken,
         ) -> std::pin::Pin<
@@ -759,6 +872,7 @@ mod tests {
             &self,
             _task_id: TaskId,
             _request: RunRequest,
+            _context: RuntimeExecutionContext,
             _sink: RuntimeEventSink,
             cancel: CancellationToken,
         ) -> std::pin::Pin<

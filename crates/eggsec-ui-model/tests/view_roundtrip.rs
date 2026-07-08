@@ -19,6 +19,7 @@ fn session_summary_view_roundtrip() {
         active_count: 2,
         completed_count: 5,
         created_at_epoch_secs: 100,
+        owner_client_id: None,
     };
     let view = SessionSummaryView::from(&summary);
     assert_eq!(view.active_count, 2);
@@ -42,6 +43,7 @@ fn session_view_roundtrip() {
         capabilities: Default::default(),
         closed: false,
         closed_at: None,
+        owner_client_id: None,
     };
     let view = SessionView::from(&snapshot);
     assert_eq!(view.surface_label, "mcp-server");
@@ -215,6 +217,7 @@ fn dashboard_summary_view() {
             active_count: 1,
             completed_count: 3,
             created_at_epoch_secs: 100,
+            owner_client_id: None,
         },
         SessionSummary {
             session_id: SessionId::new(),
@@ -223,6 +226,7 @@ fn dashboard_summary_view() {
             active_count: 0,
             completed_count: 2,
             created_at_epoch_secs: 200,
+            owner_client_id: None,
         },
     ];
     let view = DashboardSummaryView::from_summaries(&summaries);
@@ -267,6 +271,7 @@ fn event_view_all_variants() {
                 capabilities: Default::default(),
                 closed: false,
                 closed_at: None,
+                owner_client_id: None,
             },
         },
         RuntimeEvent::TaskQueued {
