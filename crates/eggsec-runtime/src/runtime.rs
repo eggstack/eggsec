@@ -101,6 +101,11 @@ impl RuntimeEventSink {
         }
     }
 
+    /// Return the session ID this sink belongs to.
+    pub fn session_id(&self) -> SessionId {
+        self.session_id
+    }
+
     /// Emit a progress event.
     pub fn progress(&self, completed: u64, total: Option<u64>, message: Option<String>) {
         emit_event(

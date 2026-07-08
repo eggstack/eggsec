@@ -36,6 +36,11 @@ struct DaemonArgs {
     /// Log level filter (trace, debug, info, warn, error).
     #[arg(short, long, default_value = "info")]
     log_level: String,
+
+    /// Enable full task execution (requires `full-executor` feature).
+    /// When enabled, the daemon dispatches real tasks through the Eggsec engine.
+    #[arg(long)]
+    full_executor: bool,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -94,8 +99,22 @@ async fn main() -> Result<()> {
         Arc::new(NoopStore)
     };
 
-    // Use a no-op executor for now; real dispatch will be wired in a later phase.
-    let host = Arc::new(DaemonHost::new_noop(config, store));
+    // Create the host, optionally with full executor.
+    let host = if args.full_executor {
+        #[cfg(feature = "full-executor")]
+        {
+            let executor = eggsec::runtime_bridge::EggsecRuntimeExecutor::new();
+            tracing::info!("Full executor enabled — real task dispatch active");
+            Arc::new(DaemonHost::new(config, executor, store))
+        }
+        #[cfg(not(feature = "full-executor"))]
+        {
+            tracing::warn!("--full-executor flag set but full-executor feature not enabled, using no-op executor");
+            Arc::new(DaemonHost::new_noop(config, store))
+        }
+    } else {
+        Arc::new(DaemonHost::new_noop(config, store))
+    };
 
     // Recover persisted sessions from a previous daemon instance
     if let Err(e) = host.recover_persisted_state().await {

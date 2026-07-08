@@ -272,6 +272,8 @@ RuntimeTaskExecutor → runtime_bridge::approve_run_request(request, policy, sco
 **Bridge**: `runtime_bridge/` module converts `eggsec-runtime` DTOs to engine enforcement types. Dependency direction: `eggsec` → `eggsec-runtime` (not reverse).
 **Invariant**: All daemon-dispatched operations must pass through `approve_run_request()` before execution.
 
+**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by calling `approve_run_request()` then `dispatch_inner()`. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
+
 ## 5. Side-Effecting Execution Path Inventory
 
 ### 5.1 CLI Command Handlers

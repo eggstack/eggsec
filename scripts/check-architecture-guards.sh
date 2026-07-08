@@ -263,13 +263,16 @@ fi
 # 16. eggsec-daemon must not depend on TUI crates or engine crate
 echo ""
 echo "--- Check 16: Daemon free of TUI and engine dependencies ---"
-HITS=$(rg -n 'ratatui|crossterm|eggsec-tui|eggsec =|eggsec-core' crates/eggsec-daemon/Cargo.toml 2>/dev/null || true)
+HITS=$(rg -n 'ratatui|crossterm|eggsec-tui|eggsec-core' crates/eggsec-daemon/Cargo.toml 2>/dev/null || true)
+# Check for non-optional eggsec engine dependency (optional = feature-gated is OK)
+NON_OPT_EGGSEC=$(awk '/^\[dependencies\]/,/^\[/' crates/eggsec-daemon/Cargo.toml 2>/dev/null | grep -E 'eggsec =\|eggsec=' | grep -v 'optional = true' | grep -v 'optional=true' || true)
+HITS="${HITS}${NON_OPT_EGGSEC}"
 if [[ -n "$HITS" ]]; then
   echo "$HITS"
-  echo "FAIL: eggsec-daemon has TUI or engine dependencies. It must depend only on eggsec-runtime."
+  echo "FAIL: eggsec-daemon has TUI or non-optional engine dependencies. It must depend only on eggsec-runtime (optional feature-gated deps allowed)."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: Daemon free of TUI and engine dependencies."
+  echo "PASS: Daemon free of TUI and non-optional engine dependencies."
 fi
 
 # 17. eggsec-daemon must not depend on transport crates (axum, tonic, etc.) in [dependencies]

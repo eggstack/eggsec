@@ -21,9 +21,11 @@
 //!   the conversion tests in [`surface`].
 
 mod descriptor;
+mod executor;
 mod manual;
 mod surface;
 
 pub use descriptor::descriptor_for_run_request;
+pub use executor::EggsecRuntimeExecutor;
 pub use manual::{approve_run_request, preflight_run_request};
 pub use surface::{runtime_surface_to_execution_surface, RuntimeBridgeError};

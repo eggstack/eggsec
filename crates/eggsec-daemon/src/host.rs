@@ -59,6 +59,27 @@ impl DaemonHost {
         }
     }
 
+    /// Create a host with a pre-built `Arc<Runtime>`.
+    ///
+    /// Used when the caller needs to share the same `Runtime` instance
+    /// with an executor that requires runtime session lookups (e.g.,
+    /// `EggsecRuntimeExecutor` which resolves session surface/scope).
+    pub fn with_runtime(
+        config: DaemonConfig,
+        runtime: Arc<Runtime>,
+        store: Arc<dyn DaemonStore>,
+        executor_is_noop: bool,
+    ) -> Self {
+        Self {
+            runtime,
+            config,
+            client_registry: std::sync::Mutex::new(ClientRegistry::new()),
+            session_access: std::sync::Mutex::new(HashMap::new()),
+            store,
+            executor_is_noop,
+        }
+    }
+
     pub fn runtime(&self) -> &Arc<Runtime> {
         &self.runtime
     }
@@ -729,7 +750,7 @@ mod tests {
     };
     use crate::store::NoopStore;
     use eggsec_runtime::{
-        CancellationToken, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
+        CancellationToken, RuntimeEvent, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
     };
     use std::future::Future;
     use std::pin::Pin;
@@ -2121,6 +2142,149 @@ mod tests {
         {
             ServerMessage::ClientDeclared { client_id, .. } => client_id,
             other => panic!("expected ClientDeclared, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "full-executor")]
+    mod full_executor_tests {
+        use super::*;
+        use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
+
+        fn real_executor_host() -> DaemonHost {
+            DaemonHost::new(
+                DaemonConfig::default(),
+                eggsec::runtime_bridge::EggsecRuntimeExecutor::new(),
+                crate::store::noop_store(),
+            )
+        }
+
+        #[tokio::test]
+        async fn real_executor_capabilities_report_all_task_kinds() {
+            let host = real_executor_host();
+            let resp = host
+                .handle_command(
+                    ClientCommand::Capabilities {
+                        request_id: "cap-real".into(),
+                    },
+                    test_ctx(None),
+                )
+                .await;
+            match resp {
+                ServerMessage::Capabilities { capabilities, .. } => {
+                    assert!(
+                        !capabilities.runtime.task_kinds.is_empty(),
+                        "real executor should report non-empty task_kinds"
+                    );
+                    let kind_names: Vec<&str> = capabilities
+                        .runtime
+                        .task_kinds
+                        .iter()
+                        .map(|tk| tk.name.as_str())
+                        .collect();
+                    assert!(
+                        kind_names.contains(&"port-scan"),
+                        "should include port-scan, got: {:?}",
+                        kind_names
+                    );
+                }
+                other => panic!("expected Capabilities, got {:?}", other),
+            }
+        }
+
+        #[tokio::test]
+        async fn real_executor_submit_task_runs_enforcement() {
+            let host = real_executor_host();
+            let client_id = declare_test_client(&host).await;
+            let session_id = match host
+                .handle_command(
+                    ClientCommand::CreateSession {
+                        request_id: "s1".into(),
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        scope: None,
+                        labels: vec![],
+                    },
+                    test_ctx(Some(client_id)),
+                )
+                .await
+            {
+                ServerMessage::SessionCreated { session_id, .. } => session_id,
+                other => panic!("expected SessionCreated, got {:?}", other),
+            };
+
+            // Subscribe to runtime events directly (host-level Subscribe is transport-only).
+            let mut rx = host.runtime().subscribe().await;
+
+            // Submit a PortScan task. The real executor will:
+            // 1. Run enforcement (approve_run_request) → ApprovedOperation
+            // 2. Log "dispatching scan-ports (target: ...)" via sink.log()
+            // 3. Call dispatch_inner → actual port scan (may fail/timeout)
+            let submit_resp = host
+                .handle_command(
+                    ClientCommand::SubmitTask {
+                        request_id: "t1".into(),
+                        session_id,
+                        request: RunRequest {
+                            task_kind: TaskKind::PortScan(PortScanParams {
+                                target: "127.0.0.1".into(),
+                                ports: Some("1".into()),
+                                scan_type: None,
+                                timeout_ms: Some(2000),
+                            }),
+                            requested_by: None,
+                            surface: eggsec_runtime::RuntimeSurface::CliManual,
+                            labels: vec![],
+                        },
+                    },
+                    test_ctx(Some(client_id)),
+                )
+                .await;
+            let task_id = match submit_resp {
+                ServerMessage::TaskSubmitted { task_id, .. } => task_id,
+                other => panic!("expected TaskSubmitted, got {:?}", other),
+            };
+
+            // Wait for TaskCompleted or TaskFailed — either confirms the executor ran.
+            let mut saw_terminal = false;
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+            while tokio::time::Instant::now() < deadline {
+                let event =
+                    tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await;
+                match event {
+                    Ok(Some(RuntimeEvent::TaskCompleted {
+                        task_id: tid,
+                        outcome,
+                        ..
+                    })) if tid == task_id => {
+                        match outcome {
+                            TaskOutcome::Result(envelope) => {
+                                assert_eq!(
+                                    envelope.kind, "port-scan",
+                                    "expected port-scan outcome kind"
+                                );
+                            }
+                            other => {
+                                panic!("expected TaskOutcome::Result, got {:?}", other);
+                            }
+                        }
+                        saw_terminal = true;
+                        break;
+                    }
+                    Ok(Some(RuntimeEvent::TaskFailed {
+                        task_id: tid,
+                        error,
+                        ..
+                    })) if tid == task_id => {
+                        tracing::info!("task failed as expected: {:?}", error);
+                        saw_terminal = true;
+                        break;
+                    }
+                    _ => continue,
+                }
+            }
+            assert!(
+                saw_terminal,
+                "should receive TaskCompleted or TaskFailed within timeout"
+            );
         }
     }
 }

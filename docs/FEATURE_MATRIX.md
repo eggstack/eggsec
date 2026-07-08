@@ -79,6 +79,7 @@ Categories:
 | Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
 |---------|----------|-----------------|-----------------|-------------|-------|
 | `http-api` | Protocol/front-end adapter | `axum`, `async-stream`, `futures` | eggsec-daemon | No | HTTP/SSE transport for daemon (loopback-only default bind) |
+| `full-executor` | Execution adapter | `dep:eggsec` | eggsec-daemon | No | Real task execution via `EggsecRuntimeExecutor` (enforcement + dispatch) |
 
 ### 1.1b CLI Crate Features
 
@@ -250,6 +251,13 @@ cargo test -p eggsec-cli --no-default-features --features daemon-client
 ```bash
 cargo check -p eggsec-daemon --features http-api
 cargo test -p eggsec-daemon --features http-api
+```
+
+#### daemon-full-executor — Daemon with real task execution
+
+```bash
+cargo check -p eggsec-daemon --features full-executor
+cargo test -p eggsec-daemon --features full-executor
 ```
 
 ### 3.2 System Dependency Requirements

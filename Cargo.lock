@@ -1892,6 +1892,7 @@ dependencies = [
  "async-trait",
  "axum",
  "clap",
+ "eggsec",
  "eggsec-runtime",
  "futures",
  "reqwest",
