@@ -222,8 +222,8 @@ Phase 2 verified and hardened the enforcement invariants established in earlier 
 
 | API | Status | Disposition |
 |-----|--------|-------------|
-| `CommandContext::with_execution_profile()` | **Deprecated** | Test-only. New code must use `with_execution_surface()` or construct `EnforcementContext` directly. |
-| `CommandContext::ensure_scope()` / `ensure_scope_url()` | **Deprecated** | Zero callers. Scope checks are centralized in `EnforcementContext::evaluate()`. |
+| `CommandContext::with_execution_profile()` | **Removed** | Replaced by `with_execution_surface()` and direct `EnforcementContext` construction. |
+| `CommandContext::ensure_scope()` / `ensure_scope_url()` | **Removed** | Scope checks are centralized in `EnforcementContext::evaluate()`. |
 | `ToolDispatcher::dispatch()` (raw) | `#[doc(hidden)]`, `pub(crate)` | Regression test guard (`enforced_dispatch_regression.rs`) enforces no raw dispatch in strict surfaces. |
 
 ### Regression Tests Added

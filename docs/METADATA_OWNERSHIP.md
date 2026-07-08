@@ -115,7 +115,7 @@ The following tests validate metadata consistency:
 | `operation_metadata_ids_are_unique` | No duplicate operation IDs |
 | `all_aliases_resolve_to_known_metadata` | All aliases point to valid canonical IDs |
 | `no_alias_maps_to_self` | No redundant self-mapping aliases |
-| `all_capability_variants_appear_in_metadata` | All 18 `Capability` variants are used |
+| `all_capability_variants_appear_in_metadata` | All 19 `Capability` variants are used |
 | `all_operation_risk_variants_appear_in_metadata` | All 15 `OperationRisk` variants are used |
 | `all_registered_base_tools_have_operation_metadata` | Every default tool has metadata |
 | `operation_id_lookup_is_stable` | Self-lookup returns the same entry |

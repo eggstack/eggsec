@@ -306,8 +306,8 @@ cat findings.json | eggsec ci --baseline baseline.json
 
 | Item | Location | Status | Recommended Disposition |
 |------|----------|--------|------------------------|
-| `CommandContext::ensure_scope()` / `ensure_scope_url()` | `commands/handlers/mod.rs:223-228` | **Deprecated (Phase 2)**. No callers. | **Deprecate**. Scope checks are centralized in `EnforcementContext::evaluate()`. |
-| `CommandContext::with_execution_profile()` | `commands/handlers/mod.rs:161` | **Deprecated (Phase 2)**. Test-only. | **Deprecate**. Replace with `with_execution_surface()` or direct `EnforcementContext` construction. |
+| `CommandContext::ensure_scope()` / `ensure_scope_url()` | — | **Removed** (Phase 2). Scope checks are centralized in `EnforcementContext::evaluate()`. | No action needed. |
+| `CommandContext::with_execution_profile()` | — | **Removed** (Phase 2). Replaced by `with_execution_surface()` and direct `EnforcementContext` construction. | No action needed. |
 | `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs:36` | `pub(crate)`, `#[doc(hidden)]`. Used by Orchestrator. | **Restrict visibility**. Keep for Orchestrator with regression test guard. |
 | Orchestrator raw dispatch | `tool/orchestrator/mod.rs:194,210` | Raw dispatch without enforcement. Regression test allows it. | **Keep with invariant**. Callers must enforce before constructing Orchestrator. |
 | `utils::check_scope()` / `check_scope_from_url()` | `utils/scope.rs` | Legacy standalone helpers. No handler callers. | **Deprecate**. Superseded by `EnforcementContext` scope evaluation. |

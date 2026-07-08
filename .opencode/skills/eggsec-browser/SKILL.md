@@ -11,7 +11,7 @@ Headless browser security testing module.
 `crates/eggsec/src/browser/`
 
 ## Tab
-Browser tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
+Browser tab is one of the 33 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 
 ## Key Types
 

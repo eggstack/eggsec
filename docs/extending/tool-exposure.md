@@ -47,7 +47,7 @@ Eggsec has two distinct registries with different purposes:
 - Not the source of truth for listing decisions
 
 **Canonical Metadata Registration** (`tool/registration.rs`):
-- Derived from `ALL_OPERATION_METADATA` (29 entries + 32 aliases in `config/policy.rs`) and `all_domain_descriptors()`
+- Derived from `ALL_OPERATION_METADATA` (32 entries + 33 aliases in `config/policy.rs`) and `all_domain_descriptors()`
 - `all_tool_registrations()` builds the canonical list
 - Source of truth for MCP, REST, gRPC, and agent listing filters
 - Cross-references `OperationMetadata` exposure flags and `DomainDescriptor` tool integrations

@@ -11,7 +11,7 @@ Intelligent vulnerability hunting module.
 `crates/eggsec/src/hunt/`
 
 ## Tab
-Hunt tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
+Hunt tab is one of the 33 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 
 ## Key Types
 

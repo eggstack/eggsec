@@ -68,8 +68,8 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 ## Transitional API Rules
 
-28. **`with_execution_profile`**: **Deprecated (Phase 2)**. Only used in tests. New code must use `with_execution_surface()` or construct `EnforcementContext` directly.
+28. **`with_execution_profile`**: **Removed** (Phase 2). Replaced by `with_execution_surface()` and direct `EnforcementContext` construction.
 
-29. **`ensure_scope` / `ensure_scope_url`**: **Deprecated (Phase 2)**. Zero callers. Must not be called by new handlers. Scope checks are centralized in `EnforcementContext::evaluate()`.
+29. **`ensure_scope` / `ensure_scope_url`**: **Removed** (Phase 2). Scope checks are centralized in `EnforcementContext::evaluate()`.
 
 30. **Raw dispatch**: `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`. Only the Orchestrator and `EnforcedDispatcher` internals may use it. All other callers must use `EnforcedDispatcher::dispatch_checked()`.

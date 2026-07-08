@@ -22,6 +22,8 @@ crates/
   eggsec-web-proxy/  # Web proxy and MITM interception domain crate
   eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
   eggsec-runtime/    # Frontend-neutral runtime with task lifecycle management (Runtime, RuntimeConfig, RuntimeTaskExecutor)
+  eggsec-daemon/     # Persistent session host (SQLite, Unix socket, optional HTTP)
+  eggsec-ui-model/   # Frontend-neutral view DTOs
 ```
 
 ## Third pass changes
@@ -93,6 +95,8 @@ crates/
   eggsec-web-proxy/  # Web proxy and MITM interception domain crate
   eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
   eggsec-runtime/    # Frontend-neutral runtime with task lifecycle management (Runtime, RuntimeConfig, RuntimeTaskExecutor)
+  eggsec-daemon/     # Persistent session host (SQLite, Unix socket, optional HTTP)
+  eggsec-ui-model/   # Frontend-neutral view DTOs
 ```
 
 ### Commands run

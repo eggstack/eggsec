@@ -48,6 +48,7 @@ This skill directory contains specialized guides for the Eggsec autonomous agent
 - `vulnerability_management.md` - Vulnerability management
 - `security_compliance_checks.md` - Compliance checks
 - `security_assessment_pipeline.md` - Security pipelines
+- `authentication_security_testing.md` - Authentication security testing (brute force, credential stuffing, lockout, MFA)
 
 ### Technical Implementation
 - `fuzz_core.md` - Fuzzing engine internals
