@@ -42,17 +42,6 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 14
 
 ## Build & Test Commands
 
-### Essential verification (run before any change)
-
-```bash
-cargo fmt --all --check
-cargo clippy --lib -p eggsec -- -D warnings
-cargo test --lib -p eggsec
-cargo test -p eggsec --test feature_matrix
-cargo test -p eggsec --test enforcement_matrix
-bash scripts/check-architecture-guards.sh
-```
-
 ### Full architecture CI reproduction
 
 ```bash
@@ -102,6 +91,15 @@ make check-architecture-ci # full architecture guard CI reproduction
 make check-no-default      # no-default-features workspace build
 make build                 # release build
 ```
+
+### CI workflows
+
+GitHub Actions (`.github/workflows/`):
+- `test.yml` — fmt, clippy, feature checks, lib tests, coverage, security audit, architecture guards, feature profiles
+- `deep-checks.yml` — weekly all-features workspace build/test
+- `security-scan.yml` — daily scan pipeline
+
+GitLab CI (`.gitlab-ci.yml`) — pre-built binary scan jobs (not build-from-source).
 
 ## Architecture
 
@@ -186,7 +184,6 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **Regex Caching**: `lru = "0.18"` with cache size 100 (NonZeroUsize).
 - **Truncation**: `utils/formatting.rs` — `strip_controls` (recommended), `preserve_all`.
 - **Error Handling**: Avoid `unwrap_or_default()` on async ops; use explicit match with tracing.
-- **Hash Collections**: `rustc_hash::FxHashMap` for hot paths.
 - **PayloadType location**: `fuzzer/payloads/mod.rs`, NOT `types.rs`.
 - **Visual Regression**: `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()`.
 - **AI Cache Keys**: Always use `CacheKeyBuilder` to avoid collisions.
@@ -233,7 +230,7 @@ See `docs/CI_ARCHITECTURE_GUARDS.md` for the full inventory.
 
 ## Module Override Files
 
-Each module has specialized guidance in `AGENTS.override.md`:
+Each module has specialized guidance in `AGENTS.override.md`. When working in a module, load the relevant override:
 
 | Module | File |
 |--------|------|
@@ -264,38 +261,17 @@ Each module has specialized guidance in `AGENTS.override.md`:
 
 ## Architecture Docs
 
-Canonical references for system design:
+Canonical references live in `docs/` and `architecture/` directories. Key entry points:
 
-| Document | Covers |
-|----------|--------|
-| `docs/ARCHITECTURE.md` | Workspace ownership, enforcement model, execution flows |
-| `docs/ARCHITECTURE_INVARIANTS.md` | 30 normative invariants |
-| `docs/FEATURE_MATRIX.md` | Feature inventory, naming, build profiles |
-| `docs/ENFORCEMENT_MODES.md` | Dual-mode enforcement contract |
-| `docs/COMMAND_REGISTRY.md` | Command registry inventory and dispatch |
-| `docs/TOOL_REGISTRATION.md` | Tool registration for MCP/REST/gRPC/agent |
-| `docs/EXTENSIBILITY.md` | Contributor guide for adding operations, domains, commands |
-| `architecture/overview.md` | System-wide architecture, module index |
-| `architecture/tui.md` | TUI event loop, key handling, overlays (33 tabs) |
-| `architecture/nse_integration.md` | NSE/Lua integration, milestones, capability wrappers |
-| `architecture/domain_contract.md` | DomainDescriptor contract |
-| `architecture/report_envelope.md` | Normalized report/evidence envelope |
-| `architecture/config.md` | EggsecConfig, Scope, EnforcementContext, ExecutionProfile |
-| `architecture/cli_commands.md` | CLI Commands enum, handler dispatch, policy enforcement |
-| `architecture/scanner.md` | Port scanning, service fingerprinting, endpoint discovery |
-| `architecture/fuzzer.md` | FuzzEngine, payloads, detection algorithms, response filtering |
-| `architecture/waf.md` | WAF detection (34 products), bypass techniques, profiles |
-| `architecture/recon.md` | 17-module recon pipeline, subdomain enum, tech detection |
-| `architecture/auth.md` | Auth testing (brute force, MFA, lockout, session), defense-lab |
-| `architecture/web_proxy.md` | Web proxy domain crate, intercept, MCP proxy surface |
-| `architecture/distributed.md` | Coordinator/worker architecture, command protocol |
-| `architecture/ai_agents.md` | AI client, adaptive fuzzing, WAF bypass, planner |
-| `architecture/evasion.md` | 16 evasion techniques, MITRE ATT&CK mapping |
-| `architecture/c2.md` | C2 simulation, campaign profiles, agent lifecycle |
-| `architecture/mobile.md` | Mobile static/dynamic analysis, Frida integration |
-| `architecture/wireless.md` | WiFi recon, active attacks (root required) |
-| `architecture/daemon.md` | DaemonStore, SQLite schema, lifecycle persistence |
-| `architecture/database_pentest.md` | Database pentest domain, correlation engine |
+- `docs/ARCHITECTURE.md` — workspace ownership, enforcement model, execution flows
+- `docs/ARCHITECTURE_INVARIANTS.md` — 30 normative invariants
+- `docs/FEATURE_MATRIX.md` — feature inventory, naming, build profiles
+- `docs/ENFORCEMENT_MODES.md` — dual-mode enforcement contract
+- `docs/COMMAND_REGISTRY.md` — command registry inventory and dispatch
+- `docs/TOOL_REGISTRATION.md` — tool registration for MCP/REST/gRPC/agent
+- `docs/EXTENSIBILITY.md` — contributor guide for adding operations, domains, commands
+- `architecture/overview.md` — system-wide architecture, module index
+- `architecture/nse_integration.md` — NSE/Lua integration, milestones, capability wrappers
 
 ## Skills
 
