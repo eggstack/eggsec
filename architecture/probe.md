@@ -8,7 +8,7 @@ Shared probe intent and risk vocabulary defined in `crates/eggsec/src/probe.rs`.
 
 ### ProbeIntent (7 variants)
 
-Intent categories for security probes:
+Intent categories for security probes. Derives `Hash` and `Copy` in addition to standard traits.
 
 | Variant | Description |
 |---------|-------------|
@@ -22,7 +22,7 @@ Intent categories for security probes:
 
 ### ProbeRisk (6 variants)
 
-Risk classification for guardrails and opt-in:
+Risk classification for guardrails and opt-in. Derives `Hash` and `Copy` in addition to standard traits.
 
 | Variant | Description |
 |---------|-------------|
@@ -45,6 +45,11 @@ Risk classification for guardrails and opt-in:
 | `Credentialed` | `CredentialTesting` | `allow_credential_testing` |
 | `Stress` | `StressTest` | `allow_stress_testing` |
 | `ExploitAdjacent` | `ExploitAdjacent` | `allow_exploit_adjacent` |
+
+### ProbeRisk Methods
+
+- `risk_level()` - Returns a numeric risk level (`u8`, 0-5). Higher values indicate higher risk. Used to enforce risk budgets: a stage is skipped if its risk level exceeds the profile's budget. Order: Passive(0) < SafeActive(1) < Intrusive(2) < Credentialed(3) < Stress(4) < ExploitAdjacent(5).
+- `requires_opt_in()` - Returns `true` if this risk level requires explicit user opt-in. Returns true for: `Credentialed`, `Intrusive`, `Stress`, `ExploitAdjacent`. Returns false for: `Passive`, `SafeActive`.
 
 ## Serialization
 

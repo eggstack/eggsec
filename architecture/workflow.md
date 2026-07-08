@@ -12,8 +12,8 @@ Finding lifecycle management including status transitions, assignment, comments,
 | `Finding` | `workflow/finding.rs` | Finding record with status transitions |
 | `FindingStatus` | `workflow/finding.rs` | Status enum: Open, InProgress, Resolved, Verified, FalsePositive |
 | `StatusWorkflow` | `workflow/status.rs` | State machine enforcing valid status transitions |
-| `Assignment` | `workflow/assignment.rs` | Finding assignment record |
-| `Comment` | `workflow/comments.rs` | Finding comment |
+| `Assignment` | `workflow/assignment.rs` | Finding assignment record (`notes: Option<String>`) |
+| `Comment` | `workflow/comments.rs` | Finding comment (`is_internal: bool`) |
 | `SlaPolicy` | `workflow/sla.rs` | SLA policy definition (severity→hours) |
 | `SlaStatus` | `workflow/sla.rs` | SLA tracking and violation detection |
 

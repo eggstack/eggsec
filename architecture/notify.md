@@ -30,7 +30,7 @@ Fully implemented. `NotifyManager` dispatches to webhooks, Slack, Discord, and T
 
 ## Wiring
 
-`NotifyManager` is created in `CommandContext::new()` from `EggsecConfig` and is available on all CLI scan handlers. Each handler calls `notify_scan_started`, `notify_scan_complete`, and `notify_error` at appropriate lifecycle points.
+`NotifyManager` is created in `CommandContext::new()` from `EggsecConfig` and is available on all CLI scan handlers. Each handler calls `notify_scan_started`, `notify_scan_complete`, `notify_findings`, and `notify_error` at appropriate lifecycle points. `NotifyManager::from_settings()` constructs from `EggsecConfig` directly. `NotifyManager::is_enabled()` returns `true` if any webhook or platform notifier is configured.
 
 ## Retry Logic
 
@@ -43,3 +43,4 @@ All notification paths (generic webhooks, Slack, Discord, Teams) use shared retr
 
 - **Generic webhooks**: Each `WebhookConfig` has an `events` field; only matching events are delivered.
 - **Platform notifiers** (Slack/Discord/Teams): Filtered by `platform_event_filter` in `NotificationConfig`. When `None`, all events are delivered.
+- **`notify_scan_complete` event filtering**: Suppressed when `notify_on_complete` is `false` AND (no findings or `notify_on_findings` is `false`). This prevents duplicate scan-complete notifications when findings are reported separately via `notify_findings`.

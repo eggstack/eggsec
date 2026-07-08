@@ -8,9 +8,9 @@ The Networking module provides low-level access to the network stack for tasks l
 
 Deep packet inspection for various protocols:
 
-- **Ethernet**: `EthernetFrame::parse()` - L2 frame parsing
-- **IP**: `IpPacket::parse()` - dispatches to IPv4/IPv6 specific parsers
-- **TCP**: `TcpHeader::parse()` - transport layer with options parsing
+- **Ethernet**: `EthernetFrame::parse()` - L2 frame parsing. `EthernetFrame::header_len()` returns 14 bytes.
+- **IP**: `IpPacket::parse()` - dispatches to IPv4/IPv6 specific parsers. Helper methods: `src_ip()`, `dst_ip()` return source/destination IP strings.
+- **TCP**: `TcpHeader::parse()` - transport layer with options parsing. `TcpFlags::from_bits(u8)` constructs from raw bits; `TcpFlags::to_string()` returns flag names (e.g., `"SYN, ACK"`).
 - **UDP**: `UdpHeader::parse()` - simple datagram parsing
 - **ICMP**: `IcmpHeader::parse()` - control message parsing
 - **DNS**: `DnsRecord::parse()` - full DNS message parsing with compression
@@ -30,7 +30,33 @@ Live packet capture and analysis using the `pnet` library (requires `packet-insp
 - `CaptureStats` (defined in `capture.rs:103-109`) — post-capture metrics: packets/bytes captured, packets dropped, runtime.
 - `PcapWriter` (defined in `capture.rs:14-74`) — writes raw packet data to PCAP files (see below).
 - `CaptureBuilder` (defined in `capture.rs:455-510`) — fluent builder for `PacketCapture` (see below).
-- `PacketCapture` (defined in `capture.rs:111`) — main capture engine; constructed via `CaptureBuilder`.
+- `PacketCapture` (defined in `capture.rs:111`) — main capture engine; constructed via `CaptureBuilder`. Methods: `is_running()` (check if capture is active), `stop()` (signal capture to stop), `stats()` (return current `CaptureStats`), `running()` (return `Arc<AtomicBool>` for external monitoring).
+
+#### `list_interfaces()` (`capture.rs:410-442`)
+
+Returns `Vec<NetworkInterfaceInfo>` of all available network interfaces. Feature-gated on `packet-inspection` + Unix; returns empty vec otherwise.
+
+#### `NetworkInterfaceInfo` (`capture.rs:435-442`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Interface name (e.g., `eth0`) |
+| `ips` | `Vec<String>` | IP addresses assigned to interface |
+| `mac` | `Option<String>` | MAC address (if available) |
+| `is_up` | `bool` | Interface is up |
+| `is_loopback` | `bool` | Interface is loopback |
+
+#### `CaptureError` (`capture.rs:444-460`)
+
+| Variant | Description |
+|---------|-------------|
+| `AlreadyRunning` | Capture already running |
+| `NoInterface` | No suitable network interface found |
+| `InterfaceNotFound(String)` | Named interface not found |
+| `RequiresRoot` | Packet capture requires root privileges |
+| `UnsupportedChannel` | Unsupported channel type |
+| `ChannelError(String)` | Failed to create channel |
+| `IoError(std::io::Error)` | IO error |
 
 #### `PcapWriter` (`capture.rs:14-74`)
 
@@ -49,6 +75,7 @@ Fluent builder pattern for `PacketCapture`. Methods consume and return `Self`:
 | `timeout(Duration)` | Read timeout | `1s` |
 | `max_packets(usize)` | Stop after N packets | `None` (unlimited) |
 | `save_to_file(impl Into<String>)` | Write PCAP to file | `None` |
+| `validate_checksums(bool)` | Enable checksum validation | `false` |
 | `build()` | Constructs `PacketCapture` | — |
 
 #### `PacketInfo` (`packet/mod.rs:25-34`)
@@ -68,7 +95,7 @@ Parsed packet representation with optional protocol layers:
 `summary()` produces a human-readable one-liner (e.g., `"AA:BB:CC:DD:EE:FF → 11:22:33:44:55:66 | 10.0.0.1 → 10.0.0.2 | TCP 443 → 54321 | SYN"`).
 
 - **Filtering**: Custom protocol/port filter for capturing relevant traffic (matches TCP, UDP, ICMP, and specific ports via string comparison).
-- **Hexdump (`hexdump.rs`)**: Pretty-printed hex views of packet data.
+- **Hexdump (`hexdump.rs`)**: Pretty-printed hex views of packet data. `HexDumper<W>` struct provides streaming hex dump to a `fmt::Write` writer with configurable `bytes_per_line` and `offset`. Top-level `hexdump(data)` and `hexdump_with_offset(data, start_offset, bytes_per_line)` functions for quick formatting.
 
 ### Packet Crafting (`craft.rs`)
 
@@ -76,10 +103,15 @@ Creating custom network packets from scratch.
 
 - **TCP/UDP/ICMP**: Support for crafting standard transport and network layer packets with custom flags and payloads.
 - **Validation (`validation.rs`)**: Ensuring crafted packets are well-formed and valid.
+  - `PacketValidationError` enum — `InvalidTtl`, `InvalidHopLimit`, `InvalidTcpOptionsLength(usize)`, `PacketTooLarge { size, max }`, `PayloadTooLarge { size, max }`
 
 ### Diagnostics & Tools
 
 - **Traceroute (`traceroute.rs`)**: High-performance, multi-protocol traceroute implementation (UDP mode default; ICMP mode disabled due to TTL control issues).
+  - `TracerouteBuilder` — fluent builder pattern: `target()`, `max_hops()`, `timeout()`, `max_retries()`, `first_ttl()`, `port()`, `use_icmp()`, `packet_size()`, `parallel()`, `resolve_names()`, `max_concurrent_probes()`, `build()`
+  - `HopProbe` struct — individual probe result: `address`, `rtt`, `success`
+  - `ProbeError` enum — `SocketError(String)`, `SendError(String)`, `ReceiveError(String)`, `Timeout`, `PortUnreachable`
+  - `TracerouteError` enum — `ResolveError(String)`, `ProbeError`, `RequiresRoot`, `Unsupported(String)`
 - **DNS Parsing**: Implemented in `parse_impl.rs` via `DnsRecord::parse()` - low-level DNS message parsing with bounds check validation for malformed responses.
 - **TLS Parsing**: Implemented in `parse_impl.rs` via `TlsHandshake::parse()` - extracting information from TLS handshakes (SNI, certificates).
 - **HTTP Parsing**: Implemented in `parse_impl.rs` via `HttpRequest::parse()` and `HttpResponse::parse()`.

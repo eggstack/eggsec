@@ -26,10 +26,10 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 |------|-------------|
 | `mod.rs` | Module root: `VulnAssessment`, re-exports of sub-module types |
 | `cvss.rs` | CVSS 3.1 base, temporal, and environmental score calculation and vector parsing |
-| `exploit.rs` | Exploitability assessment (heuristic based on CVE year parsing) |
-| `asset.rs` | Asset criticality scoring |
+| `exploit.rs` | Exploitability assessment (heuristic based on CVE year parsing); `ExploitInfo::exploit_pipeline_score()` |
+| `asset.rs` | Asset criticality scoring; `assess_asset()` function |
 | `prioritizer.rs` | Combined risk prioritization engine |
-| `triage.rs` | Finding triage workflow |
+| `triage.rs` | Finding triage workflow; `triage_finding()` function |
 | `remediation.rs` | Remediation guidance generation |
 
 ## Implementation Status

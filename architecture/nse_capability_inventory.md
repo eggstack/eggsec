@@ -623,7 +623,6 @@ All primary helper classes are migrated through `NseCapabilityContext`. The inve
 
 ### Remaining Deferred Items
 
-- `unpwdb.rs` — password database file reads (protocol-specific internal helper)
 - `brute.rs` — brute force helper operations (protocol-specific internal helper)
 - `datafiles.rs` — data file reads (protocol-specific internal helper)
 - Protocol-specific internal helpers beyond network I/O (smb, ssh, ftp, http, etc.)

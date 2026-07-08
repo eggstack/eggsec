@@ -168,10 +168,34 @@ The daemon supports multiple transport layers for client connectivity, declared 
 | Field | Type | Purpose |
 |-------|------|---------|
 | `client_id` | `ClientId` | Identifying the calling client |
-| `peer` | `Option<SocketAddr>` | Peer address (for TCP/HTTP transports) |
+| `peer` | `Option<String>` | Peer address (for TCP/HTTP transports) |
 | `transport` | `TransportKind` | Which transport the request arrived on |
 
 `DaemonHost::handle_command()` accepts `DaemonRequestContext` instead of a bare client ID, ensuring transport provenance is available for audit and policy decisions.
+
+### ErrorCode Enum
+
+```rust
+pub enum ErrorCode {
+    InvalidRequest,
+    SessionNotFound,
+    TaskNotFound,
+    TaskAlreadyCompleted,
+    UnsupportedCommand,
+    Internal,
+    PermissionDenied,
+    InvalidSurface,
+    ClientNotDeclared,
+    Unsupported,
+    InvalidState,
+}
+```
+
+### DAEMON_PROTOCOL_VERSION
+
+```rust
+pub const DAEMON_PROTOCOL_VERSION: u32 = 1;
+```
 
 ### Capabilities Advertisement
 
@@ -211,8 +235,9 @@ Configuration for the HTTP/SSE server:
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `bind_address` | `SocketAddr` | `127.0.0.1:0` | Bind address (loopback enforced unless overridden) |
-| `require_loopback` | `bool` | `true` | Enforce loopback-only binds |
+| `bind_addr` | `String` | `127.0.0.1:9876` | Bind address (loopback enforced unless overridden) |
+| `require_auth` | `bool` | `false` | Require `X-Eggsec-Client-Id` header on every request |
+| `allow_public_bind` | `bool` | `false` | Allow non-loopback bind addresses (emits warning) |
 
 ## Audit Events
 

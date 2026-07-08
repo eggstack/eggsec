@@ -44,7 +44,19 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `web-proxy` | PortScan → Fingerprint → EndpointScan → Fuzz | (Web proxy interception via `Stage::WebProxy`; requires `web-proxy` feature) |
 | `db-regression` | `Stage::DbPentest` (when `db-pentest` feature enabled); falls back to `PortScan → Fingerprint → EndpointScan → Waf → Fuzz` when feature absent |
 
-**Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, and `jwt` are normalized into canonical stages via `Stage::from_string()`.
+**Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, `jwt`, `fuzzing`, `fuzzer`, `loadtest`, `load-test`, `vulnerability`, `vuln-assess`, `proxy`, `webproxy`, `intercept` are normalized into canonical stages via `Stage::from_string()`.
+
+**Methods**:
+- `to_probe_intent()` — Maps stage to `ProbeIntent` category (Discovery, Fingerprint, ServiceValidation, EvasionResistance, LoadBearing, WafEvaluation)
+- `to_probe_risk()` — Maps stage to minimum required `ProbeRisk` level (Passive, SafeActive, Intrusive, Stress)
+
+**Constants**:
+- `DEFAULT_SCAN_PORTS` — `"80,443"`
+- `EXTENDED_SCAN_PORTS` — `"21,22,23,25,53,80,110,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,27017,9092,9200,5672,2181,2375,2376,6443,10250,3000,5000,8000,9000,4200,5601,9090"`
+
+**Functions**:
+- `profile_from_str(s)` — Parse a profile name string into `ScanProfile` variant
+- `parse_stages(s)` — Parse comma-separated stage names into `Vec<Stage>`
 
 ### Executor (`executor.rs`)
 
@@ -75,9 +87,33 @@ pub struct Pipeline {
 }
 ```
 
+#### PipelineProxyFinding (`executor.rs:19-28`)
+
+Feature-gated on `web-proxy`. Simple finding type for pipeline proxy stage results:
+- `title: String`
+- `description: String`
+- `severity: String`
+- `category: String`
+- `location: String`
+
 - `spoof_config` (`SpoofConfig`): Configures source IP spoofing, decoy addresses, fragmentation, scan type, packet trace, max rate, and TTL. Built from CLI args via `SpoofConfig::from_args()`.
 - `config` (`Option<EggsecConfig>`): Optional loaded config file. Used to read `http.verify_tls`, `http.timeout_secs`, `scan.default_concurrency`, and other settings. When `None`, defaults are used.
 - `session_path` (`Option<String>`): Extracted from `--output` arg when the path ends with `.session` or `.session.json`. When set, a `PipelineSession` checkpoint is written after each stage completes.
+
+#### Pipeline Methods
+
+- `from_session(session)` — Reconstruct pipeline from a `PipelineSession` checkpoint
+- `with_spoof_config(spoof_config)` — Set IP spoofing/decoy/fragment configuration
+- `with_config(config)` — Set `EggsecConfig` for TLS, concurrency, defaults
+- `add_stage(stage)` — Append a stage to the pipeline
+- `with_concurrency(concurrency)` — Set concurrent request count
+- `with_concurrent_stages(enabled)` — Enable/disable concurrent stage execution
+- `has_stages()` — Returns `true` if pipeline has stages
+- `get_stages()` — Returns `&[Stage]`
+- `dependency_waves()` — Partition stages into dependency waves for concurrent execution
+- `validate_defense_lab_scope()` — Validate defense-lab profiles target private/loopback only
+- `validate_feature_gates()` — Validate required compile-time features are enabled
+- `validate_stage_risk(stage)` — Check if a stage's risk level fits within the profile's budget
 
 ### Pipeline Context (`context.rs`)
 
@@ -93,6 +129,8 @@ pub struct PipelineContext {
     pub http_ports: Vec<u16>,
     pub vuln_assessment: Option<VulnAssessment>,
     pub load_test_results: Option<LoadTestResults>,
+    #[cfg(feature = "web-proxy")]
+    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
 }
 ```
 
@@ -107,12 +145,29 @@ Data flow:
 Manages persistence for resumable pipeline runs via JSON snapshots (`PipelineSession`).
 Session checkpoints are written only when output path is explicitly a session-like file name (`*.session` or `*.session.json`) to avoid colliding with report outputs.
 
+#### PipelineSession Fields
+
+```rust
+pub struct PipelineSession {
+    pub target: String,
+    pub profile: ScanProfile,
+    pub completed_stages: Vec<Stage>,
+    pub remaining_stages: Vec<Stage>,
+    pub context: PipelineContext,
+    pub spoof_config: SpoofConfig,
+    pub concurrency: Option<usize>,
+    pub concurrent_stages: Option<bool>,
+    pub config: Option<EggsecConfig>,
+}
+```
+
 ### Report (`report.rs`)
 
 `PipelineReport` aggregates results from all stages. Output formats:
 - `Display` - Human-readable console output
 - `generate_html()` - Styled HTML report (**free function**, not a method)
 - `generate_csv()` - CSV report (**free function**, not a method)
+- `generate_markdown()` - Markdown report (**free function**, not a method)
 - SARIF/JUnit via `output/` module
 
 #### PipelineReport Struct (`report.rs:13-31`)
@@ -133,6 +188,9 @@ pub struct PipelineReport {
     pub vuln_assessment: Option<VulnAssessment>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub load_test_results: Option<LoadTestResults>,
+    #[cfg(feature = "web-proxy")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
 }
 ```
 
@@ -143,8 +201,12 @@ pub struct PipelineReport {
 ## CLI Entry Points (`mod.rs`)
 
 - `run_cli(args, config)` - Standard CLI pipeline execution
-- `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction)
+- `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction); feature-gated on `tool-api`
 - `resume_cli(args, config)` - Resume from session checkpoint
+
+#### `write_output(report, output_path, format)` (`mod.rs:64-119`)
+
+Writes pipeline report to the specified path in the given format (HTML, JSON, CSV, Markdown, SARIF, JUnit). Handles manifest file writing for regression workflows.
 
 ## Implemented Defense-Lab Profiles
 

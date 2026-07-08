@@ -15,7 +15,7 @@ The `runner.rs` file contains the core logic for generating high volumes of HTTP
 - **Rate Limiting**: Optionally caps global request issuance with `--rate-limit`. Uses proper interval calculation to avoid timing drift.
 - **Auth Headers**: Helper `apply_auth_headers()` method handles Basic, Bearer, Cookie, API Key authentication.
 - **Connection Pool**: Non-success response bodies are consumed before returning connections to the pool.
-- **Graceful Shutdown**: Uses `CancellationToken` (`tokio_util::sync::CancellationToken`) to signal worker tasks to stop. The token is cloned per-worker and checked at the top of each worker's loop (`runner.rs:305`). On completion, the token is cancelled and all workers are aborted via `JoinSet::abort_all()`.
+- **Graceful Shutdown**: Uses `CancellationToken` (`tokio_util::sync::CancellationToken`) to signal worker tasks to stop. The token is cloned per-worker and checked at the top of each worker's loop (`runner.rs:343`). On completion, the token is cancelled and all workers are aborted via `JoinSet::abort_all()`.
 - **Progress Bar**: Uses `indicatif::ProgressBar` with `ProgressStyle` template `[{spinner:.green}] [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})`. Progress bar is disabled in TUI mode to avoid terminal conflicts.
 - **Report Trait**: `LoadTestResults` implements `Report` trait (`runner.rs:380-388`) with `title() -> "Load Test Report"` and `to_json()` using `serde_json::to_string_pretty()`.
 

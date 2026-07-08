@@ -30,6 +30,9 @@ pub struct DomainDescriptor {
     pub reports: &'static [ReportIntegration],
     pub dry_run: DryRunSupport,
     pub evidence: EvidenceSupport,
+    pub baseline: BaselineSupport,
+    pub strict_surface_support: bool,
+    pub docs_url: Option<&'static str>,
 }
 ```
 
@@ -54,16 +57,23 @@ Classifies domains by their risk and operating mode:
 - **`ReportIntegration`** — Maps an operation to report output.
 - **`DryRunSupport`** — `AlwaysAvailable`, `FeatureGated(&str)`, or `NotSupported`.
 - **`EvidenceSupport`** — `AlwaysAvailable`, `FeatureGated(&str)`, or `NotSupported`.
+- **`BaselineSupport`** — `AlwaysAvailable`, `FeatureGated(&str)`, or `NotSupported` (whether baseline capture and regression comparison is supported).
 
 ## Registry
 
 ```rust
 pub fn all_domain_descriptors() -> &'static [DomainDescriptor];
 pub fn domain_descriptor_by_id(id: &str) -> Option<&'static DomainDescriptor>;
+pub fn available_domain_descriptors() -> Vec<&'static DomainDescriptor>;
+pub fn feature_missing_hint(feature: &str) -> Option<&'static str>;
 pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow>;
 ```
 
 The registry returns all known domains. Domains behind disabled features are included (their `required_feature` field indicates gating). Consumers should check feature availability before use.
+
+`available_domain_descriptors()` returns only domains whose required feature is compiled (convenience wrapper over `all_domain_descriptors()`).
+
+`feature_missing_hint()` returns a diagnostic hint string naming the exact Cargo feature flag needed to enable a domain (e.g. `"enable the 'db-pentest' feature in Cargo.toml: cargo build --features db-pentest"`). Returns `None` for unrecognized features.
 
 `generate_capability_matrix()` produces `CapabilityMatrixRow` entries from all registered domain descriptors, suitable for documentation generation and validation. `docs/CAPABILITY_MATRIX.md` is the canonical human-readable output.
 
@@ -83,6 +93,49 @@ The `db-pentest` domain is the first pilot implementation:
 | `required_mcp_feature` | `"db-pentest-mcp"` |
 | `dry_run` | `AlwaysAvailable` |
 | `evidence` | `AlwaysAvailable` |
+| `baseline` | `AlwaysAvailable` |
+| `strict_surface_support` | `true` |
+| `docs_url` | `Some("docs/DATABASE_PENTEST.md")` |
+
+## Mobile Domain Descriptors
+
+### mobile-static
+
+| Field | Value |
+|-------|-------|
+| `id` | `"mobile-static"` |
+| `category` | `DefenseLab` |
+| `required_feature` | `"mobile"` |
+| `operation_id` | `"mobile-static"` |
+| `risk` | `SafeActive` |
+| `mcp_exposed_by_default` | `false` |
+| `dry_run` | `AlwaysAvailable` |
+| `evidence` | `NotSupported` |
+| `baseline` | `NotSupported` |
+| `strict_surface_support` | `true` |
+| `docs_url` | `Some("docs/MOBILE.md")` |
+
+### mobile-dynamic
+
+| Field | Value |
+|-------|-------|
+| `id` | `"mobile-dynamic"` |
+| `category` | `DefenseLab` |
+| `required_feature` | `"mobile-dynamic"` |
+| `operation_id` | `"mobile-dynamic"` |
+| `risk` | `Intrusive` |
+| `capabilities` | `[MobileDynamicAnalysis]` |
+| `mcp_exposed_by_default` | `false` |
+| `dry_run` | `AlwaysAvailable` |
+| `evidence` | `AlwaysAvailable` |
+| `baseline` | `AlwaysAvailable` |
+| `strict_surface_support` | `false` |
+| `docs_url` | `Some("docs/MOBILE.md")` |
+
+## DomainDescriptor Methods
+
+- `is_available()` - Returns `true` if the domain's required feature (if any) is currently compiled
+- `availability_hint()` - Returns a diagnostic hint if the domain is unavailable, or `None` if available
 
 ## Safety Invariants
 

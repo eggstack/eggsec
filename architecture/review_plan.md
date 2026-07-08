@@ -1,5 +1,7 @@
 # Architecture Review Plan
 
+> **HISTORICAL ARTIFACT** — This document is a completed plan from 2026-06-02. Statistics and findings below are outdated. For current architecture documentation, see [overview.md](overview.md).
+
 **Status:** COMPLETED
 **Created:** 2026-06-02
 **Completed:** 2026-06-02
@@ -270,9 +272,9 @@ Before committing, verify and clean up:
 - **41 modules** in `crates/eggsec/src/`
 - **169 NSE libraries** in `eggsec-nse/src/libraries/`
 - **34 WAF products** verified
-- **30 fuzzing payload types** verified
+- **40 fuzzing payload types** (updated from 30)
 - **261 scanner endpoints** verified
-- **28 tabs** in TUI (20 base + 8 feature-gated)
+- **33 tabs** in TUI (21 base + 12 feature-gated) (updated from 28)
 
 ### Top 4 Recommended Actions
 1. Fix defense-lab stage counts in `architecture/pipeline.md`

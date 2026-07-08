@@ -8,12 +8,19 @@ The Fuzzer is the most advanced part of Eggsec, designed to find vulnerabilities
 
 The core loop that manages targets, payloads, and detections.
 
-- **Core (`core.rs`)**: `FuzzEngine` struct — main entry point, builds HTTP client, manages configuration.
+- **Core (`core.rs`)**: `FuzzEngine` struct — main entry point, builds HTTP client, manages configuration. Fields include `args`, `client`, `timing_analyzer`, `pattern_matcher`, `user_agent`, `tui_mode`, `grammar_fuzzer`, `http_session`, `differ`, `baseline_captured`, `filter_chain`, `auth_context_entry`, and `ai_generator` (feature-gated on `ai-integration`).
 - **Execution (`execution.rs`)**: Implements Sequential (one at a time), Burst (concurrent), and Adaptive (rate-limited) modes.
 - **Types (`types.rs`)**: `FuzzResult`, `FuzzSession`, `OwaspSummary` and related types.
 - **Utils (`utils.rs`)**: Payload mutation, session building, diffing orchestration, URL construction. References `crate::constants::waf::BLOCKED_STATUS_CODES` for WAF detection.
 - **Chained (`chained.rs`)**: `StatefulFuzzer` for multi-step fuzz chains.
 - **Advanced (`advanced.rs`)**: Engine-level advanced fuzzing orchestration.
+
+#### Public Methods
+
+- **`FuzzEngine::new(args)`** — Creates engine with `tui_mode = false`
+- **`FuzzEngine::new_with_tui_mode(args, tui_mode)`** — Creates engine with explicit TUI mode control
+- **`FuzzEngine::run_return_session()`** — Executes fuzzing and returns `FuzzSession` (used by both `run()` and external callers)
+- **`run_cli_with_callback(args, config, callback)`** — Pipeline execution with finding callback; feature-gated on `tool-api`
 
 ### Payloads (`payloads/`)
 
@@ -32,17 +39,29 @@ Seven categories are treated as "advanced" (with dedicated fuzzer implementation
 
 Each payload type has its own module (e.g., `sqli.rs`, `xss.rs`). The `payload_vec!` macro in `macros.rs` builds payload vectors from inline data.
 
+The `is_advanced()` method on `PayloadType` returns `true` for 6 variants: GraphQL, OAuth, Jwt, Idor, Ssti, Grpc (WebSocket is excluded from the advanced check despite having a dedicated fuzzer).
+
 ### Detection (`detection/`)
 
 Algorithms for identifying if a fuzzing attempt was successful.
 
-- **Pattern Matching (`aho_corasick.rs`)**: Aho-Corasick multi-pattern matcher for leak detection (database errors, stack traces, file paths, sensitive data, credentials, debug info).
+- **Pattern Matching (`aho_corasick.rs`)**: Aho-Corasick multi-pattern matcher for leak detection (database errors, stack traces, file paths, sensitive data, credentials, debug info). Key types:
+  - `LeakMatch` — a matched pattern with `pattern`, `category`, `severity`, and `context` (surrounding text)
+  - `LeakCategory` enum — `DatabaseError`, `StackTrace`, `FilePath`, `SensitiveData`, `DebugInfo`, `Configuration`, `Credentials`
+  - `LeakSeverity` enum — `Critical`, `High`, `Medium`, `Low`
+  - `PatternMatcher` — wraps the static Aho-Corasick matcher; method `scan(&self, text: &str) -> Vec<LeakMatch>`
 - **Timing Analysis (`analyzer.rs`)**: `TimingAnalyzer` detects response time anomalies using IQR (Interquartile Range) baselines. Internal stats (total requests, anomaly counts) use lock-free atomics, but `record()` requires `&mut self` and is wrapped in `Arc<Mutex<>>` at the call site. Handles NaN values explicitly to prevent panics.
 - **Detection Patterns (`patterns.rs`)**: Raw pattern lists for SQL errors, stack traces, file paths, credentials, AWS keys, and connection strings.
 
 ### Diffing (`diff.rs`)
 
 `ResponseDiffer` compares fuzzed responses against a baseline "clean" request. Tracks status changes, header differences, body length anomalies, cookie changes, and timing anomalies with a weighted anomaly score.
+
+Key types:
+- **`ResponseSnapshot`** — baseline snapshot: `status_code`, `headers` (HeaderSnapshot), `body_hash`, `body_length`, `content_type`, `timing_ms`
+- **`HeaderSnapshot`** — captured headers: `headers` (Vec of tuples), `etag`, `set_cookie`, `cache_control`, `content_length`, `x_powered_by`, `server`
+- **`DiffResult`** — comparison result: `status_changed`, `content_type_changed`, `body_length_diff`, `new_headers`, `removed_headers`, `header_value_changes`, `new_cookies`, `timing_change_ms`, `anomaly_score`
+- **`HeaderChange`** — individual header difference: `name`, `baseline`, `current`
 
 ### Session Management (`state.rs`)
 
@@ -65,6 +84,20 @@ Algorithms for identifying if a fuzzing attempt was successful.
 
 `FilterChain` applies sequential filters to exclude responses by status code, response size, word count, line count, response time, or regex patterns on the response body. Similar to ffuf's filtering.
 
+`PayloadFilter` enum variants (13 total):
+- `StatusCode(Vec<u16>)` — filter by HTTP status code
+- `ResponseSize(Vec<u64>)` — filter by exact response sizes
+- `ResponseSizeRange { min, max }` — filter by response size range
+- `WordCount(Vec<u64>)` — filter by exact word counts
+- `WordCountRange { min, max }` — filter by word count range
+- `LineCount(Vec<u64>)` — filter by exact line counts
+- `LineCountRange { min, max }` — filter by line count range
+- `ResponseTimeMax(u64)` — filter by max response time (ms)
+- `ResponseTimeRange { min, max }` — filter by response time range (ms)
+- `Regex(Regex)` — filter by regex pattern on response body
+- `SizeGreaterThan(u64)` — filter by minimum response size
+- `SizeLessThan(u64)` — filter by maximum response size
+
 ### Chained Fuzzing (`chain.rs`)
 
 `ChainExecutor` supports multi-step fuzz chains with variable extraction, conditional logic, and LRU regex caching (cache size 100). `AutoExploiter` automates exploitation chains.
@@ -72,6 +105,11 @@ Algorithms for identifying if a fuzzing attempt was successful.
 ### Calibration (`calibration.rs`)
 
 Auto-calibration system that samples baseline responses before fuzzing to automatically configure filters. Analyzes status codes, response sizes, word counts, line counts, and timing to establish "normal" behavior.
+
+Key types:
+- **`Calibrator`**: Auto-calibration system that samples baseline responses using an HTTP client and `FuzzArgs`. Method `calibrate()` sends requests with dummy payloads to establish baseline behavior.
+- **`CalibrationResult`**: Result of calibration — contains `filter_chain` (derived filters), `baseline_stats` (statistical summary), and `samples_taken` (number of calibration samples).
+- **`BaselineStats`**: Statistical summary of baseline responses — `status_codes`, `avg_size`, `min_size`, `max_size`, `avg_words`, `avg_lines`, `avg_time_ms`, `min_time_ms`, `max_time_ms`.
 
 ### Targets (`targets/`)
 
@@ -88,7 +126,7 @@ Target-specific payload generation:
 
 ## Specialized Fuzzing
 
-- **API Schema Fuzzing (`api_schema/`)**: Automatically generates tests based on OpenAPI 3.0 (Swagger) definitions. Type-aware payloads, auth bypass, required parameter omission, oversized payload generation.
+- **API Schema Fuzzing (`api_schema/`)**: Automatically generates tests based on OpenAPI 3.0 (Swagger) definitions. Types: `ApiSchemaFuzzer`, `ApiEndpoint`, `ApiParameter`, `ParamLocation`, `SchemaFuzzTarget`, `SchemaFuzzResult`. Type-aware payloads, auth bypass, required parameter omission, oversized payload generation.
 - **Advanced Threat Hunting (`advanced.rs`)**: Specialized fuzzers — `GraphQLFuzzer`, `JwtFuzzer`, `OAuthFuzzer`, `IdorFuzzer`, `SstiFuzzer`, `WebSocketFuzzer`, `GrpcFuzzer`.
 - **ReDoS Detection (`redos_detect.rs`)**: `RegexExecutor` with timeout-based detection (default 1000ms, max 100k iterations). `ReDosDetector` checks against known vulnerable patterns. `PayloadReDosChecker` extracts and tests regex patterns from payloads.
 
@@ -164,6 +202,10 @@ s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
 - `SstiFuzzer` - Template engine detection (Jinja2, ERB, etc.)
 - `WebSocketFuzzer` - Message injection (use `PayloadType::Websocket`, not `PayloadType::Grpc`)
 - `GrpcFuzzer` - Method injection
+
+Traits:
+- **`AdvancedFuzzer`** — async trait with `fuzz(&mut self, client: &Client) -> Vec<FuzzResult>` and `name(&self) -> &str`
+- **`FuzzerResultConverter<T>`** — trait with `into_fuzz_result(self) -> FuzzResult` for converting type-specific results to `FuzzResult`
 
 ### ReDoS Detection
 `redos_detect.rs` provides:

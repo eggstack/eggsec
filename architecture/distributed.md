@@ -20,6 +20,31 @@ Independent nodes that perform the actual scanning and fuzzing tasks.
 - **Resource Monitoring**: Workers report their current load and availability to the coordinator.
 - **Task Execution**: Workers receive tasks, execute them locally using the core Eggsec engine, and report results back.
 
+#### `Worker::start()` Flow
+
+1. `register_with_coordinator()` — sends `CommandMessage::Register` with worker_id, hostname, capabilities
+2. `start_heartbeat_loop()` — periodic heartbeat via `RemoteClient::send_heartbeat()`
+3. `start_task_request_loop()` — periodic task requests via `RemoteClient::request_tasks()` (max `MAX_TASKS_PER_REQUEST` = 5 per request)
+4. `start_task_processing_loop()` — receives tasks from channel, spawns per-task processing
+
+#### `Worker::shutdown()` and `Drop`
+
+`shutdown()` sends a shutdown signal via `watch::Sender<bool>`, then aborts all spawned task handles (heartbeat, task request, task processor). `Drop` impl performs the same cleanup defensively if `shutdown()` was not called.
+
+#### `process_task()` Dispatch
+
+Routes tasks to type-specific processors via `TaskType`:
+
+| TaskType | Processor | Description |
+|----------|-----------|-------------|
+| `PortScan` | `process_port_scan()` | Scans ports using `scanner::ports::scan_ports()` |
+| `ServiceFingerprint` | `process_fingerprint()` | Fingerprints services via `scanner::fingerprint::fingerprint_services()` |
+| `EndpointDiscovery` | `process_endpoints()` | Discovers endpoints via `scanner::endpoints::scan_endpoints()` |
+| `Fuzz` | `process_fuzz()` | Runs fuzzing engine via `fuzzer::engine::FuzzEngine` |
+| `WafTest` | `process_waf()` | Tests WAF bypass via `waf::run_cli()` |
+| `LoadTest` | `process_load_test()` | HTTP load testing via `loadtest::run_cli()` |
+| `Recon` | `process_recon()` | Reconnaissance via `recon::run_cli()` |
+
 #### Worker Helpers
 
 - **`parse_coordinator_url(url: &str)`** (`worker.rs:11-31`): Parses `host:port` URLs, stripping `http://`/`https://` prefixes. Returns `Result<(&str, u16)>`.
@@ -84,7 +109,7 @@ Runtime statistics tracked by the worker and included in heartbeat messages.
 
 Secure and efficient communication between nodes using line-based JSON over TCP (not gRPC or HTTP).
 
-- **Authentication**: PSK-based authentication ensures only authorized workers can join the cluster.
+- **Authentication**: PSK-based authentication ensures only authorized workers can join the cluster. `AuthMessage` struct at `remote.rs:632` contains `psk: String` and is sent as the first message after TCP connection.
 - **Encryption**: TLS encryption support (with `insecure-tls` feature for testing).
 - **Line-based Protocol**: Messages are newline-delimited JSON for simple, efficient communication.
 - **Real-time Updates**: Status updates and findings are streamed back to the coordinator as they happen.
@@ -152,6 +177,17 @@ pub const CAPABILITIES: &[&str] = &[
     "Recon",
 ];
 ```
+
+### Security Constants (`command.rs:7-26`)
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:9`) |
+| `ALLOWED_COMMANDS` | `["eggsec"]` | Only `eggsec` executable permitted |
+| `MAX_OUTPUT_SIZE` | 10 MB | Max command output size |
+| `MAX_ARGS` | 50 | Max command arguments |
+| `MAX_ARG_LENGTH` | 1000 | Max characters per argument |
+| `FORBIDDEN_PATTERNS` | 12 patterns | Blocked path patterns (`../`, `/etc/`, `/root/`, `/proc/`, `/sys/`, `~/.ssh/`, `~/.aws/`, `.pem`, `.key`, `--config`, `--config-file`, `--credentials`) |
 
 When workers register with the coordinator via `CommandMessage::Register`, they include their capabilities. The coordinator uses these capabilities to assign appropriate tasks to each worker based on what the worker is capable of performing. The `WorkerRegistration` struct at `mod.rs:93-102` stores the worker's reported capabilities alongside its `worker_id`, `hostname`, `max_concurrency`, `status`, and `last_heartbeat_secs`.
 

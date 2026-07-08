@@ -60,3 +60,9 @@ eggsec postex --category lotl --dry-run --json
 - `to_scan_report_data()` bridges `PostexReport` → `ScanReportData` with `postex-*` categories
 - Auto-bridged in `report convert` handler
 - SARIF, HTML, JSON, CSV, JUnit, Markdown output supported
+
+## Key Methods
+
+- `PostexRisk::to_severity()` converts risk level to `Severity` (Low→Info, Medium→Low, High→Medium, Critical→High)
+- `run_cli()` is the CLI entry point for post-exploitation testing
+- `generate_cleanup_command()` in `persistence.rs` produces platform-specific cleanup commands per persistence type

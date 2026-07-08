@@ -72,6 +72,14 @@ pub enum FindingStatus {
 
 Each transition is recorded in `status_history: Vec<StatusChange>` with timestamps and optional notes.
 
+**`FindingStatus::valid_transitions()`** returns the set of valid target statuses from each state:
+- `New` → Confirmed, FalsePositive, AcceptedRisk
+- `Confirmed` → Remediated, AcceptedRisk, FalsePositive
+- `AcceptedRisk` → Reopened, FalsePositive
+- `FalsePositive` → Reopened
+- `Remediated` → Reopened
+- `Reopened` → Confirmed, FalsePositive, AcceptedRisk
+
 ## Confidence Divergence
 
 **IMPORTANT**: There are THREE separate `Confidence` enums in the codebase with different variants:
@@ -87,3 +95,20 @@ The `findings` module includes an `Informational` variant (score 0.0) that the o
 ## Implementation Status
 
 Fully implemented. Canonical `Finding` schema is defined with rich metadata. Module notes that existing module-specific types are not yet migrated to this canonical schema.
+
+## Key Methods
+
+### Finding Methods (`mod.rs`)
+
+- `compute_fingerprint()` - Generates a stable SHA-256 fingerprint for deduplication. Deterministic across scan runs when the same issue is rediscovered on the same asset. Hashes asset type, identifier (lowercased), finding type, location path/parameter, CWE, and normalized title.
+- `refresh_fingerprint()` - Recomputes and stores the fingerprint in-place.
+
+### StoredFinding Methods (`lifecycle.rs`)
+
+- `new(finding, scan_id)` - Creates a new stored finding with `New` status and empty history.
+- `change_status(new_status, note)` - Transitions to a new status. Returns `Err` if the transition is invalid per `valid_transitions()`. Records a `StatusChange` entry with timestamp and optional note.
+
+### Evidence Constructors (`mod.rs`)
+
+- `Evidence::new(kind, summary, data)` - Creates a new evidence entry, marked as not redacted.
+- `Evidence::redacted(kind, summary)` - Creates a redacted evidence entry with `Null` data and `redacted: true`.

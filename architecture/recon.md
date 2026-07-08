@@ -46,6 +46,13 @@ The Reconnaissance module focuses on passive and active information gathering ab
 
 - **Progress Spinner (`spinner.rs`)**: Terminal progress indicator for recon operations.
 
+### Module Entry Points (`mod.rs`)
+
+- `run_cli(args, config)` - CLI entry point for recon. Starts a spinner, runs `run_full_recon()`, stops spinner, writes output.
+- `run_cli_with_callback(args, config, callback)` - CLI entry point with callback for streaming findings (feature-gated: `tool-api`). Iterates CVE, technology, and takeover results, invoking the callback for each finding.
+- `SpinnerGuard` - Manages the terminal spinner lifecycle. Starts a background thread that ticks the spinner until stopped.
+- `write_recon_output(recon, args, has_spinner)` - Writes recon results to stdout or file (JSON or human-readable format).
+
 ### Standalone Modules (not in public API)
 
 These modules exist in `src/recon/` but are **not** exported via `mod.rs` and are not part of the full recon pipeline. They are available for direct invocation or internal use only.
@@ -89,7 +96,7 @@ The `runner.rs` file orchestrates all these recon tasks, running them in paralle
 
 ### Full Recon Pipeline Modules
 
-`run_full_recon()` executes these 17 modules:
+`run_full_recon()` executes these 16 modules:
 
 ```
 reverse_dns, geolocation, threatintel, ssl, whois, subdomain,
@@ -97,9 +104,11 @@ dns_records, techdetect, js, wayback, cloud, content, cors,
 email, takeover, cve, secrets
 ```
 
+The `FULL_RECON_PIPELINE_MODULES` constant in `mod.rs` lists the canonical module names.
+
 ### Execution Model
 
-**Parallel Execution (13 tasks via `tokio::join!`)**:
+**Parallel Execution (14 tasks via `tokio::join!`)**:
 ```
 reverse_dns, geolocation, threat_intel, ssl, whois, subdomain_enum,
 dns_records, tech_detection, js_analysis, wayback_check,
@@ -107,9 +116,10 @@ content_analysis, cors_check, email_discovery
 ```
 Cloud detection runs separately (feature-gated `#[cfg(feature = "cloud")]`).
 
-**Sequential Dependencies**:
+**Sequential Dependencies** (run after the parallel block):
 - `takeover` runs after `subdomain_enum` completes
 - `cve` mapping runs after `tech_detection` completes
+- `secrets` scanning runs after `content_analysis` completes
 
 ### Result Aggregation
 

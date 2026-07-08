@@ -24,6 +24,11 @@ The main configuration struct that holds all tool settings. It is typically load
 - `RemoteConfig` - Remote worker settings (`psk`, `default_port`, `allowed_workers`)
 - `ExecutionPolicy` - Operation policy controls (scope requirements, risk levels, allowed operations); includes `allow_exploit_adjacent` field for near-exploitation testing
 
+**Additional fields on `EggsecConfig`:**
+- `auto_save_interval_secs: u64` - Auto-save interval for session state (default: 30)
+- `schedule: Vec<ScheduledScan>` - Scheduled scan entries (cron-based)
+- `integrations: IntegrationConfig` - External integration settings (feature-gated: `external-integrations`)
+
 ### `Scope` (`scope.rs`)
 
 The `Scope` struct is critical for security and compliance. It defines which targets are "in-scope" and which are explicitly excluded.
@@ -51,10 +56,17 @@ pub enum ScopeSource {
 }
 ```
 
+**Fields on `LoadedScope`:**
+- `scope: Scope` - The underlying scope (accessed directly, not via methods)
+- `source: ScopeSource` - The provenance (accessed directly, not via methods)
+- `path: Option<String>` - Optional file path
+
 **Key methods on `LoadedScope`:**
 - `is_explicit_manifest()` - Returns `true` if the scope was provided via `--scope` or config file (not default empty)
-- `source()` - Returns the `ScopeSource`
-- `scope()` - Returns a reference to the underlying `Scope`
+- `default_empty()` - Creates a default empty scope with `DefaultEmpty` source
+- `explicit(scope, source, path)` - Creates from an explicit scope with provenance
+
+**Note:** Fields are public and accessed directly (e.g. `loaded_scope.source`, `loaded_scope.scope`). There are no `source()` or `scope()` accessor methods.
 
 **Security enforcement:**
 - Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `is_explicit_manifest() == true` for networked operations
@@ -82,12 +94,17 @@ pub enum ScopeSource {
 - `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `RequireConfirmation(PolicyDecision)`, `Deny(PolicyDecision)`
 - `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
 - `Capability` - Operation capability declarations for tool metadata
-- `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes
+- `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes with variants:
+  - `Candidate` - Newly discovered, not yet evaluated
+  - `PendingApproval` - Awaiting operator approval
+  - `ApprovedInScope` - Approved and confirmed in scope
+  - `RejectedOutOfScope` - Rejected as out-of-scope
+  - `is_scannable()` - Returns `true` only for `ApprovedInScope`
 - `ManualOverride` and `ConfirmationClass` (policy_decision.rs) - Manual discretion overrides (see below)
 
 ### Manual discretion mode (plan 2026-06-10)
 
-Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), non-baseline capability (`NonBaselineCapability`), private resolution (`PrivateResolution`), cross-host redirect (`CrossHostRedirect`), or target expansion (`TargetExpansion`).
+Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), non-baseline capability (`NonBaselineCapability`), private resolution (`PrivateResolution`), cross-host redirect (`CrossHostRedirect`), target expansion (`TargetExpansion`), or traffic interception (`TrafficInterception`).
 
 `ManualGuarded`, `CiStrict`, `McpStrict`, and `AgentStrict` treat `RequireConfirmation` as `Deny` (no proceed path).
 
@@ -151,6 +168,37 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 ### Preflight System (`preflight_operation()`)
 
 `PreflightResult` (`config/policy_decision.rs`) and `preflight_operation()` provide a read-only policy check that surfaces enforcement decisions *before* dispatching an operation. Every execution surface (CLI `eggsec preflight`, TUI wrapper, REST `POST /api/preflight`, MCP tool, agent scan logger) calls `preflight_operation(surface, enforcement, descriptor, manual_override)` which delegates to `EnforcementContext::evaluate()` — the same enforcement path used at dispatch time. The result includes the outcome kind (Allow/Warn/RequireConfirmation/Deny), required confirmation classes, suggested CLI flags for manual surfaces, and scope provenance. The TUI wraps this as `TuiPreflightResult` for status-bar display; REST returns it as JSON; the agent logs it before each scan.
+
+### `ExecutionBudget` (`budget.rs`)
+
+Budget constraints for execution runs. Ensures stress, load, and raw-packet operations always have finite limits.
+
+**Fields:** `max_duration_secs`, `max_requests`, `max_packets`, `max_bytes`, `max_concurrency`, `max_targets`, `max_resolved_addresses_per_host`, `max_payloads`, `cooldown_secs`, `per_target_rate_limit`
+
+**Constructors:**
+- `ExecutionBudget::default()` - Conservative default (300s, 10k requests, concurrency 10)
+- `ExecutionBudget::defense_lab_default()` - Conservative budget for defense-lab operations
+- `ExecutionBudget::hazardous_lab_default()` - Stricter budget with packet/byte limits and rate limiting (120s, 5k requests, 10k packets, 10MB bytes, concurrency 5)
+- `ExecutionBudget::from_preset(&DefenseLabPreset)` - Creates a budget from a defense-lab preset
+
+**Validation:** `validate()` checks that duration > 0, at least one finite bound (requests, packets, bytes, or payloads) exists, and concurrency > 0.
+
+### `DefenseLabPreset` (`presets.rs`)
+
+A defense-lab preset that defines constraints for a specific lab workflow.
+
+**Fields:** `name`, `description`, `operation_mode`, `max_risk`, `intended_uses`, `default_concurrency`, `max_duration_secs`, `max_requests`, `max_packets`, `max_payloads`, `dns_resolution_allowed`, `raw_sockets_allowed`, `external_targets_allowed`, `localhost_or_private_required`, `output_format`
+
+**7 Built-in Presets:**
+- `synvoid_local()` - Local Synvoid WAF and protocol validation (concurrency 10, 300s, 10k requests)
+- `synvoid_waf_regression()` - WAF payload and evasion-resistance regression (concurrency 20, 600s, 50k requests)
+- `synvoid_protocol_edge()` - Malformed protocol and edge behavior validation (concurrency 5, 120s, 1k requests, raw sockets)
+- `distributed_system_smoke()` - Lightweight distributed system resilience smoke test (concurrency 5, 60s, 500 requests)
+- `distributed_system_stress()` - Distributed system stress with controlled load (HazardousLab mode, concurrency 50, 300s, 100k requests)
+- `waf_regression_safe()` - Safe WAF regression with conservative budgets (concurrency 5, 120s, 5k requests)
+- `waf_regression_intrusive()` - Intrusive WAF regression with full payload families (concurrency 20, 600s, 50k requests)
+
+**Helpers:** `built_in()` returns all 7 presets; `find(name)` looks up by name; `list_names()` returns all preset name strings.
 
 ### `Loader` (`loader.rs`)
 

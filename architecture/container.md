@@ -14,6 +14,7 @@ Container security scanning for Docker images, Kubernetes configurations, contai
 | `DockerScanResult` | `container/docker.rs` | Docker image analysis results |
 | `ImageLayer` | `container/docker.rs:18` | Single Docker image layer (id, instruction, size) |
 | `DockerMisconfiguration` | `container/docker.rs:24` | Dockerfile/docker-compose misconfiguration (check, severity, description, recommendation) |
+| `KubernetesScanner` | `container/kubernetes.rs` | Kubernetes cluster scanner; `from_in_cluster_config()` reads service account token |
 | `KubernetesScanResult` | `container/kubernetes.rs` | Kubernetes cluster scan results with per-category findings |
 | `ClusterInfo` | `container/kubernetes.rs:16` | Cluster metadata (server version, node count, namespace count) |
 | `K8sFinding` | `container/kubernetes.rs:23` | Kubernetes security finding (resource type/name, severity, description, recommendation) |

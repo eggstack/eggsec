@@ -9,7 +9,7 @@ Eggsec features deep integration with AI models for analysis, payload generation
 An abstraction layer for interacting with different LLM providers:
 - **Providers**: OpenAI, Azure, Anthropic, OpenAICompatible
 - **Features**: Bearer/Azure auth, circuit breaker, response normalization
-- **Methods**: `chat_completion_from_messages()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`, `into_payload_generator()`
+- **Methods**: `chat_completion_from_messages()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`, `into_payload_generator()`, `circuit_breaker_state()`
 - **Note**: `chat_completion()` is private — use `chat_completion_from_messages()` instead
 - **AiConfig fields**: `provider`, `model`, `api_key`, `base_url`, `max_tokens`, `temperature`, `max_payloads`, `max_bypasses`
 - **Anthropic normalization**: Anthropic responses are normalized to OpenAI format, with `usage` data preserved at the top level and original response under `provider_response`
@@ -18,6 +18,9 @@ An abstraction layer for interacting with different LLM providers:
 
 Using AI to analyze target responses and adjust fuzzing strategies in real-time:
 - `AdaptiveScanEngine::adjust_strategy()` analyzes findings and returns strategy
+- `AdaptiveScanEngine::get_strategy()` returns current strategy string
+- `AdaptiveScanEngine::get_ai_suggestion()` returns AI-suggested strategy if available
+- `AdaptiveScanEngine::fallback_to_standard()` resets to standard strategy
 - Strategies: deep, thorough, quick, stealth, standard
 - Falls back to severity-based heuristics when AI unavailable
 
@@ -26,14 +29,19 @@ Using AI to analyze target responses and adjust fuzzing strategies in real-time:
 Generating complex, context-aware payloads:
 - `AiPayloadGenerator` - Generates payloads with LRU caching (100 entries, 1hr TTL)
 - `ScriptGenerator` - Generates Python security testing scripts (feature-gated)
+- `ScriptGenerator::save_script()` saves generated script to disk with metadata header
+- `PluginLanguage` enum: `Python`, `Ruby`, `Rust` (only Python is currently implemented)
 - Uses `CacheKeyBuilder` for collision-free cache keys
 
 ### WAF Bypass Suggestions (`waf_bypass.rs`)
 
 The AI can analyze detected WAF signatures and suggest novel bypass techniques:
 - `SmartWafBypass` maintains knowledge base of known bypasses
+- `SmartWafBypass::with_config(client, max_bypasses)` configurable constructor
 - Knowledge base persists to `waf_bypasses.json` (max 1000 entries)
 - Tracks success/failure per (WAF, payload) pair
+- `SmartWafBypass::record_success()` records successful bypass in knowledge base
+- `SmartWafBypass::record_failure()` records failed bypass attempt
 - `iterative_bypass()` for multi-iteration refinement
 
 ### Caching (`cache.rs`)
@@ -77,9 +85,22 @@ pub struct AiPayloadGenerator { client: AiClient, cache: Arc<AiCache> }
 pub struct SmartWafBypass { client: AiClient, cache, knowledge_base, persist_path, max_bypasses, max_knowledge_base_size }
 pub struct AdaptiveScanEngine { client: Option<AiClient>, strategy, ai_suggested_strategy }
 
+pub struct AiAnalysisResult { reassessed_severity, exploitability, impact, remediation, confidence }
+pub struct AiPayloadSuggestion { payload, description, expected_result }
+pub struct AiWafBypassSuggestion { technique, payload, explanation }
+pub struct ScanFinding { id, title, severity, description }
+
+pub struct CacheStats { total_entries, expired_entries, total_hits }
+
 pub enum AiError {
     RequestFailed(String), MissingApiKey, InvalidConfig(String), ApiError(String),
     ParseError(String), Timeout, RateLimited, InvalidResponse, CircuitBreakerOpen
+}
+
+pub enum ScriptTarget {
+    WafBypass { waf_name, blocked_payload },
+    PayloadGeneration { vuln_type, context },
+    AdaptiveScript { findings },
 }
 ```
 
@@ -87,11 +108,45 @@ pub enum AiError {
 
 Eggsec can run as an agent-readable scanning orchestrator that executes configured schedules, enforces operational constraints, and handles alert routing.
 
-- **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling.
+### Agent Runtime Types
+
+```rust
+pub struct AgentRuntimeStatus {
+    pub running: bool,
+    pub started_at: Option<DateTime<Utc>>,
+    pub last_tick_at: Option<DateTime<Utc>>,
+    pub next_tick_at: Option<DateTime<Utc>>,
+    pub portfolio_targets_total: usize,
+    pub portfolio_targets_enabled: usize,
+    pub last_scan_started_at: Option<DateTime<Utc>>,
+    pub last_scan_completed_at: Option<DateTime<Utc>>,
+    pub last_error: Option<String>,
+    pub scans_completed: u64,
+    pub scans_failed: u64,
+    pub alerts_sent: u64,
+    pub last_preflight_denial: Option<AgentPreflightDenial>,
+    pub recent_denial_count: usize,
+}
+
+pub struct AgentRuntimePersisted {
+    pub started_at, last_tick_at, last_scan_started_at, last_scan_completed_at,
+    pub scans_completed, scans_failed, alerts_sent, last_error,
+    pub last_shutdown_at, last_preflight_denial, recent_denial_count,
+}
+
+pub struct AgentPreflightDenial {
+    pub operation: String,
+    pub target: String,
+    pub timestamp: DateTime<Utc>,
+    pub denied_reasons: Vec<String>,
+}
+```
+
+- **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling. `Agent::run_once()` executes a single pass; `Agent::record_policy_denial()` / `Agent::recent_policy_denials()` track enforcement denials.
 - **Enforcement (`enforcement.rs`)**: Factored helper functions for per-scan enforcement — maps scan depth and scan type to `OperationRisk` and `Capability` lists (`risk_for_agent_scan_depth`, `capabilities_for_agent_scan`, `operation_descriptor_for_agent_scan`). Called immediately before dispatch in `execute_scan_with_depth` to re-evaluate enforcement per-scan.
 - **Memory (`memory.rs`)**: Maintains longitudinal context and baseline-aware finding comparisons.
 - **Portfolio (`portfolio.rs`)**: Stores targets, schedules, and scan history metadata.
-- **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits.
+- **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits. `ConstraintChecker` methods: `evaluate_action()`, `evaluate_target()`, `evaluate_scan_depth()`, `evaluate_rate_limit()`, `evaluate_payload()`, `evaluate_off_peak()`, `evaluate_approval()`, `evaluate_all()`.
 - **Skills (`skills.rs`)**: Represents discrete capabilities the agent can employ (e.g., "scan", "fuzz", "recon").
 - **Config Watcher (`config_watcher.rs`)**: Hot-reloading of agent configuration via `ConfigWatcher`.
 - **Logging**: Centralized in `logging/init.rs`. Agent mode composes a rolling JSON file layer alongside console output.

@@ -102,6 +102,7 @@ HTTP response diff engine for comparing responses during fuzzing sessions. Detec
 | `with_ignore_headers()` | `diff.rs:98` | Builder: adds headers to ignore |
 | `with_body_patterns()` | `diff.rs:105` | Builder: sets body patterns to ignore |
 | `set_baseline()` | `diff.rs:110` | Sets baseline snapshot |
+| `baseline_snapshot()` | `diff.rs:114` | Returns reference to current baseline snapshot |
 | `capture_baseline()` | `diff.rs:118` | Captures and sets baseline from raw response |
 | `diff()` | `diff.rs:130` | Compares current response against baseline |
 | `is_anomaly()` | `diff.rs:302` | Returns true if anomaly score >= threshold (default 0.3) |

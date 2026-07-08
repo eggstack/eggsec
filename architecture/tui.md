@@ -17,6 +17,8 @@ Context-aware action hints replace the static help text in the status bar. The `
 
 `format_hints()` renders the compact string (e.g. `"C:stop Z:pause"`). The status bar (`draw_status_bar` in `ui/shell.rs`) calls `get_action_hints` + `format_hints` instead of static help text. 16 unit tests cover task/overlay/insert/tab hints and priority precedence.
 
+**Note**: `tabs/input_accessibility.rs` is a `#[cfg(test)]` module with tests that verify unique input labels and focus traversal across all tab input groups.
+
 ## Recent Improvements (2026-06-18)
 
 - **handle_enter() reachable in graphql/oauth**: The `start()` call was unreachable after an exhaustive match; refactored to follow the `fuzz.rs` pattern (Inputs with `is_focused() == false` triggers `start()` after tabbing past the last field). Users can now actually start GraphQL and OAuth scans from the TUI.
@@ -35,7 +37,7 @@ Context-aware action hints replace the static help text in the status bar. The `
 - **Settings theme selector feedback**: Theme changes from Settings selector now show the same `Notification("Theme: ...")` as Ctrl+T; failed changes show a warning.
 - **New unit tests**: 5 regression tests for gg/autocomplete; all TUI tests pass.
 
-## Core Components (`src/tui/`)
+## Core Components (`crates/eggsec-tui/src/`)
 
 ### App & UI (`app/`)
 
@@ -78,6 +80,49 @@ The TUI depends on `eggsec-ui-model` for frontend-neutral view DTOs used in daem
 - **Renderer registry**: `renderer_for_kind(kind)` returns `Option<&'static ResultRendererDescriptor>` with `title`, `summary_fields`, `artifact_kinds`, `supports_rich_tui`, `supports_json_detail`. Used by the runtime adapter for kind labels and by CLI for consistent output.
 
 The TUI does NOT yet consume `SessionView`, `TaskView`, `EventView`, or `DashboardSummaryView` directly — these are available for future wiring into dashboard/history tabs.
+
+### UiAction Enum
+
+The `UiAction` enum (`app/action.rs`) models operator intent with ~50 variants across these categories:
+
+- **Session/task lifecycle**: `Quit`, `StopActiveTask`
+- **Overlay/mode toggles**: `ToggleHelp`, `ToggleCommandPalette`, `ToggleQuickSwitch`, `ToggleSearch`, `ToggleTheme`, `TogglePause`, `Resume`
+- **Focus/navigation**: `FocusNext`, `FocusPrev`, `PageUp`, `PageDown`, `MoveUp`/`Down`/`Left`/`Right`/`Top`/`Bottom`
+- **Normal-mode sequences**: `BeginGgSequence`, `MoveWordForward`, `MoveWordBackward`, `Home`, `End`
+- **Commit/cancel**: `Enter`, `Escape`, `EnterInsertMode`
+- **Insert-mode editing**: `InputChar`, `Backspace`, `Delete`, `Autocomplete`, `Paste`, `Copy`, `RequestPaste`, `RequestCopy`
+- **Tab navigation**: `SelectTab`, `NextTab`, `PrevTab`, `ToggleBookmark`
+- **Export**: `CycleExportFormat`, `ExportResults`
+- **Destructive actions**: `ResetCurrent`, `ReloadThemes`, `SaveSettings`, `DeleteHistoryEntry`
+- **Confirmation dialogs**: `ConfirmPendingAction`, `CancelPendingAction`, `ConfirmButtonToggle`
+- **Policy enforcement**: `ConfirmPolicyAction`, `CancelPolicyAction`, `PolicyReasonChar`, `PolicyReasonBackspace`
+- **Overlay input**: `CommandPaletteInput(CommandPaletteInput)`, `QuickSwitchInput(QuickSwitchInput)`
+- **Search**: `SearchQueryChar`, `SearchQueryBackspace`, `SearchQueryClear`, `SearchPerform`
+- **Help scrolling**: `HelpScrollUp`/`Down`/`Top`/`Bottom`/`PageUp`/`PageDown`
+- **HTTP options**: `HttpOptionsClose`
+- **Enforcement**: `ToggleEnforcementPosture`
+
+### CommandPaletteInput and QuickSwitchInput Enums
+
+`CommandPaletteInput`: `Char`, `Backspace`, `Enter`, `Up`, `Down`, `Tab`, `BackTab`, `Esc`, `Close`
+
+`QuickSwitchInput`: `Char`, `Backspace`, `Enter`, `Up`, `Down`, `PageUp`, `PageDown`, `Home`, `End`, `Esc`, `Close`
+
+### TabWindow and TabSpan Structs
+
+`TabWindow` represents a windowed view over a tab collection with `offset` and `visible_count`. `TabSpan` represents a contiguous span of tabs within a window. Both are used for pagination of the 33-tab tab bar.
+
+### Macro System
+
+- **`tab_dispatch!`** (`tabs/mod.rs:457`): Dispatches method calls across all tab variants in the `Tab` enum
+- **`cfg_push_tabs!`** (`tabs/mod.rs:126`): Conditionally pushes tab instances into the `TabStore` based on feature flags
+- **`tab_input_boilerplate!`**, **`tab_input_2area!`**, **`tab_input_3area!`**, **`tab_input_narea!`** (`tabs/macros.rs`): Generate common `TabInput` trait implementations for tabs with 2+ focus areas
+
+### RuntimeBinding and TuiRuntimeClient
+
+`RuntimeBinding` (`app/mod.rs`) wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait, providing a unified interface for session management.
+
+`TuiRuntimeClient` trait methods (8 methods): `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`
 
 ### Tabs (`tabs/`)
 
@@ -213,7 +258,7 @@ TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group:
 
 Helper methods: `can_start_task()` returns `supports_run && !direct_launch`, `shows_in_export()` returns `supports_export`. 10 unit tests verify registry integrity: all tabs have specs, all tabs have help, stable_id roundtrips, direct_launch categories match, `can_start_task`/`shows_in_export` consistency, assessment tabs support run, and tab count matches discriminant range.
 
-### TabInput Interface (27 methods)
+### TabInput Interface (28 methods)
 
 All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):
 
@@ -246,6 +291,7 @@ All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):
 | `stop` | No | `fn stop(&mut self)` |
 | `page_up` | No | `fn page_up(&mut self, page_size: usize)` |
 | `page_down` | No | `fn page_down(&mut self, page_size: usize)` |
+| `primary_target` | No | `fn primary_target(&self) -> Option<String>` - returns the primary target string for the tab |
 
 Inherits from `TabState` (4 methods): `state()`, `progress()`, `reset()`, `set_error()`.
 
@@ -338,7 +384,7 @@ The UI rendering layer is split into a module with focused submodules:
 
 ### Components (`components/`)
 
-Reusable UI primitives (7 files):
+Reusable UI primitives (6 files):
 
 | Component | File | Purpose |
 |-----------|------|---------|

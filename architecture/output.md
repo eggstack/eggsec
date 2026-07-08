@@ -51,7 +51,7 @@ pub struct AttackGraph {
 }
 ```
 
-`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures. The `AttackChain` type import is feature-gated behind `advanced-hunting`, so `from_chains()` is only available when that feature is enabled. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
+`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures. `AttackChain` is imported from `hunt::chain` (not re-exported from the output module), so `from_chains()` is only available when the `advanced-hunting` feature is enabled. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
 
 ### Trend Analysis (`trend.rs`)
 
@@ -264,7 +264,7 @@ Constructs a `RunManifest` from a completed `PipelineReport`. The conversion log
 | `AgentFinding` | `agent.rs` | Core finding with evidence, remediation, confidence |
 | `FindingSummary` | `agent.rs` | Aggregated statistics by severity/confidence/type |
 | `ScanReportData` | `convert.rs` | Intermediate format for conversions |
-| `SeverityCounts` | `report.rs` | Severity breakdown with risk scoring |
+| `SeverityCounts` | `report.rs` | Severity breakdown with risk scoring (`risk_score()` method) |
 | `DiffSummary` | `diff.rs` | Lightweight diff envelope for run manifests |
 | `ReportSummary` | `report_summary.rs` | Aggregated statistics and risk narrative |
 | `TrendAnalysis` | `trend.rs` | Historical trend data |
@@ -301,6 +301,23 @@ Avoid using `unwrap_or_default()` on serialization - use explicit error handling
 - `report_summary.rs` - `ReportSummary::from_findings` (by_severity, by_confidence, by_type, asset_counts)
 
 All `HashMap` usage in the output module has been migrated to `FxHashMap`, including `report_summary.rs` (`by_severity`, `by_confidence`, `by_type`, `asset_counts`).
+
+## Lab Report Types (`lab_report.rs`)
+
+| Type | Purpose |
+|------|---------|
+| `LabDefenseReportSection` | Defense lab report section |
+| `ScopeSummary` | Scope summary for lab reports |
+| `BudgetSummary` | Resource budget summary |
+| `TargetResolutionSummary` | Target resolution summary |
+| `SkippedOperation` | Skipped operation record |
+
+## Extensions Module
+
+| Trait | Purpose |
+|-------|---------|
+| `SarifBuilderExt` | Extension trait for SARIF builder |
+| `JUnitBuilderExt` | Extension trait for JUnit builder |
 
 ## Security Notes
 
