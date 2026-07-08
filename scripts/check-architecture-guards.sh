@@ -1239,6 +1239,28 @@ else
 fi
 
 echo ""
+echo "--- Check 55: creds library registered with capability context ---"
+creds_source="crates/eggsec-nse/src/libraries/creds.rs"
+creds_executor="crates/eggsec-nse/src/executor_core.rs"
+if [ -f "$creds_source" ] && [ -f "$creds_executor" ]; then
+    # Check function signature accepts NseCapabilityContext
+    if grep -q 'pub fn register_creds_library(lua: &Lua, _capability_ctx: &NseCapabilityContext)' "$creds_source"; then
+        # Check call site passes capability context
+        if grep -q 'register_creds_library(&self.lua, &self.capability_context)' "$creds_executor"; then
+            echo "PASS: register_creds_library accepts NseCapabilityContext and call site passes it."
+        else
+            echo "FAIL: register_creds_library call site does not pass capability context."
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        echo "FAIL: register_creds_library does not accept NseCapabilityContext parameter."
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo "SKIP: creds source or executor_core not found."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

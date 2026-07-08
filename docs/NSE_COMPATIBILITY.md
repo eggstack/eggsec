@@ -1,6 +1,6 @@
-# NSE Compatibility Matrix — Milestone 6
+# NSE Compatibility Matrix — Expansion Phase 05
 
-> **Scope**: This document describes the NSE compatibility status for Milestone 6 — a sandboxed Lua execution environment with capability-gated side effects and comprehensive HTTP method enforcement. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
+> **Scope**: This document describes the NSE compatibility status for Expansion Phase 05 — a sandboxed Lua execution environment with capability-gated side effects, comprehensive HTTP method enforcement, and selective deferred library migration. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
 
 ---
 
@@ -30,7 +30,7 @@
 | mongodb | Database | Deferred | MongoDB queries | — | No capability wrapper yet; document database |
 | ldap | Network | Deferred | LDAP queries | — | No capability wrapper yet; directory protocol |
 | snmp | Network | Deferred | SNMP queries | — | No capability wrapper yet; network management protocol |
-| creds | Auth | Deferred | Credential lookup | — | No capability wrapper yet; credential store |
+| creds | Auth | Wrapped | None | N/A | In-memory credential storage; no filesystem or network side effects; wrapped since Expansion Phase 05 |
 | unpwdb | Auth | Wrapped | Username/password DB | Deny | Wrapped since Milestone 5 Phase 04; filesystem reads routed through `NseCapabilityContext` |
 | brute | Auth | Deferred | Brute force attempts | — | No capability wrapper yet; brute force framework |
 | target | Core | Deferred | Target manipulation | — | No capability wrapper yet; target registry |
@@ -121,6 +121,10 @@
 | sslcert-get-subject-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_subject() on live certificate |
 | sslcert-get-chain-certs-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_chain_certs() chain enumeration |
 | sslcert-is-valid-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.is_valid() validity check |
+| creds-store | Auth | Full | Complete | All | hard | skip | — | — | Creds library: in-memory credential storage, retrieval, dump |
+| creds-store-manual-permissive | Auth | Full | Complete | ManualPermissive | hard | skip | — | — | Creds library under ManualPermissive profile |
+| creds-store-agent-safe | Auth | Full | Complete | AgentSafe | hard | skip | — | — | Creds library under AgentSafe profile; no side effects |
+| creds-store-ci-safe | Auth | Full | Complete | CiSafe | hard | skip | — | — | Creds library under CiSafe profile; no side effects |
 
 ---
 
@@ -370,7 +374,7 @@ New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`,
 
 ### Remaining Known Limitations
 
-1. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 7.
+1. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, brute, target — 11 libraries remain deferred to Milestone 7.
 2. **`stdnse.sleep()` cancellation**: No cancellation token integration; sleep blocks without checking task cancellation.
 
 ### Milestone 7 Candidates

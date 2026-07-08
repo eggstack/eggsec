@@ -1553,3 +1553,29 @@ Phase 04 broadens representative NSE compatibility coverage with curated, local-
 - **No public network dependencies**: All fixtures are self-contained and run without internet access.
 
 **Verification:** Compatibility corpus tests, runtime corpus tests, and architecture guard Check 54 all pass. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.
+
+### NSE Expansion Phase 05 (2026-07-07, selective deferred library migration: creds)
+
+Phase 05 migrates the `creds` library from Deferred to Wrapped status, correcting stale registry metadata and establishing API consistency for auth-category libraries.
+
+#### Changes
+
+1. **`creds` library migrated from Deferred to Wrapped**: `register_creds_library()` signature updated to accept `&NseCapabilityContext` parameter (matching `unpwdb` and other wrapped libraries). The context is accepted but no capability checks fire — the library is purely in-memory credential storage (`FxHashMap<String, Vec<Credential>>` behind `LazyLock<Mutex>`).
+
+2. **Registry correction**: `sandbox_side_effects` changed from `[FileSystemRead, NetworkAccess]` to `[]` (empty). The previous side effects were aspirational/stale — no actual filesystem or network operations exist in the current implementation. Notes updated to clarify "in-memory" scope.
+
+3. **Call site update**: `executor_core.rs` updated to pass `&self.capability_context` to `register_creds_library()`.
+
+4. **4 new runtime corpus fixtures**: `creds-store` (compatibility_lab), `creds-store-manual-permissive`, `creds-store-agent-safe` (agent_safe_runtime), `creds-store-ci-safe` (ci_safe_runtime). All assert `compatible` status, `full` fidelity, expected libraries `["creds", "stdnse"]`, and zero capability events (pure CPU operations).
+
+5. **Architecture guard**: New check verifying `register_creds_library` call site includes capability context parameter.
+
+#### Key Decisions
+
+- **API consistency over minimal change**: Even though `creds` has no side effects, accepting `&NseCapabilityContext` ensures the registration API is uniform across all auth-category libraries and future-proofs for credential file loading.
+- **Registry accuracy**: Corrected stale side effects to prevent false capability event expectations in tests and documentation.
+- **No capability events**: Since all operations are pure in-memory (table creation, HashMap insert/get/remove), no capability events are emitted for any profile.
+
+#### Verification
+
+Compatibility corpus tests, runtime corpus tests (4 new fixtures), and architecture guard checks all pass. Plan: `plans/nse-expansion-phase-05-selective-deferred-library-migration.md`.
