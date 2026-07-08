@@ -83,6 +83,11 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `ManualOverride` | `config/policy_decision.rs` | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
 | `ApprovedOperation` | `config/policy_decision.rs` | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
 | `EnforcedDispatcher` | `tool/dispatcher.rs` | Wraps `ToolDispatcher` requiring `ApprovedOperation` before dispatch. Type-level enforcement gate. |
+| `RuntimeBridgeError` | `runtime_bridge/surface.rs` | Bridge error type: `UnknownSurface`, `UnsupportedTaskKind`, `MissingTarget`, `UnknownOperationId`, `ManualOverrideRejected`, `EnforcementDenied`. |
+| `runtime_surface_to_execution_surface()` | `runtime_bridge/surface.rs` | Converts `RuntimeSurface` (daemon DTO) → `ExecutionSurface` (engine type). |
+| `descriptor_for_run_request()` | `runtime_bridge/descriptor.rs` | Converts `RunRequest` + `TaskKind` → `OperationDescriptor` via `operation_metadata()`. |
+| `preflight_run_request()` | `runtime_bridge/manual.rs` | Pre-dispatch policy preview for daemon operations. Returns `PreflightResult`. |
+| `approve_run_request()` | `runtime_bridge/manual.rs` | Pre-dispatch authorization for daemon operations. Returns `ApprovedOperation` or error. |
 
 ### 3.2 Surface-to-Profile Mapping
 
@@ -246,6 +251,27 @@ cat findings.json | eggsec ci --baseline baseline.json
 
 **No dispatch path**. CI is a passive quality gate that processes pre-existing findings. No enforcement, no tool execution.
 
+### 4.8 Daemon / Runtime (runtime_bridge)
+
+```
+DaemonClient → Runtime::submit(RunRequest)
+  → runtime_bridge::preflight_run_request(request, policy, scope)
+    → runtime_surface_to_execution_surface(surface) → ExecutionSurface
+    → descriptor_for_run_request(request) → OperationDescriptor
+    → EnforcementContext::for_surface() → preflight_operation()
+  → PreflightResult (outcome_kind, required_confirmations, suggested flags)
+
+RuntimeTaskExecutor → runtime_bridge::approve_run_request(request, policy, scope, override)
+  → same surface/descriptor conversion
+  → manual surfaces → enforcement.approve_manual(surface, descriptor, override)
+  → strict surfaces → enforcement.approve(surface, descriptor)
+  → ApprovedOperation token → dispatch
+```
+
+**Surface**: Derived from `RuntimeSurface` (daemon DTO) → `ExecutionSurface` (engine type). `Unknown` maps to error.
+**Bridge**: `runtime_bridge/` module converts `eggsec-runtime` DTOs to engine enforcement types. Dependency direction: `eggsec` → `eggsec-runtime` (not reverse).
+**Invariant**: All daemon-dispatched operations must pass through `approve_run_request()` before execution.
+
 ## 5. Side-Effecting Execution Path Inventory
 
 ### 5.1 CLI Command Handlers
@@ -343,6 +369,7 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | `EnforcementContext`, `ApprovedOperation` | `crates/eggsec/src/config/policy_decision.rs` |
 | `LoadedScope`, `Scope` | `crates/eggsec/src/config/scope.rs` |
 | `EnforcedDispatcher` | `crates/eggsec/src/tool/dispatcher.rs` |
+| `runtime_bridge` (Runtime→Engine bridge) | `crates/eggsec/src/runtime_bridge/` |
 | `TuiEnforcementState` | `crates/eggsec-tui/src/app/enforcement.rs` |
 | CLI surface resolution | `crates/eggsec-cli/src/main.rs` |
 | REST enforcement | `crates/eggsec/src/tool/protocol/rest.rs` |

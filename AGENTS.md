@@ -129,7 +129,10 @@ Scope must come from `LoadedScope` (not raw `Scope`) for automated surfaces.
 TUI → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner() → TaskResult
 CLI → CLI dispatch → eggsec::dispatch::dispatch_inner() → direct output
 REST/MCP/Agent → EnforcementContext::evaluate() → EnforcedDispatcher::dispatch_checked() → tool execution
+Daemon/Runtime → runtime_bridge (RuntimeSurface→ExecutionSurface, TaskKind→OperationDescriptor) → EnforcementContext → dispatch
 ```
+
+The `runtime_bridge` module (`crates/eggsec/src/runtime_bridge/`) bridges `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to the engine enforcement model (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). It provides `preflight_run_request()` for policy preview and `approve_run_request()` for pre-dispatch authorization.
 
 ### Workspace structure
 

@@ -17,6 +17,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 | Feature matrix | `cargo test -p eggsec --test feature_matrix` | Feature snapshot vs Cargo.toml keys, naming conventions |
 | Enforcement matrix | `cargo test -p eggsec --test enforcement_matrix` | Cross-surface enforcement invariants (22 sections, ~95 tests) |
 | Enforced dispatch regression | `cargo test -p eggsec --test enforced_dispatch_regression` | Strict surfaces do not call raw dispatch; CI handler has no dispatch path |
+| Runtime bridge | `cargo test -p eggsec --lib runtime_bridge` | RuntimeSurface→ExecutionSurface conversion, TaskKind→OperationDescriptor mapping, preflight/approve flows |
 | Report envelope | `cargo test -p eggsec-output --test report_envelope` | Normalized report/evidence envelope roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
@@ -34,6 +35,7 @@ cargo test -p eggsec --test tool_registration --features rest-api
 cargo test -p eggsec --test feature_matrix
 cargo test -p eggsec --test enforcement_matrix
 cargo test -p eggsec --test enforced_dispatch_regression
+cargo test -p eggsec --lib runtime_bridge
 cargo test -p eggsec-output --test report_envelope
 bash scripts/check-architecture-guards.sh
 ```

@@ -128,6 +128,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`output/`](../crates/eggsec/src/output/) | Compatibility facade over `eggsec-output` plus engine-coupled report modules (PDF, report, report_summary, run_manifest, attack_graph) | [output.md](output.md) |
 | [`proxy/`](../crates/eggsec/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies; `proxy/intercept/` submodule for MITM web proxy (feature-gated `web-proxy`) | [proxy.md](proxy.md) |
 | [`config/`](../crates/eggsec/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
+| [`runtime_bridge/`](../crates/eggsec/src/runtime_bridge/) | Bridges `eggsec-runtime` DTOs to engine enforcement model (`RuntimeSurface`→`ExecutionSurface`, `TaskKind`→`OperationDescriptor`). `preflight_run_request()` for policy preview, `approve_run_request()` for pre-dispatch authorization. | *(inline in module)* |
 | [`storage/`](../crates/eggsec/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
 | [`workflow/`](../crates/eggsec/src/workflow/) | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
 | [`eggsec-daemon`](../crates/eggsec-daemon/) | Long-running daemon host: session persistence (SQLite), client registry, Unix socket server, audit events | [daemon.md](daemon.md) |

@@ -123,6 +123,7 @@ pub mod pipeline;
 pub mod probe;
 pub mod proxy;
 pub mod recon;
+pub mod runtime_bridge;
 pub mod scanner;
 #[cfg(feature = "database")]
 pub mod storage;

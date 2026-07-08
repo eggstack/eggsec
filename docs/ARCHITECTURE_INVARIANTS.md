@@ -73,3 +73,5 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 29. **`ensure_scope` / `ensure_scope_url`**: **Removed** (Phase 2). Scope checks are centralized in `EnforcementContext::evaluate()`.
 
 30. **Raw dispatch**: `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`. Only the Orchestrator and `EnforcedDispatcher` internals may use it. All other callers must use `EnforcedDispatcher::dispatch_checked()`.
+
+31. **Runtime bridge direction**: `eggsec` depends on `eggsec-runtime` (not reverse). The `runtime_bridge` module converts `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to engine types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `Unknown` surface always errors. Strict surfaces never honor manual overrides through the bridge.
