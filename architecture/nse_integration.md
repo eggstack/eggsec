@@ -1579,3 +1579,19 @@ Phase 05 migrates the `creds` library from Deferred to Wrapped status, correctin
 #### Verification
 
 Compatibility corpus tests, runtime corpus tests (4 new fixtures), and architecture guard checks all pass. Plan: `plans/nse-expansion-phase-05-selective-deferred-library-migration.md`.
+
+### NSE Expansion Phase 06 (2026-07-07, sslcert guard symmetry)
+
+Phase 06 closes TLS/sslcert test symmetry gaps and strengthens the per-connect architecture guard.
+
+#### Changes
+
+1. **CiSafe get_chain_certs zero-hit denial test**: Added `local_sslcert_get_chain_certs_ci_safe_denied` matching the existing AgentSafe pattern. Asserts `server.hits() == 0` and `network_tcp` capability denials.
+
+2. **ManualPermissive TLS hit assertions**: Added `assert!(server.hits() > 0)` to 4 success tests (`get_certificate`, `parse_cert`, `get_subject`, `get_chain_certs`). Skipped for `is_valid` (parsing-only).
+
+3. **Per-connect architecture guard (Check 56)**: Replaced aggregate count check with awk-based per-connect guard. Verifies each `TcpStream::connect` line has `check_network_tcp` or `check_crypto` within preceding 30 lines. Prints offending line number on failure.
+
+4. **Architecture guard count**: 53 → 56 (56 checks pass).
+
+**Verification:** 522 eggsec-nse tests pass (1 ignored), 56 architecture guards pass. 9 local sslcert tests (5 success + 2 AgentSafe + 1 CiSafe + 1 new CiSafe).

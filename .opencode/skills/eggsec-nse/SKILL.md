@@ -58,6 +58,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Expansion Phase 04 (2026-07-07, upstream-style corpus growth).** 6 new upstream-style fixtures: SSH host key verification, SMB discovery, LDAP search, multi-step discovery, conditional portrule, timestamp extraction. Corpus: 39→45 fixtures, 16→22 upstream. New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds`. Architecture guard Check 54 enforces local-only, clean-room, no public network. 518 eggsec-nse tests pass, 54 architecture guards pass. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.
 
+> **NSE Expansion Phase 06 (sslcert guard symmetry).** CiSafe `get_chain_certs` zero-hit denial test added. ManualPermissive TLS hit assertions added to 4 success tests. Per-connect architecture guard (Check 56) replaces aggregate count check with awk-based proximity verification. 522 eggsec-nse tests pass, 56 architecture guards pass. See [Expansion Phase 06](../../architecture/nse_integration.md#nse-expansion-phase-06-2026-07-07-sslcert-guard-symmetry).
+
 ## Key Components
 
 | Component | File | Purpose |

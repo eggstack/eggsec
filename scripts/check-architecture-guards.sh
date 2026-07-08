@@ -1261,14 +1261,27 @@ else
 fi
 
 echo ""
-echo "--- Check 56: sslcert TcpStream::connect must be gated by check_network_tcp ---"
-SSL_CERT_TCP_CONNECT=$(rg -c "TcpStream::connect" crates/eggsec-nse/src/libraries/sslcert.rs 2>/dev/null || echo 0)
-SSL_CERT_NET_CHECK=$(rg -c "check_network_tcp" crates/eggsec-nse/src/libraries/sslcert.rs 2>/dev/null || echo 0)
-if [ "$SSL_CERT_TCP_CONNECT" -gt 0 ] && [ "$SSL_CERT_NET_CHECK" -eq 0 ]; then
-    echo "FAIL: sslcert.rs has TcpStream::connect without check_network_tcp gating"
-    FAIL=$((FAIL + 1))
+echo "--- Check 56: Every sslcert TcpStream::connect must have a network gate within 30 lines ---"
+SSLCERT_FILE="crates/eggsec-nse/src/libraries/sslcert.rs"
+if [ -f "$SSLCERT_FILE" ]; then
+    SSL_CERT_BAD_CONNECTS=$(awk '
+    /TcpStream::connect/ {
+      line=NR; text=$0; found=0;
+      for (i=line-30; i<line; i++) { if (i>0 && checks[i]) found=1; }
+      if (!found) print line ": " text;
+    }
+    /check_network_tcp|check_crypto/ { checks[NR]=1 }
+    ' "$SSLCERT_FILE" 2>/dev/null)
+    if [[ -n "$SSL_CERT_BAD_CONNECTS" ]]; then
+        echo "$SSL_CERT_BAD_CONNECTS"
+        echo "FAIL: Found TcpStream::connect in sslcert.rs without a network gate within 30 lines."
+        FAIL=$((FAIL + 1))
+    else
+        CONNECT_COUNT=$(rg -c "TcpStream::connect" "$SSLCERT_FILE" 2>/dev/null || echo 0)
+        echo "PASS: All $CONNECT_COUNT TcpStream::connect calls in sslcert.rs have a network gate within 30 lines."
+    fi
 else
-    echo "PASS: sslcert.rs TcpStream::connect is gated by check_network_tcp ($SSL_CERT_NET_CHECK calls)."
+    echo "SKIP: sslcert.rs not found."
 fi
 
 echo ""
