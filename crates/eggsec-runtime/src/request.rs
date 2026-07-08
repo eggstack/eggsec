@@ -6,7 +6,7 @@ use crate::ids::ClientId;
 ///
 /// This is a local serializable mirror. Later phases can implement conversion
 /// to/from `eggsec::config::ExecutionSurface`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum RuntimeSurface {
     CliManual,
     CliManualStrict,
@@ -17,6 +17,7 @@ pub enum RuntimeSurface {
     RestApi,
     GrpcApi,
     SecurityAgent,
+    #[default]
     Unknown,
 }
 
@@ -34,12 +35,6 @@ impl RuntimeSurface {
             Self::SecurityAgent => "security-agent",
             Self::Unknown => "unknown",
         }
-    }
-}
-
-impl Default for RuntimeSurface {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 

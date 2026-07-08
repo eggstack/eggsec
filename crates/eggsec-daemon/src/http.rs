@@ -1,8 +1,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::extract::{FromRequestParts, Path, State};
+use axum::http::request::Parts;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
@@ -15,8 +16,14 @@ use crate::protocol::{
     ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
 };
 
+/// HTTP header carrying the caller-declared client id.
+pub const CLIENT_ID_HEADER: &str = "x-eggsec-client-id";
+
 pub struct HttpConfig {
     pub bind_addr: String,
+    /// When true, every request must carry a non-empty `X-Eggsec-Client-Id`
+    /// header; otherwise the daemon rejects the request with HTTP 401
+    /// before the command is dispatched.
     pub require_auth: bool,
     pub allow_public_bind: bool,
 }
@@ -33,14 +40,65 @@ impl Default for HttpConfig {
 
 struct HttpState {
     host: Arc<DaemonHost>,
-    client_id: std::sync::Mutex<Option<eggsec_runtime::ClientId>>,
+    require_auth: bool,
 }
 
-fn make_ctx(state: &HttpState) -> DaemonRequestContext {
+/// Per-request client identity derived from the `X-Eggsec-Client-Id` header.
+///
+/// `client_id` is `None` when the header is absent; per the daemon protocol
+/// this is only acceptable for unauthenticated sub-commands (e.g.
+/// `DeclareClient`, `Health`, `Capabilities`) on hosts that have not enabled
+/// `require_auth`.
+#[derive(Clone)]
+struct AuthenticatedClientId(Option<eggsec_runtime::ClientId>);
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for AuthenticatedClientId
+where
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let value = parts
+            .headers
+            .get(CLIENT_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim().to_string());
+        let parsed = value.and_then(|raw| match raw.parse::<eggsec_runtime::ClientId>() {
+            Ok(id) => Some(id),
+            Err(_) => None,
+        });
+        Ok(Self(parsed))
+    }
+}
+
+fn make_ctx(client_id: Option<eggsec_runtime::ClientId>) -> DaemonRequestContext {
     DaemonRequestContext {
-        client_id: *state.client_id.lock().unwrap(),
+        client_id,
         peer: None,
         transport: TransportKind::LoopbackHttp,
+    }
+}
+
+fn auth_required_response() -> Response {
+    error_response(
+        StatusCode::UNAUTHORIZED,
+        ErrorCode::InvalidRequest,
+        format!(
+            "authentication required: missing or invalid '{}' header",
+            CLIENT_ID_HEADER
+        ),
+    )
+}
+
+/// Reject the request when `require_auth` is enabled and no caller identity
+/// was presented. Returns `Ok(())` for callers that may proceed.
+fn enforce_auth(state: &HttpState, auth: &AuthenticatedClientId) -> Result<(), Response> {
+    if state.require_auth && auth.0.is_none() {
+        Err(auth_required_response())
+    } else {
+        Ok(())
     }
 }
 
@@ -56,7 +114,7 @@ async fn health(State(state): State<Arc<HttpState>>) -> Response {
     let cmd = ClientCommand::Health {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(None)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
@@ -64,14 +122,25 @@ async fn capabilities(State(state): State<Arc<HttpState>>) -> Response {
     let cmd = ClientCommand::Capabilities {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(None)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn declare_client(
     State(state): State<Arc<HttpState>>,
+    headers: HeaderMap,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
+    if state.require_auth {
+        let presented = headers
+            .get(CLIENT_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if !presented {
+            return auth_required_response();
+        }
+    }
     let kind = match body
         .get("kind")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -91,25 +160,32 @@ async fn declare_client(
         kind,
         label,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
-    if let ServerMessage::ClientDeclared { client_id, .. } = &resp {
-        *state.client_id.lock().unwrap() = Some(*client_id);
-    }
+    let resp = state.host.handle_command(cmd, make_ctx(None)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
-async fn list_sessions(State(state): State<Arc<HttpState>>) -> Response {
+async fn list_sessions(
+    State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
+) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let cmd = ClientCommand::ListSessions {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn create_session(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let surface = body
         .get("surface")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -127,14 +203,18 @@ async fn create_session(
         scope,
         labels,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn get_snapshot(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -149,15 +229,19 @@ async fn get_snapshot(
         request_id: uuid::Uuid::new_v4().to_string(),
         session_id,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn submit_task(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -186,14 +270,18 @@ async fn submit_task(
         session_id,
         request,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn cancel_task(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path((session_id, task_id)): Path<(String, String)>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -219,14 +307,18 @@ async fn cancel_task(
         session_id,
         task_id,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn cancel_active(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -241,7 +333,7 @@ async fn cancel_active(
         request_id: uuid::Uuid::new_v4().to_string(),
         session_id,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
@@ -287,9 +379,13 @@ async fn subscribe_events(
 
 async fn approve_policy(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path((session_id, task_id)): Path<(String, String)>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -325,14 +421,18 @@ async fn approve_policy(
         approved,
         reason,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn close_session(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -347,22 +447,32 @@ async fn close_session(
         request_id: uuid::Uuid::new_v4().to_string(),
         session_id,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
-async fn list_persisted_sessions(State(state): State<Arc<HttpState>>) -> Response {
+async fn list_persisted_sessions(
+    State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
+) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let cmd = ClientCommand::ListPersistedSessions {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
 async fn get_persisted_snapshot(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
     let session_id = match session_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -377,7 +487,7 @@ async fn get_persisted_snapshot(
         request_id: uuid::Uuid::new_v4().to_string(),
         session_id,
     };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
@@ -418,7 +528,7 @@ pub async fn run_http_server(
 
     let state = Arc::new(HttpState {
         host,
-        client_id: std::sync::Mutex::new(None),
+        require_auth: config.require_auth,
     });
 
     let app = Router::new()
@@ -511,7 +621,7 @@ mod tests {
         tokio::spawn(async move {
             let state = Arc::new(HttpState {
                 host: host_clone,
-                client_id: std::sync::Mutex::new(None),
+                require_auth: false,
             });
             let app = Router::new()
                 .route("/health", get(health))
@@ -573,6 +683,27 @@ mod tests {
         shutdown.cancel();
     }
 
+    async fn declare_client_id(addr: &str, label: &str) -> String {
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(format!("http://{}/clients/declare", addr))
+            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": label}))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "ClientDeclared");
+        body["client_id"].as_str().unwrap().to_string()
+    }
+
+    fn auth_header(client_id: &str) -> (reqwest::header::HeaderName, reqwest::header::HeaderValue) {
+        (
+            reqwest::header::HeaderName::from_static(CLIENT_ID_HEADER),
+            reqwest::header::HeaderValue::from_str(client_id).unwrap(),
+        )
+    }
+
     #[tokio::test]
     async fn http_declare_client() {
         let (addr, shutdown) = start_server().await;
@@ -593,10 +724,13 @@ mod tests {
     #[tokio::test]
     async fn http_create_and_list_sessions() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -608,6 +742,7 @@ mod tests {
 
         let resp = client
             .get(format!("http://{}/sessions", addr))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -622,17 +757,13 @@ mod tests {
     #[tokio::test]
     async fn http_get_snapshot() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -642,6 +773,7 @@ mod tests {
 
         let resp = client
             .get(format!("http://{}/sessions/{}/snapshot", addr, session_id))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -655,17 +787,13 @@ mod tests {
     #[tokio::test]
     async fn http_close_session() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -675,6 +803,7 @@ mod tests {
 
         let resp = client
             .delete(format!("http://{}/sessions/{}", addr, session_id))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -687,18 +816,14 @@ mod tests {
     #[tokio::test]
     async fn http_session_not_found() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let fake_id = eggsec_runtime::SessionId::new();
         let resp = client
             .get(format!("http://{}/sessions/{}/snapshot", addr, fake_id))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -748,17 +873,13 @@ mod tests {
     #[tokio::test]
     async fn http_submit_task() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -768,6 +889,7 @@ mod tests {
 
         let resp = client
             .post(format!("http://{}/sessions/{}/tasks", addr, session_id))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({
                 "request": {
                     "task_kind": {"kind": "PortScan", "params": {"target": "10.0.0.1"}},
@@ -787,17 +909,13 @@ mod tests {
     #[tokio::test]
     async fn http_cancel_active() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -810,6 +928,7 @@ mod tests {
                 "http://{}/sessions/{}/cancel-active",
                 addr, session_id
             ))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -846,17 +965,13 @@ mod tests {
     #[tokio::test]
     async fn http_sse_event_delivery() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "sse-test").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "sse-test"}))
-            .send()
-            .await
-            .unwrap();
 
         let resp = client
             .post(format!("http://{}/sessions", addr))
+            .header(name.clone(), value.clone())
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -866,6 +981,7 @@ mod tests {
 
         let resp = client
             .get(format!("http://{}/sessions/{}/events", addr, session_id))
+            .header(name, value)
             .header("Accept", "text/event-stream")
             .send()
             .await
@@ -883,13 +999,6 @@ mod tests {
         let (addr, shutdown) = start_server().await;
         let client = reqwest::Client::new();
 
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
-
         let resp = client
             .get(format!("http://{}/sessions/persisted", addr))
             .send()
@@ -906,13 +1015,6 @@ mod tests {
     async fn http_get_persisted_snapshot() {
         let (addr, shutdown) = start_server().await;
         let client = reqwest::Client::new();
-
-        let _ = client
-            .post(format!("http://{}/clients/declare", addr))
-            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
-            .send()
-            .await
-            .unwrap();
 
         let fake_id = eggsec_runtime::SessionId::new();
         let resp = client

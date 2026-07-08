@@ -273,8 +273,6 @@ impl DaemonHost {
                             owner_client_id: client_id,
                             surface,
                             owner_client_kind: owner_kind,
-                            default_observer_allowed: true,
-                            default_controller_allowed: true,
                             ..Default::default()
                         };
                         self.session_access

@@ -98,6 +98,10 @@ pub struct ClientAccessRule {
 }
 
 /// Session-level access control metadata.
+///
+/// Role resolution falls back to `Observer` for any client not listed in
+/// `allowed_clients` and not the owner. Callers that need broader defaults
+/// must add explicit `ClientAccessRule` entries when granting access.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionAccess {
     pub owner_client_id: Option<ClientId>,
@@ -106,8 +110,6 @@ pub struct SessionAccess {
     pub surface: RuntimeSurface,
     /// The client kind of the session creator (for audit).
     pub owner_client_kind: ClientKind,
-    pub default_observer_allowed: bool,
-    pub default_controller_allowed: bool,
 }
 
 impl Default for SessionAccess {
@@ -117,8 +119,6 @@ impl Default for SessionAccess {
             allowed_clients: Vec::new(),
             surface: RuntimeSurface::Unknown,
             owner_client_kind: ClientKind::Unknown,
-            default_observer_allowed: true,
-            default_controller_allowed: false,
         }
     }
 }
@@ -220,8 +220,7 @@ mod tests {
     fn session_access_defaults() {
         let access = SessionAccess::default();
         assert!(access.owner_client_id.is_none());
-        assert!(access.default_observer_allowed);
-        assert!(!access.default_controller_allowed);
+        assert!(access.allowed_clients.is_empty());
         assert_eq!(access.surface, RuntimeSurface::Unknown);
     }
 

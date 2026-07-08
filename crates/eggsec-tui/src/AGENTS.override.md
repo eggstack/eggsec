@@ -905,8 +905,7 @@ self.inputs.fields[1].value = "report.json".to_string();
 // CORRECT - check length first
 if self.inputs.fields.len() > 1 {
     self.inputs.fields[1].value = "report.json".to_string();
-self.inputs.fields[1].cursor_pos = 11;
-    }
+    self.inputs.fields[1].cursor_pos = 11;
 }
 ```
 

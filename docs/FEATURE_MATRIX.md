@@ -209,7 +209,7 @@ cargo test --lib -p eggsec --features evasion
 cargo test --lib -p eggsec --features postex
 cargo test --lib -p eggsec --features c2
 cargo test --lib -p eggsec --features stress-testing
-cargo test -p eggsec-nse
+cargo test -p eggsec-nse --features nse
 ```
 
 #### docs-metadata — Broad metadata/doc validation without heavy optional dependencies
