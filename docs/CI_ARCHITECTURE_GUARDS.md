@@ -148,3 +148,5 @@ The CI architecture guards enforce these invariants from Phases 1–14 (23 check
 25. `EggsecRuntimeExecutor` does not hardcode `LoadedScope::default_empty()` — it resolves scope from `RuntimeExecutionContext` (permissive manual surfaces excepted).
 26. Session snapshots include `owner_client_id` for persisted access control.
 27. CloseSession persists final snapshot (with cancelled tasks and closed flag).
+28. CloseSession does not call `delete_session()` — history is preserved for later inspection.
+29. No hardcoded `RuntimeSurface::CliManual` in `EggsecRuntimeExecutor` outside `#[cfg(test)]` modules — surface is derived from `RuntimeExecutionContext`.

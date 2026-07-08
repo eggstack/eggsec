@@ -64,7 +64,7 @@ Snapshots are written at these `DaemonHost` command handler points (fire-and-for
 | `SubmitTask` | `submit-task` | Yes |
 | `CancelTask` | `cancel-task` | Yes |
 | `CancelActive` | `cancel-active` | Yes |
-| `CloseSession` | `close-session` | Yes (final snapshot with closed=true + cancelled tasks) |
+| `CloseSession` | `close-session` | Yes (final snapshot with closed=true + cancelled tasks; preserves history — does NOT delete the session) |
 | `DeclareClient` | `declare-client` | No (audit only) |
 | `ApprovePolicy` | `approve-policy` | No (audit only, unsupported) |
 | Permission denied | `command-denied:{discriminant}` | No (audit only) |
@@ -108,6 +108,13 @@ For `ListPersistedSessions`, elevated client kinds (`Cli`, `Tui`, `DaemonInterna
 
 The `owner_client_id` field uses `#[serde(default)]` for deserialization, ensuring existing persisted snapshots that lack the field are loaded without error (owner defaults to `None`).
 
+### Persisted-Session Listing Policy
+
+`ListPersistedSessions` applies different visibility rules based on client kind:
+
+- **CLI/TUI clients** (`Cli`, `Tui`): See only sessions where `owner_client_id` matches their own client ID. Sessions without owner info are included for backward compatibility.
+- **DaemonInternal clients**: See all sessions regardless of owner. This enables daemon-level history inspection and administrative tooling.
+
 ## Schema Migration
 
 `SqliteStore::migrate()` (`store/sqlite.rs`) is version-aware:
@@ -138,9 +145,12 @@ When `enable_persistence` is `false`, the daemon uses `NoopStore` behavior and r
 | Executor Mode | Capabilities | Task Kinds |
 |---------------|-------------|------------|
 | Real (`--full-executor`) | `RuntimeCapabilities::full()` | All 29 task kinds |
-| No-op (default) | `RuntimeCapabilities::noop()` | Empty (no task kinds advertised) |
+| Conservative (default) | `RuntimeCapabilities::conservative()` | Safe subset only — excludes hazardous task families (stress, packet, wireless-deauth, postex, c2, evasion) unless lab mode is configured |
+| No-op (no `full-executor`) | `RuntimeCapabilities::noop()` | Empty (no task kinds advertised) |
 
 Capabilities are set per-session at creation time via `RuntimeConfig`. Clients can discover capabilities via the `Capabilities` command or `GET /capabilities` HTTP endpoint. The daemon does not advertise task kinds it cannot execute.
+
+Strict daemon execution (automated surfaces such as REST, MCP, gRPC, agent) currently requires resolvable explicit scope metadata — `LoadedScope::is_explicit_manifest()` must be true. Permissive manual surfaces allow `LoadedScope::default_empty()`.
 
 ## Protocol Extensions
 
@@ -186,6 +196,8 @@ bash scripts/smoke-daemon-local.sh /path/to/socket # custom socket path
 - `async_trait` for the `DaemonStore` trait
 
 ## Transport Abstraction
+
+The noop daemon mode operates at the protocol/session level only — it handles session creation, task queuing, and cancellation without executing any tasks. The real executor mode (`--full-executor` / `full-executor` feature) adds actual task dispatch via `EggsecRuntimeExecutor`.
 
 The daemon supports multiple transport layers for client connectivity, declared via `TransportKind` and advertised through `DaemonCapabilities`.
 

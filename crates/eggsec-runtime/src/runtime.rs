@@ -54,7 +54,7 @@ impl Default for RuntimeConfig {
             default_task_timeout: Some(Duration::from_secs(300)),
             max_active_tasks_per_session: 1,
             event_channel_capacity: 256,
-            capabilities: crate::capabilities::RuntimeCapabilities::full(),
+            capabilities: crate::capabilities::RuntimeCapabilities::full_lab(),
         }
     }
 }
@@ -351,7 +351,14 @@ impl Runtime {
     ) -> Result<TaskId, RuntimeError> {
         let task_id = TaskId::new();
 
-        let (cancel_token, timeout_duration, executor_clone, event_tx_clone, context) = {
+        let (
+            cancel_token,
+            timeout_duration,
+            executor_clone,
+            event_tx_clone,
+            context,
+            normalized_request,
+        ) = {
             let mut state = self.state.lock().await;
 
             // Validate session exists
@@ -365,7 +372,18 @@ impl Runtime {
                 .get(&session_id)
                 .is_some_and(|s| s.is_closed())
             {
-                return Err(RuntimeError::SessionNotFound(session_id.to_string()));
+                return Err(RuntimeError::SessionClosed(session_id.to_string()));
+            }
+
+            // Reject task kinds not supported by runtime capabilities
+            {
+                let session = state.sessions.get(&session_id).unwrap();
+                if !session
+                    .capabilities()
+                    .supports_task_kind(&request.task_kind)
+                {
+                    return Err(RuntimeError::UnsupportedTaskKind);
+                }
             }
 
             // Single-active-task policy: terminalize any existing active tasks
@@ -424,10 +442,29 @@ impl Runtime {
                 }
             };
 
+            // Normalize request surface to match session surface.
+            // The session surface is authoritative; request surface is informational.
+            let session_surface = context.surface.clone();
+            let mut normalized_request = request;
+            if normalized_request.surface == RuntimeSurface::Unknown
+                || normalized_request.surface != session_surface
+            {
+                if normalized_request.surface != RuntimeSurface::Unknown
+                    && normalized_request.surface != session_surface
+                {
+                    tracing::debug!(
+                        request_surface = %normalized_request.surface.label(),
+                        session_surface = %session_surface.label(),
+                        "Normalizing request surface to match session surface"
+                    );
+                }
+                normalized_request.surface = session_surface;
+            }
+
             state.sessions.get_mut(&session_id).unwrap().tasks.insert(
                 task_id,
                 crate::session::TaskRecord {
-                    request: request.clone(),
+                    request: normalized_request.clone(),
                     status: TaskStatus::Queued,
                     progress: None,
                     last_error: None,
@@ -442,7 +479,7 @@ impl Runtime {
                 RuntimeEvent::TaskQueued {
                     session_id,
                     task_id,
-                    request: request.clone(),
+                    request: normalized_request.clone(),
                 },
             );
 
@@ -452,6 +489,7 @@ impl Runtime {
                 state.executor.clone(),
                 state.event_tx.clone(),
                 context,
+                normalized_request,
             )
         };
 
@@ -462,7 +500,7 @@ impl Runtime {
         let handle = {
             let state_arc = state_arc.clone();
             let cancel_for_spawn = cancel_token.clone();
-            let request_for_spawn = request.clone();
+            let request_for_spawn = normalized_request;
 
             tokio::spawn(async move {
                 // Signal TaskStarted — but only if the task hasn't been
@@ -1458,5 +1496,319 @@ mod tests {
         .await
         .ok();
         assert!(found);
+    }
+
+    #[tokio::test]
+    async fn submit_normalizes_unknown_surface_to_session_surface() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let mut req = test_request();
+        req.surface = RuntimeSurface::Unknown;
+        let task_id = runtime.submit(session_id, req).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.surface, RuntimeSurface::McpServer);
+        // Task should exist in either active or completed tasks.
+        let task = snapshot
+            .completed_tasks
+            .iter()
+            .chain(snapshot.active_tasks.iter())
+            .find(|t| t.task_id == task_id)
+            .expect("task should exist");
+        assert!(
+            task.status.is_terminal()
+                || task.status == TaskStatus::Running
+                || task.status == TaskStatus::Queued
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_normalizes_mismatched_surface_to_session_surface() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let mut rx = runtime.subscribe().await;
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let mut req = test_request();
+        req.surface = RuntimeSurface::CliManual;
+        let task_id = runtime.submit(session_id, req).await.unwrap();
+
+        // Collect events to verify the TaskQueued event carries the normalized surface
+        let mut queued_surface = None;
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while let Some(event) = rx.recv().await {
+                if let RuntimeEvent::TaskQueued {
+                    task_id: tid,
+                    request,
+                    ..
+                } = event
+                {
+                    if tid == task_id {
+                        queued_surface = Some(request.surface.clone());
+                        break;
+                    }
+                }
+            }
+        })
+        .await
+        .ok();
+
+        // The queued event should carry McpServer, not CliManual
+        assert_eq!(queued_surface, Some(RuntimeSurface::McpServer));
+    }
+
+    #[tokio::test]
+    async fn submit_preserves_matching_surface() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let mut req = test_request();
+        req.surface = RuntimeSurface::McpServer;
+        let task_id = runtime.submit(session_id, req).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.surface, RuntimeSurface::McpServer);
+        let task = snapshot
+            .completed_tasks
+            .iter()
+            .chain(snapshot.active_tasks.iter())
+            .find(|t| t.task_id == task_id)
+            .expect("task should exist");
+        assert!(
+            task.status.is_terminal()
+                || task.status == TaskStatus::Running
+                || task.status == TaskStatus::Queued
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_rejects_unsupported_task_kind() {
+        use crate::capabilities::RuntimeCapabilities;
+        use crate::request::StressTestParams;
+
+        let config = RuntimeConfig {
+            capabilities: RuntimeCapabilities::daemon_conservative(),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        let req = RunRequest {
+            task_kind: TaskKind::StressTest(StressTestParams {
+                target: "10.0.0.1".into(),
+                flood_type: "syn".into(),
+                duration_secs: None,
+                threads: None,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        };
+
+        let result = runtime.submit(session_id, req).await;
+        assert!(matches!(result, Err(RuntimeError::UnsupportedTaskKind)));
+    }
+
+    #[tokio::test]
+    async fn submit_to_closed_session_returns_session_closed() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        runtime.close_session(session_id).await.unwrap();
+
+        let result = runtime.submit(session_id, test_request()).await;
+        assert!(matches!(
+            result,
+            Err(RuntimeError::SessionClosed(ref id)) if id == &session_id.to_string()
+        ));
+    }
+
+    /// Executor that captures the surface from the RuntimeExecutionContext it receives.
+    struct SurfaceCapturingExecutor {
+        captured: std::sync::Arc<std::sync::Mutex<Option<RuntimeSurface>>>,
+    }
+
+    impl RuntimeTaskExecutor for SurfaceCapturingExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: RunRequest,
+            context: RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                    + Send
+                    + 'static,
+            >,
+        > {
+            let captured = self.captured.clone();
+            Box::pin(async move {
+                *captured.lock().unwrap() = Some(context.surface);
+                Ok(TaskOutcome::Empty)
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn executor_receives_session_surface_from_context() {
+        let captured = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let executor = SurfaceCapturingExecutor {
+            captured: captured.clone(),
+        };
+        let runtime = Runtime::new(RuntimeConfig::default(), executor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let req = RunRequest {
+            task_kind: TaskKind::PortScan(PortScanParams {
+                target: "10.0.0.1".into(),
+                ports: None,
+                scan_type: None,
+                timeout_ms: None,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::CliManual, // spoofed!
+            labels: vec![],
+        };
+        runtime.submit(session_id, req).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let surface = captured.lock().unwrap().clone().unwrap();
+        assert_eq!(surface, RuntimeSurface::McpServer);
+    }
+
+    #[tokio::test]
+    async fn request_surface_normalized_in_task_record() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let mut req = test_request();
+        req.surface = RuntimeSurface::CliManual; // spoofed
+        let task_id = runtime.submit(session_id, req).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        // Session surface must be McpServer (the authoritative trust boundary)
+        assert_eq!(snapshot.surface, RuntimeSurface::McpServer);
+        // The task should be in completed_tasks with the correct task_kind
+        let task = snapshot
+            .completed_tasks
+            .iter()
+            .find(|t| t.task_id == task_id)
+            .expect("task should exist in completed tasks");
+        assert_eq!(task.status, TaskStatus::Completed);
+        // TaskKind is preserved from the original request (not affected by surface normalization)
+        assert!(matches!(task.task_kind, TaskKind::PortScan(_)));
+    }
+
+    #[tokio::test]
+    async fn close_preserves_cancelled_active_task_in_snapshot() {
+        let runtime = Runtime::new(RuntimeConfig::default(), SlowExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let task_id = runtime.submit(session_id, test_request()).await.unwrap();
+        // Let the task start running
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Close the session — should cancel the active task
+        runtime.close_session(session_id).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.closed);
+        // The cancelled task should appear in completed_tasks
+        let task = snapshot
+            .completed_tasks
+            .iter()
+            .find(|t| t.task_id == task_id)
+            .expect("cancelled task should be in completed_tasks after close");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        assert_eq!(task.last_error.as_deref(), Some("session closed"));
+    }
+
+    #[tokio::test]
+    async fn conservative_capabilities_reject_hazardous_task_kinds() {
+        use crate::capabilities::RuntimeCapabilities;
+
+        let config = RuntimeConfig {
+            capabilities: RuntimeCapabilities::daemon_conservative(),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        let hazardous_kinds = vec![
+            TaskKind::C2(crate::request::C2Params {
+                profile: None,
+                target: None,
+            }),
+            TaskKind::PacketSend(crate::request::PacketSendParams {
+                target: "10.0.0.1".into(),
+                protocol: "tcp".into(),
+                payload: None,
+            }),
+            TaskKind::WirelessActive(crate::request::WirelessActiveParams {
+                interface: None,
+                target_bssid: None,
+            }),
+            TaskKind::DbPentest(crate::request::DbPentestParams {
+                db_type: "postgres".into(),
+                target: "10.0.0.1".into(),
+                port: None,
+            }),
+            TaskKind::Intercept(crate::request::InterceptParams {
+                listen_port: None,
+                target: None,
+            }),
+            TaskKind::StressTest(crate::request::StressTestParams {
+                target: "10.0.0.1".into(),
+                flood_type: "syn".into(),
+                duration_secs: None,
+                threads: None,
+            }),
+        ];
+
+        for kind in hazardous_kinds {
+            let req = RunRequest {
+                task_kind: kind,
+                requested_by: None,
+                surface: RuntimeSurface::TuiManual,
+                labels: vec![],
+            };
+            let result = runtime.submit(session_id, req).await;
+            assert!(
+                matches!(result, Err(RuntimeError::UnsupportedTaskKind)),
+                "Expected UnsupportedTaskKind for hazardous task, got: {:?}",
+                result
+            );
+        }
     }
 }

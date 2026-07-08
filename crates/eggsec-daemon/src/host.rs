@@ -574,14 +574,17 @@ impl DaemonHost {
                 session_id,
             } => match self.runtime().close_session(session_id).await {
                 Ok(()) => {
-                    // Delete persisted snapshot and record audit event
+                    // Persist the final closed snapshot and record audit event
                     let store = self.store.clone();
+                    let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
                     tokio::spawn(async move {
                         if enable_persistence {
-                            if let Err(e) = store.delete_session(session_id).await {
-                                tracing::warn!(error = %e, "Failed to delete persisted session snapshot");
+                            if let Ok(snapshot) = runtime.snapshot(session_id).await {
+                                if let Err(e) = store.save_session_snapshot(&snapshot).await {
+                                    tracing::warn!(error = %e, "Failed to persist final closed session snapshot");
+                                }
                             }
                             let _ = store
                                 .record_audit_event(&PersistedAuditEvent {
@@ -642,14 +645,14 @@ impl DaemonHost {
                     .unwrap_or_else(|e| Err(anyhow::anyhow!("spawn_blocking failed: {}", e)));
                 match result {
                     Ok(sessions) => {
-                        // Filter by owner unless the client has an elevated role
+                        // Only DaemonInternal clients get global persisted session listing.
+                        // CLI/TUI clients see only their own sessions by default, matching
+                        // the single-user local daemon model. This can be relaxed via config
+                        // if multi-client scenarios arise.
                         let is_elevated = client_id.map_or(false, |cid| {
                             let registry = self.client_registry.lock().unwrap();
                             registry.get(&cid).map_or(false, |info| {
-                                matches!(
-                                    info.kind,
-                                    ClientKind::Cli | ClientKind::Tui | ClientKind::DaemonInternal
-                                )
+                                matches!(info.kind, ClientKind::DaemonInternal)
                             })
                         });
                         let filtered = if is_elevated {
@@ -2625,6 +2628,151 @@ mod tests {
         assert!(
             found,
             "recovery should populate session_access with owner from snapshot"
+        );
+    }
+
+    #[tokio::test]
+    async fn close_session_persists_final_snapshot() {
+        let store = Arc::new(crate::store::SqliteStore::new_in_memory().unwrap());
+        let config = DaemonConfig {
+            enable_persistence: true,
+            ..Default::default()
+        };
+        let host = DaemonHost::new(config, TestExecutor, store.clone());
+        let client_id = declare_test_client(&host).await;
+
+        let session_id = match host
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+
+        let resp = host
+            .handle_command(
+                ClientCommand::CloseSession {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        assert!(
+            matches!(resp, ServerMessage::SessionClosed { .. }),
+            "expected SessionClosed, got {:?}",
+            resp
+        );
+
+        // Wait for the spawned persistence task to complete
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let snapshot = store.load_session_snapshot(session_id).await.unwrap();
+        let snapshot = snapshot.expect("expected persisted snapshot after close");
+        assert!(snapshot.closed, "snapshot should be marked closed");
+        assert!(snapshot.closed_at.is_some(), "closed_at should be set");
+    }
+
+    #[tokio::test]
+    async fn close_session_cancels_active_tasks_in_snapshot() {
+        let store = Arc::new(crate::store::SqliteStore::new_in_memory().unwrap());
+        let config = DaemonConfig {
+            enable_persistence: true,
+            ..Default::default()
+        };
+        let host = DaemonHost::new(config, TestExecutor, store.clone());
+        let client_id = declare_test_client(&host).await;
+
+        let session_id = match host
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+
+        // Submit a task before closing
+        let resp = host
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "10.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        assert!(
+            matches!(resp, ServerMessage::TaskSubmitted { .. }),
+            "expected TaskSubmitted, got {:?}",
+            resp
+        );
+
+        // Close the session
+        let resp = host
+            .handle_command(
+                ClientCommand::CloseSession {
+                    request_id: "r3".into(),
+                    session_id,
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        assert!(
+            matches!(resp, ServerMessage::SessionClosed { .. }),
+            "expected SessionClosed, got {:?}",
+            resp
+        );
+
+        // Wait for the spawned persistence task to complete
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let snapshot = store.load_session_snapshot(session_id).await.unwrap();
+        let snapshot = snapshot.expect("expected persisted snapshot after close");
+
+        // The task should be in completed_tasks (cancelled tasks move to completed)
+        let all_tasks: Vec<_> = snapshot
+            .active_tasks
+            .iter()
+            .chain(snapshot.completed_tasks.iter())
+            .collect();
+        assert!(
+            !all_tasks.is_empty(),
+            "expected at least one task in the snapshot"
+        );
+        let task = all_tasks[0];
+        assert_eq!(
+            task.status,
+            eggsec_runtime::TaskStatus::Cancelled,
+            "task should be cancelled after close"
         );
     }
 }

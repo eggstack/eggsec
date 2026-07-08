@@ -91,3 +91,9 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 37. **RuntimeExecutionContext origin**: `RuntimeExecutionContext` must be populated by the runtime from `RuntimeSession` state (surface, scope). Client-submitted `RunRequest.surface` is informational only and must not influence enforcement.
 
 38. **Daemon capabilities reflect executor mode**: `RuntimeCapabilities` must reflect whether the daemon has a real executor (`full()`) or a no-op stub (`noop()`). No-op executors must not advertise task kinds they cannot execute.
+
+39. **Close-session must not delete persisted session state**: `CloseSession` must persist a final snapshot (with `closed=true` and cancelled tasks) but must not call `delete_session()`. Session history is preserved for later inspection via `daemon history` / `daemon show`.
+
+40. **Request surface is normalized to session surface**: The executor must derive its `ExecutionSurface` from `RuntimeExecutionContext` (session-bound), not from `RunRequest.surface`. Client-submitted surface is informational only and must not influence enforcement decisions or persisted state.
+
+41. **Unsupported task kinds are rejected before dispatch**: If the daemon's runtime capabilities do not include a submitted `TaskKind`, the task must be rejected during submission (before dispatch) rather than silently dropped or returned as an unexpected runtime error.

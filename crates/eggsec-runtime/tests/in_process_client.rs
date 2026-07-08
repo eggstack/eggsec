@@ -719,8 +719,12 @@ async fn capabilities_reflect_current_build() {
     // Cancellation supported
     assert!(caps.supports_cancellation);
 
-    // All 29 task kinds are advertised
-    assert_eq!(caps.task_kinds.len(), 29);
+    // Default (daemon_conservative) includes safe task kinds
+    assert!(!caps.task_kinds.is_empty());
+
+    // Full lab has all 29 task kinds
+    let full = eggsec_runtime::RuntimeCapabilities::full_lab();
+    assert_eq!(full.task_kinds.len(), 29);
 }
 
 #[tokio::test]

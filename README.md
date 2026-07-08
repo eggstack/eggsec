@@ -331,7 +331,11 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 
 ## Daemon Persistence
 
-The `eggsec-daemon` crate provides durable session state backed by SQLite. Session snapshots are persisted at lifecycle points (create, submit, cancel, close) and recovered automatically on daemon restart.
+The `eggsec-daemon` crate provides durable session state backed by SQLite. Session snapshots are persisted at lifecycle points (create, submit, cancel, close) and recovered automatically on daemon restart. The daemon is **optional** — CLI/TUI manual mode operates without a daemon by default, with `ManualPermissive` as the first-class enforcement profile.
+
+Closing a session persists a final snapshot (with `closed=true` and cancelled tasks) but does **not** delete the session. History is preserved and accessible via `daemon history` / `daemon show`.
+
+The daemon's default capabilities are **conservative** — when `full-executor` is enabled but lab mode is not configured, only a safe subset of task kinds is advertised (excluding hazardous families such as stress, packet, wireless-deauth, postex, c2, and evasion). Full capabilities require explicit `--full-executor` configuration.
 
 ### Daemon Transport
 

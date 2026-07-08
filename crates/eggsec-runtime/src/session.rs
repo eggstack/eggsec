@@ -46,6 +46,14 @@ pub struct RuntimeExecutionContext {
 /// Mirrors the essential provenance data from `LoadedScope` without
 /// depending on the `eggsec` crate. The `eggsec` crate provides
 /// `From<&LoadedScope>` to convert from the full scope type.
+///
+/// # Strict daemon scope limitation
+///
+/// For strict automated surfaces (McpServer, SecurityAgent, RestApi, GrpcApi, Ci),
+/// scope must be resolvable from `path` when `is_explicit` is true. Inline/preset
+/// scope sources without a file path are not yet supported for daemon strict execution.
+/// Sessions with `is_explicit = true` but no `path` will fail closed when the
+/// executor attempts to resolve scope rules.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SessionScope {
     /// Whether scope was explicitly provided (config file, CLI, or preset).

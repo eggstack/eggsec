@@ -271,10 +271,11 @@ DaemonClient → Runtime::submit(RunRequest)
       → task_result_to_outcome() → TaskOutcome
 ```
 
-**Surface**: Derived from `RuntimeExecutionContext.surface` (session-bound) → `ExecutionSurface` (engine type). `Unknown` maps to error.
+**Surface**: Derived from `RuntimeExecutionContext.surface` (session-bound) → `ExecutionSurface` (engine type). Request surface is normalized to session surface before storage/emission — `RunRequest.surface` is informational only and must not influence enforcement. `Unknown` maps to error.
 **Scope**: Resolved from `RuntimeExecutionContext.scope`. Strict surfaces fail closed without explicit scope. Permissive manual surfaces allow `LoadedScope::default_empty()`.
 **Bridge**: `runtime_bridge/` module converts `eggsec-runtime` DTOs to engine enforcement types. Dependency direction: `eggsec` → `eggsec-runtime` (not reverse).
 **Invariant**: All daemon-dispatched operations must pass through `approve_run_request_bundle()` before execution. The `ApprovedRunRequest` bundle couples the approval token with the specific request, preventing token reuse.
+**Close-session behavior**: Closing a session persists a final snapshot (with `closed=true` and cancelled tasks) but does **not** delete the session. History is preserved and accessible via `daemon history` / `daemon show`.
 
 **Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
 

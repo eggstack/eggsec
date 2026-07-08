@@ -79,7 +79,15 @@ Categories:
 | Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
 |---------|----------|-----------------|-----------------|-------------|-------|
 | `http-api` | Protocol/front-end adapter | `axum`, `async-stream`, `futures` | eggsec-daemon | No | HTTP/SSE transport for daemon (loopback-only default bind) |
-| `full-executor` | Execution adapter | `dep:eggsec` | eggsec-daemon | No | Real task execution via `EggsecRuntimeExecutor` (enforcement + dispatch) |
+| `full-executor` | Execution adapter | `dep:eggsec` | eggsec-daemon | No | Real task execution via `EggsecRuntimeExecutor` (enforcement + dispatch). Without this flag, the daemon uses a conservative capability set by default (safe subset only, excluding hazardous task families) unless no-op stub is used. |
+
+**Daemon capability profiles:**
+
+| Profile | Description | Hazardous Tasks |
+|---------|-------------|----------------|
+| `full()` | All 29 task kinds (requires `full-executor`) | Included |
+| `conservative()` | Safe subset only (default when `full-executor` is enabled but lab mode is not configured) | Excluded (stress, packet, wireless-deauth, postex, c2, evasion) |
+| `noop()` | No task kinds (no `full-executor` feature) | None |
 
 ### 1.1b CLI Crate Features
 

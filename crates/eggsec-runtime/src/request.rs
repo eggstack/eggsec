@@ -21,6 +21,12 @@ pub enum RuntimeSurface {
     Unknown,
 }
 
+impl std::fmt::Display for RuntimeSurface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 impl RuntimeSurface {
     pub fn label(&self) -> &'static str {
         match self {
@@ -300,6 +306,46 @@ pub struct InterceptParams {
 pub struct C2Params {
     pub profile: Option<String>,
     pub target: Option<String>,
+}
+
+impl TaskKind {
+    /// Return the capability name string for this task kind variant.
+    ///
+    /// This name must match the entries in [`RuntimeCapabilities::task_kinds`]
+    /// for the task to be supported by a given runtime configuration.
+    pub fn capability_name(&self) -> &'static str {
+        match self {
+            TaskKind::LoadTest(_) => "load-test",
+            TaskKind::StressTest(_) => "stress-test",
+            TaskKind::PortScan(_) => "port-scan",
+            TaskKind::EndpointScan(_) => "endpoint-scan",
+            TaskKind::Fingerprint(_) => "fingerprint",
+            TaskKind::Fuzz(_) => "fuzz",
+            TaskKind::Waf(_) => "waf",
+            TaskKind::WafStress(_) => "waf-stress",
+            TaskKind::Pipeline(_) => "pipeline",
+            TaskKind::Recon(_) => "recon",
+            TaskKind::PacketCapture(_) => "packet-capture",
+            TaskKind::PacketTraceroute(_) => "traceroute",
+            TaskKind::PacketSend(_) => "packet-send",
+            TaskKind::GraphQl(_) => "graphql",
+            TaskKind::OAuth(_) => "oauth",
+            TaskKind::AuthTest(_) => "auth-test",
+            TaskKind::Nse(_) => "nse",
+            TaskKind::Hunt(_) => "hunt",
+            TaskKind::Browser(_) => "browser",
+            TaskKind::Compliance(_) => "compliance",
+            TaskKind::Storage(_) => "storage",
+            TaskKind::Integrations(_) => "integration",
+            TaskKind::Workflow(_) => "workflow",
+            TaskKind::Vuln(_) => "vuln",
+            TaskKind::Wireless(_) => "wireless",
+            TaskKind::WirelessActive(_) => "wireless-active",
+            TaskKind::DbPentest(_) => "db-pentest",
+            TaskKind::Intercept(_) => "intercept",
+            TaskKind::C2(_) => "c2",
+        }
+    }
 }
 
 #[cfg(test)]
