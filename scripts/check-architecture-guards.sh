@@ -1261,6 +1261,17 @@ else
 fi
 
 echo ""
+echo "--- Check 56: sslcert TcpStream::connect must be gated by check_network_tcp ---"
+SSL_CERT_TCP_CONNECT=$(rg -c "TcpStream::connect" crates/eggsec-nse/src/libraries/sslcert.rs 2>/dev/null || echo 0)
+SSL_CERT_NET_CHECK=$(rg -c "check_network_tcp" crates/eggsec-nse/src/libraries/sslcert.rs 2>/dev/null || echo 0)
+if [ "$SSL_CERT_TCP_CONNECT" -gt 0 ] && [ "$SSL_CERT_NET_CHECK" -eq 0 ]; then
+    echo "FAIL: sslcert.rs has TcpStream::connect without check_network_tcp gating"
+    FAIL=$((FAIL + 1))
+else
+    echo "PASS: sslcert.rs TcpStream::connect is gated by check_network_tcp ($SSL_CERT_NET_CHECK calls)."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

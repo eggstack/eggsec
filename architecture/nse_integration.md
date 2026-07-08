@@ -382,7 +382,7 @@ Milestone 3 should not:
 - **Randomness**: `rand.rs` — random byte generation gated by `check_randomness()`
 - **Environment**: `os.rs` — environment variable reads gated by `check_environment()`
 - **Compression**: `zlib.rs` — compress/decompress gated by `check_compression()` with size limits (64 MiB input, 256 MiB output)
-- **Crypto/TLS**: `openssl.rs`, `tls.rs`, `sslcert.rs` — crypto operations gated by `check_crypto()`
+- **Crypto/TLS**: `openssl.rs`, `tls.rs`, `sslcert.rs` — crypto operations gated by `check_crypto()`; sslcert network functions (`get_certificate`, `get_chain_certs`, `version`) additionally gated by `check_network_tcp()` (dual-gated)
 
 ### Partially Wrapped
 
@@ -750,7 +750,7 @@ The compatibility matrix summarizes the registry's 43 library descriptors. The a
 | `ssh` | Protocol | GracefulDegrade | NetworkAccess | CIDR-filtered | Requires `libssh2`; auth methods partial | Partial |
 | `smb` | Protocol | GracefulDegrade | NetworkAccess | CIDR-filtered | NTLM auth only; SMBv1 signing incomplete | Partial |
 | `vulns` | Exploit | Skip | NetworkAccess | CIDR-filtered | CVE lookup via NVD/OSV APIs; offline DB not bundled | Covered |
-| `creds` | Auth | Skip | FileSystemRead, NetworkAccess | FS+net restricted | Credential iteration works; file-based wordlists sandboxed | Partial |
+| `creds` | Auth | Skip | None | Clean | Pure in-memory credential store; no filesystem or network side effects | Covered |
 | `io` | Core | GracefulDegrade | FileSystemRead, FileSystemWrite, ProcessExecution | Heavily sandboxed | `popen` restricted to command allowlist; `tmpfile` denied | Covered |
 | `lfs` | Core | GracefulDegrade | FileSystemRead, FileSystemWrite | Restricted to `allowed_dir` | Symlink checks enforced; `attributes` partial | Covered |
 | `tab` | Utility | Skip | None | Clean | Pure utility; full fidelity | Covered |
@@ -771,9 +771,9 @@ The compatibility matrix summarizes the registry's 43 library descriptors. The a
 
 | Side Effect | Libraries |
 |-------------|-----------|
-| None | `stdnse`, `tab`, `json`, `base64`, `base32`, `bin`, `bit`, `stringaux`, `strbuf`, `nse_string`, `nse_table`, `pcre`, `shortport`, `match_lib`, `matchs`, `datetime`, `rand`, `url`, `unicode` |
-| NetworkAccess | `nmap`, `socket`, `http`, `dns`, `ssl`, `ssh`, `smb`, `smb2`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `vulns`, `brute`, `openssl`, `comm`, `target`, `creds` |
-| FileSystemRead | `lfs`, `creds`, `unpwdb` |
+| None | `stdnse`, `tab`, `json`, `base64`, `base32`, `bin`, `bit`, `stringaux`, `strbuf`, `nse_string`, `nse_table`, `pcre`, `shortport`, `match_lib`, `matchs`, `datetime`, `rand`, `url`, `unicode`, `creds` |
+| NetworkAccess | `nmap`, `socket`, `http`, `dns`, `ssl`, `ssh`, `smb`, `smb2`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `vulns`, `brute`, `openssl`, `comm`, `target` |
+| FileSystemRead | `lfs`, `unpwdb` |
 | FileSystemWrite | `io`, `lfs` |
 | ProcessExecution | `io`, `os` |
 | EnvAccess | `nmap`, `os` |
@@ -1171,7 +1171,7 @@ Phase 05 migrated time, randomness, environment, crypto, and compression operati
 | `rand.rs` | `rand.random()`, `rand.num_range()`, `rand.random_string()`, `rand.seed()` | `nse_random_bytes`, `check_randomness` |
 | `openssl.rs` | OpenSSL crypto operations, certificate handling | `check_crypto` |
 | `tls.rs` | TLS connection setup, cipher suite operations | `check_crypto` |
-| `sslcert.rs` | SSL certificate parsing and validation | `check_crypto` |
+| `sslcert.rs` | SSL certificate parsing and validation; network functions (`get_certificate`, `get_chain_certs`, `version`) also gated by `check_network_tcp` | `check_crypto`, `check_network_tcp` |
 | `zlib.rs` | `zlib.compress()`, `zlib.decompress()` | `nse_compress`, `nse_decompress`, `check_compression` |
 
 #### Executing Wrappers

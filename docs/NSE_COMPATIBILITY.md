@@ -20,7 +20,7 @@
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
 | http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via `check_network_tcp()` or `maybe_denied_response()`; denied requests never reach reqwest |
-| ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext` |
+| ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext`. Network functions (`get_certificate`, `get_chain_certs`, `version`) additionally gated by `check_network_tcp` — denied under AgentSafe/CiSafe |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |
 | smb2 | Network | Deferred | SMB2 I/O | — | No capability wrapper yet; SMB version 2 |
@@ -30,7 +30,7 @@
 | mongodb | Database | Deferred | MongoDB queries | — | No capability wrapper yet; document database |
 | ldap | Network | Deferred | LDAP queries | — | No capability wrapper yet; directory protocol |
 | snmp | Network | Deferred | SNMP queries | — | No capability wrapper yet; network management protocol |
-| creds | Auth | Wrapped | None | N/A | In-memory credential storage; no filesystem or network side effects; wrapped since Expansion Phase 05 |
+| creds | Auth | Wrapped | None | N/A | Pure in-memory credential store. No side effects. |
 | unpwdb | Auth | Wrapped | Username/password DB | Deny | Wrapped since Milestone 5 Phase 04; filesystem reads routed through `NseCapabilityContext` |
 | brute | Auth | Deferred | Brute force attempts | — | No capability wrapper yet; brute force framework |
 | target | Core | Deferred | Target manipulation | — | No capability wrapper yet; target registry |
@@ -116,11 +116,11 @@
 | http-head-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP HEAD |
 | http-options-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP OPTIONS |
 | http-request-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP generic request |
-| sslcert-get-certificate-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_certificate() with PEM extraction |
-| sslcert-parse-cert-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.parse_cert() on live certificate |
-| sslcert-get-subject-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_subject() on live certificate |
-| sslcert-get-chain-certs-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_chain_certs() chain enumeration |
-| sslcert-is-valid-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.is_valid() validity check |
+| sslcert-get-certificate-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_certificate() with PEM extraction. Gated by check_crypto + check_network_tcp (denied under AgentSafe/CiSafe) |
+| sslcert-parse-cert-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.parse_cert() on live certificate (pure parsing, no network gate) |
+| sslcert-get-subject-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_subject() on live certificate (pure parsing, no network gate) |
+| sslcert-get-chain-certs-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_chain_certs() chain enumeration. Gated by check_crypto + check_network_tcp (denied under AgentSafe/CiSafe) |
+| sslcert-is-valid-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.is_valid() validity check (pure parsing, no network gate) |
 | creds-store | Auth | Full | Complete | All | hard | skip | — | — | Creds library: in-memory credential storage, retrieval, dump |
 | creds-store-manual-permissive | Auth | Full | Complete | ManualPermissive | hard | skip | — | — | Creds library under ManualPermissive profile |
 | creds-store-agent-safe | Auth | Full | Complete | AgentSafe | hard | skip | — | — | Creds library under AgentSafe profile; no side effects |
@@ -150,8 +150,8 @@
 
 ### AgentSafe
 
-- **Libraries**: Wrapped (10) + PartiallyWrapped (2) + Pure (17) = 29 available
-- **Deferred libraries**: 14 unavailable (ssl, ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, unpwdb, brute, target)
+- **Libraries**: Wrapped (14) + PartiallyWrapped (1) + Pure (17) = 32 available
+- **Deferred libraries**: 11 unavailable (ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, brute, target)
 - **Side effects**: Restricted
 - **Network**: TCP/UDP/DNS gated by network policy; HTTP/HTTPS gated
 - **Filesystem**: Read scoped to allowed directory; write denied
@@ -162,8 +162,8 @@
 
 ### CiSafe
 
-- **Libraries**: Wrapped (10) + PartiallyWrapped (2) + Pure (17) = 29 available
-- **Deferred libraries**: 14 unavailable (same as AgentSafe)
+- **Libraries**: Wrapped (14) + PartiallyWrapped (1) + Pure (17) = 32 available
+- **Deferred libraries**: 11 unavailable (same as AgentSafe)
 - **Side effects**: Most restricted
 - **Network**: TCP/UDP/DNS denied; HTTP gated
 - **Filesystem**: Read scoped; write denied
@@ -178,7 +178,7 @@
 
 ## Known Gaps
 
-### Deferred Libraries (12)
+### Deferred Libraries (11)
 
 These libraries have no capability wrappers and are unavailable in AgentSafe and CiSafe profiles:
 
@@ -193,14 +193,13 @@ These libraries have no capability wrappers and are unavailable in AgentSafe and
 | mongodb | MongoDB | Cannot query MongoDB; NoSQL scripts unavailable |
 | ldap | LDAP | Cannot query LDAP directories; directory enumeration unavailable |
 | snmp | SNMP | Cannot query SNMP; network management scripts unavailable |
-| creds | Credentials | Cannot access credential stores; credential-based scripts unavailable |
 | brute | Brute force | Cannot perform brute force authentication; auth testing unavailable |
 | target | Target | Cannot manipulate target registry; advanced target handling unavailable |
 
 ### Unsupported Patterns
 
 - **Real HTTP/HTTPS**: All core HTTP methods now have local fixture scripts with zero-hit denial tests; no mock fallback for tested methods
-- **Real TLS/SSL**: sslcert library has 5 local fixture scripts with real TLS handshake against self-signed cert; tls and openssl libraries remain stubbed (hardcoded version/cipher strings)
+- **Real TLS/SSL**: sslcert library has 5 local fixture scripts with real TLS handshake against self-signed cert; network functions (`get_certificate`, `get_chain_certs`, `version`) gated by `check_crypto` + `check_network_tcp` (denied under AgentSafe/CiSafe); tls and openssl libraries remain stubbed (hardcoded version/cipher strings)
 - **Real DNS resolution**: Corpus uses mocks; real DNS requires network policy
 - **`stdnse.sleep()`**: Blocked without cancellation token support; scripts using sleep will hang or error
 - **Process execution**: Fully denied in AgentSafe/CiSafe; only ManualPermissive allows
@@ -306,7 +305,6 @@ The following are candidates for capability wrapper migration in Milestone 7:
 ### Priority 3: Authentication Libraries
 
 - **brute** — Brute force framework; required for authentication testing
-- **creds** — Credential store access; required for credential-based testing
 
 ### Priority 4: Network Protocol Libraries
 
