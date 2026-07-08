@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::DaemonError;
@@ -33,15 +34,30 @@ pub async fn run_server(
     let _ = std::fs::remove_file(socket_path);
     let listener = UnixListener::bind(socket_path)?;
 
-    tracing::info!("Daemon listening on {}", socket_path);
+    let max_clients = host.config().max_clients;
+    let semaphore = Arc::new(Semaphore::new(max_clients));
+    tracing::info!(
+        "Daemon listening on {} (max_clients={})",
+        socket_path,
+        max_clients
+    );
 
     loop {
         tokio::select! {
             result = listener.accept() => {
                 match result {
                     Ok((stream, _addr)) => {
+                        let permit = match semaphore.clone().try_acquire_owned() {
+                            Ok(permit) => permit,
+                            Err(_) => {
+                                tracing::warn!("Max clients ({}) reached, rejecting connection", max_clients);
+                                // Drop the stream — client gets a connection reset.
+                                drop(stream);
+                                continue;
+                            }
+                        };
                         let host = host.clone();
-                        tokio::spawn(handle_client(host, stream));
+                        tokio::spawn(handle_client(host, stream, permit));
                     }
                     Err(e) => tracing::error!("Accept error: {}", e),
                 }
@@ -73,7 +89,8 @@ pub(crate) fn event_session_id(
         | TaskCompleted { session_id, .. }
         | TaskFailed { session_id, .. }
         | TaskCancelled { session_id, .. }
-        | Audit { session_id, .. } => Some(session_id),
+        | Audit { session_id, .. }
+        | SessionClosed { session_id } => Some(session_id),
     }
 }
 
@@ -83,9 +100,15 @@ pub(crate) fn event_session_id(
 /// and writes the corresponding `ServerMessage` as a JSON line. The loop
 /// exits when the client disconnects (read returns `None` or error).
 ///
-/// Subscribe commands transfer ownership of the write half to a streaming
-/// task and return early.
-async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
+/// The `_permit` argument is an `OwnedSemaphorePermit` that is held for the
+/// lifetime of the connection. When it is dropped (client disconnects or
+/// handler returns), the permit is automatically released back to the
+/// semaphore.
+async fn handle_client(
+    host: Arc<DaemonHost>,
+    stream: tokio::net::UnixStream,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+) {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half).lines();
 

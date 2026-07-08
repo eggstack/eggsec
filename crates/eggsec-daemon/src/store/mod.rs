@@ -67,11 +67,13 @@ mod tests {
             session_id: SessionId::new(),
             surface: eggsec_runtime::RuntimeSurface::TuiManual,
             scope: None,
-            created_at_secs: 0,
+            created_at_epoch_secs: 0,
             generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![],
             capabilities: eggsec_runtime::RuntimeCapabilities::default(),
+            closed: false,
+            closed_at: None,
         };
         store.save_session_snapshot(&snapshot).await.unwrap();
         let loaded = store

@@ -18,7 +18,7 @@ fn session_summary_view_roundtrip() {
         }),
         active_count: 2,
         completed_count: 5,
-        created_at_secs: 100,
+        created_at_epoch_secs: 100,
     };
     let view = SessionSummaryView::from(&summary);
     assert_eq!(view.active_count, 2);
@@ -35,11 +35,13 @@ fn session_view_roundtrip() {
         session_id: SessionId::new(),
         surface: RuntimeSurface::McpServer,
         scope: None,
-        created_at_secs: 42,
+        created_at_epoch_secs: 42,
         generation: 3,
         active_tasks: vec![],
         completed_tasks: vec![],
         capabilities: Default::default(),
+        closed: false,
+        closed_at: None,
     };
     let view = SessionView::from(&snapshot);
     assert_eq!(view.surface_label, "mcp-server");
@@ -212,7 +214,7 @@ fn dashboard_summary_view() {
             scope: None,
             active_count: 1,
             completed_count: 3,
-            created_at_secs: 100,
+            created_at_epoch_secs: 100,
         },
         SessionSummary {
             session_id: SessionId::new(),
@@ -220,7 +222,7 @@ fn dashboard_summary_view() {
             scope: None,
             active_count: 0,
             completed_count: 2,
-            created_at_secs: 200,
+            created_at_epoch_secs: 200,
         },
     ];
     let view = DashboardSummaryView::from_summaries(&summaries);
@@ -258,11 +260,13 @@ fn event_view_all_variants() {
                 session_id: sid,
                 surface: RuntimeSurface::Ci,
                 scope: None,
-                created_at_secs: 0,
+                created_at_epoch_secs: 0,
                 generation: 0,
                 active_tasks: vec![],
                 completed_tasks: vec![],
                 capabilities: Default::default(),
+                closed: false,
+                closed_at: None,
             },
         },
         RuntimeEvent::TaskQueued {
@@ -336,6 +340,7 @@ fn event_view_all_variants() {
                 details: None,
             },
         },
+        RuntimeEvent::SessionClosed { session_id: sid },
     ];
 
     for event in &cases {

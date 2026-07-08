@@ -216,14 +216,14 @@ async fn attach_daemon_session(
         let sessions = client.list_sessions().await?;
         sessions
             .into_iter()
-            .max_by_key(|s| s.created_at_secs)
+            .max_by_key(|s| s.created_at_epoch_secs)
             .map(|s| s.session_id)
     } else {
         // No explicit session flag: list and pick latest, or create new.
         let sessions = client.list_sessions().await?;
         sessions
             .into_iter()
-            .max_by_key(|s| s.created_at_secs)
+            .max_by_key(|s| s.created_at_epoch_secs)
             .map(|s| s.session_id)
     };
 

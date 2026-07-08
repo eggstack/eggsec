@@ -534,7 +534,7 @@ mod tests {
                 scope: None,
                 active_count: 1,
                 completed_count: 0,
-                created_at_secs: 100,
+                created_at_epoch_secs: 100,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -555,17 +555,19 @@ mod tests {
                 session_id: SessionId::new(),
                 surface: RuntimeSurface::TuiManual,
                 scope: None,
-                created_at_secs: 42,
+                created_at_epoch_secs: 42,
                 generation: 0,
                 active_tasks: vec![],
                 completed_tasks: vec![],
                 capabilities: RuntimeCapabilities::default(),
+                closed: false,
+                closed_at: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
         let back: ServerMessage = serde_json::from_str(&json).unwrap();
         if let ServerMessage::Snapshot { snapshot, .. } = back {
-            assert_eq!(snapshot.created_at_secs, 42);
+            assert_eq!(snapshot.created_at_epoch_secs, 42);
         } else {
             panic!("wrong variant");
         }
@@ -993,7 +995,7 @@ mod tests {
                 scope: None,
                 active_count: 1,
                 completed_count: 0,
-                created_at_secs: 100,
+                created_at_epoch_secs: 100,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -1014,11 +1016,13 @@ mod tests {
                 session_id: SessionId::new(),
                 surface: RuntimeSurface::TuiManual,
                 scope: None,
-                created_at_secs: 42,
+                created_at_epoch_secs: 42,
                 generation: 0,
                 active_tasks: vec![],
                 completed_tasks: vec![],
                 capabilities: RuntimeCapabilities::default(),
+                closed: false,
+                closed_at: None,
             }),
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -1028,7 +1032,7 @@ mod tests {
             ..
         } = back
         {
-            assert_eq!(snapshot.created_at_secs, 42);
+            assert_eq!(snapshot.created_at_epoch_secs, 42);
         } else {
             panic!("wrong variant");
         }

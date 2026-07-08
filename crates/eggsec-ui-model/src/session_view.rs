@@ -26,7 +26,7 @@ impl From<&SessionSummary> for SessionSummaryView {
             has_explicit_scope: s.scope.as_ref().map_or(false, |sc| sc.is_explicit),
             active_count: s.active_count,
             completed_count: s.completed_count,
-            created_at_secs: s.created_at_secs,
+            created_at_secs: s.created_at_epoch_secs,
         }
     }
 }
@@ -88,7 +88,7 @@ impl From<&SessionSnapshot> for SessionView {
             surface: format!("{:?}", snapshot.surface),
             surface_label: snapshot.surface.label().into(),
             scope: snapshot.scope.as_ref().map(SessionScopeView::from),
-            created_at_secs: snapshot.created_at_secs,
+            created_at_secs: snapshot.created_at_epoch_secs,
             generation: snapshot.generation,
             active_count: active.len(),
             completed_count: completed.len(),

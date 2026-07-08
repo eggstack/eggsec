@@ -191,7 +191,7 @@ impl DaemonStore for SqliteStore {
                 scope: snapshot.scope,
                 active_count: snapshot.active_tasks.len(),
                 completed_count: snapshot.completed_tasks.len(),
-                created_at_secs: snapshot.created_at_secs,
+                created_at_epoch_secs: snapshot.created_at_epoch_secs,
             });
         }
         Ok(summaries)

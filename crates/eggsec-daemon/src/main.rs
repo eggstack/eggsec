@@ -1,29 +1,60 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
 use eggsec_daemon::config::DaemonConfig;
 use eggsec_daemon::host::DaemonHost;
 use eggsec_daemon::server::run_server;
 use eggsec_daemon::store::{DaemonStore, NoopStore};
+use eggsec_runtime::RuntimeEvent;
 
-/// Eggsec daemon — local-only runtime host over Unix domain socket.
+#[derive(Parser)]
+#[command(
+    name = "eggsec-daemon",
+    about = "Eggsec daemon — local-only runtime host over Unix domain socket"
+)]
+struct DaemonArgs {
+    /// Unix socket path for client connections.
+    #[arg(short, long, default_value = "/tmp/eggsec-daemon.sock")]
+    socket_path: String,
+
+    /// Maximum number of concurrent client connections.
+    #[arg(short = 'm', long, default_value_t = 10)]
+    max_clients: usize,
+
+    /// Directory for persistent state (sessions, audit log).
+    /// Defaults to ~/.local/share/eggsec/daemon/ if not set.
+    #[arg(short, long)]
+    data_dir: Option<String>,
+
+    /// Disable persistence (no-op store regardless of data-dir).
+    #[arg(long)]
+    no_persistence: bool,
+
+    /// Log level filter (trace, debug, info, warn, error).
+    #[arg(short, long, default_value = "info")]
+    log_level: String,
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    let args = DaemonArgs::parse();
+
     tracing_subscriber::fmt()
         .with_target(false)
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| args.log_level.parse().unwrap_or_else(|_| "info".into())),
         )
         .init();
 
-    let socket_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "/tmp/eggsec-daemon.sock".into());
-
     let config = DaemonConfig {
-        socket_path,
+        socket_path: args.socket_path,
+        max_clients: args.max_clients,
+        data_dir: args.data_dir,
+        enable_persistence: !args.no_persistence,
         ..Default::default()
     };
 
@@ -64,7 +95,7 @@ async fn main() -> Result<()> {
     };
 
     // Use a no-op executor for now; real dispatch will be wired in a later phase.
-    let host = Arc::new(DaemonHost::new(config, NoopExecutor, store));
+    let host = Arc::new(DaemonHost::new_noop(config, store));
 
     // Recover persisted sessions from a previous daemon instance
     if let Err(e) = host.recover_persisted_state().await {
@@ -80,6 +111,50 @@ async fn main() -> Result<()> {
             wait_for_shutdown_signal().await;
             tracing::info!("Received shutdown signal");
             shutdown.cancel();
+        });
+    }
+
+    // Spawn background task to persist terminal runtime events
+    {
+        let host = host.clone();
+        let shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            let mut receiver = host.runtime().subscribe().await;
+            loop {
+                tokio::select! {
+                    _ = shutdown.cancelled() => {
+                        tracing::debug!("Event persistence task shutting down");
+                        break;
+                    }
+                    event = receiver.recv() => {
+                        let event = match event {
+                            Some(e) => e,
+                            None => {
+                                tracing::debug!("Event channel closed, stopping persistence task");
+                                break;
+                            }
+                        };
+                        let session_id = match &event {
+                            RuntimeEvent::TaskCompleted { session_id, .. } => *session_id,
+                            RuntimeEvent::TaskFailed { session_id, .. } => *session_id,
+                            RuntimeEvent::TaskCancelled { session_id, .. } => *session_id,
+                            _ => continue,
+                        };
+                        match host.runtime().snapshot(session_id).await {
+                            Ok(snapshot) => {
+                                if let Err(e) = host.store().save_session_snapshot(&snapshot).await {
+                                    tracing::warn!(error = %e, %session_id, "Failed to persist snapshot on terminal event");
+                                } else {
+                                    tracing::debug!(%session_id, "Persisted snapshot after terminal event");
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, %session_id, "Failed to snapshot on terminal event");
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
@@ -110,31 +185,4 @@ async fn wait_for_shutdown_signal() {
 #[cfg(not(unix))]
 async fn wait_for_shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
-}
-
-/// Placeholder executor that rejects all tasks.
-///
-/// Real executor wiring (via `eggsec::dispatch::dispatch_inner`) will be
-/// added in a later phase. For now this allows the daemon to start and
-/// accept protocol commands (health, capabilities, session management)
-/// without requiring the full `eggsec` crate dependency.
-struct NoopExecutor;
-
-impl eggsec_runtime::RuntimeTaskExecutor for NoopExecutor {
-    fn execute(
-        &self,
-        _task_id: eggsec_runtime::TaskId,
-        _request: eggsec_runtime::RunRequest,
-        _sink: eggsec_runtime::RuntimeEventSink,
-        _cancel: tokio_util::sync::CancellationToken,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<eggsec_runtime::TaskOutcome, eggsec_runtime::RuntimeError>,
-                > + Send
-                + 'static,
-        >,
-    > {
-        Box::pin(async { Err(eggsec_runtime::RuntimeError::UnsupportedTaskKind) })
-    }
 }

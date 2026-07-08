@@ -160,6 +160,9 @@ pub enum RuntimeEvent {
         task_id: TaskId,
         reason: Option<String>,
     },
+    SessionClosed {
+        session_id: SessionId,
+    },
     Audit {
         session_id: SessionId,
         event: RuntimeAuditEvent,

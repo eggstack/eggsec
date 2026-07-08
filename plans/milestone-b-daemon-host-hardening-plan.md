@@ -1,5 +1,7 @@
 # Milestone B: Daemon Host Hardening Plan
 
+Status: Executed
+
 ## Objective
 
 Harden `eggsec-daemon` as a real local runtime host before real Eggsec execution is wired through it. This milestone should close resource-control, configuration, persistence, session lifecycle, and access-control gaps in the daemon layer.

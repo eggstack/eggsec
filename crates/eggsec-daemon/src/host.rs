@@ -23,6 +23,9 @@ pub struct DaemonHost {
     client_registry: std::sync::Mutex<ClientRegistry>,
     session_access: std::sync::Mutex<HashMap<eggsec_runtime::SessionId, SessionAccess>>,
     store: Arc<dyn DaemonStore>,
+    /// Whether the executor is a no-op stub (rejects all tasks).
+    /// Used to report honest capabilities to clients.
+    executor_is_noop: bool,
 }
 
 impl DaemonHost {
@@ -38,6 +41,21 @@ impl DaemonHost {
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(HashMap::new()),
             store,
+            executor_is_noop: false,
+        }
+    }
+
+    /// Create a host with a no-op executor (all tasks rejected).
+    /// Used by the daemon when no real executor is wired yet.
+    pub fn new_noop(config: DaemonConfig, store: Arc<dyn DaemonStore>) -> Self {
+        let runtime = Runtime::new(RuntimeConfig::default(), NoopExecutorStub);
+        Self {
+            runtime: Arc::new(runtime),
+            config,
+            client_registry: std::sync::Mutex::new(ClientRegistry::new()),
+            session_access: std::sync::Mutex::new(HashMap::new()),
+            store,
+            executor_is_noop: true,
         }
     }
 
@@ -47,6 +65,10 @@ impl DaemonHost {
 
     pub fn config(&self) -> &DaemonConfig {
         &self.config
+    }
+
+    pub fn store(&self) -> &Arc<dyn DaemonStore> {
+        &self.store
     }
 
     pub fn register_client(&self, info: ClientInfo) -> ClientId {
@@ -195,17 +217,30 @@ impl DaemonHost {
                 protocol_version: crate::protocol::DAEMON_PROTOCOL_VERSION,
             },
 
-            ClientCommand::Capabilities { request_id } => ServerMessage::Capabilities {
-                request_id,
-                capabilities: crate::protocol::DaemonCapabilities {
-                    runtime: eggsec_runtime::RuntimeCapabilities::default(),
-                    transports: vec![crate::protocol::TransportCapability {
-                        kind: crate::protocol::TransportKind::UnixSocket,
-                        bind_address: self.config.socket_path.clone(),
-                        enabled: true,
-                    }],
-                },
-            },
+            ClientCommand::Capabilities { request_id } => {
+                let runtime_caps = if self.executor_is_noop {
+                    eggsec_runtime::RuntimeCapabilities {
+                        task_kinds: vec![],
+                        transports: vec!["in-process".into()],
+                        supports_cancellation: true,
+                        supports_multiple_sessions: true,
+                        supports_multiple_active_tasks: false,
+                    }
+                } else {
+                    eggsec_runtime::RuntimeCapabilities::default()
+                };
+                ServerMessage::Capabilities {
+                    request_id,
+                    capabilities: crate::protocol::DaemonCapabilities {
+                        runtime: runtime_caps,
+                        transports: vec![crate::protocol::TransportCapability {
+                            kind: crate::protocol::TransportKind::UnixSocket,
+                            bind_address: self.config.socket_path.clone(),
+                            enabled: true,
+                        }],
+                    },
+                }
+            }
 
             ClientCommand::DeclareClient {
                 request_id,
@@ -495,14 +530,17 @@ impl DaemonHost {
             ClientCommand::CloseSession {
                 request_id,
                 session_id,
-            } => match self.runtime().snapshot(session_id).await {
-                Ok(_) => {
-                    // Record audit event for session close
+            } => match self.runtime().close_session(session_id).await {
+                Ok(()) => {
+                    // Delete persisted snapshot and record audit event
                     let store = self.store.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
                     tokio::spawn(async move {
                         if enable_persistence {
+                            if let Err(e) = store.delete_session(session_id).await {
+                                tracing::warn!(error = %e, "Failed to delete persisted session snapshot");
+                            }
                             let _ = store
                                 .record_audit_event(&PersistedAuditEvent {
                                     action: "close-session".into(),
@@ -577,6 +615,32 @@ impl DaemonHost {
                 request_id,
                 session_id,
             } => {
+                // Access control: verify the requesting client owns this session
+                // or the session has no owner entry (e.g., recovered from store).
+                if let Some(client_id) = client_id {
+                    let access = self.session_access.lock().unwrap();
+                    if let Some(session_access) = access.get(&session_id) {
+                        if session_access.owner_client_id != Some(client_id) {
+                            // Check explicit allow list
+                            let allowed = session_access
+                                .allowed_clients
+                                .iter()
+                                .any(|rule| rule.client_id == client_id);
+                            if !allowed {
+                                return ServerMessage::Error {
+                                    request_id,
+                                    code: ErrorCode::PermissionDenied,
+                                    message: format!(
+                                        "client {} is not the owner of session {}",
+                                        client_id, session_id
+                                    ),
+                                };
+                            }
+                        }
+                    }
+                    // Not in session_access → recovered session, allow access
+                }
+
                 let store = self.store.clone();
                 let sid = session_id;
                 let result = tokio::task::spawn_blocking(move || store.blocking_get_snapshot(&sid))
@@ -2058,5 +2122,28 @@ mod tests {
             ServerMessage::ClientDeclared { client_id, .. } => client_id,
             other => panic!("expected ClientDeclared, got {:?}", other),
         }
+    }
+}
+
+/// No-op executor stub used by `DaemonHost::new_noop`.
+/// Rejects all tasks with `UnsupportedTaskKind`.
+struct NoopExecutorStub;
+
+impl RuntimeTaskExecutor for NoopExecutorStub {
+    fn execute(
+        &self,
+        _task_id: eggsec_runtime::TaskId,
+        _request: eggsec_runtime::RunRequest,
+        _sink: eggsec_runtime::RuntimeEventSink,
+        _cancel: tokio_util::sync::CancellationToken,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<eggsec_runtime::TaskOutcome, eggsec_runtime::RuntimeError>,
+                > + Send
+                + 'static,
+        >,
+    > {
+        Box::pin(async { Err(eggsec_runtime::RuntimeError::UnsupportedTaskKind) })
     }
 }

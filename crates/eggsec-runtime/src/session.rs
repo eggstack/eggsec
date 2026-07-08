@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Current time as seconds since Unix epoch.
 fn now_epoch_secs() -> u64 {
@@ -75,6 +75,12 @@ pub struct RuntimeSession {
     /// Completed task snapshots restored from a previous session snapshot.
     /// These are read-only records for history/audit; they hold no runtime handles.
     hydrated_completed: Vec<TaskSnapshot>,
+    /// Per-session task timeout override. `None` means use the runtime default.
+    task_timeout: Option<Duration>,
+    /// Whether this session has been closed.
+    closed: bool,
+    /// When the session was closed (seconds since Unix epoch), if closed.
+    closed_at: Option<u64>,
 }
 
 impl RuntimeSession {
@@ -89,6 +95,9 @@ impl RuntimeSession {
             generation: 0,
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
+            task_timeout: None,
+            closed: false,
+            closed_at: None,
         }
     }
 
@@ -103,7 +112,37 @@ impl RuntimeSession {
             generation: 0,
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
+            task_timeout: None,
+            closed: false,
+            closed_at: None,
         }
+    }
+
+    /// Set the per-session task timeout override.
+    pub fn with_task_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.task_timeout = timeout;
+        self
+    }
+
+    /// Get the per-session task timeout override.
+    ///
+    /// Returns `None` if no override is set, meaning the runtime default
+    /// should be used. This is distinct from "explicitly no timeout" —
+    /// to disable timeouts entirely, set `RuntimeConfig.default_task_timeout`
+    /// to `None` and leave session override as `None`.
+    pub fn task_timeout_override(&self) -> Option<Duration> {
+        self.task_timeout
+    }
+
+    /// Whether this session has been closed.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    /// Close this session, marking it as closed with the current timestamp.
+    pub fn close(&mut self) {
+        self.closed = true;
+        self.closed_at = Some(now_epoch_secs());
     }
 
     /// Execution surface this session was bound to at creation.
@@ -188,11 +227,13 @@ impl RuntimeSession {
             session_id: self.id,
             surface: self.surface.clone(),
             scope: self.scope.clone(),
-            created_at_secs: self.created_at.elapsed().as_secs(),
+            created_at_epoch_secs: self.created_at_utc,
             generation: self.generation,
             active_tasks: self.active_tasks(),
             completed_tasks: self.completed_tasks(),
             capabilities: self.capabilities(),
+            closed: self.closed,
+            closed_at: self.closed_at,
         }
     }
 
@@ -211,6 +252,9 @@ impl RuntimeSession {
             generation: snapshot.generation,
             tasks: HashMap::new(),
             hydrated_completed: snapshot.completed_tasks,
+            task_timeout: None,
+            closed: snapshot.closed,
+            closed_at: snapshot.closed_at,
         }
     }
 }
@@ -241,13 +285,17 @@ pub struct SessionSnapshot {
     pub surface: RuntimeSurface,
     /// Scope metadata bound at session creation.
     pub scope: Option<SessionScope>,
-    /// Seconds since session creation (monotonic approximation).
-    pub created_at_secs: u64,
+    /// When the session was created (seconds since Unix epoch).
+    pub created_at_epoch_secs: u64,
     /// Monotonically increasing generation counter for change detection.
     pub generation: u64,
     pub active_tasks: Vec<TaskSnapshot>,
     pub completed_tasks: Vec<TaskSnapshot>,
     pub capabilities: RuntimeCapabilities,
+    /// Whether this session has been closed.
+    pub closed: bool,
+    /// When the session was closed (seconds since Unix epoch), if closed.
+    pub closed_at: Option<u64>,
 }
 
 /// Lightweight summary of a session for listing purposes.
@@ -258,7 +306,7 @@ pub struct SessionSummary {
     pub scope: Option<SessionScope>,
     pub active_count: usize,
     pub completed_count: usize,
-    pub created_at_secs: u64,
+    pub created_at_epoch_secs: u64,
 }
 
 /// Summary of a task request for snapshot display.
@@ -313,17 +361,21 @@ mod tests {
             session_id: SessionId::new(),
             surface: RuntimeSurface::TuiManual,
             scope: None,
-            created_at_secs: 42,
+            created_at_epoch_secs: 42,
             generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![],
             capabilities: RuntimeCapabilities::default(),
+            closed: false,
+            closed_at: None,
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(snapshot.session_id, deserialized.session_id);
-        assert_eq!(deserialized.created_at_secs, 42);
+        assert_eq!(deserialized.created_at_epoch_secs, 42);
         assert!(deserialized.scope.is_none());
+        assert!(!deserialized.closed);
+        assert!(deserialized.closed_at.is_none());
     }
 
     #[test]
@@ -336,11 +388,13 @@ mod tests {
                 source: "config".into(),
                 path: Some("/etc/eggsec/scope.yaml".into()),
             }),
-            created_at_secs: 10,
+            created_at_epoch_secs: 10,
             generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![],
             capabilities: RuntimeCapabilities::default(),
+            closed: true,
+            closed_at: Some(99),
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
@@ -348,6 +402,8 @@ mod tests {
         assert!(scope.is_explicit);
         assert_eq!(scope.source, "config");
         assert_eq!(scope.path.as_deref(), Some("/etc/eggsec/scope.yaml"));
+        assert!(deserialized.closed);
+        assert_eq!(deserialized.closed_at, Some(99));
     }
 
     #[test]
@@ -403,7 +459,7 @@ mod tests {
                 source: "config".into(),
                 path: None,
             }),
-            created_at_secs: 10,
+            created_at_epoch_secs: 10,
             generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![TaskSnapshot {
@@ -421,6 +477,8 @@ mod tests {
                 outcome: None,
             }],
             capabilities: RuntimeCapabilities::default(),
+            closed: false,
+            closed_at: None,
         };
         let session = RuntimeSession::hydrate_from_snapshot(snapshot.clone());
         assert_eq!(session.id, snapshot.session_id);
@@ -457,5 +515,66 @@ mod tests {
         assert_eq!(snapshot.surface, RuntimeSurface::RestApi);
         assert_eq!(snapshot.session_id, session.id);
         assert!(snapshot.scope.is_none());
+    }
+
+    #[test]
+    fn runtime_session_new_is_not_closed() {
+        let session = RuntimeSession::new(SessionId::new(), RuntimeSurface::TuiManual);
+        assert!(!session.is_closed());
+        let snapshot = session.snapshot();
+        assert!(!snapshot.closed);
+        assert!(snapshot.closed_at.is_none());
+    }
+
+    #[test]
+    fn runtime_session_close_sets_closed_fields() {
+        let mut session = RuntimeSession::new(SessionId::new(), RuntimeSurface::TuiManual);
+        assert!(!session.is_closed());
+        session.close();
+        assert!(session.is_closed());
+        let snapshot = session.snapshot();
+        assert!(snapshot.closed);
+        assert!(snapshot.closed_at.is_some());
+    }
+
+    #[test]
+    fn session_snapshot_roundtrip_closed() {
+        let snapshot = SessionSnapshot {
+            session_id: SessionId::new(),
+            surface: RuntimeSurface::TuiManual,
+            scope: None,
+            created_at_epoch_secs: 42,
+            generation: 0,
+            active_tasks: vec![],
+            completed_tasks: vec![],
+            capabilities: RuntimeCapabilities::default(),
+            closed: true,
+            closed_at: Some(100),
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.closed);
+        assert_eq!(deserialized.closed_at, Some(100));
+    }
+
+    #[test]
+    fn runtime_session_hydrate_from_snapshot_preserves_closed() {
+        let snapshot = SessionSnapshot {
+            session_id: SessionId::new(),
+            surface: RuntimeSurface::McpServer,
+            scope: None,
+            created_at_epoch_secs: 10,
+            generation: 0,
+            active_tasks: vec![],
+            completed_tasks: vec![],
+            capabilities: RuntimeCapabilities::default(),
+            closed: true,
+            closed_at: Some(200),
+        };
+        let session = RuntimeSession::hydrate_from_snapshot(snapshot);
+        assert!(session.is_closed());
+        let snap = session.snapshot();
+        assert!(snap.closed);
+        assert_eq!(snap.closed_at, Some(200));
     }
 }

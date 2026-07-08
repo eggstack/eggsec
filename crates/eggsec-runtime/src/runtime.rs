@@ -11,6 +11,26 @@ use crate::request::{RunRequest, RuntimeSurface};
 use crate::session::{RuntimeSession, SessionScope, SessionSnapshot, SessionSummary};
 use crate::RuntimeError;
 
+/// Emit a runtime event best-effort. Logs at trace level if no subscribers
+/// are listening. Never panics on channel failure.
+fn emit_event(tx: &broadcast::Sender<RuntimeEvent>, event: RuntimeEvent) {
+    if tx.receiver_count() == 0 {
+        tracing::trace!("no event subscribers; dropping event");
+    } else if let Err(e) = tx.send(event) {
+        tracing::trace!("event send failed (likely no active receivers): {}", e);
+    }
+}
+
+/// Emit a runtime event with audit-critical semantics. Logs at warn level
+/// on send failure to make policy-relevant event loss observable.
+fn emit_event_critical(tx: &broadcast::Sender<RuntimeEvent>, event: RuntimeEvent) {
+    if tx.receiver_count() == 0 {
+        tracing::warn!("no event subscribers for critical event; event dropped");
+    } else if let Err(e) = tx.send(event) {
+        tracing::warn!("critical event send failed: {}", e);
+    }
+}
+
 /// Configuration for the runtime.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
@@ -83,47 +103,59 @@ impl RuntimeEventSink {
 
     /// Emit a progress event.
     pub fn progress(&self, completed: u64, total: Option<u64>, message: Option<String>) {
-        let _ = self.event_tx.send(RuntimeEvent::TaskProgress {
-            session_id: self.session_id,
-            task_id: self.task_id,
-            progress: TaskProgress {
-                completed,
-                total,
-                message,
+        emit_event(
+            &self.event_tx,
+            RuntimeEvent::TaskProgress {
+                session_id: self.session_id,
+                task_id: self.task_id,
+                progress: TaskProgress {
+                    completed,
+                    total,
+                    message,
+                },
             },
-        });
+        );
     }
 
     /// Emit a log event.
     pub fn log(&self, level: crate::event::LogLevel, message: String) {
-        let _ = self.event_tx.send(RuntimeEvent::TaskLog {
-            session_id: self.session_id,
-            task_id: Some(self.task_id),
-            level,
-            message,
-        });
+        emit_event(
+            &self.event_tx,
+            RuntimeEvent::TaskLog {
+                session_id: self.session_id,
+                task_id: Some(self.task_id),
+                level,
+                message,
+            },
+        );
     }
 
     /// Emit a completion event.
     pub fn completed(&self, outcome: TaskOutcome) {
-        let _ = self.event_tx.send(RuntimeEvent::TaskCompleted {
-            session_id: self.session_id,
-            task_id: self.task_id,
-            outcome,
-        });
+        emit_event(
+            &self.event_tx,
+            RuntimeEvent::TaskCompleted {
+                session_id: self.session_id,
+                task_id: self.task_id,
+                outcome,
+            },
+        );
     }
 
     /// Emit a failure event.
     pub fn failed(&self, message: String, code: Option<String>) {
-        let _ = self.event_tx.send(RuntimeEvent::TaskFailed {
-            session_id: self.session_id,
-            task_id: self.task_id,
-            error: RuntimeErrorInfo {
-                message,
-                code,
-                details: None,
+        emit_event_critical(
+            &self.event_tx,
+            RuntimeEvent::TaskFailed {
+                session_id: self.session_id,
+                task_id: self.task_id,
+                error: RuntimeErrorInfo {
+                    message,
+                    code,
+                    details: None,
+                },
             },
-        });
+        );
     }
 }
 
@@ -188,17 +220,16 @@ impl Runtime {
     /// - `CiStrict`: CI pipeline surface
     pub async fn create_session(
         &self,
-        _options: SessionOptions,
+        options: SessionOptions,
         surface: RuntimeSurface,
     ) -> Result<SessionId, RuntimeError> {
-        self.create_session_with_scope(_options, surface, None)
-            .await
+        self.create_session_with_scope(options, surface, None).await
     }
 
     /// Create a new session with an explicit scope binding.
     pub async fn create_session_with_scope(
         &self,
-        _options: SessionOptions,
+        options: SessionOptions,
         surface: RuntimeSurface,
         scope: Option<SessionScope>,
     ) -> Result<SessionId, RuntimeError> {
@@ -207,11 +238,10 @@ impl Runtime {
         let session = match scope {
             Some(s) => RuntimeSession::with_scope(session_id, surface, s),
             None => RuntimeSession::new(session_id, surface),
-        };
+        }
+        .with_task_timeout(options.task_timeout);
         state.sessions.insert(session_id, session);
-        let _ = state
-            .event_tx
-            .send(RuntimeEvent::SessionCreated { session_id });
+        emit_event(&state.event_tx, RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
     }
 
@@ -241,19 +271,20 @@ impl Runtime {
         Ok(session.scope().cloned())
     }
 
-    /// List summaries for all sessions.
+    /// List summaries for all active (non-closed) sessions.
     pub async fn list_sessions(&self) -> Vec<SessionSummary> {
         let state = self.state.lock().await;
         state
             .sessions
             .iter()
+            .filter(|(_, session)| !session.is_closed())
             .map(|(id, session)| SessionSummary {
                 session_id: *id,
                 surface: session.execution_surface(),
                 scope: session.scope().cloned(),
                 active_count: session.active_tasks().len(),
                 completed_count: session.completed_tasks().len(),
-                created_at_secs: session.created_at_secs(),
+                created_at_epoch_secs: session.created_at_secs(),
             })
             .collect()
     }
@@ -274,7 +305,16 @@ impl Runtime {
                 return Err(RuntimeError::SessionNotFound(session_id.to_string()));
             }
 
-            // Single-active-task policy: abort any existing active task
+            // Reject submissions to closed sessions
+            if state
+                .sessions
+                .get(&session_id)
+                .is_some_and(|s| s.is_closed())
+            {
+                return Err(RuntimeError::SessionNotFound(session_id.to_string()));
+            }
+
+            // Single-active-task policy: terminalize any existing active tasks
             let active_ids: Vec<TaskId> = state
                 .sessions
                 .get(&session_id)
@@ -285,30 +325,40 @@ impl Runtime {
                 .map(|(id, _)| *id)
                 .collect();
             for existing_id in active_ids {
-                if let Some(mut old) = state
+                if let Some(task) = state
                     .sessions
                     .get_mut(&session_id)
                     .unwrap()
                     .tasks
-                    .remove(&existing_id)
+                    .get_mut(&existing_id)
                 {
-                    if let Some(cancel) = old.abort.take() {
+                    task.status = TaskStatus::Cancelled;
+                    task.last_error = Some("replaced by new task".into());
+                    if let Some(cancel) = task.abort.take() {
                         cancel.cancel();
                     }
-                    old.status = TaskStatus::Cancelled;
-                    let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
+                    task._handle = None;
+                }
+                emit_event(
+                    &state.event_tx,
+                    RuntimeEvent::TaskCancelled {
                         session_id,
                         task_id: existing_id,
                         reason: Some("replaced by new task".into()),
-                    });
-                }
+                    },
+                );
             }
             if let Some(session) = state.sessions.get_mut(&session_id) {
                 session.increment_generation();
             }
 
             let cancel_token = CancellationToken::new();
-            let timeout_duration = state.config.default_task_timeout;
+            // Session timeout overrides runtime default. None means "use runtime default".
+            let timeout_duration = state
+                .sessions
+                .get(&session_id)
+                .and_then(|s| s.task_timeout_override())
+                .or(state.config.default_task_timeout);
 
             state.sessions.get_mut(&session_id).unwrap().tasks.insert(
                 task_id,
@@ -323,11 +373,14 @@ impl Runtime {
                 },
             );
 
-            let _ = state.event_tx.send(RuntimeEvent::TaskQueued {
-                session_id,
-                task_id,
-                request: request.clone(),
-            });
+            emit_event(
+                &state.event_tx,
+                RuntimeEvent::TaskQueued {
+                    session_id,
+                    task_id,
+                    request: request.clone(),
+                },
+            );
 
             (
                 cancel_token,
@@ -347,19 +400,35 @@ impl Runtime {
             let request_for_spawn = request.clone();
 
             tokio::spawn(async move {
-                // Signal TaskStarted
-                {
+                // Signal TaskStarted — but only if the task hasn't been
+                // terminalized (cancelled/timed out/superseded) while queued.
+                let already_terminal = {
                     let mut state = state_arc.lock().await;
                     if let Some(session) = state.sessions.get_mut(&session_id) {
                         if let Some(task) = session.tasks.get_mut(&task_id) {
-                            task.status = TaskStatus::Running;
+                            if task.status.is_terminal() {
+                                true
+                            } else {
+                                task.status = TaskStatus::Running;
+                                false
+                            }
+                        } else {
+                            true
                         }
+                    } else {
+                        true
                     }
+                };
+                if already_terminal {
+                    return;
                 }
-                let _ = event_tx_clone.send(RuntimeEvent::TaskStarted {
-                    session_id,
-                    task_id,
-                });
+                emit_event(
+                    &event_tx_clone,
+                    RuntimeEvent::TaskStarted {
+                        session_id,
+                        task_id,
+                    },
+                );
 
                 // Execute with timeout
                 let result = if let Some(timeout) = timeout_duration {
@@ -382,41 +451,58 @@ impl Runtime {
                 // Determine final status
                 let (final_status, error_msg, outcome_value) = match result {
                     Ok(Ok(outcome)) => {
-                        let _ = event_tx_clone.send(RuntimeEvent::TaskCompleted {
-                            session_id,
-                            task_id,
-                            outcome: outcome.clone(),
-                        });
+                        emit_event(
+                            &event_tx_clone,
+                            RuntimeEvent::TaskCompleted {
+                                session_id,
+                                task_id,
+                                outcome: outcome.clone(),
+                            },
+                        );
                         (TaskStatus::Completed, None, Some(outcome))
                     }
                     Ok(Err(e)) => {
                         let msg = e.to_string();
-                        let _ = event_tx_clone.send(RuntimeEvent::TaskFailed {
-                            session_id,
-                            task_id,
-                            error: RuntimeErrorInfo {
-                                message: msg.clone(),
-                                code: None,
-                                details: None,
+                        emit_event_critical(
+                            &event_tx_clone,
+                            RuntimeEvent::TaskFailed {
+                                session_id,
+                                task_id,
+                                error: RuntimeErrorInfo {
+                                    message: msg.clone(),
+                                    code: None,
+                                    details: None,
+                                },
                             },
-                        });
+                        );
                         (TaskStatus::Failed, Some(msg), None)
                     }
                     Err(_elapsed) => {
                         cancel_for_spawn.cancel();
-                        let _ = event_tx_clone.send(RuntimeEvent::TaskCancelled {
-                            session_id,
-                            task_id,
-                            reason: Some("timed out".into()),
-                        });
+                        emit_event_critical(
+                            &event_tx_clone,
+                            RuntimeEvent::TaskCancelled {
+                                session_id,
+                                task_id,
+                                reason: Some("timed out".into()),
+                            },
+                        );
                         (TaskStatus::TimedOut, Some("task timed out".into()), None)
                     }
                 };
 
-                // Update task record
+                // Update task record — but only if the task is still non-terminal.
+                // A task may have been cancelled, timed out, or superseded by a new
+                // task while the executor was running. In that case, we must not
+                // overwrite its terminal status.
                 let mut state = state_arc.lock().await;
                 if let Some(session) = state.sessions.get_mut(&session_id) {
                     if let Some(task) = session.tasks.get_mut(&task_id) {
+                        if task.status.is_terminal() {
+                            // Task was already terminal (cancelled, timed out, or
+                            // superseded). Discard the late result.
+                            return;
+                        }
                         task.status = final_status;
                         task.last_error = error_msg;
                         task.outcome = outcome_value;
@@ -467,11 +553,14 @@ impl Runtime {
 
         session.increment_generation();
 
-        let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
-            session_id,
-            task_id,
-            reason: Some("cancelled by user".into()),
-        });
+        emit_event_critical(
+            &state.event_tx,
+            RuntimeEvent::TaskCancelled {
+                session_id,
+                task_id,
+                reason: Some("cancelled by user".into()),
+            },
+        );
 
         Ok(())
     }
@@ -502,11 +591,14 @@ impl Runtime {
                 }
             }
             session.increment_generation();
-            let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
-                session_id,
-                task_id,
-                reason: Some("cancelled by user".into()),
-            });
+            emit_event_critical(
+                &state.event_tx,
+                RuntimeEvent::TaskCancelled {
+                    session_id,
+                    task_id,
+                    reason: Some("cancelled by user".into()),
+                },
+            );
         }
 
         Ok(())
@@ -523,6 +615,29 @@ impl Runtime {
         Ok(session.snapshot())
     }
 
+    /// Close a session, marking it as closed and rejecting future task submissions.
+    ///
+    /// Returns `Ok(())` on success. Returns `SessionNotFound` if the session
+    /// does not exist or is already closed.
+    pub async fn close_session(&self, session_id: SessionId) -> Result<(), RuntimeError> {
+        let mut state = self.state.lock().await;
+        let session = state
+            .sessions
+            .get_mut(&session_id)
+            .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
+
+        if session.is_closed() {
+            return Err(RuntimeError::SessionNotFound(session_id.to_string()));
+        }
+
+        session.close();
+        session.increment_generation();
+
+        emit_event_critical(&state.event_tx, RuntimeEvent::SessionClosed { session_id });
+
+        Ok(())
+    }
+
     /// Hydrate a session from a snapshot (for daemon recovery on startup).
     ///
     /// Reconstructs a `RuntimeSession` from a persisted snapshot and inserts
@@ -537,9 +652,7 @@ impl Runtime {
         let session = RuntimeSession::hydrate_from_snapshot(snapshot);
         let mut state = self.state.lock().await;
         state.sessions.insert(session_id, session);
-        let _ = state
-            .event_tx
-            .send(RuntimeEvent::SessionCreated { session_id });
+        emit_event(&state.event_tx, RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
     }
 
@@ -629,6 +742,36 @@ mod tests {
             >,
         > {
             Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+        }
+    }
+
+    /// A test executor that sleeps longer than the timeout/cancellation, then
+    /// returns a late result. Used to verify stale completion guards.
+    struct DelayedReturnExecutor;
+
+    impl RuntimeTaskExecutor for DelayedReturnExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: RunRequest,
+            _sink: RuntimeEventSink,
+            cancel: CancellationToken,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                    + Send
+                    + 'static,
+            >,
+        > {
+            Box::pin(async move {
+                // Sleep well past timeout/cancellation
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+                    _ = cancel.cancelled() => {},
+                }
+                // Return a result even after cancellation
+                Ok(TaskOutcome::Text("late result".into()))
+            })
         }
     }
 
@@ -786,16 +929,27 @@ mod tests {
             .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
-        let _task1 = runtime.submit(session_id, test_request()).await.unwrap();
+        let task1 = runtime.submit(session_id, test_request()).await.unwrap();
         let task2 = runtime.submit(session_id, test_request()).await.unwrap();
 
         tokio::time::sleep(Duration::from_millis(10)).await;
 
-        // task1 should have been cancelled by task2 submission
+        // task1 should have been cancelled by task2 submission and remain in history
         let snapshot = runtime.snapshot(session_id).await.unwrap();
         // task2 is the only active one
         assert_eq!(snapshot.active_tasks.len(), 1);
         assert_eq!(snapshot.active_tasks[0].task_id, task2);
+        // task1 should be in completed tasks with Cancelled status
+        let cancelled = snapshot
+            .completed_tasks
+            .iter()
+            .find(|t| t.task_id == task1)
+            .expect("cancelled task should remain in history");
+        assert_eq!(cancelled.status, TaskStatus::Cancelled);
+        assert!(cancelled.last_error.is_some());
+        // Cancelled task preserves task kind and request summary
+        assert_eq!(cancelled.task_kind, test_request().task_kind);
+        assert!(!cancelled.request_summary.is_empty());
     }
 
     #[tokio::test]
@@ -804,6 +958,55 @@ mod tests {
         let fake = SessionId::new();
         let result = runtime.submit(fake, test_request()).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn stale_completion_does_not_overwrite_terminal() {
+        // The executor returns "late result" after 5s, but the task should be
+        // cancelled by the user before that. The stale completion guard must
+        // prevent the late result from overwriting the Cancelled status.
+        let runtime = Runtime::new(RuntimeConfig::default(), DelayedReturnExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        // Give task a moment to start
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Cancel the task
+        runtime.cancel(session_id, task_id).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].status, TaskStatus::Cancelled);
+        // The late result must NOT overwrite the outcome
+        assert!(snapshot.completed_tasks[0].outcome.is_none());
+    }
+
+    #[tokio::test]
+    async fn stale_timeout_does_not_overwrite_terminal() {
+        // Task times out, then executor returns late. TimedOut must persist.
+        let config = RuntimeConfig {
+            default_task_timeout: Some(Duration::from_millis(50)),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, DelayedReturnExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        // Wait for timeout
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.active_tasks.is_empty());
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].status, TaskStatus::TimedOut);
+        assert!(snapshot.completed_tasks[0].outcome.is_none());
     }
 
     #[tokio::test]
@@ -928,5 +1131,213 @@ mod tests {
         let snapshot = runtime.snapshot(session_id).await.unwrap();
         assert!(snapshot.active_tasks.is_empty());
         assert!(snapshot.completed_tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn session_timeout_overrides_runtime_default() {
+        // Runtime default is 300s, but session sets 50ms timeout.
+        let config = RuntimeConfig {
+            default_task_timeout: Some(Duration::from_secs(300)),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, SlowExecutor);
+        let session_id = runtime
+            .create_session(
+                SessionOptions {
+                    task_timeout: Some(Duration::from_millis(50)),
+                },
+                RuntimeSurface::TuiManual,
+            )
+            .await
+            .unwrap();
+        let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        // Wait for session timeout to fire (50ms)
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.active_tasks.is_empty());
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].status, TaskStatus::TimedOut);
+    }
+
+    #[tokio::test]
+    async fn session_without_override_uses_runtime_default() {
+        let config = RuntimeConfig {
+            default_task_timeout: Some(Duration::from_millis(50)),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, SlowExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        // Wait for runtime default timeout (50ms)
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.active_tasks.is_empty());
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].status, TaskStatus::TimedOut);
+    }
+
+    #[tokio::test]
+    async fn two_sessions_different_timeout_behavior() {
+        let config = RuntimeConfig {
+            default_task_timeout: Some(Duration::from_millis(50)),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(config, SlowExecutor);
+
+        // Session with no override — uses 50ms default
+        let s1 = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        // Session with explicit longer timeout — should NOT time out in 200ms
+        let s2 = runtime
+            .create_session(
+                SessionOptions {
+                    task_timeout: Some(Duration::from_secs(300)),
+                },
+                RuntimeSurface::McpServer,
+            )
+            .await
+            .unwrap();
+
+        runtime.submit(s1, test_request()).await.unwrap();
+        runtime.submit(s2, test_request()).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let snap1 = runtime.snapshot(s1).await.unwrap();
+        let snap2 = runtime.snapshot(s2).await.unwrap();
+
+        // s1 should have timed out
+        assert!(snap1.active_tasks.is_empty());
+        assert_eq!(snap1.completed_tasks.len(), 1);
+        assert_eq!(snap1.completed_tasks[0].status, TaskStatus::TimedOut);
+
+        // s2 should still be active (or running)
+        assert_eq!(snap2.active_tasks.len(), 1);
+        assert_eq!(snap2.active_tasks[0].status, TaskStatus::Running);
+    }
+
+    #[tokio::test]
+    async fn event_emission_no_receivers_does_not_panic() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        // Create session and submit WITHOUT subscribing — no receivers
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        // Wait for task to complete — should not panic even without subscribers
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn close_session_marks_session_closed() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        assert!(runtime.close_session(session_id).await.is_ok());
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.closed);
+        assert!(snapshot.closed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn close_session_not_found() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let fake = SessionId::new();
+        let result = runtime.close_session(fake).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn close_session_already_closed_errors() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        runtime.close_session(session_id).await.unwrap();
+        let result = runtime.close_session(session_id).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn submit_to_closed_session_errors() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        runtime.close_session(session_id).await.unwrap();
+
+        let result = runtime.submit(session_id, test_request()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn list_sessions_excludes_closed() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let s1 = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let _s2 = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let sessions = runtime.list_sessions().await;
+        assert_eq!(sessions.len(), 2);
+
+        runtime.close_session(s1).await.unwrap();
+
+        let sessions = runtime.list_sessions().await;
+        assert_eq!(sessions.len(), 1);
+        assert!(sessions.iter().all(|s| s.session_id != s1));
+    }
+
+    #[tokio::test]
+    async fn close_session_emits_event() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let mut rx = runtime.subscribe().await;
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        runtime.close_session(session_id).await.unwrap();
+
+        // Drain events looking for SessionClosed
+        let mut found = false;
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while let Some(event) = rx.recv().await {
+                if matches!(event, RuntimeEvent::SessionClosed { session_id: sid } if sid == session_id) {
+                    found = true;
+                    break;
+                }
+            }
+        })
+        .await
+        .ok();
+        assert!(found);
     }
 }

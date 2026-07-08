@@ -131,6 +131,13 @@ impl From<&RuntimeEvent> for EventView {
                 message: Some(event.event_type.clone()),
                 timestamp_hint: None,
             },
+            RuntimeEvent::SessionClosed { session_id } => Self {
+                session_id: *session_id,
+                event_type: "session-closed".into(),
+                task_id: None,
+                message: Some(format!("Session {} closed", session_id)),
+                timestamp_hint: None,
+            },
         }
     }
 }
