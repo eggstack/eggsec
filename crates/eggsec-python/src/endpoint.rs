@@ -232,6 +232,25 @@ impl EndpointScanResult {
             self.base_url, self.endpoints_found, self.elapsed_ms
         )
     }
+
+    /// Convert endpoint findings to a list of row dicts suitable for tabular output.
+    fn to_rows(&self, py: Python) -> PyResult<PyObject> {
+        let list = PyList::empty_bound(py);
+        for f in &self.findings {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("base_url", &self.base_url)?;
+            dict.set_item("url", &f.url)?;
+            dict.set_item("path", &f.path)?;
+            dict.set_item("status_code", f.status_code)?;
+            dict.set_item("content_length", &f.content_length)?;
+            dict.set_item("content_type", &f.content_type)?;
+            dict.set_item("redirect_location", &f.redirect_location)?;
+            dict.set_item("interesting", f.interesting)?;
+            dict.set_item("response_time_ms", f.response_time_ms)?;
+            list.append(dict)?;
+        }
+        Ok(list.into())
+    }
 }
 
 impl EndpointScanResult {

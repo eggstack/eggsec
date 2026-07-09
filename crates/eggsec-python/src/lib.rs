@@ -5,11 +5,14 @@ mod endpoint;
 mod error;
 mod features;
 mod fingerprint;
+mod finding;
+mod recon;
 mod runtime_async;
 mod runtime_sync;
 mod scanner;
 mod scope;
 mod version;
+mod waf;
 
 pub use error::*;
 use pyo3::prelude::*;
@@ -62,6 +65,23 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<fingerprint::FingerprintConfidence>()?;
     m.add_class::<fingerprint::ServiceFingerprintResult>()?;
     m.add_class::<fingerprint::FingerprintScanResult>()?;
+    // Phase D: Findings and reporting
+    m.add_class::<finding::Severity>()?;
+    m.add_class::<finding::Evidence>()?;
+    m.add_class::<finding::Finding>()?;
+    m.add_class::<finding::FindingSet>()?;
+    m.add_class::<finding::Report>()?;
+    // Phase D: Recon
+    m.add_class::<recon::DnsRecordSet>()?;
+    m.add_class::<recon::MxRecord>()?;
+    m.add_class::<recon::SoaRecord>()?;
+    m.add_class::<recon::TlsCertificateInfo>()?;
+    m.add_class::<recon::TlsInspectionResult>()?;
+    m.add_class::<recon::SslIssue>()?;
+    m.add_class::<recon::TechStack>()?;
+    m.add_class::<recon::TechDetectionResult>()?;
+    // Phase D: WAF detection
+    m.add_class::<waf::WafDetectionResultPy>()?;
 
     // Functions
     m.add_function(wrap_pyfunction!(features::features, m)?)?;
@@ -73,6 +93,16 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scanner::async_scan_endpoints, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::fingerprint_services, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::async_fingerprint_services, m)?)?;
+    // Phase D: Recon functions
+    m.add_function(wrap_pyfunction!(recon::recon_dns, m)?)?;
+    m.add_function(wrap_pyfunction!(recon::async_recon_dns, m)?)?;
+    m.add_function(wrap_pyfunction!(recon::inspect_tls, m)?)?;
+    m.add_function(wrap_pyfunction!(recon::async_inspect_tls, m)?)?;
+    m.add_function(wrap_pyfunction!(recon::detect_technology, m)?)?;
+    m.add_function(wrap_pyfunction!(recon::async_detect_technology, m)?)?;
+    // Phase D: WAF functions
+    m.add_function(wrap_pyfunction!(waf::detect_waf, m)?)?;
+    m.add_function(wrap_pyfunction!(waf::async_detect_waf, m)?)?;
 
     Ok(())
 }

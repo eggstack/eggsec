@@ -4,8 +4,10 @@ use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
 use crate::error::EggsecResultExt;
 use crate::fingerprint::FingerprintScanResult;
+use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::runtime_sync;
 use crate::scope::Scope;
+use crate::waf::WafDetectionResultPy;
 
 /// Client for performing scoped security scans through the Eggsec engine.
 ///
@@ -207,6 +209,186 @@ impl Client {
         })?;
 
         Ok(FingerprintScanResult::from_engine(result))
+    }
+
+    /// Perform passive DNS reconnaissance on a domain.
+    ///
+    /// Args:
+    ///     domain: Domain name to enumerate (e.g. "example.com").
+    ///
+    /// Returns:
+    ///     DnsRecordSet: DNS records for the domain.
+    ///
+    /// Raises:
+    ///     EnforcementError: If the target is outside the allowed scope.
+    ///     NetworkError: If DNS resolution fails.
+    fn recon_dns(&self, py: Python<'_>, domain: &str) -> PyResult<DnsRecordSet> {
+        self.scope.enforce_target(domain)?;
+
+        let domain_owned = domain.to_string();
+        let result = runtime_sync::block_on(py, async move {
+            eggsec::recon::dns_records::enumerate_dns_records(&domain_owned)
+                .await
+                .map_pyerr()
+        })?;
+
+        Ok(DnsRecordSet {
+            domain: result.domain,
+            a_records: result.a,
+            aaaa_records: result.aaaa,
+            cname_records: result.cname,
+            mx_records: result
+                .mx
+                .into_iter()
+                .map(|m| crate::recon::MxRecord {
+                    preference: m.preference,
+                    exchange: m.exchange,
+                })
+                .collect(),
+            txt_records: result.txt,
+            ns_records: result.ns,
+            soa_record: result.soa.map(|s| crate::recon::SoaRecord {
+                mname: s.mname,
+                rname: s.rname,
+                serial: s.serial,
+                refresh: s.refresh,
+                retry: s.retry,
+                expire: s.expire,
+                minimum: s.minimum,
+            }),
+            caa_records: result.caa,
+        })
+    }
+
+    /// Inspect TLS certificate and configuration for a host.
+    ///
+    /// Args:
+    ///     host: Hostname to inspect (e.g. "example.com").
+    ///     port: TLS port (default: 443).
+    ///
+    /// Returns:
+    ///     TlsInspectionResult: TLS certificate and configuration details.
+    ///
+    /// Raises:
+    ///     EnforcementError: If the target is outside the allowed scope.
+    ///     NetworkError: If TLS connection fails.
+    #[pyo3(signature = (host, *, port=443))]
+    fn inspect_tls(&self, py: Python<'_>, host: &str, port: u16) -> PyResult<TlsInspectionResult> {
+        self.scope.enforce_target(host)?;
+
+        let host_owned = host.to_string();
+        let result = runtime_sync::block_on(py, async move {
+            eggsec::recon::ssl::analyze_ssl(&host_owned, port)
+                .await
+                .map_pyerr()
+        })?;
+
+        Ok(TlsInspectionResult {
+            target: result.target,
+            has_ssl: result.has_ssl,
+            certificate: result.certificate.map(|c| crate::recon::TlsCertificateInfo {
+                subject: c.subject,
+                issuer: c.issuer,
+                valid_from: c.valid_from,
+                valid_until: c.valid_until,
+                serial_number: c.serial_number,
+                signature_algorithm: c.signature_algorithm,
+                public_key_algorithm: c.public_key_algorithm,
+                key_size: c.key_size,
+                is_expired: c.is_expired,
+                days_until_expiry: c.days_until_expiry,
+                sans: c.subject_alternative_names,
+            }),
+            supported_versions: result.supported_versions,
+            supported_cipher_suites: result.supported_cipher_suites,
+            issues: result
+                .issues
+                .into_iter()
+                .map(|i| crate::recon::SslIssue {
+                    severity: i.severity,
+                    code: i.code,
+                    description: i.description,
+                })
+                .collect(),
+        })
+    }
+
+    /// Detect technology stack from HTTP response headers and body.
+    ///
+    /// Args:
+    ///     url: Full URL to inspect (e.g. "https://example.com").
+    ///
+    /// Returns:
+    ///     TechDetectionResult: Detected technology stack.
+    ///
+    /// Raises:
+    ///     EnforcementError: If the target is outside the allowed scope.
+    ///     NetworkError: If the HTTP request fails.
+    fn detect_technology(&self, py: Python<'_>, url: &str) -> PyResult<TechDetectionResult> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        let url_owned = url.to_string();
+        let result = runtime_sync::block_on(py, async move {
+            eggsec::recon::techdetect::detect_tech_stack(&url_owned)
+                .await
+                .map_pyerr()
+        })?;
+
+        Ok(TechDetectionResult {
+            url: result.url,
+            status_code: result.status_code,
+            headers: result.headers.into_iter().collect(),
+            tech_stack: crate::recon::TechStack {
+                servers: result.tech_stack.servers,
+                frameworks: result.tech_stack.frameworks,
+                languages: result.tech_stack.languages,
+                databases: result.tech_stack.databases,
+                cdns: result.tech_stack.cdns,
+                cms: result.tech_stack.cms,
+                javascript: result.tech_stack.javascript,
+                other: result.tech_stack.other,
+            },
+        })
+    }
+
+    /// Detect WAF by making an HTTP request to the target URL.
+    ///
+    /// This performs passive detection only - no bypass or validation testing.
+    ///
+    /// Args:
+    ///     url: Target URL to test (e.g. "https://example.com").
+    ///
+    /// Returns:
+    ///     WafDetectionResultPy: WAF detection result with vendor, confidence, and evidence.
+    ///
+    /// Raises:
+    ///     EnforcementError: If the target is outside the allowed scope.
+    ///     NetworkError: If the HTTP request fails.
+    fn detect_waf(&self, py: Python<'_>, url: &str) -> PyResult<WafDetectionResultPy> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        let url_owned = url.to_string();
+        let url_clone = url_owned.clone();
+        let result = runtime_sync::block_on(py, async move {
+            let detector = eggsec::waf::WafDetector::new().map_pyerr()?;
+            detector.detect(&url_clone).await.map_pyerr()
+        })?;
+
+        Ok(WafDetectionResultPy {
+            url: url_owned,
+            detected: result.waf_name.is_some(),
+            vendor: result.waf_name.clone(),
+            waf_name: result.waf_name,
+            confidence: result.confidence,
+            matched_headers: result.matched_headers,
+            matched_cookies: result.matched_cookies,
+            matched_patterns: result.matched_patterns,
+            server_header: result.server_header,
+            status_code: result.status_code,
+            request_error: result.request_error,
+        })
     }
 
     /// Get the client's scope.

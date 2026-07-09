@@ -126,6 +126,22 @@ impl PortScanResult {
             self.elapsed_ms
         )
     }
+
+    /// Convert open ports to a list of row dicts suitable for tabular output.
+    fn to_rows(&self, py: Python) -> PyResult<PyObject> {
+        let list = PyList::empty_bound(py);
+        for port in &self.open_ports {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("target", &self.target)?;
+            dict.set_item("port", port.port)?;
+            dict.set_item("protocol", &port.protocol)?;
+            dict.set_item("service", &port.service)?;
+            dict.set_item("banner", &port.banner)?;
+            dict.set_item("confidence", port.confidence)?;
+            list.append(dict)?;
+        }
+        Ok(list.into())
+    }
 }
 
 impl PortScanResult {

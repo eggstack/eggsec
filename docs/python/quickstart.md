@@ -126,6 +126,44 @@ for svc in result.services:
     print(f"  {svc.port}: {svc.service} {svc.version or ''}")
 ```
 
+## Reconnaissance
+
+Gather intelligence passively:
+
+```python
+dns = eggsec.recon_dns("example.com")
+print(f"A records: {dns.a_records}")
+
+tls = eggsec.inspect_tls("example.com")
+print(f"Certificate expires: {tls.certificate.valid_until}")
+
+tech = eggsec.detect_technology("https://example.com")
+print(f"Servers: {tech.tech_stack.servers}")
+```
+
+## WAF Detection
+
+Check for Web Application Firewalls:
+
+```python
+result = eggsec.detect_waf("https://example.com")
+if result.detected:
+    print(f"WAF: {result.waf_name} ({result.confidence}%)")
+```
+
+## Reporting
+
+Build structured reports from findings:
+
+```python
+report = eggsec.Report({"title": "Assessment Report"})
+report.add_finding(eggsec.Finding(
+    title="Open port 80",
+    severity=eggsec.Severity.INFO,
+))
+report.write_json("report.json")
+```
+
 ## Next Steps
 
 - [Sync API Reference](sync-api.md) — full function and class docs
@@ -133,4 +171,7 @@ for svc in result.services:
 - [Scanner Guide](scanner.md) — port ranges, timing, common patterns
 - [Endpoint Discovery](endpoint-discovery.md) — HTTP endpoint scanning
 - [Service Fingerprinting](service-fingerprinting.md) — service identification
+- [Reconnaissance](recon.md) — DNS, TLS, technology detection
+- [WAF Detection](waf.md) — Web Application Firewall identification
+- [Findings & Reports](reports.md) — findings, reporting, export formats
 - [Scope & Safety](scope-and-safety.md) — authorization and enforcement details

@@ -20,6 +20,18 @@ async_scan_endpoints = _core.async_scan_endpoints
 fingerprint_services = _core.fingerprint_services
 async_fingerprint_services = _core.async_fingerprint_services
 
+# Phase D: Recon functions
+recon_dns = _core.recon_dns
+async_recon_dns = _core.async_recon_dns
+inspect_tls = _core.inspect_tls
+async_inspect_tls = _core.async_inspect_tls
+detect_technology = _core.detect_technology
+async_detect_technology = _core.async_detect_technology
+
+# Phase D: WAF functions
+detect_waf = _core.detect_waf
+async_detect_waf = _core.async_detect_waf
+
 # Re-export classes
 Scope = _core.Scope
 Client = _core.Client
@@ -38,6 +50,26 @@ FingerprintEvidence = _core.FingerprintEvidence
 FingerprintConfidence = _core.FingerprintConfidence
 ServiceFingerprintResult = _core.ServiceFingerprintResult
 FingerprintScanResult = _core.FingerprintScanResult
+
+# Phase D: Findings and reporting
+Severity = _core.Severity
+Evidence = _core.Evidence
+Finding = _core.Finding
+FindingSet = _core.FindingSet
+Report = _core.Report
+
+# Phase D: Recon types
+DnsRecordSet = _core.DnsRecordSet
+MxRecord = _core.MxRecord
+SoaRecord = _core.SoaRecord
+TlsCertificateInfo = _core.TlsCertificateInfo
+TlsInspectionResult = _core.TlsInspectionResult
+SslIssue = _core.SslIssue
+TechStack = _core.TechStack
+TechDetectionResult = _core.TechDetectionResult
+
+# Phase D: WAF detection
+WafDetectionResult = _core.WafDetectionResultPy
 
 # Re-export exceptions
 EggsecError = _core.EggsecError
@@ -64,6 +96,16 @@ __all__ = [
     "async_scan_endpoints",
     "fingerprint_services",
     "async_fingerprint_services",
+    # Phase D: Recon functions
+    "recon_dns",
+    "async_recon_dns",
+    "inspect_tls",
+    "async_inspect_tls",
+    "detect_technology",
+    "async_detect_technology",
+    # Phase D: WAF functions
+    "detect_waf",
+    "async_detect_waf",
     # Classes
     "Scope",
     "Client",
@@ -82,6 +124,23 @@ __all__ = [
     "FingerprintConfidence",
     "ServiceFingerprintResult",
     "FingerprintScanResult",
+    # Phase D: Findings and reporting
+    "Severity",
+    "Evidence",
+    "Finding",
+    "FindingSet",
+    "Report",
+    # Phase D: Recon types
+    "DnsRecordSet",
+    "MxRecord",
+    "SoaRecord",
+    "TlsCertificateInfo",
+    "TlsInspectionResult",
+    "SslIssue",
+    "TechStack",
+    "TechDetectionResult",
+    # Phase D: WAF detection
+    "WafDetectionResult",
     # Exceptions
     "EggsecError",
     "ConfigError",

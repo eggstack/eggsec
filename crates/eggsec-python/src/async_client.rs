@@ -4,8 +4,10 @@ use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
 use crate::error::EggsecResultExt;
 use crate::fingerprint::FingerprintScanResult;
+use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::runtime_async;
 use crate::scope::Scope;
+use crate::waf::WafDetectionResultPy;
 
 /// Async client for performing scoped security scans through the Eggsec engine.
 ///
@@ -168,6 +170,146 @@ impl AsyncClient {
             .await
             .map_pyerr()?;
             Ok(FingerprintScanResult::from_engine(result))
+        })
+    }
+
+    /// Perform async passive DNS reconnaissance on a domain.
+    fn recon_dns(&self, domain: &str) -> PyResult<crate::runtime_async::PyFuture> {
+        self.scope.enforce_target(domain)?;
+
+        let domain_owned = domain.to_string();
+
+        runtime_async::spawn_async(async move {
+            let result = eggsec::recon::dns_records::enumerate_dns_records(&domain_owned)
+                .await
+                .map_pyerr()?;
+
+            Ok(DnsRecordSet {
+                domain: result.domain,
+                a_records: result.a,
+                aaaa_records: result.aaaa,
+                cname_records: result.cname,
+                mx_records: result
+                    .mx
+                    .into_iter()
+                    .map(|m| crate::recon::MxRecord {
+                        preference: m.preference,
+                        exchange: m.exchange,
+                    })
+                    .collect(),
+                txt_records: result.txt,
+                ns_records: result.ns,
+                soa_record: result.soa.map(|s| crate::recon::SoaRecord {
+                    mname: s.mname,
+                    rname: s.rname,
+                    serial: s.serial,
+                    refresh: s.refresh,
+                    retry: s.retry,
+                    expire: s.expire,
+                    minimum: s.minimum,
+                }),
+                caa_records: result.caa,
+            })
+        })
+    }
+
+    /// Perform async TLS inspection.
+    #[pyo3(signature = (host, *, port=443))]
+    fn inspect_tls(&self, host: &str, port: u16) -> PyResult<crate::runtime_async::PyFuture> {
+        self.scope.enforce_target(host)?;
+
+        let host_owned = host.to_string();
+
+        runtime_async::spawn_async(async move {
+            let result = eggsec::recon::ssl::analyze_ssl(&host_owned, port)
+                .await
+                .map_pyerr()?;
+
+            Ok(TlsInspectionResult {
+                target: result.target,
+                has_ssl: result.has_ssl,
+                certificate: result.certificate.map(|c| crate::recon::TlsCertificateInfo {
+                    subject: c.subject,
+                    issuer: c.issuer,
+                    valid_from: c.valid_from,
+                    valid_until: c.valid_until,
+                    serial_number: c.serial_number,
+                    signature_algorithm: c.signature_algorithm,
+                    public_key_algorithm: c.public_key_algorithm,
+                    key_size: c.key_size,
+                    is_expired: c.is_expired,
+                    days_until_expiry: c.days_until_expiry,
+                    sans: c.subject_alternative_names,
+                }),
+                supported_versions: result.supported_versions,
+                supported_cipher_suites: result.supported_cipher_suites,
+                issues: result
+                    .issues
+                    .into_iter()
+                    .map(|i| crate::recon::SslIssue {
+                        severity: i.severity,
+                        code: i.code,
+                        description: i.description,
+                    })
+                    .collect(),
+            })
+        })
+    }
+
+    /// Perform async technology detection.
+    fn detect_technology(&self, url: &str) -> PyResult<crate::runtime_async::PyFuture> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        let url_owned = url.to_string();
+
+        runtime_async::spawn_async(async move {
+            let result = eggsec::recon::techdetect::detect_tech_stack(&url_owned)
+                .await
+                .map_pyerr()?;
+
+            Ok(TechDetectionResult {
+                url: result.url,
+                status_code: result.status_code,
+                headers: result.headers.into_iter().collect(),
+                tech_stack: crate::recon::TechStack {
+                    servers: result.tech_stack.servers,
+                    frameworks: result.tech_stack.frameworks,
+                    languages: result.tech_stack.languages,
+                    databases: result.tech_stack.databases,
+                    cdns: result.tech_stack.cdns,
+                    cms: result.tech_stack.cms,
+                    javascript: result.tech_stack.javascript,
+                    other: result.tech_stack.other,
+                },
+            })
+        })
+    }
+
+    /// Perform async WAF detection.
+    fn detect_waf(&self, url: &str) -> PyResult<crate::runtime_async::PyFuture> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        let url_owned = url.to_string();
+
+        runtime_async::spawn_async(async move {
+            let detector = eggsec::waf::WafDetector::new().map_pyerr()?;
+            let result = detector.detect(&url_owned).await.map_pyerr()?;
+
+            Ok(WafDetectionResultPy {
+                url: url_owned,
+                detected: result.waf_name.is_some(),
+                vendor: result.waf_name.clone(),
+                waf_name: result.waf_name,
+                confidence: result.confidence,
+                matched_headers: result.matched_headers,
+                matched_cookies: result.matched_cookies,
+                matched_patterns: result.matched_patterns,
+                server_header: result.server_header,
+                status_code: result.status_code,
+                request_error: result.request_error,
+            })
         })
     }
 

@@ -2,7 +2,7 @@
 
 The Python bindings provide a synchronous API over the async Rust engine. The GIL is released during all network I/O, so other Python threads run freely while scans execute.
 
-Phase C adds endpoint discovery, service fingerprinting, and an async client. See [Async API](async-api.md), [Endpoint Discovery](endpoint-discovery.md), and [Service Fingerprinting](service-fingerprinting.md) for details.
+Phase C adds endpoint discovery, service fingerprinting, and an async client. Phase D adds findings/reporting, passive recon (DNS, TLS, tech detection), and WAF detection. See [Async API](async-api.md), [Endpoint Discovery](endpoint-discovery.md), [Service Fingerprinting](service-fingerprinting.md), [Reconnaissance](recon.md), [WAF Detection](waf.md), and [Findings & Reports](reports.md) for details.
 
 ## Functions
 
@@ -33,6 +33,22 @@ import eggsec
 scope = eggsec.Scope.allow_hosts(["127.0.0.1"])
 result = eggsec.scan_ports("127.0.0.1", [80, 443], scope)
 ```
+
+### `eggsec.recon_dns(domain, scope) -> DnsRecordSet`
+
+Enumerate DNS records for a domain. See [Reconnaissance](recon.md).
+
+### `eggsec.inspect_tls(host, scope) -> TlsInspectionResult`
+
+Inspect TLS/SSL configuration. See [Reconnaissance](recon.md).
+
+### `eggsec.detect_technology(url, scope) -> TechDetectionResult`
+
+Detect web technologies from HTTP headers. See [Reconnaissance](recon.md).
+
+### `eggsec.detect_waf(url, scope) -> WafDetectionResult`
+
+Detect Web Application Firewall protection. See [WAF Detection](waf.md).
 
 ## Classes
 
@@ -66,6 +82,30 @@ Scan HTTP endpoints on a web server. The `base_url` host must be in scope.
 #### `Client.fingerprint_services(host, ports, *, concurrency=None, timeout_ms=None) -> FingerprintScanResult`
 
 Fingerprint services on open ports by analyzing banners and response patterns.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.recon_dns(domain) -> DnsRecordSet`
+
+Enumerate DNS records for a domain.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.inspect_tls(host) -> TlsInspectionResult`
+
+Inspect TLS/SSL configuration for a host.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.detect_technology(url) -> TechDetectionResult`
+
+Detect web technologies from HTTP response headers.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.detect_waf(url) -> WafDetectionResult`
+
+Detect Web Application Firewall protection.
 
 **Raises:** `EnforcementError`, `ScanError`
 
@@ -214,6 +254,72 @@ Evidence supporting a fingerprint detection.
 ### `FingerprintConfidence`
 
 Confidence level for a fingerprint detection.
+
+### `Severity`
+
+Finding severity enum. Values: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`.
+
+```python
+eggsec.Severity.HIGH
+eggsec.Severity.from_str("high")  # case-insensitive
+```
+
+### `Evidence`
+
+Supporting evidence for a finding.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | `str` | Evidence type (e.g. `"header"`, `"body"`) |
+| `value` | `str` | Evidence content |
+
+### `Finding`
+
+Individual security finding. See [Findings & Reports](reports.md).
+
+### `FindingSet`
+
+Collection of findings with filtering and bulk export. See [Findings & Reports](reports.md).
+
+### `Report`
+
+Aggregated findings document. See [Findings & Reports](reports.md).
+
+### `DnsRecordSet`
+
+DNS enumeration result. See [Reconnaissance](recon.md).
+
+### `MxRecord`
+
+MX record entry. See [Reconnaissance](recon.md).
+
+### `SoaRecord`
+
+SOA record entry. See [Reconnaissance](recon.md).
+
+### `TlsInspectionResult`
+
+TLS inspection result. See [Reconnaissance](recon.md).
+
+### `TlsCertificateInfo`
+
+Certificate details. See [Reconnaissance](recon.md).
+
+### `SslIssue`
+
+TLS security issue. See [Reconnaissance](recon.md).
+
+### `TechDetectionResult`
+
+Technology detection result. See [Reconnaissance](recon.md).
+
+### `TechStack`
+
+Detected technologies. See [Reconnaissance](recon.md).
+
+### `WafDetectionResult`
+
+WAF detection result. See [WAF Detection](waf.md).
 
 ## Exception Hierarchy
 

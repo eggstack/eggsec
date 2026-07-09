@@ -175,6 +175,24 @@ impl FingerprintScanResult {
             self.target, self.services_identified, self.elapsed_ms
         )
     }
+
+    /// Convert service fingerprints to a list of row dicts suitable for tabular output.
+    fn to_rows(&self, py: Python) -> PyResult<PyObject> {
+        let list = PyList::empty_bound(py);
+        for s in &self.services {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("target", &self.target)?;
+            dict.set_item("port", s.port)?;
+            dict.set_item("service", &s.service)?;
+            dict.set_item("banner", &s.banner)?;
+            dict.set_item("version", &s.version)?;
+            dict.set_item("product", &s.product)?;
+            dict.set_item("extra", &s.extra)?;
+            dict.set_item("confidence", s.confidence)?;
+            list.append(dict)?;
+        }
+        Ok(list.into())
+    }
 }
 
 impl FingerprintScanResult {
