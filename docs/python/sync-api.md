@@ -2,6 +2,8 @@
 
 The Python bindings provide a synchronous API over the async Rust engine. The GIL is released during all network I/O, so other Python threads run freely while scans execute.
 
+Phase C adds endpoint discovery, service fingerprinting, and an async client. See [Async API](async-api.md), [Endpoint Discovery](endpoint-discovery.md), and [Service Fingerprinting](service-fingerprinting.md) for details.
+
 ## Functions
 
 ### `eggsec.scan_ports(target, ports, scope, *, concurrency=100, timeout_ms=5000)`
@@ -55,6 +57,18 @@ Scan ports on a target. Keyword-only parameters override client defaults for thi
 
 **Raises:** `EnforcementError`, `ScanError`
 
+#### `Client.scan_endpoints(config: EndpointScanConfig) -> EndpointScanResult`
+
+Scan HTTP endpoints on a web server. The `base_url` host must be in scope.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.fingerprint_services(host, ports, *, concurrency=None, timeout_ms=None) -> FingerprintScanResult`
+
+Fingerprint services on open ports by analyzing banners and response patterns.
+
+**Raises:** `EnforcementError`, `ScanError`
+
 #### `Client.scope -> Scope`
 
 Read-only property. Returns the client's scope.
@@ -69,6 +83,14 @@ client = eggsec.Client(
     concurrency=200,
 )
 result = client.scan_ports("10.0.0.1", [22, 80])
+```
+
+#### Context Manager
+
+```python
+with eggsec.Client(scope) as client:
+    result = client.scan_ports("10.0.0.1", [80, 443])
+# Client resources released
 ```
 
 ### `Scope`
@@ -164,6 +186,34 @@ preset = eggsec.TimingPreset.normal()
 ```
 
 Available: `paranoid`, `sneaky`, `polite`, `normal`, `aggressive`, `insane`.
+
+### `EndpointScanConfig`
+
+Configuration for endpoint discovery scans. See [Endpoint Discovery](endpoint-discovery.md).
+
+### `EndpointScanResult`
+
+Result of an endpoint scan. See [Endpoint Discovery](endpoint-discovery.md).
+
+### `EndpointFinding`
+
+Individual endpoint finding. See [Endpoint Discovery](endpoint-discovery.md).
+
+### `FingerprintScanResult`
+
+Result of a service fingerprint scan. See [Service Fingerprinting](service-fingerprinting.md).
+
+### `ServiceFingerprintResult`
+
+Individual service fingerprint. See [Service Fingerprinting](service-fingerprinting.md).
+
+### `FingerprintEvidence`
+
+Evidence supporting a fingerprint detection.
+
+### `FingerprintConfidence`
+
+Confidence level for a fingerprint detection.
 
 ## Exception Hierarchy
 

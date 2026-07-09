@@ -81,8 +81,56 @@ data = result.to_dict()
 json_str = result.to_json()
 ```
 
+## Async API
+
+For non-blocking scans, use `AsyncClient`:
+
+```python
+import eggsec
+
+scope = eggsec.Scope.allow_hosts(["127.0.0.1"])
+
+async def scan():
+    async with eggsec.AsyncClient(scope) as client:
+        future = client.scan_ports("127.0.0.1", [80, 443])
+        result = await future
+        print(result)
+
+# Or poll manually in a thread
+future = eggsec.async_scan_ports("127.0.0.1", [80, 443], scope)
+for result in future:
+    if result is not None:
+        print(result)
+```
+
+## Endpoint Discovery
+
+Scan a web server for known paths:
+
+```python
+config = eggsec.EndpointScanConfig(
+    base_url="http://127.0.0.1",
+    endpoints=["/", "/admin", "/login", "/robots.txt"],
+)
+result = eggsec.scan_endpoints(config, scope)
+print(f"Found {result.found} endpoints")
+```
+
+## Service Fingerprinting
+
+Identify services on open ports:
+
+```python
+result = eggsec.fingerprint_services("127.0.0.1", [22, 80, 443], scope)
+for svc in result.services:
+    print(f"  {svc.port}: {svc.service} {svc.version or ''}")
+```
+
 ## Next Steps
 
 - [Sync API Reference](sync-api.md) — full function and class docs
+- [Async API](async-api.md) — non-blocking scan operations
 - [Scanner Guide](scanner.md) — port ranges, timing, common patterns
+- [Endpoint Discovery](endpoint-discovery.md) — HTTP endpoint scanning
+- [Service Fingerprinting](service-fingerprinting.md) — service identification
 - [Scope & Safety](scope-and-safety.md) — authorization and enforcement details

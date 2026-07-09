@@ -1,7 +1,11 @@
+mod async_client;
 mod client;
 mod dto;
+mod endpoint;
 mod error;
 mod features;
+mod fingerprint;
+mod runtime_async;
 mod runtime_sync;
 mod scanner;
 mod scope;
@@ -43,17 +47,32 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Classes
     m.add_class::<scope::Scope>()?;
     m.add_class::<client::Client>()?;
+    m.add_class::<async_client::AsyncClient>()?;
+    m.add_class::<runtime_async::PyFuture>()?;
     m.add_class::<dto::PortScanResult>()?;
     m.add_class::<dto::OpenPort>()?;
     m.add_class::<dto::ScanStats>()?;
     m.add_class::<dto::PortRange>()?;
     m.add_class::<dto::TimingPreset>()?;
+    m.add_class::<endpoint::EndpointScanConfig>()?;
+    m.add_class::<endpoint::EndpointFinding>()?;
+    m.add_class::<endpoint::EndpointScanStats>()?;
+    m.add_class::<endpoint::EndpointScanResult>()?;
+    m.add_class::<fingerprint::FingerprintEvidence>()?;
+    m.add_class::<fingerprint::FingerprintConfidence>()?;
+    m.add_class::<fingerprint::ServiceFingerprintResult>()?;
+    m.add_class::<fingerprint::FingerprintScanResult>()?;
 
     // Functions
     m.add_function(wrap_pyfunction!(features::features, m)?)?;
     m.add_function(wrap_pyfunction!(features::has_feature, m)?)?;
     m.add_function(wrap_pyfunction!(version::build_info, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::scan_ports, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::async_scan_ports, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::scan_endpoints, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::async_scan_endpoints, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::fingerprint_services, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::async_fingerprint_services, m)?)?;
 
     Ok(())
 }

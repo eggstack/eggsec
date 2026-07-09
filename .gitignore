@@ -47,3 +47,10 @@ test_safe_canonicalize
 # Skill directory copies (canonical: .opencode/skills/)
 .skills/
 .agents/skills/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/

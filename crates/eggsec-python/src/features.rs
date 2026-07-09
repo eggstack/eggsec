@@ -5,8 +5,10 @@ use std::collections::HashMap;
 pub fn features() -> HashMap<String, bool> {
     let mut map = HashMap::new();
     map.insert("core".to_string(), true);
-    map.insert("scanner".to_string(), false);
-    map.insert("async-api".to_string(), false);
+    map.insert("scanner".to_string(), true);
+    map.insert("async-api".to_string(), true);
+    map.insert("endpoint-discovery".to_string(), true);
+    map.insert("service-fingerprinting".to_string(), true);
     map.insert("nse".to_string(), false);
     map.insert("stress-testing".to_string(), false);
     map.insert("packet-inspection".to_string(), false);
@@ -21,7 +23,7 @@ pub fn features() -> HashMap<String, bool> {
 #[pyfunction]
 pub fn has_feature(name: &str) -> bool {
     match name {
-        "core" => true,
+        "core" | "scanner" | "async-api" | "endpoint-discovery" | "service-fingerprinting" => true,
         _ => false,
     }
 }

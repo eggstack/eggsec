@@ -4,15 +4,16 @@ use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
 use crate::error::EggsecResultExt;
 use crate::fingerprint::FingerprintScanResult;
-use crate::runtime_sync;
+use crate::runtime_async;
 use crate::scope::Scope;
 
-/// Client for performing scoped security scans through the Eggsec engine.
+/// Async client for performing scoped security scans through the Eggsec engine.
 ///
-/// Wraps the Rust engine directly (does not shell out to the CLI).
-/// The GIL is released during network I/O operations.
+/// Provides the same operations as Client but returns Python awaitables.
+/// Each async operation spawns a background thread with its own Tokio runtime.
+/// The GIL is released during network I/O.
 #[pyclass]
-pub struct Client {
+pub struct AsyncClient {
     scope: Scope,
     mode: String,
     concurrency: usize,
@@ -20,8 +21,8 @@ pub struct Client {
 }
 
 #[pymethods]
-impl Client {
-    /// Create a new scan client.
+impl AsyncClient {
+    /// Create a new async scan client.
     ///
     /// Args:
     ///     scope: Scope defining authorized targets and ports.
@@ -48,20 +49,9 @@ impl Client {
         })
     }
 
-    /// Perform a TCP port scan.
+    /// Perform an async TCP port scan.
     ///
-    /// Args:
-    ///     target: Hostname or IP to scan.
-    ///     ports: List of port numbers to scan.
-    ///     concurrency: Max concurrent connections (overrides client default).
-    ///     timeout_ms: Connection timeout in ms (overrides client default).
-    ///
-    /// Returns:
-    ///     PortScanResult: Structured scan results.
-    ///
-    /// Raises:
-    ///     EnforcementError: If the target is outside the allowed scope.
-    ///     ScanError: If the scan fails.
+    /// Returns a PyFuture that can be awaited in Python.
     #[pyo3(signature = (target, ports, *, concurrency=None, timeout_ms=None))]
     fn scan_ports(
         &self,
@@ -69,7 +59,7 @@ impl Client {
         ports: Vec<u16>,
         concurrency: Option<usize>,
         timeout_ms: Option<u64>,
-    ) -> PyResult<PortScanResult> {
+    ) -> PyResult<crate::runtime_async::PyFuture> {
         self.scope.enforce_target(target)?;
 
         let effective_concurrency = concurrency.unwrap_or(self.concurrency);
@@ -79,108 +69,80 @@ impl Client {
             self.scope.enforce_port(port)?;
         }
 
-        let config = eggsec::scanner::PortScanConfig {
-            ports,
-            concurrency: effective_concurrency,
-            timeout_duration: std::time::Duration::from_millis(effective_timeout_ms),
-            tui_mode: false,
-            spoof_config: eggsec::scanner::SpoofConfig::default(),
-            progress_tx: None,
-            max_results: None,
-        };
-
         let target_owned = target.to_string();
+        let ports_owned = ports;
 
-        Python::with_gil(|py| {
-            let result = runtime_sync::block_on(py, async move {
-                eggsec::scanner::scan_ports(&target_owned, config)
-                    .await
-                    .map_pyerr()
-            })?;
+        runtime_async::spawn_async(async move {
+            let config = eggsec::scanner::PortScanConfig {
+                ports: ports_owned,
+                concurrency: effective_concurrency,
+                timeout_duration: std::time::Duration::from_millis(effective_timeout_ms),
+                tui_mode: false,
+                spoof_config: eggsec::scanner::SpoofConfig::default(),
+                progress_tx: None,
+                max_results: None,
+            };
 
+            let result = eggsec::scanner::scan_ports(&target_owned, config)
+                .await
+                .map_pyerr()?;
             Ok(PortScanResult::from_engine(result))
         })
     }
 
-    /// Perform endpoint discovery against a web server.
+    /// Perform async endpoint discovery against a web server.
     ///
-    /// Args:
-    ///     base_url: Base URL to scan (e.g. "https://example.com").
-    ///     endpoints: List of paths to probe (e.g. ["admin", "login"]).
-    ///     concurrency: Max concurrent requests (overrides client default).
-    ///     timeout_ms: Request timeout in ms (overrides client default).
-    ///     include_404: Include 404 responses (default: False).
-    ///     verify_tls: Verify TLS certificates (default: True).
-    ///
-    /// Returns:
-    ///     EndpointScanResult: Structured endpoint discovery results.
-    ///
-    /// Raises:
-    ///     EnforcementError: If the target is outside the allowed scope.
-    ///     ScanError: If the scan fails.
+    /// Returns a PyFuture that can be awaited in Python.
     #[pyo3(signature = (base_url, endpoints, *, concurrency=None, timeout_ms=None, include_404=false, verify_tls=true))]
     fn scan_endpoints(
         &self,
-        py: Python<'_>,
         base_url: &str,
         endpoints: Vec<String>,
         concurrency: Option<usize>,
         timeout_ms: Option<u64>,
         include_404: bool,
         verify_tls: bool,
-    ) -> PyResult<EndpointScanResult> {
-        // Extract host from URL for scope enforcement
+    ) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(base_url)?;
         self.scope.enforce_target(&host)?;
 
         let effective_concurrency = concurrency.unwrap_or(self.concurrency);
         let effective_timeout_ms = timeout_ms.unwrap_or(self.timeout_ms);
 
-        let config = eggsec::scanner::EndpointScanConfig {
-            base_url: base_url.to_string(),
-            endpoints,
-            concurrency: effective_concurrency,
-            timeout_duration: std::time::Duration::from_millis(effective_timeout_ms),
-            include_404,
-            tui_mode: false,
-            spoof_config: std::sync::Arc::new(eggsec::scanner::SpoofConfig::default()),
-            verify_tls,
-            progress_tx: None,
-            max_results: None,
-        };
+        let base_url_owned = base_url.to_string();
 
-        let result = runtime_sync::block_on(py, async move {
-            eggsec::scanner::scan_endpoints(config)
+        runtime_async::spawn_async(async move {
+            let config = eggsec::scanner::EndpointScanConfig {
+                base_url: base_url_owned,
+                endpoints,
+                concurrency: effective_concurrency,
+                timeout_duration: std::time::Duration::from_millis(effective_timeout_ms),
+                include_404,
+                tui_mode: false,
+                spoof_config: std::sync::Arc::new(eggsec::scanner::SpoofConfig::default()),
+                verify_tls,
+                progress_tx: None,
+                max_results: None,
+            };
+
+            let result = eggsec::scanner::scan_endpoints(config)
                 .await
-                .map_pyerr()
-        })?;
-
-        Ok(EndpointScanResult::from_engine(result))
+                .map_pyerr()?;
+            Ok(EndpointScanResult::from_engine(result))
+        })
     }
 
-    /// Perform service fingerprinting on target ports.
+    /// Perform async service fingerprinting on target ports.
     ///
-    /// Args:
-    ///     target: Hostname or IP to fingerprint.
-    ///     ports: List of port numbers to fingerprint.
-    ///     concurrency: Max concurrent connections (overrides client default).
-    ///     timeout_ms: Connection timeout in ms (overrides client default).
-    ///
-    /// Returns:
-    ///     FingerprintScanResult: Structured fingerprinting results.
-    ///
-    /// Raises:
-    ///     EnforcementError: If the target is outside the allowed scope.
-    ///     ScanError: If the scan fails.
+    /// Returns a PyFuture that can be awaited in Python.
     #[pyo3(signature = (target, ports, *, concurrency=None, timeout_ms=None))]
     fn fingerprint_services(
         &self,
-        py: Python<'_>,
         target: &str,
         ports: Vec<u16>,
         concurrency: Option<usize>,
         timeout_ms: Option<u64>,
-    ) -> PyResult<FingerprintScanResult> {
+    ) -> PyResult<crate::runtime_async::PyFuture> {
         self.scope.enforce_target(target)?;
 
         let effective_concurrency = concurrency.unwrap_or(self.concurrency);
@@ -191,11 +153,12 @@ impl Client {
         }
 
         let target_owned = target.to_string();
+        let ports_owned = ports;
 
-        let result = runtime_sync::block_on(py, async move {
-            eggsec::scanner::fingerprint_services(
+        runtime_async::spawn_async(async move {
+            let result = eggsec::scanner::fingerprint_services(
                 &target_owned,
-                ports,
+                ports_owned,
                 std::time::Duration::from_millis(effective_timeout_ms),
                 false,
                 effective_concurrency,
@@ -203,10 +166,9 @@ impl Client {
                 None,
             )
             .await
-            .map_pyerr()
-        })?;
-
-        Ok(FingerprintScanResult::from_engine(result))
+            .map_pyerr()?;
+            Ok(FingerprintScanResult::from_engine(result))
+        })
     }
 
     /// Get the client's scope.
@@ -221,17 +183,17 @@ impl Client {
         self.mode.clone()
     }
 
-    /// Close the client (no-op for sync client, exists for API consistency).
+    /// Close the client (no-op, exists for API consistency).
     fn close(&self) {}
 
-    /// Context manager __enter__.
-    fn __enter__(slf: Py<Self>) -> Py<Self> {
+    /// Context manager __aenter__ (returns self for use with `async with`).
+    fn __aenter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// Context manager __exit__.
+    /// Context manager __aexit__.
     #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
-    fn __exit__(
+    fn __aexit__(
         &self,
         _exc_type: Option<&Bound<'_, PyAny>>,
         _exc_value: Option<&Bound<'_, PyAny>>,
@@ -241,13 +203,12 @@ impl Client {
     }
 
     fn __repr__(&self) -> String {
-        format!("Client(mode={})", self.mode)
+        format!("AsyncClient(mode={})", self.mode)
     }
 }
 
 /// Extract hostname from a URL for scope enforcement.
 fn extract_host_from_url(url: &str) -> PyResult<String> {
-    // Try to parse as a URL
     let parsed = url::Url::parse(url)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid URL: {}", e)))?;
 

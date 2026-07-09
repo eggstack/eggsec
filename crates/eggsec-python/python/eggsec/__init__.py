@@ -14,15 +14,30 @@ features = _core.features
 has_feature = _core.has_feature
 build_info = _core.build_info
 scan_ports = _core.scan_ports
+async_scan_ports = _core.async_scan_ports
+scan_endpoints = _core.scan_endpoints
+async_scan_endpoints = _core.async_scan_endpoints
+fingerprint_services = _core.fingerprint_services
+async_fingerprint_services = _core.async_fingerprint_services
 
 # Re-export classes
 Scope = _core.Scope
 Client = _core.Client
+AsyncClient = _core.AsyncClient
+PyFuture = _core.PyFuture
 PortScanResult = _core.PortScanResult
 OpenPort = _core.OpenPort
 ScanStats = _core.ScanStats
 PortRange = _core.PortRange
 TimingPreset = _core.TimingPreset
+EndpointScanConfig = _core.EndpointScanConfig
+EndpointFinding = _core.EndpointFinding
+EndpointScanStats = _core.EndpointScanStats
+EndpointScanResult = _core.EndpointScanResult
+FingerprintEvidence = _core.FingerprintEvidence
+FingerprintConfidence = _core.FingerprintConfidence
+ServiceFingerprintResult = _core.ServiceFingerprintResult
+FingerprintScanResult = _core.FingerprintScanResult
 
 # Re-export exceptions
 EggsecError = _core.EggsecError
@@ -44,14 +59,29 @@ __all__ = [
     "has_feature",
     "build_info",
     "scan_ports",
+    "async_scan_ports",
+    "scan_endpoints",
+    "async_scan_endpoints",
+    "fingerprint_services",
+    "async_fingerprint_services",
     # Classes
     "Scope",
     "Client",
+    "AsyncClient",
+    "PyFuture",
     "PortScanResult",
     "OpenPort",
     "ScanStats",
     "PortRange",
     "TimingPreset",
+    "EndpointScanConfig",
+    "EndpointFinding",
+    "EndpointScanStats",
+    "EndpointScanResult",
+    "FingerprintEvidence",
+    "FingerprintConfidence",
+    "ServiceFingerprintResult",
+    "FingerprintScanResult",
     # Exceptions
     "EggsecError",
     "ConfigError",
