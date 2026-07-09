@@ -115,8 +115,8 @@ impl Scope {
     ///     ScopeError: If the file cannot be read or parsed.
     #[staticmethod]
     fn from_file(path: &str) -> PyResult<Self> {
-        let scope =
-            eggsec::config::Scope::from_file(path).map_err(|e| ScopeError::new_err(e.to_string()))?;
+        let scope = eggsec::config::Scope::from_file(path)
+            .map_err(|e| ScopeError::new_err(e.to_string()))?;
         Ok(Self { inner: scope })
     }
 

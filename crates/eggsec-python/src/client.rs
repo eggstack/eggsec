@@ -152,9 +152,7 @@ impl Client {
         };
 
         let result = runtime_sync::block_on(py, async move {
-            eggsec::scanner::scan_endpoints(config)
-                .await
-                .map_pyerr()
+            eggsec::scanner::scan_endpoints(config).await.map_pyerr()
         })?;
 
         Ok(EndpointScanResult::from_engine(result))
@@ -286,19 +284,21 @@ impl Client {
         Ok(TlsInspectionResult {
             target: result.target,
             has_ssl: result.has_ssl,
-            certificate: result.certificate.map(|c| crate::recon::TlsCertificateInfo {
-                subject: c.subject,
-                issuer: c.issuer,
-                valid_from: c.valid_from,
-                valid_until: c.valid_until,
-                serial_number: c.serial_number,
-                signature_algorithm: c.signature_algorithm,
-                public_key_algorithm: c.public_key_algorithm,
-                key_size: c.key_size,
-                is_expired: c.is_expired,
-                days_until_expiry: c.days_until_expiry,
-                sans: c.subject_alternative_names,
-            }),
+            certificate: result
+                .certificate
+                .map(|c| crate::recon::TlsCertificateInfo {
+                    subject: c.subject,
+                    issuer: c.issuer,
+                    valid_from: c.valid_from,
+                    valid_until: c.valid_until,
+                    serial_number: c.serial_number,
+                    signature_algorithm: c.signature_algorithm,
+                    public_key_algorithm: c.public_key_algorithm,
+                    key_size: c.key_size,
+                    is_expired: c.is_expired,
+                    days_until_expiry: c.days_until_expiry,
+                    sans: c.subject_alternative_names,
+                }),
             supported_versions: result.supported_versions,
             supported_cipher_suites: result.supported_cipher_suites,
             issues: result
@@ -436,7 +436,5 @@ fn extract_host_from_url(url: &str) -> PyResult<String> {
     parsed
         .host_str()
         .map(|h| h.to_string())
-        .ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host")
-        })
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
 }

@@ -308,10 +308,7 @@ pub struct SslIssue {
 #[pymethods]
 impl SslIssue {
     fn __repr__(&self) -> String {
-        format!(
-            "SslIssue(severity={}, code={})",
-            self.severity, self.code
-        )
+        format!("SslIssue(severity={}, code={})", self.severity, self.code)
     }
 }
 

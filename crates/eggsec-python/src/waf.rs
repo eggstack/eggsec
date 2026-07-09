@@ -71,10 +71,7 @@ impl WafDetectionResultPy {
     }
 
     fn __repr__(&self) -> String {
-        let vendor_str = self
-            .vendor
-            .as_deref()
-            .unwrap_or("Unknown");
+        let vendor_str = self.vendor.as_deref().unwrap_or("Unknown");
         format!(
             "WafDetectionResult(url={}, detected={}, vendor={}, confidence={})",
             self.url, self.detected, vendor_str, self.confidence
@@ -118,9 +115,9 @@ pub fn detect_waf(url: &str) -> PyResult<WafDetectionResultPy> {
         })?;
 
         Ok(WafDetectionResultPy {
-            url: result.status_code.to_string(), // placeholder, overwritten below
+            url: url.to_string(),
             detected: result.waf_name.is_some(),
-            vendor: result.server_header.clone(), // placeholder, overwritten below
+            vendor: result.waf_name.clone(),
             waf_name: result.waf_name,
             confidence: result.confidence,
             matched_headers: result.matched_headers,

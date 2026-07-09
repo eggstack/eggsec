@@ -154,9 +154,7 @@ pub fn scan_endpoints(
 
     Python::with_gil(|py| {
         let result = runtime_sync::block_on(py, async move {
-            eggsec::scanner::scan_endpoints(config)
-                .await
-                .map_pyerr()
+            eggsec::scanner::scan_endpoints(config).await.map_pyerr()
         })?;
 
         Ok(EndpointScanResult::from_engine(result))
@@ -194,9 +192,7 @@ pub fn async_scan_endpoints(
             max_results: None,
         };
 
-        let result = eggsec::scanner::scan_endpoints(config)
-            .await
-            .map_pyerr()?;
+        let result = eggsec::scanner::scan_endpoints(config).await.map_pyerr()?;
         Ok(EndpointScanResult::from_engine(result))
     })
 }
@@ -291,7 +287,5 @@ fn extract_host_from_url(url: &str) -> PyResult<String> {
     parsed
         .host_str()
         .map(|h| h.to_string())
-        .ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host")
-        })
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
 }

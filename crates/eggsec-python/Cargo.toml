@@ -13,10 +13,37 @@ categories = ["development-tools", "parser-implementations", "network-programmin
 name = "eggsec"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+# Feature-gated engine modules exposed to Python
+websocket = ["eggsec/websocket"]
+git-secrets = ["eggsec/git-secrets"]
+sbom = ["eggsec/sbom"]
+db-pentest = ["eggsec/db-pentest", "dep:eggsec-db-lab"]
+db-pentest-mongodb = ["eggsec/db-pentest-mongodb"]
+db-pentest-redis = ["eggsec/db-pentest-redis"]
+web-proxy = ["eggsec/web-proxy", "dep:eggsec-web-proxy"]
+mobile = ["eggsec/mobile"]
+mobile-dynamic = ["eggsec/mobile-dynamic"]
+packet-inspection = ["eggsec/packet-inspection"]
+stress-testing = ["eggsec/stress-testing"]
+nse = ["eggsec/nse", "dep:eggsec-nse"]
+container = ["eggsec/container"]
+daemon-client = ["dep:eggsec-daemon", "dep:eggsec-runtime"]
+# Aggregate: everything that can be built without system deps
+full-no-system = ["websocket", "git-secrets", "sbom", "container"]
+
 [dependencies]
 eggsec = { path = "../eggsec", default-features = false }
 eggsec-core = { path = "../eggsec-core" }
+eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
+eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
+eggsec-mobile-lab = { path = "../eggsec-mobile-lab", optional = true }
+eggsec-nse = { path = "../eggsec-nse", optional = true }
+eggsec-daemon = { path = "../eggsec-daemon", optional = true }
+eggsec-runtime = { path = "../eggsec-runtime", optional = true }
 pyo3 = { version = "0.22", features = ["extension-module"] }
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

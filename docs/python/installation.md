@@ -36,7 +36,7 @@ maturin build --release
 
 ## Status
 
-**Experimental / Alpha** — Phase A foundation only. Core metadata, feature flags, and build info are exposed. Scanner, proxy, and other tool APIs are not yet available from Python.
+**Experimental / Alpha** — Phase F complete. Default wheel includes: port scanning, endpoint discovery, service fingerprinting, DNS/TLS/tech recon, WAF detection, WAF validation/bypass, HTTP fuzzing, load testing, findings/reporting, and scope enforcement. Optional feature-gated modules: WebSocket testing, git secrets, SBOM generation, database pentesting, proxy management, mobile app analysis, container scanning, packet inspection, stress testing, NSE scripts, and daemon client.
 
 ## Notes
 

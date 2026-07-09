@@ -40,7 +40,7 @@ impl Severity {
 }
 
 impl Severity {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             Severity::Critical => "Critical",
             Severity::High => "High",
@@ -137,10 +137,7 @@ impl Evidence {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "Evidence(kind={}, source={})",
-            self.kind, self.source
-        )
+        format!("Evidence(kind={}, source={})", self.kind, self.source)
     }
 }
 
@@ -255,7 +252,9 @@ impl Finding {
     fn __repr__(&self) -> String {
         format!(
             "Finding(id={}, severity={}, title={})",
-            self.id, self.severity.as_str(), self.title
+            self.id,
+            self.severity.as_str(),
+            self.title
         )
     }
 }
@@ -367,17 +366,15 @@ impl Report {
                     Severity::Info,
                     port_result.target.clone(),
                     "port-scan".to_string(),
-                    format!(
-                        "Port {} is open (service: {})",
-                        port.port, port.service
-                    ),
+                    format!("Port {} is open (service: {})", port.port, port.service),
                     None,
                     None,
                     None,
                 );
                 self.findings.push(finding);
             }
-        } else if let Ok(endpoint_result) = result.extract::<crate::endpoint::EndpointScanResult>() {
+        } else if let Ok(endpoint_result) = result.extract::<crate::endpoint::EndpointScanResult>()
+        {
             // Access findings via Python getter since it's a private field with #[getter]
             let findings_py = result.getattr("findings")?;
             let endpoint_findings: Vec<crate::endpoint::EndpointFinding> = findings_py.extract()?;
@@ -395,10 +392,12 @@ impl Report {
                 );
                 self.findings.push(finding);
             }
-        } else if let Ok(fp_result) = result.extract::<crate::fingerprint::FingerprintScanResult>() {
+        } else if let Ok(fp_result) = result.extract::<crate::fingerprint::FingerprintScanResult>()
+        {
             // Access services via Python getter since it's a private field with #[getter]
             let services_py = result.getattr("services")?;
-            let services: Vec<crate::fingerprint::ServiceFingerprintResult> = services_py.extract()?;
+            let services: Vec<crate::fingerprint::ServiceFingerprintResult> =
+                services_py.extract()?;
             for svc in services {
                 let finding = Finding::new(
                     format!("service-{}", svc.port),
@@ -519,9 +518,7 @@ impl Report {
         // Summary table
         let mut severity_counts = std::collections::HashMap::new();
         for f in &self.findings {
-            *severity_counts
-                .entry(f.severity.as_str())
-                .or_insert(0u32) += 1;
+            *severity_counts.entry(f.severity.as_str()).or_insert(0u32) += 1;
         }
 
         md.push_str("## Summary\n\n");
@@ -541,7 +538,11 @@ impl Report {
             for f in &self.findings {
                 md.push_str(&format!(
                     "| {} | {} | {} | {} | {} |\n",
-                    f.id, f.severity.as_str(), f.title, f.target, f.category
+                    f.id,
+                    f.severity.as_str(),
+                    f.title,
+                    f.target,
+                    f.category
                 ));
             }
             md.push('\n');
@@ -562,7 +563,10 @@ impl Report {
                     for e in &f.evidence_items {
                         md.push_str(&format!(
                             "- [{}] {} (source: {}, confidence: {:.0}%)\n",
-                            e.kind, e.value, e.source, e.confidence * 100.0
+                            e.kind,
+                            e.value,
+                            e.source,
+                            e.confidence * 100.0
                         ));
                     }
                     md.push('\n');

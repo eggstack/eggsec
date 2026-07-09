@@ -68,7 +68,11 @@ pub fn scan_repo(repo_path: &Path) -> anyhow::Result<SupplyChainScanResult> {
         .into_iter()
         .filter_map(|e| match e {
             Ok(entry) => Some(entry),
-            Err(ref e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(ref e)
+                if e.io_error().map_or(false, |io| {
+                    io.kind() == std::io::ErrorKind::PermissionDenied
+                }) =>
+            {
                 tracing::warn!("Permission denied walking supply chain: {}", e);
                 None
             }

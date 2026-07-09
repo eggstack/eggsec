@@ -23,9 +23,10 @@ pub(crate) fn engine_error_to_pyerr(err: eggsec::error::EggsecError) -> PyErr {
         E::RequestFailed { method, url, error } => {
             NetworkError::new_err(format!("{} {} - {}", method, url, error))
         }
-        E::Timeout { timeout_ms, operation } => {
-            TimeoutError::new_err(format!("Timeout after {}ms: {}", timeout_ms, operation))
-        }
+        E::Timeout {
+            timeout_ms,
+            operation,
+        } => TimeoutError::new_err(format!("Timeout after {}ms: {}", timeout_ms, operation)),
         E::RateLimited(msg) => NetworkError::new_err(format!("Rate limited: {}", msg)),
         E::ScanFailed { stage, error } => ScanError::new_err(format!("{} - {}", stage, error)),
         E::Payload(msg) => ScanError::new_err(format!("Payload error: {}", msg)),
