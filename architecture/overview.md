@@ -185,6 +185,8 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
 | [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) + active deauth/disassoc (Phase 1 complete 2026-06-12, under `wireless-advanced`; lab-only, requires `--allow-active-wireless`) | [wireless.md](wireless.md) |
+| [`eggsec-runtime`](../crates/eggsec-runtime/) | Frontend-neutral async runtime: task lifecycle (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor`), session management, event broadcasting. Dependency-light (serde/tokio/tracing only). | [runtime.md](runtime.md) |
+| [`eggsec-ui-model`](../crates/eggsec-ui-model/) | Frontend-neutral view DTOs and `ResultRendererRegistry` (22 result kinds). Converts runtime types to serializable view models for TUI/CLI rendering. | [ui_model.md](ui_model.md) |
 
 ---
 
@@ -770,10 +772,10 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 |----------|-----------|
 | **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [domain_contract.md](domain_contract.md), [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) |
 | **Security** | [scanner.md](scanner.md), [fuzzer.md](fuzzer.md), [waf.md](waf.md), [recon.md](recon.md), [auth.md](auth.md), [hunt.md](hunt.md) |
-| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md), [daemon.md](daemon.md) |
+| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md), [daemon.md](daemon.md), [runtime.md](runtime.md) |
 | **Output** | [output.md](output.md), [findings.md](findings.md), [diff.md](diff.md), [workflow.md](workflow.md) |
 | **Integration** | [ai_agents.md](ai_agents.md), [nse_integration.md](nse_integration.md), [integrations.md](integrations.md), [notify.md](notify.md) |
-| **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
+| **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md), [ui_model.md](ui_model.md) |
 | **Compliance** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Utilities** | [utils.md](utils.md), [logging.md](logging.md), [probe.md](probe.md) |
 | **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [compile_time_baseline.md](compile_time_baseline.md), [auth_context.md](auth_context.md) |
@@ -784,4 +786,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-07-08 — deep-dive review completed, all architecture docs verified and updated*
+*Last updated: 2026-07-09 — added runtime.md and ui_model.md architecture docs*
