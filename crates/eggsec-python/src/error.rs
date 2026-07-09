@@ -1,0 +1,10 @@
+pyo3::create_exception!(eggsec._core, EggsecError, pyo3::exceptions::PyException);
+pyo3::create_exception!(eggsec._core, ConfigError, EggsecError);
+pyo3::create_exception!(eggsec._core, ScopeError, EggsecError);
+pyo3::create_exception!(eggsec._core, EnforcementError, EggsecError);
+pyo3::create_exception!(eggsec._core, NetworkError, EggsecError);
+pyo3::create_exception!(eggsec._core, ScanError, EggsecError);
+pyo3::create_exception!(eggsec._core, TimeoutError, EggsecError);
+pyo3::create_exception!(eggsec._core, FeatureUnavailableError, EggsecError);
+pyo3::create_exception!(eggsec._core, SerializationError, EggsecError);
+pyo3::create_exception!(eggsec._core, InternalError, EggsecError);

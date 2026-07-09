@@ -112,6 +112,23 @@ eggsec agent run --scope scope.toml --portfolio portfolio.json
 
 See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation. See [docs/ENFORCEMENT_MODES.md](docs/ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract defining manual vs. automated posture semantics.
 
+## Python Bindings (Experimental)
+
+Eggsec provides experimental Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). Python is a **host-language binding** over the Rust engine — not an internal plugin runtime.
+
+Phase A (foundation) is complete: importable module, version info, feature flags, exception hierarchy, and build metadata. Scanner and tool APIs are not yet exposed.
+
+```python
+import eggsec
+
+print(eggsec.__version__)          # "0.1.0"
+print(eggsec.features())           # {"core": True, ...}
+print(eggsec.has_feature("core"))  # True
+print(eggsec.build_info())         # {"version": "0.1.0", ...}
+```
+
+See [`docs/python/installation.md`](docs/python/installation.md) for development setup instructions. The binding crate lives at `crates/eggsec-python/`.
+
 ## Quick Start
 
 ### Workspace Layout
@@ -133,6 +150,7 @@ Eggsec is organized as a Cargo workspace with these crates:
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
 | `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), transport abstraction (Unix socket default; HTTP/SSE feature-gated via `http-api`), client library, multi-client registry (`ClientKind`/`ClientRole`), session access control, and role-based permission checks |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) |
+| `eggsec-python` | Python bindings (experimental — PyO3/maturin, host-language binding) |
 
 ### Prerequisites
 

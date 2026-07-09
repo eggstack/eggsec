@@ -14,6 +14,7 @@ members = [
     "crates/eggsec-runtime",
     "crates/eggsec-daemon",
     "crates/eggsec-ui-model",
+    "crates/eggsec-python",
 ]
 resolver = "2"
 

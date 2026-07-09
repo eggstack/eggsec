@@ -27,7 +27,7 @@ Feature-gated crates need explicit features: `cargo check -p eggsec --features m
 
 ## Project Overview
 
-Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 14 crates:
+Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15 crates:
 
 | Crate | Purpose |
 |-------|---------|
@@ -45,6 +45,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 14
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
+| `eggsec-python` | Python bindings (PyO3/maturin, experimental) |
 
 ## Build & Test Commands
 

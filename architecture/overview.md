@@ -569,7 +569,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 
 ### Crate-Level Dependencies
 
-The workspace has 14 crates organized in a layered dependency graph. Arrows indicate "depends on":
+The workspace has 15 crates organized in a layered dependency graph. Arrows indicate "depends on":
 
 ```
 eggsec-core (leaf — no workspace deps: Severity, SensitiveString, constants)
@@ -591,7 +591,8 @@ eggsec-core (leaf — no workspace deps: Severity, SensitiveString, constants)
     └── eggsec               (ALL above — main engine, lib only)
             ↑
             ├── eggsec-tui   (engine + runtime + daemon + ui-model — 33 tabs)
-            └── eggsec-cli   (engine + runtime + ui-model; optional: tui + daemon)
+            ├── eggsec-cli   (engine + runtime + ui-model; optional: tui + daemon)
+            └── eggsec-python   (core + pyo3 — Python bindings, no CLI/TUI deps)
 ```
 
 ### Intra-Engine Module Dependencies
