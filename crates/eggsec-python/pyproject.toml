@@ -38,6 +38,12 @@ Documentation = "https://github.com/sugarwookie/eggsec/tree/main/docs/python"
 Repository = "https://github.com/sugarwookie/eggsec"
 Issues = "https://github.com/sugarwookie/eggsec/issues"
 
+[tool.pytest.ini_options]
+markers = [
+    "network: mark test as requiring network access (DNS/TLS to external hosts)",
+]
+addopts = "-m 'not network'"
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"

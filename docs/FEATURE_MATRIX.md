@@ -362,6 +362,35 @@ cargo test -p eggsec-daemon --features full-executor
 
 ---
 
+## 6. Python Bindings (`eggsec-python`)
+
+The `eggsec-python` crate provides PyO3/maturin Python bindings. Its feature flags **mirror engine
+features** via Cargo forwarding — enabling `web-proxy` in Python compiles the same `eggsec` features
+as `cargo check -p eggsec --features web-proxy`.
+
+| Python Feature | Engine Feature | Notes |
+|----------------|----------------|-------|
+| `full-no-system` | aggregate | `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
+| `websocket` | `websocket` | WebSocket security testing |
+| `git-secrets` | `git-secrets` | Git secret detection |
+| `sbom` | `sbom` | SBOM generation |
+| `db-pentest` | `db-pentest` | Database pentest (requires `eggsec-db-lab`) |
+| `db-pentest-mongodb` | `db-pentest-mongodb` | MongoDB pentest |
+| `db-pentest-redis` | `db-pentest-redis` | Redis pentest |
+| `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `mobile` | `mobile` | APK/IPA static analysis |
+| `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
+| `packet-inspection` | `packet-inspection` | Packet capture |
+| `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
+| `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
+| `container` | `container` | K8s/Docker scanning |
+| `daemon-client` | — | Daemon session access (no engine feature) |
+
+Default wheel: core + scanner + endpoint discovery + service fingerprinting + recon + WAF + reporting + async API.
+`full` aggregate includes all non-default features (not conservative/production).
+
+---
+
 ## Updating This Document
 
 This document is manually maintained. When adding or modifying a feature:
@@ -372,3 +401,5 @@ This document is manually maintained. When adding or modifying a feature:
 4. Run `cargo test --lib -p eggsec` to verify metadata consistency
 5. Update this file to reflect the new feature (category, dependencies, metadata IDs, etc.)
 6. Run `cargo test -p eggsec --test metadata_consistency` to validate cross-references
+7. If Python bindings are affected, update `[features]` in `crates/eggsec-python/Cargo.toml` and
+   Section 6 above

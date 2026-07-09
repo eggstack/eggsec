@@ -74,6 +74,41 @@ def test_async_scan_ports_exists():
     assert callable(eggsec.async_scan_ports)
 
 
+def test_async_scan_ports_returns_future():
+    """Test that async_scan_ports returns a PyFuture."""
+    scope = eggsec.Scope.allow_hosts(["127.0.0.1"])
+    future = eggsec.async_scan_ports("127.0.0.1", [80], scope)
+    assert isinstance(future, eggsec.PyFuture)
+
+
+def test_async_scan_ports_denied_scope():
+    """Test that async_scan_ports raises EnforcementError for out-of-scope target."""
+    scope = eggsec.Scope.allow_hosts(["10.0.0.0/8"])
+    with pytest.raises(eggsec.EnforcementError):
+        eggsec.async_scan_ports("evil.com", [80], scope)
+
+
+def test_async_validate_waf_denied_scope():
+    """Test that async_validate_waf raises EnforcementError for out-of-scope target."""
+    scope = eggsec.Scope.allow_hosts(["10.0.0.0/8"])
+    with pytest.raises(eggsec.EnforcementError):
+        eggsec.async_validate_waf("http://evil.com", scope)
+
+
+def test_async_fuzz_http_denied_scope():
+    """Test that async_fuzz_http raises EnforcementError for out-of-scope target."""
+    scope = eggsec.Scope.allow_hosts(["10.0.0.0/8"])
+    with pytest.raises(eggsec.EnforcementError):
+        eggsec.async_fuzz_http("http://evil.com", scope, "xss")
+
+
+def test_async_load_test_denied_scope():
+    """Test that async_load_test_http raises EnforcementError for out-of-scope target."""
+    scope = eggsec.Scope.allow_hosts(["10.0.0.0/8"])
+    with pytest.raises(eggsec.EnforcementError):
+        eggsec.async_load_test_http("http://evil.com", 10, 1, 5, scope)
+
+
 def test_py_future_exists():
     """Test that PyFuture class exists."""
     assert hasattr(eggsec, "PyFuture")
