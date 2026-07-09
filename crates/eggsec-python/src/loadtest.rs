@@ -7,6 +7,16 @@ use std::time::Duration;
 use crate::error::EggsecResultExt;
 use crate::runtime_async;
 use crate::runtime_sync;
+use crate::scope::Scope;
+
+fn extract_host_from_url(url: &str) -> PyResult<String> {
+    let parsed = url::Url::parse(url)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid URL: {}", e)))?;
+    parsed
+        .host_str()
+        .map(|h| h.to_string())
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
+}
 
 /// HTTP load test result with latency percentiles and status code distribution.
 #[pyclass(frozen)]
@@ -212,15 +222,35 @@ impl LoadTestConfig {
 /// Raises:
 ///     ScanError: If the load test fails.
 #[pyfunction]
-#[pyo3(signature = (url, total_requests, concurrency, timeout_secs, method="GET"))]
+#[pyo3(signature = (url, total_requests, concurrency, timeout_secs, scope, *, method="GET"))]
 pub fn load_test_http(
     py: Python<'_>,
     url: &str,
     total_requests: u64,
     concurrency: usize,
     timeout_secs: u64,
+    scope: Scope,
     method: &str,
 ) -> PyResult<LoadTestResultPy> {
+    if total_requests == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "total_requests must be > 0",
+        ));
+    }
+    if concurrency == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "concurrency must be > 0",
+        ));
+    }
+    if timeout_secs == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "timeout_secs must be > 0",
+        ));
+    }
+
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     let url_owned = url.to_string();
     let method_owned = method.to_string();
 
@@ -261,14 +291,34 @@ pub fn load_test_http(
 ///
 /// Returns a PyFuture that can be awaited in Python.
 #[pyfunction]
-#[pyo3(signature = (url, total_requests, concurrency, timeout_secs, method="GET"))]
+#[pyo3(signature = (url, total_requests, concurrency, timeout_secs, scope, *, method="GET"))]
 pub fn async_load_test_http(
     url: &str,
     total_requests: u64,
     concurrency: usize,
     timeout_secs: u64,
+    scope: Scope,
     method: &str,
 ) -> PyResult<runtime_async::PyFuture> {
+    if total_requests == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "total_requests must be > 0",
+        ));
+    }
+    if concurrency == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "concurrency must be > 0",
+        ));
+    }
+    if timeout_secs == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "timeout_secs must be > 0",
+        ));
+    }
+
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     let url_owned = url.to_string();
     let method_owned = method.to_string();
 

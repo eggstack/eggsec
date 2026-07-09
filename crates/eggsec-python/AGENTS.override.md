@@ -37,3 +37,4 @@ pytest crates/eggsec-python/tests/        # Python-side tests
 - Add tests in `tests/` for Python-side validation.
 - GIL is released during network I/O; use `py.allow_threads()` for blocking calls.
 - Feature-gated engine modules require explicit `--features` at build time.
+- Active APIs (`load_test_http`, `validate_waf`, `fuzz_http` and async variants) require a mandatory `scope` parameter as a positional argument. Scope is enforced at the Python layer before any engine work is dispatched. `Client`/`AsyncClient` methods use the client's internal scope.

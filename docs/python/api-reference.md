@@ -239,7 +239,7 @@ Async version of `detect_technology`.
 ### `detect_waf`
 
 ```python
-eggsec.detect_waf(url: str) -> WafDetectionResult
+eggsec.detect_waf(url: str, scope: Scope) -> WafDetectionResult
 ```
 
 Detect WAF by making an HTTP request to the target URL. Performs passive
@@ -248,6 +248,7 @@ detection only -- no bypass or validation testing.
 | Parameter | Type | Description |
 |---|---|---|
 | `url` | `str` | Target URL to test (e.g. `"https://example.com"`). |
+| `scope` | `Scope` | Scope defining authorized targets. |
 
 **Returns:** `WafDetectionResult`
 **Raises:** `EnforcementError`, `NetworkError`
@@ -257,10 +258,155 @@ detection only -- no bypass or validation testing.
 ### `async_detect_waf`
 
 ```python
-eggsec.async_detect_waf(url: str) -> PyFuture
+eggsec.async_detect_waf(url: str, scope: Scope) -> PyFuture
 ```
 
 Async version of `detect_waf`.
+
+---
+
+### `validate_waf`
+
+```python
+eggsec.validate_waf(
+    url: str,
+    scope: Scope,
+    *,
+    bypass: bool = False,
+    test_type: str | None = None,
+) -> WafDetectionResult
+```
+
+Validate WAF bypass techniques against a target. Scope is enforced before
+any engine work is dispatched.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `url` | `str` | Target URL to test. |
+| `scope` | `Scope` | Scope defining authorized targets. |
+| `bypass` | `bool` | Enable bypass techniques. |
+| `test_type` | `str \| None` | Specific test type to run. |
+
+**Returns:** `WafDetectionResult`
+**Raises:** `EnforcementError`, `ScanError`
+
+---
+
+### `async_validate_waf`
+
+```python
+eggsec.async_validate_waf(
+    url: str,
+    scope: Scope,
+    *,
+    bypass: bool = False,
+    test_type: str | None = None,
+) -> PyFuture
+```
+
+Async version of `validate_waf`.
+
+---
+
+### `fuzz_http`
+
+```python
+eggsec.fuzz_http(
+    url: str,
+    scope: Scope,
+    payload_type: str = "all",
+    *,
+    method: str = "GET",
+    param: str | None = None,
+    concurrency: int = 10,
+    timeout: int = 30,
+) -> FuzzResult
+```
+
+Perform HTTP fuzzing against a target. Scope is enforced before any engine
+work is dispatched.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `url` | `str` | Target URL. |
+| `scope` | `Scope` | Scope defining authorized targets. |
+| `payload_type` | `str` | Payload category (e.g. `"all"`, `"xss"`). |
+| `method` | `str` | HTTP method. |
+| `param` | `str \| None` | Target parameter. |
+| `concurrency` | `int` | Max concurrent requests. |
+| `timeout` | `int` | Request timeout in seconds. |
+
+**Returns:** `FuzzResult`
+**Raises:** `EnforcementError`, `ScanError`
+
+---
+
+### `async_fuzz_http`
+
+```python
+eggsec.async_fuzz_http(
+    url: str,
+    scope: Scope,
+    payload_type: str = "all",
+    *,
+    method: str = "GET",
+    param: str | None = None,
+    concurrency: int = 10,
+    timeout: int = 30,
+) -> PyFuture
+```
+
+Async version of `fuzz_http`.
+
+---
+
+### `load_test_http`
+
+```python
+eggsec.load_test_http(
+    url: str,
+    total_requests: int,
+    concurrency: int,
+    timeout_secs: int,
+    scope: Scope,
+    *,
+    method: str = "GET",
+) -> LoadTestResult
+```
+
+Perform HTTP load testing against a target. Scope is enforced before any
+engine work is dispatched. `total_requests`, `concurrency`, and
+`timeout_secs` must all be greater than zero.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `url` | `str` | Target URL. |
+| `total_requests` | `int` | Total requests to send. |
+| `concurrency` | `int` | Concurrent workers. |
+| `timeout_secs` | `int` | Request timeout in seconds. |
+| `scope` | `Scope` | Scope defining authorized targets. |
+| `method` | `str` | HTTP method. |
+
+**Returns:** `LoadTestResult`
+**Raises:** `EnforcementError`, `ScanError`, `ValueError`
+
+---
+
+### `async_load_test_http`
+
+```python
+eggsec.async_load_test_http(
+    url: str,
+    total_requests: int,
+    concurrency: int,
+    timeout_secs: int,
+    scope: Scope,
+    *,
+    method: str = "GET",
+) -> PyFuture
+```
+
+Async version of `load_test_http`.
 
 ---
 
@@ -474,6 +620,44 @@ Client.detect_waf(url: str) -> WafDetectionResult
 Detect WAF by making an HTTP request to the target URL.
 
 ```python
+Client.validate_waf(
+    url: str,
+    *,
+    bypass: bool = False,
+    test_type: str | None = None,
+) -> WafDetectionResult
+```
+
+Validate WAF bypass techniques. Uses the client's internal scope for enforcement.
+
+```python
+Client.fuzz_http(
+    url: str,
+    payload_type: str = "all",
+    *,
+    method: str = "GET",
+    param: str | None = None,
+    concurrency: int = 10,
+    timeout: int = 30,
+) -> FuzzResult
+```
+
+Perform HTTP fuzzing. Uses the client's internal scope for enforcement.
+
+```python
+Client.load_test_http(
+    url: str,
+    total_requests: int,
+    concurrency: int,
+    timeout_secs: int,
+    *,
+    method: str = "GET",
+) -> LoadTestResult
+```
+
+Perform HTTP load testing. Uses the client's internal scope for enforcement.
+
+```python
 Client.close() -> None
 ```
 
@@ -527,6 +711,9 @@ AsyncClient.recon_dns(domain) -> PyFuture
 AsyncClient.inspect_tls(host, *, port=443) -> PyFuture
 AsyncClient.detect_technology(url) -> PyFuture
 AsyncClient.detect_waf(url) -> PyFuture
+AsyncClient.validate_waf(url, *, bypass=False, test_type=None) -> PyFuture
+AsyncClient.fuzz_http(url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30) -> PyFuture
+AsyncClient.load_test_http(url, total_requests, concurrency, timeout_secs, *, method="GET") -> PyFuture
 AsyncClient.close() -> None
 ```
 

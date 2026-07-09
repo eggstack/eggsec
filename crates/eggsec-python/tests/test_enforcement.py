@@ -5,13 +5,7 @@ import eggsec
 
 
 class TestScopeEnforcement:
-    """Verify scope enforcement across network-active modules.
-
-    Note: load_test_http, validate_waf, and fuzz_http do NOT accept a scope
-    parameter at the Python binding level. Scope enforcement for these functions
-    is handled at the engine/CLI layer, not through the Python API. These tests
-    verify that functions which DO accept scope enforce it correctly.
-    """
+    """Verify scope enforcement across all network-active modules."""
 
     def test_scan_ports_out_of_scope(self):
         """scan_ports must enforce target scope."""
@@ -36,71 +30,111 @@ class TestScopeEnforcement:
         with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
             eggsec.fingerprint_services("evil.local", [80], scope, timeout_ms=1000)
 
-    def test_load_test_http_no_scope_parameter(self):
-        """load_test_http does not accept a scope parameter (scope enforced elsewhere)."""
-        # Verify calling without scope works (the function has no scope param)
-        # This confirms the API contract — scope is NOT enforced at this level
-        import inspect
-        sig = inspect.signature(eggsec.load_test_http)
-        assert "scope" not in sig.parameters
+    def test_load_test_http_out_of_scope(self):
+        """load_test_http must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            eggsec.load_test_http(
+                "http://evil.local",
+                total_requests=1,
+                concurrency=1,
+                timeout_secs=1,
+                scope=scope,
+            )
 
-    def test_validate_waf_no_scope_parameter(self):
-        """validate_waf does not accept a scope parameter (scope enforced elsewhere)."""
-        import inspect
-        sig = inspect.signature(eggsec.validate_waf)
-        assert "scope" not in sig.parameters
+    def test_validate_waf_out_of_scope(self):
+        """validate_waf must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            eggsec.validate_waf("http://evil.local", scope=scope)
 
-    def test_fuzz_http_no_scope_parameter(self):
-        """fuzz_http does not accept a scope parameter (scope enforced elsewhere)."""
-        import inspect
-        sig = inspect.signature(eggsec.fuzz_http)
-        assert "scope" not in sig.parameters
+    def test_fuzz_http_out_of_scope(self):
+        """fuzz_http must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            eggsec.fuzz_http("http://evil.local", scope=scope)
+
+    def test_client_load_test_http_out_of_scope(self):
+        """Client.load_test_http must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        client = eggsec.Client(scope)
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            client.load_test_http(
+                "http://evil.local",
+                total_requests=1,
+                concurrency=1,
+                timeout_secs=1,
+            )
+
+    def test_client_validate_waf_out_of_scope(self):
+        """Client.validate_waf must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        client = eggsec.Client(scope)
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            client.validate_waf("http://evil.local")
+
+    def test_client_fuzz_http_out_of_scope(self):
+        """Client.fuzz_http must enforce target scope."""
+        scope = eggsec.Scope.allow_hosts(["allowed.local"])
+        client = eggsec.Client(scope)
+        with pytest.raises(eggsec.EnforcementError, match="not within the allowed scope"):
+            client.fuzz_http("http://evil.local")
 
 
 class TestCapValidation:
-    """Verify cap validation for active/dangerous modules.
-
-    LoadTestRunner validates total_requests > 0 and concurrency > 0,
-    raising ConfigError (mapped from EggsecError::Validation).
-    """
+    """Verify cap validation for active/dangerous modules."""
 
     def test_load_test_http_zero_requests(self):
         """load_test_http must reject zero requests."""
-        with pytest.raises(eggsec.ScanError, match="Total requests must be greater than 0"):
+        scope = eggsec.Scope.allow_hosts(["localhost"])
+        with pytest.raises(ValueError, match="total_requests must be > 0"):
             eggsec.load_test_http(
                 "http://localhost/test",
                 total_requests=0,
                 concurrency=1,
                 timeout_secs=5,
+                scope=scope,
             )
 
     def test_load_test_http_zero_concurrency(self):
         """load_test_http must reject zero concurrency."""
-        with pytest.raises(eggsec.ScanError, match="Concurrency must be greater than 0"):
+        scope = eggsec.Scope.allow_hosts(["localhost"])
+        with pytest.raises(ValueError, match="concurrency must be > 0"):
             eggsec.load_test_http(
                 "http://localhost/test",
                 total_requests=1,
                 concurrency=0,
                 timeout_secs=5,
+                scope=scope,
             )
 
     def test_load_test_http_zero_timeout(self):
         """load_test_http must reject zero timeout."""
-        with pytest.raises(eggsec.ScanError, match="Timeout must be greater than 0"):
+        scope = eggsec.Scope.allow_hosts(["localhost"])
+        with pytest.raises(ValueError, match="timeout_secs must be > 0"):
             eggsec.load_test_http(
                 "http://localhost/test",
                 total_requests=1,
                 concurrency=1,
                 timeout_secs=0,
+                scope=scope,
             )
+
+    def test_fuzz_http_zero_concurrency(self):
+        """fuzz_http must reject zero concurrency."""
+        scope = eggsec.Scope.allow_hosts(["localhost"])
+        with pytest.raises(ValueError, match="concurrency must be > 0"):
+            eggsec.fuzz_http("http://localhost/test", scope=scope, concurrency=0)
+
+    def test_fuzz_http_zero_timeout(self):
+        """fuzz_http must reject zero timeout."""
+        scope = eggsec.Scope.allow_hosts(["localhost"])
+        with pytest.raises(ValueError, match="timeout must be > 0"):
+            eggsec.fuzz_http("http://localhost/test", scope=scope, timeout=0)
 
 
 class TestFeatureAvailability:
-    """Verify feature-gated modules are unavailable by default.
-
-    These tests check that functions behind feature flags are not
-    present in the module when the feature is not compiled in.
-    """
+    """Verify feature-gated modules are unavailable by default."""
 
     def test_stress_testing_unavailable(self):
         """stress_test should not be available without stress-testing feature."""

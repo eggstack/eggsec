@@ -146,7 +146,7 @@ print(f"Servers: {tech.tech_stack.servers}")
 Check for Web Application Firewalls:
 
 ```python
-result = eggsec.detect_waf("https://example.com")
+result = eggsec.detect_waf("https://example.com", scope)
 if result.detected:
     print(f"WAF: {result.waf_name} ({result.confidence}%)")
 ```

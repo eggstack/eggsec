@@ -77,7 +77,7 @@ tls = eggsec.inspect_tls("example.com")
 print(tls.certificate.subject)
 
 # WAF detection
-waf = eggsec.detect_waf("https://example.com")
+waf = eggsec.detect_waf("https://example.com", scope)
 if waf.detected:
     print(f"WAF: {waf.waf_name}")
 
@@ -118,6 +118,9 @@ report.write_json("scan_report.json")
 | `inspect_tls()` / `async_inspect_tls()` | TLS certificate inspection |
 | `detect_technology()` / `async_detect_technology()` | Technology stack detection |
 | `detect_waf()` / `async_detect_waf()` | WAF detection |
+| `validate_waf()` / `async_validate_waf()` | WAF bypass validation (requires scope) |
+| `fuzz_http()` / `async_fuzz_http()` | HTTP fuzzing (requires scope) |
+| `load_test_http()` / `async_load_test_http()` | HTTP load testing (requires scope) |
 | `features()` | Available feature flags |
 | `has_feature()` | Check a feature flag |
 | `build_info()` | Build metadata |

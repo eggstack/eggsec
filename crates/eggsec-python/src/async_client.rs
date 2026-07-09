@@ -313,6 +313,95 @@ impl AsyncClient {
         })
     }
 
+    /// Run an async HTTP load test against a scoped target.
+    #[pyo3(signature = (url, total_requests, concurrency, timeout_secs, *, method="GET"))]
+    fn load_test_http(
+        &self,
+        url: &str,
+        total_requests: u64,
+        concurrency: usize,
+        timeout_secs: u64,
+        method: &str,
+    ) -> PyResult<crate::runtime_async::PyFuture> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        if total_requests == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "total_requests must be > 0",
+            ));
+        }
+        if concurrency == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "concurrency must be > 0",
+            ));
+        }
+        if timeout_secs == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "timeout_secs must be > 0",
+            ));
+        }
+
+        crate::loadtest::async_load_test_http(
+            url,
+            total_requests,
+            concurrency,
+            timeout_secs,
+            self.scope.clone(),
+            method,
+        )
+    }
+
+    /// Validate WAF protection on a scoped target (async).
+    #[pyo3(signature = (url, *, bypass=false, test_type=None))]
+    fn validate_waf(
+        &self,
+        url: &str,
+        bypass: bool,
+        test_type: Option<&str>,
+    ) -> PyResult<crate::runtime_async::PyFuture> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        crate::waf_validation::async_validate_waf(url, self.scope.clone(), bypass, test_type)
+    }
+
+    /// Run HTTP fuzzing against a scoped target (async).
+    #[pyo3(signature = (url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30))]
+    fn fuzz_http(
+        &self,
+        url: &str,
+        payload_type: &str,
+        method: &str,
+        param: Option<&str>,
+        concurrency: usize,
+        timeout: u64,
+    ) -> PyResult<crate::runtime_async::PyFuture> {
+        let host = extract_host_from_url(url)?;
+        self.scope.enforce_target(&host)?;
+
+        if concurrency == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "concurrency must be > 0",
+            ));
+        }
+        if timeout == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "timeout must be > 0",
+            ));
+        }
+
+        crate::waf_validation::async_fuzz_http(
+            url,
+            self.scope.clone(),
+            payload_type,
+            method,
+            param,
+            concurrency,
+            timeout,
+        )
+    }
+
     /// Get the client's scope.
     #[getter]
     fn scope(&self) -> Scope {

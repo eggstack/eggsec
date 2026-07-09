@@ -5,6 +5,16 @@ use serde::{Deserialize, Serialize};
 use crate::error::EggsecResultExt;
 use crate::runtime_async;
 use crate::runtime_sync;
+use crate::scope::Scope;
+
+fn extract_host_from_url(url: &str) -> PyResult<String> {
+    let parsed = url::Url::parse(url)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid URL: {}", e)))?;
+    parsed
+        .host_str()
+        .map(|h| h.to_string())
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // WAF Validation Types
@@ -491,8 +501,16 @@ pub fn generate_fuzz_payloads(payload_type: &str) -> PyResult<Vec<PayloadPy>> {
 /// Returns:
 ///     WafScanResultPy: Detection result with optional bypass results.
 #[pyfunction]
-#[pyo3(signature = (url, *, bypass=false, test_type=None))]
-pub fn validate_waf(url: &str, bypass: bool, test_type: Option<&str>) -> PyResult<WafScanResultPy> {
+#[pyo3(signature = (url, scope, *, bypass=false, test_type=None))]
+pub fn validate_waf(
+    url: &str,
+    scope: Scope,
+    bypass: bool,
+    test_type: Option<&str>,
+) -> PyResult<WafScanResultPy> {
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     Python::with_gil(|py| {
         let url_owned = url.to_string();
         let test_type_owned = test_type.map(|s| s.to_string());
@@ -566,12 +584,16 @@ pub fn validate_waf(url: &str, bypass: bool, test_type: Option<&str>) -> PyResul
 ///
 /// Returns a PyFuture that can be awaited in Python.
 #[pyfunction]
-#[pyo3(signature = (url, *, bypass=false, test_type=None))]
+#[pyo3(signature = (url, scope, *, bypass=false, test_type=None))]
 pub fn async_validate_waf(
     url: &str,
+    scope: Scope,
     bypass: bool,
     test_type: Option<&str>,
 ) -> PyResult<crate::runtime_async::PyFuture> {
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     let url_owned = url.to_string();
     let test_type_owned = test_type.map(|s| s.to_string());
 
@@ -654,15 +676,30 @@ pub fn async_validate_waf(
 /// Returns:
 ///     FuzzSessionPy: Complete fuzzing session results.
 #[pyfunction]
-#[pyo3(signature = (url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30))]
+#[pyo3(signature = (url, scope, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30))]
 pub fn fuzz_http(
     url: &str,
+    scope: Scope,
     payload_type: &str,
     method: &str,
     param: Option<&str>,
     concurrency: usize,
     timeout: u64,
 ) -> PyResult<FuzzSessionPy> {
+    if concurrency == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "concurrency must be > 0",
+        ));
+    }
+    if timeout == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "timeout must be > 0",
+        ));
+    }
+
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     Python::with_gil(|py| {
         let url_owned = url.to_string();
         let pt_owned = payload_type.to_string();
@@ -735,15 +772,30 @@ pub fn fuzz_http(
 ///
 /// Returns a PyFuture that can be awaited in Python.
 #[pyfunction]
-#[pyo3(signature = (url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30))]
+#[pyo3(signature = (url, scope, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30))]
 pub fn async_fuzz_http(
     url: &str,
+    scope: Scope,
     payload_type: &str,
     method: &str,
     param: Option<&str>,
     concurrency: usize,
     timeout: u64,
 ) -> PyResult<crate::runtime_async::PyFuture> {
+    if concurrency == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "concurrency must be > 0",
+        ));
+    }
+    if timeout == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "timeout must be > 0",
+        ));
+    }
+
+    let host = extract_host_from_url(url)?;
+    scope.enforce_target(&host)?;
+
     let url_owned = url.to_string();
     let pt_owned = payload_type.to_string();
     let method_owned = method.to_string();

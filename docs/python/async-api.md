@@ -21,6 +21,12 @@ client = eggsec.AsyncClient(scope, concurrency=100, timeout_ms=5000)
 
 #### `client.fingerprint_services(host, ports, *, concurrency=None, timeout_ms=None) -> PyFuture`
 
+#### `client.validate_waf(url, *, bypass=False, test_type=None) -> PyFuture`
+
+#### `client.fuzz_http(url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30) -> PyFuture`
+
+#### `client.load_test_http(url, total_requests, concurrency, timeout_secs, *, method="GET") -> PyFuture`
+
 All return a `PyFuture` that can be polled or awaited via the async context manager.
 
 ### Async Context Manager
@@ -67,6 +73,15 @@ future = eggsec.async_scan_endpoints(config, scope)
 
 # Async service fingerprinting
 future = eggsec.async_fingerprint_services("127.0.0.1", [22, 80, 443], scope)
+
+# Async WAF validation
+future = eggsec.async_validate_waf("https://example.com", scope)
+
+# Async HTTP fuzzing
+future = eggsec.async_fuzz_http("https://example.com", scope)
+
+# Async load testing
+future = eggsec.async_load_test_http("https://example.com", 100, 10, 30, scope)
 ```
 
 ## Thread-Based Async Bridge

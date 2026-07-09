@@ -85,6 +85,37 @@ eggsec.scan_ports("192.168.1.1", [80], scope)
 eggsec.scan_ports("10.0.0.1", [3306], scope)  # if port not allowed
 ```
 
+## Active API Scope Enforcement
+
+The following APIs perform **mandatory scope enforcement at the Python layer** before any engine work is dispatched. Scope is a required positional parameter for standalone functions; `Client`/`AsyncClient` methods use the client's internal scope:
+
+| API | Standalone Signature | Client Method |
+|-----|---------------------|---------------|
+| `load_test_http` | `(url, total_requests, concurrency, timeout_secs, scope, *, method="GET")` | `Client.load_test_http(url, total_requests, concurrency, timeout_secs, *, method="GET")` |
+| `validate_waf` | `(url, scope, *, bypass=False, test_type=None)` | `Client.validate_waf(url, *, bypass=False, test_type=None)` |
+| `fuzz_http` | `(url, scope, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30)` | `Client.fuzz_http(url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30)` |
+
+**Enforcement flow:**
+
+1. The Python binding extracts the host from the target URL.
+2. `Scope.is_target_allowed(host)` is called. If the host is outside scope, `EnforcementError` is raised immediately.
+3. For `load_test_http`, additional validation ensures `total_requests > 0`, `concurrency > 0`, and `timeout_secs > 0`. Violations raise `ValueError`.
+4. Only after scope enforcement passes does the call dispatch to the engine.
+
+This means even if you bypass the `Client` and use standalone functions, scope is still enforced. There is no way to perform active operations against out-of-scope targets.
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+
+# EnforcementError: host outside scope
+eggsec.validate_waf("https://evil.com", scope)
+eggsec.fuzz_http("https://evil.com", scope)
+eggsec.load_test_http("https://evil.com", 100, 10, 30, scope)
+
+# ValueError: caps violated
+eggsec.load_test_http("https://example.com", 0, 10, 30, scope)  # total_requests=0
+```
+
 ## Best Practices
 
 1. **Be specific** — allow only the hosts and ports you need. Start with `deny_all()` and add rules.

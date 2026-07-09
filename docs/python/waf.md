@@ -15,13 +15,73 @@ result = client.detect_waf("https://example.com")
 ### Convenience Function
 
 ```python
-result = eggsec.detect_waf("https://example.com")
+scope = eggsec.Scope.allow_hosts(["example.com"])
+result = eggsec.detect_waf("https://example.com", scope)
 ```
 
 ### Async
 
 ```python
-future = eggsec.async_detect_waf("https://example.com")
+scope = eggsec.Scope.allow_hosts(["example.com"])
+future = eggsec.async_detect_waf("https://example.com", scope)
+for r in future:
+    if r is not None:
+        result = r
+```
+
+## WAF Validation
+
+Active WAF validation tests bypass techniques against a target. Requires scope enforcement.
+
+### Using `Client`
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+client = eggsec.Client(scope, mode="manual")
+result = client.validate_waf("https://example.com", bypass=True)
+```
+
+### Convenience Function
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+result = eggsec.validate_waf("https://example.com", scope, bypass=True)
+```
+
+### Async
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+future = eggsec.async_validate_waf("https://example.com", scope, bypass=True)
+for r in future:
+    if r is not None:
+        result = r
+```
+
+## HTTP Fuzzing
+
+HTTP fuzzing sends crafted payloads to identify WAF behavior and weaknesses. Requires scope enforcement.
+
+### Using `Client`
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+client = eggsec.Client(scope, mode="manual")
+result = client.fuzz_http("https://example.com", payload_type="xss")
+```
+
+### Convenience Function
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+result = eggsec.fuzz_http("https://example.com", scope, payload_type="xss")
+```
+
+### Async
+
+```python
+scope = eggsec.Scope.allow_hosts(["example.com"])
+future = eggsec.async_fuzz_http("https://example.com", scope, payload_type="xss")
 for r in future:
     if r is not None:
         result = r

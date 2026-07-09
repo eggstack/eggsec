@@ -137,6 +137,9 @@ cargo test -p eggsec-python
 | `inspect_tls` / `async_inspect_tls` | Both | TLS certificate inspection |
 | `detect_technology` / `async_detect_technology` | Both | Technology stack detection |
 | `detect_waf` / `async_detect_waf` | Both | WAF detection |
+| `validate_waf` / `async_validate_waf` | Both | WAF bypass validation (requires scope) |
+| `fuzz_http` / `async_fuzz_http` | Both | HTTP fuzzing (requires scope) |
+| `load_test_http` / `async_load_test_http` | Both | HTTP load testing (requires scope) |
 | `features` | Sync | List available features |
 | `has_feature` | Sync | Check if a feature is compiled in |
 | `build_info` | Sync | Build metadata |

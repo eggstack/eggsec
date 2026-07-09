@@ -92,14 +92,14 @@ jobs:
           python -m venv .venv-test
           source .venv-test/bin/activate
           WHEEL=$(ls dist/*.whl)
-          pip install "$WHEEL[dev]" 2>/dev/null || pip install "$WHEEL"
+          pip install "$WHEEL"
           pip install pytest
           python -c "import eggsec; print(f'Installed eggsec {eggsec.__version__}')"
 
       - name: Import smoke test
         run: |
           source .venv-test/bin/activate
-          python crates/eggsec-python/python/tests/test_smoke.py
+          python crates/eggsec-python/python/tests/test_python_smoke.py
 
       - name: Localhost scanner smoke test
         run: |
@@ -178,7 +178,7 @@ jobs:
         run: |
           source .venv-test/bin/activate
           pip install pytest
-          pytest crates/eggsec-python/python/tests/ -v --timeout=30
+          pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30
 
   publish:
     name: Publish to PyPI

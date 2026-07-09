@@ -1,7 +1,7 @@
 """Smoke tests for the eggsec Python package.
 
-Run standalone: python crates/eggsec-python/python/tests/test_smoke.py
-Run with pytest: pytest crates/eggsec-python/python/tests/test_smoke.py
+Run standalone: python crates/eggsec-python/python/tests/test_python_smoke.py
+Run with pytest: pytest crates/eggsec-python/python/tests/test_python_smoke.py
 """
 
 import json

@@ -50,6 +50,62 @@ Detect web technologies from HTTP headers. See [Reconnaissance](recon.md).
 
 Detect Web Application Firewall protection. See [WAF Detection](waf.md).
 
+### `eggsec.validate_waf(url, scope, *, bypass=False, test_type=None) -> WafDetectionResult`
+
+Validate WAF bypass techniques against a target. Requires scope enforcement before dispatch. See [WAF Detection](waf.md).
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `url` | `str` | *(required)* | Target URL |
+| `scope` | `Scope` | *(required)* | Authorization scope |
+| `bypass` | `bool` | `False` | Enable bypass techniques |
+| `test_type` | `str \| None` | `None` | Specific test type to run |
+
+**Returns:** `WafDetectionResult`
+
+**Raises:** `EnforcementError`, `ScanError`
+
+### `eggsec.fuzz_http(url, scope, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30) -> FuzzResult`
+
+Perform HTTP fuzzing against a target. Requires scope enforcement before dispatch.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `url` | `str` | *(required)* | Target URL |
+| `scope` | `Scope` | *(required)* | Authorization scope |
+| `payload_type` | `str` | `"all"` | Payload category |
+| `method` | `str` | `"GET"` | HTTP method |
+| `param` | `str \| None` | `None` | Target parameter |
+| `concurrency` | `int` | `10` | Max concurrent requests |
+| `timeout` | `int` | `30` | Request timeout (seconds) |
+
+**Returns:** `FuzzResult`
+
+**Raises:** `EnforcementError`, `ScanError`
+
+### `eggsec.load_test_http(url, total_requests, concurrency, timeout_secs, scope, *, method="GET") -> LoadTestResult`
+
+Perform HTTP load testing against a target. Requires scope enforcement before dispatch.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `url` | `str` | *(required)* | Target URL |
+| `total_requests` | `int` | *(required)* | Total requests to send (must be > 0) |
+| `concurrency` | `int` | *(required)* | Concurrent workers (must be > 0) |
+| `timeout_secs` | `int` | *(required)* | Request timeout in seconds (must be > 0) |
+| `scope` | `Scope` | *(required)* | Authorization scope |
+| `method` | `str` | `"GET"` | HTTP method |
+
+**Returns:** `LoadTestResult`
+
+**Raises:** `EnforcementError`, `ScanError`, `ValueError` (if caps are violated)
+
 ## Classes
 
 ### `Client(scope, *, mode="manual", concurrency=100, timeout_ms=5000)`
@@ -108,6 +164,24 @@ Detect web technologies from HTTP response headers.
 Detect Web Application Firewall protection.
 
 **Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.validate_waf(url, *, bypass=False, test_type=None) -> WafDetectionResult`
+
+Validate WAF bypass techniques. Uses the client's internal scope for enforcement.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.fuzz_http(url, payload_type="all", *, method="GET", param=None, concurrency=10, timeout=30) -> FuzzResult`
+
+Perform HTTP fuzzing. Uses the client's internal scope for enforcement.
+
+**Raises:** `EnforcementError`, `ScanError`
+
+#### `Client.load_test_http(url, total_requests, concurrency, timeout_secs, *, method="GET") -> LoadTestResult`
+
+Perform HTTP load testing. Uses the client's internal scope for enforcement.
+
+**Raises:** `EnforcementError`, `ScanError`, `ValueError`
 
 #### `Client.scope -> Scope`
 
