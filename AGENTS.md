@@ -2,6 +2,8 @@
 
 Guidelines for AI agents working on this codebase.
 
+**Minimum Rust version: 1.80** (workspace `rust-version` in `Cargo.toml`).
+
 ## Quick Verification
 
 Before claiming code is correct, run these in order:
@@ -12,10 +14,12 @@ cargo clippy --lib -p eggsec     # lint (pre-existing warnings OK)
 cargo test --lib -p eggsec       # unit tests
 cargo test -p eggsec --test feature_matrix   # feature metadata
 cargo test -p eggsec --test enforcement_matrix
-bash scripts/check-architecture-guards.sh    # requires ripgrep
+bash scripts/check-architecture-guards.sh    # requires ripgrep (rg)
 ```
 
 Or use the Makefile (requires `cargo-nextest`): `make check-architecture-ci`
+
+Prerequisites: `cargo-nextest` (`cargo install cargo-nextest`) for Makefile targets; `ripgrep` (`rg`) for architecture guards.
 
 Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
 
