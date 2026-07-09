@@ -5,8 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-publish = false
 description = "Python bindings for the Eggsec security assessment engine"
+keywords = ["security", "penetration-testing", "scanner", "python", "bindings"]
+categories = ["development-tools", "parser-implementations", "network-programming"]
 
 [lib]
 name = "eggsec"

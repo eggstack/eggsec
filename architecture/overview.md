@@ -187,6 +187,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) + active deauth/disassoc (Phase 1 complete 2026-06-12, under `wireless-advanced`; lab-only, requires `--allow-active-wireless`) | [wireless.md](wireless.md) |
 | [`eggsec-runtime`](../crates/eggsec-runtime/) | Frontend-neutral async runtime: task lifecycle (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor`), session management, event broadcasting. Dependency-light (serde/tokio/tracing only). | [runtime.md](runtime.md) |
 | [`eggsec-ui-model`](../crates/eggsec-ui-model/) | Frontend-neutral view DTOs and `ResultRendererRegistry` (22 result kinds). Converts runtime types to serializable view models for TUI/CLI rendering. | [ui_model.md](ui_model.md) |
+| [`eggsec-python`](../crates/eggsec-python/) | Python bindings via PyO3/maturin. Host-language binding over the Rust engine providing sync/async clients, scope enforcement, scanning, recon, WAF detection, and reporting. | [docs/python/](../docs/python/) |
 
 ---
 

@@ -5,15 +5,20 @@ build-backend = "maturin"
 [project]
 name = "eggsec"
 version = "0.1.0"
-description = "Python bindings for the Eggsec security assessment engine"
+description = "Python bindings for the Eggsec security assessment engine — a Rust-powered security toolkit for scanning, recon, and reporting."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
+authors = [
+    {name = "Eggsec Contributors"},
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -22,9 +27,22 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
     "Topic :: Security",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
 ]
+keywords = ["security", "penetration-testing", "scanner", "recon", "waf", "python"]
+
+[project.urls]
+Homepage = "https://github.com/sugarwookie/eggsec"
+Documentation = "https://github.com/sugarwookie/eggsec/tree/main/docs/python"
+Repository = "https://github.com/sugarwookie/eggsec"
+Issues = "https://github.com/sugarwookie/eggsec/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "eggsec._core"
+include = [
+    "python/eggsec/py.typed",
+    "python/eggsec/*.pyi",
+]

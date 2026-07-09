@@ -112,31 +112,43 @@ eggsec agent run --scope scope.toml --portfolio portfolio.json
 
 See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation. See [docs/ENFORCEMENT_MODES.md](docs/ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract defining manual vs. automated posture semantics.
 
-## Python Bindings (Experimental)
+## Python Bindings
 
-Eggsec provides experimental Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). Python is a **host-language binding** over the Rust engine — not an internal plugin runtime.
+Eggsec provides Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). The Python package is a **host-language binding** over the Rust engine — not an internal plugin runtime.
 
-Phase B (scanner MVP) is complete: scoped synchronous TCP port scanning with stable result DTOs, JSON/dict serialization, scope enforcement, and client-based API. See [`docs/python/quickstart.md`](docs/python/quickstart.md) for a getting-started guide.
+```bash
+pip install eggsec
+```
+
+Prebuilt wheels are available for macOS (arm64, x86_64) and Linux (x86_64, aarch64). No Rust toolchain required.
 
 ```python
 import eggsec
 
-# Create a scope allowing specific targets
-scope = eggsec.Scope.allow_hosts(["example.com", "10.0.0.0/8"])
+# Define scope
+scope = eggsec.Scope.allow_hosts(["127.0.0.1"])
 
-# Perform a scoped port scan
-result = eggsec.scan_ports(
-    target="example.com",
-    ports=[22, 80, 443],
-    scope=scope,
-)
+# Port scan
+result = eggsec.scan_ports("127.0.0.1", [22, 80, 443], scope)
+for port in result.open_ports:
+    print(f"  {port.port}: {port.service}")
 
-print(result.open_ports)   # list of OpenPort
-print(result.to_json())    # JSON string
-print(result.to_dict())    # Python dict
+# Passive recon
+dns = eggsec.recon_dns("example.com")
+tls = eggsec.inspect_tls("example.com")
+
+# WAF detection
+waf = eggsec.detect_waf("https://example.com")
+
+# Reporting
+report = eggsec.Report()
+report.add_result(result)
+report.write_json("scan_report.json")
 ```
 
-See [`docs/python/sync-api.md`](docs/python/sync-api.md) for the full API reference, [`docs/python/scanner.md`](docs/python/scanner.md) for scanning patterns, and [`docs/python/scope-and-safety.md`](docs/python/scope-and-safety.md) for scope enforcement details. Development setup is in [`docs/python/installation.md`](docs/python/installation.md). The binding crate lives at `crates/eggsec-python/`.
+The default wheel includes: port scanning, endpoint discovery, service fingerprinting, passive recon (DNS/TLS/tech detection), WAF detection, findings/reporting, and scope enforcement. NSE, stress testing, packet inspection, headless browser, database, and cloud features require building from source with feature flags.
+
+See [`docs/python/`](docs/python/) for the full documentation: [Quick Start](docs/python/quickstart.md), [API Reference](docs/python/api-reference.md), [Sync API](docs/python/sync-api.md), [Async API](docs/python/async-api.md), [Scope & Safety](docs/python/scope-and-safety.md), [Packaging & Release](docs/python/packaging.md). The binding crate lives at `crates/eggsec-python/`.
 
 ## Quick Start
 

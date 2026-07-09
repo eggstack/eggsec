@@ -99,6 +99,23 @@ make check-no-default      # no-default-features workspace build
 make build                 # release build
 ```
 
+### Python bindings
+
+```bash
+# Development build (installs into active venv)
+cd crates/eggsec-python
+maturin develop
+
+# Release wheel
+maturin build --release
+
+# Tests
+pytest crates/eggsec-python/tests/
+
+# Rust-side tests
+cargo test -p eggsec-python
+```
+
 ### CI workflows
 
 GitHub Actions (`.github/workflows/`):
@@ -159,6 +176,7 @@ crates/
   eggsec-db-lab/    # database pentest domain
   eggsec-web-proxy/ # web proxy domain
   eggsec-mobile-lab/ # mobile analysis domain
+  eggsec-python/    # Python bindings (PyO3/maturin)
 ```
 
 ### Feature flags
@@ -186,6 +204,8 @@ Feature-gated modules require explicit build flags:
 Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`
 
 CLI features: `tui` (default), `daemon-client`, `headless`
+
+Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, and reporting. Type stubs included.
 
 Aggregate: `full` — all non-default features. Not conservative/production.
 
