@@ -512,6 +512,7 @@ pub fn async_stress_test(
 ) -> PyResult<runtime_async::PyFuture> {
     let stype = parse_stress_type(stress_type)?;
     let target_owned = target.to_string();
+    let target_for_result = target_owned.clone();
 
     tracing::warn!(
         target = %target,
@@ -542,7 +543,7 @@ pub fn async_stress_test(
         let stats = test.run_non_interactive().await.map_pyerr()?;
 
         Ok(StressResultPy {
-            target: target.to_string(),
+            target: target_for_result,
             stress_type: stype,
             stats: StressStatsPy::from_engine(stats),
             config_used: StressConfigSummaryPy {

@@ -54,9 +54,12 @@ maturin build --release --manylinux 2_28 --target x86_64-unknown-linux-gnu
 
 ## Default wheel feature set
 
-The published wheel compiles the engine with **no optional features
+The default wheel compiles the engine with **no optional features
 enabled**. This keeps the binary small and avoids pulling in system
 dependencies (`libssl-dev`, `libpcap-dev`, etc.) that users may not have.
+
+**Note:** PyPI publication has not yet occurred. The wheel is a default
+wheel candidate — not a published artifact.
 
 The default wheel includes:
 

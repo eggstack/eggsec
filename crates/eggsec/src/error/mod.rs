@@ -360,6 +360,13 @@ impl From<reqwest::header::InvalidHeaderValue> for EggsecError {
     }
 }
 
+#[cfg(feature = "web-proxy")]
+impl From<eggsec_web_proxy::WebProxyError> for EggsecError {
+    fn from(e: eggsec_web_proxy::WebProxyError) -> Self {
+        EggsecError::Network(format!("Web proxy error: {}", e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

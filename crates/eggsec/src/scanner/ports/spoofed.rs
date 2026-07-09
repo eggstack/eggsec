@@ -543,11 +543,12 @@ pub(crate) async fn scan_ports_spoofed(
         decoy_mode: format!("{:?}", spoof_config.decoy_mode).to_lowercase(),
     });
 
+    let total_open = results.len();
     Ok(PortScanResults {
         host: host.to_string(),
         ports_scanned: ports_count as u32,
         open_ports: results,
-        total_open_ports: results.len(),
+        total_open_ports: total_open,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats,
     })

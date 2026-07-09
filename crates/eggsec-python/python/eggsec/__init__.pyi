@@ -1,3 +1,6 @@
+__version__: str
+__version_info__: tuple[int, int, int]
+
 from .errors import (
     EggsecError as EggsecError,
     ConfigError as ConfigError,

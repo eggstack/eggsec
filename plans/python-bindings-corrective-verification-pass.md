@@ -1,5 +1,7 @@
 # Python Bindings Corrective Verification Pass
 
+**Status: Completed**
+
 ## Objective
 
 Stabilize the Python binding work after the rapid Phase A-F implementation sequence. This pass should not add new user-facing tools. It should verify that the new `eggsec-python` crate builds, imports, packages, enforces scope, gates optional features correctly, and behaves predictably under sync and async use.

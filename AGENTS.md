@@ -207,6 +207,24 @@ CLI features: `tui` (default), `daemon-client`, `headless`
 
 Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, and reporting. Type stubs included.
 
+| Python Feature | Engine Feature | Notes |
+|----------------|----------------|-------|
+| `websocket` | `websocket` | WebSocket security testing |
+| `git-secrets` | `git-secrets` | Git secret detection |
+| `sbom` | `sbom` | SBOM generation |
+| `db-pentest` | `db-pentest` | Database pentest (requires `eggsec-db-lab`) |
+| `db-pentest-mongodb` | `db-pentest-mongodb` | MongoDB pentest |
+| `db-pentest-redis` | `db-pentest-redis` | Redis pentest |
+| `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `mobile` | `mobile` | APK/IPA static analysis |
+| `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
+| `packet-inspection` | `packet-inspection` | Packet capture |
+| `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
+| `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
+| `container` | `container` | K8s/Docker scanning |
+| `daemon-client` | — | Daemon session access |
+| `full-no-system` | — | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
+
 Aggregate: `full` — all non-default features. Not conservative/production.
 
 ## Key Patterns
@@ -290,6 +308,7 @@ Each module has specialized guidance in `AGENTS.override.md`. When working in a 
 | `evasion/` | `crates/eggsec/src/evasion/AGENTS.override.md` |
 | `c2/` | `crates/eggsec/src/c2/AGENTS.override.md` |
 | `postex/` | `crates/eggsec/src/postex/AGENTS.override.md` |
+| `eggsec-python/` | `crates/eggsec-python/AGENTS.override.md` |
 
 ## Architecture Docs
 
@@ -309,7 +328,7 @@ Canonical references live in `docs/` and `architecture/` directories. Key entry 
 
 Load relevant skills via the `skill` tool when working in specific domains. Skills are in `.opencode/skills/` (also mirrored in `.skills/`, `.claude/skills/`, `.agents/skills/` for other agent platforms):
 
-`eggsec-agent`, `eggsec-ai`, `eggsec-architecture-review`, `eggsec-auth`, `eggsec-browser`, `eggsec-cli`, `eggsec-config`, `eggsec-distributed`, `eggsec-evasion`, `eggsec-fuzzer`, `eggsec-hunt`, `eggsec-loadtest`, `eggsec-nse`, `eggsec-output`, `eggsec-packet`, `eggsec-pipeline`, `eggsec-proxy`, `eggsec-recon`, `eggsec-scanner`, `eggsec-security`, `eggsec-stress`, `eggsec-tool`, `eggsec-tui`, `eggsec-waf`
+`eggsec-agent`, `eggsec-ai`, `eggsec-architecture-review`, `eggsec-auth`, `eggsec-browser`, `eggsec-cli`, `eggsec-config`, `eggsec-distributed`, `eggsec-evasion`, `eggsec-fuzzer`, `eggsec-hunt`, `eggsec-loadtest`, `eggsec-nse`, `eggsec-output`, `eggsec-packet`, `eggsec-pipeline`, `eggsec-proxy`, `eggsec-python`, `eggsec-recon`, `eggsec-scanner`, `eggsec-security`, `eggsec-stress`, `eggsec-tool`, `eggsec-tui`, `eggsec-waf`
 
 ## Planning Notes
 

@@ -114,13 +114,19 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ## Python Bindings
 
-Eggsec provides Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). The Python package is a **host-language binding** over the Rust engine — not an internal plugin runtime.
+Eggsec provides experimental Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). The Python package is a **host-language binding** over the Rust engine — not an internal plugin runtime. **Status: experimental / alpha — not yet published to PyPI.** Windows is unsupported. See `crates/eggsec-python/README.md` for details.
 
 ```bash
-pip install eggsec
+# Development build (requires Rust toolchain)
+cd crates/eggsec-python
+maturin develop
+
+# From source wheel
+maturin build --release
+pip install target/wheels/eggsec-*.whl
 ```
 
-Prebuilt wheels are available for macOS (arm64, x86_64) and Linux (x86_64, aarch64). No Rust toolchain required.
+Prebuilt wheels are **not yet available on PyPI**. Build from source using maturin on macOS (arm64, x86_64) or Linux (x86_64, aarch64).
 
 ```python
 import eggsec
@@ -146,7 +152,7 @@ report.add_result(result)
 report.write_json("scan_report.json")
 ```
 
-The default wheel includes: port scanning, endpoint discovery, service fingerprinting, passive recon (DNS/TLS/tech detection), WAF detection, findings/reporting, and scope enforcement. NSE, stress testing, packet inspection, headless browser, database, and cloud features require building from source with feature flags.
+The default wheel candidate includes: port scanning, endpoint discovery, service fingerprinting, passive recon (DNS/TLS/tech detection), WAF detection, findings/reporting, and scope enforcement. NSE, stress testing, packet inspection, headless browser, database, and cloud features are feature-gated experimental modules requiring builds from source with feature flags.
 
 See [`docs/python/`](docs/python/) for the full documentation: [Quick Start](docs/python/quickstart.md), [API Reference](docs/python/api-reference.md), [Sync API](docs/python/sync-api.md), [Async API](docs/python/async-api.md), [Scope & Safety](docs/python/scope-and-safety.md), [Packaging & Release](docs/python/packaging.md). The binding crate lives at `crates/eggsec-python/`.
 

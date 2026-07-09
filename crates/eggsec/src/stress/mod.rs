@@ -46,7 +46,7 @@ impl std::fmt::Display for StressType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct StressConfig {
     pub target: String,
     pub port: u16,

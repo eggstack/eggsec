@@ -62,13 +62,17 @@ jobs:
           path: dist/*.whl
 
   test:
-    name: Test wheel (${{ matrix.os }})
+    name: Test wheel (${{ matrix.target }})
     needs: build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -80,15 +84,14 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: wheel-*
+          name: wheel-${{ matrix.target }}
           path: dist
-          merge-multiple: true
 
       - name: Install wheel in clean venv
         run: |
           python -m venv .venv-test
           source .venv-test/bin/activate
-          WHEEL=$(ls dist/*.whl | head -1)
+          WHEEL=$(ls dist/*.whl)
           pip install "$WHEEL[dev]" 2>/dev/null || pip install "$WHEEL"
           pip install pytest
           python -c "import eggsec; print(f'Installed eggsec {eggsec.__version__}')"
@@ -175,7 +178,7 @@ jobs:
         run: |
           source .venv-test/bin/activate
           pip install pytest
-          pytest crates/eggsec-python/python/tests/ -v --timeout=30 || true
+          pytest crates/eggsec-python/python/tests/ -v --timeout=30
 
   publish:
     name: Publish to PyPI

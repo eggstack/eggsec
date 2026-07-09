@@ -4,24 +4,31 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Phase E** — Packaging, PyPI, type stubs, and documentation hardening.
+**Experimental / Alpha** — Pre-release. Not yet published to PyPI. See `RELEASE_CHECKLIST.md` for publication gates.
 
 ## Installation
 
 ```bash
-pip install eggsec
+# Development build (requires Rust toolchain)
+cd crates/eggsec-python
+maturin develop
+
+# From source wheel
+maturin build --release
+pip install target/wheels/eggsec-*.whl
 ```
 
 ### Supported Platforms
 
-| Platform | Architecture |
-|----------|-------------|
-| macOS | arm64 (Apple Silicon) |
-| macOS | x86_64 |
-| Linux | x86_64 (manylinux) |
-| Linux | aarch64 (manylinux) |
+| Platform | Architecture | Status |
+|----------|-------------|--------|
+| macOS | arm64 (Apple Silicon) | Supported (from source) |
+| macOS | x86_64 | Supported (from source) |
+| Linux | x86_64 (manylinux) | Supported (from source) |
+| Linux | aarch64 (manylinux) | Supported (from source) |
+| Windows | x86_64 | Not currently built |
 
-Prebuilt wheels are available — no Rust toolchain required.
+Prebuilt wheels are **not yet available on PyPI**. Build from source using maturin.
 
 ### Included Features (default wheel)
 

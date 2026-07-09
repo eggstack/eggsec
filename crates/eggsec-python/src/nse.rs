@@ -378,8 +378,8 @@ async fn run_nse_inner(
     let target = config.target.clone();
     let script = config.script.clone();
 
-    // Build the execution profile (ManualPermissive for CLI usage)
-    let profile = eggsec::nse::ResolvedNseExecutionProfile::manual_permissive(Some(&target));
+    // Build the execution profile (AgentSafe for automated Python surface)
+    let profile = eggsec::nse::ResolvedNseExecutionProfile::agent_safe(&target, &[]);
 
     let report_profile = profile.clone();
     let execution_profile = profile.clone();

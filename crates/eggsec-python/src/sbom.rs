@@ -300,11 +300,10 @@ pub fn generate_sbom(project_path: &str, ecosystem: &str, format: &str) -> PyRes
                 "npm" => gen.generate_from_npm(&project_path_owned, engine_format),
                 "pip" => gen.generate_from_requirements(&project_path_owned, engine_format),
                 other => {
-                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    return Err(eggsec::error::EggsecError::Config(format!(
                         "Unsupported ecosystem: '{}'. Must be one of: cargo, npm, pip",
                         other
-                    ))
-                    .into())
+                    )))
                 }
             })
         })?;

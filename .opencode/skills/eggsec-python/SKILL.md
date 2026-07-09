@@ -69,6 +69,42 @@ maturin develop --features <feature>
 
 Requires Python >= 3.9 and `maturin>=1.5`.
 
+## Feature Flags
+
+The Python crate mirrors engine features via Cargo features:
+
+```bash
+# Default (no extra features)
+maturin develop
+
+# With specific features
+maturin develop --features db-pentest
+maturin develop --features web-proxy
+maturin develop --features nse
+maturin develop --features mobile
+
+# All features without system dependencies
+maturin develop --features full-no-system
+```
+
+| Python Feature | Engine Feature | System Dep | Notes |
+|----------------|----------------|------------|-------|
+| `websocket` | `websocket` | none | WebSocket security testing |
+| `git-secrets` | `git-secrets` | none | Git secret detection |
+| `sbom` | `sbom` | none | SBOM generation |
+| `db-pentest` | `db-pentest` | none (drivers) | Database pentest (requires `eggsec-db-lab`) |
+| `db-pentest-mongodb` | `db-pentest-mongodb` | none | MongoDB pentest |
+| `db-pentest-redis` | `db-pentest-redis` | none | Redis pentest |
+| `web-proxy` | `web-proxy` | none | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `mobile` | `mobile` | none | APK/IPA static analysis |
+| `mobile-dynamic` | `mobile-dynamic` | ADB + device | Android dynamic testing |
+| `packet-inspection` | `packet-inspection` | `libpcap-dev` | Packet capture |
+| `stress-testing` | `stress-testing` | none | Stress testing (raw sockets) |
+| `nse` | `nse` | `libssl-dev` | Nmap NSE scripts (requires `eggsec-nse`) |
+| `container` | `container` | none | K8s/Docker scanning |
+| `daemon-client` | — | none | Daemon session access |
+| `full-no-system` | — | none | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` |
+
 ## Test Commands
 
 ```bash
@@ -238,3 +274,10 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 3. Re-export in `python/eggsec/__init__.py`
 4. Add type stub
 5. Add tests
+
+## Known Limitations
+
+- **Async bridge**: Hand-rolled `PyFuture` wrapper, not `pyo3-async-runtimes`. The `AsyncClient` spawns a tokio task and polls from Python's event loop via `PyFuture`. This works but lacks integration with Python's native `asyncio` cancellation propagation.
+- **GIL release**: GIL is released during network I/O (blocking calls use `py.allow_threads()`), but CPU-bound Rust work holds the GIL.
+- **Feature parity**: Not all engine features are exposed to Python. Feature-gated modules (e.g., `fuzzer`, `loadtest`, `stress`) require explicit `--features` at build time.
+- **Type stubs**: Generated manually, not auto-generated from Rust source. Keep `python/eggsec/*.pyi` in sync with `src/` changes.
