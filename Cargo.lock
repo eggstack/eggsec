@@ -2014,8 +2014,15 @@ name = "eggsec-python"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "eggsec",
  "eggsec-core",
+ "eggsec-daemon",
+ "eggsec-db-lab",
+ "eggsec-mobile-lab",
+ "eggsec-nse",
+ "eggsec-runtime",
+ "eggsec-web-proxy",
  "pyo3",
  "serde",
  "serde_json",
