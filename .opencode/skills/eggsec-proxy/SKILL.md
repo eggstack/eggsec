@@ -35,7 +35,7 @@ The intercepting proxy domain code lives in `crates/eggsec-web-proxy/src/interce
 - `FlowBuffer` — Capacity-capped flow buffer (`crates/eggsec-web-proxy/src/intercept/types.rs`)
 - `ProxyMetrics` — Runtime performance telemetry snapshot (`crates/eggsec-web-proxy/src/intercept/types.rs`)
 - `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`crates/eggsec-web-proxy/src/mcp.rs`)
-- `ProxyTool` — MCP tool handler implementation (`tool/implementations/proxy.rs`)
+- `ProxyTool` — MCP tool handler implementation (`crates/eggsec/src/tool/implementations/proxy.rs`)
 - Real WebSocket (`tokio-tungstenite`) and HTTP/2 (`h2`) protocol backends
 
 ### MCP Proxy Tools (12 tools via `web-proxy-mcp` feature)
@@ -81,17 +81,17 @@ cargo test --lib -p eggsec --features web-proxy-mcp
 ```
 
 ### Writing Tests
-Follow existing test patterns in `proxy/` modules, testing interception and safe logging.
+Follow existing test patterns in `crates/eggsec-web-proxy/src/intercept/` modules, testing interception and safe logging.
 
 ## Common Tasks
 
 ### Adding a New Proxy Feature
-1. Implement logic in `proxy/` modules
+1. Implement logic in `crates/eggsec-web-proxy/src/intercept/` (domain crate)
 2. Use `to_log_key()` for logging sensitive data
 3. Add tests for new proxy feature
 
 ### Adding Dynamic SSL Certificate Support
-1. Update `proxy/intercept/` with certificate generation logic
+1. Update `crates/eggsec-web-proxy/src/intercept/` with certificate generation logic
 2. Test certificate handling
 
 ### Working with Phase 4

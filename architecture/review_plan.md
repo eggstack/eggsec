@@ -7,6 +7,8 @@
 **Completed:** 2026-06-02
 **Purpose:** Systematic review of all architecture documents, verification against codebase, bug/improvement discovery, and stale item pruning.
 
+> **Note:** The review output files (`plans/review_*.md`) referenced below have been cleaned up and are no longer retained. The consolidated findings were captured in `plans/review_consolidated.md` (also cleaned up). Key findings are summarized in the Key Findings Summary section below.
+
 ---
 
 ## Scope
@@ -179,7 +181,7 @@ Each review file MUST use this structure:
 
 8 subagents launch in parallel. Each agent reads its assigned architecture doc(s), reads corresponding source module(s), verifies claims against code, interrogates code for bugs and improvements, and writes `plans/review_<module>.md` files.
 
-**Output:** 45 review files in `plans/` directory.
+**Output:** 45 review files in `plans/` directory (completed; files no longer retained).
 
 ---
 
@@ -193,14 +195,14 @@ After all reviews complete, a consolidation agent will:
 4. **Cross-reference consistency**: Ensure docs don't contradict each other
 5. **Identify deprecated content**: Items marked as deprecated/stub/TODO that are no longer accurate
 
-**Output:** `plans/stale_items.md` with findings and recommended actions.
+**Output:** `plans/stale_items.md` with findings and recommended actions (completed; file no longer retained).
 
 ---
 
 ## Phase 3: Consolidation
 
-1. Verify all 45 review files exist: `ls plans/review_*.md | wc -l`
-2. Extract high-priority items to `plans/review_consolidated.md`
+1. Verify all 45 review files exist: `ls plans/review_*.md | wc -l` (completed)
+2. Extract high-priority items to `plans/review_consolidated.md` (completed; file no longer retained)
 3. Update this document with final status
 4. Commit to main
 
@@ -240,9 +242,9 @@ Before committing, verify and clean up:
 
 ## Execution Summary
 
-- [x] Phase 1: 8 subagents complete document reviews (43 docs → 43 review files)
-- [x] Phase 2: Stale item detection and reporting → `plans/stale_items.md`
-- [x] Phase 3: Consolidation and commit to main → `plans/review_consolidated.md`
+- [x] Phase 1: 8 subagents complete document reviews (43 docs → 43 review files; files no longer retained)
+- [x] Phase 2: Stale item detection and reporting → `plans/stale_items.md` (file no longer retained)
+- [x] Phase 3: Consolidation and commit to main → `plans/review_consolidated.md` (file no longer retained)
 
 ---
 

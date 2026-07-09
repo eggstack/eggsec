@@ -4,7 +4,7 @@ Eggsec provides standalone-complete passive WiFi network reconnaissance and basi
 
 Passive reconnaissance is the default. Active deauth/disassoc is available under `wireless-advanced` (CLI `deauth` and TUI active mode). Handshake capture remains future work.
 
-**(Phase 0 — complete 2026-06-11; Phase 1 — complete 2026-06-12)**: Standalone-complete passive WiFi recon + rogue heuristic + reporting bridge + TUI tab + policy integration. Active deauth/disassoc is available under `wireless-advanced` in both CLI and TUI, with dry-run default and live confirmation. See `plans/wireless-active-attacks-loadout-design-plan.md` for the active loadout details.
+**(Phase 0 — complete 2026-06-11; Phase 1 — complete 2026-06-12)**: Standalone-complete passive WiFi recon + rogue heuristic + reporting bridge + TUI tab + policy integration. Active deauth/disassoc is available under `wireless-advanced` in both CLI and TUI, with dry-run default and live confirmation. See the active loadout details (completed).
 
 ## Feature Gate
 
@@ -229,12 +229,12 @@ sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 
 ## Not In Scope (This Phase)
 
-- Active attacks (deauth, disassociation, Evil Twin AP creation, handshake capture, etc.) — Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" below); Phase 2+ handshake capture and Phase 3+ flood/rogue-sim remain future work. See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 deauth gated behind `wireless-advanced` feature flag = ["wireless"]; heavily policy-gated with `--allow-active-wireless`, packet budgets, and `Intrusive` risk tier; **MCP/agent tool exposure remains intentionally absent** for the entire wireless surface, including advanced — standalone defense-lab design decision, not registered as `SecurityTool`).
+- Active attacks (deauth, disassociation, Evil Twin AP creation, handshake capture, etc.) — Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" below); Phase 2+ handshake capture and Phase 3+ flood/rogue-sim remain future work. Phase 1 design (completed): deauth gated behind `wireless-advanced` feature flag = ["wireless"]; heavily policy-gated with `--allow-active-wireless`, packet budgets, and `Intrusive` risk tier; **MCP/agent tool exposure remains intentionally absent** for the entire wireless surface, including advanced — standalone defense-lab design decision, not registered as `SecurityTool`.
 - Handshake capture / PMKID / WPS PIN attacks / KRACK-style testing
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
-- Full pipeline integration (wireless is a standalone-complete defense-lab surface; MCP and agentic tool exposure is intentionally absent per design decision — wireless is not registered as a SecurityTool and does not appear in tools/list or agent dispatch). Optional reporting bridge only. See architecture/wireless.md (MCP / Agentic section) and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note).
+- Full pipeline integration (wireless is a standalone-complete defense-lab surface; MCP and agentic tool exposure is intentionally absent per design decision — wireless is not registered as a SecurityTool and does not appear in tools/list or agent dispatch). Optional reporting bridge only. See architecture/wireless.md (MCP / Agentic section).
 
 ## Active Attacks (Phase 1)
 
@@ -306,7 +306,7 @@ Produces `wireless-active-deauth` findings with severity High, evidence (frames 
 - **Budget enforcement**: Hard caps on max frames (1000) and rate (100 fps)
 - **Dry-run safe**: `--dry-run` produces valid JSON without any transmission
 
-See `docs/SAFETY.md` and `plans/wireless-active-attacks-loadout-design-plan.md`.
+See `docs/SAFETY.md`.
 
 ### Reporting Bridge
 
@@ -341,12 +341,11 @@ The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status); `plans/wireless-active-attacks-loadout-design-plan.md` (active attacks loadout design; Phase 0 = passive standalone completion; Phase 1+ gated `wireless-advanced`)
-- Plan (CLI integration): `plans/wireless-active-loadout-cli-integration-plan.md`
+- Plans: All wireless implementation plans completed — standalone completion, active attacks loadout design, TUI/MCP/agentic integration, CLI integration, and closeout checklist.
 
 ## Active Attacks (Future, Phase 2+)
 
-Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" above). See `plans/wireless-active-attacks-loadout-design-plan.md` for the full roadmap:
+Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" above). Full roadmap:
 
 - **Phase 2**: Handshake capture (PMKID, WPA handshake), WPS PIN enumeration
 - **Phase 3+**: Flood attacks, rogue AP simulation, KRACK-style testing

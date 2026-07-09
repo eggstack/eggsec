@@ -30,7 +30,7 @@ src/commands/      # Handler dispatch and implementations
 - `cluster.rs` - `ClusterArgs`, `ClusterCommand`
 - `storage.rs` - `StorageArgs`, `StorageCommand`
 - `vuln.rs` - `VulnArgs`, `VulnCommand`
-- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`
+- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`, `PolicyExplainArgs`, `ScopeExplainArgs`
 - `agent.rs` - `AgentArgs`, agent management commands
 - `ai_analyze.rs` - `AiAnalyzeArgs`, AI analysis commands
 - `browser.rs` - `BrowserArgs`, headless browser commands
@@ -38,8 +38,16 @@ src/commands/      # Handler dispatch and implementations
 - `hunt.rs` - `HuntArgs`, vulnerability hunting commands
 - `packet.rs` - `PacketArgs`, packet inspection commands
 - `plan.rs` - `PlanArgs`, execution planning commands
+- `preflight.rs` - `PreflightArgs`, advisory policy preflight
 - `timeout.rs` - `TimeoutArgs`, timeout configuration commands
 - `wireless.rs` - `WirelessArgs`, wireless scanning commands
+- `db_pentest.rs` - `DbCommand`, database pentesting subcommands
+- `mobile.rs` - `MobileArgs`, mobile app analysis
+- `evasion.rs` - `EvasionArgs`, evasion detection
+- `postex.rs` - `PostexArgs`, post-exploitation simulation
+- `c2.rs` - `C2Args`, C2 simulation
+- `web_proxy.rs` - `ProxyInterceptArgs`, web proxy interception
+- `explain.rs` - `PolicyExplainArgs`, `ScopeExplainArgs`, policy/scope explanation
 
 ### Key Types
 
@@ -54,14 +62,71 @@ pub struct Cli {
 }
 
 pub enum Commands {
+    // --- Scan operations ---
     ScanPorts(PortScanArgs),
     ScanEndpoints(EndpointScanArgs),
     Fingerprint(FingerprintArgs),
     Scan(ScanArgs),
     Resume(ResumeArgs),
+    // --- Hunt operations ---
+    Hunt(HuntArgs),                          // feature-gated: advanced-hunting
+    // --- Assessment operations ---
     Fuzz(FuzzArgs),
     Waf(WafArgs),
-    // ... 52 variants (33 base, 52 total with all features)
+    WafStress(WafStressArgs),
+    Graphql(GraphQlArgs),
+    OAuth(OAuthArgs),
+    AuthTest(AuthTestArgs),
+    // --- Recon operations ---
+    Recon(ReconArgs),
+    // --- Planning & CI ---
+    Plan(PlanArgs),
+    Preflight(PreflightArgs),
+    Ci(CiArgs),
+    Config(ConfigArgs),
+    Doctor,
+    PolicyExplain(PolicyExplainArgs),
+    ScopeExplain(ScopeExplainArgs),
+    Sbom(SbomArgs),                          // feature-gated: sbom
+    // --- Load testing ---
+    Load(LoadArgs),
+    // --- Tool operations ---
+    Packet(PacketArgs),                      // feature-gated: packet-inspection
+    Nse(NseArgs),                            // feature-gated: nse
+    Report(ReportArgs),
+    Vuln(VulnArgs),
+    Storage(StorageArgs),
+    // --- Web proxy ---
+    ProxyIntercept(ProxyInterceptArgs),      // feature-gated: web-proxy
+    // --- Stress testing ---
+    Stress(StressArgs),                      // feature-gated: stress-testing
+    Proxy(ProxyArgs),                        // feature-gated: stress-testing
+    Icmp(IcmpArgs),                          // feature-gated: stress-testing
+    Traceroute(TracerouteArgs),              // feature-gated: stress-testing
+    // --- Infrastructure ---
+    Cluster(ClusterArgs),
+    Notify(NotifyArgs),
+    Remote(RemoteArgs),
+    Exec(ExecArgs),
+    // --- API/Agent/AI ---
+    Serve(ServeArgs),                        // feature-gated: rest-api
+    McpServe(McpServeArgs),                  // feature-gated: rest-api
+    CodeggMcp(CodeggMcpArgs),                // feature-gated: rest-api
+    Agent(AgentArgs),                        // feature-gated: rest-api
+    AiAnalyze(AiAnalyzeArgs),                // feature-gated: ai-integration
+    // --- Domain-specific ---
+    Wireless(WirelessArgs),                  // feature-gated: wireless
+    Browser(BrowserArgs),                    // feature-gated: headless-browser
+    Mobile(MobileArgs),                      // feature-gated: mobile
+    Evasion(EvasionArgs),                    // feature-gated: evasion
+    Postex(PostexArgs),                      // feature-gated: postex
+    C2(C2Args),                              // feature-gated: c2
+    Db(DbCommand),                           // feature-gated: db-pentest
+    Grpc(GrpcServerArgs),                    // feature-gated: grpc-api
+    // --- Daemon client ---
+    Daemon(DaemonArgs),                      // feature-gated: daemon-client
+    Session(SessionArgs),                    // feature-gated: daemon-client
+    Task(TaskArgs),                          // feature-gated: daemon-client
 }
 ```
 
@@ -144,15 +209,15 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `handle_ci` | `handlers/ci.rs` | - | CI/CD checks |
 | `handle_report` | `handlers/report.rs` | - | Report generation |
 
-**Daemon commands** (feature-gated: `daemon-client`, dispatched in `main.rs` before general handler):
+**Daemon commands** (feature-gated: `daemon-client`, dispatched in `crates/eggsec-cli/src/daemon_cli.rs` before general handler):
 
 | Command | Source | Purpose |
 |---------|--------|---------|
-| `daemon start/status/stop` | `daemon_cli.rs` | Daemon lifecycle management |
-| `daemon history` | `daemon_cli.rs` | List persisted sessions |
-| `daemon show <id>` | `daemon_cli.rs` | Show persisted snapshot |
-| `session list/create/snapshot` | `daemon_cli.rs` | Session introspection |
-| `task submit/cancel/watch` | `daemon_cli.rs` | Task lifecycle management |
+| `daemon start/status/stop` | `crates/eggsec-cli/src/daemon_cli.rs` | Daemon lifecycle management |
+| `daemon history` | `crates/eggsec-cli/src/daemon_cli.rs` | List persisted sessions |
+| `daemon show <id>` | `crates/eggsec-cli/src/daemon_cli.rs` | Show persisted snapshot |
+| `session list/create/snapshot` | `crates/eggsec-cli/src/daemon_cli.rs` | Session introspection |
+| `task submit/cancel/watch` | `crates/eggsec-cli/src/daemon_cli.rs` | Task lifecycle management |
 
 Daemon commands connect via Unix socket using `DaemonClient` from `eggsec-daemon`. The daemon also supports an optional `http-api` loopback HTTP transport (feature-gated). Authorization uses `CommandPermission` enum — `DeclareClient` must succeed before session-scoped commands are allowed.
 

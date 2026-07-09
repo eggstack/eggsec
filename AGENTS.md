@@ -19,6 +19,8 @@ bash scripts/check-architecture-guards.sh    # requires ripgrep (rg)
 
 Or use the Makefile (requires `cargo-nextest`): `make check-architecture-ci`
 
+**Note:** `make check-architecture-ci` runs additional checks beyond the above subset (metadata consistency, command registry, tool registration, enforced dispatch regression, report envelope). Use it for full CI parity.
+
 Prerequisites: `cargo-nextest` (`cargo install cargo-nextest`) for Makefile targets; `ripgrep` (`rg`) for architecture guards.
 
 Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
@@ -176,6 +178,8 @@ Feature-gated modules require explicit build flags:
 | `c2` | none | C2 simulation (depends on postex+evasion) |
 | `stress-testing` | none | Raw sockets, IP spoofing |
 | `packet-inspection` | `libpcap-dev` | Packet capture |
+| `nse-ssh2` | `ssh2` | NSE with SSH2/libssh2 support |
+| `nse-sandbox` | (needs nse) | Sandboxed NSE execution |
 | `http-api` | none | Daemon HTTP transport (axum) |
 
 Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`
@@ -282,7 +286,7 @@ Canonical references live in `docs/` and `architecture/` directories. Key entry 
 
 ## Skills
 
-Load relevant skills via the `skill` tool when working in specific domains. Skills are in `.opencode/skills/`:
+Load relevant skills via the `skill` tool when working in specific domains. Skills are in `.opencode/skills/` (also mirrored in `.skills/`, `.claude/skills/`, `.agents/skills/` for other agent platforms):
 
 `eggsec-agent`, `eggsec-ai`, `eggsec-architecture-review`, `eggsec-auth`, `eggsec-browser`, `eggsec-cli`, `eggsec-config`, `eggsec-distributed`, `eggsec-evasion`, `eggsec-fuzzer`, `eggsec-hunt`, `eggsec-loadtest`, `eggsec-nse`, `eggsec-output`, `eggsec-packet`, `eggsec-pipeline`, `eggsec-proxy`, `eggsec-recon`, `eggsec-scanner`, `eggsec-security`, `eggsec-stress`, `eggsec-tool`, `eggsec-tui`, `eggsec-waf`
 

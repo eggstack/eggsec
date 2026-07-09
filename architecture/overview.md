@@ -185,7 +185,6 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
 | [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) + active deauth/disassoc (Phase 1 complete 2026-06-12, under `wireless-advanced`; lab-only, requires `--allow-active-wireless`) | [wireless.md](wireless.md) |
-| `mobile/` | Thin adapter for mobile domain crate. Re-exports `eggsec-mobile-lab` types and provides CLI bridging. Domain crate owns static APK/IPA analysis and dynamic Android testing. | [mobile.md](mobile.md) |
 
 ---
 

@@ -84,11 +84,7 @@ This skill directory contains specialized guides for the Eggsec autonomous agent
 
 ## Using These Skills
 
-Load individual skill files as needed based on the task:
-```bash
-# Example: Load the SQL injection skill
-# (Skills are loaded automatically when their patterns are detected)
-```
+Load individual skill files as needed based on the task. The security testing domain files (SQL injection, XSS, etc.) serve as a knowledge base for common vulnerability patterns and can be referenced when implementing or testing related features.
 
 ## Resources
 - `crates/eggsec/src/agent/AGENTS.override.md` - Agent module guidance
