@@ -451,6 +451,11 @@ where
 }
 
 pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanResults> {
+    if config.concurrency == 0 {
+        return Err(crate::error::EggsecError::Runtime(
+            "concurrency must be greater than zero".to_string(),
+        ));
+    }
     if config.spoof_config.enabled && config.spoof_config.use_raw_sockets {
         return spoofed::scan_ports_spoofed(
             host,

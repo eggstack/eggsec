@@ -1,3 +1,4 @@
+use crate::error::EggsecError;
 use crate::error::Result;
 use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::strip_controls;
@@ -247,6 +248,11 @@ pub async fn fingerprint_services(
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
     max_results: Option<usize>,
 ) -> Result<FingerprintResults> {
+    if concurrency == 0 {
+        return Err(EggsecError::Runtime(
+            "concurrency must be greater than zero".to_string(),
+        ));
+    }
     let resolved_ip = resolve_host(host)?;
     let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));

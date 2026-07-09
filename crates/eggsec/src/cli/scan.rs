@@ -87,6 +87,7 @@ pub struct PortScanArgs {
         short = 'c',
         long,
         default_value = "100",
+        value_parser = parse_positive_usize,
         help = "Concurrent connections"
     )]
     pub concurrency: usize,
@@ -182,7 +183,13 @@ pub struct EndpointScanArgs {
     pub url: String,
     #[arg(short = 'w', long, help = "Custom wordlist file path")]
     pub wordlist: Option<String>,
-    #[arg(short = 'c', long, default_value = "20", help = "Concurrent requests")]
+    #[arg(
+        short = 'c',
+        long,
+        default_value = "20",
+        value_parser = parse_positive_usize,
+        help = "Concurrent requests"
+    )]
     pub concurrency: usize,
     #[arg(long, default_value_t = ENDPOINT_SCAN_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
@@ -257,9 +264,21 @@ pub struct FingerprintArgs {
         short = 'c',
         long,
         default_value = "20",
+        value_parser = parse_positive_usize,
         help = "Concurrent connections"
     )]
     pub concurrency: usize,
+}
+
+fn parse_positive_usize(s: &str) -> Result<usize, String> {
+    let n: usize = s
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    if n == 0 {
+        Err("must be greater than 0".to_string())
+    } else {
+        Ok(n)
+    }
 }
 
 #[derive(clap::Args)]

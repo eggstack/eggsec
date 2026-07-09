@@ -1,3 +1,4 @@
+use crate::error::EggsecError;
 use crate::error::Result;
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};
 use crate::utils::preserve_all;
@@ -874,6 +875,11 @@ mod tests {
 }
 
 pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanResults> {
+    if config.concurrency == 0 {
+        return Err(EggsecError::Runtime(
+            "concurrency must be greater than zero".to_string(),
+        ));
+    }
     if !config.verify_tls {
         tracing::warn!(
             "TLS certificate verification disabled. This is insecure and should only \
