@@ -396,6 +396,7 @@ pub struct EndpointScanResults {
     pub base_url: String,
     pub endpoints_scanned: usize,
     pub endpoints_found: usize,
+    pub total_endpoints_matched: usize,
     pub interesting_findings: usize,
     pub duration_ms: u64,
     pub results: Vec<EndpointResult>,
@@ -803,6 +804,7 @@ mod tests {
             base_url: "https://example.com".to_string(),
             endpoints_scanned: 100,
             endpoints_found: 2,
+            total_endpoints_matched: 2,
             interesting_findings: 1,
             duration_ms: 5000,
             results: vec![
@@ -840,6 +842,7 @@ mod tests {
             base_url: "https://example.com".to_string(),
             endpoints_scanned: 100,
             endpoints_found: 0,
+            total_endpoints_matched: 0,
             interesting_findings: 0,
             duration_ms: 5000,
             results: vec![],
@@ -890,6 +893,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
     let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(AtomicU64::new(0));
     let results_count = Arc::new(AtomicU64::new(0));
+    let total_matches_count = Arc::new(AtomicU64::new(0));
     let total_endpoints = config.endpoints.len() as u64;
 
     let progress = if config.tui_mode {
@@ -923,6 +927,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         let scanned_count = scanned_count.clone();
         let progress_tx = config.progress_tx.clone();
         let results_count = results_count.clone();
+        let total_matches_count = total_matches_count.clone();
         let max_results = config.max_results;
 
         let handle = tokio::spawn(async move {
@@ -965,6 +970,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                             }
                             None => true,
                         };
+                        total_matches_count.fetch_add(1, Ordering::Relaxed);
                         if should_insert {
                             results.insert(
                                 idx,
@@ -1026,11 +1032,13 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
     let endpoints_found = results.len();
     let interesting = results.iter().filter(|r| r.interesting).count();
+    let total_endpoints_matched = total_matches_count.load(Ordering::Relaxed) as usize;
 
     Ok(EndpointScanResults {
         base_url: config.base_url.clone(),
         endpoints_scanned: endpoints_count,
         endpoints_found,
+        total_endpoints_matched,
         interesting_findings: interesting,
         duration_ms: start.elapsed().as_millis() as u64,
         results,

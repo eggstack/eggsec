@@ -253,6 +253,7 @@ async fn test_port_scan_results_display() {
                 service: "HTTPS".to_string(),
             },
         ],
+        total_open_ports: 2,
         duration_ms: 1000,
         spoof_stats: None,
     };

@@ -83,6 +83,7 @@ fn test_fingerprint_results_display() {
         host: "example.com".to_string(),
         ports_scanned: 10,
         services_identified: 3,
+        total_services_identified: 3,
         duration_ms: 1500,
         results: vec![
             eggsec::scanner::ServiceFingerprint {

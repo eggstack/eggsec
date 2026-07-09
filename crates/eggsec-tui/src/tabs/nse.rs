@@ -255,11 +255,8 @@ impl TabRender for NseTab {
                         title = format!("NSE Results [{}]", filter);
                     }
                     if !self.report_search.is_empty() {
-                        title = format!(
-                            "{} /{}",
-                            title,
-                            &self.report_search[..self.report_search.len().min(20)]
-                        );
+                        let preview: String = self.report_search.chars().take(20).collect();
+                        title = format!("{} /{}", title, preview);
                     }
                 }
                 let mut view = self.core.results_view.clone();

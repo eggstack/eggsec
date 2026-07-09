@@ -51,6 +51,16 @@ impl TemplateLoader {
                 "Template ID cannot be empty".to_string(),
             ));
         }
+        if template.id.contains('/')
+            || template.id.contains('\\')
+            || template.id.contains("..")
+            || template.id.contains('\0')
+        {
+            return Err(EggsecError::Config(format!(
+                "Invalid template ID: {}",
+                template.id
+            )));
+        }
 
         if template.info.name.is_empty() {
             return Err(EggsecError::Config(
@@ -90,12 +100,26 @@ impl TemplateLoader {
                             .to_string(),
                     ));
                 }
+                for pattern in &http.search {
+                    if pattern.pattern.is_empty() {
+                        return Err(EggsecError::Config(
+                            "HTTP search pattern cannot be empty".to_string(),
+                        ));
+                    }
+                }
             }
             Matcher::Dns(dns) => {
                 if dns.search.is_empty() {
                     return Err(EggsecError::Config(
                         "DNS matcher must have at least one search pattern".to_string(),
                     ));
+                }
+                for pattern in &dns.search {
+                    if pattern.pattern.is_empty() {
+                        return Err(EggsecError::Config(
+                            "DNS search pattern cannot be empty".to_string(),
+                        ));
+                    }
                 }
             }
             Matcher::Other => {}
@@ -278,6 +302,63 @@ matchers:
                 remediation: String::new(),
             },
             matchers: vec![],
+            requests: vec![],
+        };
+
+        let loader = TemplateLoader::default();
+        assert!(loader.validate_template(&template).is_err());
+    }
+
+    #[test]
+    fn test_traversal_id_rejected() {
+        let template = VulnerabilityTemplate {
+            id: "../escape".to_string(),
+            info: TemplateInfo {
+                name: "Test".to_string(),
+                author: "test".to_string(),
+                severity: "high".to_string(),
+                description: String::new(),
+                tags: vec![],
+                references: vec![],
+                remediation: String::new(),
+            },
+            matchers: vec![],
+            requests: vec![],
+        };
+
+        let loader = TemplateLoader::default();
+        assert!(loader.validate_template(&template).is_err());
+    }
+
+    #[test]
+    fn test_empty_http_search_pattern_rejected() {
+        use crate::scanner::templates::models::{HttpMatcher, MatchMode, Matcher, SearchPattern};
+        use rustc_hash::FxHashMap;
+
+        let template = VulnerabilityTemplate {
+            id: "empty-pattern".to_string(),
+            info: TemplateInfo {
+                name: "Test".to_string(),
+                author: "test".to_string(),
+                severity: "high".to_string(),
+                description: String::new(),
+                tags: vec![],
+                references: vec![],
+                remediation: String::new(),
+            },
+            matchers: vec![Matcher::Http(HttpMatcher {
+                path: Some("/".to_string()),
+                method: Some("GET".to_string()),
+                headers: FxHashMap::default(),
+                body: None,
+                search: vec![SearchPattern {
+                    pattern: String::new(),
+                    mode: MatchMode::Binary,
+                    encoding: String::new(),
+                }],
+                status_codes: vec![],
+                interactsh: None,
+            })],
             requests: vec![],
         };
 

@@ -320,6 +320,7 @@ mod tests {
             host: "10.0.0.1".into(),
             ports_scanned: 1000,
             open_ports: vec![],
+            total_open_ports: 0,
             duration_ms: 500,
             spoof_stats: None,
         });
@@ -387,6 +388,7 @@ mod tests {
             host: "10.0.0.1".into(),
             ports_scanned: 100,
             services_identified: 5,
+            total_services_identified: 5,
             duration_ms: 300,
             results: vec![],
         });
@@ -401,6 +403,7 @@ mod tests {
             base_url: "http://api.local".into(),
             endpoints_scanned: 50,
             endpoints_found: 12,
+            total_endpoints_matched: 12,
             interesting_findings: 3,
             duration_ms: 2000,
             results: vec![],

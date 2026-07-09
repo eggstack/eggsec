@@ -377,6 +377,7 @@ mod tests {
             host: "10.0.0.1".into(),
             ports_scanned: 1000,
             open_ports: vec![],
+            total_open_ports: 0,
             duration_ms: 500,
             spoof_stats: None,
         });

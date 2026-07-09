@@ -214,6 +214,9 @@ impl TemplateMatcher {
                 } else {
                     search.pattern.as_bytes().to_vec()
                 };
+                if decoded.is_empty() {
+                    return false;
+                }
                 text.as_bytes().windows(decoded.len()).any(|w| w == decoded)
             }
         }
@@ -447,5 +450,27 @@ mod tests {
             .await
             .unwrap();
         assert!(result.matched);
+    }
+
+    #[test]
+    fn test_binary_matching_empty_pattern_does_not_panic() {
+        let matcher = TemplateMatcher::new();
+        let search = SearchPattern {
+            pattern: String::new(),
+            mode: MatchMode::Binary,
+            encoding: String::new(),
+        };
+        assert!(!matcher.search_pattern("any text", &search));
+    }
+
+    #[test]
+    fn test_binary_matching_empty_base64_pattern_does_not_panic() {
+        let matcher = TemplateMatcher::new();
+        let search = SearchPattern {
+            pattern: String::new(),
+            mode: MatchMode::Binary,
+            encoding: "base64".to_string(),
+        };
+        assert!(!matcher.search_pattern("any text", &search));
     }
 }

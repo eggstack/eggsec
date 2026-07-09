@@ -39,6 +39,25 @@ pub struct TemplateMarketplace {
     verify_downloaded: bool,
 }
 
+pub fn validate_template_id(template_id: &str) -> Result<()> {
+    if template_id.is_empty() {
+        return Err(EggsecError::Validation(
+            "Template ID cannot be empty".to_string(),
+        ));
+    }
+    if template_id.contains('/')
+        || template_id.contains('\\')
+        || template_id.contains("..")
+        || template_id.contains('\0')
+    {
+        return Err(EggsecError::Validation(format!(
+            "Invalid template ID: {}",
+            template_id
+        )));
+    }
+    Ok(())
+}
+
 impl TemplateMarketplace {
     pub fn new(base_url: &str) -> Result<Self> {
         let client = reqwest::Client::builder()
@@ -172,12 +191,7 @@ impl TemplateMarketplace {
     }
 
     fn save_to_cache(&self, template_id: &str, content: &str) -> Result<()> {
-        if template_id.contains('/') || template_id.contains('\\') || template_id.contains("..") {
-            return Err(EggsecError::Validation(format!(
-                "Invalid template ID: {}",
-                template_id
-            )));
-        }
+        validate_template_id(template_id)?;
 
         std::fs::create_dir_all(&self.local_cache)
             .map_err(|e| EggsecError::Config(format!("Failed to create cache directory: {}", e)))?;
@@ -191,6 +205,8 @@ impl TemplateMarketplace {
     }
 
     pub fn get_cached_template(&self, template_id: &str) -> Result<Option<VulnerabilityTemplate>> {
+        validate_template_id(template_id)?;
+
         let cache_path = self.local_cache.join(format!("{}.yaml", template_id));
 
         if !cache_path.exists() {
@@ -253,6 +269,14 @@ impl TemplateMarketplace {
 
             match self.download_template(&marketplace_template.id).await {
                 Ok(template) => {
+                    if let Err(e) = validate_template_id(&template.id) {
+                        tracing::warn!(
+                            "Refusing to write template with invalid ID '{}': {}",
+                            template.id,
+                            e
+                        );
+                        continue;
+                    }
                     let path = template_dir.join(format!("{}.yaml", template.id));
                     let yaml = serde_yaml_neo::to_string(&template).map_err(|e| {
                         EggsecError::Config(format!("Failed to serialize template: {}", e))
@@ -309,5 +333,42 @@ mod tests {
     fn test_default_marketplace() {
         let marketplace = TemplateMarketplace::default();
         assert_eq!(marketplace.base_url, "https://templates.eggsec.io");
+    }
+
+    #[test]
+    fn test_validate_template_id_rejects_traversal() {
+        assert!(validate_template_id("..").is_err());
+        assert!(validate_template_id("../etc/passwd").is_err());
+        assert!(validate_template_id("foo/bar").is_err());
+        assert!(validate_template_id("foo\\bar").is_err());
+        assert!(validate_template_id("foo\0bar").is_err());
+        assert!(validate_template_id("").is_err());
+    }
+
+    #[test]
+    fn test_validate_template_id_accepts_valid() {
+        assert!(validate_template_id("cve-2024-1234").is_ok());
+        assert!(validate_template_id("simple_id").is_ok());
+    }
+
+    #[test]
+    fn test_get_cached_template_rejects_traversal_id() {
+        let dir = std::env::temp_dir().join("eggsec_test_marketplace_get");
+        let _ = std::fs::create_dir_all(&dir);
+        let mp = TemplateMarketplace::new("https://templates.example.com")
+            .unwrap()
+            .with_cache_dir(dir);
+        assert!(mp.get_cached_template("../escape").is_err());
+        assert!(mp.get_cached_template("ok/../escape").is_err());
+    }
+
+    #[test]
+    fn test_validate_template_id_rejects_save_traversal() {
+        let dir = std::env::temp_dir().join("eggsec_test_marketplace_save");
+        let _ = std::fs::create_dir_all(&dir);
+        let _mp = TemplateMarketplace::new("https://templates.example.com")
+            .unwrap()
+            .with_cache_dir(dir);
+        assert!(validate_template_id("../escape").is_err());
     }
 }

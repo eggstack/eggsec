@@ -83,6 +83,7 @@ pub struct FingerprintResults {
     pub host: String,
     pub ports_scanned: usize,
     pub services_identified: usize,
+    pub total_services_identified: usize,
     pub duration_ms: u64,
     pub results: Vec<ServiceFingerprint>,
 }
@@ -250,6 +251,7 @@ pub async fn fingerprint_services(
     let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let results_count = Arc::new(AtomicU64::new(0));
+    let total_matches_count = Arc::new(AtomicU64::new(0));
     let total_ports = ports.len() as u64;
 
     let progress = if tui_mode {
@@ -278,9 +280,11 @@ pub async fn fingerprint_services(
         let scanned_count = scanned_count.clone();
         let progress_tx = progress_tx.clone();
         let results_count = results_count.clone();
+        let total_matches_count = total_matches_count.clone();
 
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(resolved_ip, port, timeout_dur).await {
+                total_matches_count.fetch_add(1, Ordering::Relaxed);
                 let should_insert = match max_results {
                     Some(limit) => {
                         let old = results_count.fetch_add(1, Ordering::Relaxed);
@@ -327,11 +331,13 @@ pub async fn fingerprint_services(
     }
 
     let identified = results.len();
+    let total_services_identified = total_matches_count.load(Ordering::Relaxed) as usize;
 
     Ok(FingerprintResults {
         host: host.to_string(),
         ports_scanned: ports_count,
         services_identified: identified,
+        total_services_identified,
         duration_ms: start.elapsed().as_millis() as u64,
         results,
     })
@@ -692,6 +698,7 @@ mod tests {
             host: "example.com".to_string(),
             ports_scanned: 100,
             services_identified: 0,
+            total_services_identified: 0,
             duration_ms: 5000,
             results: vec![],
         };
@@ -706,6 +713,7 @@ mod tests {
             host: "example.com".to_string(),
             ports_scanned: 100,
             services_identified: 2,
+            total_services_identified: 2,
             duration_ms: 5000,
             results: vec![
                 ServiceFingerprint {

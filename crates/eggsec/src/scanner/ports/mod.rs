@@ -79,6 +79,7 @@ pub struct PortScanResults {
     pub host: String,
     pub ports_scanned: u32,
     pub open_ports: Vec<PortResult>,
+    pub total_open_ports: usize,
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spoof_stats: Option<SpoofStats>,
@@ -467,6 +468,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(AtomicU64::new(0));
     let results_count = Arc::new(AtomicU64::new(0));
+    let total_matches_count = Arc::new(AtomicU64::new(0));
     let total_ports = config.ports.len() as u64;
 
     let progress = if config.tui_mode {
@@ -495,12 +497,14 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         let scanned_count = scanned_count.clone();
         let progress_tx = config.progress_tx.clone();
         let results_count = results_count.clone();
+        let total_matches_count = total_matches_count.clone();
 
         let handle = tokio::spawn(async move {
             let socket_addr = std::net::SocketAddr::new(addr, port);
             let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
 
             if result.is_ok() {
+                total_matches_count.fetch_add(1, Ordering::Relaxed);
                 let should_insert = match config.max_results {
                     Some(limit) => {
                         let old = results_count.fetch_add(1, Ordering::Relaxed);
@@ -550,11 +554,13 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
     }
 
     let open_ports: Vec<PortResult> = results.into_iter().filter(|p| p.status == "open").collect();
+    let total_open_ports = total_matches_count.load(Ordering::Relaxed) as usize;
 
     Ok(PortScanResults {
         host: host.to_string(),
         ports_scanned: ports_count as u32,
         open_ports,
+        total_open_ports,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,
     })
@@ -618,6 +624,7 @@ mod tests {
             host: "example.com".to_string(),
             ports_scanned: 100,
             open_ports: vec![],
+            total_open_ports: 0,
             duration_ms: 5000,
             spoof_stats: None,
         };
@@ -649,6 +656,7 @@ mod tests {
                     service: "HTTPS".to_string(),
                 },
             ],
+            total_open_ports: 3,
             duration_ms: 3000,
             spoof_stats: None,
         };
