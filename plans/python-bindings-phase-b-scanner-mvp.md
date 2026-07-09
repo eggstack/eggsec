@@ -1,5 +1,7 @@
 # Phase B Plan: Scanner MVP
 
+Status: Executed
+
 ## Objective
 
 Expose Eggsec's first real Python-facing capability: scoped, synchronous TCP port scanning with stable result DTOs and JSON/dict serialization. This phase should prove that Python can call the Rust engine directly, receive structured results, and enforce scope semantics without going through the CLI.

@@ -116,18 +116,27 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 Eggsec provides experimental Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). Python is a **host-language binding** over the Rust engine — not an internal plugin runtime.
 
-Phase A (foundation) is complete: importable module, version info, feature flags, exception hierarchy, and build metadata. Scanner and tool APIs are not yet exposed.
+Phase B (scanner MVP) is complete: scoped synchronous TCP port scanning with stable result DTOs, JSON/dict serialization, scope enforcement, and client-based API. See [`docs/python/quickstart.md`](docs/python/quickstart.md) for a getting-started guide.
 
 ```python
 import eggsec
 
-print(eggsec.__version__)          # "0.1.0"
-print(eggsec.features())           # {"core": True, ...}
-print(eggsec.has_feature("core"))  # True
-print(eggsec.build_info())         # {"version": "0.1.0", ...}
+# Create a scope allowing specific targets
+scope = eggsec.Scope.allow_hosts(["example.com", "10.0.0.0/8"])
+
+# Perform a scoped port scan
+result = eggsec.scan_ports(
+    target="example.com",
+    ports=[22, 80, 443],
+    scope=scope,
+)
+
+print(result.open_ports)   # list of OpenPort
+print(result.to_json())    # JSON string
+print(result.to_dict())    # Python dict
 ```
 
-See [`docs/python/installation.md`](docs/python/installation.md) for development setup instructions. The binding crate lives at `crates/eggsec-python/`.
+See [`docs/python/sync-api.md`](docs/python/sync-api.md) for the full API reference, [`docs/python/scanner.md`](docs/python/scanner.md) for scanning patterns, and [`docs/python/scope-and-safety.md`](docs/python/scope-and-safety.md) for scope enforcement details. Development setup is in [`docs/python/installation.md`](docs/python/installation.md). The binding crate lives at `crates/eggsec-python/`.
 
 ## Quick Start
 

@@ -1,5 +1,10 @@
+mod client;
+mod dto;
 mod error;
 mod features;
+mod runtime_sync;
+mod scanner;
+mod scope;
 mod version;
 
 pub use error::*;
@@ -35,10 +40,20 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add("InternalError", m.py().get_type_bound::<InternalError>())?;
 
+    // Classes
+    m.add_class::<scope::Scope>()?;
+    m.add_class::<client::Client>()?;
+    m.add_class::<dto::PortScanResult>()?;
+    m.add_class::<dto::OpenPort>()?;
+    m.add_class::<dto::ScanStats>()?;
+    m.add_class::<dto::PortRange>()?;
+    m.add_class::<dto::TimingPreset>()?;
+
     // Functions
     m.add_function(wrap_pyfunction!(features::features, m)?)?;
     m.add_function(wrap_pyfunction!(features::has_feature, m)?)?;
     m.add_function(wrap_pyfunction!(version::build_info, m)?)?;
+    m.add_function(wrap_pyfunction!(scanner::scan_ports, m)?)?;
 
     Ok(())
 }

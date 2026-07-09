@@ -13,6 +13,16 @@ __version_info__ = _core.__version_info__
 features = _core.features
 has_feature = _core.has_feature
 build_info = _core.build_info
+scan_ports = _core.scan_ports
+
+# Re-export classes
+Scope = _core.Scope
+Client = _core.Client
+PortScanResult = _core.PortScanResult
+OpenPort = _core.OpenPort
+ScanStats = _core.ScanStats
+PortRange = _core.PortRange
+TimingPreset = _core.TimingPreset
 
 # Re-export exceptions
 EggsecError = _core.EggsecError
@@ -29,9 +39,20 @@ InternalError = _core.InternalError
 __all__ = [
     "__version__",
     "__version_info__",
+    # Functions
     "features",
     "has_feature",
     "build_info",
+    "scan_ports",
+    # Classes
+    "Scope",
+    "Client",
+    "PortScanResult",
+    "OpenPort",
+    "ScanStats",
+    "PortRange",
+    "TimingPreset",
+    # Exceptions
     "EggsecError",
     "ConfigError",
     "ScopeError",
