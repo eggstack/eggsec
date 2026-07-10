@@ -1469,6 +1469,470 @@ WafDetectionResult.to_json() -> str
 
 ---
 
+## Policy, Configuration & Execution Context (Milestone B)
+
+These types are always available (no feature flags required). They expose the
+engine's enforcement model, configuration system, and operation metadata
+registry to Python.
+
+### Module-level functions
+
+#### `preflight_operation`
+
+```python
+eggsec.preflight_operation(
+    operation_id: str,
+    target: str | None = None,
+) -> PreflightResult
+```
+
+Preview the enforcement decision for an operation before dispatch. Returns a
+`PreflightResult` with the outcome, suggested CLI flags, scope status, and
+risk level.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `operation_id` | `str` | Operation to preview (e.g. `"port_scan"`). |
+| `target` | `str \| None` | Optional target for scope checking. |
+
+---
+
+#### `validate_scope`
+
+```python
+eggsec.validate_scope(scope: LoadedScope) -> ScopeValidation
+```
+
+Validate a `LoadedScope` and return errors, warnings, and rule counts.
+
+---
+
+#### `audit_event_from_enforcement`
+
+```python
+eggsec.audit_event_from_enforcement(
+    surface: str,
+    operation_id: str,
+    target: str | None,
+    allowed: bool,
+    denied: bool,
+    confirmed: bool,
+    override_ignored: bool,
+    decision_summary: str,
+    confirmation_classes: list[str],
+    manual_override_reason: str | None,
+    scope_source: str,
+    scope_path: str | None,
+    allow_rule_count: int,
+    exclusion_rule_count: int,
+    explicit_manifest: bool,
+    policy_hash: str,
+    correlation_id: str | None = None,
+) -> EnforcementAuditEvent
+```
+
+Create an audit event from an enforcement outcome.
+
+---
+
+#### `audit_event_from_preflight`
+
+```python
+eggsec.audit_event_from_preflight(
+    surface: str,
+    operation_id: str,
+    target: str | None,
+    allowed: bool,
+    denied: bool,
+    decision_summary: str,
+    confirmation_classes: list[str],
+    scope_source: str,
+    scope_path: str | None,
+    allow_rule_count: int,
+    exclusion_rule_count: int,
+    explicit_manifest: bool,
+    policy_hash: str,
+    correlation_id: str | None = None,
+) -> EnforcementAuditEvent
+```
+
+Create an audit event from a preflight result.
+
+---
+
+#### `emit_audit_event`
+
+```python
+eggsec.emit_audit_event(event: EnforcementAuditEvent) -> None
+```
+
+Emit an audit event to the logging sink.
+
+---
+
+### Classes
+
+#### `EggsecConfig`
+
+```python
+class EggsecConfig:
+    frozen = True
+```
+
+Full configuration model. Load from file or use defaults.
+
+##### Static constructors
+
+```python
+EggsecConfig.load(path: str | None = None) -> EggsecConfig
+EggsecConfig.default_path() -> str
+```
+
+##### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `http` | `HttpConfig` | HTTP client settings. |
+| `scan` | `ScanConfig` | Scan behavior settings. |
+| `output` | `OutputConfig` | Output formatting settings. |
+| `recon` | `ReconConfig` | Reconnaissance settings. |
+| `profiles` | `dict[str, str]` | Named execution profiles. |
+| `proxies` | `list[ProxyConfigEntry]` | Proxy configuration entries. |
+| `remote` | `RemoteConfig` | Remote worker configuration. |
+| `ai` | `AiConfig \| None` | AI integration settings. |
+| `search` | `SearchConfig \| None` | Search engine settings. |
+| `paths` | `PathsConfig` | File path settings. |
+| `alert_channels` | `dict[str, AlertChannelConfig]` | Alert notification channels. |
+
+##### Methods
+
+```python
+EggsecConfig.save(path: str | None = None) -> None
+EggsecConfig.validate() -> list[str]  # empty list = valid
+```
+
+---
+
+#### `SensitiveString`
+
+```python
+class SensitiveString:
+    frozen = True
+```
+
+Zeroized secret wrapper. Value is not displayed in repr/str.
+
+```python
+SensitiveString.new(value: str) -> SensitiveString
+sensitive.expose_secret() -> str
+sensitive.is_empty() -> bool
+```
+
+---
+
+#### `LoadedScope`
+
+```python
+class LoadedScope:
+    frozen = True
+```
+
+Enriched scope with source tracking and validation.
+
+##### Static constructors
+
+```python
+LoadedScope.default_empty() -> LoadedScope
+```
+
+##### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `source` | `ScopeSource` | Where the scope was loaded from. |
+| `path` | `str \| None` | File path, if loaded from file. |
+| `is_explicit` | `bool` | Whether scope was explicitly provided. |
+| `allowed_targets` | `list[ScopeRule]` | Allow rules. |
+| `excluded_targets` | `list[ScopeRule]` | Exclusion rules. |
+| `allowed_ports` | `list[int]` | Allowed ports. |
+| `excluded_ports` | `list[int]` | Excluded ports. |
+| `max_requests_per_second` | `int` | Rate limit. |
+
+##### Methods
+
+```python
+LoadedScope.is_target_allowed(target: str) -> bool
+LoadedScope.is_port_allowed(port: int) -> bool
+LoadedScope.is_excluded(target: str) -> bool
+LoadedScope.explain(target: str) -> ScopeExplanation
+```
+
+---
+
+#### `OperationRegistry`
+
+Static registry of all registered operations. All methods are static.
+
+```python
+OperationRegistry.all_operations() -> list[OperationMetadataView]
+OperationRegistry.find(operation_id: str) -> OperationMetadataView | None
+OperationRegistry.find_by_tool_id(tool_id: str) -> OperationMetadataView | None
+```
+
+---
+
+#### `OperationMetadataView`
+
+Read-only view of an operation's metadata.
+
+| Property | Type | Description |
+|---|---|---|
+| `operation_id` | `str` | Unique operation identifier. |
+| `label` | `str` | Human-readable label. |
+| `description` | `str` | Operation description. |
+| `risk` | `OperationRisk` | Risk level. |
+| `required_features` | `list[str]` | Feature flags required. |
+| `required_capabilities` | `list[Capability]` | Capabilities required. |
+| `target_required` | `bool` | Whether a target is required. |
+| `target_policy` | `TargetPolicyKind` | Target policy kind. |
+
+```python
+OperationMetadataView.descriptor_for_target(target: str | None = None) -> OperationDescriptor
+```
+
+Create a mutable `OperationDescriptor` for a specific target.
+
+---
+
+#### `OperationDescriptor`
+
+Mutable descriptor for a specific target. Created from
+`OperationMetadataView.descriptor_for_target()`. Required by
+`EnforcementContext.evaluate()`.
+
+| Property | Type | Description |
+|---|---|---|
+| `operation_id` | `str` | Operation identifier. |
+| `operation_label` | `str` | Human-readable label. |
+| `risk` | `OperationRisk` | Risk level. |
+| `mode` | `OperationMode` | Operation mode. |
+| `intended_uses` | `list[IntendedUse]` | Intended use categories. |
+| `required_capabilities` | `list[Capability]` | Required capabilities. |
+| `requires_explicit_scope` | `bool` | Whether explicit scope is required. |
+| `requires_target` | `bool` | Whether a target is required. |
+| `requires_network` | `bool` | Whether network access is required. |
+| `required_features` | `list[str]` | Required feature flags. |
+| `target_policy` | `TargetPolicyKind` | Target policy kind. |
+
+---
+
+#### `EnforcementContext`
+
+Policy evaluation gate. Mandatory pre-dispatch check for all surfaces.
+
+##### Static constructors
+
+```python
+EnforcementContext.manual_permissive(policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+EnforcementContext.manual_guarded(policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+EnforcementContext.ci_strict(policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+EnforcementContext.mcp_strict(policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+EnforcementContext.agent_strict(policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+EnforcementContext.for_surface(surface: ExecutionSurface, policy: ExecutionPolicy, scope: LoadedScope) -> EnforcementContext
+```
+
+##### Methods
+
+```python
+EnforcementContext.evaluate(descriptor: OperationDescriptor) -> EnforcementOutcome
+EnforcementContext.approve(surface: ExecutionSurface, descriptor: OperationDescriptor) -> ApprovedOperation
+EnforcementContext.approve_manual(surface: ExecutionSurface, descriptor: OperationDescriptor, override: ManualOverride | None = None) -> ApprovedOperation
+EnforcementContext.policy_hash() -> str
+```
+
+---
+
+#### `ExecutionPolicy`
+
+Risk-level policy configuration.
+
+```python
+ExecutionPolicy.default() -> ExecutionPolicy
+ExecutionPolicy.from_config(config: EggsecConfig) -> ExecutionPolicy
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `allow_passive` | `bool` | Allow passive-risk operations. |
+| `allow_read_only` | `bool` | Allow read-only operations. |
+| `allow_low_risk` | `bool` | Allow low-risk operations. |
+| `allow_medium_risk` | `bool` | Allow medium-risk operations. |
+| `allow_elevated_risk` | `bool` | Allow elevated-risk operations. |
+| `allow_high_risk` | `bool` | Allow high-risk operations. |
+| `allow_destructive` | `bool` | Allow destructive operations. |
+| `allow_intrusive` | `bool` | Allow intrusive operations. |
+| `allow_credential_access` | `bool` | Allow credential access. |
+| `allow_network_intrusion` | `bool` | Allow network intrusion. |
+| `allow_denial_of_service` | `bool` | Allow denial of service. |
+| `allow_data_exfiltration` | `bool` | Allow data exfiltration. |
+| `allow_privilege_escalation` | `bool` | Allow privilege escalation. |
+| `allow_persistence` | `bool` | Allow persistence techniques. |
+| `allow_agent_autonomous` | `bool` | Allow autonomous agent operations. |
+| `require_confirmation_above_medium` | `bool` | Require confirmation above medium risk. |
+| `require_confirmation_above_high` | `bool` | Require confirmation above high risk. |
+| `allowed_capabilities` | `list[str]` | Allowed capability names. |
+| `denied_capabilities` | `list[str]` | Denied capability names. |
+
+---
+
+#### `ManualOverride`
+
+Override flags for manual (CLI/TUI) surfaces.
+
+```python
+ManualOverride(
+    reason: str = "",
+    assume_yes: bool = False,
+    allow_out_of_scope: bool = False,
+    allow_explicit_exclusion: bool = False,
+    allow_high_risk: bool = False,
+    allow_intrusive: bool = False,
+    allow_credential_access: bool = False,
+    allow_network_intrusion: bool = False,
+    allow_denial_of_service: bool = False,
+    allow_data_exfiltration: bool = False,
+) -> ManualOverride
+```
+
+---
+
+#### `ExecutionSurface`
+
+Surface identification. Static constants:
+
+| Constant | Description |
+|---|---|
+| `ExecutionSurface.CLI_MANUAL` | CLI interactive |
+| `ExecutionSurface.TUI_MANUAL` | TUI interactive |
+| `ExecutionSurface.CLI_MANUAL_STRICT` | CLI strict mode |
+| `ExecutionSurface.TUI_MANUAL_STRICT` | TUI strict mode |
+| `ExecutionSurface.MCP_SERVER` | MCP server |
+| `ExecutionSurface.SECURITY_AGENT` | Security agent |
+| `ExecutionSurface.CI` | CI pipeline |
+| `ExecutionSurface.REST_API` | REST API |
+| `ExecutionSurface.GRPC_API` | gRPC API |
+
+Properties: `name`, `label`, `is_manual`, `is_agent_controlled`.
+
+---
+
+#### `ExecutionProfile`
+
+Enforcement profile. Static constants:
+
+| Constant | Description |
+|---|---|
+| `ExecutionProfile.manual_permissive` | Operator-directed, supports overrides |
+| `ExecutionProfile.manual_guarded` | Operator-directed, guarded |
+| `ExecutionProfile.ci_strict` | CI hard enforcement |
+| `ExecutionProfile.mcp_strict` | MCP/REST strict |
+| `ExecutionProfile.agent_strict` | Agent strict |
+
+Properties: `name`, `is_strict`, `is_automated`.
+
+---
+
+#### `PreflightResult`
+
+Pre-dispatch policy preview.
+
+| Property | Type | Description |
+|---|---|---|
+| `operation_id` | `str` | Operation being previewed. |
+| `target` | `str \| None` | Target, if provided. |
+| `outcome` | `str` | `"allow"`, `"confirm"`, or `"deny"`. |
+| `requires_confirmation` | `bool` | Whether confirmation is needed. |
+| `confirmation_classes` | `list[str]` | Confirmation categories. |
+| `suggested_cli_flags` | `list[str]` | Suggested CLI flags. |
+| `warnings` | `list[str]` | Policy warnings. |
+| `scope_status` | `str \| None` | Scope validation status. |
+| `risk_level` | `str \| None` | Assessed risk level. |
+| `surface` | `str \| None` | Surface name. |
+| `profile` | `str \| None` | Profile name. |
+
+---
+
+#### `ApprovedOperation`
+
+Authorization token from `EnforcementContext.approve()`.
+
+| Property | Type | Description |
+|---|---|---|
+| `operation_id` | `str` | Approved operation. |
+| `target` | `str \| None` | Approved target. |
+| `risk` | `str` | Risk level. |
+| `mode` | `str` | Operation mode. |
+| `surface` | `str` | Execution surface. |
+| `policy_hash` | `str` | Policy hash at approval time. |
+| `audit_event_id` | `str` | Audit trail identifier. |
+
+---
+
+#### `EnforcementAuditEvent`
+
+Audit trail entry for enforcement decisions.
+
+| Property | Type | Description |
+|---|---|---|
+| `event_id` | `str` | Unique event identifier. |
+| `timestamp` | `str` | ISO 8601 timestamp. |
+| `surface` | `str` | Execution surface. |
+| `profile` | `str` | Enforcement profile. |
+| `operation_id` | `str` | Operation evaluated. |
+| `target` | `str \| None` | Target, if any. |
+| `outcome` | `AuditOutcome` | Decision outcome. |
+| `decision_summary` | `str` | Human-readable decision. |
+| `manual_override` | `ManualOverrideAudit \| None` | Override details, if used. |
+| `scope` | `ScopeAudit` | Scope information. |
+| `policy_hash` | `str` | Policy hash. |
+
+```python
+EnforcementAuditEvent.to_dict() -> dict
+```
+
+---
+
+#### `AuditOutcome`
+
+Decision outcome enum. Constants: `allow`, `warn`, `confirmed`, `deny`, `confirmation_required`.
+
+```python
+AuditOutcome.to_dict() -> dict[str, str]
+```
+
+---
+
+#### `OperationRisk`
+
+Risk level enum. Static constructors: `passive`, `read_only`, `low`, `medium`,
+`elevated`, `high`, `destructive`, `intrusive`, `credential_access`,
+`network_intrusion`, `denial_of_service`, `data_exfiltration`,
+`privilege_escalation`, `persistence`, `agent_autonomous`.
+
+Properties: `name`, `level` (int).
+
+---
+
+#### `Capability`
+
+Capability enum. Static constructors: `passive_fingerprint`, `active_fingerprint`,
+`port_scan`, `service_detection`, `vulnerability_scan`, `exploit_simulation`,
+`credential_test`, `web_crawl`, `web_fuzz`, `web_inject`, `proxy_required`,
+`packet_capture`, `packet_injection`, `stress_test`, `denial_of_service`,
+`nse_script`, `database_query`, `mobile_static`, `mobile_dynamic_analysis`.
+
+---
+
 ## Exceptions
 
 All exceptions inherit from `EggsecError`, which inherits from Python's

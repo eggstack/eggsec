@@ -205,7 +205,9 @@ Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `insecure-tls`, `
 
 CLI features: `tui` (default), `daemon-client`, `headless`
 
-Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, and reporting. Type stubs included.
+Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Type stubs included.
+
+**Milestone B** adds always-available (no feature flags) Python bindings for: `EggsecConfig`, `LoadedScope`, `OperationRegistry`, `EnforcementContext`, `ExecutionPolicy`, `ManualOverride`, `PreflightResult`, and `EnforcementAuditEvent`. See `crates/eggsec-python/README.md` for usage examples.
 
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|

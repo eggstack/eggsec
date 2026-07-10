@@ -1,8 +1,11 @@
 mod async_client;
 mod async_engine;
+mod audit;
+mod authorization;
 mod cancellation;
 mod checkpoint;
 mod client;
+mod config_model;
 #[cfg(feature = "container")]
 mod container;
 #[cfg(feature = "daemon-client")]
@@ -13,6 +16,7 @@ mod dto;
 mod endpoint;
 mod engine;
 mod error;
+mod execution_context;
 mod features;
 mod finding;
 mod fingerprint;
@@ -24,10 +28,12 @@ mod loadtest;
 mod mobile;
 #[cfg(feature = "nse")]
 mod nse;
+mod operation_metadata;
 #[cfg(feature = "packet-inspection")]
 mod packet_inspection;
 mod pipeline;
 mod planning;
+mod preflight;
 #[cfg(feature = "web-proxy")]
 mod proxy;
 mod recon;
@@ -38,6 +44,7 @@ mod runtime_sync;
 mod sbom;
 mod scanner;
 mod scope;
+mod scope_eval;
 mod status;
 #[cfg(feature = "stress-testing")]
 mod stress;
@@ -79,7 +86,37 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("InternalError", m.py().get_type_bound::<InternalError>())?;
 
     // Classes
+    m.add_class::<config_model::PySensitiveString>()?;
+    m.add_class::<config_model::PyHttpConfig>()?;
+    m.add_class::<config_model::PyScanConfig>()?;
+    m.add_class::<config_model::PyOutputConfig>()?;
+    m.add_class::<config_model::PyReconApiConfig>()?;
+    m.add_class::<config_model::PyReconConfig>()?;
+    m.add_class::<config_model::PyProxyConfigEntry>()?;
+    m.add_class::<config_model::PyAllowedWorker>()?;
+    m.add_class::<config_model::PyRemoteConfig>()?;
+    m.add_class::<config_model::PyAiConfig>()?;
+    m.add_class::<config_model::PySearchConfig>()?;
+    m.add_class::<config_model::PyPathsConfig>()?;
+    m.add_class::<config_model::PyCacheConfig>()?;
+    m.add_class::<config_model::PyAlertChannelConfig>()?;
+    m.add_class::<config_model::PyEggsecConfig>()?;
     m.add_class::<scope::Scope>()?;
+    m.add_class::<scope_eval::ScopeSourcePy>()?;
+    m.add_class::<scope_eval::LoadedScopePy>()?;
+    m.add_class::<scope_eval::ScopeRulePy>()?;
+    m.add_class::<scope_eval::ScopeExplanationPy>()?;
+    m.add_class::<scope_eval::ScopeValidationPy>()?;
+    // Operation metadata and capabilities
+    m.add_class::<operation_metadata::OperationRiskPy>()?;
+    m.add_class::<operation_metadata::OperationModePy>()?;
+    m.add_class::<operation_metadata::IntendedUsePy>()?;
+    m.add_class::<operation_metadata::CapabilityPy>()?;
+    m.add_class::<operation_metadata::DenialClassPy>()?;
+    m.add_class::<operation_metadata::TargetPolicyKindPy>()?;
+    m.add_class::<operation_metadata::OperationDescriptorPy>()?;
+    m.add_class::<operation_metadata::OperationMetadataViewPy>()?;
+    m.add_class::<operation_metadata::OperationRegistry>()?;
     m.add_class::<client::Client>()?;
     m.add_class::<async_client::AsyncClient>()?;
     m.add_class::<engine::Engine>()?;
@@ -249,6 +286,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     }
 
     // Functions
+    m.add_function(wrap_pyfunction!(scope_eval::validate_scope, m)?)?;
     m.add_function(wrap_pyfunction!(features::features, m)?)?;
     m.add_function(wrap_pyfunction!(features::has_feature, m)?)?;
     m.add_function(wrap_pyfunction!(version::build_info, m)?)?;
@@ -361,6 +399,29 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(daemon::async_daemon_get_snapshot, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_close_session, m)?)?;
     }
+    // B4: Execution Context types
+    m.add_class::<execution_context::ExecutionSurfacePy>()?;
+    m.add_class::<execution_context::ExecutionProfilePy>()?;
+    m.add_class::<execution_context::EnforcementContextPy>()?;
+    m.add_class::<execution_context::EnforcementOutcomePy>()?;
+    m.add_class::<execution_context::ApprovedOperationPy>()?;
+    m.add_class::<execution_context::OperationDescriptorPy>()?;
+    m.add_class::<execution_context::PolicyDecisionPy>()?;
+    // B5: Authorization Policy types
+    m.add_class::<authorization::ExecutionPolicyPy>()?;
+    m.add_class::<authorization::ManualOverridePy>()?;
+    // B6: Preflight types
+    m.add_class::<preflight::PreflightResultPy>()?;
+    m.add_function(wrap_pyfunction!(preflight::preflight_operation, m)?)?;
+    m.add_function(wrap_pyfunction!(preflight::preflight_with_descriptor, m)?)?;
+    // B7: Audit types
+    m.add_class::<audit::AuditOutcomePy>()?;
+    m.add_class::<audit::ManualOverrideAuditPy>()?;
+    m.add_class::<audit::ScopeAuditPy>()?;
+    m.add_class::<audit::EnforcementAuditEventPy>()?;
+    m.add_function(wrap_pyfunction!(audit::audit_event_from_enforcement, m)?)?;
+    m.add_function(wrap_pyfunction!(audit::audit_event_from_preflight, m)?)?;
+    m.add_function(wrap_pyfunction!(audit::emit_audit_event, m)?)?;
 
     Ok(())
 }

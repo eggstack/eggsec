@@ -11,7 +11,7 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
-**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, and reporting.
+**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B).
 
 ## Directory Structure
 
@@ -35,7 +35,14 @@ crates/eggsec-python/
 │   ├── features.rs          # features(), has_feature()
 │   ├── version.rs           # build_info()
 │   ├── runtime_sync.rs      # Sync blocking wrapper
-│   └── runtime_async.rs     # Async runtime (PyFuture)
+│   ├── runtime_async.rs     # Async runtime (PyFuture)
+│   ├── config_model.rs      # SensitiveString, EggsecConfig, config sub-models
+│   ├── scope_eval.rs        # LoadedScope, ScopeSource, ScopeRule, validate_scope()
+│   ├── operation_metadata.rs # OperationRegistry, OperationDescriptor, OperationRisk, Capability
+│   ├── execution_context.rs # EnforcementContext, ExecutionSurface, ExecutionProfile
+│   ├── authorization.rs     # ExecutionPolicy, ManualOverride
+│   ├── preflight.rs         # PreflightResult, preflight_operation()
+│   └── audit.rs             # EnforcementAuditEvent, AuditOutcome, emit_audit_event()
 ├── python/
 │   └── eggsec/
 │       ├── __init__.py      # Re-exports all public API
@@ -50,7 +57,8 @@ crates/eggsec-python/
     ├── test_endpoint.py
     ├── test_fingerprint.py
     ├── test_async.py
-    └── test_smoke.py
+    ├── test_smoke.py
+    └── test_policy_equivalence.py
 ```
 
 ## Build Commands
@@ -113,6 +121,9 @@ pytest crates/eggsec-python/tests/
 
 # Rust-side tests
 cargo test -p eggsec-python
+
+# Policy equivalence tests (Milestone B)
+pytest crates/eggsec-python/tests/test_policy_equivalence.py
 ```
 
 ## API Surface
@@ -125,6 +136,24 @@ cargo test -p eggsec-python
 | `Client` | Sync scan client. Releases GIL during I/O. |
 | `AsyncClient` | Async scan client (tokio-backed). Returns `PyFuture` objects. |
 | `PyFuture` | Awaitable wrapper for async Rust futures. |
+| `EggsecConfig` | Full configuration model. Use `EggsecConfig.load()` or `EggsecConfig.default()`. |
+| `LoadedScope` | Enriched scope with source tracking. Use `LoadedScope.default_empty()` or `LoadedScope.explicit(...)`. |
+| `OperationRegistry` | Static registry of operation metadata. Use `OperationRegistry.all_operations()`, `.find()`, `.find_by_tool_id()`. |
+| `OperationMetadataView` | Read-only view of an operation's metadata. Use `.descriptor_for_target()` to get a writable `OperationDescriptor`. |
+| `OperationDescriptor` | Writable descriptor for a specific target. Required by `EnforcementContext.evaluate()`. |
+| `EnforcementContext` | Policy evaluation gate. Use `manual_permissive()`, `mcp_strict()`, `agent_strict()`, `ci_strict()`, or `for_surface()`. |
+| `ExecutionPolicy` | Risk-level policy config. Use `ExecutionPolicy.default()` or `ExecutionPolicy.from_config()`. |
+| `ExecutionSurface` | Surface identifier. Static constants: `CLI_MANUAL`, `TUI_MANUAL`, `MCP_SERVER`, `SECURITY_AGENT`, `CI`, etc. |
+| `ExecutionProfile` | Profile for enforcement. Constants: `manual_permissive`, `mcp_strict`, `agent_strict`, `ci_strict`. |
+| `ManualOverride` | Override flags for manual surfaces (reason, allow_high_risk, etc.). |
+| `ApprovedOperation` | Authorization token from `EnforcementContext.approve()`. Contains audit event ID. |
+| `PolicyDecision` | Result of policy evaluation (allowed, denied, warnings, confirmation required). |
+| `EnforcementOutcome` | Rich outcome from `evaluate()` (outcome_type, decision, warnings, confirmation_classes). |
+| `PreflightResult` | Pre-dispatch preview (outcome, suggested CLI flags, scope status, risk level). |
+| `SensitiveString` | Zeroized secret wrapper. Use `SensitiveString.new("value")`, `.expose_secret()` to read. |
+| `EnforcementAuditEvent` | Audit trail entry with event_id, timestamp, surface, outcome, scope info, policy hash. |
+| `ScopeValidation` | Result of `validate_scope()` (valid, errors, warnings, target/exclusion counts). |
+| `AlertChannelConfig` | Alert channel config. Use `.webhook()`, `.email()`, `.slack()`, `.pagerduty()` static constructors. |
 
 ### Functions
 
@@ -143,6 +172,12 @@ cargo test -p eggsec-python
 | `features` | Sync | List available features |
 | `has_feature` | Sync | Check if a feature is compiled in |
 | `build_info` | Sync | Build metadata |
+| `preflight_operation` | Sync | Pre-dispatch policy preview by operation ID |
+| `preflight_with_descriptor` | Sync | Pre-dispatch policy preview with explicit descriptor |
+| `validate_scope` | Sync | Validate a `LoadedScope` (returns errors/warnings) |
+| `audit_event_from_enforcement` | Sync | Create `EnforcementAuditEvent` from enforcement outcome |
+| `audit_event_from_preflight` | Sync | Create `EnforcementAuditEvent` from preflight result |
+| `emit_audit_event` | Sync | Emit an audit event (logging/sink) |
 
 ### Exceptions
 
@@ -223,12 +258,188 @@ for finding in result.findings:
         print(f"Critical: {finding.title}")
 ```
 
+### EnforcementContext Usage
+
+```python
+from eggsec import (
+    EnforcementContext, ExecutionPolicy, ExecutionSurface,
+    LoadedScope, ManualOverride, OperationRegistry,
+)
+
+scope = LoadedScope.default_empty()
+policy = ExecutionPolicy.default()
+
+# CLI manual surface — operator-directed, supports overrides
+ctx = EnforcementContext.manual_permissive(policy, scope)
+
+# MCP/REST surface — strict, no overrides
+ctx = EnforcementContext.mcp_strict(policy, scope)
+
+# Agent surface — explicit scope, no overrides
+ctx = EnforcementContext.agent_strict(policy, scope)
+
+# CI surface — hard enforcement
+ctx = EnforcementContext.ci_strict(policy, scope)
+
+# Custom surface
+ctx = EnforcementContext.for_surface(ExecutionSurface.GRPC_API, policy, scope)
+
+# Evaluate an operation
+op = OperationRegistry.find("port_scan")
+desc = op.descriptor_for_target("example.com")
+outcome = ctx.evaluate(desc)
+print(outcome.outcome_type)  # "allow", "confirm", or "deny"
+
+# Approve (strict surfaces require this before dispatch)
+approved = ctx.approve(ExecutionSurface.MCP_SERVER, desc)
+
+# Manual override (CLI/TUI only)
+override = ManualOverride(reason="testing", allow_high_risk=True)
+approved = ctx.approve_manual(ExecutionSurface.CLI_MANUAL, desc, override)
+```
+
+### OperationRegistry Discovery
+
+```python
+from eggsec import OperationRegistry
+
+# List all registered operations
+all_ops = OperationRegistry.all_operations()
+for op in all_ops:
+    print(f"{op.operation_id}: {op.label} (risk={op.risk.name})")
+
+# Find by operation ID
+op = OperationRegistry.find("port_scan")
+if op:
+    print(op.description)
+
+# Find by tool ID (MCP/REST tool name)
+op = OperationRegistry.find_by_tool_id("eggsec.port_scan")
+
+# Get a descriptor for a specific target (mutable copy)
+desc = op.descriptor_for_target("192.168.1.1")
+```
+
+### Preflight Evaluation
+
+```python
+from eggsec import preflight_operation, preflight_with_descriptor
+
+# Quick preview by operation ID
+result = preflight_operation("port_scan", target="example.com")
+print(result.outcome)           # "allow", "confirm", "deny"
+print(result.suggested_cli_flags)
+
+# With explicit descriptor
+desc = op.descriptor_for_target("example.com")
+result = preflight_with_descriptor(desc)
+print(result.scope_status)
+print(result.risk_level)
+```
+
+### Audit Event Creation
+
+```python
+from eggsec import (
+    audit_event_from_enforcement, audit_event_from_preflight, emit_audit_event,
+)
+
+# From enforcement outcome
+event = audit_event_from_enforcement(
+    surface="CLI_MANUAL",
+    operation_id="port_scan",
+    target="example.com",
+    allowed=True,
+    denied=False,
+    confirmed=False,
+    override_ignored=False,
+    decision_summary="Auto-approved: passive risk",
+    confirmation_classes=[],
+    manual_override_reason=None,
+    scope_source="config_file",
+    scope_path=None,
+    allow_rule_count=3,
+    exclusion_rule_count=0,
+    explicit_manifest=True,
+    policy_hash="abc123",
+)
+emit_audit_event(event)
+
+# From preflight
+event = audit_event_from_preflight(
+    surface="MCP_SERVER",
+    operation_id="port_scan",
+    target="example.com",
+    allowed=True,
+    denied=False,
+    decision_summary="Scope validated",
+    confirmation_classes=[],
+    scope_source="config_file",
+    scope_path=None,
+    allow_rule_count=3,
+    exclusion_rule_count=0,
+    explicit_manifest=True,
+    policy_hash="abc123",
+)
+```
+
+### Configuration Loading
+
+```python
+from eggsec import EggsecConfig, SensitiveString
+
+# Load from default path
+config = EggsecConfig.load()
+
+# Load from custom path
+config = EggsecConfig.load("/etc/eggsec/config.toml")
+
+# Validate
+errors = config.validate()
+if errors:
+    print("Config errors:", errors)
+
+# Access sub-configs
+print(config.http.timeout_secs)
+print(config.scan.default_concurrency)
+print(config.output.format)
+
+# SensitiveString handling
+secret = SensitiveString.new("api-key-123")
+print(secret.expose_secret())  # "api-key-123"
+print(secret.is_empty())       # False
+```
+
+### Scope Evaluation
+
+```python
+from eggsec import LoadedScope, validate_scope
+
+# Default empty scope
+scope = LoadedScope.default_empty()
+
+# Check targets
+print(scope.is_target_allowed("example.com"))
+print(scope.is_port_allowed(80))
+print(scope.is_excluded("10.0.0.1"))
+
+# Get explanation
+explanation = scope.explain("example.com")
+print(explanation.allowed, explanation.reason)
+
+# Validate
+result = validate_scope(scope)
+print(result.valid, result.errors, result.warnings)
+```
+
 ## Type Stubs
 
 Full type stubs are included in the wheel:
 - `python/eggsec/__init__.pyi` — top-level stubs
-- `python/eggsec/*.pyi` — per-module stubs (client, scope, dto, endpoint, fingerprint, finding, recon, waf, etc.)
+- `python/eggsec/*.pyi` — per-module stubs (client, scope, dto, endpoint, fingerprint, finding, recon, waf, config_model, scope_eval, operation_metadata, execution_context, authorization, preflight, audit, etc.)
 - `python/eggsec/py.typed` — PEP 561 marker for type checker support
+
+**Naming convention**: Some Rust modules export types with `Py` suffixes internally (e.g., `ExecutionSurfacePy`, `EnforcementContextPy`). The `__init__.py` re-exports these under clean names (`ExecutionSurface`, `EnforcementContext`). Type stubs use the clean names.
 
 ## Documentation
 
@@ -259,7 +470,15 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 | `src/async_client.rs` | `AsyncClient` class — async scanning |
 | `src/scope.rs` | `Scope` class — target authorization |
 | `src/error.rs` | Python exception hierarchy |
+| `src/config_model.rs` | `SensitiveString`, `EggsecConfig`, config sub-models |
+| `src/scope_eval.rs` | `LoadedScope`, `ScopeSource`, `ScopeRule`, `validate_scope()` |
+| `src/operation_metadata.rs` | `OperationRegistry`, `OperationDescriptor`, `OperationRisk`, `Capability` |
+| `src/execution_context.rs` | `EnforcementContext`, `ExecutionSurface`, `ExecutionProfile` |
+| `src/authorization.rs` | `ExecutionPolicy`, `ManualOverride` |
+| `src/preflight.rs` | `PreflightResult`, `preflight_operation()` |
+| `src/audit.rs` | `EnforcementAuditEvent`, `AuditOutcome`, `emit_audit_event()` |
 | `python/eggsec/__init__.py` | Public API re-exports |
+| `python/eggsec/__init__.pyi` | Top-level type stubs |
 | `pyproject.toml` | maturin build configuration |
 
 ## Common Tasks

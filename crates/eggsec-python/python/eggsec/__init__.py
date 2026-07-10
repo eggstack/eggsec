@@ -141,6 +141,57 @@ try:
 except AttributeError:
     pass
 
+# Milestone B: Configuration, Policy, and Execution Context
+SensitiveString = _core.SensitiveString
+HttpConfig = _core.HttpConfig
+ScanConfig = _core.ScanConfig
+OutputConfig = _core.OutputConfig
+ReconApiConfig = _core.ReconApiConfig
+ReconConfig = _core.ReconConfig
+ProxyConfigEntry = _core.ProxyConfigEntry
+AllowedWorker = _core.AllowedWorker
+RemoteConfig = _core.RemoteConfig
+AiConfig = _core.AiConfig
+SearchConfig = _core.SearchConfig
+PathsConfig = _core.PathsConfig
+CacheConfig = _core.CacheConfig
+AlertChannelConfig = _core.AlertChannelConfig
+EggsecConfig = _core.EggsecConfig
+ScopeSource = _core.ScopeSource
+LoadedScope = _core.LoadedScope
+ScopeRule = _core.ScopeRule
+ScopeExplanation = _core.ScopeExplanation
+ScopeValidation = _core.ScopeValidation
+OperationRisk = _core.OperationRisk
+OperationMode = _core.OperationMode
+IntendedUse = _core.IntendedUse
+Capability = _core.Capability
+DenialClass = _core.DenialClass
+TargetPolicyKind = _core.TargetPolicyKind
+OperationDescriptor = _core.OperationDescriptor
+OperationDescriptorPy = _core.OperationDescriptorPy
+OperationMetadataView = _core.OperationMetadataView
+OperationRegistry = _core.OperationRegistry
+ExecutionSurface = _core.ExecutionSurfacePy
+ExecutionProfile = _core.ExecutionProfilePy
+PolicyDecision = _core.PolicyDecisionPy
+EnforcementOutcome = _core.EnforcementOutcomePy
+ApprovedOperation = _core.ApprovedOperationPy
+EnforcementContext = _core.EnforcementContext
+ExecutionPolicy = _core.ExecutionPolicyPy
+ManualOverride = _core.ManualOverridePy
+PreflightResult = _core.PreflightResultPy
+AuditOutcome = _core.AuditOutcomePy
+ManualOverrideAudit = _core.ManualOverrideAuditPy
+ScopeAudit = _core.ScopeAuditPy
+EnforcementAuditEvent = _core.EnforcementAuditEventPy
+validate_scope = _core.validate_scope
+preflight_operation = _core.preflight_operation
+preflight_with_descriptor = _core.preflight_with_descriptor
+audit_event_from_enforcement = _core.audit_event_from_enforcement
+audit_event_from_preflight = _core.audit_event_from_preflight
+emit_audit_event = _core.emit_audit_event
+
 # Re-export classes
 Scope = _core.Scope
 Client = _core.Client
@@ -465,6 +516,56 @@ __all__ = [
     # Phase F Track 2: Load testing classes
     "LoadTestResult",
     "LoadTestConfig",
+    # Milestone B: Configuration, Policy, and Execution Context
+    "SensitiveString",
+    "HttpConfig",
+    "ScanConfig",
+    "OutputConfig",
+    "ReconApiConfig",
+    "ReconConfig",
+    "ProxyConfigEntry",
+    "AllowedWorker",
+    "RemoteConfig",
+    "AiConfig",
+    "SearchConfig",
+    "PathsConfig",
+    "CacheConfig",
+    "AlertChannelConfig",
+    "EggsecConfig",
+    "ScopeSource",
+    "LoadedScope",
+    "ScopeRule",
+    "ScopeExplanation",
+    "ScopeValidation",
+    "OperationRisk",
+    "OperationMode",
+    "IntendedUse",
+    "Capability",
+    "DenialClass",
+    "TargetPolicyKind",
+    "OperationDescriptor",
+    "OperationDescriptorPy",
+    "OperationMetadataView",
+    "OperationRegistry",
+    "ExecutionSurface",
+    "ExecutionProfile",
+    "PolicyDecision",
+    "EnforcementOutcome",
+    "ApprovedOperation",
+    "EnforcementContext",
+    "ExecutionPolicy",
+    "ManualOverride",
+    "PreflightResult",
+    "AuditOutcome",
+    "ManualOverrideAudit",
+    "ScopeAudit",
+    "EnforcementAuditEvent",
+    "validate_scope",
+    "preflight_operation",
+    "preflight_with_descriptor",
+    "audit_event_from_enforcement",
+    "audit_event_from_preflight",
+    "emit_audit_event",
     # Exceptions
     "EggsecError",
     "ConfigError",

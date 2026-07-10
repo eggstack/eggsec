@@ -40,6 +40,7 @@ Prebuilt wheels are **not yet available on PyPI**. Build from source using matur
 - Findings and reporting (JSON, Markdown)
 - Sync and async APIs
 - Scope enforcement
+- Policy, configuration, and execution context (Milestone B)
 
 ### Not Included (default wheel)
 
@@ -106,6 +107,14 @@ report.write_json("scan_report.json")
 | `Finding` | Individual security finding |
 | `Report` | Aggregated findings report |
 | `Severity` | Finding severity enum |
+| `EggsecConfig` | Full configuration model (load, save, validate) |
+| `LoadedScope` | Enriched scope with source tracking and validation |
+| `OperationRegistry` | Operation metadata discovery (all operations, find by ID) |
+| `EnforcementContext` | Policy evaluation gate (manual, MCP, agent, CI surfaces) |
+| `ExecutionPolicy` | Risk-level policy configuration |
+| `ExecutionSurface` | Execution surface identification (CLI, TUI, MCP, agent, etc.) |
+| `PreflightResult` | Pre-dispatch policy preview |
+| `EnforcementAuditEvent` | Audit trail for enforcement decisions |
 
 ### Functions
 
@@ -124,6 +133,55 @@ report.write_json("scan_report.json")
 | `features()` | Available feature flags |
 | `has_feature()` | Check a feature flag |
 | `build_info()` | Build metadata |
+| `preflight_operation()` | Pre-dispatch policy preview |
+| `validate_scope()` | Scope validation |
+| `audit_event_from_enforcement()` | Create audit event from enforcement outcome |
+| `audit_event_from_preflight()` | Create audit event from preflight result |
+
+### Policy, Configuration & Execution Context
+
+Milestone B adds Python bindings for the engine's enforcement model, configuration system, and operation metadata registry. These are always available (no feature flags required).
+
+| Module | Key Types |
+|--------|-----------|
+| `config_model` | `EggsecConfig`, `SensitiveString`, `HttpConfig`, `ScanConfig`, `OutputConfig`, `ReconConfig`, `AlertChannelConfig` |
+| `scope_eval` | `LoadedScope`, `ScopeSource`, `ScopeRule`, `ScopeValidation`, `validate_scope()` |
+| `operation_metadata` | `OperationRegistry`, `OperationMetadataView`, `OperationDescriptor`, `OperationRisk`, `Capability` |
+| `execution_context` | `EnforcementContext`, `ExecutionSurface`, `ExecutionProfile`, `PolicyDecision`, `ApprovedOperation` |
+| `authorization` | `ExecutionPolicy`, `ManualOverride` |
+| `preflight` | `PreflightResult`, `preflight_operation()`, `preflight_with_descriptor()` |
+| `audit` | `EnforcementAuditEvent`, `AuditOutcome`, `ManualOverrideAudit`, `ScopeAudit` |
+
+#### Quick example: enforcement workflow
+
+```python
+from eggsec import (
+    EnforcementContext, ExecutionPolicy, ExecutionSurface,
+    OperationRegistry, LoadedScope, ManualOverride,
+)
+
+# 1. Load scope and policy
+scope = LoadedScope.default_empty()
+policy = ExecutionPolicy.default()
+
+# 2. Create enforcement context for a CLI manual session
+ctx = EnforcementContext.manual_permissive(policy, scope)
+
+# 3. Look up an operation
+op = OperationRegistry.find("port_scan")
+
+# 4. Build a descriptor for a specific target
+desc = op.descriptor_for_target("example.com")
+
+# 5. Evaluate — preview the decision
+outcome = ctx.evaluate(desc)
+print(outcome.outcome_type)     # "allow" or "confirm"
+print(outcome.is_allowed)       # True
+
+# 6. Approve (generates audit token)
+approved = ctx.approve(ExecutionSurface.CLI_MANUAL, desc)
+print(approved.audit_event_id)  # audit trail identifier
+```
 
 ### Exceptions
 

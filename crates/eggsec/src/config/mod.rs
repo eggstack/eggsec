@@ -75,7 +75,7 @@ pub use scope::{
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
     ConfigError, EggsecConfig, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig,
-    ProxyConfigEntry, ReconConfig, RemoteConfig, ScheduledScan, SlackConfigEntry,
+    ProxyConfigEntry, ReconConfig, RemoteConfig, ScheduledScan, SearchConfig, SlackConfigEntry,
     WebhookConfigEntry,
 };
 

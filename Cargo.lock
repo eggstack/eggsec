@@ -2024,6 +2024,7 @@ dependencies = [
  "eggsec-runtime",
  "eggsec-web-proxy",
  "pyo3",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tokio",

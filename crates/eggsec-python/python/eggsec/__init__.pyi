@@ -92,6 +92,68 @@ from .checkpoint import (
     Checkpoint as Checkpoint,
     CheckpointStore as CheckpointStore,
 )
+from .config_model import (
+    SensitiveString as SensitiveString,
+    HttpConfig as HttpConfig,
+    ScanConfig as ScanConfig,
+    OutputConfig as OutputConfig,
+    ReconApiConfig as ReconApiConfig,
+    ReconConfig as ReconConfig,
+    ProxyConfigEntry as ProxyConfigEntry,
+    AllowedWorker as AllowedWorker,
+    RemoteConfig as RemoteConfig,
+    AiConfig as AiConfig,
+    SearchConfig as SearchConfig,
+    PathsConfig as PathsConfig,
+    CacheConfig as CacheConfig,
+    AlertChannelConfig as AlertChannelConfig,
+    EggsecConfig as EggsecConfig,
+)
+from .scope_eval import (
+    ScopeSourcePy as ScopeSourcePy,
+    LoadedScopePy as LoadedScopePy,
+    ScopeRulePy as ScopeRulePy,
+    ScopeExplanationPy as ScopeExplanationPy,
+    ScopeValidationPy as ScopeValidationPy,
+    validate_scope as validate_scope,
+)
+from .operation_metadata import (
+    OperationRiskPy as OperationRiskPy,
+    OperationModePy as OperationModePy,
+    IntendedUsePy as IntendedUsePy,
+    CapabilityPy as CapabilityPy,
+    DenialClassPy as DenialClassPy,
+    TargetPolicyKindPy as TargetPolicyKindPy,
+    OperationDescriptorPy as OperationDescriptorPy,
+    OperationMetadataViewPy as OperationMetadataViewPy,
+    OperationRegistry as OperationRegistry,
+)
+from .execution_context import (
+    ExecutionSurfacePy as ExecutionSurfacePy,
+    ExecutionProfilePy as ExecutionProfilePy,
+    PolicyDecisionPy as PolicyDecisionPy,
+    EnforcementOutcomePy as EnforcementOutcomePy,
+    ApprovedOperationPy as ApprovedOperationPy,
+    EnforcementContextPy as EnforcementContextPy,
+)
+from .authorization import (
+    ExecutionPolicyPy as ExecutionPolicyPy,
+    ManualOverridePy as ManualOverridePy,
+)
+from .preflight import (
+    PreflightResultPy as PreflightResultPy,
+    preflight_operation as preflight_operation,
+    preflight_with_descriptor as preflight_with_descriptor,
+)
+from .audit import (
+    AuditOutcomePy as AuditOutcomePy,
+    ManualOverrideAuditPy as ManualOverrideAuditPy,
+    ScopeAuditPy as ScopeAuditPy,
+    EnforcementAuditEventPy as EnforcementAuditEventPy,
+    audit_event_from_enforcement as audit_event_from_enforcement,
+    audit_event_from_preflight as audit_event_from_preflight,
+    emit_audit_event as emit_audit_event,
+)
 from .runtime import PyFuture as PyFuture
 from .functions import (
     features as features,
