@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+use crate::async_engine::AsyncEngine;
 use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
 use crate::error::EggsecResultExt;
@@ -11,15 +12,13 @@ use crate::waf::WafDetectionResultPy;
 
 /// Async client for performing scoped security scans through the Eggsec engine.
 ///
+/// Delegates scope enforcement and configuration to an internal `AsyncEngine`.
 /// Provides the same operations as Client but returns Python awaitables.
 /// Each async operation spawns a background thread with its own Tokio runtime.
 /// The GIL is released during network I/O.
 #[pyclass]
 pub struct AsyncClient {
-    scope: Scope,
-    mode: String,
-    concurrency: usize,
-    timeout_ms: u64,
+    engine: AsyncEngine,
 }
 
 #[pymethods]
@@ -37,17 +36,8 @@ impl AsyncClient {
     #[new]
     #[pyo3(signature = (scope, *, mode="manual", concurrency=100, timeout_ms=5000))]
     fn new(scope: Scope, mode: &str, concurrency: usize, timeout_ms: u64) -> PyResult<Self> {
-        if mode != "manual" && mode != "automation" {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Invalid mode '{}'. Must be 'manual' or 'automation'.",
-                mode
-            )));
-        }
         Ok(Self {
-            scope,
-            mode: mode.to_string(),
-            concurrency,
-            timeout_ms,
+            engine: AsyncEngine::new_inner(scope, mode, concurrency, timeout_ms)?,
         })
     }
 
@@ -62,13 +52,13 @@ impl AsyncClient {
         concurrency: Option<usize>,
         timeout_ms: Option<u64>,
     ) -> PyResult<crate::runtime_async::PyFuture> {
-        self.scope.enforce_target(target)?;
+        self.engine.enforce_target(target)?;
 
-        let effective_concurrency = concurrency.unwrap_or(self.concurrency);
-        let effective_timeout_ms = timeout_ms.unwrap_or(self.timeout_ms);
+        let effective_concurrency = concurrency.unwrap_or(self.engine.get_concurrency());
+        let effective_timeout_ms = timeout_ms.unwrap_or(self.engine.get_timeout_ms());
 
         for &port in &ports {
-            self.scope.enforce_port(port)?;
+            self.engine.enforce_port(port)?;
         }
 
         let target_owned = target.to_string();
@@ -106,10 +96,10 @@ impl AsyncClient {
         verify_tls: bool,
     ) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(base_url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
-        let effective_concurrency = concurrency.unwrap_or(self.concurrency);
-        let effective_timeout_ms = timeout_ms.unwrap_or(self.timeout_ms);
+        let effective_concurrency = concurrency.unwrap_or(self.engine.get_concurrency());
+        let effective_timeout_ms = timeout_ms.unwrap_or(self.engine.get_timeout_ms());
 
         let base_url_owned = base_url.to_string();
 
@@ -143,13 +133,13 @@ impl AsyncClient {
         concurrency: Option<usize>,
         timeout_ms: Option<u64>,
     ) -> PyResult<crate::runtime_async::PyFuture> {
-        self.scope.enforce_target(target)?;
+        self.engine.enforce_target(target)?;
 
-        let effective_concurrency = concurrency.unwrap_or(self.concurrency);
-        let effective_timeout_ms = timeout_ms.unwrap_or(self.timeout_ms);
+        let effective_concurrency = concurrency.unwrap_or(self.engine.get_concurrency());
+        let effective_timeout_ms = timeout_ms.unwrap_or(self.engine.get_timeout_ms());
 
         for &port in &ports {
-            self.scope.enforce_port(port)?;
+            self.engine.enforce_port(port)?;
         }
 
         let target_owned = target.to_string();
@@ -173,7 +163,7 @@ impl AsyncClient {
 
     /// Perform async passive DNS reconnaissance on a domain.
     fn recon_dns(&self, domain: &str) -> PyResult<crate::runtime_async::PyFuture> {
-        self.scope.enforce_target(domain)?;
+        self.engine.enforce_target(domain)?;
 
         let domain_owned = domain.to_string();
 
@@ -214,7 +204,7 @@ impl AsyncClient {
     /// Perform async TLS inspection.
     #[pyo3(signature = (host, *, port=443))]
     fn inspect_tls(&self, host: &str, port: u16) -> PyResult<crate::runtime_async::PyFuture> {
-        self.scope.enforce_target(host)?;
+        self.engine.enforce_target(host)?;
 
         let host_owned = host.to_string();
 
@@ -259,7 +249,7 @@ impl AsyncClient {
     /// Perform async technology detection.
     fn detect_technology(&self, url: &str) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
         let url_owned = url.to_string();
 
@@ -289,7 +279,7 @@ impl AsyncClient {
     /// Perform async WAF detection.
     fn detect_waf(&self, url: &str) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
         let url_owned = url.to_string();
 
@@ -324,7 +314,7 @@ impl AsyncClient {
         method: &str,
     ) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
         if total_requests == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -347,7 +337,7 @@ impl AsyncClient {
             total_requests,
             concurrency,
             timeout_secs,
-            self.scope.clone(),
+            self.engine.scope_ref().clone(),
             method,
         )
     }
@@ -361,9 +351,14 @@ impl AsyncClient {
         test_type: Option<&str>,
     ) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
-        crate::waf_validation::async_validate_waf(url, self.scope.clone(), bypass, test_type)
+        crate::waf_validation::async_validate_waf(
+            url,
+            self.engine.scope_ref().clone(),
+            bypass,
+            test_type,
+        )
     }
 
     /// Run HTTP fuzzing against a scoped target (async).
@@ -378,7 +373,7 @@ impl AsyncClient {
         timeout: u64,
     ) -> PyResult<crate::runtime_async::PyFuture> {
         let host = extract_host_from_url(url)?;
-        self.scope.enforce_target(&host)?;
+        self.engine.enforce_target(&host)?;
 
         if concurrency == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -393,7 +388,7 @@ impl AsyncClient {
 
         crate::waf_validation::async_fuzz_http(
             url,
-            self.scope.clone(),
+            self.engine.scope_ref().clone(),
             payload_type,
             method,
             param,
@@ -405,13 +400,13 @@ impl AsyncClient {
     /// Get the client's scope.
     #[getter]
     fn scope(&self) -> Scope {
-        self.scope.clone()
+        self.engine.scope_ref().clone()
     }
 
     /// Get the client's mode.
     #[getter]
     fn mode(&self) -> String {
-        self.mode.clone()
+        self.engine.get_mode().to_string()
     }
 
     /// Close the client (no-op, exists for API consistency).
@@ -434,7 +429,7 @@ impl AsyncClient {
     }
 
     fn __repr__(&self) -> String {
-        format!("AsyncClient(mode={})", self.mode)
+        format!("AsyncClient(mode={})", self.engine.get_mode())
     }
 }
 

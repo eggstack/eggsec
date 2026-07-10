@@ -1,4 +1,7 @@
 mod async_client;
+mod async_engine;
+mod cancellation;
+mod checkpoint;
 mod client;
 #[cfg(feature = "container")]
 mod container;
@@ -8,12 +11,14 @@ mod daemon;
 mod db_pentest;
 mod dto;
 mod endpoint;
+mod engine;
 mod error;
 mod features;
 mod finding;
 mod fingerprint;
 #[cfg(feature = "git-secrets")]
 mod git_secrets;
+mod handles;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
@@ -21,15 +26,19 @@ mod mobile;
 mod nse;
 #[cfg(feature = "packet-inspection")]
 mod packet_inspection;
+mod pipeline;
+mod planning;
 #[cfg(feature = "web-proxy")]
 mod proxy;
 mod recon;
+mod requests;
 mod runtime_async;
 mod runtime_sync;
 #[cfg(feature = "sbom")]
 mod sbom;
 mod scanner;
 mod scope;
+mod status;
 #[cfg(feature = "stress-testing")]
 mod stress;
 mod version;
@@ -73,6 +82,12 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<scope::Scope>()?;
     m.add_class::<client::Client>()?;
     m.add_class::<async_client::AsyncClient>()?;
+    m.add_class::<engine::Engine>()?;
+    m.add_class::<async_engine::AsyncEngine>()?;
+    m.add_class::<handles::ExecutionHandle>()?;
+    m.add_class::<handles::ExecutionEvent>()?;
+    m.add_class::<handles::EventLog>()?;
+    m.add_class::<cancellation::CancellationToken>()?;
     m.add_class::<runtime_async::PyFuture>()?;
     m.add_class::<dto::PortScanResult>()?;
     m.add_class::<dto::OpenPort>()?;
@@ -93,6 +108,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<finding::Finding>()?;
     m.add_class::<finding::FindingSet>()?;
     m.add_class::<finding::Report>()?;
+    // Phase A3: Common result protocol types
+    m.add_class::<status::ExecutionStatus>()?;
+    m.add_class::<status::ExecutionStats>()?;
+    m.add_class::<status::Artifact>()?;
+    m.add_class::<status::OperationResult>()?;
     // Phase D: Recon
     m.add_class::<recon::DnsRecordSet>()?;
     m.add_class::<recon::MxRecord>()?;
@@ -104,6 +124,31 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<recon::TechDetectionResult>()?;
     // Phase D: WAF detection
     m.add_class::<waf::WafDetectionResultPy>()?;
+    // Operation request types
+    m.add_class::<requests::OperationRequest>()?;
+    m.add_class::<requests::PortScanRequest>()?;
+    m.add_class::<requests::EndpointScanRequest>()?;
+    m.add_class::<requests::FingerprintRequest>()?;
+    m.add_class::<requests::ReconDnsRequest>()?;
+    m.add_class::<requests::TlsInspectRequest>()?;
+    m.add_class::<requests::TechDetectRequest>()?;
+    m.add_class::<requests::WafDetectRequest>()?;
+    m.add_class::<requests::LoadTestRequest>()?;
+    m.add_class::<requests::WafValidateRequest>()?;
+    m.add_class::<requests::FuzzRequest>()?;
+    m.add_class::<requests::RequestBuilder>()?;
+    // Pipeline and assessment types
+    m.add_class::<pipeline::PipelineStep>()?;
+    m.add_class::<pipeline::StepResult>()?;
+    m.add_class::<pipeline::PipelineResult>()?;
+    m.add_class::<pipeline::Pipeline>()?;
+    m.add_class::<pipeline::AsyncPipeline>()?;
+    // Planning types
+    m.add_class::<planning::PlanStep>()?;
+    m.add_class::<planning::ScanPlan>()?;
+    // Checkpoint types
+    m.add_class::<checkpoint::Checkpoint>()?;
+    m.add_class::<checkpoint::CheckpointStore>()?;
     // Phase F Track 1: WAF validation and HTTP fuzzing
     m.add_class::<waf_validation::BypassResultPy>()?;
     m.add_class::<waf_validation::WafScanResultPy>()?;

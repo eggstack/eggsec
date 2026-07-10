@@ -145,6 +145,12 @@ except AttributeError:
 Scope = _core.Scope
 Client = _core.Client
 AsyncClient = _core.AsyncClient
+Engine = _core.Engine
+AsyncEngine = _core.AsyncEngine
+ExecutionHandle = _core.ExecutionHandle
+ExecutionEvent = _core.ExecutionEvent
+EventLog = _core.EventLog
+CancellationToken = _core.CancellationToken
 PyFuture = _core.PyFuture
 PortScanResult = _core.PortScanResult
 OpenPort = _core.OpenPort
@@ -167,6 +173,12 @@ Finding = _core.Finding
 FindingSet = _core.FindingSet
 Report = _core.Report
 
+# Phase A3: Common result protocol types
+ExecutionStatus = _core.ExecutionStatus
+ExecutionStats = _core.ExecutionStats
+Artifact = _core.Artifact
+OperationResult = _core.OperationResult
+
 # Phase D: Recon types
 DnsRecordSet = _core.DnsRecordSet
 MxRecord = _core.MxRecord
@@ -179,6 +191,35 @@ TechDetectionResult = _core.TechDetectionResult
 
 # Phase D: WAF detection
 WafDetectionResult = _core.WafDetectionResultPy
+
+# Operation request types
+OperationRequest = _core.OperationRequest
+PortScanRequest = _core.PortScanRequest
+EndpointScanRequest = _core.EndpointScanRequest
+FingerprintRequest = _core.FingerprintRequest
+ReconDnsRequest = _core.ReconDnsRequest
+TlsInspectRequest = _core.TlsInspectRequest
+TechDetectRequest = _core.TechDetectRequest
+WafDetectRequest = _core.WafDetectRequest
+LoadTestRequest = _core.LoadTestRequest
+WafValidateRequest = _core.WafValidateRequest
+FuzzRequest = _core.FuzzRequest
+RequestBuilder = _core.RequestBuilder
+
+# Pipeline and assessment types
+PipelineStep = _core.PipelineStep
+StepResult = _core.StepResult
+PipelineResult = _core.PipelineResult
+Pipeline = _core.Pipeline
+AsyncPipeline = _core.AsyncPipeline
+
+# Planning types
+PlanStep = _core.PlanStep
+ScanPlan = _core.ScanPlan
+
+# Checkpoint types
+Checkpoint = _core.Checkpoint
+CheckpointStore = _core.CheckpointStore
 
 # Phase F Track 1: WAF validation and HTTP fuzzing
 BypassResult = _core.BypassResultPy
@@ -347,6 +388,12 @@ __all__ = [
     "Scope",
     "Client",
     "AsyncClient",
+    "Engine",
+    "AsyncEngine",
+    "ExecutionHandle",
+    "ExecutionEvent",
+    "EventLog",
+    "CancellationToken",
     "PyFuture",
     "PortScanResult",
     "OpenPort",
@@ -367,6 +414,11 @@ __all__ = [
     "Finding",
     "FindingSet",
     "Report",
+    # Phase A3: Common result protocol types
+    "ExecutionStatus",
+    "ExecutionStats",
+    "Artifact",
+    "OperationResult",
     # Phase D: Recon types
     "DnsRecordSet",
     "MxRecord",
@@ -378,6 +430,31 @@ __all__ = [
     "TechDetectionResult",
     # Phase D: WAF detection
     "WafDetectionResult",
+    # Operation request types
+    "OperationRequest",
+    "PortScanRequest",
+    "EndpointScanRequest",
+    "FingerprintRequest",
+    "ReconDnsRequest",
+    "TlsInspectRequest",
+    "TechDetectRequest",
+    "WafDetectRequest",
+    "LoadTestRequest",
+    "WafValidateRequest",
+    "FuzzRequest",
+    "RequestBuilder",
+    # Pipeline and assessment types
+    "PipelineStep",
+    "StepResult",
+    "PipelineResult",
+    "Pipeline",
+    "AsyncPipeline",
+    # Planning types
+    "PlanStep",
+    "ScanPlan",
+    # Checkpoint types
+    "Checkpoint",
+    "CheckpointStore",
     # Phase F Track 1: WAF validation and HTTP fuzzing classes
     "BypassResult",
     "WafScanResult",

@@ -16,6 +16,10 @@ from .errors import (
 from .scope import Scope as Scope
 from .client import Client as Client
 from .async_client import AsyncClient as AsyncClient
+from .engine import Engine as Engine
+from .async_engine import AsyncEngine as AsyncEngine
+from .handles import ExecutionHandle as ExecutionHandle, ExecutionEvent as ExecutionEvent, EventLog as EventLog
+from .cancellation import CancellationToken as CancellationToken
 from .dto import (
     PortRange as PortRange,
     TimingPreset as TimingPreset,
@@ -42,6 +46,12 @@ from .finding import (
     FindingSet as FindingSet,
     Report as Report,
 )
+from .status import (
+    ExecutionStatus as ExecutionStatus,
+    ExecutionStats as ExecutionStats,
+    Artifact as Artifact,
+    OperationResult as OperationResult,
+)
 from .recon import (
     MxRecord as MxRecord,
     SoaRecord as SoaRecord,
@@ -53,6 +63,35 @@ from .recon import (
     TechDetectionResult as TechDetectionResult,
 )
 from .waf import WafDetectionResult as WafDetectionResult
+from .requests import (
+    OperationRequest as OperationRequest,
+    PortScanRequest as PortScanRequest,
+    EndpointScanRequest as EndpointScanRequest,
+    FingerprintRequest as FingerprintRequest,
+    ReconDnsRequest as ReconDnsRequest,
+    TlsInspectRequest as TlsInspectRequest,
+    TechDetectRequest as TechDetectRequest,
+    WafDetectRequest as WafDetectRequest,
+    LoadTestRequest as LoadTestRequest,
+    WafValidateRequest as WafValidateRequest,
+    FuzzRequest as FuzzRequest,
+    RequestBuilder as RequestBuilder,
+)
+from .pipeline import (
+    PipelineStep as PipelineStep,
+    StepResult as StepResult,
+    PipelineResult as PipelineResult,
+    Pipeline as Pipeline,
+    AsyncPipeline as AsyncPipeline,
+)
+from .planning import (
+    PlanStep as PlanStep,
+    ScanPlan as ScanPlan,
+)
+from .checkpoint import (
+    Checkpoint as Checkpoint,
+    CheckpointStore as CheckpointStore,
+)
 from .runtime import PyFuture as PyFuture
 from .functions import (
     features as features,
