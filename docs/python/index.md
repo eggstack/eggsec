@@ -56,12 +56,19 @@ additional configuration.
 | WAF detection | Yes | |
 | Findings & reporting | Yes | |
 | Scope enforcement | Yes | |
-| NSE (Nmap scripts) | No | Requires `nse` feature at build time |
+| Consolidated recon | Yes | Milestone C |
+| GraphQL security | Yes | Milestone C |
+| OAuth/OIDC security | Yes | Milestone C |
+| Auth assessment | Yes | Milestone C |
+| NSE script metadata | No | Requires `nse` feature |
+| Packet inspection / traceroute | No | Requires `packet-inspection` feature |
+| Web proxy interception | No | Requires `web-proxy` feature |
+| Mobile dynamic analysis | No | Requires `mobile` + `mobile-dynamic` features |
+| Database pentest | No | Requires `db-pentest` feature |
+| Daemon client | No | Requires `daemon-client` feature |
 | Stress testing | No | Requires `stress-testing` feature |
-| Packet inspection | No | Requires `packet-inspection` feature |
 | Headless browser | No | Requires `headless-browser` feature |
-| Database persistence | No | Requires `database` feature |
-| Cloud integration | No | Requires `cloud` feature |
+| Advanced hunting | No | Requires `advanced-hunting` feature |
 | SBOM generation | No | Requires `sbom` feature |
 | WebSocket testing | No | Requires `websocket` feature |
 
@@ -76,7 +83,7 @@ available in your installed wheel at runtime.
 | Scope enforcement | `Scope` class + `EnforcementError` | `--target` flags | Scope config file | `ApprovedOperation` tokens |
 | Async support | `AsyncClient` + `asyncio` | N/A | N/A | N/A |
 | Report formats | `to_dict()`, `to_json()`, `to_rows()`, `Report.write_*()` | `--format json\|sarif\|...` | Interactive | JSON responses |
-| Feature parity | Core scanner, recon, WAF, fingerprint | Full (all features) | Full (all features) | Depends on build |
+| Feature parity | Core scanner, recon, WAF, fingerprint, Milestone C & D types | Full (all features) | Full (all features) | Depends on build |
 | GIL behavior | Released during I/O | N/A | N/A | N/A |
 | Embeddability | High -- import from any Python script | Requires subprocess | Standalone process | Requires HTTP client |
 | Installation | `pip install eggsec` | Binary or `cargo install` | Binary or `cargo install` | Docker / binary |

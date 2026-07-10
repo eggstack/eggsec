@@ -207,12 +207,12 @@ impl EggsecRuntimeExecutor {
             #[cfg(feature = "advanced-hunting")]
             TaskResult::Hunt(r) => (
                 "hunt".into(),
-                Some(format!("{} findings", r.findings.len())),
+                Some(format!("{} findings", r.total_findings)),
             ),
             #[cfg(feature = "headless-browser")]
             TaskResult::Browser(r) => (
                 "browser".into(),
-                Some(format!("{} findings", r.findings.len())),
+                Some(format!("{} findings", r.total_findings)),
             ),
             #[cfg(feature = "compliance")]
             TaskResult::Compliance(r) => ("compliance".into(), Some(format!("{}", r.framework))),

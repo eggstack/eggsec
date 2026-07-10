@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::error::ScanError;
@@ -765,6 +766,22 @@ impl ProxyManagerPy {
     fn __str__(&self) -> String {
         "ProxyManager".to_string()
     }
+
+    /// Context manager __enter__.
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Context manager __exit__ — no-op (ProxyManager is Arc-backed, no resources to release).
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -838,4 +855,227 @@ pub fn async_proxy_health_check(manager: ProxyManagerPy) -> PyResult<runtime_asy
             .map_err(|e| ScanError::new_err(e.to_string()))?;
         Ok(ProxyHealthPy::from_engine(result))
     })
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// D4: Interception proxy types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Configuration for an intercepting proxy session.
+///
+/// Controls what traffic is intercepted, how it's displayed, and what
+/// mutations are applied.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptConfigPy {
+    #[pyo3(get)]
+    pub listen_addr: String,
+    #[pyo3(get)]
+    pub listen_port: u16,
+    #[pyo3(get)]
+    pub target_host: Option<String>,
+    #[pyo3(get)]
+    pub target_port: Option<u16>,
+    #[pyo3(get)]
+    pub ssl_intercept: bool,
+    #[pyo3(get)]
+    pub verbose: bool,
+    #[pyo3(get)]
+    pub max_flows: usize,
+    #[pyo3(get)]
+    pub timeout_secs: u64,
+    #[pyo3(get)]
+    pub modify_request: bool,
+    #[pyo3(get)]
+    pub modify_response: bool,
+}
+
+#[pymethods]
+impl InterceptConfigPy {
+    #[new]
+    #[pyo3(signature = (listen_addr="127.0.0.1", listen_port=8080, target_host=None, target_port=None, ssl_intercept=false, verbose=false, max_flows=1000, timeout_secs=300, modify_request=false, modify_response=false))]
+    fn new(
+        listen_addr: &str,
+        listen_port: u16,
+        target_host: Option<&str>,
+        target_port: Option<u16>,
+        ssl_intercept: bool,
+        verbose: bool,
+        max_flows: usize,
+        timeout_secs: u64,
+        modify_request: bool,
+        modify_response: bool,
+    ) -> Self {
+        Self {
+            listen_addr: listen_addr.to_string(),
+            listen_port,
+            target_host: target_host.map(|s| s.to_string()),
+            target_port,
+            ssl_intercept,
+            verbose,
+            max_flows,
+            timeout_secs,
+            modify_request,
+            modify_response,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("listen_addr", &self.listen_addr)?;
+        dict.set_item("listen_port", self.listen_port)?;
+        dict.set_item("target_host", &self.target_host)?;
+        dict.set_item("target_port", self.target_port)?;
+        dict.set_item("ssl_intercept", self.ssl_intercept)?;
+        dict.set_item("verbose", self.verbose)?;
+        dict.set_item("max_flows", self.max_flows)?;
+        dict.set_item("timeout_secs", self.timeout_secs)?;
+        dict.set_item("modify_request", self.modify_request)?;
+        dict.set_item("modify_response", self.modify_response)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InterceptConfig(listen={}:{}, ssl={})",
+            self.listen_addr, self.listen_port, self.ssl_intercept
+        )
+    }
+}
+
+/// A captured HTTP request/response exchange.
+///
+/// Represents a single intercepted request and its corresponding response.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapturedExchangePy {
+    #[pyo3(get)]
+    pub id: usize,
+    #[pyo3(get)]
+    pub method: String,
+    #[pyo3(get)]
+    pub uri: String,
+    #[pyo3(get)]
+    pub request_headers: Vec<(String, String)>,
+    #[pyo3(get)]
+    pub request_body: Option<String>,
+    #[pyo3(get)]
+    pub response_status: Option<u16>,
+    #[pyo3(get)]
+    pub response_headers: Vec<(String, String)>,
+    #[pyo3(get)]
+    pub response_body: Option<String>,
+    #[pyo3(get)]
+    pub timestamp_ms: u64,
+    #[pyo3(get)]
+    pub latency_ms: Option<u64>,
+    #[pyo3(get)]
+    pub request_modified: bool,
+    #[pyo3(get)]
+    pub response_modified: bool,
+}
+
+#[pymethods]
+impl CapturedExchangePy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("id", self.id)?;
+        dict.set_item("method", &self.method)?;
+        dict.set_item("uri", &self.uri)?;
+        dict.set_item("request_headers", &self.request_headers)?;
+        dict.set_item("request_body", &self.request_body)?;
+        dict.set_item("response_status", self.response_status)?;
+        dict.set_item("response_headers", &self.response_headers)?;
+        dict.set_item("response_body", &self.response_body)?;
+        dict.set_item("timestamp_ms", self.timestamp_ms)?;
+        dict.set_item("latency_ms", self.latency_ms)?;
+        dict.set_item("request_modified", self.request_modified)?;
+        dict.set_item("response_modified", self.response_modified)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CapturedExchange({} {} → {:?})",
+            self.method, self.uri, self.response_status
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let status = self
+            .response_status
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "?".to_string());
+        format!("{} {} → {}", self.method, self.uri, status)
+    }
+}
+
+/// Result of an interception proxy session.
+///
+/// Contains all captured exchanges and session statistics.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptSessionResultPy {
+    #[pyo3(get)]
+    pub listen_addr: String,
+    #[pyo3(get)]
+    pub listen_port: u16,
+    #[pyo3(get)]
+    pub duration_ms: u64,
+    #[pyo3(get)]
+    pub total_exchanges: usize,
+    #[pyo3(get)]
+    pub modified_requests: usize,
+    #[pyo3(get)]
+    pub modified_responses: usize,
+    #[pyo3(get)]
+    pub exchanges: Vec<CapturedExchangePy>,
+}
+
+#[pymethods]
+impl InterceptSessionResultPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("listen_addr", &self.listen_addr)?;
+        dict.set_item("listen_port", self.listen_port)?;
+        dict.set_item("duration_ms", self.duration_ms)?;
+        dict.set_item("total_exchanges", self.total_exchanges)?;
+        dict.set_item("modified_requests", self.modified_requests)?;
+        dict.set_item("modified_responses", self.modified_responses)?;
+        let exchanges_list = PyList::empty_bound(py);
+        for e in &self.exchanges {
+            exchanges_list.append(e.to_dict(py)?)?;
+        }
+        dict.set_item("exchanges", exchanges_list)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InterceptSessionResult({}:{}, exchanges={})",
+            self.listen_addr, self.listen_port, self.total_exchanges
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "Intercepted {} exchanges on {}:{} in {}ms",
+            self.total_exchanges, self.listen_addr, self.listen_port, self.duration_ms
+        )
+    }
 }

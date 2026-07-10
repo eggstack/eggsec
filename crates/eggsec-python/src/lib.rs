@@ -1,13 +1,17 @@
+mod artifact;
 mod async_client;
 mod async_engine;
 mod audit;
+mod auth_assess;
 mod authorization;
+mod baseline;
 mod cancellation;
 mod checkpoint;
 mod client;
 mod config_model;
 #[cfg(feature = "container")]
 mod container;
+mod cvss;
 #[cfg(feature = "daemon-client")]
 mod daemon;
 #[cfg(feature = "db-pentest")]
@@ -19,15 +23,19 @@ mod error;
 mod execution_context;
 mod features;
 mod finding;
+mod finding_schema;
+mod finding_workflow;
 mod fingerprint;
 #[cfg(feature = "git-secrets")]
 mod git_secrets;
+mod graphql;
 mod handles;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
 #[cfg(feature = "nse")]
 mod nse;
+mod oauth;
 mod operation_metadata;
 #[cfg(feature = "packet-inspection")]
 mod packet_inspection;
@@ -37,6 +45,8 @@ mod preflight;
 #[cfg(feature = "web-proxy")]
 mod proxy;
 mod recon;
+mod reporters;
+mod repository;
 mod requests;
 mod runtime_async;
 mod runtime_sync;
@@ -51,6 +61,16 @@ mod stress;
 mod version;
 mod waf;
 mod waf_validation;
+
+#[cfg(feature = "headless-browser")]
+mod browser_assess;
+#[cfg(feature = "compliance")]
+mod compliance;
+mod consolidated_recon;
+#[cfg(feature = "advanced-hunting")]
+mod hunt;
+mod integrations;
+mod migration;
 
 pub use error::*;
 use pyo3::prelude::*;
@@ -145,6 +165,43 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<finding::Finding>()?;
     m.add_class::<finding::FindingSet>()?;
     m.add_class::<finding::Report>()?;
+    // E5: Repository abstraction
+    m.add_class::<finding_schema::ConfidencePy>()?;
+    m.add_class::<finding_schema::FindingTypePy>()?;
+    m.add_class::<finding_schema::EvidenceKindPy>()?;
+    m.add_class::<finding_schema::AffectedAssetPy>()?;
+    m.add_class::<finding_schema::FindingLocationPy>()?;
+    m.add_class::<finding_schema::VersionedEvidencePy>()?;
+    m.add_class::<finding_schema::VersionedFindingPy>()?;
+    m.add(
+        "FINDING_SCHEMA_VERSION",
+        finding_schema::FINDING_SCHEMA_VERSION,
+    )?;
+    // E2: Artifacts
+    m.add_class::<artifact::ArtifactPy>()?;
+    m.add_class::<artifact::ArtifactReferencePy>()?;
+    m.add_class::<artifact::ArtifactStorePy>()?;
+    // E3: CVSS and vulnerability records
+    m.add_class::<cvss::CvssScorePy>()?;
+    m.add_class::<cvss::VulnerabilityRecordPy>()?;
+    m.add_class::<cvss::RemediationRecordPy>()?;
+    // E4: Finding workflow
+    m.add_class::<finding_workflow::FindingStatePy>()?;
+    m.add_class::<finding_workflow::WorkflowTransitionPy>()?;
+    m.add_class::<finding_workflow::SuppressionPy>()?;
+    m.add_class::<finding_workflow::FindingWorkflowPy>()?;
+    m.add_class::<repository::FindingRepositoryPy>()?;
+    m.add_class::<repository::AssessmentPy>()?;
+    m.add_class::<repository::AssessmentRepositoryPy>()?;
+    // E6: Baselines and comparisons
+    m.add_class::<baseline::FindingCorrelationPy>()?;
+    m.add_class::<baseline::FindingDiffPy>()?;
+    m.add_class::<baseline::AssessmentDiffPy>()?;
+    m.add_class::<baseline::BaselineComparatorPy>()?;
+    // E7: Reporting
+    m.add_class::<reporters::FindingReporterPy>()?;
+    m.add_class::<reporters::SeveritySummaryPy>()?;
+    m.add_class::<reporters::ReportEnvelopePy>()?;
     // Phase A3: Common result protocol types
     m.add_class::<status::ExecutionStatus>()?;
     m.add_class::<status::ExecutionStats>()?;
@@ -217,6 +274,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<mobile::MobilePlatformPy>()?;
         m.add_class::<mobile::MobileFindingPy>()?;
         m.add_class::<mobile::MobileScanReportPy>()?;
+        // D5: Mobile dynamic
+        m.add_class::<mobile::MobileDevicePy>()?;
+        m.add_class::<mobile::DynamicMobileConfigPy>()?;
+        m.add_class::<mobile::DynamicMobileReportPy>()?;
     }
     // Phase F Track 6: Database pentesting
     #[cfg(feature = "db-pentest")]
@@ -224,6 +285,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<db_pentest::DbFindingPy>()?;
         m.add_class::<db_pentest::DbPentestReportPy>()?;
         m.add_class::<db_pentest::DbPentestConfig>()?;
+        // D7: Database extensibility
+        m.add_class::<db_pentest::DbDriverInfoPy>()?;
+        m.add_class::<db_pentest::DbCapabilityPy>()?;
+        m.add_class::<db_pentest::DbCredentialProviderPy>()?;
+        m.add_class::<db_pentest::DbSessionConfigPy>()?;
     }
     // Phase F Track 9: Container security
     #[cfg(feature = "container")]
@@ -252,6 +318,14 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<packet_inspection::PacketInfoPy>()?;
         m.add_class::<packet_inspection::NetworkInterfaceInfoPy>()?;
         m.add_class::<packet_inspection::PcapWriterPy>()?;
+        // D2: Live packet inspection
+        m.add_class::<packet_inspection::PacketFilterPy>()?;
+        m.add_class::<packet_inspection::FlowRecordPy>()?;
+        m.add_class::<packet_inspection::LiveCaptureResultPy>()?;
+        // D3: Network probing
+        m.add_class::<packet_inspection::TracerouteConfigPy>()?;
+        m.add_class::<packet_inspection::TracerouteHopPy>()?;
+        m.add_class::<packet_inspection::TracerouteResultPy>()?;
     }
     // Phase F Track 2: Load testing
     m.add_class::<loadtest::LoadTestResultPy>()?;
@@ -272,6 +346,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<nse::NseLibraryUsePy>()?;
         m.add_class::<nse::NseRuleEvaluationPy>()?;
         m.add_class::<nse::NseReportPy>()?;
+        // D1: NSE runtime completion
+        m.add_class::<nse::NseScriptMetadataPy>()?;
+        m.add_class::<nse::NseSandboxPolicyPy>()?;
+        m.add_class::<nse::NseTargetContextPy>()?;
     }
     // Phase F Track 7: Proxy and web proxy
     #[cfg(feature = "web-proxy")]
@@ -283,6 +361,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<proxy::ProxyManagerPy>()?;
         m.add_class::<proxy::HealthCheckResultPy>()?;
         m.add_class::<proxy::ProxyHealthPy>()?;
+        // D4: Interception proxy
+        m.add_class::<proxy::InterceptConfigPy>()?;
+        m.add_class::<proxy::CapturedExchangePy>()?;
+        m.add_class::<proxy::InterceptSessionResultPy>()?;
     }
 
     // Functions
@@ -331,6 +413,9 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(mobile::async_analyze_apk, m)?)?;
         m.add_function(wrap_pyfunction!(mobile::analyze_ipa, m)?)?;
         m.add_function(wrap_pyfunction!(mobile::async_analyze_ipa, m)?)?;
+        // D5: Mobile dynamic functions
+        m.add_function(wrap_pyfunction!(mobile::list_mobile_devices, m)?)?;
+        m.add_function(wrap_pyfunction!(mobile::dynamic_mobile_analysis, m)?)?;
     }
     // Phase F Track 6: Database pentesting functions
     #[cfg(feature = "db-pentest")]
@@ -343,6 +428,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(db_pentest::db_probe_mssql, m)?)?;
         m.add_function(wrap_pyfunction!(db_pentest::db_probe_mongodb, m)?)?;
         m.add_function(wrap_pyfunction!(db_pentest::db_probe_redis, m)?)?;
+        // D7: Database extensibility functions
+        m.add_function(wrap_pyfunction!(db_pentest::db_list_drivers, m)?)?;
+        m.add_function(wrap_pyfunction!(db_pentest::db_get_capabilities, m)?)?;
+        m.add_function(wrap_pyfunction!(db_pentest::db_run_with_config, m)?)?;
     }
     // Phase F Track 9: Container functions
     #[cfg(feature = "container")]
@@ -362,6 +451,13 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
             m
         )?)?;
         m.add_function(wrap_pyfunction!(packet_inspection::parse_pcap, m)?)?;
+        // D3: Network probing functions
+        m.add_function(wrap_pyfunction!(packet_inspection::run_traceroute, m)?)?;
+        m.add_function(wrap_pyfunction!(
+            packet_inspection::async_run_traceroute,
+            m
+        )?)?;
+        m.add_function(wrap_pyfunction!(packet_inspection::traceroute, m)?)?;
     }
     // Phase F Track 2: Load testing functions
     m.add_function(wrap_pyfunction!(loadtest::load_test_http, m)?)?;
@@ -378,6 +474,9 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(nse::nse_run, m)?)?;
         m.add_function(wrap_pyfunction!(nse::async_nse_run, m)?)?;
         m.add_function(wrap_pyfunction!(nse::nse_list_libraries, m)?)?;
+        // D1: NSE runtime completion functions
+        m.add_function(wrap_pyfunction!(nse::nse_list_scripts, m)?)?;
+        m.add_function(wrap_pyfunction!(nse::nse_get_script_metadata, m)?)?;
     }
     // Phase F Track 7: Proxy and web proxy functions
     #[cfg(feature = "web-proxy")]
@@ -391,6 +490,13 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     {
         m.add_class::<daemon::DaemonResponsePy>()?;
         m.add_class::<daemon::DaemonClientPy>()?;
+        // D6: Daemon task API
+        m.add_class::<daemon::DaemonCapabilitiesPy>()?;
+        m.add_class::<daemon::TaskHandlePy>()?;
+        m.add_class::<daemon::TaskStatusPy>()?;
+        m.add_class::<daemon::DaemonEventPy>()?;
+        m.add_class::<daemon::SessionSummaryPy>()?;
+        m.add_class::<daemon::TransportMetadataPy>()?;
         m.add_function(wrap_pyfunction!(daemon::daemon_connect, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_health, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_declare_client, m)?)?;
@@ -398,6 +504,80 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(daemon::async_daemon_list_sessions, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_get_snapshot, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_close_session, m)?)?;
+    }
+    // Milestone C: Core assessment domains
+    // C1: Consolidated recon
+    m.add_class::<consolidated_recon::ConsolidatedReconConfigPy>()?;
+    m.add_class::<consolidated_recon::ReconModuleResultPy>()?;
+    m.add_class::<consolidated_recon::ConsolidatedReconReportPy>()?;
+    m.add_function(wrap_pyfunction!(
+        consolidated_recon::run_consolidated_recon,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        consolidated_recon::async_run_consolidated_recon,
+        m
+    )?)?;
+    // C2: GraphQL
+    m.add_class::<graphql::GraphQLVulnerabilityPy>()?;
+    m.add_class::<graphql::GraphQLTestResultPy>()?;
+    m.add_class::<graphql::GraphQLTypePy>()?;
+    m.add_class::<graphql::GraphQLFieldPy>()?;
+    m.add_class::<graphql::GraphQLArgPy>()?;
+    m.add_class::<graphql::GraphQLInputFieldPy>()?;
+    m.add_class::<graphql::GraphQLSchemaPy>()?;
+    m.add_class::<graphql::GraphQLTestConfigPy>()?;
+    m.add_function(wrap_pyfunction!(graphql::graphql_test, m)?)?;
+    m.add_function(wrap_pyfunction!(graphql::async_graphql_test, m)?)?;
+    // C3: OAuth/OIDC
+    m.add_class::<oauth::OAuthVulnerabilityPy>()?;
+    m.add_class::<oauth::OAuthEndpointKindPy>()?;
+    m.add_class::<oauth::OAuthEndpointPy>()?;
+    m.add_class::<oauth::OAuthTestResultPy>()?;
+    m.add_class::<oauth::OAuthTestConfigPy>()?;
+    m.add_function(wrap_pyfunction!(oauth::oauth_discover_endpoints, m)?)?;
+    m.add_function(wrap_pyfunction!(oauth::oauth_test, m)?)?;
+    m.add_function(wrap_pyfunction!(oauth::async_oauth_test, m)?)?;
+    // C4: Auth assessment
+    m.add_class::<auth_assess::AuthTestTypePy>()?;
+    m.add_class::<auth_assess::AuthFindingPy>()?;
+    m.add_class::<auth_assess::AuthTestConfigPy>()?;
+    m.add_class::<auth_assess::AuthTestReportPy>()?;
+    m.add_function(wrap_pyfunction!(auth_assess::auth_test, m)?)?;
+    m.add_function(wrap_pyfunction!(auth_assess::async_auth_test, m)?)?;
+    // C5: Headless browser
+    #[cfg(feature = "headless-browser")]
+    {
+        m.add_class::<browser_assess::XssSourcePy>()?;
+        m.add_class::<browser_assess::XssSinkPy>()?;
+        m.add_class::<browser_assess::DomXssFindingPy>()?;
+        m.add_class::<browser_assess::DiscoveryMethodPy>()?;
+        m.add_class::<browser_assess::SpaRoutePy>()?;
+        m.add_class::<browser_assess::ClientIssueTypePy>()?;
+        m.add_class::<browser_assess::ClientIssuePy>()?;
+        m.add_class::<browser_assess::BrowserTestConfigPy>()?;
+        m.add_class::<browser_assess::BrowserTestReportPy>()?;
+        m.add_function(wrap_pyfunction!(browser_assess::browser_test, m)?)?;
+        m.add_function(wrap_pyfunction!(browser_assess::async_browser_test, m)?)?;
+    }
+    // C6: Advanced hunting
+    #[cfg(feature = "advanced-hunting")]
+    {
+        m.add_class::<hunt::ChainTypePy>()?;
+        m.add_class::<hunt::ChainStepPy>()?;
+        m.add_class::<hunt::AttackChainPy>()?;
+        m.add_class::<hunt::FlawTypePy>()?;
+        m.add_class::<hunt::BusinessLogicFlawPy>()?;
+        m.add_class::<hunt::RaceTypePy>()?;
+        m.add_class::<hunt::RaceConditionPy>()?;
+        m.add_class::<hunt::BypassTypePy>()?;
+        m.add_class::<hunt::AuthzBypassPy>()?;
+        m.add_class::<hunt::SessionIssueTypePy>()?;
+        m.add_class::<hunt::SessionIssuePy>()?;
+        m.add_class::<hunt::HuntTestConfigPy>()?;
+        m.add_class::<hunt::HuntReportPy>()?;
+        m.add_function(wrap_pyfunction!(hunt::hunt_test, m)?)?;
+        m.add_function(wrap_pyfunction!(hunt::async_hunt_test, m)?)?;
     }
     // B4: Execution Context types
     m.add_class::<execution_context::ExecutionSurfacePy>()?;
@@ -422,6 +602,27 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(audit::audit_event_from_enforcement, m)?)?;
     m.add_function(wrap_pyfunction!(audit::audit_event_from_preflight, m)?)?;
     m.add_function(wrap_pyfunction!(audit::emit_audit_event, m)?)?;
+    // E8: Compliance mapping (feature-gated)
+    #[cfg(feature = "compliance")]
+    {
+        m.add_class::<compliance::ComplianceFrameworkPy>()?;
+        m.add_class::<compliance::ComplianceControlPy>()?;
+        m.add_class::<compliance::ComplianceMappingPy>()?;
+        m.add_class::<compliance::ComplianceResultPy>()?;
+        m.add_class::<compliance::ControlAssessmentPy>()?;
+        m.add_class::<compliance::ComplianceReportPy>()?;
+        m.add_class::<compliance::ComplianceMapperPy>()?;
+    }
+    // E9: External integrations
+    m.add_class::<integrations::IntegrationTypePy>()?;
+    m.add_class::<integrations::PublicationRecordPy>()?;
+    m.add_class::<integrations::RetryPolicyPy>()?;
+    m.add_class::<integrations::PublicationPolicyPy>()?;
+    m.add_class::<integrations::ExternalIntegrationPy>()?;
+    // E10: Migration and compatibility
+    m.add_class::<migration::SchemaVersionPy>()?;
+    m.add_class::<migration::MigrationResultPy>()?;
+    m.add_class::<migration::FindingMigrationPy>()?;
 
     Ok(())
 }

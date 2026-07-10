@@ -238,6 +238,13 @@ from .db_pentest import (
     db_probe_mssql as db_probe_mssql,
     db_probe_mongodb as db_probe_mongodb,
     db_probe_redis as db_probe_redis,
+    DbDriverInfoPy as DbDriverInfoPy,
+    DbCapabilityPy as DbCapabilityPy,
+    DbCredentialProviderPy as DbCredentialProviderPy,
+    DbSessionConfigPy as DbSessionConfigPy,
+    db_list_drivers as db_list_drivers,
+    db_get_capabilities as db_get_capabilities,
+    db_run_with_config as db_run_with_config,
 )
 from .proxy import (
     ProxyTypePy as ProxyTypePy,
@@ -250,6 +257,9 @@ from .proxy import (
     create_proxy_manager as create_proxy_manager,
     async_add_proxy as async_add_proxy,
     async_proxy_health_check as async_proxy_health_check,
+    InterceptConfigPy as InterceptConfigPy,
+    CapturedExchangePy as CapturedExchangePy,
+    InterceptSessionResultPy as InterceptSessionResultPy,
 )
 from .mobile import (
     MobilePlatformPy as MobilePlatformPy,
@@ -259,6 +269,11 @@ from .mobile import (
     async_analyze_apk as async_analyze_apk,
     analyze_ipa as analyze_ipa,
     async_analyze_ipa as async_analyze_ipa,
+    MobileDevicePy as MobileDevicePy,
+    DynamicMobileConfigPy as DynamicMobileConfigPy,
+    DynamicMobileReportPy as DynamicMobileReportPy,
+    list_mobile_devices as list_mobile_devices,
+    dynamic_mobile_analysis as dynamic_mobile_analysis,
 )
 from .container import (
     ContainerScanTypePy as ContainerScanTypePy,
@@ -291,6 +306,15 @@ from .packet_inspection import (
     PcapWriterPy as PcapWriterPy,
     list_network_interfaces as list_network_interfaces,
     parse_pcap as parse_pcap,
+    PacketFilterPy as PacketFilterPy,
+    FlowRecordPy as FlowRecordPy,
+    LiveCaptureResultPy as LiveCaptureResultPy,
+    TracerouteConfigPy as TracerouteConfigPy,
+    TracerouteHopPy as TracerouteHopPy,
+    TracerouteResultPy as TracerouteResultPy,
+    run_traceroute as run_traceroute,
+    async_run_traceroute as async_run_traceroute,
+    traceroute as traceroute,
 )
 from .stress import (
     StressTypePy as StressTypePy,
@@ -309,6 +333,11 @@ from .nse import (
     nse_run as nse_run,
     async_nse_run as async_nse_run,
     nse_list_libraries as nse_list_libraries,
+    NseScriptMetadataPy as NseScriptMetadataPy,
+    NseSandboxPolicyPy as NseSandboxPolicyPy,
+    NseTargetContextPy as NseTargetContextPy,
+    nse_list_scripts as nse_list_scripts,
+    nse_get_script_metadata as nse_get_script_metadata,
 )
 from .daemon import (
     DaemonResponsePy as DaemonResponsePy,
@@ -320,4 +349,10 @@ from .daemon import (
     async_daemon_list_sessions as async_daemon_list_sessions,
     async_daemon_get_snapshot as async_daemon_get_snapshot,
     async_daemon_close_session as async_daemon_close_session,
+    DaemonCapabilitiesPy as DaemonCapabilitiesPy,
+    TaskHandlePy as TaskHandlePy,
+    TaskStatusPy as TaskStatusPy,
+    DaemonEventPy as DaemonEventPy,
+    SessionSummaryPy as SessionSummaryPy,
+    TransportMetadataPy as TransportMetadataPy,
 )

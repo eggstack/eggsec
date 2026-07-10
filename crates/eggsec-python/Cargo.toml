@@ -30,6 +30,9 @@ stress-testing = ["eggsec/stress-testing"]
 nse = ["eggsec/nse", "dep:eggsec-nse"]
 container = ["eggsec/container"]
 daemon-client = ["dep:eggsec-daemon", "dep:eggsec-runtime"]
+headless-browser = ["eggsec/headless-browser"]
+advanced-hunting = ["eggsec/advanced-hunting"]
+compliance = []
 # Aggregate: everything that can be built without system deps
 full-no-system = ["websocket", "git-secrets", "sbom", "container"]
 
@@ -50,4 +53,5 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 rustc-hash = { workspace = true }
+uuid = { workspace = true }
 url = "2"

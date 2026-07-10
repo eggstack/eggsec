@@ -11,7 +11,7 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
-**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B).
+**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Milestone C adds: consolidated recon, GraphQL/OAuth/auth assessment, headless browser testing, and advanced vulnerability hunting. Milestone E adds: typed findings schema, artifact storage, workflow management, finding repository, baseline comparison, reporting engine, compliance mapping (feature-gated), external integrations, and schema migration.
 
 ## Directory Structure
 
@@ -42,7 +42,23 @@ crates/eggsec-python/
 │   ├── execution_context.rs # EnforcementContext, ExecutionSurface, ExecutionProfile
 │   ├── authorization.rs     # ExecutionPolicy, ManualOverride
 │   ├── preflight.rs         # PreflightResult, preflight_operation()
-│   └── audit.rs             # EnforcementAuditEvent, AuditOutcome, emit_audit_event()
+│   ├── audit.rs             # EnforcementAuditEvent, AuditOutcome, emit_audit_event()
+│   ├── consolidated_recon.rs # ConsolidatedReconConfig, run_consolidated_recon
+│   ├── graphql.rs           # GraphQLFuzzer, GraphQLTestConfig, graphql_test
+│   ├── oauth.rs             # OAuthFuzzer, OAuthTestConfig, oauth_test
+│   ├── auth_assess.rs       # AuthTestConfig, AuthTestReport, auth_test
+│   ├── browser_assess.rs    # BrowserTestConfig, BrowserTestReport, browser_test (feature-gated)
+│   ├── hunt.rs              # HuntTestConfig, HuntReport, hunt_test (feature-gated)
+│   ├── finding_schema.rs    # Confidence, FindingType, VersionedFinding, VersionedEvidence (Milestone E)
+│   ├── artifact.rs          # MilestoneArtifact, ArtifactReference, ArtifactStore (Milestone E)
+│   ├── vuln_record.rs       # CvssScore, VulnerabilityRecord, RemediationRecord (Milestone E)
+│   ├── workflow.rs          # FindingState, WorkflowTransition, Suppression, FindingWorkflow (Milestone E)
+│   ├── repository.rs        # FindingRepository, Assessment, AssessmentRepository (Milestone E)
+│   ├── correlation.rs       # FindingCorrelation, FindingDiff, AssessmentDiff, BaselineComparator (Milestone E)
+│   ├── reporting.rs         # FindingReporter, SeveritySummary, ReportEnvelope (Milestone E)
+│   ├── compliance.rs        # ComplianceFramework, ComplianceControl, ComplianceMapper (feature-gated, Milestone E)
+│   ├── integration.rs       # IntegrationType, PublicationRecord, ExternalIntegration (Milestone E)
+│   └── migration.rs         # SchemaVersion, MigrationResult, FindingMigration (Milestone E)
 ├── python/
 │   └── eggsec/
 │       ├── __init__.py      # Re-exports all public API
@@ -110,6 +126,9 @@ maturin develop --features full-no-system
 | `stress-testing` | `stress-testing` | none | Stress testing (raw sockets) |
 | `nse` | `nse` | `libssl-dev` | Nmap NSE scripts (requires `eggsec-nse`) |
 | `container` | `container` | none | K8s/Docker scanning |
+| `headless-browser` | `headless-browser` | `headless-chrome` | Headless browser testing (DOM XSS, SPA routes) |
+| `advanced-hunting` | `advanced-hunting` | none | Advanced vulnerability hunting (attack chains, business logic, race conditions) |
+| `compliance` | `compliance` | none | Compliance mapping and reporting (OWASP, HIPAA, PCI, SOC2) |
 | `daemon-client` | — | none | Daemon session access |
 | `full-no-system` | — | none | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` |
 
@@ -154,6 +173,90 @@ pytest crates/eggsec-python/tests/test_policy_equivalence.py
 | `EnforcementAuditEvent` | Audit trail entry with event_id, timestamp, surface, outcome, scope info, policy hash. |
 | `ScopeValidation` | Result of `validate_scope()` (valid, errors, warnings, target/exclusion counts). |
 | `AlertChannelConfig` | Alert channel config. Use `.webhook()`, `.email()`, `.slack()`, `.pagerduty()` static constructors. |
+| `ConsolidatedReconConfig` | Config for consolidated recon. Toggle modules: `run_dns`, `run_ssl`, `run_tech_detect`, etc. |
+| `ReconModuleResult` | Single module result: `module`, `success`, `data_json`, `error`. |
+| `ConsolidatedReconReport` | Aggregated recon report with per-module results. |
+| `GraphQLVulnerability` | Enum: `Introspection`, `QueryInjection`, `DepthLimitBypass`, etc. |
+| `GraphQLTestResult` | Single test result: `vulnerability`, `success`, `query`, `severity`. |
+| `GraphQLType` | GraphQL schema type: `name`, `kind`, `fields`, `input_fields`. |
+| `GraphQLField` | GraphQL field: `name`, `type_name`, `args`, `is_deprecated`. |
+| `GraphQLArg` | GraphQL argument: `name`, `type_name`, `default_value`. |
+| `GraphQLInputField` | GraphQL input field: `name`, `type_name`, `default_value`. |
+| `GraphQLSchema` | Full introspection schema: `query_type`, `mutation_type`, `types`. |
+| `GraphQLTestConfig` | Config for GraphQL tests: `enable_introspection`, `enable_depth_bypass`, etc. |
+| `OAuthVulnerability` | Enum: `RedirectUriValidation`, `StateParameterMissing`, etc. |
+| `OAuthEndpointKind` | Enum: `OidcDiscovery`, `Authorize`, `Token`, `UserInfo`, `Jwks`, `Revoke`. |
+| `OAuthEndpoint` | Discovered endpoint: `url`, `kind`. |
+| `OAuthTestResult` | Single test result: `vulnerability`, `success`, `endpoint`, `severity`. |
+| `OAuthTestConfig` | Config for OAuth tests: `client_id`, `redirect_uri`, `issuer_url`, etc. |
+| `AuthTestType` | Enum: `BruteForce`, `CredentialStuffing`, `AccountLockout`, etc. |
+| `AuthFinding` | Auth finding: `test_type`, `severity`, `title`, `description`, `recommendation`. |
+| `AuthTestConfig` | Config for auth tests: `max_attempts`, `concurrency`, `usernames`, `passwords`. |
+| `AuthTestReport` | Aggregated auth report with per-test-type results and findings. |
+| `XssSource` | Enum: `Url`, `Fragment`, `PostMessage`, `Storage`, etc. |
+| `XssSink` | Enum: `InnerHtml`, `Eval`, `DocumentWrite`, `Location`, etc. |
+| `DomXssFinding` | DOM XSS finding: `id`, `source`, `sink`, `severity`, `evidence`. |
+| `DiscoveryMethod` | Enum: `LinkExtraction`, `ApiDiscovery`, `RouteBruteForce`, `HistoryApi`. |
+| `SpaRoute` | SPA route: `path`, `method`, `parameters`, `discovered_via`. |
+| `ClientIssueType` | Enum: `InsecureStorage`, `WeakCrypto`, `CorsMisconfig`, etc. |
+| `ClientIssue` | Client-side issue: `id`, `issue_type`, `severity`, `location`, `description`. |
+| `BrowserTestConfig` | Config for browser tests: `check_dom_xss`, `discover_spa_routes`, etc. |
+| `BrowserTestReport` | Browser scan report with DOM XSS, SPA routes, client issues. |
+| `ChainType` | Enum: `AuthenticationBypass`, `PrivilegeEscalation`, `DataExfiltration`, etc. |
+| `ChainStep` | Attack chain step: `order`, `description`, `evidence`, `severity`. |
+| `AttackChain` | Multi-step attack chain: `id`, `name`, `chain_type`, `steps`, `severity`. |
+| `FlawType` | Enum: `BusinessLogicBypass`, `RaceCondition`, `InputValidation`, etc. |
+| `BusinessLogicFlaw` | Business logic flaw: `id`, `flaw_type`, `severity`, `evidence`. |
+| `RaceType` | Enum: `DoubleSpend`, `TimeOfCheck`, `ConcurrentModification`, etc. |
+| `RaceCondition` | Race condition finding: `id`, `race_type`, `severity`, `endpoint`. |
+| `BypassType` | Enum: `VerticalPrivilegeEscalation`, `HorizontalPrivilegeEscalation`, etc. |
+| `AuthzBypass` | Authorization bypass: `id`, `bypass_type`, `severity`, `endpoint`, `evidence`. |
+| `SessionIssueType` | Enum: `Fixation`, `TokenLeakage`, `InsecureCookie`, etc. |
+| `SessionIssue` | Session issue: `id`, `issue_type`, `severity`, `evidence`. |
+| `HuntTestConfig` | Config for hunt: `check_attack_chains`, `check_business_logic`, etc. |
+| `HuntReport` | Hunt report with chains, business logic, race, authz, session findings. |
+| `Confidence` | Enum: `Certain`, `High`, `Medium`, `Low`, `None`. |
+| `FindingType` | Enum: `Vulnerability`, `Misconfiguration`, `InformationLeak`, `PolicyViolation`, `Custom`. |
+| `EvidenceKind` | Enum: `Screenshot`, `Log`, `PacketCapture`, `HttpRequestResponse`, `CommandLine`, `Artifact`, `Custom`. |
+| `AffectedAsset` | Asset: `asset_type`, `identifier`, `details`. |
+| `FindingLocation` | Location: `file_path`, `line`, `column`, `url`, `parameter`. |
+| `VersionedEvidence` | Evidence with `schema_version`, `kind`, `data`, `collected_at`. |
+| `VersionedFinding` | Finding with `schema_version`, `id`, `title`, `severity`, `confidence`, `finding_type`, `evidence`, `location`, `assets`, `remediation`. |
+| `MilestoneArtifact` | Stored artifact: `id`, `name`, `kind`, `mime_type`, `size_bytes`, `content_hash`, `path`, `created_at`. |
+| `ArtifactReference` | Reference: `artifact_id`, `finding_id`, `role`. |
+| `ArtifactStore` | Artifact store: `store(artifact)`, `get(id)`, `list()`, `delete(id)`. |
+| `CvssScore` | CVSS v3.1: `base_score`, `temporal_score`, `environmental_score`, `vector_string`. |
+| `VulnerabilityRecord` | Vuln record: `cve_id`, `cvss`, `description`, `references`, `published_at`. |
+| `RemediationRecord` | Remediation: `finding_id`, `summary`, `steps`, `references`, `effort`. |
+| `FindingState` | Enum: `Open`, `Triaged`, `InProgress`, `Resolved`, `Dismissed`, `Reopened`. |
+| `WorkflowTransition` | Transition: `from_state`, `to_state`, `actor`, `timestamp`, `reason`. |
+| `Suppression` | Suppression: `finding_id`, `reason`, `expires_at`, `suppressed_by`. |
+| `FindingWorkflow` | Workflow: `transition(finding_id, to_state, ...)`, `history(finding_id)`. |
+| `FindingRepository` | Repository: `save(finding)`, `get(id)`, `query(filters)`, `count()`. |
+| `Assessment` | Assessment: `id`, `name`, `target`, `started_at`, `completed_at`, `finding_ids`, `metadata`. |
+| `AssessmentRepository` | Repository: `save(assessment)`, `get(id)`, `list()`. |
+| `FindingCorrelation` | Correlation: `finding_ids`, `correlation_type`, `confidence`, `description`. |
+| `FindingDiff` | Diff: `finding_id`, `added_fields`, `removed_fields`, `changed_fields`. |
+| `AssessmentDiff` | Diff: `assessment_id`, `new_findings`, `resolved_findings`, `changed_findings`. |
+| `BaselineComparator` | Comparator: `compare(baseline, current)`, `summary(diff)`. |
+| `FindingReporter` | Reporter: `generate(findings, format)`, `write(path)`. |
+| `SeveritySummary` | Summary: `critical`, `high`, `medium`, `low`, `info`, `total`. |
+| `ReportEnvelope` | Envelope: `report_id`, `generated_at`, `schema_version`, `format`, `summary`, `finding_count`. |
+| `ComplianceFramework` | Framework: `id`, `name`, `version`, `controls` (feature: `compliance`). |
+| `ComplianceControl` | Control: `id`, `framework_id`, `title`, `description`, `severity` (feature: `compliance`). |
+| `ComplianceMapping` | Mapping: `finding_id`, `control_id`, `match_type`, `confidence` (feature: `compliance`). |
+| `ComplianceResult` | Result: `framework_id`, `compliant_count`, `non_compliant_count`, `mappings` (feature: `compliance`). |
+| `ControlAssessment` | Assessment: `control_id`, `status`, `findings`, `evidence` (feature: `compliance`). |
+| `ComplianceReport` | Report: `framework`, `results`, `control_assessments`, `generated_at` (feature: `compliance`). |
+| `ComplianceMapper` | Mapper: `map_findings(findings, framework)`, `assess(findings, framework)` (feature: `compliance`). |
+| `IntegrationType` | Enum: `Jira`, `GitHub`, `GitLab`, `Slack`, `Webhook`, `Custom`. |
+| `PublicationRecord` | Record: `finding_id`, `integration_type`, `external_id`, `url`, `published_at`. |
+| `RetryPolicy` | Policy: `max_retries`, `backoff_ms`, `timeout_ms`. |
+| `PublicationPolicy` | Policy: `integration_type`, `auto_publish`, `retry`, `filter_severity`. |
+| `ExternalIntegration` | Integration: `publish(finding)`, `list_publications()`, `status()`. |
+| `SchemaVersion` | Version: `major`, `minor`, `patch`, `is_compatible(other)`. |
+| `MigrationResult` | Result: `success`, `migrated_count`, `errors`, `warnings`. |
+| `FindingMigration` | Migration: `migrate(findings, from_version, to_version)`, `register_transform(version, fn)`. |
 
 ### Functions
 
@@ -178,6 +281,13 @@ pytest crates/eggsec-python/tests/test_policy_equivalence.py
 | `audit_event_from_enforcement` | Sync | Create `EnforcementAuditEvent` from enforcement outcome |
 | `audit_event_from_preflight` | Sync | Create `EnforcementAuditEvent` from preflight result |
 | `emit_audit_event` | Sync | Emit an audit event (logging/sink) |
+| `run_consolidated_recon` / `async_run_consolidated_recon` | Both | Consolidated multi-module reconnaissance |
+| `graphql_test` / `async_graphql_test` | Both | GraphQL security assessment (introspection, injection, batching) |
+| `oauth_discover_endpoints` | Sync | Discover OAuth/OIDC endpoints from issuer URL |
+| `oauth_test` / `async_oauth_test` | Both | OAuth/OIDC security assessment (redirect, state, scope, PKCE) |
+| `auth_test` / `async_auth_test` | Both | Authentication security assessment (brute force, lockout, MFA, etc.) |
+| `browser_test` / `async_browser_test` | Both | Headless browser assessment (DOM XSS, SPA, client checks) — feature-gated |
+| `hunt_test` / `async_hunt_test` | Both | Advanced vulnerability hunting (chains, business logic, race, authz) — feature-gated |
 
 ### Exceptions
 
@@ -432,6 +542,297 @@ result = validate_scope(scope)
 print(result.valid, result.errors, result.warnings)
 ```
 
+### Consolidated Reconnaissance
+
+```python
+from eggsec import ConsolidatedReconConfig, run_consolidated_recon
+
+# Run all available modules
+config = ConsolidatedReconConfig()
+report = run_consolidated_recon("example.com", config)
+print(f"Completed {sum(1 for m in report.results if m.success)}/{len(report.results)} modules")
+
+# Selective modules
+config = ConsolidatedReconConfig(
+    run_dns=True, run_ssl=True, run_tech_detect=True,
+    run_subdomain=False, run_whois=False,
+    run_cors=False, run_wayback=False,
+    run_js_analysis=False, run_content=False, run_email=False,
+)
+report = run_consolidated_recon("example.com", config)
+for module in report.results:
+    if module.success:
+        print(f"{module.module}: {module.data_json[:100]}")
+```
+
+### GraphQL Security Assessment
+
+```python
+from eggsec import GraphQLTestConfig, graphql_test
+
+config = GraphQLTestConfig(
+    endpoint="https://example.com/graphql",
+    enable_introspection=True,
+    enable_depth_bypass=True,
+    enable_alias_overload=True,
+    max_depth=5,
+)
+report = graphql_test("https://example.com", config)
+for result in report.results:
+    if result.success:
+        print(f"[{result.severity}] {result.vulnerability}: {result.description}")
+```
+
+### OAuth/OIDC Assessment
+
+```python
+from eggsec import oauth_discover_endpoints, OAuthTestConfig, oauth_test
+
+# Discover endpoints
+endpoints = oauth_discover_endpoints("https://auth.example.com")
+for ep in endpoints:
+    print(f"{ep.kind}: {ep.url}")
+
+# Run tests
+config = OAuthTestConfig(
+    client_id="test-client",
+    redirect_uri="https://example.com/callback",
+    issuer_url="https://auth.example.com",
+    enable_redirect_test=True,
+    enable_scope_test=True,
+    enable_state_test=True,
+)
+report = oauth_test("https://auth.example.com", config)
+for result in report.results:
+    if result.success:
+        print(f"[{result.severity}] {result.vulnerability}")
+```
+
+### Authentication Assessment
+
+```python
+from eggsec import AuthTestConfig, auth_test
+
+config = AuthTestConfig(
+    max_attempts=5,
+    concurrency=10,
+    timeout_secs=30,
+    stop_on_lockout=True,
+    usernames=["admin", "user"],
+    passwords=["password123", "admin"],
+)
+report = auth_test("https://example.com", config)
+for finding in report.findings:
+    print(f"[{finding.severity}] {finding.title}: {finding.description}")
+    print(f"  Recommendation: {finding.recommendation}")
+```
+
+### Headless Browser Assessment
+
+```python
+from eggsec import BrowserTestConfig, browser_test
+
+config = BrowserTestConfig(
+    check_dom_xss=True,
+    discover_spa_routes=True,
+    check_client_security=True,
+    timeout_ms=30000,
+)
+report = browser_test("https://example.com", config)
+for finding in report.dom_xss:
+    print(f"DOM XSS: {finding.source} -> {finding.sink} [{finding.severity}]")
+for route in report.spa_routes:
+    print(f"SPA Route: {route.path} ({route.method})")
+for issue in report.client_issues:
+    print(f"Client Issue: {issue.issue_type} [{issue.severity}]")
+```
+
+### Advanced Vulnerability Hunting
+
+```python
+from eggsec import HuntTestConfig, hunt_test
+
+config = HuntTestConfig(
+    check_attack_chains=True,
+    check_business_logic=True,
+    check_race_conditions=True,
+    check_authz_bypass=True,
+    check_session=True,
+    concurrency=10,
+)
+report = hunt_test("https://example.com", config)
+for chain in report.attack_chains:
+    print(f"Attack Chain: {chain.name} [{chain.severity}]")
+    for step in chain.steps:
+        print(f"  Step {step.order}: {step.description}")
+for flaw in report.business_logic:
+    print(f"Business Logic: {flaw.flaw_type} [{flaw.severity}]")
+for race in report.race_conditions:
+    print(f"Race Condition: {race.race_type} [{race.severity}]")
+for bypass in report.authz_bypasses:
+    print(f"AuthZ Bypass: {bypass.bypass_type} [{bypass.severity}]")
+```
+
+### Milestone E: Findings, Reporting, Storage, and Integrations
+
+#### Creating Versioned Findings
+
+```python
+from eggsec import (
+    Confidence, FindingType, EvidenceKind, Severity,
+    VersionedFinding, VersionedEvidence, AffectedAsset, FindingLocation,
+)
+
+evidence = VersionedEvidence(
+    kind=EvidenceKind.HTTP_REQUEST_RESPONSE,
+    data="HTTP/1.1 200 OK\nX-Powered-By: PHP/7.4",
+    collected_at="2026-07-10T12:00:00Z",
+)
+
+finding = VersionedFinding(
+    title="Information Disclosure via X-Powered-By Header",
+    severity=Severity.MEDIUM,
+    confidence=Confidence.HIGH,
+    finding_type=FindingType.INFORMATION_LEAK,
+    evidence=[evidence],
+    location=FindingLocation(url="https://example.com/"),
+    assets=[AffectedAsset(asset_type="host", identifier="example.com")],
+)
+print(f"Finding: {finding.title} (confidence={finding.confidence})")
+```
+
+#### Artifact Storage
+
+```python
+from eggsec import ArtifactStore, MilestoneArtifact
+
+store = ArtifactStore()
+
+artifact = MilestoneArtifact(
+    name="capture.pcap",
+    mime_type="application/octet-stream",
+    content=b"...",
+)
+stored = store.store(artifact)
+print(f"Artifact ID: {stored.id}")
+
+# Retrieve
+retrieved = store.get(stored.id)
+```
+
+#### Finding Workflow
+
+```python
+from eggsec import FindingWorkflow, FindingState
+
+workflow = FindingWorkflow()
+
+# Transition a finding through its lifecycle
+workflow.transition("find-001", FindingState.TRIAGED, actor="analyst", reason="Confirmed valid")
+workflow.transition("find-001", FindingState.IN_PROGRESS, actor="analyst", reason="Working on fix")
+
+# View history
+for transition in workflow.history("find-001"):
+    print(f"{transition.from_state} -> {transition.to_state} by {transition.actor}")
+```
+
+#### Finding Repository and Assessment
+
+```python
+from eggsec import FindingRepository, Assessment, AssessmentRepository
+
+repo = FindingRepository()
+assessment_repo = AssessmentRepository()
+
+# Save findings
+repo.save(finding)
+
+# Create assessment
+assessment = Assessment(
+    name="Q3 2026 Pentest",
+    target="example.com",
+    finding_ids=[finding.id],
+)
+assessment_repo.save(assessment)
+```
+
+#### Baseline Comparison
+
+```python
+from eggsec import BaselineComparator
+
+comparator = BaselineComparator()
+
+# Compare two assessments
+diff = comparator.compare(baseline_assessment, current_assessment)
+print(f"New findings: {len(diff.new_findings)}")
+print(f"Resolved: {len(diff.resolved_findings)}")
+print(f"Changed: {len(diff.changed_findings)}")
+```
+
+#### Finding Reporting
+
+```python
+from eggsec import FindingReporter, SeveritySummary
+
+reporter = FindingReporter()
+
+# Generate report from findings
+envelope = reporter.generate(findings, format="json")
+print(f"Report {envelope.report_id}: {envelope.finding_count} findings")
+print(f"Generated at: {envelope.generated_at}")
+
+# Write to file
+reporter.write(findings, "output/report.json", format="json")
+```
+
+#### Compliance Mapping (feature: `compliance`)
+
+```python
+from eggsec import ComplianceMapper, ComplianceFramework
+
+mapper = ComplianceMapper()
+
+# Map findings to a compliance framework
+framework = ComplianceFramework.load("owasp-top-10")
+result = mapper.map_findings(findings, framework)
+
+print(f"Compliant: {result.compliant_count}, Non-compliant: {result.non_compliant_count}")
+for mapping in result.mappings:
+    print(f"  Finding {mapping.finding_id} -> Control {mapping.control_id} ({mapping.match_type})")
+```
+
+#### External Integration and Publication
+
+```python
+from eggsec import ExternalIntegration, PublicationPolicy, RetryPolicy
+
+integration = ExternalIntegration(integration_type="jira")
+policy = PublicationPolicy(
+    integration_type="jira",
+    auto_publish=True,
+    retry=RetryPolicy(max_retries=3, backoff_ms=1000),
+    filter_severity="HIGH",
+)
+
+# Publish a finding
+record = integration.publish(finding, policy=policy)
+print(f"Published to: {record.url}")
+```
+
+#### Finding Migration
+
+```python
+from eggsec import FindingMigration, SchemaVersion
+
+migration = FindingMigration()
+
+# Migrate findings from v1 to current schema
+target_version = SchemaVersion(major=2, minor=0, patch=0)
+result = migration.migrate(old_findings, from_version=SchemaVersion(major=1, minor=0, patch=0), to_version=target_version)
+print(f"Migrated {result.migrated_count} findings, errors: {len(result.errors)}")
+```
+
 ## Type Stubs
 
 Full type stubs are included in the wheel:
@@ -477,6 +878,22 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 | `src/authorization.rs` | `ExecutionPolicy`, `ManualOverride` |
 | `src/preflight.rs` | `PreflightResult`, `preflight_operation()` |
 | `src/audit.rs` | `EnforcementAuditEvent`, `AuditOutcome`, `emit_audit_event()` |
+| `src/consolidated_recon.rs` | `ConsolidatedReconConfig`, `run_consolidated_recon()` |
+| `src/graphql.rs` | `GraphQLTestConfig`, `GraphQLSchema`, `graphql_test()` |
+| `src/oauth.rs` | `OAuthTestConfig`, `OAuthEndpoint`, `oauth_test()` |
+| `src/auth_assess.rs` | `AuthTestConfig`, `AuthTestReport`, `auth_test()` |
+| `src/browser_assess.rs` | `BrowserTestConfig`, `BrowserTestReport`, `browser_test()` (feature-gated) |
+| `src/hunt.rs` | `HuntTestConfig`, `HuntReport`, `hunt_test()` (feature-gated) |
+| `src/finding_schema.rs` | `Confidence`, `FindingType`, `VersionedFinding`, `VersionedEvidence` (Milestone E) |
+| `src/artifact.rs` | `MilestoneArtifact`, `ArtifactReference`, `ArtifactStore` (Milestone E) |
+| `src/vuln_record.rs` | `CvssScore`, `VulnerabilityRecord`, `RemediationRecord` (Milestone E) |
+| `src/workflow.rs` | `FindingState`, `WorkflowTransition`, `Suppression`, `FindingWorkflow` (Milestone E) |
+| `src/repository.rs` | `FindingRepository`, `Assessment`, `AssessmentRepository` (Milestone E) |
+| `src/correlation.rs` | `FindingCorrelation`, `FindingDiff`, `AssessmentDiff`, `BaselineComparator` (Milestone E) |
+| `src/reporting.rs` | `FindingReporter`, `SeveritySummary`, `ReportEnvelope` (Milestone E) |
+| `src/compliance.rs` | `ComplianceFramework`, `ComplianceControl`, `ComplianceMapper` (feature-gated, Milestone E) |
+| `src/integration.rs` | `IntegrationType`, `PublicationRecord`, `ExternalIntegration` (Milestone E) |
+| `src/migration.rs` | `SchemaVersion`, `MigrationResult`, `FindingMigration` (Milestone E) |
 | `python/eggsec/__init__.py` | Public API re-exports |
 | `python/eggsec/__init__.pyi` | Top-level type stubs |
 | `pyproject.toml` | maturin build configuration |

@@ -250,6 +250,49 @@ impl DaemonClientPy {
         self.socket_path.clone()
     }
 
+    /// Check if the client connection has been closed.
+    #[getter]
+    fn is_closed(&self) -> bool {
+        #[cfg(feature = "daemon-client")]
+        {
+            match self.client.try_lock() {
+                Ok(guard) => guard.is_none(),
+                Err(_) => false,
+            }
+        }
+        #[cfg(not(feature = "daemon-client"))]
+        {
+            true
+        }
+    }
+
+    /// Close the client connection. Idempotent — safe to call multiple times.
+    fn close(&self) {
+        #[cfg(feature = "daemon-client")]
+        {
+            if let Ok(mut guard) = self.client.try_lock() {
+                *guard = None;
+            }
+        }
+    }
+
+    /// Context manager __enter__.
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Context manager __exit__ — closes the client connection.
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        self.close();
+        false
+    }
+
     fn __repr__(&self) -> String {
         format!("DaemonClient(socket_path={})", self.socket_path)
     }
@@ -262,6 +305,7 @@ impl DaemonClientPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("socket_path", &self.socket_path)?;
+        dict.set_item("is_closed", self.is_closed())?;
         Ok(dict.into())
     }
 }
@@ -599,5 +643,269 @@ pub fn async_daemon_close_session(
         Err(crate::error::FeatureUnavailableError::new_err(
             "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
         ))
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// D6: Daemon task API types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Capabilities reported by the daemon host.
+///
+/// Describes supported transports, runtime features, and protocol version.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonCapabilitiesPy {
+    #[pyo3(get)]
+    pub protocol_version: u32,
+    #[pyo3(get)]
+    pub transports: Vec<String>,
+    #[pyo3(get)]
+    pub has_persistence: bool,
+    #[pyo3(get)]
+    pub max_clients: usize,
+    #[pyo3(get)]
+    pub runtime_version: String,
+}
+
+#[pymethods]
+impl DaemonCapabilitiesPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("protocol_version", self.protocol_version)?;
+        dict.set_item("transports", &self.transports)?;
+        dict.set_item("has_persistence", self.has_persistence)?;
+        dict.set_item("max_clients", self.max_clients)?;
+        dict.set_item("runtime_version", &self.runtime_version)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DaemonCapabilities(version={}, transports={})",
+            self.protocol_version,
+            self.transports.len()
+        )
+    }
+}
+
+/// Handle to a submitted daemon task.
+///
+/// Used to track and manage a task after submission.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct TaskHandlePy {
+    pub(crate) task_id: String,
+    pub(crate) session_id: String,
+    pub(crate) client_id: Option<String>,
+}
+
+#[pymethods]
+impl TaskHandlePy {
+    #[getter]
+    fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    #[getter]
+    fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    #[getter]
+    fn client_id(&self) -> Option<&str> {
+        self.client_id.as_deref()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TaskHandle(task_id={}, session={})",
+            self.task_id, self.session_id
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("Task {} in session {}", self.task_id, self.session_id)
+    }
+}
+
+/// Current status of a daemon task.
+///
+/// Tracks the task's lifecycle from submission through completion.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStatusPy {
+    #[pyo3(get)]
+    pub task_id: String,
+    #[pyo3(get)]
+    pub session_id: String,
+    #[pyo3(get)]
+    pub state: String,
+    #[pyo3(get)]
+    pub submitted_at_ms: Option<u64>,
+    #[pyo3(get)]
+    pub started_at_ms: Option<u64>,
+    #[pyo3(get)]
+    pub completed_at_ms: Option<u64>,
+    #[pyo3(get)]
+    pub error: Option<String>,
+    #[pyo3(get)]
+    pub result_available: bool,
+}
+
+#[pymethods]
+impl TaskStatusPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("task_id", &self.task_id)?;
+        dict.set_item("session_id", &self.session_id)?;
+        dict.set_item("state", &self.state)?;
+        dict.set_item("submitted_at_ms", self.submitted_at_ms)?;
+        dict.set_item("started_at_ms", self.started_at_ms)?;
+        dict.set_item("completed_at_ms", self.completed_at_ms)?;
+        dict.set_item("error", &self.error)?;
+        dict.set_item("result_available", self.result_available)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("TaskStatus(task={}, state={})", self.task_id, self.state)
+    }
+
+    fn __str__(&self) -> String {
+        format!("Task {} is {}", self.task_id, self.state)
+    }
+}
+
+/// Event received from a daemon session subscription.
+///
+/// Represents a runtime event pushed from the daemon to subscribed clients.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonEventPy {
+    #[pyo3(get)]
+    pub session_id: String,
+    #[pyo3(get)]
+    pub event_type: String,
+    #[pyo3(get)]
+    pub timestamp_ms: u64,
+    #[pyo3(get)]
+    pub data: Option<String>,
+}
+
+#[pymethods]
+impl DaemonEventPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("session_id", &self.session_id)?;
+        dict.set_item("event_type", &self.event_type)?;
+        dict.set_item("timestamp_ms", self.timestamp_ms)?;
+        dict.set_item("data", &self.data)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DaemonEvent(session={}, type={})",
+            self.session_id, self.event_type
+        )
+    }
+}
+
+/// Summary of a daemon session.
+///
+/// Contains high-level information about a session for listing purposes.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummaryPy {
+    #[pyo3(get)]
+    pub session_id: String,
+    #[pyo3(get)]
+    pub surface: String,
+    #[pyo3(get)]
+    pub state: String,
+    #[pyo3(get)]
+    pub labels: Vec<String>,
+    #[pyo3(get)]
+    pub created_at_ms: Option<u64>,
+    #[pyo3(get)]
+    pub task_count: usize,
+}
+
+#[pymethods]
+impl SessionSummaryPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("session_id", &self.session_id)?;
+        dict.set_item("surface", &self.surface)?;
+        dict.set_item("state", &self.state)?;
+        dict.set_item("labels", &self.labels)?;
+        dict.set_item("created_at_ms", self.created_at_ms)?;
+        dict.set_item("task_count", self.task_count)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SessionSummary(id={}, surface={}, state={})",
+            self.session_id, self.surface, self.state
+        )
+    }
+}
+
+/// Transport metadata for a daemon connection.
+///
+/// Describes the transport type and connection details for a daemon client.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransportMetadataPy {
+    #[pyo3(get)]
+    pub kind: String,
+    #[pyo3(get)]
+    pub bind_address: String,
+    #[pyo3(get)]
+    pub enabled: bool,
+}
+
+#[pymethods]
+impl TransportMetadataPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("kind", &self.kind)?;
+        dict.set_item("bind_address", &self.bind_address)?;
+        dict.set_item("enabled", self.enabled)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TransportMetadata(kind={}, addr={})",
+            self.kind, self.bind_address
+        )
     }
 }

@@ -76,6 +76,10 @@ try:
     db_probe_mssql = _core.db_probe_mssql
     db_probe_mongodb = _core.db_probe_mongodb
     db_probe_redis = _core.db_probe_redis
+    # D7: Database extensibility functions
+    db_list_drivers = _core.db_list_drivers
+    db_get_capabilities = _core.db_get_capabilities
+    db_run_with_config = _core.db_run_with_config
 except AttributeError:
     pass
 
@@ -93,6 +97,9 @@ try:
     async_analyze_apk = _core.async_analyze_apk
     analyze_ipa = _core.analyze_ipa
     async_analyze_ipa = _core.async_analyze_ipa
+    # D5: Mobile dynamic functions
+    list_mobile_devices = _core.list_mobile_devices
+    dynamic_mobile_analysis = _core.dynamic_mobile_analysis
 except AttributeError:
     pass
 
@@ -111,6 +118,10 @@ except AttributeError:
 try:
     list_network_interfaces = _core.list_network_interfaces
     parse_pcap = _core.parse_pcap
+    # D3: Network probing functions
+    run_traceroute = _core.run_traceroute
+    async_run_traceroute = _core.async_run_traceroute
+    traceroute = _core.traceroute
 except AttributeError:
     pass
 
@@ -126,6 +137,9 @@ try:
     nse_run = _core.nse_run
     async_nse_run = _core.async_nse_run
     nse_list_libraries = _core.nse_list_libraries
+    # D1: NSE runtime completion functions
+    nse_list_scripts = _core.nse_list_scripts
+    nse_get_script_metadata = _core.nse_get_script_metadata
 except AttributeError:
     pass
 
@@ -138,6 +152,79 @@ try:
     async_daemon_list_sessions = _core.async_daemon_list_sessions
     async_daemon_get_snapshot = _core.async_daemon_get_snapshot
     async_daemon_close_session = _core.async_daemon_close_session
+except AttributeError:
+    pass
+
+# Milestone C: Consolidated Reconnaissance
+run_consolidated_recon = _core.run_consolidated_recon
+async_run_consolidated_recon = _core.async_run_consolidated_recon
+ConsolidatedReconConfig = _core.ConsolidatedReconConfigPy
+ReconModuleResult = _core.ReconModuleResultPy
+ConsolidatedReconReport = _core.ConsolidatedReconReportPy
+
+# Milestone C: GraphQL Security Assessment
+graphql_test = _core.graphql_test
+async_graphql_test = _core.async_graphql_test
+GraphQLVulnerability = _core.GraphQLVulnerabilityPy
+GraphQLTestResult = _core.GraphQLTestResultPy
+GraphQLType = _core.GraphQLTypePy
+GraphQLField = _core.GraphQLFieldPy
+GraphQLArg = _core.GraphQLArgPy
+GraphQLInputField = _core.GraphQLInputFieldPy
+GraphQLSchema = _core.GraphQLSchemaPy
+GraphQLTestConfig = _core.GraphQLTestConfigPy
+
+# Milestone C: OAuth/OIDC Assessment
+oauth_discover_endpoints = _core.oauth_discover_endpoints
+oauth_test = _core.oauth_test
+async_oauth_test = _core.async_oauth_test
+OAuthVulnerability = _core.OAuthVulnerabilityPy
+OAuthEndpointKind = _core.OAuthEndpointKindPy
+OAuthEndpoint = _core.OAuthEndpointPy
+OAuthTestResult = _core.OAuthTestResultPy
+OAuthTestConfig = _core.OAuthTestConfigPy
+
+# Milestone C: Authentication Assessment
+auth_test = _core.auth_test
+async_auth_test = _core.async_auth_test
+AuthTestType = _core.AuthTestTypePy
+AuthFinding = _core.AuthFindingPy
+AuthTestConfig = _core.AuthTestConfigPy
+AuthTestReport = _core.AuthTestReportPy
+
+# Milestone C: Headless Browser Assessment (feature-gated: headless-browser)
+try:
+    browser_test = _core.browser_test
+    async_browser_test = _core.async_browser_test
+    XssSource = _core.XssSourcePy
+    XssSink = _core.XssSinkPy
+    DomXssFinding = _core.DomXssFindingPy
+    DiscoveryMethod = _core.DiscoveryMethodPy
+    SpaRoute = _core.SpaRoutePy
+    ClientIssueType = _core.ClientIssueTypePy
+    ClientIssue = _core.ClientIssuePy
+    BrowserTestConfig = _core.BrowserTestConfigPy
+    BrowserTestReport = _core.BrowserTestReportPy
+except AttributeError:
+    pass
+
+# Milestone C: Advanced Hunting (feature-gated: advanced-hunting)
+try:
+    hunt_test = _core.hunt_test
+    async_hunt_test = _core.async_hunt_test
+    ChainType = _core.ChainTypePy
+    ChainStep = _core.ChainStepPy
+    AttackChain = _core.AttackChainPy
+    FlawType = _core.FlawTypePy
+    BusinessLogicFlaw = _core.BusinessLogicFlawPy
+    RaceType = _core.RaceTypePy
+    RaceCondition = _core.RaceConditionPy
+    BypassType = _core.BypassTypePy
+    AuthzBypass = _core.AuthzBypassPy
+    SessionIssueType = _core.SessionIssueTypePy
+    SessionIssue = _core.SessionIssuePy
+    HuntTestConfig = _core.HuntTestConfigPy
+    HuntReport = _core.HuntReportPy
 except AttributeError:
     pass
 
@@ -319,6 +406,11 @@ try:
     DbPentestReport = _core.DbPentestReportPy
     DbFinding = _core.DbFindingPy
     DbPentestConfig = _core.DbPentestConfig
+    # D7: Database extensibility
+    DbDriverInfo = _core.DbDriverInfoPy
+    DbCapability = _core.DbCapabilityPy
+    DbCredentialProvider = _core.DbCredentialProviderPy
+    DbSessionConfig = _core.DbSessionConfigPy
 except AttributeError:
     pass
 
@@ -331,6 +423,10 @@ try:
     ProxyManager = _core.ProxyManagerPy
     HealthCheckResult = _core.HealthCheckResultPy
     ProxyHealth = _core.ProxyHealthPy
+    # D4: Interception proxy
+    InterceptConfig = _core.InterceptConfigPy
+    CapturedExchange = _core.CapturedExchangePy
+    InterceptSessionResult = _core.InterceptSessionResultPy
 except AttributeError:
     pass
 
@@ -339,6 +435,10 @@ try:
     MobilePlatform = _core.MobilePlatformPy
     MobileFinding = _core.MobileFindingPy
     MobileScanReport = _core.MobileScanReportPy
+    # D5: Mobile dynamic
+    MobileDevice = _core.MobileDevicePy
+    DynamicMobileConfig = _core.DynamicMobileConfigPy
+    DynamicMobileReport = _core.DynamicMobileReportPy
 except AttributeError:
     pass
 
@@ -363,6 +463,14 @@ try:
     PacketInfo = _core.PacketInfoPy
     NetworkInterfaceInfo = _core.NetworkInterfaceInfoPy
     PcapWriter = _core.PcapWriterPy
+    # D2: Live packet inspection
+    PacketFilter = _core.PacketFilterPy
+    FlowRecord = _core.FlowRecordPy
+    LiveCaptureResult = _core.LiveCaptureResultPy
+    # D3: Network probing
+    TracerouteConfig = _core.TracerouteConfigPy
+    TracerouteHop = _core.TracerouteHopPy
+    TracerouteResult = _core.TracerouteResultPy
 except AttributeError:
     pass
 
@@ -381,6 +489,10 @@ try:
     NseReport = _core.NseReportPy
     NseLibraryUse = _core.NseLibraryUsePy
     NseRuleEvaluation = _core.NseRuleEvaluationPy
+    # D1: NSE runtime completion
+    NseScriptMetadata = _core.NseScriptMetadataPy
+    NseSandboxPolicy = _core.NseSandboxPolicyPy
+    NseTargetContext = _core.NseTargetContextPy
 except AttributeError:
     pass
 
@@ -388,6 +500,79 @@ except AttributeError:
 try:
     DaemonClient = _core.DaemonClientPy
     DaemonResponse = _core.DaemonResponsePy
+    # D6: Daemon task API
+    DaemonCapabilities = _core.DaemonCapabilitiesPy
+    TaskHandle = _core.TaskHandlePy
+    TaskStatus = _core.TaskStatusPy
+    DaemonEvent = _core.DaemonEventPy
+    SessionSummary = _core.SessionSummaryPy
+    TransportMetadata = _core.TransportMetadataPy
+except AttributeError:
+    pass
+
+# Milestone E: Versioned finding schema
+FINDING_SCHEMA_VERSION = _core.FINDING_SCHEMA_VERSION
+Confidence = _core.Confidence
+FindingType = _core.FindingType
+EvidenceKind = _core.EvidenceKind
+AffectedAsset = _core.AffectedAsset
+FindingLocation = _core.FindingLocation
+VersionedEvidence = _core.VersionedEvidence
+VersionedFinding = _core.VersionedFinding
+
+# Milestone E: Evidence and artifact model
+MilestoneArtifact = _core.MilestoneArtifact
+ArtifactReference = _core.ArtifactReference
+ArtifactStore = _core.ArtifactStore
+
+# Milestone E: CVSS and vulnerability records
+CvssScore = _core.CvssScore
+VulnerabilityRecord = _core.VulnerabilityRecord
+RemediationRecord = _core.RemediationRecord
+
+# Milestone E: Finding workflow
+FindingState = _core.FindingState
+WorkflowTransition = _core.WorkflowTransition
+Suppression = _core.Suppression
+FindingWorkflow = _core.FindingWorkflow
+
+# Milestone E: Repository abstraction
+FindingRepository = _core.FindingRepository
+Assessment = _core.Assessment
+AssessmentRepository = _core.AssessmentRepository
+
+# Milestone E: Baselines and comparisons
+FindingCorrelation = _core.FindingCorrelation
+FindingDiff = _core.FindingDiff
+AssessmentDiff = _core.AssessmentDiff
+BaselineComparator = _core.BaselineComparator
+
+# Milestone E: Reporting
+FindingReporter = _core.FindingReporter
+SeveritySummary = _core.SeveritySummary
+ReportEnvelope = _core.ReportEnvelope
+
+# Milestone E: External integrations
+IntegrationType = _core.IntegrationType
+PublicationRecord = _core.PublicationRecord
+RetryPolicy = _core.RetryPolicy
+PublicationPolicy = _core.PublicationPolicy
+ExternalIntegration = _core.ExternalIntegration
+
+# Milestone E: Migration and compatibility
+SchemaVersion = _core.SchemaVersion
+MigrationResult = _core.MigrationResult
+FindingMigration = _core.FindingMigration
+
+# Milestone E: Compliance mapping (feature-gated)
+try:
+    ComplianceFramework = _core.ComplianceFramework
+    ComplianceControl = _core.ComplianceControl
+    ComplianceMapping = _core.ComplianceMapping
+    ComplianceResult = _core.ComplianceResult
+    ControlAssessment = _core.ControlAssessment
+    ComplianceReport = _core.ComplianceReport
+    ComplianceMapper = _core.ComplianceMapper
 except AttributeError:
     pass
 
@@ -566,6 +751,162 @@ __all__ = [
     "audit_event_from_enforcement",
     "audit_event_from_preflight",
     "emit_audit_event",
+    # Milestone C: Consolidated Recon
+    "run_consolidated_recon",
+    "async_run_consolidated_recon",
+    "ConsolidatedReconConfig",
+    "ReconModuleResult",
+    "ConsolidatedReconReport",
+    # Milestone C: GraphQL
+    "graphql_test",
+    "async_graphql_test",
+    "GraphQLVulnerability",
+    "GraphQLTestResult",
+    "GraphQLType",
+    "GraphQLField",
+    "GraphQLArg",
+    "GraphQLInputField",
+    "GraphQLSchema",
+    "GraphQLTestConfig",
+    # Milestone C: OAuth/OIDC
+    "oauth_discover_endpoints",
+    "oauth_test",
+    "async_oauth_test",
+    "OAuthVulnerability",
+    "OAuthEndpointKind",
+    "OAuthEndpoint",
+    "OAuthTestResult",
+    "OAuthTestConfig",
+    # Milestone C: Auth Assessment
+    "auth_test",
+    "async_auth_test",
+    "AuthTestType",
+    "AuthFinding",
+    "AuthTestConfig",
+    "AuthTestReport",
+    # Milestone C: Headless Browser (feature-gated)
+    "browser_test",
+    "async_browser_test",
+    "XssSource",
+    "XssSink",
+    "DomXssFinding",
+    "DiscoveryMethod",
+    "SpaRoute",
+    "ClientIssueType",
+    "ClientIssue",
+    "BrowserTestConfig",
+    "BrowserTestReport",
+    # Milestone C: Advanced Hunting (feature-gated)
+    "hunt_test",
+    "async_hunt_test",
+    "ChainType",
+    "ChainStep",
+    "AttackChain",
+    "FlawType",
+    "BusinessLogicFlaw",
+    "RaceType",
+    "RaceCondition",
+    "BypassType",
+    "AuthzBypass",
+    "SessionIssueType",
+    "SessionIssue",
+    "HuntTestConfig",
+    "HuntReport",
+    # Milestone D: NSE runtime completion (feature-gated)
+    "NseScriptMetadata",
+    "NseSandboxPolicy",
+    "NseTargetContext",
+    "nse_list_scripts",
+    "nse_get_script_metadata",
+    # Milestone D: Live packet inspection (feature-gated)
+    "PacketFilter",
+    "FlowRecord",
+    "LiveCaptureResult",
+    # Milestone D: Network probing (feature-gated)
+    "TracerouteConfig",
+    "TracerouteHop",
+    "TracerouteResult",
+    "run_traceroute",
+    "async_run_traceroute",
+    "traceroute",
+    # Milestone D: Interception proxy (feature-gated)
+    "InterceptConfig",
+    "CapturedExchange",
+    "InterceptSessionResult",
+    # Milestone D: Mobile dynamic (feature-gated)
+    "MobileDevice",
+    "DynamicMobileConfig",
+    "DynamicMobileReport",
+    "list_mobile_devices",
+    "dynamic_mobile_analysis",
+    # Milestone D: Daemon task API (feature-gated)
+    "DaemonCapabilities",
+    "TaskHandle",
+    "TaskStatus",
+    "DaemonEvent",
+    "SessionSummary",
+    "TransportMetadata",
+    # Milestone D: Database extensibility (feature-gated)
+    "DbDriverInfo",
+    "DbCapability",
+    "DbCredentialProvider",
+    "DbSessionConfig",
+    "db_list_drivers",
+    "db_get_capabilities",
+    "db_run_with_config",
+    # Milestone E: Versioned finding schema
+    "FINDING_SCHEMA_VERSION",
+    "Confidence",
+    "FindingType",
+    "EvidenceKind",
+    "AffectedAsset",
+    "FindingLocation",
+    "VersionedEvidence",
+    "VersionedFinding",
+    # Milestone E: Evidence and artifact model
+    "MilestoneArtifact",
+    "ArtifactReference",
+    "ArtifactStore",
+    # Milestone E: CVSS and vulnerability records
+    "CvssScore",
+    "VulnerabilityRecord",
+    "RemediationRecord",
+    # Milestone E: Finding workflow
+    "FindingState",
+    "WorkflowTransition",
+    "Suppression",
+    "FindingWorkflow",
+    # Milestone E: Repository abstraction
+    "FindingRepository",
+    "Assessment",
+    "AssessmentRepository",
+    # Milestone E: Baselines and comparisons
+    "FindingCorrelation",
+    "FindingDiff",
+    "AssessmentDiff",
+    "BaselineComparator",
+    # Milestone E: Reporting
+    "FindingReporter",
+    "SeveritySummary",
+    "ReportEnvelope",
+    # Milestone E: External integrations
+    "IntegrationType",
+    "PublicationRecord",
+    "RetryPolicy",
+    "PublicationPolicy",
+    "ExternalIntegration",
+    # Milestone E: Migration and compatibility
+    "SchemaVersion",
+    "MigrationResult",
+    "FindingMigration",
+    # Milestone E: Compliance mapping (feature-gated)
+    "ComplianceFramework",
+    "ComplianceControl",
+    "ComplianceMapping",
+    "ComplianceResult",
+    "ControlAssessment",
+    "ComplianceReport",
+    "ComplianceMapper",
     # Exceptions
     "EggsecError",
     "ConfigError",

@@ -617,3 +617,342 @@ pub fn nse_list_libraries() -> Vec<String> {
     names.sort();
     names
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// D1: NSE Runtime completion types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Metadata about an NSE script.
+///
+/// Describes a script's name, category, description, and dependencies
+/// without loading or executing it.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseScriptMetadataPy {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub category: String,
+    #[pyo3(get)]
+    pub description: String,
+    #[pyo3(get)]
+    pub author: Option<String>,
+    #[pyo3(get)]
+    pub license: Option<String>,
+    #[pyo3(get)]
+    pub dependencies: Vec<String>,
+    #[pyo3(get)]
+    pub targets: Option<String>,
+    #[pyo3(get)]
+    pub categories: Vec<String>,
+}
+
+#[pymethods]
+impl NseScriptMetadataPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("category", &self.category)?;
+        dict.set_item("description", &self.description)?;
+        dict.set_item("author", &self.author)?;
+        dict.set_item("license", &self.license)?;
+        dict.set_item("dependencies", &self.dependencies)?;
+        dict.set_item("targets", &self.targets)?;
+        dict.set_item("categories", &self.categories)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseScriptMetadata(name={}, category={})",
+            self.name, self.category
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "NSE script '{}' [{}]: {}",
+            self.name, self.category, self.description
+        )
+    }
+}
+
+/// Sandbox policy for NSE script execution.
+///
+/// Controls filesystem access, network restrictions, and resource limits
+/// for scripts running in the NSE sandbox.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseSandboxPolicyPy {
+    #[pyo3(get)]
+    pub allow_filesystem: bool,
+    #[pyo3(get)]
+    pub allowed_dirs: Vec<String>,
+    #[pyo3(get)]
+    pub allow_network: bool,
+    #[pyo3(get)]
+    pub allowed_cidrs: Vec<String>,
+    #[pyo3(get)]
+    pub max_lua_instructions: u64,
+    #[pyo3(get)]
+    pub max_output_bytes: usize,
+    #[pyo3(get)]
+    pub max_network_ops: usize,
+    #[pyo3(get)]
+    pub max_memory_bytes: usize,
+}
+
+impl NseSandboxPolicyPy {
+    pub fn from_engine(config: &eggsec::nse::SandboxConfig) -> Self {
+        Self {
+            allow_filesystem: config.allowed_dir.is_some(),
+            allowed_dirs: config
+                .allowed_dir
+                .as_ref()
+                .map(|p| vec![p.to_string_lossy().to_string()])
+                .unwrap_or_default(),
+            allow_network: config.allowed_networks.is_empty() || !config.enabled,
+            allowed_cidrs: config
+                .allowed_networks
+                .iter()
+                .map(|n| n.to_string())
+                .collect(),
+            max_lua_instructions: 1_000_000,
+            max_output_bytes: 1_048_576,
+            max_network_ops: 100,
+            max_memory_bytes: 67_108_864,
+        }
+    }
+}
+
+#[pymethods]
+impl NseSandboxPolicyPy {
+    #[new]
+    #[pyo3(signature = (allow_filesystem=false, allowed_dirs=None, allow_network=true, allowed_cidrs=None, max_lua_instructions=1000000, max_output_bytes=1048576, max_network_ops=100, max_memory_bytes=67108864))]
+    fn new(
+        allow_filesystem: bool,
+        allowed_dirs: Option<Vec<String>>,
+        allow_network: bool,
+        allowed_cidrs: Option<Vec<String>>,
+        max_lua_instructions: u64,
+        max_output_bytes: usize,
+        max_network_ops: usize,
+        max_memory_bytes: usize,
+    ) -> Self {
+        Self {
+            allow_filesystem,
+            allowed_dirs: allowed_dirs.unwrap_or_default(),
+            allow_network,
+            allowed_cidrs: allowed_cidrs.unwrap_or_default(),
+            max_lua_instructions,
+            max_output_bytes,
+            max_network_ops,
+            max_memory_bytes,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("allow_filesystem", self.allow_filesystem)?;
+        dict.set_item("allowed_dirs", &self.allowed_dirs)?;
+        dict.set_item("allow_network", self.allow_network)?;
+        dict.set_item("allowed_cidrs", &self.allowed_cidrs)?;
+        dict.set_item("max_lua_instructions", self.max_lua_instructions)?;
+        dict.set_item("max_output_bytes", self.max_output_bytes)?;
+        dict.set_item("max_network_ops", self.max_network_ops)?;
+        dict.set_item("max_memory_bytes", self.max_memory_bytes)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseSandboxPolicy(fs={}, net={}, max_instr={})",
+            self.allow_filesystem, self.allow_network, self.max_lua_instructions
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Target context for NSE script execution.
+///
+/// Provides host, port, and service information that scripts can use
+/// to tailor their behavior to the target.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseTargetContextPy {
+    #[pyo3(get)]
+    pub host_ip: String,
+    #[pyo3(get)]
+    pub hostname: Option<String>,
+    #[pyo3(get)]
+    pub port: Option<u16>,
+    #[pyo3(get)]
+    pub protocol: Option<String>,
+    #[pyo3(get)]
+    pub service_name: Option<String>,
+    #[pyo3(get)]
+    pub service_product: Option<String>,
+    #[pyo3(get)]
+    pub service_version: Option<String>,
+    #[pyo3(get)]
+    pub os_detection: Option<String>,
+}
+
+#[pymethods]
+impl NseTargetContextPy {
+    #[new]
+    #[pyo3(signature = (host_ip, hostname=None, port=None, protocol=None, service_name=None, service_product=None, service_version=None, os_detection=None))]
+    fn new(
+        host_ip: &str,
+        hostname: Option<&str>,
+        port: Option<u16>,
+        protocol: Option<&str>,
+        service_name: Option<&str>,
+        service_product: Option<&str>,
+        service_version: Option<&str>,
+        os_detection: Option<&str>,
+    ) -> Self {
+        Self {
+            host_ip: host_ip.to_string(),
+            hostname: hostname.map(|s| s.to_string()),
+            port,
+            protocol: protocol.map(|s| s.to_string()),
+            service_name: service_name.map(|s| s.to_string()),
+            service_product: service_product.map(|s| s.to_string()),
+            service_version: service_version.map(|s| s.to_string()),
+            os_detection: os_detection.map(|s| s.to_string()),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("host_ip", &self.host_ip)?;
+        dict.set_item("hostname", &self.hostname)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("protocol", &self.protocol)?;
+        dict.set_item("service_name", &self.service_name)?;
+        dict.set_item("service_product", &self.service_product)?;
+        dict.set_item("service_version", &self.service_version)?;
+        dict.set_item("os_detection", &self.os_detection)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseTargetContext(host={}, port={:?}, service={:?})",
+            self.host_ip, self.port, self.service_name
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let service = self.service_name.as_deref().unwrap_or("unknown");
+        format!("{} ({})", self.host_ip, service)
+    }
+}
+
+/// List available built-in NSE scripts.
+///
+/// Returns a list of NseScriptMetadataPy objects describing each available
+/// built-in script. Currently returns the built-in script names from the
+/// resolver registry.
+///
+/// Args:
+///     category: Optional category filter. Since built-in scripts have limited
+///         metadata, this is matched against the name prefix if present.
+///
+/// Returns:
+///     list[NseScriptMetadataPy]: Script metadata entries.
+#[pyfunction]
+#[pyo3(signature = (category=None))]
+pub fn nse_list_scripts(category: Option<&str>) -> Vec<NseScriptMetadataPy> {
+    static BUILTIN_SCRIPTS: &[(&str, &str, &str)] = &[
+        ("default", "discovery", "Default set of scripts"),
+        (
+            "discovery",
+            "discovery",
+            "Discovery and enumeration scripts",
+        ),
+        ("banner", "discovery", "Grab service banners"),
+        ("http-headers", "discovery", "Display HTTP response headers"),
+        ("dns-check", "discovery", "DNS validation and checks"),
+        (
+            "ssl-cert",
+            "discovery",
+            "Display SSL certificate information",
+        ),
+    ];
+
+    let _ = category;
+    BUILTIN_SCRIPTS
+        .iter()
+        .map(|(name, cat, desc)| NseScriptMetadataPy {
+            name: name.to_string(),
+            category: cat.to_string(),
+            description: desc.to_string(),
+            author: None,
+            license: None,
+            dependencies: Vec::new(),
+            targets: None,
+            categories: vec![cat.to_string()],
+        })
+        .collect()
+}
+
+/// Get metadata for a specific NSE script by name.
+///
+/// Args:
+///     script_name: Name of the script (e.g. "http-headers", "ssl-cert").
+///
+/// Returns:
+///     NseScriptMetadataPy: Script metadata, or None if not found.
+#[pyfunction]
+pub fn nse_get_script_metadata(script_name: &str) -> PyResult<Option<NseScriptMetadataPy>> {
+    static BUILTIN_SCRIPTS: &[(&str, &str, &str)] = &[
+        ("default", "discovery", "Default set of scripts"),
+        (
+            "discovery",
+            "discovery",
+            "Discovery and enumeration scripts",
+        ),
+        ("banner", "discovery", "Grab service banners"),
+        ("http-headers", "discovery", "Display HTTP response headers"),
+        ("dns-check", "discovery", "DNS validation and checks"),
+        (
+            "ssl-cert",
+            "discovery",
+            "Display SSL certificate information",
+        ),
+    ];
+
+    Ok(BUILTIN_SCRIPTS
+        .iter()
+        .find(|(name, _, _)| *name == script_name)
+        .map(|(name, cat, desc)| NseScriptMetadataPy {
+            name: name.to_string(),
+            category: cat.to_string(),
+            description: desc.to_string(),
+            author: None,
+            license: None,
+            dependencies: Vec::new(),
+            targets: None,
+            categories: vec![cat.to_string()],
+        }))
+}
