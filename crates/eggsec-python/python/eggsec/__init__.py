@@ -190,6 +190,13 @@ try:
     async_daemon_list_sessions = _core.async_daemon_list_sessions
     async_daemon_get_snapshot = _core.async_daemon_get_snapshot
     async_daemon_close_session = _core.async_daemon_close_session
+    async_daemon_submit_task = _core.async_daemon_submit_task
+    async_daemon_cancel_task = _core.async_daemon_cancel_task
+    async_daemon_cancel_active = _core.async_daemon_cancel_active
+    async_daemon_approve_policy = _core.async_daemon_approve_policy
+    async_daemon_list_persisted_sessions = _core.async_daemon_list_persisted_sessions
+    async_daemon_get_persisted_snapshot = _core.async_daemon_get_persisted_snapshot
+    async_daemon_subscribe = _core.async_daemon_subscribe
 except AttributeError:
     pass
 

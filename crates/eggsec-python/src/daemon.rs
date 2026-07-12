@@ -646,6 +646,363 @@ pub fn async_daemon_close_session(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Missing daemon operations — WS 6 parity
+// ---------------------------------------------------------------------------
+
+/// Submit a task to a daemon session (async).
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+///     task_kind_json: JSON string in `eggsec_runtime::TaskKind` serde format,
+///         e.g. `{"kind": "PortScan", "params": {"target": "10.0.0.1"}}`.
+///     surface: Runtime surface (default "cli_manual").
+///     labels: Optional list of labels.
+#[pyfunction]
+#[pyo3(signature = (client, session_id, task_kind_json, surface="cli_manual", labels=None))]
+pub fn async_daemon_submit_task(
+    client: DaemonClientPy,
+    session_id: &str,
+    task_kind_json: &str,
+    surface: &str,
+    labels: Option<Vec<String>>,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        let task_kind_owned = task_kind_json.to_string();
+        let surface_owned = surface.to_string();
+        let labels_owned = labels.unwrap_or_default();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+
+            let task_kind: eggsec_runtime::TaskKind = serde_json::from_str(&task_kind_owned)
+                .map_err(|e| {
+                    crate::error::ConfigError::new_err(format!("Invalid task_kind JSON: {}", e))
+                })?;
+
+            let runtime_surface = parse_surface(&surface_owned)?;
+
+            let run_request = eggsec_runtime::RunRequest {
+                task_kind,
+                requested_by: None,
+                surface: runtime_surface,
+                labels: labels_owned,
+            };
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.submit_task(sid, run_request).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!("daemon submit_task failed: {}", e))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Cancel a specific task in a daemon session (async).
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+///     task_id: The task UUID string.
+#[pyfunction]
+pub fn async_daemon_cancel_task(
+    client: DaemonClientPy,
+    session_id: &str,
+    task_id: &str,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        let task_id_owned = task_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+            let tid: eggsec_runtime::TaskId = task_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!("Invalid task ID: {}", task_id_owned))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.cancel_task(sid, tid).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!("daemon cancel_task failed: {}", e))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Cancel all active tasks in a daemon session (async).
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+#[pyfunction]
+pub fn async_daemon_cancel_active(
+    client: DaemonClientPy,
+    session_id: &str,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.cancel_active(sid).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!("daemon cancel_active failed: {}", e))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Approve or reject a policy decision for a task (async).
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+///     task_id: The task UUID string.
+///     approved: Whether the task is approved.
+///     reason: Optional reason for the decision.
+#[pyfunction]
+#[pyo3(signature = (client, session_id, task_id, approved, reason=None))]
+pub fn async_daemon_approve_policy(
+    client: DaemonClientPy,
+    session_id: &str,
+    task_id: &str,
+    approved: bool,
+    reason: Option<String>,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        let task_id_owned = task_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+            let tid: eggsec_runtime::TaskId = task_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!("Invalid task ID: {}", task_id_owned))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner
+                .approve_policy(sid, tid, approved, reason)
+                .await
+                .map_err(|e| {
+                    crate::error::NetworkError::new_err(format!(
+                        "daemon approve_policy failed: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// List all persisted sessions from the daemon store (async).
+///
+/// Returns a PyFuture that resolves to a DaemonResponsePy.
+#[pyfunction]
+pub fn async_daemon_list_persisted_sessions(
+    client: DaemonClientPy,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        runtime_async::spawn_async(async move {
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.list_persisted_sessions().await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!(
+                    "daemon list_persisted_sessions failed: {}",
+                    e
+                ))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Get a persisted session snapshot from the daemon store (async).
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+#[pyfunction]
+pub fn async_daemon_get_persisted_snapshot(
+    client: DaemonClientPy,
+    session_id: &str,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.get_persisted_snapshot(sid).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!(
+                    "daemon get_persisted_snapshot failed: {}",
+                    e
+                ))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Subscribe to events for a daemon session (async).
+///
+/// Returns a PyFuture that resolves to a DaemonResponsePy. Events are
+/// streamed asynchronously via the daemon protocol.
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+#[pyfunction]
+pub fn async_daemon_subscribe(
+    client: DaemonClientPy,
+    session_id: &str,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            // subscribe() consumes the read half — return Ok with event note
+            let _rx = inner.subscribe(sid).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!("daemon subscribe failed: {}", e))
+            })?;
+
+            Ok(DaemonResponsePy {
+                ok: true,
+                request_id: uuid::Uuid::new_v4().to_string(),
+                message: "subscribed".into(),
+                error_code: None,
+            })
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // D6: Daemon task API types
 // ═══════════════════════════════════════════════════════════════════

@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use std::sync::Mutex;
 
 use crate::pipeline::StepResult;
 
@@ -83,85 +82,5 @@ impl serde::Serialize for Checkpoint {
         s.serialize_field("results", &self.results)?;
         s.serialize_field("created_at_ms", &self.created_at_ms)?;
         s.end()
-    }
-}
-
-/// A thread-safe store for managing pipeline checkpoints.
-#[pyclass]
-pub struct CheckpointStore {
-    checkpoints: Mutex<Vec<Checkpoint>>,
-}
-
-#[pymethods]
-impl CheckpointStore {
-    #[new]
-    fn new() -> Self {
-        Self {
-            checkpoints: Mutex::new(Vec::new()),
-        }
-    }
-
-    /// Save a new checkpoint and return it.
-    fn save(
-        &self,
-        pipeline_name: String,
-        completed_steps: Vec<String>,
-        results: Vec<StepResult>,
-    ) -> Checkpoint {
-        let id = format!(
-            "cp-{}-{}",
-            completed_steps.len(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0)
-        );
-        let created_at_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-
-        let checkpoint = Checkpoint {
-            id: id.clone(),
-            pipeline_name,
-            completed_steps,
-            results,
-            created_at_ms,
-        };
-
-        let mut store = self.checkpoints.lock().unwrap();
-        store.push(checkpoint.clone());
-        checkpoint
-    }
-
-    /// Load a checkpoint by ID.
-    fn load(&self, checkpoint_id: &str) -> Option<Checkpoint> {
-        let store = self.checkpoints.lock().unwrap();
-        store.iter().find(|c| c.id == checkpoint_id).cloned()
-    }
-
-    /// List all stored checkpoints.
-    fn list_checkpoints(&self) -> Vec<Checkpoint> {
-        let store = self.checkpoints.lock().unwrap();
-        store.clone()
-    }
-
-    /// Delete a checkpoint by ID. Returns true if found and deleted.
-    fn delete(&self, checkpoint_id: &str) -> bool {
-        let mut store = self.checkpoints.lock().unwrap();
-        let len_before = store.len();
-        store.retain(|c| c.id != checkpoint_id);
-        store.len() < len_before
-    }
-
-    /// Number of stored checkpoints.
-    fn len(&self) -> usize {
-        let store = self.checkpoints.lock().unwrap();
-        store.len()
-    }
-
-    fn __repr__(&self) -> String {
-        let len = self.len();
-        format!("CheckpointStore({} checkpoints)", len)
     }
 }

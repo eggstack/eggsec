@@ -37,6 +37,35 @@ def async_daemon_create_session(
 def async_daemon_list_sessions(client: DaemonClientPy) -> Any: ...
 def async_daemon_get_snapshot(client: DaemonClientPy, session_id: str) -> Any: ...
 def async_daemon_close_session(client: DaemonClientPy, session_id: str) -> Any: ...
+def async_daemon_submit_task(
+    client: DaemonClientPy,
+    session_id: str,
+    task_kind_json: str,
+    surface: str = "cli_manual",
+    labels: Optional[list] = None,
+) -> Any: ...
+def async_daemon_cancel_task(
+    client: DaemonClientPy, session_id: str, task_id: str
+) -> Any: ...
+def async_daemon_cancel_active(
+    client: DaemonClientPy, session_id: str
+) -> Any: ...
+def async_daemon_approve_policy(
+    client: DaemonClientPy,
+    session_id: str,
+    task_id: str,
+    approved: bool,
+    reason: Optional[str] = None,
+) -> Any: ...
+def async_daemon_list_persisted_sessions(
+    client: DaemonClientPy,
+) -> Any: ...
+def async_daemon_get_persisted_snapshot(
+    client: DaemonClientPy, session_id: str
+) -> Any: ...
+def async_daemon_subscribe(
+    client: DaemonClientPy, session_id: str
+) -> Any: ...
 
 class DaemonCapabilitiesPy:
     @property

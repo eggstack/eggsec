@@ -207,6 +207,36 @@ impl DaemonClient {
         });
         Ok(rx)
     }
+
+    /// Cancel all active tasks in a session.
+    pub async fn cancel_active(
+        &mut self,
+        session_id: eggsec_runtime::SessionId,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::CancelActive {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            session_id,
+        })
+        .await
+    }
+
+    /// Approve or reject a policy decision for a task.
+    pub async fn approve_policy(
+        &mut self,
+        session_id: eggsec_runtime::SessionId,
+        task_id: eggsec_runtime::TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::ApprovePolicy {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            session_id,
+            task_id,
+            approved,
+            reason,
+        })
+        .await
+    }
 }
 
 #[cfg(test)]

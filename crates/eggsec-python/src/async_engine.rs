@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 
+use crate::config_model::PyEggsecConfig;
 use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
+use crate::engine_state::EngineState;
 use crate::error::EggsecResultExt;
 use crate::fingerprint::FingerprintScanResult;
 use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
@@ -98,12 +102,13 @@ fn operation_err(error: String) -> OperationResult {
 ///
 /// Provides the same operations as Engine but returns Python awaitables.
 /// Each async operation spawns a background thread with its own Tokio runtime.
+///
+/// The engine holds a shared `EngineState` (via `Arc`) that is also used by
+/// `Engine`, ensuring every operation passes through common validation,
+/// scope enforcement, feature gating, and audit logging.
 #[pyclass]
 pub struct AsyncEngine {
-    pub(crate) scope: Scope,
-    pub(crate) mode: String,
-    pub(crate) concurrency: usize,
-    pub(crate) timeout_ms: u64,
+    pub(crate) state: Arc<EngineState>,
 }
 
 #[pymethods]
@@ -126,15 +131,31 @@ impl AsyncEngine {
 
     /// Dispatch a generic operation request to the appropriate engine function.
     ///
+    /// Routes through the OperationExecutorRegistry, which checks feature gates
+    /// and provides "Did you mean?" suggestions for unknown operations.
     /// Returns a PyFuture that resolves to an OperationResult.
     fn run(&self, request: OperationRequest) -> PyResult<runtime_async::PyFuture> {
-        self.dispatch_async(request)
+        self.state
+            .registry
+            .execute_async(&request.operation, &request, self)
+    }
+
+    /// List all registered operation IDs.
+    fn list_operations(&self) -> Vec<String> {
+        self.state.registry.list()
+    }
+
+    /// Check if an operation ID is registered.
+    fn has_operation(&self, operation_id: &str) -> bool {
+        self.state.registry.contains(operation_id)
     }
 
     /// Run a port scan (async).
     #[pyo3(signature = (request,))]
     fn run_port_scan(&self, request: PortScanRequest) -> PyResult<runtime_async::PyFuture> {
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        self.state
+            .pre_dispatch_validate("scan_ports", &request.target)?;
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         let ports_str = request
             .ports
             .clone()
@@ -146,48 +167,62 @@ impl AsyncEngine {
     /// Run an endpoint scan (async).
     #[pyo3(signature = (request,))]
     fn run_endpoint_scan(&self, request: EndpointScanRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("scan_endpoints", &request.target)?;
         let endpoints = request.paths.clone().unwrap_or_default();
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         self.run_endpoint_scan_async(request.target.clone(), endpoints, effective_timeout)
     }
 
     /// Run service fingerprinting (async).
     #[pyo3(signature = (request,))]
     fn run_fingerprint(&self, request: FingerprintRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("fingerprint_services", &request.target)?;
         let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         self.run_fingerprint_async(request.target.clone(), ports, effective_timeout)
     }
 
     /// Run DNS reconnaissance (async).
     #[pyo3(signature = (request,))]
     fn run_recon_dns(&self, request: ReconDnsRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("recon_dns", &request.target)?;
         self.run_recon_dns_async(request.target.clone())
     }
 
     /// Run TLS inspection (async).
     #[pyo3(signature = (request,))]
     fn run_tls_inspect(&self, request: TlsInspectRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("inspect_tls", &request.target)?;
         self.run_tls_inspect_async(request.target.clone())
     }
 
     /// Run technology detection (async).
     #[pyo3(signature = (request,))]
     fn run_tech_detect(&self, request: TechDetectRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("detect_technology", &request.target)?;
         self.run_tech_detect_async(request.target.clone())
     }
 
     /// Run WAF detection (async).
     #[pyo3(signature = (request,))]
     fn run_waf_detect(&self, request: WafDetectRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("detect_waf", &request.target)?;
         self.run_waf_detect_async(request.target.clone())
     }
 
     /// Run an HTTP load test (async).
     #[pyo3(signature = (request,))]
     fn run_load_test(&self, request: LoadTestRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("load_test", &request.target)?;
         let total_requests = request.requests.unwrap_or(100) as u64;
-        let concurrency = request.concurrency.unwrap_or(self.concurrency as u32) as usize;
+        let concurrency = request.concurrency.unwrap_or(self.state.concurrency as u32) as usize;
         let method = request.method.clone().unwrap_or_else(|| "GET".to_string());
         let timeout_secs = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
         self.run_load_test_async(
@@ -202,12 +237,16 @@ impl AsyncEngine {
     /// Run WAF validation (async).
     #[pyo3(signature = (request,))]
     fn run_waf_validate(&self, request: WafValidateRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("validate_waf", &request.target)?;
         self.run_waf_validate_async(request.target.clone())
     }
 
     /// Run HTTP fuzzing (async).
     #[pyo3(signature = (request,))]
     fn run_fuzz(&self, request: FuzzRequest) -> PyResult<runtime_async::PyFuture> {
+        self.state
+            .pre_dispatch_validate("fuzz_http", &request.target)?;
         let payload_type = request
             .payload_type
             .clone()
@@ -226,25 +265,25 @@ impl AsyncEngine {
     /// Get the engine's scope.
     #[getter]
     fn scope(&self) -> Scope {
-        self.scope.clone()
+        self.state.scope.clone()
     }
 
     /// Get the engine's mode.
     #[getter]
     fn mode(&self) -> String {
-        self.mode.clone()
+        self.state.mode.clone()
     }
 
     /// Get the engine's concurrency.
     #[getter]
     fn concurrency(&self) -> usize {
-        self.concurrency
+        self.state.concurrency
     }
 
     /// Get the engine's timeout in milliseconds.
     #[getter]
     fn timeout_ms(&self) -> u64 {
-        self.timeout_ms
+        self.state.timeout_ms
     }
 
     /// Close the engine (no-op).
@@ -269,7 +308,7 @@ impl AsyncEngine {
     fn __repr__(&self) -> String {
         format!(
             "AsyncEngine(mode={}, concurrency={})",
-            self.mode, self.concurrency
+            self.state.mode, self.state.concurrency
         )
     }
 }
@@ -283,79 +322,89 @@ impl AsyncEngine {
         concurrency: usize,
         timeout_ms: u64,
     ) -> PyResult<Self> {
-        if mode != "manual" && mode != "automation" {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Invalid mode '{}'. Must be 'manual' or 'automation'.",
-                mode
-            )));
-        }
-        Ok(Self {
-            scope,
-            mode: mode.to_string(),
-            concurrency,
-            timeout_ms,
-        })
+        let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
+        Ok(Self { state })
+    }
+
+    /// Internal constructor from a full EggsecConfig.
+    pub(crate) fn new_with_config(
+        scope: Scope,
+        config: PyEggsecConfig,
+        mode: &str,
+        concurrency: Option<usize>,
+        timeout_ms: Option<u64>,
+    ) -> PyResult<Self> {
+        let state = EngineState::from_config(scope, config, mode, concurrency, timeout_ms)?;
+        Ok(Self { state })
     }
 
     /// Enforce that a target is within scope, raising EnforcementError if denied.
     pub(crate) fn enforce_target(&self, target: &str) -> PyResult<()> {
-        self.scope.enforce_target(target)
+        self.state.enforce_target(target)
     }
 
     /// Enforce that a port is within scope, raising EnforcementError if denied.
     pub(crate) fn enforce_port(&self, port: u16) -> PyResult<()> {
-        self.scope.enforce_port(port)
+        self.state.enforce_port(port)
     }
 
     /// Borrow the scope (immutable reference).
     pub(crate) fn scope_ref(&self) -> &Scope {
-        &self.scope
+        self.state.scope_ref()
     }
 
     /// Get the effective concurrency.
     pub(crate) fn get_concurrency(&self) -> usize {
-        self.concurrency
+        self.state.get_concurrency()
     }
 
     /// Get the effective timeout in milliseconds.
     pub(crate) fn get_timeout_ms(&self) -> u64 {
-        self.timeout_ms
+        self.state.get_timeout_ms()
     }
 
     /// Get the mode string.
     pub(crate) fn get_mode(&self) -> &str {
-        &self.mode
+        self.state.get_mode()
     }
 
     /// Dispatch a generic operation request (used by async pipeline and other internal callers).
+    ///
+    /// This method is called by `OperationExecutorRegistry::execute_async()` after feature
+    /// gate validation. Operation IDs must match `operation_registry::STABLE_OPERATION_IDS`.
     pub(crate) fn dispatch_async(
         &self,
         request: OperationRequest,
     ) -> PyResult<runtime_async::PyFuture> {
+        use crate::operation_registry::*;
         let op = request.operation.clone();
+
+        // Pre-dispatch validation: scope, feature gates, audit logging.
+        self.state.pre_dispatch_validate(&op, &request.target)?;
+
         match op.as_str() {
-            "scan_ports" => {
+            OP_SCAN_PORTS => {
                 let target = request.target.clone();
                 let ports_str = request
                     .metadata
                     .get("ports")
                     .cloned()
                     .unwrap_or_else(|| "1-1024".to_string());
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports = parse_ports_string(&ports_str)?;
                 self.run_port_scan_async(target, ports, effective_timeout)
             }
-            "scan_endpoints" => {
+            OP_SCAN_ENDPOINTS => {
                 let target = request.target.clone();
                 let endpoints: Vec<String> = request
                     .metadata
                     .get("endpoints")
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
                     .unwrap_or_default();
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_endpoint_scan_async(target, endpoints, effective_timeout)
             }
-            "fingerprint" => {
+            OP_FINGERPRINT_SERVICES => {
                 let target = request.target.clone();
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
@@ -363,14 +412,14 @@ impl AsyncEngine {
                 } else {
                     parse_ports_string(&ports_str)?
                 };
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_fingerprint_async(target, ports, effective_timeout)
             }
-            "recon_dns" => self.run_recon_dns_async(request.target.clone()),
-            "tls_inspect" => self.run_tls_inspect_async(request.target.clone()),
-            "tech_detect" => self.run_tech_detect_async(request.target.clone()),
-            "waf_detect" => self.run_waf_detect_async(request.target.clone()),
-            "load_test" => {
+            OP_RECON_DNS => self.run_recon_dns_async(request.target.clone()),
+            OP_INSPECT_TLS => self.run_tls_inspect_async(request.target.clone()),
+            OP_DETECT_TECHNOLOGY => self.run_tech_detect_async(request.target.clone()),
+            OP_DETECT_WAF => self.run_waf_detect_async(request.target.clone()),
+            OP_LOAD_TEST => {
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -380,7 +429,7 @@ impl AsyncEngine {
                     .metadata
                     .get("concurrency")
                     .and_then(|s| s.parse().ok())
-                    .unwrap_or(self.concurrency);
+                    .unwrap_or(self.state.concurrency);
                 let method = request
                     .metadata
                     .get("method")
@@ -395,8 +444,8 @@ impl AsyncEngine {
                     method,
                 )
             }
-            "waf_validate" => self.run_waf_validate_async(request.target.clone()),
-            "fuzz" => {
+            OP_VALIDATE_WAF => self.run_waf_validate_async(request.target.clone()),
+            OP_FUZZ_HTTP => {
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: usize = request
                     .metadata
@@ -424,13 +473,34 @@ impl AsyncEngine {
         ports: Vec<u16>,
         effective_timeout_ms: u64,
     ) -> PyResult<runtime_async::PyFuture> {
-        self.scope.enforce_target(&target)?;
+        self.state.scope.enforce_target(&target)?;
         for &port in &ports {
-            self.scope.enforce_port(port)?;
+            self.state.scope.enforce_port(port)?;
         }
 
-        let effective_concurrency = self.concurrency;
+        let effective_concurrency = self.state.concurrency;
         let target_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started (before spawn, on calling thread)
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting port scan on {}", target_owned),
+                        0,
+                        ports.len(),
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             let config = eggsec::scanner::PortScanConfig {
@@ -454,11 +524,12 @@ impl AsyncEngine {
                     let mut metadata = std::collections::HashMap::new();
                     metadata.insert("target".to_string(), target_owned);
                     let stats = ExecutionStats::new(py_result.elapsed_ms, items, items - open, 0);
-                    Ok(operation_ok(
+                    let result = operation_ok(
                         stats,
                         Some(metadata),
                         Some(OperationPayload::PortScan(py_result)),
-                    ))
+                    );
+                    Ok(result)
                 }
                 Err(e) => Ok(operation_err(e.to_string())),
             }
@@ -472,9 +543,30 @@ impl AsyncEngine {
         effective_timeout_ms: u64,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
         let target_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting endpoint scan on {}", target_owned),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             let config = eggsec::scanner::EndpointScanConfig {
@@ -514,13 +606,34 @@ impl AsyncEngine {
         ports: Vec<u16>,
         effective_timeout_ms: u64,
     ) -> PyResult<runtime_async::PyFuture> {
-        self.scope.enforce_target(&target)?;
+        self.state.scope.enforce_target(&target)?;
         for &port in &ports {
-            self.scope.enforce_port(port)?;
+            self.state.scope.enforce_port(port)?;
         }
 
         let target_owned = target.clone();
         let ports_owned = ports;
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting fingerprint scan on {}", target_owned),
+                        0,
+                        ports_owned.len(),
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             match eggsec::scanner::fingerprint_services(
@@ -553,9 +666,30 @@ impl AsyncEngine {
     }
 
     fn run_recon_dns_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
-        self.scope.enforce_target(&target)?;
+        self.state.scope.enforce_target(&target)?;
 
         let domain_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting DNS recon on {}", domain_owned),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             match eggsec::recon::dns_records::enumerate_dns_records(&domain_owned)
@@ -612,9 +746,30 @@ impl AsyncEngine {
     }
 
     fn run_tls_inspect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
-        self.scope.enforce_target(&target)?;
+        self.state.scope.enforce_target(&target)?;
 
         let host_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting TLS inspection on {}", host_owned),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             match eggsec::recon::ssl::analyze_ssl(&host_owned, 443)
@@ -667,9 +822,30 @@ impl AsyncEngine {
 
     fn run_tech_detect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
         let url_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting technology detection on {}", url_owned),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             match eggsec::recon::techdetect::detect_tech_stack(&url_owned)
@@ -717,9 +893,30 @@ impl AsyncEngine {
 
     fn run_waf_detect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
         let url_owned = target.clone();
+        let event_tx = self.state.event_tx.clone();
+
+        // Emit: operation started
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting WAF detection on {}", url_owned),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
 
         runtime_async::spawn_async(async move {
             match async {
@@ -766,7 +963,7 @@ impl AsyncEngine {
         method: String,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
         if total_requests == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -784,21 +981,63 @@ impl AsyncEngine {
             ));
         }
 
+        // Emit: operation started
+        let event_tx = self.state.event_tx.clone();
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting load test on {}", target),
+                        0,
+                        total_requests as usize,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
+
         crate::loadtest::async_load_test_http(
             &target,
             total_requests,
             concurrency,
             timeout_secs,
-            self.scope.clone(),
+            self.state.scope.clone(),
             &method,
         )
     }
 
     fn run_waf_validate_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
-        crate::waf_validation::async_validate_waf(&target, self.scope.clone(), false, None)
+        // Emit: operation started
+        let event_tx = self.state.event_tx.clone();
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting WAF validation on {}", target),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
+
+        crate::waf_validation::async_validate_waf(&target, self.state.scope.clone(), false, None)
     }
 
     fn run_fuzz_async(
@@ -809,7 +1048,7 @@ impl AsyncEngine {
         timeout: u64,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
-        self.scope.enforce_target(&host)?;
+        self.state.scope.enforce_target(&host)?;
 
         if concurrency == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -822,9 +1061,30 @@ impl AsyncEngine {
             ));
         }
 
+        // Emit: operation started
+        let event_tx = self.state.event_tx.clone();
+        if let Some(ref tx) = event_tx {
+            let _ = Python::with_gil(|py| {
+                tx.try_send(crate::event_protocol::EventEnvelope::create(
+                    "operation.started".to_string(),
+                    crate::event_protocol::ProgressEvent::new(
+                        0.0,
+                        format!("Starting HTTP fuzz on {}", target),
+                        0,
+                        0,
+                    )
+                    .into_py(py),
+                    None,
+                    None,
+                    None,
+                    None,
+                ))
+            });
+        }
+
         crate::waf_validation::async_fuzz_http(
             &target,
-            self.scope.clone(),
+            self.state.scope.clone(),
             &payload_type,
             "GET",
             None,

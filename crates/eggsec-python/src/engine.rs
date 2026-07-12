@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 
+use crate::config_model::PyEggsecConfig;
 use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
+use crate::engine_state::EngineState;
 use crate::error::EggsecResultExt;
 use crate::fingerprint::FingerprintScanResult;
 use crate::planning::ScanPlan;
@@ -16,12 +20,13 @@ use crate::waf::WafDetectionResultPy;
 ///
 /// Wraps the Rust engine directly. Each `run_*` method returns an `OperationResult`
 /// instead of raising exceptions — errors are captured in the result status.
+///
+/// The engine holds a shared `EngineState` (via `Arc`) that is also used by
+/// `AsyncEngine`, ensuring every operation passes through common validation,
+/// scope enforcement, feature gating, and audit logging.
 #[pyclass]
 pub struct Engine {
-    pub(crate) scope: Scope,
-    pub(crate) mode: String,
-    pub(crate) concurrency: usize,
-    pub(crate) timeout_ms: u64,
+    pub(crate) state: Arc<EngineState>,
 }
 
 /// Extract hostname from a URL for scope enforcement.
@@ -126,18 +131,46 @@ impl Engine {
         Self::new_inner(scope, mode, concurrency, timeout_ms)
     }
 
+    /// List all registered operation IDs.
+    ///
+    /// Returns:
+    ///     list[str]: Stable operation identifiers available for dispatch.
+    fn list_operations(&self) -> Vec<String> {
+        self.state.registry.list()
+    }
+
+    /// Check if an operation ID is registered.
+    ///
+    /// Args:
+    ///     operation_id: The operation identifier to check.
+    ///
+    /// Returns:
+    ///     bool: True if the operation is registered.
+    fn has_operation(&self, operation_id: &str) -> bool {
+        self.state.registry.contains(operation_id)
+    }
+
     /// Dispatch a generic operation request to the appropriate engine function.
     ///
+    /// Routes through the OperationExecutorRegistry, which checks feature gates
+    /// and provides "Did you mean?" suggestions for unknown operations.
     /// Returns an OperationResult with status and artifacts.
-    /// On unknown operation, returns a Failed OperationResult.
     fn run(&self, py: Python<'_>, request: OperationRequest) -> OperationResult {
-        self.dispatch(py, request)
+        self.state
+            .registry
+            .execute(py, &request.operation, &request, self)
     }
 
     /// Run a port scan.
     #[pyo3(signature = (request,))]
     fn run_port_scan(&self, py: Python<'_>, request: PortScanRequest) -> OperationResult {
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("scan_ports", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         let ports_str = request
             .ports
             .clone()
@@ -146,7 +179,7 @@ impl Engine {
             Ok(p) => p,
             Err(e) => return operation_err(e.to_string()),
         };
-        let effective_concurrency = self.concurrency;
+        let effective_concurrency = self.state.concurrency;
         self.run_port_scan_inner(
             py,
             &request,
@@ -159,12 +192,24 @@ impl Engine {
     /// Run an endpoint scan.
     #[pyo3(signature = (request,))]
     fn run_endpoint_scan(&self, py: Python<'_>, request: EndpointScanRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("scan_endpoints", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_endpoint_scan_inner(py, &request)
     }
 
     /// Run service fingerprinting.
     #[pyo3(signature = (request,))]
     fn run_fingerprint(&self, py: Python<'_>, request: FingerprintRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("fingerprint_services", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
         self.run_fingerprint_inner(py, &request, ports)
     }
@@ -172,42 +217,84 @@ impl Engine {
     /// Run DNS reconnaissance.
     #[pyo3(signature = (request,))]
     fn run_recon_dns(&self, py: Python<'_>, request: ReconDnsRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("recon_dns", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_recon_dns_inner(py, &request)
     }
 
     /// Run TLS inspection.
     #[pyo3(signature = (request,))]
     fn run_tls_inspect(&self, py: Python<'_>, request: TlsInspectRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("inspect_tls", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_tls_inspect_inner(py, &request)
     }
 
     /// Run technology detection.
     #[pyo3(signature = (request,))]
     fn run_tech_detect(&self, py: Python<'_>, request: TechDetectRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("detect_technology", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_tech_detect_inner(py, &request)
     }
 
     /// Run WAF detection.
     #[pyo3(signature = (request,))]
     fn run_waf_detect(&self, py: Python<'_>, request: WafDetectRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("detect_waf", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_waf_detect_inner(py, &request)
     }
 
     /// Run an HTTP load test.
     #[pyo3(signature = (request,))]
     fn run_load_test(&self, py: Python<'_>, request: LoadTestRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("load_test", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_load_test_inner(py, &request)
     }
 
     /// Run WAF validation.
     #[pyo3(signature = (request,))]
     fn run_waf_validate(&self, py: Python<'_>, request: WafValidateRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("validate_waf", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_waf_validate_inner(py, &request)
     }
 
     /// Run HTTP fuzzing.
     #[pyo3(signature = (request,))]
     fn run_fuzz(&self, py: Python<'_>, request: FuzzRequest) -> OperationResult {
+        if let Err(e) = self
+            .state
+            .pre_dispatch_validate("fuzz_http", &request.target)
+        {
+            return operation_err(e.to_string());
+        }
         self.run_fuzz_inner(py, &request)
     }
 
@@ -219,25 +306,25 @@ impl Engine {
     /// Get the engine's scope.
     #[getter]
     fn scope(&self) -> Scope {
-        self.scope.clone()
+        self.state.scope.clone()
     }
 
     /// Get the engine's mode.
     #[getter]
     fn mode(&self) -> String {
-        self.mode.clone()
+        self.state.mode.clone()
     }
 
     /// Get the engine's concurrency.
     #[getter]
     fn concurrency(&self) -> usize {
-        self.concurrency
+        self.state.concurrency
     }
 
     /// Get the engine's timeout in milliseconds.
     #[getter]
     fn timeout_ms(&self) -> u64 {
-        self.timeout_ms
+        self.state.timeout_ms
     }
 
     /// Close the engine (no-op).
@@ -262,7 +349,7 @@ impl Engine {
     fn __repr__(&self) -> String {
         format!(
             "Engine(mode={}, concurrency={})",
-            self.mode, self.concurrency
+            self.state.mode, self.state.concurrency
         )
     }
 }
@@ -276,63 +363,75 @@ impl Engine {
         concurrency: usize,
         timeout_ms: u64,
     ) -> PyResult<Self> {
-        if mode != "manual" && mode != "automation" {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Invalid mode '{}'. Must be 'manual' or 'automation'.",
-                mode
-            )));
-        }
-        Ok(Self {
-            scope,
-            mode: mode.to_string(),
-            concurrency,
-            timeout_ms,
-        })
+        let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
+        Ok(Self { state })
+    }
+
+    /// Internal constructor from a full EggsecConfig.
+    pub(crate) fn new_with_config(
+        scope: Scope,
+        config: PyEggsecConfig,
+        mode: &str,
+        concurrency: Option<usize>,
+        timeout_ms: Option<u64>,
+    ) -> PyResult<Self> {
+        let state = EngineState::from_config(scope, config, mode, concurrency, timeout_ms)?;
+        Ok(Self { state })
     }
 
     /// Enforce that a target is within scope, raising EnforcementError if denied.
     pub(crate) fn enforce_target(&self, target: &str) -> PyResult<()> {
-        self.scope.enforce_target(target)
+        self.state.enforce_target(target)
     }
 
     /// Enforce that a port is within scope, raising EnforcementError if denied.
     pub(crate) fn enforce_port(&self, port: u16) -> PyResult<()> {
-        self.scope.enforce_port(port)
+        self.state.enforce_port(port)
     }
 
     /// Borrow the scope (immutable reference).
     pub(crate) fn scope_ref(&self) -> &Scope {
-        &self.scope
+        self.state.scope_ref()
     }
 
     /// Get the effective concurrency.
     pub(crate) fn get_concurrency(&self) -> usize {
-        self.concurrency
+        self.state.get_concurrency()
     }
 
     /// Get the effective timeout in milliseconds.
     pub(crate) fn get_timeout_ms(&self) -> u64 {
-        self.timeout_ms
+        self.state.get_timeout_ms()
     }
 
     /// Get the mode string.
     pub(crate) fn get_mode(&self) -> &str {
-        &self.mode
+        self.state.get_mode()
     }
 
     /// Dispatch a generic operation request (used by pipeline and other internal callers).
+    ///
+    /// This method is called by `OperationExecutorRegistry::execute()` after feature
+    /// gate validation. Operation IDs must match `operation_registry::STABLE_OPERATION_IDS`.
     pub(crate) fn dispatch(&self, py: Python<'_>, request: OperationRequest) -> OperationResult {
+        use crate::operation_registry::*;
         let op = request.operation.clone();
+
+        // Pre-dispatch validation: scope, feature gates, audit logging.
+        if let Err(e) = self.state.pre_dispatch_validate(&op, &request.target) {
+            return operation_err(e.to_string());
+        }
+
         match op.as_str() {
-            "scan_ports" => {
+            OP_SCAN_PORTS => {
                 let target = request.target.clone();
                 let ports_str = request
                     .metadata
                     .get("ports")
                     .cloned()
                     .unwrap_or_else(|| "1-1024".to_string());
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
-                let effective_concurrency = self.concurrency;
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
+                let effective_concurrency = self.state.concurrency;
                 match parse_ports_string(&ports_str) {
                     Ok(ports) => {
                         let req = PortScanRequest::new(
@@ -353,9 +452,9 @@ impl Engine {
                     Err(e) => operation_err(e.to_string()),
                 }
             }
-            "scan_endpoints" => {
+            OP_SCAN_ENDPOINTS => {
                 let target = request.target.clone();
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let endpoints: Vec<String> = request
                     .metadata
                     .get("endpoints")
@@ -369,9 +468,9 @@ impl Engine {
                 );
                 self.run_endpoint_scan_inner(py, &req)
             }
-            "fingerprint" => {
+            OP_FINGERPRINT_SERVICES => {
                 let target = request.target.clone();
-                let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
                     vec![80, 443]
@@ -385,23 +484,23 @@ impl Engine {
                     FingerprintRequest::new(target, Some(ports.clone()), Some(effective_timeout));
                 self.run_fingerprint_inner(py, &req, ports)
             }
-            "recon_dns" => {
+            OP_RECON_DNS => {
                 let req = ReconDnsRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_recon_dns_inner(py, &req)
             }
-            "tls_inspect" => {
+            OP_INSPECT_TLS => {
                 let req = TlsInspectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_tls_inspect_inner(py, &req)
             }
-            "tech_detect" => {
+            OP_DETECT_TECHNOLOGY => {
                 let req = TechDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_tech_detect_inner(py, &req)
             }
-            "waf_detect" => {
+            OP_DETECT_WAF => {
                 let req = WafDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_waf_detect_inner(py, &req)
             }
-            "load_test" => {
+            OP_LOAD_TEST => {
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -411,7 +510,7 @@ impl Engine {
                     .metadata
                     .get("concurrency")
                     .and_then(|s| s.parse().ok())
-                    .unwrap_or(self.concurrency);
+                    .unwrap_or(self.state.concurrency);
                 let method = request
                     .metadata
                     .get("method")
@@ -426,11 +525,11 @@ impl Engine {
                 );
                 self.run_load_test_inner(py, &req)
             }
-            "waf_validate" => {
+            OP_VALIDATE_WAF => {
                 let req = WafValidateRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_waf_validate_inner(py, &req)
             }
-            "fuzz" => {
+            OP_FUZZ_HTTP => {
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: Option<u32> =
                     request.metadata.get("threads").and_then(|s| s.parse().ok());
@@ -454,14 +553,31 @@ impl Engine {
         effective_concurrency: usize,
         effective_timeout_ms: u64,
     ) -> OperationResult {
-        if let Err(e) = self.scope.enforce_target(&request.target) {
+        if let Err(e) = self.state.scope.enforce_target(&request.target) {
             return operation_err(e.to_string());
         }
         for &port in &ports {
-            if let Err(e) = self.scope.enforce_port(port) {
+            if let Err(e) = self.state.scope.enforce_port(port) {
                 return operation_err(e.to_string());
             }
         }
+
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting port scan on {}", request.target),
+                    0,
+                    ports.len(),
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
 
         let target_owned = request.target.clone();
         let config = eggsec::scanner::PortScanConfig {
@@ -488,13 +604,48 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(py_result.elapsed_ms, items, items - open, 0);
+
+                // Emit: operation completed
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            py_result.elapsed_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::PortScan(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                // Emit: operation failed
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "scan_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -507,17 +658,34 @@ impl Engine {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
 
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting endpoint scan on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
+
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         let endpoints = request.paths.clone().unwrap_or_default();
 
         let config = eggsec::scanner::EndpointScanConfig {
             base_url: request.target.clone(),
             endpoints,
-            concurrency: self.concurrency,
+            concurrency: self.state.concurrency,
             timeout_duration: std::time::Duration::from_millis(effective_timeout),
             include_404: false,
             tui_mode: false,
@@ -538,13 +706,47 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(py_result.elapsed_ms, items, 0, 0);
+
+                // Emit: operation completed
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            py_result.elapsed_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::EndpointScan(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "scan_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -554,16 +756,33 @@ impl Engine {
         request: &FingerprintRequest,
         ports: Vec<u16>,
     ) -> OperationResult {
-        if let Err(e) = self.scope.enforce_target(&request.target) {
+        if let Err(e) = self.state.scope.enforce_target(&request.target) {
             return operation_err(e.to_string());
         }
         for &port in &ports {
-            if let Err(e) = self.scope.enforce_port(port) {
+            if let Err(e) = self.state.scope.enforce_port(port) {
                 return operation_err(e.to_string());
             }
         }
 
-        let effective_timeout = request.timeout_ms.unwrap_or(self.timeout_ms);
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting fingerprint scan on {}", request.target),
+                    0,
+                    ports.len(),
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
+
+        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         let target_owned = request.target.clone();
         let ports_owned = ports;
 
@@ -588,20 +807,70 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(py_result.elapsed_ms, items, 0, 0);
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            py_result.elapsed_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::Fingerprint(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "fingerprint_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
     fn run_recon_dns_inner(&self, py: Python<'_>, request: &ReconDnsRequest) -> OperationResult {
-        if let Err(e) = self.scope.enforce_target(&request.target) {
+        if let Err(e) = self.state.scope.enforce_target(&request.target) {
             return operation_err(e.to_string());
         }
+
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting DNS recon on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
 
         let domain_owned = request.target.clone();
         let result = runtime_sync::block_on(py, async move {
@@ -648,13 +917,46 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(0, record_count, 0, 0);
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            0,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::DnsRecon(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "dns_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -663,9 +965,26 @@ impl Engine {
         py: Python<'_>,
         request: &TlsInspectRequest,
     ) -> OperationResult {
-        if let Err(e) = self.scope.enforce_target(&request.target) {
+        if let Err(e) = self.state.scope.enforce_target(&request.target) {
             return operation_err(e.to_string());
         }
+
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting TLS inspection on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
 
         let host_owned = request.target.clone();
         let result = runtime_sync::block_on(py, async move {
@@ -708,13 +1027,46 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(0, 1, issue_count, 0);
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            0,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::TlsInspection(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "tls_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -727,9 +1079,26 @@ impl Engine {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
+
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting technology detection on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
 
         let url_owned = request.target.clone();
         let result = runtime_sync::block_on(py, async move {
@@ -766,13 +1135,46 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(0, tech_count, 0, 0);
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            0,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::TechnologyDetection(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "tech_detect_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -781,9 +1183,26 @@ impl Engine {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
+
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting WAF detection on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
 
         let url_owned = request.target.clone();
         let url_clone = url_owned.clone();
@@ -811,13 +1230,46 @@ impl Engine {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
                 let stats = ExecutionStats::new(0, items, 0, 0);
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            0,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::WafDetection(py_result)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "waf_detect_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
@@ -826,12 +1278,12 @@ impl Engine {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
 
         let total_requests = request.requests.unwrap_or(100) as u64;
-        let concurrency = request.concurrency.unwrap_or(self.concurrency as u32) as usize;
+        let concurrency = request.concurrency.unwrap_or(self.state.concurrency as u32) as usize;
         let method = request.method.clone().unwrap_or_else(|| "GET".to_string());
         let timeout_secs = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
 
@@ -845,7 +1297,24 @@ impl Engine {
             return operation_err("timeout_secs must be > 0".to_string());
         }
 
-        let scope_clone = self.scope.clone();
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting load test on {}", request.target),
+                    0,
+                    total_requests as usize,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
+
+        let scope_clone = self.state.scope.clone();
 
         let result = crate::loadtest::load_test_http(
             py,
@@ -867,26 +1336,76 @@ impl Engine {
                     r.failed_requests,
                     0,
                 );
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            r.total_duration_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(stats, Some(metadata), Some(OperationPayload::LoadTest(r)))
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "load_test_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
     fn run_waf_validate_inner(
         &self,
-        _py: Python<'_>,
+        py: Python<'_>,
         request: &WafValidateRequest,
     ) -> OperationResult {
         let host = match extract_host_from_url(&request.target) {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
 
-        let scope_clone = self.scope.clone();
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting WAF validation on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
+
+        let scope_clone = self.state.scope.clone();
         let result = crate::waf_validation::validate_waf(&request.target, scope_clone, false, None);
 
         match result {
@@ -899,22 +1418,55 @@ impl Engine {
                     r.bypasses_successful as u64,
                     0,
                 );
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            r.duration_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(
                     stats,
                     Some(metadata),
                     Some(OperationPayload::WafValidation(r)),
                 )
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "waf_validation_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 
-    fn run_fuzz_inner(&self, _py: Python<'_>, request: &FuzzRequest) -> OperationResult {
+    fn run_fuzz_inner(&self, py: Python<'_>, request: &FuzzRequest) -> OperationResult {
         let host = match extract_host_from_url(&request.target) {
             Ok(h) => h,
             Err(e) => return operation_err(e.to_string()),
         };
-        if let Err(e) = self.scope.enforce_target(&host) {
+        if let Err(e) = self.state.scope.enforce_target(&host) {
             return operation_err(e.to_string());
         }
 
@@ -932,7 +1484,24 @@ impl Engine {
             return operation_err("timeout must be > 0".to_string());
         }
 
-        let scope_clone = self.scope.clone();
+        // Emit: operation started
+        self.state
+            .emit_event(crate::event_protocol::EventEnvelope::create(
+                "operation.started".to_string(),
+                crate::event_protocol::ProgressEvent::new(
+                    0.0,
+                    format!("Starting HTTP fuzz on {}", request.target),
+                    0,
+                    0,
+                )
+                .into_py(py),
+                None,
+                None,
+                None,
+                None,
+            ));
+
+        let scope_clone = self.state.scope.clone();
         let target = request.target.clone();
 
         let result = crate::waf_validation::fuzz_http(
@@ -955,9 +1524,42 @@ impl Engine {
                     r.failed_requests as u64,
                     0,
                 );
+
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.completed".to_string(),
+                        crate::event_protocol::CompletionEvent::new(
+                            py,
+                            "Completed".to_string(),
+                            None,
+                            r.duration_ms,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+
                 operation_ok(stats, Some(metadata), Some(OperationPayload::HttpFuzz(r)))
             }
-            Err(e) => operation_err(e.to_string()),
+            Err(e) => {
+                self.state
+                    .emit_event(crate::event_protocol::EventEnvelope::create(
+                        "operation.failed".to_string(),
+                        crate::event_protocol::FailureEvent::new(
+                            "fuzz_error".to_string(),
+                            e.to_string(),
+                            false,
+                        )
+                        .into_py(py),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ));
+                operation_err(e.to_string())
+            }
         }
     }
 }

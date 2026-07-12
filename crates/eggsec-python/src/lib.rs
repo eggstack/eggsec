@@ -12,6 +12,7 @@ mod buffer_support;
 mod callbacks;
 mod cancellation;
 mod checkpoint;
+mod checkpoint_store;
 mod client;
 mod config_model;
 #[cfg(feature = "container")]
@@ -26,11 +27,13 @@ mod domains;
 mod dto;
 mod endpoint;
 mod engine;
+mod engine_state;
 mod ergonomics;
 mod error;
 mod event_protocol;
 mod event_stream;
 mod execution_context;
+mod execution_handle;
 mod experimental;
 mod features;
 mod finding;
@@ -50,6 +53,7 @@ mod mobile;
 mod nse;
 mod oauth;
 mod operation_metadata;
+pub(crate) mod operation_registry;
 #[cfg(feature = "packet-inspection")]
 mod packet_inspection;
 mod pipeline;
@@ -173,6 +177,8 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<handles::ExecutionEvent>()?;
     m.add_class::<handles::EventLog>()?;
     m.add_class::<handles::LazyEventIterator>()?;
+    m.add_class::<execution_handle::ExecutionState>()?;
+    m.add_class::<execution_handle::TrackedExecutionHandle>()?;
     m.add_class::<cancellation::CancellationToken>()?;
     m.add_class::<runtime_async::PyFuture>()?;
     m.add_class::<dto::PortScanResult>()?;
@@ -277,7 +283,14 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<planning::ScanPlan>()?;
     // Checkpoint types
     m.add_class::<checkpoint::Checkpoint>()?;
-    m.add_class::<checkpoint::CheckpointStore>()?;
+    // Versioned checkpoint store
+    m.add_class::<checkpoint_store::PipelineCheckpoint>()?;
+    m.add_class::<checkpoint_store::CheckpointLoadResult>()?;
+    m.add_class::<checkpoint_store::CheckpointStore>()?;
+    m.add_function(wrap_pyfunction!(
+        checkpoint_store::create_checkpoint_store,
+        m
+    )?)?;
     // Phase F Track 1: WAF validation and HTTP fuzzing
     m.add_class::<waf_validation::BypassResultPy>()?;
     m.add_class::<waf_validation::WafScanResultPy>()?;
@@ -542,6 +555,19 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(daemon::async_daemon_list_sessions, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_get_snapshot, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_close_session, m)?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_submit_task, m)?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_cancel_task, m)?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_cancel_active, m)?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_approve_policy, m)?)?;
+        m.add_function(wrap_pyfunction!(
+            daemon::async_daemon_list_persisted_sessions,
+            m
+        )?)?;
+        m.add_function(wrap_pyfunction!(
+            daemon::async_daemon_get_persisted_snapshot,
+            m
+        )?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_subscribe, m)?)?;
     }
     // Milestone C: Core assessment domains
     // C1: Consolidated recon
@@ -824,19 +850,14 @@ fn api_surface() -> PyObject {
             };
         }
 
-        // Always-available stable functions
+        // Stable: real execution path, result data preserved, policy integrated,
+        // serialization versioned, behavior tests pass
         add_entry!("scan_ports", "stable");
         add_entry!("async_scan_ports", "stable");
         add_entry!("scan_endpoints", "stable");
         add_entry!("async_scan_endpoints", "stable");
         add_entry!("fingerprint_services", "stable");
         add_entry!("async_fingerprint_services", "stable");
-        add_entry!("features", "stable");
-        add_entry!("has_feature", "stable");
-        add_entry!("build_info", "stable");
-        add_entry!("feature_matrix", "stable");
-        add_entry!("api_surface_version", "stable");
-        add_entry!("api_surface", "stable");
         add_entry!("recon_dns", "stable");
         add_entry!("async_recon_dns", "stable");
         add_entry!("inspect_tls", "stable");
@@ -852,21 +873,20 @@ fn api_surface() -> PyObject {
         add_entry!("generate_fuzz_payloads", "stable");
         add_entry!("load_test_http", "stable");
         add_entry!("async_load_test_http", "stable");
+
+        // Stable: introspection and utility functions
+        add_entry!("features", "stable");
+        add_entry!("has_feature", "stable");
+        add_entry!("build_info", "stable");
+        add_entry!("feature_matrix", "stable");
+        add_entry!("api_surface_version", "stable");
+        add_entry!("api_surface", "stable");
         add_entry!("validate_scope", "stable");
         add_entry!("preflight_operation", "stable");
         add_entry!("preflight_with_descriptor", "stable");
         add_entry!("audit_event_from_enforcement", "stable");
         add_entry!("audit_event_from_preflight", "stable");
         add_entry!("emit_audit_event", "stable");
-        add_entry!("run_consolidated_recon", "stable");
-        add_entry!("async_run_consolidated_recon", "stable");
-        add_entry!("graphql_test", "stable");
-        add_entry!("async_graphql_test", "stable");
-        add_entry!("oauth_discover_endpoints", "stable");
-        add_entry!("oauth_test", "stable");
-        add_entry!("async_oauth_test", "stable");
-        add_entry!("auth_test", "stable");
-        add_entry!("async_auth_test", "stable");
         add_entry!("distributed_task_types", "stable");
         add_entry!("distributed_generate_psk", "stable");
         add_entry!("notify_scan_started", "stable");
@@ -874,86 +894,105 @@ fn api_surface() -> PyObject {
         add_entry!("notify_findings", "stable");
         add_entry!("notify_error", "stable");
 
-        // Feature-gated functions (stable when available)
-        add_entry!("websocket_probe", "stable");
-        add_entry!("async_websocket_probe", "stable");
-        add_entry!("websocket_fuzz", "stable");
-        add_entry!("async_websocket_fuzz", "stable");
-        add_entry!("scan_git_secrets", "stable");
-        add_entry!("async_scan_git_secrets", "stable");
-        add_entry!("generate_sbom", "stable");
-        add_entry!("async_generate_sbom", "stable");
-        add_entry!("db_probe", "stable");
-        add_entry!("async_db_probe", "stable");
-        add_entry!("db_probe_with_config", "stable");
-        add_entry!("db_probe_postgres", "stable");
-        add_entry!("db_probe_mysql", "stable");
-        add_entry!("db_probe_mssql", "stable");
-        add_entry!("db_probe_mongodb", "stable");
-        add_entry!("db_probe_redis", "stable");
-        add_entry!("db_list_drivers", "stable");
-        add_entry!("db_get_capabilities", "stable");
-        add_entry!("db_run_with_config", "stable");
-        add_entry!("create_proxy_manager", "stable");
-        add_entry!("async_add_proxy", "stable");
-        add_entry!("async_proxy_health_check", "stable");
-        add_entry!("analyze_apk", "stable");
-        add_entry!("async_analyze_apk", "stable");
-        add_entry!("analyze_ipa", "stable");
-        add_entry!("async_analyze_ipa", "stable");
-        add_entry!("list_mobile_devices", "stable");
-        add_entry!("dynamic_mobile_analysis", "stable");
-        add_entry!("scan_docker_image", "stable");
-        add_entry!("async_scan_docker_image", "stable");
-        add_entry!("scan_kubernetes", "stable");
-        add_entry!("async_scan_kubernetes", "stable");
-        add_entry!("detect_escape_risks", "stable");
-        add_entry!("check_cis_docker_benchmark", "stable");
-        add_entry!("list_network_interfaces", "stable");
-        add_entry!("parse_pcap", "stable");
-        add_entry!("run_traceroute", "stable");
-        add_entry!("async_run_traceroute", "stable");
-        add_entry!("traceroute", "stable");
-        add_entry!("stress_test", "stable");
-        add_entry!("async_stress_test", "stable");
-        add_entry!("nse_run", "stable");
-        add_entry!("async_nse_run", "stable");
-        add_entry!("nse_list_libraries", "stable");
-        add_entry!("nse_list_scripts", "stable");
-        add_entry!("nse_get_script_metadata", "stable");
-        add_entry!("daemon_connect", "stable");
-        add_entry!("async_daemon_health", "stable");
-        add_entry!("async_daemon_declare_client", "stable");
-        add_entry!("async_daemon_create_session", "stable");
-        add_entry!("async_daemon_list_sessions", "stable");
-        add_entry!("async_daemon_get_snapshot", "stable");
-        add_entry!("async_daemon_close_session", "stable");
-        add_entry!("wireless_scan", "stable");
-        add_entry!("async_wireless_scan", "stable");
-        add_entry!("wireless_analyze_networks", "stable");
-        add_entry!("evasion_scan", "stable");
-        add_entry!("async_evasion_scan", "stable");
-        add_entry!("evasion_list_techniques", "stable");
-        add_entry!("postex_scan", "stable");
-        add_entry!("async_postex_scan", "stable");
-        add_entry!("postex_list_techniques", "stable");
-        add_entry!("c2_scan", "stable");
-        add_entry!("async_c2_scan", "stable");
-        add_entry!("c2_get_campaign", "stable");
-        add_entry!("browser_test", "stable");
-        add_entry!("async_browser_test", "stable");
-        add_entry!("hunt_test", "stable");
-        add_entry!("async_hunt_test", "stable");
-        add_entry!("ai_analyze_finding", "stable");
-        add_entry!("async_ai_analyze_finding", "stable");
-        add_entry!("ai_generate_payloads", "stable");
-        add_entry!("ai_suggest_waf_bypass", "stable");
+        // Provisional: public API shape accepted, implementation works but
+        // lacks full backend validation or end-to-end tests
+        add_entry!("run_consolidated_recon", "provisional");
+        add_entry!("async_run_consolidated_recon", "provisional");
+        add_entry!("graphql_test", "provisional");
+        add_entry!("async_graphql_test", "provisional");
+        add_entry!("oauth_discover_endpoints", "provisional");
+        add_entry!("oauth_test", "provisional");
+        add_entry!("async_oauth_test", "provisional");
+        add_entry!("auth_test", "provisional");
+        add_entry!("async_auth_test", "provisional");
 
-        // G1: Domain introspection
-        add_entry!("DomainDescriptorPy", "stable");
-        add_entry!("DomainRegistry", "stable");
+        // Provisional: feature-gated, implementation works but lacks full
+        // backend/platform validation
+        add_entry!("websocket_probe", "provisional");
+        add_entry!("async_websocket_probe", "provisional");
+        add_entry!("websocket_fuzz", "provisional");
+        add_entry!("async_websocket_fuzz", "provisional");
+        add_entry!("scan_git_secrets", "provisional");
+        add_entry!("async_scan_git_secrets", "provisional");
+        add_entry!("generate_sbom", "provisional");
+        add_entry!("async_generate_sbom", "provisional");
+        add_entry!("db_probe", "provisional");
+        add_entry!("async_db_probe", "provisional");
+        add_entry!("db_probe_with_config", "provisional");
+        add_entry!("db_probe_postgres", "provisional");
+        add_entry!("db_probe_mysql", "provisional");
+        add_entry!("db_probe_mssql", "provisional");
+        add_entry!("db_probe_mongodb", "provisional");
+        add_entry!("db_probe_redis", "provisional");
+        add_entry!("db_list_drivers", "provisional");
+        add_entry!("db_get_capabilities", "provisional");
+        add_entry!("db_run_with_config", "provisional");
+        add_entry!("create_proxy_manager", "provisional");
+        add_entry!("async_add_proxy", "provisional");
+        add_entry!("async_proxy_health_check", "provisional");
+        add_entry!("analyze_apk", "provisional");
+        add_entry!("async_analyze_apk", "provisional");
+        add_entry!("analyze_ipa", "provisional");
+        add_entry!("async_analyze_ipa", "provisional");
+        add_entry!("scan_docker_image", "provisional");
+        add_entry!("async_scan_docker_image", "provisional");
+        add_entry!("scan_kubernetes", "provisional");
+        add_entry!("async_scan_kubernetes", "provisional");
+        add_entry!("detect_escape_risks", "provisional");
+        add_entry!("check_cis_docker_benchmark", "provisional");
+        add_entry!("list_network_interfaces", "provisional");
+        add_entry!("parse_pcap", "provisional");
+        add_entry!("run_traceroute", "provisional");
+        add_entry!("async_run_traceroute", "provisional");
+        add_entry!("traceroute", "provisional");
+        add_entry!("nse_run", "provisional");
+        add_entry!("async_nse_run", "provisional");
+        add_entry!("nse_list_libraries", "provisional");
+        add_entry!("nse_list_scripts", "provisional");
+        add_entry!("nse_get_script_metadata", "provisional");
+        add_entry!("daemon_connect", "provisional");
+        add_entry!("async_daemon_health", "provisional");
+        add_entry!("async_daemon_declare_client", "provisional");
+        add_entry!("async_daemon_create_session", "provisional");
+        add_entry!("async_daemon_list_sessions", "provisional");
+        add_entry!("async_daemon_get_snapshot", "provisional");
+        add_entry!("async_daemon_close_session", "provisional");
+        add_entry!("async_daemon_submit_task", "provisional");
+        add_entry!("async_daemon_cancel_task", "provisional");
+        add_entry!("async_daemon_cancel_active", "provisional");
+        add_entry!("async_daemon_approve_policy", "provisional");
+        add_entry!("async_daemon_list_persisted_sessions", "provisional");
+        add_entry!("async_daemon_get_persisted_snapshot", "provisional");
+        add_entry!("async_daemon_subscribe", "provisional");
 
-        // G2: Event protocol
+        // Experimental: platform-sensitive, hazardous, incomplete, or
+        // subject to substantial change
+        add_entry!("wireless_scan", "experimental");
+        add_entry!("async_wireless_scan", "experimental");
+        add_entry!("wireless_analyze_networks", "experimental");
+        add_entry!("evasion_scan", "experimental");
+        add_entry!("async_evasion_scan", "experimental");
+        add_entry!("evasion_list_techniques", "experimental");
+        add_entry!("postex_scan", "experimental");
+        add_entry!("async_postex_scan", "experimental");
+        add_entry!("postex_list_techniques", "experimental");
+        add_entry!("c2_scan", "experimental");
+        add_entry!("async_c2_scan", "experimental");
+        add_entry!("c2_get_campaign", "experimental");
+        add_entry!("browser_test", "experimental");
+        add_entry!("async_browser_test", "experimental");
+        add_entry!("hunt_test", "experimental");
+        add_entry!("async_hunt_test", "experimental");
+        add_entry!("ai_analyze_finding", "experimental");
+        add_entry!("async_ai_analyze_finding", "experimental");
+        add_entry!("ai_generate_payloads", "experimental");
+        add_entry!("ai_suggest_waf_bypass", "experimental");
+        add_entry!("list_mobile_devices", "experimental");
+        add_entry!("dynamic_mobile_analysis", "experimental");
+        add_entry!("stress_test", "experimental");
+        add_entry!("async_stress_test", "experimental");
+
+        // G2: Event protocol (stable — versioned serialization)
         add_entry!("EventEnvelope", "stable");
         add_entry!("PlanningEvent", "stable");
         add_entry!("PreflightEvent", "stable");
@@ -968,7 +1007,7 @@ fn api_surface() -> PyObject {
         add_entry!("EVENT_SCHEMA_VERSION", "stable");
         add_entry!("EventStream", "stable");
         add_entry!("event_stream_from_legacy", "stable");
-        // G3: Callbacks and sinks
+        // G3: Callbacks and sinks (stable — contract types)
         add_entry!("AuditSink", "stable");
         add_entry!("FindingSink", "stable");
         add_entry!("ArtifactSink", "stable");
@@ -978,16 +1017,192 @@ fn api_surface() -> PyObject {
         add_entry!("CallbackScheduler", "stable");
         add_entry!("PyBackpressureChannel", "stable");
 
-        // Stable classes (always available)
+        // Stable classes (always available, real execution path)
         add_entry!("Scope", "stable");
         add_entry!("Client", "stable");
         add_entry!("AsyncClient", "stable");
         add_entry!("Engine", "stable");
         add_entry!("AsyncEngine", "stable");
-        add_entry!("EggsecConfig", "stable");
         add_entry!("Severity", "stable");
         add_entry!("Finding", "stable");
         add_entry!("Report", "stable");
+        add_entry!("ExecutionHandle", "stable");
+        add_entry!("ExecutionEvent", "stable");
+        add_entry!("EventLog", "stable");
+        add_entry!("CancellationToken", "stable");
+
+        // Provisional: Milestone B/C/D/E types — working but lacking
+        // full backend validation
+        add_entry!("EggsecConfig", "provisional");
+        add_entry!("LoadedScope", "provisional");
+        add_entry!("OperationRegistry", "provisional");
+        add_entry!("EnforcementContext", "provisional");
+        add_entry!("ExecutionPolicy", "provisional");
+        add_entry!("ManualOverride", "provisional");
+        add_entry!("PreflightResult", "provisional");
+        add_entry!("EnforcementAuditEvent", "provisional");
+        add_entry!("OperationDescriptor", "provisional");
+        add_entry!("OperationMetadataView", "provisional");
+        add_entry!("Pipeline", "provisional");
+        add_entry!("AsyncPipeline", "provisional");
+        add_entry!("PipelineStep", "provisional");
+        add_entry!("StepResult", "provisional");
+        add_entry!("PipelineResult", "provisional");
+        add_entry!("ScanPlan", "provisional");
+        add_entry!("PlanStep", "provisional");
+        add_entry!("Checkpoint", "provisional");
+        add_entry!("CheckpointStore", "provisional");
+        add_entry!("ExecutionSurface", "provisional");
+        add_entry!("ExecutionProfile", "provisional");
+        add_entry!("ApprovedOperation", "provisional");
+        add_entry!("PolicyDecision", "provisional");
+        add_entry!("DomainDescriptorPy", "provisional");
+        add_entry!("DomainRegistry", "provisional");
+
+        // Provisional: Config model types (Milestone B)
+        add_entry!("PyEggsecConfig", "provisional");
+        add_entry!("PySensitiveString", "provisional");
+        add_entry!("PyHttpConfig", "provisional");
+        add_entry!("PyScanConfig", "provisional");
+        add_entry!("PyOutputConfig", "provisional");
+        add_entry!("PyReconConfig", "provisional");
+        add_entry!("PyReconApiConfig", "provisional");
+        add_entry!("PyAiConfig", "provisional");
+        add_entry!("PySearchConfig", "provisional");
+        add_entry!("PyPathsConfig", "provisional");
+        add_entry!("PyCacheConfig", "provisional");
+
+        // Stable: Scope evaluation types
+        add_entry!("ScopeSource", "stable");
+        add_entry!("ScopeRule", "stable");
+        add_entry!("ScopeExplanation", "stable");
+        add_entry!("ScopeValidation", "stable");
+
+        // Provisional: Operation metadata types
+        add_entry!("OperationRisk", "provisional");
+        add_entry!("OperationMode", "provisional");
+        add_entry!("IntendedUse", "provisional");
+        add_entry!("Capability", "provisional");
+        add_entry!("DenialClass", "provisional");
+        add_entry!("TargetPolicyKind", "provisional");
+
+        // Stable: DTO types (result data preserved, serialization versioned)
+        add_entry!("PortScanResult", "stable");
+        add_entry!("OpenPort", "stable");
+        add_entry!("ScanStats", "stable");
+        add_entry!("PortRange", "stable");
+        add_entry!("TimingPreset", "stable");
+        add_entry!("EndpointScanResult", "stable");
+        add_entry!("EndpointFinding", "stable");
+        add_entry!("EndpointScanStats", "stable");
+        add_entry!("FingerprintScanResult", "stable");
+        add_entry!("FingerprintEvidence", "stable");
+        add_entry!("FingerprintConfidence", "stable");
+
+        // Stable: Recon result types
+        add_entry!("DnsRecordSet", "stable");
+        add_entry!("MxRecord", "stable");
+        add_entry!("SoaRecord", "stable");
+        add_entry!("TlsInspectionResult", "stable");
+        add_entry!("TlsCertificateInfo", "stable");
+        add_entry!("SslIssue", "stable");
+        add_entry!("TechDetectionResult", "stable");
+        add_entry!("TechStack", "stable");
+        add_entry!("WafDetectionResult", "stable");
+
+        // Stable: Request types
+        add_entry!("OperationRequest", "stable");
+        add_entry!("PortScanRequest", "stable");
+        add_entry!("EndpointScanRequest", "stable");
+        add_entry!("FingerprintRequest", "stable");
+        add_entry!("ReconDnsRequest", "stable");
+        add_entry!("TlsInspectRequest", "stable");
+        add_entry!("TechDetectRequest", "stable");
+        add_entry!("WafDetectRequest", "stable");
+        add_entry!("LoadTestRequest", "stable");
+        add_entry!("WafValidateRequest", "stable");
+        add_entry!("FuzzRequest", "stable");
+        add_entry!("RequestBuilder", "stable");
+
+        // Stable: Common result protocol types
+        add_entry!("ExecutionStatus", "stable");
+        add_entry!("ExecutionStats", "stable");
+        add_entry!("Artifact", "stable");
+        add_entry!("OperationResult", "stable");
+
+        // Provisional: Finding and reporting types (Milestone D/E)
+        add_entry!("Evidence", "provisional");
+        add_entry!("FindingSet", "provisional");
+        add_entry!("Confidence", "provisional");
+        add_entry!("FindingType", "provisional");
+        add_entry!("EvidenceKind", "provisional");
+        add_entry!("AffectedAsset", "provisional");
+        add_entry!("FindingLocation", "provisional");
+        add_entry!("VersionedEvidence", "provisional");
+        add_entry!("VersionedFinding", "provisional");
+        add_entry!("ArtifactPy", "provisional");
+        add_entry!("ArtifactReferencePy", "provisional");
+        add_entry!("ArtifactStorePy", "provisional");
+        add_entry!("CvssScore", "provisional");
+        add_entry!("VulnerabilityRecord", "provisional");
+        add_entry!("RemediationRecord", "provisional");
+        add_entry!("FindingState", "provisional");
+        add_entry!("WorkflowTransition", "provisional");
+        add_entry!("Suppression", "provisional");
+        add_entry!("FindingWorkflow", "provisional");
+        add_entry!("FindingRepository", "provisional");
+        add_entry!("Assessment", "provisional");
+        add_entry!("AssessmentRepository", "provisional");
+        add_entry!("FindingCorrelation", "provisional");
+        add_entry!("FindingDiff", "provisional");
+        add_entry!("AssessmentDiff", "provisional");
+        add_entry!("BaselineComparator", "provisional");
+        add_entry!("FindingReporter", "provisional");
+        add_entry!("SeveritySummary", "provisional");
+        add_entry!("ReportEnvelope", "provisional");
+        add_entry!("BinaryBuffer", "provisional");
+        add_entry!("LazyArtifact", "provisional");
+        add_entry!("PaginatedResults", "provisional");
+
+        // Provisional: WAF validation and fuzz types
+        add_entry!("BypassResult", "provisional");
+        add_entry!("WafScanResult", "provisional");
+        add_entry!("Payload", "provisional");
+        add_entry!("FuzzResult", "provisional");
+        add_entry!("FuzzSession", "provisional");
+        add_entry!("FuzzConfig", "provisional");
+
+        // Provisional: Load test types
+        add_entry!("LoadTestResult", "provisional");
+        add_entry!("LoadTestConfig", "provisional");
+
+        // Provisional: Consolidated recon types (Milestone C)
+        add_entry!("ConsolidatedReconConfig", "provisional");
+        add_entry!("ReconModuleResult", "provisional");
+        add_entry!("ConsolidatedReconReport", "provisional");
+
+        // Provisional: GraphQL types (Milestone C)
+        add_entry!("GraphQLVulnerability", "provisional");
+        add_entry!("GraphQLTestResult", "provisional");
+        add_entry!("GraphQLType", "provisional");
+        add_entry!("GraphQLField", "provisional");
+        add_entry!("GraphQLArg", "provisional");
+        add_entry!("GraphQLInputField", "provisional");
+        add_entry!("GraphQLSchema", "provisional");
+        add_entry!("GraphQLTestConfig", "provisional");
+
+        // Provisional: OAuth types (Milestone C)
+        add_entry!("OAuthVulnerability", "provisional");
+        add_entry!("OAuthEndpointKind", "provisional");
+        add_entry!("OAuthEndpoint", "provisional");
+        add_entry!("OAuthTestResult", "provisional");
+        add_entry!("OAuthTestConfig", "provisional");
+
+        // Provisional: Auth assessment types (Milestone C)
+        add_entry!("AuthTestType", "provisional");
+        add_entry!("AuthFinding", "provisional");
+        add_entry!("AuthTestConfig", "provisional");
+        add_entry!("AuthTestReport", "provisional");
 
         // Version constants
         add_entry!("__version__", "stable");

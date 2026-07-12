@@ -6,6 +6,19 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 **Pre-release (Milestone G stabilization in progress)** — Not yet published to PyPI. See `RELEASE_CHECKLIST.md` for publication gates and `docs/python/README_1_0_CHECKLIST.md` for the 1.0 readiness checklist.
 
+### Stability Classifications
+
+Operations and types are classified according to WS9 criteria:
+
+| Level | Criteria | Examples |
+|-------|----------|----------|
+| **Stable** | Real execution path, result data preserved, policy/cancellation integrated, serialization versioned, behavior tests pass | `scan_ports`, `recon_dns`, `detect_waf`, `Engine`, `Scope`, `PortScanResult` |
+| **Provisional** | Public API shape accepted, implementation works but lacks full backend validation or schema freeze | `graphql_test`, `auth_test`, `db_probe`, `EggsecConfig`, `Pipeline`, `OperationRegistry` |
+| **Experimental** | Platform-sensitive, hazardous, incomplete, or subject to substantial change | `wireless_scan`, `evasion_scan`, `c2_scan`, `browser_test`, `ai_analyze_finding`, `stress_test` |
+| **Internal** | No compatibility guarantee, not top-level exported | `deprecated_warning` |
+
+Use `eggsec.api_surface()` to inspect the stability of any exported name at runtime.
+
 ## Installation
 
 ```bash
@@ -246,41 +259,46 @@ report.write_json("scan_report.json")
 
 ### Functions
 
-| Function | Description |
-|----------|-------------|
-| `scan_ports()` / `async_scan_ports()` | Port scanning |
-| `scan_endpoints()` / `async_scan_endpoints()` | Endpoint discovery |
-| `fingerprint_services()` / `async_fingerprint_services()` | Service fingerprinting |
-| `recon_dns()` / `async_recon_dns()` | DNS reconnaissance |
-| `inspect_tls()` / `async_inspect_tls()` | TLS certificate inspection |
-| `detect_technology()` / `async_detect_technology()` | Technology stack detection |
-| `detect_waf()` / `async_detect_waf()` | WAF detection |
-| `validate_waf()` / `async_validate_waf()` | WAF bypass validation (requires scope) |
-| `fuzz_http()` / `async_fuzz_http()` | HTTP fuzzing (requires scope) |
-| `load_test_http()` / `async_load_test_http()` | HTTP load testing (requires scope) |
-| `features()` | Available feature flags |
-| `has_feature()` | Check a feature flag |
-| `build_info()` | Build metadata |
-| `preflight_operation()` | Pre-dispatch policy preview |
-| `validate_scope()` | Scope validation |
-| `audit_event_from_enforcement()` | Create audit event from enforcement outcome |
-| `audit_event_from_preflight()` | Create audit event from preflight result |
-| `run_consolidated_recon()` / `async_run_consolidated_recon()` | Consolidated multi-module reconnaissance |
-| `graphql_test()` / `async_graphql_test()` | GraphQL security assessment |
-| `oauth_discover_endpoints()` | Discover OAuth/OIDC endpoints |
-| `oauth_test()` / `async_oauth_test()` | OAuth/OIDC security assessment |
-| `auth_test()` / `async_auth_test()` | Authentication security assessment |
-| `browser_test()` / `async_browser_test()` | Headless browser assessment (feature-gated) |
-| `hunt_test()` / `async_hunt_test()` | Advanced vulnerability hunting (feature-gated) |
-| `nse_list_scripts()` | List available NSE scripts (feature: `nse`) |
-| `nse_get_script_metadata()` | Get NSE script metadata (feature: `nse`) |
-| `run_traceroute()` / `async_run_traceroute()` | Traceroute (feature: `packet-inspection`) |
-| `traceroute()` / `async_traceroute()` | Traceroute shorthand (feature: `packet-inspection`) |
-| `list_mobile_devices()` | List connected mobile devices (feature: `mobile`) |
-| `dynamic_mobile_analysis()` | Dynamic mobile analysis (feature: `mobile`) |
-| `db_list_drivers()` | List available database drivers (feature: `db-pentest`) |
-| `db_get_capabilities()` | Get DB driver capabilities (feature: `db-pentest`) |
-| `db_run_with_config()` | Run DB pentest with config (feature: `db-pentest`) |
+| Function | Stability | Description |
+|----------|-----------|-------------|
+| `scan_ports()` / `async_scan_ports()` | stable | Port scanning |
+| `scan_endpoints()` / `async_scan_endpoints()` | stable | Endpoint discovery |
+| `fingerprint_services()` / `async_fingerprint_services()` | stable | Service fingerprinting |
+| `recon_dns()` / `async_recon_dns()` | stable | DNS reconnaissance |
+| `inspect_tls()` / `async_inspect_tls()` | stable | TLS certificate inspection |
+| `detect_technology()` / `async_detect_technology()` | stable | Technology stack detection |
+| `detect_waf()` / `async_detect_waf()` | stable | WAF detection |
+| `validate_waf()` / `async_validate_waf()` | stable | WAF bypass validation (requires scope) |
+| `fuzz_http()` / `async_fuzz_http()` | stable | HTTP fuzzing (requires scope) |
+| `load_test_http()` / `async_load_test_http()` | stable | HTTP load testing (requires scope) |
+| `features()` | stable | Available feature flags |
+| `has_feature()` | stable | Check a feature flag |
+| `build_info()` | stable | Build metadata |
+| `preflight_operation()` | stable | Pre-dispatch policy preview |
+| `validate_scope()` | stable | Scope validation |
+| `audit_event_from_enforcement()` | stable | Create audit event from enforcement outcome |
+| `audit_event_from_preflight()` | stable | Create audit event from preflight result |
+| `run_consolidated_recon()` / `async_run_consolidated_recon()` | provisional | Consolidated multi-module reconnaissance |
+| `graphql_test()` / `async_graphql_test()` | provisional | GraphQL security assessment |
+| `oauth_discover_endpoints()` | provisional | Discover OAuth/OIDC endpoints |
+| `oauth_test()` / `async_oauth_test()` | provisional | OAuth/OIDC security assessment |
+| `auth_test()` / `async_auth_test()` | provisional | Authentication security assessment |
+| `browser_test()` / `async_browser_test()` | experimental | Headless browser assessment (feature-gated) |
+| `hunt_test()` / `async_hunt_test()` | experimental | Advanced vulnerability hunting (feature-gated) |
+| `nse_list_scripts()` | provisional | List available NSE scripts (feature: `nse`) |
+| `nse_get_script_metadata()` | provisional | Get NSE script metadata (feature: `nse`) |
+| `run_traceroute()` / `async_run_traceroute()` | provisional | Traceroute (feature: `packet-inspection`) |
+| `traceroute()` | provisional | Traceroute shorthand (feature: `packet-inspection`) |
+| `list_mobile_devices()` | experimental | List connected mobile devices (feature: `mobile`) |
+| `dynamic_mobile_analysis()` | experimental | Dynamic mobile analysis (feature: `mobile`) |
+| `db_list_drivers()` | provisional | List available database drivers (feature: `db-pentest`) |
+| `db_get_capabilities()` | provisional | Get DB driver capabilities (feature: `db-pentest`) |
+| `db_run_with_config()` | provisional | Run DB pentest with config (feature: `db-pentest`) |
+| `wireless_scan()` / `async_wireless_scan()` | experimental | WiFi scanning (feature: `wireless`) |
+| `evasion_scan()` / `async_evasion_scan()` | experimental | Evasion detection (feature: `evasion`) |
+| `postex_scan()` / `async_postex_scan()` | experimental | Post-exploitation (feature: `postex`) |
+| `c2_scan()` / `async_c2_scan()` | experimental | C2 simulation (feature: `c2`) |
+| `ai_analyze_finding()` / `async_ai_analyze_finding()` | experimental | AI finding analysis (feature: `ai-integration`) |
 
 ### Policy, Configuration & Execution Context
 
@@ -327,6 +345,187 @@ approved = ctx.approve(ExecutionSurface.CLI_MANUAL, desc)
 print(approved.audit_event_id)  # audit trail identifier
 ```
 
+## Engine API Documentation
+
+### Accessing Operation Results
+
+Every `Engine.run_*()` method and convenience function returns an `OperationResult` with a typed payload:
+
+```python
+from eggsec import Engine, Scope, PortScanRequest
+
+scope = Scope.allow_hosts(["127.0.0.1"])
+engine = Engine(scope)
+
+# Via engine method
+result = engine.run_port_scan(PortScanRequest("127.0.0.1", ports="22,80,443"))
+if result.status.name() == "Completed":
+    # Access the typed payload directly
+    payload = result.payload  # PortScanResult
+    for port in payload.open_ports:
+        print(f"  {port.port}: {port.service}")
+
+# Via convenience function
+result = eggsec.scan_ports("127.0.0.1", [22, 80, 443], scope)
+for port in result.open_ports:
+    print(f"  {port.port}: {port.service}")
+```
+
+### Canonical Operation IDs
+
+Each operation has a canonical ID used by `OperationRegistry` and the enforcement model:
+
+| Operation ID | Python Function | Request Type | Result Type |
+|-------------|-----------------|--------------|-------------|
+| `scan-ports` | `scan_ports()` | `PortScanRequest` | `PortScanResult` |
+| `scan-endpoints` | `scan_endpoints()` | `EndpointScanRequest` | `EndpointScanResult` |
+| `fingerprint-services` | `fingerprint_services()` | `FingerprintRequest` | `FingerprintScanResult` |
+| `recon` | `recon_dns()` | `ReconDnsRequest` | `DnsRecordSet` |
+| `tls-inspect` | `inspect_tls()` | `TlsInspectRequest` | `TlsInspectionResult` |
+| `tech-detect` | `detect_technology()` | `TechDetectRequest` | `TechDetectionResult` |
+| `waf-detect` | `detect_waf()` | `WafDetectRequest` | `WafDetectionResult` |
+| `waf-validate` | `validate_waf()` | `WafValidateRequest` | `WafScanResult` |
+| `http-fuzz` | `fuzz_http()` | `FuzzRequest` | `FuzzSession` |
+| `load-test` | `load_test_http()` | `LoadTestRequest` | `LoadTestResult` |
+
+Look up operation metadata at runtime:
+
+```python
+from eggsec import OperationRegistry
+
+op = OperationRegistry.find("scan-ports")
+print(op.operation_id)         # "scan-ports"
+print(op.default_risk.name)    # "safe-active"
+print(op.supported_surfaces)   # ["cli", "tui", "mcp", "rest"]
+```
+
+### Execution Context and Preflight
+
+Before dispatching an operation, use the preflight path to preview the policy decision:
+
+```python
+from eggsec import (
+    EnforcementContext, ExecutionPolicy, ExecutionSurface,
+    LoadedScope, OperationRegistry,
+)
+
+scope = LoadedScope.default_empty()
+policy = ExecutionPolicy.default()
+
+# Create enforcement context
+ctx = EnforcementContext.manual_permissive(policy, scope)
+
+# Look up operation and build descriptor
+op = OperationRegistry.find("scan-ports")
+desc = op.descriptor_for_target("example.com")
+
+# Preview the decision (no side effects)
+outcome = ctx.evaluate(desc)
+print(outcome.outcome_type)  # "allow", "confirm", or "deny"
+
+# Approve (generates audit token)
+approved = ctx.approve(ExecutionSurface.CLI_MANUAL, desc)
+```
+
+### Event Guarantees and Progress
+
+The event protocol provides typed, versioned events:
+
+```python
+from eggsec import EventStream, EventEnvelope
+
+# Events are delivered in monotonic sequence order
+# Each envelope contains: event_type, payload, sequence_id, correlation_id
+
+# Guaranteed event types:
+# - pipeline.started / pipeline.completed / pipeline.failure
+# - step.started / step.completed / step.failed
+# - finding.discovered
+# - artifact.created
+# - cancellation.requested
+# - progress.updated (where supported)
+
+# Progress events are NOT guaranteed for all operations.
+# Operations that support progress: scan-ports, load-test, http-fuzz
+# Operations without progress: recon-dns, tls-inspect, tech-detect
+```
+
+### Cancellation and Partial Results
+
+Pipelines and engine operations support cooperative cancellation:
+
+```python
+from eggsec import Pipeline, CancellationToken, Engine, Scope
+
+engine = Engine(Scope.allow_hosts(["127.0.0.1"]))
+pipeline = Pipeline("my-scan")
+
+# Set a cancellation token
+token = CancellationToken()
+pipeline.set_cancel_token(token)
+
+# Add steps...
+
+# Run in background and cancel when needed
+result = pipeline.run(engine)
+
+# Or cancel from another thread
+token.cancel("User requested abort")
+
+# Partial results are preserved in PipelineResult.step_results
+# even when cancellation occurs mid-pipeline
+```
+
+### Feature Compiled vs Runtime-Ready
+
+Some features are compiled (available when the feature flag is enabled) while others are runtime-ready (fully validated and tested):
+
+```python
+import eggsec
+
+# Check what's compiled in
+features = eggsec.features()
+print(features["db-pentest"])  # True if compiled with feature
+
+# Check stability via api_surface
+surface = eggsec.api_surface()
+print(surface["db_probe"]["stability"])  # "provisional"
+print(surface["scan_ports"]["stability"])  # "stable"
+```
+
+### Migration: Convenience Functions to Engine Requests
+
+Convenience functions wrap the engine with simplified signatures. For full control, use the engine directly:
+
+```python
+# Before: convenience function (simplified signature)
+result = eggsec.scan_ports("127.0.0.1", [80, 443], scope)
+
+# After: engine request (full control over all parameters)
+from eggsec import Engine, Scope, PortScanRequest
+
+scope = Scope.allow_hosts(["127.0.0.1"])
+engine = Engine(scope, mode="manual", concurrency=200, timeout_ms=10000)
+
+request = PortScanRequest(
+    "127.0.0.1",
+    ports="1-1024",
+    timeout_ms=30000,
+)
+result = engine.run_port_scan(request)
+
+# Or use the generic dispatch
+from eggsec import OperationRequest
+
+request = OperationRequest(
+    operation="scan_ports",
+    target="127.0.0.1",
+    timeout_ms=30000,
+    metadata={"ports": "1-1024"},
+)
+result = engine.run(request)
+```
+
 ### Exceptions
 
 - `EggsecError` — base for all errors
@@ -368,6 +567,50 @@ This package ships `py.typed` and `.pyi` type stubs for full IDE support.
 ## Safety
 
 All operations enforce authorization scope. Scans only target hosts and ports explicitly allowed in the scope configuration. See [Scope & Safety](../../docs/python/scope-and-safety.md) for details.
+
+## Daemon Client (feature: `daemon-client`)
+
+The Python daemon client is **wire-compatible** with the Rust daemon protocol. All serialization is handled by the Rust `eggsec-daemon::client::DaemonClient` — Python functions delegate directly to it.
+
+**Wire format:** JSON lines over Unix socket. Protocol version: `DAEMON_PROTOCOL_VERSION = 1`.
+
+**Task kinds** use `eggsec_runtime::TaskKind` serde format: `{"kind": "PortScan", "params": {"target": "10.0.0.1"}}`.
+
+### Session lifecycle
+
+```python
+import eggsec
+
+# Connect to daemon
+client = eggsec.daemon_connect("/tmp/eggsec.sock")
+
+# Declare client type
+eggsec.async_daemon_declare_client(client, kind="cli", label="my-script")
+
+# Create session
+resp = eggsec.async_daemon_create_session(client, surface="cli_manual")
+session_id = resp.message.split("=", 1)[1]  # parse session_id from response
+
+# Submit a task
+task_json = '{"kind": "PortScan", "params": {"target": "10.0.0.1", "ports": [22, 80]}}'
+resp = eggsec.async_daemon_submit_task(client, session_id, task_json)
+
+# Manage tasks
+eggsec.async_daemon_cancel_active(client, session_id)
+eggsec.async_daemon_approve_policy(client, session_id, task_id, approved=True)
+
+# Persisted sessions
+eggsec.async_daemon_list_persisted_sessions(client)
+eggsec.async_daemon_get_persisted_snapshot(client, session_id)
+
+# Cleanup
+eggsec.async_daemon_close_session(client, session_id)
+client.close()
+```
+
+### Simplified DTOs
+
+Python DTOs (`DaemonResponsePy`, `SessionSummaryPy`, etc.) are **API convenience** wrappers, not wire format changes. The actual JSON on the wire matches the Rust daemon protocol exactly.
 
 ## License
 

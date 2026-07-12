@@ -70,7 +70,7 @@ impl Clone for EventEnvelope {
 impl EventEnvelope {
     #[new]
     #[pyo3(signature = (event_type, payload, *, event_id=None, timestamp_ms=None, correlation_id=None, schema_version=None))]
-    fn new(
+    pub(crate) fn new(
         _py: Python<'_>,
         event_type: String,
         payload: PyObject,
@@ -134,6 +134,26 @@ impl EventEnvelope {
 }
 
 impl EventEnvelope {
+    /// Create a new EventEnvelope (crate-internal, bypasses #[new] visibility).
+    pub(crate) fn create(
+        event_type: String,
+        payload: PyObject,
+        event_id: Option<String>,
+        timestamp_ms: Option<u64>,
+        correlation_id: Option<String>,
+        schema_version: Option<String>,
+    ) -> Self {
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        Self {
+            schema_version: schema_version.unwrap_or_else(|| EVENT_SCHEMA_VERSION.to_string()),
+            event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
+            timestamp_ms: timestamp_ms.unwrap_or(now_ms),
+            correlation_id,
+            event_type,
+            payload,
+        }
+    }
+
     pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("schema_version", &self.schema_version)?;
@@ -376,7 +396,12 @@ pub struct ProgressEvent {
 #[pymethods]
 impl ProgressEvent {
     #[new]
-    fn new(percentage: f64, message: String, items_processed: usize, items_total: usize) -> Self {
+    pub(crate) fn new(
+        percentage: f64,
+        message: String,
+        items_processed: usize,
+        items_total: usize,
+    ) -> Self {
         Self {
             percentage,
             message,

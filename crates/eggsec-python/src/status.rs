@@ -104,6 +104,11 @@ impl ExecutionStatus {
         }
     }
 
+    /// Returns true if the status represents a successful completion.
+    pub(crate) fn is_success(&self) -> bool {
+        matches!(self, ExecutionStatus::Completed())
+    }
+
     fn __repr__(&self) -> String {
         match self {
             ExecutionStatus::Pending() => "ExecutionStatus.Pending".to_string(),

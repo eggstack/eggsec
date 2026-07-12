@@ -368,34 +368,70 @@ The `eggsec-python` crate provides PyO3/maturin Python bindings. Its feature fla
 features** via Cargo forwarding — enabling `web-proxy` in Python compiles the same `eggsec` features
 as `cargo check -p eggsec --features web-proxy`.
 
-| Python Feature | Engine Feature | Notes |
-|----------------|----------------|-------|
-| `full-no-system` | aggregate | `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
-| `websocket` | `websocket` | WebSocket security testing |
-| `git-secrets` | `git-secrets` | Git secret detection |
-| `sbom` | `sbom` | SBOM generation |
-| `db-pentest` | `db-pentest` | Database pentest (requires `eggsec-db-lab`) |
-| `db-pentest-mongodb` | `db-pentest-mongodb` | MongoDB pentest |
-| `db-pentest-redis` | `db-pentest-redis` | Redis pentest |
-| `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
-| `mobile` | `mobile` | APK/IPA static analysis |
-| `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
-| `packet-inspection` | `packet-inspection` | Packet capture |
-| `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
-| `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
-| `container` | `container` | K8s/Docker scanning |
-| `daemon-client` | — | Daemon session access (no engine feature) |
-| `headless-browser` | `headless-browser` | Headless browser testing (requires Chromium) |
-| `advanced-hunting` | `advanced-hunting` | Advanced vulnerability hunting (chains, race conditions) |
-| `compliance` | — | Compliance framework mapping (OWASP, NIST, etc.) |
-| `wireless` | `wireless` | WiFi scanning and analysis (requires wireless-tools) |
-| `evasion` | `evasion` | Evasion technique detection and validation |
-| `postex` | `postex` | Post-exploitation simulation |
-| `c2` | `c2` | C2 framework simulation |
-| `ai-integration` | `ai-integration` | AI-assisted finding analysis and payload generation |
+### 6.1 Feature-to-Python Mapping
+
+| Python Feature | Engine Feature | Stability | Notes |
+|----------------|----------------|-----------|-------|
+| `full-no-system` | aggregate | — | `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
+| `websocket` | `websocket` | provisional | WebSocket security testing |
+| `git-secrets` | `git-secrets` | provisional | Git secret detection |
+| `sbom` | `sbom` | provisional | SBOM generation |
+| `db-pentest` | `db-pentest` | provisional | Database pentest (requires `eggsec-db-lab`) |
+| `db-pentest-mongodb` | `db-pentest-mongodb` | provisional | MongoDB pentest |
+| `db-pentest-redis` | `db-pentest-redis` | provisional | Redis pentest |
+| `web-proxy` | `web-proxy` | provisional | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `mobile` | `mobile` | provisional | APK/IPA static analysis |
+| `mobile-dynamic` | `mobile-dynamic` | experimental | Android dynamic testing (requires ADB) |
+| `packet-inspection` | `packet-inspection` | provisional | Packet capture |
+| `stress-testing` | `stress-testing` | experimental | Stress testing (raw sockets, root required) |
+| `nse` | `nse` | provisional | Nmap NSE scripts (requires `eggsec-nse`) |
+| `container` | `container` | provisional | K8s/Docker scanning |
+| `daemon-client` | — | provisional | Daemon session access (no engine feature) |
+| `headless-browser` | `headless-browser` | experimental | Headless browser testing (requires Chromium) |
+| `advanced-hunting` | `advanced-hunting` | experimental | Advanced vulnerability hunting |
+| `compliance` | — | provisional | Compliance framework mapping |
+| `wireless` | `wireless` | experimental | WiFi scanning (requires wireless-tools, root) |
+| `evasion` | `evasion` | experimental | Evasion technique detection |
+| `postex` | `postex` | experimental | Post-exploitation simulation |
+| `c2` | `c2` | experimental | C2 framework simulation |
+| `ai-integration` | `ai-integration` | experimental | AI-assisted finding analysis |
 
 Default wheel: core + scanner + endpoint discovery + service fingerprinting + recon + WAF + reporting + async API.
 `full` aggregate includes all non-default features (not conservative/production).
+
+### 6.2 Operation Stability Matrix
+
+| Operation | Function | Sync | Async | Engine Dispatch | Policy | Events | Cancellation | Stability |
+|-----------|----------|:----:|:-----:|:---------------:|:------:|:------:|:------------:|-----------|
+| Port scan | `scan_ports` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | **stable** |
+| Endpoint scan | `scan_endpoints` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | **stable** |
+| Fingerprint | `fingerprint_services` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | **stable** |
+| DNS recon | `recon_dns` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| TLS inspect | `inspect_tls` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| Tech detect | `detect_technology` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| WAF detect | `detect_waf` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| WAF validate | `validate_waf` | ✓ | ✓ | ✓ | ✓ | — | ✓ | **stable** |
+| HTTP fuzz | `fuzz_http` | ✓ | ✓ | ✓ | ✓ | — | ✓ | **stable** |
+| Load test | `load_test_http` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | **stable** |
+| Consolidated recon | `run_consolidated_recon` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
+| GraphQL test | `graphql_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
+| OAuth test | `oauth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
+| Auth test | `auth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
+| DB probe | `db_probe` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| APK analyze | `analyze_apk` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| Docker scan | `scan_docker_image` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| NSE run | `nse_run` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| Traceroute | `run_traceroute` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| Daemon connect | `daemon_connect` | — | ✓ | — | — | ✓ | — | **provisional** |
+| Wireless scan | `wireless_scan` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Evasion scan | `evasion_scan` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Postex scan | `postex_scan` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| C2 scan | `c2_scan` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Browser test | `browser_test` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Hunt test | `hunt_test` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| AI analyze | `ai_analyze_finding` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Stress test | `stress_test` | ✓ | ✓ | — | ✓ | — | — | **experimental** |
+| Mobile dynamic | `dynamic_mobile_analysis` | — | ✓ | — | ✓ | — | — | **experimental** |
 
 ---
 

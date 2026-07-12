@@ -246,11 +246,15 @@ pub(crate) fn build_scan_plan(target: &str) -> ScanPlan {
             );
         }
         "ip" => {
-            let fingerprint_req =
-                OperationRequest::new("fingerprint".to_string(), target.to_string(), None, None);
+            let fingerprint_req = OperationRequest::new(
+                "fingerprint_services".to_string(),
+                target.to_string(),
+                None,
+                None,
+            );
             let fingerprint_duration = 6000;
             steps.push(PlanStep {
-                operation: "fingerprint".to_string(),
+                operation: "fingerprint_services".to_string(),
                 request: fingerprint_req,
                 rationale: "Identify services running on open ports".to_string(),
                 priority: 2,

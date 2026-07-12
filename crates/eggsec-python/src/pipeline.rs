@@ -1,8 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
+use std::sync::Arc;
+
 use crate::async_engine::AsyncEngine;
 use crate::cancellation::CancellationToken;
+use crate::checkpoint_store::{self, CheckpointVersion, PipelineCheckpoint};
 use crate::engine::Engine;
 use crate::event_protocol::{
     wrap_event, CompletionEvent, EventEnvelope, FailureEvent, StageLifecycleEvent,
@@ -306,6 +309,7 @@ pub struct Pipeline {
     steps: Vec<PipelineStep>,
     stop_on_failure: bool,
     cancel_token: Option<CancellationToken>,
+    checkpoint_store: Option<Arc<checkpoint_store::CheckpointStore>>,
 }
 
 #[pymethods]
@@ -318,6 +322,7 @@ impl Pipeline {
             steps: Vec::new(),
             stop_on_failure: true,
             cancel_token: None,
+            checkpoint_store: None,
         }
     }
 
@@ -346,6 +351,11 @@ impl Pipeline {
         self.stop_on_failure = stop;
     }
 
+    /// Attach a checkpoint store for automatic save/resume.
+    fn set_checkpoint_store(&mut self, store: checkpoint_store::CheckpointStore) {
+        self.checkpoint_store = Some(Arc::new(store));
+    }
+
     /// Execute all pipeline steps sequentially.
     fn run(&self, py: Python<'_>, engine: &Engine) -> PyResult<PipelineResult> {
         let start = std::time::Instant::now();
@@ -353,6 +363,24 @@ impl Pipeline {
         let mut events: Vec<EventEnvelope> = Vec::new();
         let mut overall_status = ExecutionStatus::Completed();
         let correlation_id = format!("pipeline-{}", start.elapsed().as_millis());
+
+        // Determine pipeline ID for checkpointing
+        let pipeline_id = self.pipeline_id();
+
+        // Check for existing checkpoint to resume from
+        let mut completed_steps: Vec<String> = Vec::new();
+        if let Some(ref store) = self.checkpoint_store {
+            if let Ok(Some(load_result)) = store.load_inner(&pipeline_id) {
+                completed_steps = load_result.checkpoint.completed_steps.clone();
+                events.push(wrap_event(
+                    py,
+                    "pipeline.resumed_from_checkpoint".to_string(),
+                    StageLifecycleEvent::new(self.name.clone(), "resumed".to_string()).into_py(py),
+                    Some(correlation_id.clone()),
+                    None,
+                )?);
+            }
+        }
 
         // Emit pipeline started event
         events.push(wrap_event(
@@ -364,6 +392,11 @@ impl Pipeline {
         )?);
 
         for step in &self.steps {
+            // Skip already-completed steps when resuming
+            if completed_steps.contains(&step.name) {
+                continue;
+            }
+
             // Check for cancellation before starting the step
             if let Some(ref token) = self.cancel_token {
                 if token.is_cancelled() {
@@ -412,6 +445,41 @@ impl Pipeline {
             };
 
             let succeeded = step_result.is_success();
+
+            // Save checkpoint after successful step
+            if succeeded {
+                if let Some(ref store) = self.checkpoint_store {
+                    let mut step_results_map = std::collections::HashMap::new();
+                    for sr in &step_results {
+                        if let Some(ref op_result) = sr.result {
+                            if let Ok(val) = serde_json::to_value(op_result) {
+                                step_results_map.insert(sr.step_name.clone(), val);
+                            }
+                        }
+                    }
+                    // Also add the current step's result
+                    if let Ok(val) = serde_json::to_value(&result) {
+                        step_results_map.insert(step.name.clone(), val);
+                    }
+
+                    let mut completed = completed_steps.clone();
+                    completed.push(step.name.clone());
+
+                    let now_ms = crate::checkpoint_store::current_epoch_ms();
+                    let cp = PipelineCheckpoint {
+                        version: CheckpointVersion::current(),
+                        pipeline_id: pipeline_id.clone(),
+                        pipeline_name: self.name.clone(),
+                        completed_steps: completed,
+                        current_step: None,
+                        step_results: step_results_map,
+                        created_at_ms: now_ms,
+                        updated_at_ms: now_ms,
+                    };
+                    let _ = store.save_inner(cp);
+                }
+            }
+
             step_results.push(step_result);
 
             if !succeeded && self.stop_on_failure {
@@ -453,6 +521,13 @@ impl Pipeline {
             Some(correlation_id),
             None,
         )?);
+
+        // Remove checkpoint on successful completion
+        if overall_status.is_success() {
+            if let Some(ref store) = self.checkpoint_store {
+                let _ = store.delete_inner(&pipeline_id);
+            }
+        }
 
         Ok(PipelineResult {
             name: self.name.clone(),
@@ -605,6 +680,13 @@ impl Pipeline {
         self.stop_on_failure
     }
 
+    /// Generate a deterministic pipeline ID from the pipeline name and step names.
+    /// Used as the key for checkpoint storage.
+    fn pipeline_id(&self) -> String {
+        let step_names: Vec<&str> = self.steps.iter().map(|s| s.name.as_str()).collect();
+        format!("{}:{}", self.name, step_names.join(","))
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Pipeline(name={}, steps={}, stop_on_failure={})",
@@ -623,6 +705,7 @@ pub struct AsyncPipeline {
     steps: Vec<PipelineStep>,
     stop_on_failure: bool,
     cancel_token: Option<CancellationToken>,
+    checkpoint_store: Option<Arc<checkpoint_store::CheckpointStore>>,
 }
 
 #[pymethods]
@@ -635,6 +718,7 @@ impl AsyncPipeline {
             steps: Vec::new(),
             stop_on_failure: true,
             cancel_token: None,
+            checkpoint_store: None,
         }
     }
 
@@ -662,23 +746,35 @@ impl AsyncPipeline {
         self.stop_on_failure = stop;
     }
 
+    /// Attach a checkpoint store for automatic save/resume.
+    fn set_checkpoint_store(&mut self, store: checkpoint_store::CheckpointStore) {
+        self.checkpoint_store = Some(Arc::new(store));
+    }
+
+    /// Generate a deterministic pipeline ID from the pipeline name and step names.
+    fn pipeline_id(&self) -> String {
+        let step_names: Vec<&str> = self.steps.iter().map(|s| s.name.as_str()).collect();
+        format!("{}:{}", self.name, step_names.join(","))
+    }
+
     /// Execute all steps asynchronously.
     ///
     /// Delegates to the sync Pipeline execution (which releases the GIL during
     /// I/O) and wraps the result in a PyFuture for async API compatibility.
     fn run(&self, py: Python<'_>, engine: &AsyncEngine) -> PyResult<PyFuture> {
         let sync_engine = Engine::new_inner(
-            engine.scope.clone(),
-            &engine.mode,
-            engine.concurrency,
-            engine.timeout_ms,
+            engine.state.scope.clone(),
+            &engine.state.mode,
+            engine.state.concurrency,
+            engine.state.timeout_ms,
         )?;
 
-        let pipeline = Pipeline {
+        let mut pipeline = Pipeline {
             name: self.name.clone(),
             steps: self.steps.clone(),
             stop_on_failure: self.stop_on_failure,
             cancel_token: self.cancel_token.clone(),
+            checkpoint_store: self.checkpoint_store.clone(),
         };
 
         let pipeline_result = pipeline.run(py, &sync_engine)?;
@@ -693,10 +789,10 @@ impl AsyncPipeline {
         checkpoint: crate::checkpoint::Checkpoint,
     ) -> PyResult<PyFuture> {
         let sync_engine = Engine::new_inner(
-            engine.scope.clone(),
-            &engine.mode,
-            engine.concurrency,
-            engine.timeout_ms,
+            engine.state.scope.clone(),
+            &engine.state.mode,
+            engine.state.concurrency,
+            engine.state.timeout_ms,
         )?;
 
         let pipeline = Pipeline {
@@ -704,6 +800,7 @@ impl AsyncPipeline {
             steps: self.steps.clone(),
             stop_on_failure: self.stop_on_failure,
             cancel_token: self.cancel_token.clone(),
+            checkpoint_store: self.checkpoint_store.clone(),
         };
 
         let pipeline_result = pipeline.resume_from(py, &sync_engine, checkpoint)?;

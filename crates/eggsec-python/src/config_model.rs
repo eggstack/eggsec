@@ -67,7 +67,7 @@ pub(crate) struct PyHttpConfig {
     default_headers: HashMap<String, String>,
     default_user_agent: Option<String>,
     proxy: Option<String>,
-    proxy_auth: Option<String>,
+    proxy_auth: Option<PySensitiveString>,
 }
 
 #[pymethods]
@@ -107,7 +107,7 @@ impl PyHttpConfig {
             default_headers: default_headers.unwrap_or_default(),
             default_user_agent,
             proxy,
-            proxy_auth,
+            proxy_auth: proxy_auth.map(|s| PySensitiveString::new(&s)),
         }
     }
 
@@ -162,8 +162,11 @@ impl PyHttpConfig {
     }
 
     #[getter]
-    fn proxy_auth(&self) -> Option<String> {
-        self.proxy_auth.clone()
+    fn proxy_auth(&self, py: Python) -> PyResult<PyObject> {
+        match &self.proxy_auth {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     fn __repr__(&self) -> String {
@@ -193,7 +196,7 @@ impl PyHttpConfig {
             proxy_auth: config
                 .proxy_auth
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
         }
     }
 }
@@ -426,19 +429,19 @@ impl PyOutputConfig {
 #[derive(Clone)]
 pub(crate) struct PyReconApiConfig {
     virustotal_enabled: bool,
-    virustotal_api_key: Option<String>,
+    virustotal_api_key: Option<PySensitiveString>,
     alienvault_enabled: bool,
-    alienvault_api_key: Option<String>,
+    alienvault_api_key: Option<PySensitiveString>,
     shodan_enabled: bool,
-    shodan_api_key: Option<String>,
+    shodan_api_key: Option<PySensitiveString>,
     ipapi_enabled: bool,
-    ipapi_api_key: Option<String>,
+    ipapi_api_key: Option<PySensitiveString>,
     maxmind_enabled: bool,
     maxmind_account_id: Option<u32>,
-    maxmind_license_key: Option<String>,
+    maxmind_license_key: Option<PySensitiveString>,
     wayback_enabled: bool,
-    wayback_api_key: Option<String>,
-    nvd_api_key: Option<String>,
+    wayback_api_key: Option<PySensitiveString>,
+    nvd_api_key: Option<PySensitiveString>,
 }
 
 #[pymethods]
@@ -478,19 +481,19 @@ impl PyReconApiConfig {
     ) -> Self {
         Self {
             virustotal_enabled,
-            virustotal_api_key,
+            virustotal_api_key: virustotal_api_key.map(|s| PySensitiveString::new(&s)),
             alienvault_enabled,
-            alienvault_api_key,
+            alienvault_api_key: alienvault_api_key.map(|s| PySensitiveString::new(&s)),
             shodan_enabled,
-            shodan_api_key,
+            shodan_api_key: shodan_api_key.map(|s| PySensitiveString::new(&s)),
             ipapi_enabled,
-            ipapi_api_key,
+            ipapi_api_key: ipapi_api_key.map(|s| PySensitiveString::new(&s)),
             maxmind_enabled,
             maxmind_account_id,
-            maxmind_license_key,
+            maxmind_license_key: maxmind_license_key.map(|s| PySensitiveString::new(&s)),
             wayback_enabled,
-            wayback_api_key,
-            nvd_api_key,
+            wayback_api_key: wayback_api_key.map(|s| PySensitiveString::new(&s)),
+            nvd_api_key: nvd_api_key.map(|s| PySensitiveString::new(&s)),
         }
     }
 
@@ -505,8 +508,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn virustotal_api_key(&self) -> Option<String> {
-        self.virustotal_api_key.clone()
+    fn virustotal_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.virustotal_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -520,8 +526,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn alienvault_api_key(&self) -> Option<String> {
-        self.alienvault_api_key.clone()
+    fn alienvault_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.alienvault_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -535,8 +544,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn shodan_api_key(&self) -> Option<String> {
-        self.shodan_api_key.clone()
+    fn shodan_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.shodan_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -550,8 +562,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn ipapi_api_key(&self) -> Option<String> {
-        self.ipapi_api_key.clone()
+    fn ipapi_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.ipapi_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -570,8 +585,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn maxmind_license_key(&self) -> Option<String> {
-        self.maxmind_license_key.clone()
+    fn maxmind_license_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.maxmind_license_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -585,8 +603,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn wayback_api_key(&self) -> Option<String> {
-        self.wayback_api_key.clone()
+    fn wayback_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.wayback_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -595,8 +616,11 @@ impl PyReconApiConfig {
     }
 
     #[getter]
-    fn nvd_api_key(&self) -> Option<String> {
-        self.nvd_api_key.clone()
+    fn nvd_api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.nvd_api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     fn __repr__(&self) -> String {
@@ -612,43 +636,43 @@ impl PyReconApiConfig {
                 .virustotal
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             alienvault_enabled: config.alienvault.enabled,
             alienvault_api_key: config
                 .alienvault
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             shodan_enabled: config.shodan.enabled,
             shodan_api_key: config
                 .shodan
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             ipapi_enabled: config.ipapi.enabled,
             ipapi_api_key: config
                 .ipapi
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             maxmind_enabled: config.maxmind.enabled,
             maxmind_account_id: config.maxmind.account_id,
             maxmind_license_key: config
                 .maxmind
                 .license_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             wayback_enabled: config.wayback_machine.enabled,
             wayback_api_key: config
                 .wayback_machine
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             nvd_api_key: config
                 .nvd
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
         }
     }
 }
@@ -879,7 +903,7 @@ impl PyAllowedWorker {
 #[pyclass(name = "RemoteConfig", frozen)]
 #[derive(Clone)]
 pub(crate) struct PyRemoteConfig {
-    psk: Option<String>,
+    psk: Option<PySensitiveString>,
     default_port: u16,
     allowed_workers: Vec<PyAllowedWorker>,
 }
@@ -894,7 +918,7 @@ impl PyRemoteConfig {
         allowed_workers: Option<Vec<PyAllowedWorker>>,
     ) -> Self {
         Self {
-            psk,
+            psk: psk.map(|s| PySensitiveString::new(&s)),
             default_port,
             allowed_workers: allowed_workers.unwrap_or_default(),
         }
@@ -906,8 +930,11 @@ impl PyRemoteConfig {
     }
 
     #[getter]
-    fn psk(&self) -> Option<String> {
-        self.psk.clone()
+    fn psk(&self, py: Python) -> PyResult<PyObject> {
+        match &self.psk {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -932,7 +959,10 @@ impl PyRemoteConfig {
 impl PyRemoteConfig {
     pub(crate) fn from_inner(config: &eggsec::config::RemoteConfig) -> Self {
         Self {
-            psk: config.psk.as_ref().map(|s| s.expose_secret().to_string()),
+            psk: config
+                .psk
+                .as_ref()
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             default_port: config.default_port,
             allowed_workers: config
                 .allowed_workers
@@ -954,7 +984,7 @@ impl PyRemoteConfig {
 pub(crate) struct PyAiConfig {
     provider: String,
     model: Option<String>,
-    api_key: Option<String>,
+    api_key: Option<PySensitiveString>,
     base_url: Option<String>,
     max_tokens: Option<usize>,
     temperature: Option<f64>,
@@ -988,7 +1018,7 @@ impl PyAiConfig {
         Self {
             provider: provider.to_string(),
             model,
-            api_key,
+            api_key: api_key.map(|s| PySensitiveString::new(&s)),
             base_url,
             max_tokens,
             temperature,
@@ -1013,8 +1043,11 @@ impl PyAiConfig {
     }
 
     #[getter]
-    fn api_key(&self) -> Option<String> {
-        self.api_key.clone()
+    fn api_key(&self, py: Python) -> PyResult<PyObject> {
+        match &self.api_key {
+            Some(s) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[getter]
@@ -1058,7 +1091,7 @@ impl PyAiConfig {
             api_key: config
                 .api_key
                 .as_ref()
-                .map(|s| s.expose_secret().to_string()),
+                .map(|s| PySensitiveString::new(s.expose_secret())),
             base_url: config.base_url.clone(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
@@ -1602,6 +1635,17 @@ impl PyEggsecConfig {
 }
 
 impl PyEggsecConfig {
+    /// Create a default config (pub(crate) for internal use).
+    pub(crate) fn new_default() -> Self {
+        let inner = eggsec::config::EggsecConfig::default();
+        Self::from_inner(&inner)
+    }
+
+    /// Get the default concurrency from scan config.
+    pub(crate) fn default_concurrency(&self) -> usize {
+        self.scan.default_concurrency
+    }
+
     pub(crate) fn from_inner(config: &eggsec::config::EggsecConfig) -> Self {
         let profiles: HashMap<String, String> = config
             .profiles
@@ -1655,8 +1699,8 @@ impl PyEggsecConfig {
             proxy_auth: self
                 .http
                 .proxy_auth
-                .as_deref()
-                .map(eggsec_core::types::SensitiveString::new),
+                .as_ref()
+                .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
         };
 
         let scan = eggsec::config::ScanConfig {
@@ -1694,8 +1738,8 @@ impl PyEggsecConfig {
             psk: self
                 .remote
                 .psk
-                .as_deref()
-                .map(eggsec_core::types::SensitiveString::new),
+                .as_ref()
+                .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             default_port: self.remote.default_port,
             allowed_workers: self
                 .remote
@@ -1738,8 +1782,8 @@ impl PyEggsecConfig {
             model: a.model.clone(),
             api_key: a
                 .api_key
-                .as_deref()
-                .map(eggsec_core::types::SensitiveString::new),
+                .as_ref()
+                .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             base_url: a.base_url.clone(),
             max_tokens: a.max_tokens,
             temperature: a.temperature,
@@ -1814,37 +1858,37 @@ impl PyReconApiConfig {
                 enabled: self.virustotal_enabled,
                 api_key: self
                     .virustotal_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
             alienvault: ApiKeyConfig {
                 enabled: self.alienvault_enabled,
                 api_key: self
                     .alienvault_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
             shodan: ApiKeyConfig {
                 enabled: self.shodan_enabled,
                 api_key: self
                     .shodan_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
             ipapi: IpApiConfig {
                 enabled: self.ipapi_enabled,
                 api_key: self
                     .ipapi_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
             maxmind: MaxMindConfig {
                 enabled: self.maxmind_enabled,
                 account_id: self.maxmind_account_id,
                 license_key: self
                     .maxmind_license_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
                 edition_ids: Vec::new(),
                 data_dir: std::path::PathBuf::from("."),
                 auto_update: false,
@@ -1853,14 +1897,14 @@ impl PyReconApiConfig {
                 enabled: self.wayback_enabled,
                 api_key: self
                     .wayback_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
             nvd: NvdConfig {
                 api_key: self
                     .nvd_api_key
-                    .as_deref()
-                    .map(eggsec_core::types::SensitiveString::new),
+                    .as_ref()
+                    .map(|s| eggsec_core::types::SensitiveString::new(s.inner.expose_secret())),
             },
         }
     }
