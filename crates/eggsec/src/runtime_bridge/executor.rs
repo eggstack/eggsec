@@ -265,7 +265,7 @@ impl EggsecRuntimeExecutor {
                 ("intercept".into(), Some(format!("{} flows", r.flows.len())))
             }
             #[cfg(feature = "c2")]
-            TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.profile))),
+            TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.campaign.mitre_profile))),
         };
 
         TaskOutcome::Result(TaskResultEnvelope {

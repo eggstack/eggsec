@@ -71,6 +71,18 @@ mod consolidated_recon;
 mod hunt;
 mod integrations;
 mod migration;
+#[cfg(feature = "wireless")]
+mod wireless;
+#[cfg(feature = "evasion")]
+mod evasion;
+#[cfg(feature = "postex")]
+mod postex;
+#[cfg(feature = "c2")]
+mod c2;
+mod distributed;
+mod notification;
+#[cfg(feature = "ai-integration")]
+mod ai_postprocess;
 
 pub use error::*;
 use pyo3::prelude::*;
@@ -623,6 +635,108 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<migration::SchemaVersionPy>()?;
     m.add_class::<migration::MigrationResultPy>()?;
     m.add_class::<migration::FindingMigrationPy>()?;
+    // Milestone F: Specialized lab domains
+    #[cfg(feature = "wireless")]
+    {
+        m.add_class::<wireless::SecurityTypePy>()?;
+        m.add_class::<wireless::WirelessNetworkPy>()?;
+        m.add_class::<wireless::WirelessVulnerabilityPy>()?;
+        m.add_class::<wireless::WirelessScanResultPy>()?;
+        m.add_class::<wireless::WirelessScanConfigPy>()?;
+        m.add_function(wrap_pyfunction!(wireless::wireless_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(wireless::async_wireless_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(wireless::wireless_analyze_networks, m)?)?;
+    }
+    #[cfg(feature = "evasion")]
+    {
+        m.add_class::<evasion::EvasionTargetTypePy>()?;
+        m.add_class::<evasion::EvasionCategoryPy>()?;
+        m.add_class::<evasion::EvasionRiskPy>()?;
+        m.add_class::<evasion::EvasionTechniquePy>()?;
+        m.add_class::<evasion::EvasionDetectionPy>()?;
+        m.add_class::<evasion::EvasionSummaryPy>()?;
+        m.add_class::<evasion::EvasionReportPy>()?;
+        m.add_class::<evasion::EvasionScanConfigPy>()?;
+        m.add_function(wrap_pyfunction!(evasion::evasion_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(evasion::async_evasion_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(evasion::evasion_list_techniques, m)?)?;
+    }
+    #[cfg(feature = "postex")]
+    {
+        m.add_class::<postex::PostexCategoryPy>()?;
+        m.add_class::<postex::PostexRiskPy>()?;
+        m.add_class::<postex::PostexProfilePy>()?;
+        m.add_class::<postex::PostexTechniquePy>()?;
+        m.add_class::<postex::PostexDetectionPy>()?;
+        m.add_class::<postex::PostexSummaryPy>()?;
+        m.add_class::<postex::PostexReportPy>()?;
+        m.add_class::<postex::PostexScanConfigPy>()?;
+        m.add_function(wrap_pyfunction!(postex::postex_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(postex::async_postex_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(postex::postex_list_techniques, m)?)?;
+    }
+    #[cfg(feature = "c2")]
+    {
+        m.add_class::<c2::BeaconProtocolPy>()?;
+        m.add_class::<c2::TaskTypePy>()?;
+        m.add_class::<c2::TaskStatusPy>()?;
+        m.add_class::<c2::OpsecCategoryPy>()?;
+        m.add_class::<c2::OpsecSeverityPy>()?;
+        m.add_class::<c2::CampaignPhasePy>()?;
+        m.add_class::<c2::C2CampaignPy>()?;
+        m.add_class::<c2::BeaconResultPy>()?;
+        m.add_class::<c2::C2TaskResultPy>()?;
+        m.add_class::<c2::OpsecFindingPy>()?;
+        m.add_class::<c2::OpsecAssessmentPy>()?;
+        m.add_class::<c2::C2SummaryPy>()?;
+        m.add_class::<c2::C2ReportPy>()?;
+        m.add_class::<c2::C2ScanConfigPy>()?;
+        m.add_function(wrap_pyfunction!(c2::c2_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(c2::async_c2_scan, m)?)?;
+        m.add_function(wrap_pyfunction!(c2::c2_get_campaign, m)?)?;
+    }
+    // Distributed (always-available)
+    m.add_class::<distributed::DistributedTaskTypePy>()?;
+    m.add_class::<distributed::WorkerStatusPy>()?;
+    m.add_class::<distributed::WorkerRegistrationPy>()?;
+    m.add_class::<distributed::HeartbeatPy>()?;
+    m.add_class::<distributed::DistributedTaskPy>()?;
+    m.add_class::<distributed::DistributedTaskResultPy>()?;
+    m.add_function(wrap_pyfunction!(distributed::distributed_task_types, m)?)?;
+    m.add_function(wrap_pyfunction!(distributed::distributed_generate_psk, m)?)?;
+    // Notifications (always-available)
+    m.add_class::<notification::WebhookEventPy>()?;
+    m.add_class::<notification::FindingSummaryPy>()?;
+    m.add_class::<notification::NotifyScanStatsPy>()?;
+    m.add_class::<notification::WebhookConfigPy>()?;
+    m.add_class::<notification::NotifyManagerPy>()?;
+    m.add_function(wrap_pyfunction!(notification::notify_scan_started, m)?)?;
+    m.add_function(wrap_pyfunction!(notification::notify_scan_complete, m)?)?;
+    m.add_function(wrap_pyfunction!(notification::notify_findings, m)?)?;
+    m.add_function(wrap_pyfunction!(notification::notify_error, m)?)?;
+    // AI post-processing (feature-gated)
+    #[cfg(feature = "ai-integration")]
+    {
+        m.add_class::<ai_postprocess::AiProviderPy>()?;
+        m.add_class::<ai_postprocess::PluginLanguagePy>()?;
+        m.add_class::<ai_postprocess::AiAnalysisResultPy>()?;
+        m.add_class::<ai_postprocess::AiPayloadSuggestionPy>()?;
+        m.add_class::<ai_postprocess::AiWafBypassSuggestionPy>()?;
+        m.add_class::<ai_postprocess::AiCacheStatsPy>()?;
+        m.add_class::<ai_postprocess::ScriptMetadataPy>()?;
+        m.add_class::<ai_postprocess::GeneratedScriptPy>()?;
+        m.add_class::<ai_postprocess::AiCachePy>()?;
+        m.add_function(wrap_pyfunction!(ai_postprocess::ai_analyze_finding, m)?)?;
+        m.add_function(wrap_pyfunction!(
+            ai_postprocess::async_ai_analyze_finding,
+            m
+        )?)?;
+        m.add_function(wrap_pyfunction!(ai_postprocess::ai_generate_payloads, m)?)?;
+        m.add_function(wrap_pyfunction!(
+            ai_postprocess::ai_suggest_waf_bypass,
+            m
+        )?)?;
+    }
 
     Ok(())
 }

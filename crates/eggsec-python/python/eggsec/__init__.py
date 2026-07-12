@@ -576,6 +576,114 @@ try:
 except AttributeError:
     pass
 
+# Milestone F: Wireless assessment (feature-gated)
+try:
+    SecurityType = _core.SecurityTypePy
+    WirelessNetwork = _core.WirelessNetworkPy
+    WirelessVulnerability = _core.WirelessVulnerabilityPy
+    WirelessScanResult = _core.WirelessScanResultPy
+    WirelessScanConfig = _core.WirelessScanConfigPy
+    wireless_scan = _core.wireless_scan
+    async_wireless_scan = _core.async_wireless_scan
+    wireless_analyze_networks = _core.wireless_analyze_networks
+except AttributeError:
+    pass
+
+# Milestone F: Evasion validation (feature-gated)
+try:
+    EvasionTargetType = _core.EvasionTargetTypePy
+    EvasionCategory = _core.EvasionCategoryPy
+    EvasionRisk = _core.EvasionRiskPy
+    EvasionTechnique = _core.EvasionTechniquePy
+    EvasionDetection = _core.EvasionDetectionPy
+    EvasionSummary = _core.EvasionSummaryPy
+    EvasionReport = _core.EvasionReportPy
+    EvasionScanConfig = _core.EvasionScanConfigPy
+    evasion_scan = _core.evasion_scan
+    async_evasion_scan = _core.async_evasion_scan
+    evasion_list_techniques = _core.evasion_list_techniques
+except AttributeError:
+    pass
+
+# Milestone F: Post-exploitation simulation (feature-gated)
+try:
+    PostexCategory = _core.PostexCategoryPy
+    PostexRisk = _core.PostexRiskPy
+    PostexProfile = _core.PostexProfilePy
+    PostexTechnique = _core.PostexTechniquePy
+    PostexDetection = _core.PostexDetectionPy
+    PostexSummary = _core.PostexSummaryPy
+    PostexReport = _core.PostexReportPy
+    PostexScanConfig = _core.PostexScanConfigPy
+    postex_scan = _core.postex_scan
+    async_postex_scan = _core.async_postex_scan
+    postex_list_techniques = _core.postex_list_techniques
+except AttributeError:
+    pass
+
+# Milestone F: C2 simulation (feature-gated)
+try:
+    BeaconProtocol = _core.BeaconProtocolPy
+    C2TaskType = _core.TaskTypePy
+    C2TaskStatus = _core.TaskStatusPy
+    OpsecCategory = _core.OpsecCategoryPy
+    OpsecSeverity = _core.OpsecSeverityPy
+    CampaignPhase = _core.CampaignPhasePy
+    C2Campaign = _core.C2CampaignPy
+    BeaconResult = _core.BeaconResultPy
+    C2TaskResult = _core.C2TaskResultPy
+    OpsecFinding = _core.OpsecFindingPy
+    OpsecAssessment = _core.OpsecAssessmentPy
+    C2Summary = _core.C2SummaryPy
+    C2Report = _core.C2ReportPy
+    C2ScanConfig = _core.C2ScanConfigPy
+    c2_scan = _core.c2_scan
+    async_c2_scan = _core.async_c2_scan
+    c2_get_campaign = _core.c2_get_campaign
+except AttributeError:
+    pass
+
+# Milestone F: Distributed scanning (always-available)
+DistributedTaskType = _core.DistributedTaskTypePy
+WorkerStatus = _core.WorkerStatusPy
+WorkerRegistration = _core.WorkerRegistrationPy
+Heartbeat = _core.HeartbeatPy
+DistributedTask = _core.DistributedTaskPy
+DistributedTaskResult = _core.DistributedTaskResultPy
+distributed_task_types = _core.distributed_task_types
+distributed_generate_psk = _core.distributed_generate_psk
+
+# Milestone F: Notifications (always-available)
+WebhookEvent = _core.WebhookEventPy
+FindingSummary = _core.FindingSummaryPy
+NotifyScanStats = _core.NotifyScanStatsPy
+WebhookConfig = _core.WebhookConfigPy
+NotifyManager = _core.NotifyManagerPy
+notify_scan_started = _core.notify_scan_started
+notify_scan_complete = _core.notify_scan_complete
+notify_findings = _core.notify_findings
+notify_error = _core.notify_error
+
+# Milestone F: AI post-processing (feature-gated)
+try:
+    AiProvider = _core.AiProviderPy
+    PluginLanguage = _core.PluginLanguagePy
+    ScriptTarget = _core.ScriptTargetPy
+    AiAnalysisResult = _core.AiAnalysisResultPy
+    AiPayloadSuggestion = _core.AiPayloadSuggestionPy
+    AiWafBypassSuggestion = _core.AiWafBypassSuggestionPy
+    AiCacheStats = _core.AiCacheStatsPy
+    ScriptMetadata = _core.ScriptMetadataPy
+    GeneratedScript = _core.GeneratedScriptPy
+    AiCache = _core.AiCachePy
+    ai_analyze_finding = _core.ai_analyze_finding
+    async_ai_analyze_finding = _core.async_ai_analyze_finding
+    ai_generate_payloads = _core.ai_generate_payloads
+    ai_suggest_waf_bypass = _core.ai_suggest_waf_bypass
+    ai_generate_script = _core.ai_generate_script
+except AttributeError:
+    pass
+
 # Re-export exceptions
 EggsecError = _core.EggsecError
 ConfigError = _core.ConfigError

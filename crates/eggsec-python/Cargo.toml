@@ -33,6 +33,11 @@ daemon-client = ["dep:eggsec-daemon", "dep:eggsec-runtime"]
 headless-browser = ["eggsec/headless-browser"]
 advanced-hunting = ["eggsec/advanced-hunting"]
 compliance = []
+wireless = ["eggsec/wireless"]
+evasion = ["eggsec/evasion"]
+postex = ["eggsec/postex"]
+c2 = ["eggsec/c2"]
+ai-integration = ["eggsec/ai-integration"]
 # Aggregate: everything that can be built without system deps
 full-no-system = ["websocket", "git-secrets", "sbom", "container"]
 

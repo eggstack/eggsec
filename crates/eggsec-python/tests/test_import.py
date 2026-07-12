@@ -103,3 +103,23 @@ def test_async_functions_import():
 def test_endpoint_functions_import():
     assert callable(eggsec.scan_endpoints)
     assert callable(eggsec.fingerprint_services)
+
+
+def test_distributed_imports():
+    assert hasattr(eggsec, "DistributedTaskType")
+    assert hasattr(eggsec, "WorkerStatus")
+    assert hasattr(eggsec, "WorkerRegistration")
+    assert hasattr(eggsec, "Heartbeat")
+    assert callable(eggsec.distributed_task_types)
+    assert callable(eggsec.distributed_generate_psk)
+
+
+def test_notification_imports():
+    assert hasattr(eggsec, "WebhookEvent")
+    assert hasattr(eggsec, "FindingSummary")
+    assert hasattr(eggsec, "NotifyScanStats")
+    assert hasattr(eggsec, "WebhookConfig")
+    assert callable(eggsec.notify_scan_started)
+    assert callable(eggsec.notify_scan_complete)
+    assert callable(eggsec.notify_findings)
+    assert callable(eggsec.notify_error)
