@@ -26,6 +26,33 @@ pub struct EventEnvelope {
     pub payload: PyObject,
 }
 
+impl std::fmt::Debug for EventEnvelope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EventEnvelope")
+            .field("event_id", &self.event_id)
+            .field("event_type", &self.event_type)
+            .field("timestamp_ms", &self.timestamp_ms)
+            .field("correlation_id", &self.correlation_id)
+            .field("schema_version", &self.schema_version)
+            .finish()
+    }
+}
+
+impl serde::Serialize for EventEnvelope {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("EventEnvelope", 6)?;
+        s.serialize_field("schema_version", &self.schema_version)?;
+        s.serialize_field("event_id", &self.event_id)?;
+        s.serialize_field("timestamp_ms", &self.timestamp_ms)?;
+        s.serialize_field("correlation_id", &self.correlation_id)?;
+        s.serialize_field("event_type", &self.event_type)?;
+        // payload is a PyObject — serialize as null for JSON transport
+        s.serialize_field("payload", &())?;
+        s.end()
+    }
+}
+
 impl Clone for EventEnvelope {
     fn clone(&self) -> Self {
         Python::with_gil(|py| Self {
@@ -305,7 +332,7 @@ pub struct StageLifecycleEvent {
 #[pymethods]
 impl StageLifecycleEvent {
     #[new]
-    fn new(stage: String, status: String) -> Self {
+    pub(crate) fn new(stage: String, status: String) -> Self {
         Self { stage, status }
     }
 
@@ -549,7 +576,7 @@ pub struct FailureEvent {
 #[pymethods]
 impl FailureEvent {
     #[new]
-    fn new(error_type: String, error_message: String, is_retryable: bool) -> Self {
+    pub(crate) fn new(error_type: String, error_message: String, is_retryable: bool) -> Self {
         Self {
             error_type,
             error_message,
@@ -597,7 +624,12 @@ pub struct CompletionEvent {
 impl CompletionEvent {
     #[new]
     #[pyo3(signature = (status, stats, duration_ms))]
-    fn new(_py: Python<'_>, status: String, stats: Option<PyObject>, duration_ms: u64) -> Self {
+    pub(crate) fn new(
+        _py: Python<'_>,
+        status: String,
+        stats: Option<PyObject>,
+        duration_ms: u64,
+    ) -> Self {
         Self {
             status,
             stats,

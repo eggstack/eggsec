@@ -57,7 +57,7 @@ impl ScanStats {
 pub struct PortScanResult {
     #[pyo3(get)]
     pub target: String,
-    open_ports: Vec<OpenPort>,
+    pub(crate) open_ports: Vec<OpenPort>,
     #[pyo3(get)]
     pub scanned_ports: u32,
     #[pyo3(get)]

@@ -30,8 +30,7 @@ impl BinaryBufferPy {
     /// Create from hex string.
     #[staticmethod]
     fn from_hex(hex_str: &str) -> PyResult<Self> {
-        let data = hex_decode(hex_str)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        let data = hex_decode(hex_str).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
         let shape = data.len() as isize;
         Ok(Self { data, shape })
     }
@@ -72,9 +71,7 @@ impl BinaryBufferPy {
         _flags: i32,
     ) -> PyResult<()> {
         if view.is_null() {
-            return Err(pyo3::exceptions::PyBufferError::new_err(
-                "view is null",
-            ));
+            return Err(pyo3::exceptions::PyBufferError::new_err("view is null"));
         }
 
         let buf = &slf.data;

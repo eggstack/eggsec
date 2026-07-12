@@ -9,7 +9,7 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::requests::*;
 use crate::runtime_sync;
 use crate::scope::Scope;
-use crate::status::{ExecutionStats, ExecutionStatus, OperationResult};
+use crate::status::{ExecutionStats, ExecutionStatus, OperationPayload, OperationResult};
 use crate::waf::WafDetectionResultPy;
 
 /// Sync engine for running scoped security operations.
@@ -18,10 +18,10 @@ use crate::waf::WafDetectionResultPy;
 /// instead of raising exceptions — errors are captured in the result status.
 #[pyclass]
 pub struct Engine {
-    scope: Scope,
-    mode: String,
-    concurrency: usize,
-    timeout_ms: u64,
+    pub(crate) scope: Scope,
+    pub(crate) mode: String,
+    pub(crate) concurrency: usize,
+    pub(crate) timeout_ms: u64,
 }
 
 /// Extract hostname from a URL for scope enforcement.
@@ -79,27 +79,33 @@ fn parse_ports_string(ports: &str) -> PyResult<Vec<u16>> {
 fn operation_ok(
     stats: ExecutionStats,
     metadata: Option<std::collections::HashMap<String, String>>,
+    payload: Option<super::status::OperationPayload>,
 ) -> OperationResult {
-    OperationResult::new(
-        ExecutionStatus::Completed(),
-        Some(stats),
-        None,
-        None,
-        metadata,
-    )
+    let payload_type = payload.as_ref().map(|p| p.type_name().to_string());
+    OperationResult {
+        status: ExecutionStatus::Completed(),
+        stats: Some(stats),
+        artifacts: Vec::new(),
+        error: None,
+        metadata: metadata.unwrap_or_default(),
+        payload,
+        payload_type,
+    }
 }
 
 /// Build an OperationResult from an error.
 fn operation_err(error: String) -> OperationResult {
-    OperationResult::new(
-        ExecutionStatus::Failed {
+    OperationResult {
+        status: ExecutionStatus::Failed {
             error: error.clone(),
         },
-        None,
-        None,
-        Some(error),
-        None,
-    )
+        stats: None,
+        artifacts: Vec::new(),
+        error: Some(error),
+        metadata: std::collections::HashMap::new(),
+        payload: None,
+        payload_type: None,
+    }
 }
 
 #[pymethods]
@@ -476,10 +482,17 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = PortScanResult::from_engine(r);
+                let py_result = PortScanResult::from_engine(r);
+                let items = py_result.scanned_ports as u64;
+                let open = py_result.open_ports.len() as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(py_result.elapsed_ms, items, items - open, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::PortScan(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -520,10 +533,16 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = EndpointScanResult::from_engine(r);
+                let py_result = EndpointScanResult::from_engine(r);
+                let items = py_result.endpoints_found as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(py_result.elapsed_ms, items, 0, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::EndpointScan(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -564,10 +583,16 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = FingerprintScanResult::from_engine(r);
+                let py_result = FingerprintScanResult::from_engine(r);
+                let items = py_result.services_identified as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(py_result.elapsed_ms, items, 0, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::Fingerprint(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -587,7 +612,7 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = DnsRecordSet {
+                let py_result = DnsRecordSet {
                     domain: r.domain,
                     a_records: r.a,
                     aaaa_records: r.aaaa,
@@ -613,9 +638,21 @@ impl Engine {
                     }),
                     caa_records: r.caa,
                 };
+                let record_count = (py_result.a_records.len()
+                    + py_result.aaaa_records.len()
+                    + py_result.cname_records.len()
+                    + py_result.mx_records.len()
+                    + py_result.txt_records.len()
+                    + py_result.ns_records.len()
+                    + py_result.caa_records.len()) as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(0, record_count, 0, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::DnsRecon(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -639,7 +676,7 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = TlsInspectionResult {
+                let py_result = TlsInspectionResult {
                     target: r.target,
                     has_ssl: r.has_ssl,
                     certificate: r.certificate.map(|c| crate::recon::TlsCertificateInfo {
@@ -667,9 +704,15 @@ impl Engine {
                         })
                         .collect(),
                 };
+                let issue_count = py_result.issues.len() as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(0, 1, issue_count, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::TlsInspection(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -697,7 +740,7 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = TechDetectionResult {
+                let py_result = TechDetectionResult {
                     url: r.url,
                     status_code: r.status_code,
                     headers: r.headers.into_iter().collect(),
@@ -712,9 +755,22 @@ impl Engine {
                         other: r.tech_stack.other,
                     },
                 };
+                let tech_count = (py_result.tech_stack.servers.len()
+                    + py_result.tech_stack.frameworks.len()
+                    + py_result.tech_stack.languages.len()
+                    + py_result.tech_stack.databases.len()
+                    + py_result.tech_stack.cdns.len()
+                    + py_result.tech_stack.cms.len()
+                    + py_result.tech_stack.javascript.len()
+                    + py_result.tech_stack.other.len()) as u64;
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(0, tech_count, 0, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::TechnologyDetection(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -738,7 +794,7 @@ impl Engine {
 
         match result {
             Ok(r) => {
-                let _py_result = WafDetectionResultPy {
+                let py_result = WafDetectionResultPy {
                     url: url_owned,
                     detected: r.waf_name.is_some(),
                     vendor: r.waf_name.clone(),
@@ -751,9 +807,15 @@ impl Engine {
                     status_code: r.status_code,
                     request_error: r.request_error,
                 };
+                let items = if py_result.detected { 1 } else { 0 };
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(0, items, 0, 0);
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::WafDetection(py_result)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -796,10 +858,16 @@ impl Engine {
         );
 
         match result {
-            Ok(_r) => {
+            Ok(r) => {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(
+                    r.total_duration_ms,
+                    r.total_requests,
+                    r.failed_requests,
+                    0,
+                );
+                operation_ok(stats, Some(metadata), Some(OperationPayload::LoadTest(r)))
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -822,10 +890,20 @@ impl Engine {
         let result = crate::waf_validation::validate_waf(&request.target, scope_clone, false, None);
 
         match result {
-            Ok(_r) => {
+            Ok(r) => {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(
+                    r.duration_ms,
+                    r.bypasses_tested as u64,
+                    r.bypasses_successful as u64,
+                    0,
+                );
+                operation_ok(
+                    stats,
+                    Some(metadata),
+                    Some(OperationPayload::WafValidation(r)),
+                )
             }
             Err(e) => operation_err(e.to_string()),
         }
@@ -868,10 +946,16 @@ impl Engine {
         );
 
         match result {
-            Ok(_r) => {
+            Ok(r) => {
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("target".to_string(), request.target.clone());
-                operation_ok(ExecutionStats::new(0, 0, 0, 0), Some(metadata))
+                let stats = ExecutionStats::new(
+                    r.duration_ms,
+                    r.total_payloads as u64,
+                    r.failed_requests as u64,
+                    0,
+                );
+                operation_ok(stats, Some(metadata), Some(OperationPayload::HttpFuzz(r)))
             }
             Err(e) => operation_err(e.to_string()),
         }

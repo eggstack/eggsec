@@ -295,20 +295,14 @@ pub struct FindingSetIteratorPy {
 impl FindingSetIteratorPy {
     #[new]
     fn new(findings: Vec<Finding>) -> Self {
-        Self {
-            findings,
-            index: 0,
-        }
+        Self { findings, index: 0 }
     }
 
     fn __iter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    fn __next__<'py>(
-        mut slf: PyRefMut<'py, Self>,
-        py: Python<'py>,
-    ) -> PyResult<Option<Finding>> {
+    fn __next__<'py>(mut slf: PyRefMut<'py, Self>, py: Python<'py>) -> PyResult<Option<Finding>> {
         if slf.index >= slf.findings.len() {
             return Ok(None);
         }

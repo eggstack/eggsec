@@ -407,10 +407,7 @@ impl LazyEventIterator {
         slf
     }
 
-    fn __next__<'py>(
-        mut slf: PyRefMut<'py, Self>,
-        py: Python<'py>,
-    ) -> PyResult<Option<PyObject>> {
+    fn __next__<'py>(mut slf: PyRefMut<'py, Self>, py: Python<'py>) -> PyResult<Option<PyObject>> {
         if slf.index >= slf.events.len() {
             return Ok(None);
         }

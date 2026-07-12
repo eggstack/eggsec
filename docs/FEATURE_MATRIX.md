@@ -385,6 +385,14 @@ as `cargo check -p eggsec --features web-proxy`.
 | `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
 | `container` | `container` | K8s/Docker scanning |
 | `daemon-client` | — | Daemon session access (no engine feature) |
+| `headless-browser` | `headless-browser` | Headless browser testing (requires Chromium) |
+| `advanced-hunting` | `advanced-hunting` | Advanced vulnerability hunting (chains, race conditions) |
+| `compliance` | — | Compliance framework mapping (OWASP, NIST, etc.) |
+| `wireless` | `wireless` | WiFi scanning and analysis (requires wireless-tools) |
+| `evasion` | `evasion` | Evasion technique detection and validation |
+| `postex` | `postex` | Post-exploitation simulation |
+| `c2` | `c2` | C2 framework simulation |
+| `ai-integration` | `ai-integration` | AI-assisted finding analysis and payload generation |
 
 Default wheel: core + scanner + endpoint discovery + service fingerprinting + recon + WAF + reporting + async API.
 `full` aggregate includes all non-default features (not conservative/production).

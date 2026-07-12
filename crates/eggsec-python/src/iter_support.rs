@@ -88,10 +88,7 @@ impl PaginatedResultsPy {
     }
 
     /// Python iterator protocol: next item.
-    fn __next__<'py>(
-        mut slf: PyRefMut<'py, Self>,
-        py: Python<'py>,
-    ) -> PyResult<Option<PyObject>> {
+    fn __next__<'py>(mut slf: PyRefMut<'py, Self>, py: Python<'py>) -> PyResult<Option<PyObject>> {
         if slf.current_index >= slf.items.len() {
             return Ok(None);
         }
@@ -139,10 +136,18 @@ pub fn batch_to_dicts<'py, T: ToPyObject>(
     batch_size: usize,
 ) -> Vec<Vec<Bound<'py, PyAny>>> {
     if batch_size == 0 {
-        return vec![items.iter().map(|i| i.to_object(py).into_bound(py)).collect()];
+        return vec![items
+            .iter()
+            .map(|i| i.to_object(py).into_bound(py))
+            .collect()];
     }
     items
         .chunks(batch_size)
-        .map(|chunk| chunk.iter().map(|i| i.to_object(py).into_bound(py)).collect())
+        .map(|chunk| {
+            chunk
+                .iter()
+                .map(|i| i.to_object(py).into_bound(py))
+                .collect()
+        })
         .collect()
 }

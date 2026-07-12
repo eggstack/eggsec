@@ -2,6 +2,83 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::collections::HashMap;
 
+use crate::dto::PortScanResult;
+use crate::endpoint::EndpointScanResult;
+use crate::fingerprint::FingerprintScanResult;
+use crate::loadtest::LoadTestResultPy;
+use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
+use crate::waf::WafDetectionResultPy;
+use crate::waf_validation::{FuzzSessionPy, WafScanResultPy};
+
+/// Tagged payload enum carrying domain-specific results through the engine boundary.
+///
+/// Each variant wraps the typed result from a specific operation domain.
+/// Python callers access the concrete result via the `payload` getter.
+#[derive(Debug, Clone)]
+pub(crate) enum OperationPayload {
+    PortScan(PortScanResult),
+    EndpointScan(EndpointScanResult),
+    Fingerprint(FingerprintScanResult),
+    DnsRecon(DnsRecordSet),
+    TlsInspection(TlsInspectionResult),
+    TechnologyDetection(TechDetectionResult),
+    WafDetection(WafDetectionResultPy),
+    WafValidation(WafScanResultPy),
+    HttpFuzz(FuzzSessionPy),
+    LoadTest(LoadTestResultPy),
+}
+
+impl OperationPayload {
+    /// Return a human-readable type name for this payload variant.
+    pub(crate) fn type_name(&self) -> &'static str {
+        match self {
+            OperationPayload::PortScan(_) => "PortScanResult",
+            OperationPayload::EndpointScan(_) => "EndpointScanResult",
+            OperationPayload::Fingerprint(_) => "FingerprintScanResult",
+            OperationPayload::DnsRecon(_) => "DnsRecordSet",
+            OperationPayload::TlsInspection(_) => "TlsInspectionResult",
+            OperationPayload::TechnologyDetection(_) => "TechDetectionResult",
+            OperationPayload::WafDetection(_) => "WafDetectionResult",
+            OperationPayload::WafValidation(_) => "WafScanResult",
+            OperationPayload::HttpFuzz(_) => "FuzzSession",
+            OperationPayload::LoadTest(_) => "LoadTestResult",
+        }
+    }
+
+    /// Convert the inner domain result to a Python object.
+    pub(crate) fn to_pyobject(&self, py: Python) -> PyResult<PyObject> {
+        Ok(match self {
+            OperationPayload::PortScan(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::EndpointScan(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::Fingerprint(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::DnsRecon(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::TlsInspection(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::TechnologyDetection(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::WafDetection(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::WafValidation(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::HttpFuzz(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::LoadTest(r) => Py::new(py, r.clone())?.into_any(),
+        })
+    }
+}
+
+impl serde::Serialize for OperationPayload {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            OperationPayload::PortScan(r) => r.serialize(serializer),
+            OperationPayload::EndpointScan(r) => r.serialize(serializer),
+            OperationPayload::Fingerprint(r) => r.serialize(serializer),
+            OperationPayload::DnsRecon(r) => r.serialize(serializer),
+            OperationPayload::TlsInspection(r) => r.serialize(serializer),
+            OperationPayload::TechnologyDetection(r) => r.serialize(serializer),
+            OperationPayload::WafDetection(r) => r.serialize(serializer),
+            OperationPayload::WafValidation(r) => r.serialize(serializer),
+            OperationPayload::HttpFuzz(r) => r.serialize(serializer),
+            OperationPayload::LoadTest(r) => r.serialize(serializer),
+        }
+    }
+}
+
 /// Execution status enum for operation results.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -175,10 +252,14 @@ impl Artifact {
 #[derive(Debug, Clone)]
 pub struct OperationResult {
     pub(crate) status: ExecutionStatus,
-    stats: Option<ExecutionStats>,
-    artifacts: Vec<Artifact>,
-    error: Option<String>,
-    metadata: HashMap<String, String>,
+    pub(crate) stats: Option<ExecutionStats>,
+    pub(crate) artifacts: Vec<Artifact>,
+    pub(crate) error: Option<String>,
+    pub(crate) metadata: HashMap<String, String>,
+    /// Domain-specific payload carrying the typed result.
+    pub(crate) payload: Option<OperationPayload>,
+    /// Human-readable type name of the payload (e.g. "PortScanResult").
+    pub(crate) payload_type: Option<String>,
 }
 
 #[pymethods]
@@ -198,6 +279,8 @@ impl OperationResult {
             artifacts: artifacts.unwrap_or_default(),
             error,
             metadata: metadata.unwrap_or_default(),
+            payload: None,
+            payload_type: None,
         }
     }
 
@@ -230,7 +313,7 @@ impl OperationResult {
         Ok(dict.into())
     }
 
-    fn is_success(&self) -> bool {
+    pub(crate) fn is_success(&self) -> bool {
         matches!(self.status, ExecutionStatus::Completed())
     }
 
@@ -243,6 +326,50 @@ impl OperationResult {
 
     fn artifact_count(&self) -> usize {
         self.artifacts.len()
+    }
+
+    /// The domain-specific payload as a Python object.
+    ///
+    /// Returns the typed result (e.g. PortScanResult, EndpointScanResult)
+    /// or None if the operation did not produce a domain payload.
+    #[getter]
+    fn payload(&self, py: Python) -> PyResult<PyObject> {
+        match &self.payload {
+            Some(p) => p.to_pyobject(py),
+            None => Ok(py.None()),
+        }
+    }
+
+    /// Human-readable type name of the payload (e.g. "PortScanResult").
+    #[getter]
+    fn payload_type_name(&self) -> Option<String> {
+        self.payload_type.clone()
+    }
+
+    /// Raise an exception if the operation failed.
+    ///
+    /// Raises:
+    ///     ScanError: If the operation failed.
+    ///     TimeoutError: If the operation timed out.
+    fn raise_for_status(&self) -> PyResult<()> {
+        match &self.status {
+            ExecutionStatus::Failed { error } => {
+                Err(pyo3::exceptions::PyException::new_err(error.clone()))
+            }
+            ExecutionStatus::Timeout { elapsed_ms } => {
+                Err(pyo3::exceptions::PyTimeoutError::new_err(format!(
+                    "Operation timed out after {}ms",
+                    elapsed_ms
+                )))
+            }
+            ExecutionStatus::Cancelled { reason } => {
+                let msg = reason
+                    .clone()
+                    .unwrap_or_else(|| "Operation was cancelled".to_string());
+                Err(pyo3::exceptions::PyException::new_err(msg))
+            }
+            _ => Ok(()),
+        }
     }
 
     pub(crate) fn to_dict(&self, py: Python) -> PyResult<PyObject> {
@@ -286,6 +413,14 @@ impl OperationResult {
         }
         dict.set_item("metadata", meta_dict)?;
 
+        // Payload
+        if let Some(ref payload) = self.payload {
+            dict.set_item("payload", payload.to_pyobject(py)?)?;
+        } else {
+            dict.set_item("payload", py.None())?;
+        }
+        dict.set_item("payload_type", &self.payload_type)?;
+
         Ok(dict.into())
     }
 
@@ -296,8 +431,9 @@ impl OperationResult {
 
     fn __repr__(&self) -> String {
         format!(
-            "OperationResult(status={}, artifacts={}, error={})",
+            "OperationResult(status={}, payload={}, artifacts={}, error={})",
             self.status.name(),
+            self.payload_type.as_deref().unwrap_or("None"),
             self.artifacts.len(),
             self.error.is_some()
         )
@@ -305,9 +441,10 @@ impl OperationResult {
 
     fn __str__(&self) -> String {
         let base = format!(
-            "{} ({} artifacts)",
+            "{} ({} artifacts, payload={})",
             self.status.name(),
-            self.artifacts.len()
+            self.artifacts.len(),
+            self.payload_type.as_deref().unwrap_or("None")
         );
         match &self.error {
             Some(e) => format!("{}: {}", base, e),
@@ -407,12 +544,14 @@ impl serde::Serialize for Artifact {
 impl serde::Serialize for OperationResult {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("OperationResult", 5)?;
+        let mut s = serializer.serialize_struct("OperationResult", 7)?;
         s.serialize_field("status", &self.status)?;
         s.serialize_field("stats", &self.stats)?;
         s.serialize_field("artifacts", &self.artifacts)?;
         s.serialize_field("error", &self.error)?;
         s.serialize_field("metadata", &self.metadata)?;
+        s.serialize_field("payload", &self.payload)?;
+        s.serialize_field("payload_type", &self.payload_type)?;
         s.end()
     }
 }

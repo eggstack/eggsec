@@ -1,46 +1,66 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+#[derive(Debug)]
+struct CancellationTokenInner {
+    cancelled: AtomicBool,
+    reason: Mutex<Option<String>>,
+}
 
 /// A cancellation token for cooperative cancellation of operations.
 ///
 /// Can be checked periodically by running operations to determine
 /// if they should abort early.
 #[pyclass]
+#[derive(Debug, Clone)]
 pub struct CancellationToken {
-    cancelled: AtomicBool,
-    reason: Option<String>,
+    inner: Arc<CancellationTokenInner>,
+}
+
+impl CancellationToken {
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.inner.cancelled.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn reason(&self) -> Option<String> {
+        self.inner.reason.lock().ok().and_then(|r| r.clone())
+    }
 }
 
 #[pymethods]
 impl CancellationToken {
     /// Create a new cancellation token.
     #[new]
-    fn new() -> Self {
+    fn py_new() -> Self {
         Self {
-            cancelled: AtomicBool::new(false),
-            reason: None,
+            inner: Arc::new(CancellationTokenInner {
+                cancelled: AtomicBool::new(false),
+                reason: Mutex::new(None),
+            }),
         }
     }
 
     /// Request cancellation with an optional reason.
     #[pyo3(signature = (reason=None))]
-    pub(crate) fn cancel(&self, reason: Option<String>) {
-        self.cancelled.store(true, Ordering::SeqCst);
-        // Store reason — we use a simple approach since this is a Python-facing type
-        // and the reason is only read from Python.
-        // Note: for a production implementation, this should use a Mutex<Option<String>>
-        // but for the initial API surface this is sufficient.
-        if let Some(r) = reason {
-            // We intentionally ignore the reason storage limitation here
-            // since the primary use case is checking is_cancelled().
-            let _ = r;
+    fn cancel(&self, reason: Option<String>) {
+        self.inner.cancelled.store(true, Ordering::SeqCst);
+        if let Ok(mut r) = self.inner.reason.lock() {
+            *r = reason;
         }
     }
 
     /// Check if cancellation has been requested.
-    fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
+    #[pyo3(name = "is_cancelled")]
+    fn py_is_cancelled(&self) -> bool {
+        self.is_cancelled()
+    }
+
+    /// Get the cancellation reason, if any.
+    #[pyo3(name = "reason")]
+    fn py_reason(&self) -> Option<String> {
+        self.reason()
     }
 
     /// Get a Python object that can be checked for cancellation.
@@ -49,14 +69,14 @@ impl CancellationToken {
     fn cancel_token(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("is_cancelled", self.is_cancelled())?;
-        dict.set_item("reason", &self.reason)?;
+        dict.set_item("reason", self.reason())?;
         Ok(dict.into())
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("cancelled", self.is_cancelled())?;
-        dict.set_item("reason", &self.reason)?;
+        dict.set_item("reason", self.reason())?;
         Ok(dict.into())
     }
 
@@ -68,7 +88,7 @@ impl CancellationToken {
         }
         serde_json::to_string(&CancelTokenJson {
             cancelled: self.is_cancelled(),
-            reason: self.reason.clone(),
+            reason: self.reason(),
         })
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }

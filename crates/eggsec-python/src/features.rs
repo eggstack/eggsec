@@ -46,6 +46,23 @@ pub fn features() -> HashMap<String, bool> {
     map.insert("nse".to_string(), cfg!(feature = "nse"));
     map.insert("container".to_string(), cfg!(feature = "container"));
     map.insert("daemon-client".to_string(), cfg!(feature = "daemon-client"));
+    map.insert(
+        "headless-browser".to_string(),
+        cfg!(feature = "headless-browser"),
+    );
+    map.insert(
+        "advanced-hunting".to_string(),
+        cfg!(feature = "advanced-hunting"),
+    );
+    map.insert("compliance".to_string(), cfg!(feature = "compliance"));
+    map.insert("wireless".to_string(), cfg!(feature = "wireless"));
+    map.insert("evasion".to_string(), cfg!(feature = "evasion"));
+    map.insert("postex".to_string(), cfg!(feature = "postex"));
+    map.insert("c2".to_string(), cfg!(feature = "c2"));
+    map.insert(
+        "ai-integration".to_string(),
+        cfg!(feature = "ai-integration"),
+    );
     map
 }
 
@@ -78,6 +95,14 @@ pub fn has_feature(name: &str) -> bool {
         "nse" => cfg!(feature = "nse"),
         "container" => cfg!(feature = "container"),
         "daemon-client" => cfg!(feature = "daemon-client"),
+        "headless-browser" => cfg!(feature = "headless-browser"),
+        "advanced-hunting" => cfg!(feature = "advanced-hunting"),
+        "compliance" => cfg!(feature = "compliance"),
+        "wireless" => cfg!(feature = "wireless"),
+        "evasion" => cfg!(feature = "evasion"),
+        "postex" => cfg!(feature = "postex"),
+        "c2" => cfg!(feature = "c2"),
+        "ai-integration" => cfg!(feature = "ai-integration"),
         _ => false,
     }
 }

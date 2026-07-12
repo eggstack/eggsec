@@ -788,4 +788,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-07-10 — eggsec-python Milestone E (findings, reporting, storage, integrations)*
+*Last updated: 2026-07-12 — eggsec-python Milestone G (domain registry, event protocol, callbacks, ergonomics, 1.0 readiness)*
