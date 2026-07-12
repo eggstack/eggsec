@@ -1,8 +1,32 @@
 # eggsec-python Validation Report
 
+## Final integration checkpoint — 2026-07-12
+
+The final integration pass completed the scoped pre-1.0 stable-core gates:
+
+- Python suite: **1326 passed, 80 skipped, 23 deselected**.
+- Stable-core registry and sync/async dispatch use one canonical operation
+  identifier source.
+- `OperationResult.error` is a versioned `OperationError` DTO with typed
+  exception mapping and a compatibility `error_message` view.
+- Stable-core dispatch records structured policy decisions in the audit log.
+- Event envelopes carry monotonic sequence numbers; reliable lifecycle events
+  are protected from progress-event drops and delivery statistics are exposed.
+- `domain_maturity()` and the architecture/release documentation now mark the
+  ten-operation stable-core boundary separately from provisional and
+  experimental domains.
+
+Remaining release gates are intentionally recorded in
+[`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): deterministic daemon/pipeline/
+secret fixtures, final verification in a clean environment, TestPyPI/PyPI
+publication, and the repository-wide architecture guard debt. The Python
+crate’s Rust test target remains link-limited in this environment because the
+`cdylib` test binary is not linked with the Python runtime; `cargo check`,
+`maturin develop`, and the installed-extension pytest suite pass.
+
 ## Validation Summary
 
-**Date:** 2026-07-09
+**Date:** 2026-07-12
 **Platform:** linux (x86_64)
 **Rust toolchain:** nightly (via rtk)
 **Python:** 3.12.3
@@ -10,11 +34,12 @@
 
 | Category | Status |
 |----------|--------|
-| Rust validation matrix | 15/15 PASS |
+| Rust validation matrix | 14 PASS, 1 environment-limited |
 | Python build + smoke | PASS |
 | Network failure triage | RESOLVED (6 tests properly skipped) |
 | Async API tests | ADDED (5 new tests) |
-| Export checker | CREATED |
+| Python suite | 1326 passed, 80 skipped, 23 deselected |
+| Export checker | PASS (263 default exports resolve) |
 | GitHub Actions workflow | EXISTS, VALID |
 | Release checklist | UPDATED |
 
@@ -25,7 +50,7 @@
 | Command | Result | Notes |
 |---------|--------|-------|
 | `cargo check -p eggsec-python` | PASS | 11 warnings (pre-existing PyO3 cfg) |
-| `cargo test -p eggsec-python` | PASS | 0 Rust tests (tests live in pytest) |
+| `cargo test -p eggsec-python` | ENVIRONMENT-LIMITED | The `cdylib` test binary is not linked with the Python runtime in this container; Rust compilation/checks pass and pytest covers the installed extension |
 | `cargo check -p eggsec-python --features full-no-system` | PASS | |
 | `cargo check -p eggsec-python --features websocket` | PASS | |
 | `cargo check -p eggsec-python --features git-secrets` | PASS | |
@@ -50,7 +75,7 @@ All warnings are pre-existing PyO3 `cfg` or downstream dead_code. None block the
 | `import eggsec` | PASS (version 0.1.0, 24 features) |
 | Release wheel build | PASS (`eggsec-0.1.0-cp312-cp312-manylinux_2_38_x86_64.whl`) |
 | Clean venv wheel install | PASS |
-| `__all__` check | PASS (75 names, all resolve) |
+| `__all__` check | PASS (263 default names, all resolve) |
 | Scanner smoke | PASS (generate_fuzz_payloads, Scope, Client, scope enforcement) |
 | Report smoke | PASS (Report, Finding, FindingSet, Evidence, to_dict/to_json/write_json/to_rows/write_markdown) |
 

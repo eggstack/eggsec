@@ -4,7 +4,11 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Pre-release (Milestone G stabilization in progress)** — Not yet published to PyPI. See `RELEASE_CHECKLIST.md` for publication gates and `docs/python/README_1_0_CHECKLIST.md` for the 1.0 readiness checklist.
+**Scoped pre-1.0 release-candidate work** — Not yet published to PyPI. The
+stable-core compatibility boundary is the ten operations listed in
+[`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
+See `RELEASE_CHECKLIST.md` for publication gates and
+`docs/python/README_1_0_CHECKLIST.md` for the remaining 1.0 readiness work.
 
 ### Stability Classifications
 
@@ -12,9 +16,9 @@ Operations and types are classified according to WS9 criteria:
 
 | Level | Criteria | Examples |
 |-------|----------|----------|
-| **Stable** | Real execution path, result data preserved, policy/cancellation integrated, serialization versioned, behavior tests pass | `scan_ports`, `recon_dns`, `detect_waf`, `Engine`, `Scope`, `PortScanResult` |
-| **Provisional** | Public API shape accepted, implementation works but lacks full backend validation or schema freeze | `graphql_test`, `auth_test`, `db_probe`, `EggsecConfig`, `Pipeline`, `OperationRegistry` |
-| **Experimental** | Platform-sensitive, hazardous, incomplete, or subject to substantial change | `wireless_scan`, `evasion_scan`, `c2_scan`, `browser_test`, `ai_analyze_finding`, `stress_test` |
+| **Stable-core** | Canonical registry, mandatory policy gate, typed payload, structured error, audit decision, and sync/async contract coverage | the ten operations in `domain-maturity.md`, plus their core DTOs |
+| **Provisional** | Public API shape is useful, but common-engine parity, deterministic fixtures, or daemon/schema coverage is incomplete | consolidated recon, GraphQL, OAuth, auth, database, NSE, daemon, pipeline/configuration surfaces |
+| **Experimental** | Platform-sensitive, hazardous, provider-dependent, or subject to substantial change | wireless, evasion, postex, C2, browser, mobile dynamic, proxy, packet, distributed, and AI domains |
 | **Internal** | No compatibility guarantee, not top-level exported | `deprecated_warning` |
 
 Use `eggsec.api_surface()` to inspect the stability of any exported name at runtime.
@@ -53,11 +57,13 @@ Prebuilt wheels are **not yet available on PyPI**. Build from source using matur
 - Findings and reporting (JSON, Markdown)
 - Sync and async APIs
 - Scope enforcement
-- Policy, configuration, and execution context (Milestone B)
-- Consolidated reconnaissance (Milestone C)
-- GraphQL security assessment (Milestone C)
-- OAuth/OIDC security assessment (Milestone C)
-- Authentication security assessment (Milestone C)
+- Mandatory policy gate and structured dispatch audit records for stable-core operations
+- Versioned `OperationError` payloads with compatibility `error_message`
+- Versioned event envelopes with monotonic sequence numbers
+- Backpressure delivery statistics with reliable lifecycle-event handling
+- Domain maturity introspection via `domain_maturity()`
+- Policy, configuration, and execution context (provisional until common-engine parity closes)
+- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (provisional)
 - NSE script metadata and sandbox policy inspection (Milestone D)
 - Packet filter and flow record types (Milestone D)
 - Traceroute API (Milestone D)
@@ -84,6 +90,11 @@ Prebuilt wheels are **not yet available on PyPI**. Build from source using matur
 - API surface introspection and feature matrix (Milestone G)
 - Performance benchmarks and regression gates (Milestone G)
 - 1.0 readiness checklist and stability classifications (Milestone G)
+
+The default wheel is a scoped stable-core release candidate, not a claim that
+all importable modules are stable. Use `eggsec.api_surface()` and
+`eggsec.domain_maturity()` before selecting a domain for compatibility-sensitive
+automation.
 
 ### Not Included (default wheel)
 
@@ -163,6 +174,9 @@ report.write_json("scan_report.json")
 | `ExecutionSurface` | Execution surface identification (CLI, TUI, MCP, agent, etc.) |
 | `PreflightResult` | Pre-dispatch policy preview |
 | `EnforcementAuditEvent` | Audit trail for enforcement decisions |
+| `OperationError` | Versioned structured failure payload |
+| `DispatchAuditEvent` | Stable-core dispatch decision record |
+| `EventDeliveryStats` | Event delivery and drop counters |
 | `ConsolidatedReconConfig` | Config for consolidated recon (toggle modules) |
 | `ReconModuleResult` | Single module result from consolidated recon |
 | `ConsolidatedReconReport` | Aggregated consolidated recon report |

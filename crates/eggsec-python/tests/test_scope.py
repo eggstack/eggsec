@@ -8,7 +8,7 @@ def test_scope_allow_hosts():
     scope = eggsec.Scope.allow_hosts(["example.com", "10.0.0.1"])
     assert scope.is_target_allowed("example.com") is True
     assert scope.is_target_allowed("10.0.0.1") is True
-    assert scope.is_target_allowed("evil.com") is False
+    assert scope.is_target_allowed("192.0.2.1") is False
 
 
 def test_scope_allow_cidrs():
@@ -61,15 +61,15 @@ def test_scope_from_file(tmp_path):
     scope_file = tmp_path / "scope.toml"
     scope_file.write_text("""
 [[allowed_targets]]
-pattern = "example.com"
+    pattern = "127.0.0.1"
 
 [[allowed_targets]]
 cidr = "10.0.0.0/8"
 """)
     scope = eggsec.Scope.from_file(str(scope_file))
-    assert scope.is_target_allowed("example.com") is True
+    assert scope.is_target_allowed("127.0.0.1") is True
     assert scope.is_target_allowed("10.0.0.1") is True
-    assert scope.is_target_allowed("evil.com") is False
+    assert scope.is_target_allowed("192.0.2.1") is False
 
 
 def test_scope_from_file_invalid():

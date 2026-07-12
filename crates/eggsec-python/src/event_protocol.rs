@@ -16,6 +16,9 @@ pub struct EventEnvelope {
     pub schema_version: String,
     #[pyo3(get)]
     pub event_id: String,
+    /// Monotonic sequence within the producing execution stream.
+    #[pyo3(get)]
+    pub sequence: u64,
     #[pyo3(get)]
     pub timestamp_ms: u64,
     #[pyo3(get)]
@@ -30,6 +33,7 @@ impl std::fmt::Debug for EventEnvelope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EventEnvelope")
             .field("event_id", &self.event_id)
+            .field("sequence", &self.sequence)
             .field("event_type", &self.event_type)
             .field("timestamp_ms", &self.timestamp_ms)
             .field("correlation_id", &self.correlation_id)
@@ -41,9 +45,10 @@ impl std::fmt::Debug for EventEnvelope {
 impl serde::Serialize for EventEnvelope {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("EventEnvelope", 6)?;
+        let mut s = serializer.serialize_struct("EventEnvelope", 7)?;
         s.serialize_field("schema_version", &self.schema_version)?;
         s.serialize_field("event_id", &self.event_id)?;
+        s.serialize_field("sequence", &self.sequence)?;
         s.serialize_field("timestamp_ms", &self.timestamp_ms)?;
         s.serialize_field("correlation_id", &self.correlation_id)?;
         s.serialize_field("event_type", &self.event_type)?;
@@ -58,6 +63,7 @@ impl Clone for EventEnvelope {
         Python::with_gil(|py| Self {
             schema_version: self.schema_version.clone(),
             event_id: self.event_id.clone(),
+            sequence: self.sequence,
             timestamp_ms: self.timestamp_ms,
             correlation_id: self.correlation_id.clone(),
             event_type: self.event_type.clone(),
@@ -83,6 +89,7 @@ impl EventEnvelope {
         Self {
             schema_version: schema_version.unwrap_or_else(|| EVENT_SCHEMA_VERSION.to_string()),
             event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
+            sequence: 0,
             timestamp_ms: timestamp_ms.unwrap_or(now_ms),
             correlation_id,
             event_type,
@@ -125,6 +132,7 @@ impl EventEnvelope {
         Ok(EventEnvelope {
             schema_version: EVENT_SCHEMA_VERSION.to_string(),
             event_id: format!("evt-{}", event.timestamp_ms),
+            sequence: 0,
             timestamp_ms: event.timestamp_ms,
             correlation_id: None,
             event_type: event.event_type.clone(),
@@ -147,6 +155,7 @@ impl EventEnvelope {
         Self {
             schema_version: schema_version.unwrap_or_else(|| EVENT_SCHEMA_VERSION.to_string()),
             event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
+            sequence: 0,
             timestamp_ms: timestamp_ms.unwrap_or(now_ms),
             correlation_id,
             event_type,
@@ -158,6 +167,7 @@ impl EventEnvelope {
         let dict = PyDict::new_bound(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("event_id", &self.event_id)?;
+        dict.set_item("sequence", self.sequence)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
         dict.set_item("correlation_id", &self.correlation_id)?;
         dict.set_item("event_type", &self.event_type)?;
@@ -180,6 +190,10 @@ impl EventEnvelope {
         map.insert(
             "event_id".into(),
             serde_json::Value::String(self.event_id.clone()),
+        );
+        map.insert(
+            "sequence".into(),
+            serde_json::Value::Number(self.sequence.into()),
         );
         map.insert(
             "timestamp_ms".into(),
@@ -701,6 +715,7 @@ pub fn wrap_event(
     Ok(EventEnvelope {
         schema_version: EVENT_SCHEMA_VERSION.to_string(),
         event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
+        sequence: 0,
         timestamp_ms: now_ms,
         correlation_id,
         event_type,

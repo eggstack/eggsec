@@ -60,6 +60,7 @@ Issues = "https://github.com/sugarwookie/eggsec/issues"
 # See docs/python/packaging.md for the full feature matrix.
 
 [tool.pytest.ini_options]
+testpaths = ["tests", "python/tests"]
 markers = [
     "network: mark test as requiring network access (DNS/TLS to external hosts)",
 ]

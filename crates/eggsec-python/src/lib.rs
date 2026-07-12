@@ -133,6 +133,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.py().get_type_bound::<SerializationError>(),
     )?;
     m.add("InternalError", m.py().get_type_bound::<InternalError>())?;
+    m.add(
+        "CancellationError",
+        m.py().get_type_bound::<CancellationError>(),
+    )?;
 
     // Classes
     m.add_class::<config_model::PySensitiveString>()?;
@@ -169,6 +173,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // G1: Domain descriptors
     m.add_class::<domains::DomainDescriptorPy>()?;
     m.add_class::<domains::DomainRegistry>()?;
+    m.add_function(wrap_pyfunction!(domains::domain_maturity, m)?)?;
     m.add_class::<client::Client>()?;
     m.add_class::<async_client::AsyncClient>()?;
     m.add_class::<engine::Engine>()?;
@@ -248,6 +253,8 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<status::ExecutionStats>()?;
     m.add_class::<status::Artifact>()?;
     m.add_class::<status::OperationResult>()?;
+    m.add_class::<engine_state::DispatchAuditEvent>()?;
+    m.add_class::<status::OperationError>()?;
     // Phase D: Recon
     m.add_class::<recon::DnsRecordSet>()?;
     m.add_class::<recon::MxRecord>()?;
@@ -793,6 +800,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<async_support::AsyncCallback>()?;
     m.add_class::<async_support::CallbackScheduler>()?;
     m.add_class::<backpressure::PyBackpressureChannel>()?;
+    m.add_class::<backpressure::EventDeliveryStats>()?;
     // AI post-processing (feature-gated)
     #[cfg(feature = "ai-integration")]
     {
@@ -879,6 +887,7 @@ fn api_surface() -> PyObject {
         add_entry!("has_feature", "stable");
         add_entry!("build_info", "stable");
         add_entry!("feature_matrix", "stable");
+        add_entry!("domain_maturity", "stable");
         add_entry!("api_surface_version", "stable");
         add_entry!("api_surface", "stable");
         add_entry!("validate_scope", "stable");
@@ -1003,6 +1012,7 @@ fn api_surface() -> PyObject {
         add_entry!("CancellationEvent", "stable");
         add_entry!("FailureEvent", "stable");
         add_entry!("CompletionEvent", "stable");
+        add_entry!("EventDeliveryStats", "provisional");
         add_entry!("wrap_event", "stable");
         add_entry!("EVENT_SCHEMA_VERSION", "stable");
         add_entry!("EventStream", "stable");
@@ -1016,6 +1026,7 @@ fn api_surface() -> PyObject {
         add_entry!("AsyncCallback", "stable");
         add_entry!("CallbackScheduler", "stable");
         add_entry!("PyBackpressureChannel", "stable");
+        add_entry!("EventDeliveryStats", "provisional");
 
         // Stable classes (always available, real execution path)
         add_entry!("Scope", "stable");
@@ -1129,6 +1140,8 @@ fn api_surface() -> PyObject {
         add_entry!("ExecutionStats", "stable");
         add_entry!("Artifact", "stable");
         add_entry!("OperationResult", "stable");
+        add_entry!("OperationError", "stable");
+        add_entry!("DispatchAuditEvent", "stable");
 
         // Provisional: Finding and reporting types (Milestone D/E)
         add_entry!("Evidence", "provisional");

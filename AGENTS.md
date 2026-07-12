@@ -45,7 +45,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin, experimental) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental) |
 
 ## Build & Test Commands
 
@@ -207,7 +207,7 @@ CLI features: `tui` (default), `daemon-client`, `headless`
 
 Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Type stubs included.
 
-**Milestone B** adds always-available (no feature flags) Python bindings for: `EggsecConfig`, `LoadedScope`, `OperationRegistry`, `EnforcementContext`, `ExecutionPolicy`, `ManualOverride`, `PreflightResult`, and `EnforcementAuditEvent`. See `crates/eggsec-python/README.md` for usage examples.
+The Python stable-core boundary is the ten-operation engine registry (`scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, and `load_test`). Every stable-core dispatch passes through the structured policy gate and emits an audit decision. `OperationResult.error` is the versioned `OperationError` DTO; `error_message` is retained for compatibility. See `docs/python/domain-maturity.md` for the provisional/experimental boundary and `crates/eggsec-python/README.md` for examples.
 
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|

@@ -10,6 +10,155 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::waf::WafDetectionResultPy;
 use crate::waf_validation::{FuzzSessionPy, WafScanResultPy};
 
+/// Versioned, cross-surface failure payload for a stable operation.
+///
+/// The status enum retains its legacy text field for compatibility, but this
+/// DTO is the authoritative error contract exposed by `OperationResult`.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OperationError {
+    #[pyo3(get)]
+    pub schema_version: String,
+    #[pyo3(get)]
+    pub kind: String,
+    #[pyo3(get)]
+    pub code: String,
+    #[pyo3(get)]
+    pub message: String,
+    #[pyo3(get)]
+    pub operation_id: Option<String>,
+    #[pyo3(get)]
+    pub retryable: bool,
+    #[pyo3(get)]
+    pub denial_class: Option<String>,
+    #[pyo3(get)]
+    pub source: Option<String>,
+    #[pyo3(get)]
+    pub details: HashMap<String, String>,
+    #[pyo3(get)]
+    pub causes: Vec<String>,
+}
+
+impl OperationError {
+    pub(crate) fn from_message(operation_id: Option<&str>, message: impl Into<String>) -> Self {
+        let message = message.into();
+        let lower = message.to_ascii_lowercase();
+        let (kind, code, retryable, denial_class) = if lower.contains("scope") {
+            (
+                "scope_denial",
+                "scope_denied",
+                false,
+                Some("target_out_of_scope"),
+            )
+        } else if lower.contains("feature") && lower.contains("not") {
+            ("feature_unavailable", "feature_unavailable", false, None)
+        } else if lower.contains("timeout") || lower.contains("timed out") {
+            ("timeout", "operation_timeout", true, None)
+        } else if lower.contains("cancel") {
+            ("cancellation", "operation_cancelled", false, None)
+        } else if lower.contains("parse") || lower.contains("serialize") {
+            ("serialization", "serialization_error", false, None)
+        } else if lower.contains("connection")
+            || lower.contains("network")
+            || lower.contains("http")
+        {
+            ("network", "network_error", true, None)
+        } else if lower.contains("invalid") || lower.contains("must ") {
+            ("validation", "invalid_request", false, None)
+        } else {
+            ("internal", "operation_failed", false, None)
+        };
+
+        Self {
+            schema_version: "1.0".to_string(),
+            kind: kind.to_string(),
+            code: code.to_string(),
+            message,
+            operation_id: operation_id.map(str::to_string),
+            retryable,
+            denial_class: denial_class.map(str::to_string),
+            source: Some("eggsec-python-engine".to_string()),
+            details: HashMap::new(),
+            causes: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_code(
+        operation_id: Option<&str>,
+        kind: &str,
+        code: &str,
+        message: impl Into<String>,
+        retryable: bool,
+    ) -> Self {
+        let mut error = Self::from_message(operation_id, message);
+        error.kind = kind.to_string();
+        error.code = code.to_string();
+        error.retryable = retryable;
+        error
+    }
+}
+
+#[pymethods]
+impl OperationError {
+    #[new]
+    #[pyo3(signature = (kind, code, message, *, operation_id=None, retryable=false, denial_class=None, source=None, details=None, causes=None))]
+    fn new(
+        kind: String,
+        code: String,
+        message: String,
+        operation_id: Option<String>,
+        retryable: bool,
+        denial_class: Option<String>,
+        source: Option<String>,
+        details: Option<HashMap<String, String>>,
+        causes: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            schema_version: "1.0".to_string(),
+            kind,
+            code,
+            message,
+            operation_id,
+            retryable,
+            denial_class,
+            source,
+            details: details.unwrap_or_default(),
+            causes: causes.unwrap_or_default(),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("schema_version", &self.schema_version)?;
+        dict.set_item("kind", &self.kind)?;
+        dict.set_item("code", &self.code)?;
+        dict.set_item("message", &self.message)?;
+        dict.set_item("operation_id", &self.operation_id)?;
+        dict.set_item("retryable", self.retryable)?;
+        dict.set_item("denial_class", &self.denial_class)?;
+        dict.set_item("source", &self.source)?;
+        dict.set_item("details", &self.details)?;
+        dict.set_item("causes", &self.causes)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "OperationError(kind={}, code={}, operation_id={:?}, retryable={})",
+            self.kind, self.code, self.operation_id, self.retryable
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.message.clone()
+    }
+}
+
 /// Tagged payload enum carrying domain-specific results through the engine boundary.
 ///
 /// Each variant wraps the typed result from a specific operation domain.
@@ -259,7 +408,7 @@ pub struct OperationResult {
     pub(crate) status: ExecutionStatus,
     pub(crate) stats: Option<ExecutionStats>,
     pub(crate) artifacts: Vec<Artifact>,
-    pub(crate) error: Option<String>,
+    pub(crate) error: Option<OperationError>,
     pub(crate) metadata: HashMap<String, String>,
     /// Domain-specific payload carrying the typed result.
     pub(crate) payload: Option<OperationPayload>,
@@ -282,7 +431,7 @@ impl OperationResult {
             status,
             stats,
             artifacts: artifacts.unwrap_or_default(),
-            error,
+            error: error.map(|message| OperationError::from_message(None, message)),
             metadata: metadata.unwrap_or_default(),
             payload: None,
             payload_type: None,
@@ -305,8 +454,14 @@ impl OperationResult {
     }
 
     #[getter]
-    fn error(&self) -> Option<String> {
+    fn error(&self) -> Option<OperationError> {
         self.error.clone()
+    }
+
+    /// Compatibility accessor for callers that used the old string error.
+    #[getter]
+    fn error_message(&self) -> Option<String> {
+        self.error.as_ref().map(|error| error.message.clone())
     }
 
     #[getter]
@@ -359,7 +514,11 @@ impl OperationResult {
     fn raise_for_status(&self) -> PyResult<()> {
         match &self.status {
             ExecutionStatus::Failed { error } => {
-                Err(pyo3::exceptions::PyException::new_err(error.clone()))
+                let structured = self
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| OperationError::from_message(None, error.clone()));
+                Err(crate::error::operation_error_to_pyerr(&structured))
             }
             ExecutionStatus::Timeout { elapsed_ms } => {
                 Err(pyo3::exceptions::PyTimeoutError::new_err(format!(
@@ -371,7 +530,16 @@ impl OperationResult {
                 let msg = reason
                     .clone()
                     .unwrap_or_else(|| "Operation was cancelled".to_string());
-                Err(pyo3::exceptions::PyException::new_err(msg))
+                let structured = self.error.clone().unwrap_or_else(|| {
+                    OperationError::with_code(
+                        None,
+                        "cancellation",
+                        "operation_cancelled",
+                        msg,
+                        false,
+                    )
+                });
+                Err(crate::error::operation_error_to_pyerr(&structured))
             }
             _ => Ok(()),
         }
@@ -410,7 +578,11 @@ impl OperationResult {
         }
         dict.set_item("artifacts", artifacts_list)?;
 
-        dict.set_item("error", &self.error)?;
+        match &self.error {
+            Some(error) => dict.set_item("error", error.to_dict(py)?)?,
+            None => dict.set_item("error", py.None())?,
+        }
+        dict.set_item("error_message", self.error_message())?;
 
         let meta_dict = PyDict::new_bound(py);
         for (k, v) in &self.metadata {
@@ -452,7 +624,7 @@ impl OperationResult {
             self.payload_type.as_deref().unwrap_or("None")
         );
         match &self.error {
-            Some(e) => format!("{}: {}", base, e),
+            Some(e) => format!("{}: {}", base, e.message),
             None => base,
         }
     }

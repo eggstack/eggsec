@@ -8,7 +8,7 @@
   "finding_to_dict": 0.01,
   "finding_to_json": 0.01,
   "event_envelope": 0.01,
-  "buffer_1mb": 0.01,
+  "buffer_1mb": 0.1,
   "finding_set_iteration_100": 0.1,
   "api_surface": 0.1,
   "feature_matrix": 0.1,

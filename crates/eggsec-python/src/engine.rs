@@ -13,7 +13,9 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::requests::*;
 use crate::runtime_sync;
 use crate::scope::Scope;
-use crate::status::{ExecutionStats, ExecutionStatus, OperationPayload, OperationResult};
+use crate::status::{
+    ExecutionStats, ExecutionStatus, OperationError, OperationPayload, OperationResult,
+};
 use crate::waf::WafDetectionResultPy;
 
 /// Sync engine for running scoped security operations.
@@ -87,12 +89,15 @@ fn operation_ok(
     payload: Option<super::status::OperationPayload>,
 ) -> OperationResult {
     let payload_type = payload.as_ref().map(|p| p.type_name().to_string());
+    let mut metadata = metadata.unwrap_or_default();
+    metadata.insert("policy_decision".to_string(), "allow".to_string());
+    metadata.insert("policy_schema_version".to_string(), "1.0".to_string());
     OperationResult {
         status: ExecutionStatus::Completed(),
         stats: Some(stats),
         artifacts: Vec::new(),
         error: None,
-        metadata: metadata.unwrap_or_default(),
+        metadata,
         payload,
         payload_type,
     }
@@ -100,13 +105,18 @@ fn operation_ok(
 
 /// Build an OperationResult from an error.
 fn operation_err(error: String) -> OperationResult {
+    operation_err_for(None, error)
+}
+
+fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult {
+    let structured = OperationError::from_message(operation, &error);
     OperationResult {
         status: ExecutionStatus::Failed {
             error: error.clone(),
         },
         stats: None,
         artifacts: Vec::new(),
-        error: Some(error),
+        error: Some(structured),
         metadata: std::collections::HashMap::new(),
         payload: None,
         payload_type: None,
@@ -150,6 +160,11 @@ impl Engine {
         self.state.registry.contains(operation_id)
     }
 
+    /// Return structured policy decisions emitted by this engine instance.
+    fn audit_events(&self) -> Vec<crate::engine_state::DispatchAuditEvent> {
+        self.state.audit_events()
+    }
+
     /// Dispatch a generic operation request to the appropriate engine function.
     ///
     /// Routes through the OperationExecutorRegistry, which checks feature gates
@@ -168,7 +183,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("scan_ports", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("scan_ports"), e.to_string());
         }
         let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
         let ports_str = request
@@ -196,7 +211,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("scan_endpoints", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("scan_endpoints"), e.to_string());
         }
         self.run_endpoint_scan_inner(py, &request)
     }
@@ -208,7 +223,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("fingerprint_services", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("fingerprint_services"), e.to_string());
         }
         let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
         self.run_fingerprint_inner(py, &request, ports)
@@ -221,7 +236,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("recon_dns", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("recon_dns"), e.to_string());
         }
         self.run_recon_dns_inner(py, &request)
     }
@@ -233,7 +248,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("inspect_tls", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("inspect_tls"), e.to_string());
         }
         self.run_tls_inspect_inner(py, &request)
     }
@@ -245,7 +260,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("detect_technology", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("detect_technology"), e.to_string());
         }
         self.run_tech_detect_inner(py, &request)
     }
@@ -257,7 +272,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("detect_waf", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("detect_waf"), e.to_string());
         }
         self.run_waf_detect_inner(py, &request)
     }
@@ -269,7 +284,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("load_test", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("load_test"), e.to_string());
         }
         self.run_load_test_inner(py, &request)
     }
@@ -281,7 +296,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("validate_waf", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("validate_waf"), e.to_string());
         }
         self.run_waf_validate_inner(py, &request)
     }
@@ -293,7 +308,7 @@ impl Engine {
             .state
             .pre_dispatch_validate("fuzz_http", &request.target)
         {
-            return operation_err(e.to_string());
+            return operation_err_for(Some("fuzz_http"), e.to_string());
         }
         self.run_fuzz_inner(py, &request)
     }
@@ -412,9 +427,9 @@ impl Engine {
     /// Dispatch a generic operation request (used by pipeline and other internal callers).
     ///
     /// This method is called by `OperationExecutorRegistry::execute()` after feature
-    /// gate validation. Operation IDs must match `operation_registry::STABLE_OPERATION_IDS`.
+    /// gate validation. Operation IDs must match `StableOperation::ALL`.
     pub(crate) fn dispatch(&self, py: Python<'_>, request: OperationRequest) -> OperationResult {
-        use crate::operation_registry::*;
+        use crate::operation_registry::StableOperation;
         let op = request.operation.clone();
 
         // Pre-dispatch validation: scope, feature gates, audit logging.
@@ -422,8 +437,13 @@ impl Engine {
             return operation_err(e.to_string());
         }
 
-        match op.as_str() {
-            OP_SCAN_PORTS => {
+        let operation = match StableOperation::parse(&op) {
+            Some(operation) => operation,
+            None => return operation_err(format!("Unknown operation: {}", op)),
+        };
+
+        match operation {
+            StableOperation::ScanPorts => {
                 let target = request.target.clone();
                 let ports_str = request
                     .metadata
@@ -452,7 +472,7 @@ impl Engine {
                     Err(e) => operation_err(e.to_string()),
                 }
             }
-            OP_SCAN_ENDPOINTS => {
+            StableOperation::ScanEndpoints => {
                 let target = request.target.clone();
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let endpoints: Vec<String> = request
@@ -468,7 +488,7 @@ impl Engine {
                 );
                 self.run_endpoint_scan_inner(py, &req)
             }
-            OP_FINGERPRINT_SERVICES => {
+            StableOperation::FingerprintServices => {
                 let target = request.target.clone();
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
@@ -484,23 +504,23 @@ impl Engine {
                     FingerprintRequest::new(target, Some(ports.clone()), Some(effective_timeout));
                 self.run_fingerprint_inner(py, &req, ports)
             }
-            OP_RECON_DNS => {
+            StableOperation::ReconDns => {
                 let req = ReconDnsRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_recon_dns_inner(py, &req)
             }
-            OP_INSPECT_TLS => {
+            StableOperation::InspectTls => {
                 let req = TlsInspectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_tls_inspect_inner(py, &req)
             }
-            OP_DETECT_TECHNOLOGY => {
+            StableOperation::DetectTechnology => {
                 let req = TechDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_tech_detect_inner(py, &req)
             }
-            OP_DETECT_WAF => {
+            StableOperation::DetectWaf => {
                 let req = WafDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_waf_detect_inner(py, &req)
             }
-            OP_LOAD_TEST => {
+            StableOperation::LoadTest => {
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -525,11 +545,11 @@ impl Engine {
                 );
                 self.run_load_test_inner(py, &req)
             }
-            OP_VALIDATE_WAF => {
+            StableOperation::ValidateWaf => {
                 let req = WafValidateRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_waf_validate_inner(py, &req)
             }
-            OP_FUZZ_HTTP => {
+            StableOperation::FuzzHttp => {
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: Option<u32> =
                     request.metadata.get("threads").and_then(|s| s.parse().ok());
@@ -541,7 +561,6 @@ impl Engine {
                 );
                 self.run_fuzz_inner(py, &req)
             }
-            other => operation_err(format!("Unknown operation: {}", other)),
         }
     }
 

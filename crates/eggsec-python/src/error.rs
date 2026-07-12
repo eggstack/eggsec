@@ -10,6 +10,26 @@ pyo3::create_exception!(eggsec._core, TimeoutError, EggsecError);
 pyo3::create_exception!(eggsec._core, FeatureUnavailableError, EggsecError);
 pyo3::create_exception!(eggsec._core, SerializationError, EggsecError);
 pyo3::create_exception!(eggsec._core, InternalError, EggsecError);
+pyo3::create_exception!(eggsec._core, CancellationError, EggsecError);
+
+/// Reconstruct the documented Python exception from a structured operation
+/// error. This mapping is shared by sync, async, and daemon-facing results.
+pub(crate) fn operation_error_to_pyerr(error: &crate::status::OperationError) -> PyErr {
+    match error.kind.as_str() {
+        "validation" | "configuration" => ConfigError::new_err(error.message.clone()),
+        "scope_denial" => ScopeError::new_err(error.message.clone()),
+        "policy_denial" | "capability_unavailable" | "privilege_missing" => {
+            EnforcementError::new_err(error.message.clone())
+        }
+        "feature_unavailable" => FeatureUnavailableError::new_err(error.message.clone()),
+        "network" | "daemon_transport" => NetworkError::new_err(error.message.clone()),
+        "timeout" => TimeoutError::new_err(error.message.clone()),
+        "cancellation" => CancellationError::new_err(error.message.clone()),
+        "serialization" | "parsing" => SerializationError::new_err(error.message.clone()),
+        "scan" => ScanError::new_err(error.message.clone()),
+        _ => InternalError::new_err(error.message.clone()),
+    }
+}
 
 /// Convert engine EggsecError to Python exception.
 ///

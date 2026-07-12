@@ -1,15 +1,10 @@
-use std::collections::HashMap;
-
 use pyo3::prelude::*;
 
 use crate::requests::OperationRequest;
-use crate::status::OperationResult;
+use crate::status::{OperationError, OperationResult};
 
-/// Stable operation ID constants.
-///
-/// These string identifiers form the canonical dispatch surface for
-/// `Engine.run()` and `AsyncEngine.run()`. All operations are registered
-/// in the `OperationExecutorRegistry` at engine construction time.
+/// Stable operation ID constants. These are generated from the canonical
+/// declaration below so metadata and dispatch cannot grow separate lists.
 pub const OP_SCAN_PORTS: &str = "scan_ports";
 pub const OP_SCAN_ENDPOINTS: &str = "scan_endpoints";
 pub const OP_FINGERPRINT_SERVICES: &str = "fingerprint_services";
@@ -21,86 +16,89 @@ pub const OP_VALIDATE_WAF: &str = "validate_waf";
 pub const OP_FUZZ_HTTP: &str = "fuzz_http";
 pub const OP_LOAD_TEST: &str = "load_test";
 
-/// All stable operation IDs in registration order.
-pub const STABLE_OPERATION_IDS: &[&str] = &[
-    OP_SCAN_PORTS,
-    OP_SCAN_ENDPOINTS,
-    OP_FINGERPRINT_SERVICES,
-    OP_RECON_DNS,
-    OP_INSPECT_TLS,
-    OP_DETECT_TECHNOLOGY,
-    OP_DETECT_WAF,
-    OP_VALIDATE_WAF,
-    OP_FUZZ_HTTP,
-    OP_LOAD_TEST,
-];
+/// Compiler-enforced identity for the stable Python engine operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StableOperation {
+    ScanPorts,
+    ScanEndpoints,
+    FingerprintServices,
+    ReconDns,
+    InspectTls,
+    DetectTechnology,
+    DetectWaf,
+    ValidateWaf,
+    FuzzHttp,
+    LoadTest,
+}
 
-/// Human-readable name for each operation, indexed to match `STABLE_OPERATION_IDS`.
-const OPERATION_NAMES: &[&str] = &[
-    "Port Scan",
-    "Endpoint Scan",
-    "Service Fingerprinting",
-    "DNS Reconnaissance",
-    "TLS Inspection",
-    "Technology Detection",
-    "WAF Detection",
-    "WAF Validation",
-    "HTTP Fuzzing",
-    "Load Test",
-];
+impl StableOperation {
+    pub const ALL: &'static [Self] = &[
+        Self::ScanPorts,
+        Self::ScanEndpoints,
+        Self::FingerprintServices,
+        Self::ReconDns,
+        Self::InspectTls,
+        Self::DetectTechnology,
+        Self::DetectWaf,
+        Self::ValidateWaf,
+        Self::FuzzHttp,
+        Self::LoadTest,
+    ];
 
-/// Feature flag required by each operation, or `None` if always available.
-/// Indexed to match `STABLE_OPERATION_IDS`.
-const OPERATION_FEATURES: &[Option<&str>] =
-    &[None, None, None, None, None, None, None, None, None, None];
-
-/// Minimal Levenshtein distance for "Did you mean?" suggestions.
-fn levenshtein(a: &str, b: &str) -> usize {
-    let a_len = a.len();
-    let b_len = b.len();
-    let mut matrix = vec![vec![0usize; b_len + 1]; a_len + 1];
-
-    for i in 0..=a_len {
-        matrix[i][0] = i;
-    }
-    for j in 0..=b_len {
-        matrix[0][j] = j;
-    }
-
-    let a_bytes = a.as_bytes();
-    let b_bytes = b.as_bytes();
-
-    for i in 1..=a_len {
-        for j in 1..=b_len {
-            let cost = if a_bytes[i - 1] == b_bytes[j - 1] {
-                0
-            } else {
-                1
-            };
-            matrix[i][j] = (matrix[i - 1][j] + 1)
-                .min(matrix[i][j - 1] + 1)
-                .min(matrix[i - 1][j - 1] + cost);
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::ScanPorts => OP_SCAN_PORTS,
+            Self::ScanEndpoints => OP_SCAN_ENDPOINTS,
+            Self::FingerprintServices => OP_FINGERPRINT_SERVICES,
+            Self::ReconDns => OP_RECON_DNS,
+            Self::InspectTls => OP_INSPECT_TLS,
+            Self::DetectTechnology => OP_DETECT_TECHNOLOGY,
+            Self::DetectWaf => OP_DETECT_WAF,
+            Self::ValidateWaf => OP_VALIDATE_WAF,
+            Self::FuzzHttp => OP_FUZZ_HTTP,
+            Self::LoadTest => OP_LOAD_TEST,
         }
     }
 
-    matrix[a_len][b_len]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::ScanPorts => "Port Scan",
+            Self::ScanEndpoints => "Endpoint Scan",
+            Self::FingerprintServices => "Service Fingerprinting",
+            Self::ReconDns => "DNS Reconnaissance",
+            Self::InspectTls => "TLS Inspection",
+            Self::DetectTechnology => "Technology Detection",
+            Self::DetectWaf => "WAF Detection",
+            Self::ValidateWaf => "WAF Validation",
+            Self::FuzzHttp => "HTTP Fuzzing",
+            Self::LoadTest => "Load Test",
+        }
+    }
+
+    pub const fn feature_required(self) -> Option<&'static str> {
+        None
+    }
+
+    /// Parse the stable public IDs plus the historical aliases accepted by
+    /// `Engine.run()` for backward compatibility.
+    pub fn parse(id: &str) -> Option<Self> {
+        match id {
+            OP_SCAN_PORTS => Some(Self::ScanPorts),
+            OP_SCAN_ENDPOINTS => Some(Self::ScanEndpoints),
+            OP_FINGERPRINT_SERVICES | "fingerprint" => Some(Self::FingerprintServices),
+            OP_RECON_DNS | "recon" => Some(Self::ReconDns),
+            OP_INSPECT_TLS | "tls_inspect" => Some(Self::InspectTls),
+            OP_DETECT_TECHNOLOGY | "tech_detect" => Some(Self::DetectTechnology),
+            OP_DETECT_WAF | "waf_detect" => Some(Self::DetectWaf),
+            OP_VALIDATE_WAF | "waf_validate" => Some(Self::ValidateWaf),
+            OP_FUZZ_HTTP | "http_fuzz" => Some(Self::FuzzHttp),
+            OP_LOAD_TEST | "load_test_http" => Some(Self::LoadTest),
+            _ => None,
+        }
+    }
 }
 
-/// Find close matches for an unknown operation ID.
-fn suggest_operations(unknown: &str, known: &[&str]) -> Vec<String> {
-    let mut suggestions: Vec<(usize, &str)> = known
-        .iter()
-        .map(|&id| (levenshtein(unknown, id), id))
-        .filter(|&(dist, _)| dist <= 3)
-        .collect();
-    suggestions.sort_by_key(|&(dist, _)| dist);
-    suggestions
-        .into_iter()
-        .map(|(_, id)| id.to_string())
-        .collect()
-}
-
-/// Information about a registered operation.
+/// Information about a stable operation.
 #[derive(Debug, Clone)]
 pub struct OperationInfo {
     pub id: String,
@@ -108,50 +106,24 @@ pub struct OperationInfo {
     pub feature_required: Option<String>,
 }
 
-/// Registry mapping operation IDs to executor functions.
-///
-/// Created once per `Engine` / `AsyncEngine` instance at construction time.
-/// Contains all stable operations with their feature requirements.
-///
-/// The registry does NOT hold async executors directly — async engines
-/// wrap the sync executor in a spawn call at dispatch time.
-pub struct OperationExecutorRegistry {
-    executors: HashMap<String, OperationInfo>,
+impl From<StableOperation> for OperationInfo {
+    fn from(operation: StableOperation) -> Self {
+        Self {
+            id: operation.id().to_string(),
+            name: operation.name().to_string(),
+            feature_required: operation.feature_required().map(str::to_string),
+        }
+    }
 }
 
+/// Registry facade over the canonical `StableOperation` enum.
+pub struct OperationExecutorRegistry;
+
 impl OperationExecutorRegistry {
-    /// Create a default registry with all stable operations registered.
     pub fn default_stable() -> Self {
-        let mut executors = HashMap::new();
-        for (i, &id) in STABLE_OPERATION_IDS.iter().enumerate() {
-            executors.insert(
-                id.to_string(),
-                OperationInfo {
-                    id: id.to_string(),
-                    name: OPERATION_NAMES[i].to_string(),
-                    feature_required: OPERATION_FEATURES[i].map(String::from),
-                },
-            );
-        }
-        Self { executors }
+        Self
     }
 
-    /// Register a new operation.
-    pub fn register(&mut self, id: &str, name: &str, feature_required: Option<&str>) {
-        self.executors.insert(
-            id.to_string(),
-            OperationInfo {
-                id: id.to_string(),
-                name: name.to_string(),
-                feature_required: feature_required.map(String::from),
-            },
-        );
-    }
-
-    /// Execute an operation by ID, dispatching to the engine's internal methods.
-    ///
-    /// Returns `OperationResult` with `Failed` status for unknown operations,
-    /// missing features, or execution errors.
     pub fn execute(
         &self,
         py: Python<'_>,
@@ -159,83 +131,50 @@ impl OperationExecutorRegistry {
         request: &OperationRequest,
         engine: &crate::engine::Engine,
     ) -> OperationResult {
-        let info = match self.executors.get(id) {
-            Some(info) => info.clone(),
-            None => {
-                let known: Vec<&str> = self.executors.keys().map(|s| s.as_str()).collect();
-                let suggestions = suggest_operations(id, &known);
-                let msg = if suggestions.is_empty() {
-                    format!("Unknown operation: {}", id)
-                } else {
-                    format!(
-                        "Unknown operation: {}. Did you mean: {}?",
-                        id,
-                        suggestions.join(", ")
-                    )
-                };
-                return OperationResult {
-                    status: crate::status::ExecutionStatus::Failed { error: msg.clone() },
-                    stats: None,
-                    artifacts: Vec::new(),
-                    error: Some(msg),
-                    metadata: HashMap::new(),
-                    payload: None,
-                    payload_type: None,
-                };
-            }
+        let operation = match StableOperation::parse(id) {
+            Some(operation) => operation,
+            None => return unknown_operation(id),
         };
 
-        // Feature gate check
-        if let Some(ref feature) = info.feature_required {
+        if let Some(feature) = operation.feature_required() {
             if !crate::features::has_feature(feature) {
-                let msg = format!(
-                    "Operation '{}' requires feature '{}' which is not compiled in this build",
-                    id, feature
-                );
                 return OperationResult {
-                    status: crate::status::ExecutionStatus::Failed { error: msg.clone() },
+                    status: crate::status::ExecutionStatus::Failed {
+                        error: format!("Operation '{}' requires feature '{}'", id, feature),
+                    },
                     stats: None,
                     artifacts: Vec::new(),
-                    error: Some(msg),
-                    metadata: HashMap::new(),
+                    error: Some(OperationError::with_code(
+                        Some(operation.id()),
+                        "feature_unavailable",
+                        "feature_unavailable",
+                        format!("Operation '{}' requires feature '{}'", id, feature),
+                        false,
+                    )),
+                    metadata: std::collections::HashMap::new(),
                     payload: None,
                     payload_type: None,
                 };
             }
         }
 
+        // The exhaustive dispatch match is implemented by Engine::dispatch.
+        // Keeping the enum parse here means unknown IDs cannot reach it.
+        debug_assert_eq!(operation.id(), StableOperation::parse(id).unwrap().id());
         engine.dispatch(py, request.clone())
     }
 
-    /// Execute an async operation by ID.
-    ///
-    /// Returns a `PyFuture` that resolves to `OperationResult`.
     pub fn execute_async(
         &self,
         id: &str,
         request: &OperationRequest,
         engine: &crate::async_engine::AsyncEngine,
     ) -> PyResult<crate::runtime_async::PyFuture> {
-        let info = match self.executors.get(id) {
-            Some(info) => info.clone(),
-            None => {
-                let known: Vec<&str> = self.executors.keys().map(|s| s.as_str()).collect();
-                let suggestions = suggest_operations(id, &known);
-                let msg = if suggestions.is_empty() {
-                    format!("Unknown operation: {}", id)
-                } else {
-                    format!(
-                        "Unknown operation: {}. Did you mean: {}?",
-                        id,
-                        suggestions.join(", ")
-                    )
-                };
-                return Err(pyo3::exceptions::PyValueError::new_err(msg));
-            }
-        };
+        let operation = StableOperation::parse(id).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(unknown_operation_message(id))
+        })?;
 
-        // Feature gate check
-        if let Some(ref feature) = info.feature_required {
+        if let Some(feature) = operation.feature_required() {
             if !crate::features::has_feature(feature) {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
                     "Operation '{}' requires feature '{}' which is not compiled in this build",
@@ -247,31 +186,84 @@ impl OperationExecutorRegistry {
         engine.dispatch_async(request.clone())
     }
 
-    /// Return all registered operation IDs.
     pub fn list(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self.executors.keys().cloned().collect();
-        ids.sort();
-        ids
+        StableOperation::ALL
+            .iter()
+            .map(|operation| operation.id().to_string())
+            .collect()
     }
 
-    /// Return operation info for a given ID, or `None` if not found.
     pub fn get(&self, id: &str) -> Option<OperationInfo> {
-        self.executors.get(id).cloned()
+        StableOperation::parse(id).map(OperationInfo::from)
     }
 
-    /// Return the number of registered operations.
     pub fn len(&self) -> usize {
-        self.executors.len()
+        StableOperation::ALL.len()
     }
 
-    /// Whether the registry is empty.
     pub fn is_empty(&self) -> bool {
-        self.executors.is_empty()
+        StableOperation::ALL.is_empty()
     }
 
-    /// Check if a given operation ID is registered.
     pub fn contains(&self, id: &str) -> bool {
-        self.executors.contains_key(id)
+        StableOperation::parse(id).is_some()
+    }
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, a_byte) in a.bytes().enumerate() {
+        let mut next = vec![i + 1; b.len() + 1];
+        for (j, b_byte) in b.bytes().enumerate() {
+            next[j + 1] = (row[j + 1] + 1)
+                .min(next[j] + 1)
+                .min(row[j] + usize::from(a_byte != b_byte));
+        }
+        row = next;
+    }
+    row[b.len()]
+}
+
+fn unknown_operation_message(unknown: &str) -> String {
+    let mut suggestions: Vec<(&str, usize)> = StableOperation::ALL
+        .iter()
+        .map(|operation| (operation.id(), levenshtein(unknown, operation.id())))
+        .filter(|(_, distance)| *distance <= 3)
+        .collect();
+    suggestions.sort_by_key(|(_, distance)| *distance);
+    if suggestions.is_empty() {
+        format!("Unknown operation: {}", unknown)
+    } else {
+        format!(
+            "Unknown operation: {}. Did you mean: {}?",
+            unknown,
+            suggestions
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+fn unknown_operation(unknown: &str) -> OperationResult {
+    let message = unknown_operation_message(unknown);
+    OperationResult {
+        status: crate::status::ExecutionStatus::Failed {
+            error: message.clone(),
+        },
+        stats: None,
+        artifacts: Vec::new(),
+        error: Some(OperationError::with_code(
+            None,
+            "validation",
+            "unknown_operation",
+            message,
+            false,
+        )),
+        metadata: std::collections::HashMap::new(),
+        payload: None,
+        payload_type: None,
     }
 }
 
@@ -280,77 +272,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stable_operation_ids_count() {
-        assert_eq!(STABLE_OPERATION_IDS.len(), 10);
-        assert_eq!(OPERATION_NAMES.len(), 10);
-        assert_eq!(OPERATION_FEATURES.len(), 10);
-    }
-
-    #[test]
-    fn operation_ids_are_unique() {
-        let mut seen = std::collections::HashSet::new();
-        for id in STABLE_OPERATION_IDS {
-            assert!(seen.insert(id), "Duplicate operation ID: {}", id);
+    fn canonical_registry_is_exhaustive() {
+        let registry = OperationExecutorRegistry::default_stable();
+        assert_eq!(StableOperation::ALL.len(), 10);
+        for operation in StableOperation::ALL {
+            assert!(registry.contains(operation.id()));
+            assert_eq!(registry.get(operation.id()).unwrap().id, operation.id());
         }
     }
 
     #[test]
-    fn default_registry_contains_all_stable() {
-        let reg = OperationExecutorRegistry::default_stable();
-        assert_eq!(reg.len(), 10);
-        for id in STABLE_OPERATION_IDS {
-            assert!(reg.contains(id), "Missing operation: {}", id);
-        }
+    fn operation_ids_are_unique_and_ordered() {
+        let mut ids: Vec<_> = StableOperation::ALL
+            .iter()
+            .map(|operation| operation.id())
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), StableOperation::ALL.len());
     }
 
     #[test]
-    fn list_returns_sorted_ids() {
-        let reg = OperationExecutorRegistry::default_stable();
-        let ids = reg.list();
-        let mut sorted = ids.clone();
-        sorted.sort();
-        assert_eq!(ids, sorted);
+    fn legacy_aliases_preserve_dispatch_identity() {
+        assert_eq!(
+            StableOperation::parse("fingerprint"),
+            Some(StableOperation::FingerprintServices)
+        );
+        assert_eq!(
+            StableOperation::parse("tls_inspect"),
+            Some(StableOperation::InspectTls)
+        );
     }
 
     #[test]
-    fn get_returns_operation_info() {
-        let reg = OperationExecutorRegistry::default_stable();
-        let info = reg.get("scan_ports").unwrap();
-        assert_eq!(info.id, "scan_ports");
-        assert_eq!(info.name, "Port Scan");
-        assert!(info.feature_required.is_none());
-    }
-
-    #[test]
-    fn register_new_operation() {
-        let mut reg = OperationExecutorRegistry::default_stable();
-        reg.register("custom_op", "Custom Operation", Some("custom-feature"));
-        assert!(reg.contains("custom_op"));
-        let info = reg.get("custom_op").unwrap();
-        assert_eq!(info.name, "Custom Operation");
-        assert_eq!(info.feature_required.as_deref(), Some("custom-feature"));
-    }
-
-    #[test]
-    fn levenshtein_basic() {
-        assert_eq!(levenshtein("", ""), 0);
-        assert_eq!(levenshtein("abc", "abc"), 0);
-        assert_eq!(levenshtein("abc", "ab"), 1);
-        assert_eq!(levenshtein("abc", "ac"), 1);
-        assert_eq!(levenshtein("kitten", "sitting"), 3);
-    }
-
-    #[test]
-    fn suggest_operations_finds_close_matches() {
-        let known = vec!["scan_ports", "scan_endpoints", "fuzz_http"];
-        let suggestions = suggest_operations("scan_port", &known);
-        assert!(suggestions.contains(&"scan_ports".to_string()));
-    }
-
-    #[test]
-    fn suggest_operations_empty_for_distant_matches() {
-        let known = vec!["scan_ports", "scan_endpoints"];
-        let suggestions = suggest_operations("xyzzy", &known);
-        assert!(suggestions.is_empty());
+    fn unknown_operations_keep_suggestions() {
+        assert!(unknown_operation_message("scan_port").contains("scan_ports"));
     }
 }

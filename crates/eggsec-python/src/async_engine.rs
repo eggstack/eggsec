@@ -12,7 +12,9 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::requests::*;
 use crate::runtime_async;
 use crate::scope::Scope;
-use crate::status::{ExecutionStats, ExecutionStatus, OperationPayload, OperationResult};
+use crate::status::{
+    ExecutionStats, ExecutionStatus, OperationError, OperationPayload, OperationResult,
+};
 use crate::waf::WafDetectionResultPy;
 
 /// Extract hostname from a URL for scope enforcement.
@@ -72,12 +74,15 @@ fn operation_ok(
     payload: Option<super::status::OperationPayload>,
 ) -> OperationResult {
     let payload_type = payload.as_ref().map(|p| p.type_name().to_string());
+    let mut metadata = metadata.unwrap_or_default();
+    metadata.insert("policy_decision".to_string(), "allow".to_string());
+    metadata.insert("policy_schema_version".to_string(), "1.0".to_string());
     OperationResult {
         status: ExecutionStatus::Completed(),
         stats: Some(stats),
         artifacts: Vec::new(),
         error: None,
-        metadata: metadata.unwrap_or_default(),
+        metadata,
         payload,
         payload_type,
     }
@@ -85,13 +90,18 @@ fn operation_ok(
 
 /// Build an OperationResult from an error.
 fn operation_err(error: String) -> OperationResult {
+    operation_err_for(None, error)
+}
+
+fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult {
+    let structured = OperationError::from_message(operation, &error);
     OperationResult {
         status: ExecutionStatus::Failed {
             error: error.clone(),
         },
         stats: None,
         artifacts: Vec::new(),
-        error: Some(error),
+        error: Some(structured),
         metadata: std::collections::HashMap::new(),
         payload: None,
         payload_type: None,
@@ -148,6 +158,11 @@ impl AsyncEngine {
     /// Check if an operation ID is registered.
     fn has_operation(&self, operation_id: &str) -> bool {
         self.state.registry.contains(operation_id)
+    }
+
+    /// Return structured policy decisions emitted by this engine instance.
+    fn audit_events(&self) -> Vec<crate::engine_state::DispatchAuditEvent> {
+        self.state.audit_events()
     }
 
     /// Run a port scan (async).
@@ -371,19 +386,23 @@ impl AsyncEngine {
     /// Dispatch a generic operation request (used by async pipeline and other internal callers).
     ///
     /// This method is called by `OperationExecutorRegistry::execute_async()` after feature
-    /// gate validation. Operation IDs must match `operation_registry::STABLE_OPERATION_IDS`.
+    /// gate validation. Operation IDs must match `StableOperation::ALL`.
     pub(crate) fn dispatch_async(
         &self,
         request: OperationRequest,
     ) -> PyResult<runtime_async::PyFuture> {
-        use crate::operation_registry::*;
+        use crate::operation_registry::StableOperation;
         let op = request.operation.clone();
 
         // Pre-dispatch validation: scope, feature gates, audit logging.
         self.state.pre_dispatch_validate(&op, &request.target)?;
 
-        match op.as_str() {
-            OP_SCAN_PORTS => {
+        let operation = StableOperation::parse(&op).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("Unknown operation: {}", op))
+        })?;
+
+        match operation {
+            StableOperation::ScanPorts => {
                 let target = request.target.clone();
                 let ports_str = request
                     .metadata
@@ -394,7 +413,7 @@ impl AsyncEngine {
                 let ports = parse_ports_string(&ports_str)?;
                 self.run_port_scan_async(target, ports, effective_timeout)
             }
-            OP_SCAN_ENDPOINTS => {
+            StableOperation::ScanEndpoints => {
                 let target = request.target.clone();
                 let endpoints: Vec<String> = request
                     .metadata
@@ -404,7 +423,7 @@ impl AsyncEngine {
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_endpoint_scan_async(target, endpoints, effective_timeout)
             }
-            OP_FINGERPRINT_SERVICES => {
+            StableOperation::FingerprintServices => {
                 let target = request.target.clone();
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
@@ -415,11 +434,11 @@ impl AsyncEngine {
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_fingerprint_async(target, ports, effective_timeout)
             }
-            OP_RECON_DNS => self.run_recon_dns_async(request.target.clone()),
-            OP_INSPECT_TLS => self.run_tls_inspect_async(request.target.clone()),
-            OP_DETECT_TECHNOLOGY => self.run_tech_detect_async(request.target.clone()),
-            OP_DETECT_WAF => self.run_waf_detect_async(request.target.clone()),
-            OP_LOAD_TEST => {
+            StableOperation::ReconDns => self.run_recon_dns_async(request.target.clone()),
+            StableOperation::InspectTls => self.run_tls_inspect_async(request.target.clone()),
+            StableOperation::DetectTechnology => self.run_tech_detect_async(request.target.clone()),
+            StableOperation::DetectWaf => self.run_waf_detect_async(request.target.clone()),
+            StableOperation::LoadTest => {
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -444,8 +463,8 @@ impl AsyncEngine {
                     method,
                 )
             }
-            OP_VALIDATE_WAF => self.run_waf_validate_async(request.target.clone()),
-            OP_FUZZ_HTTP => {
+            StableOperation::ValidateWaf => self.run_waf_validate_async(request.target.clone()),
+            StableOperation::FuzzHttp => {
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: usize = request
                     .metadata
@@ -460,10 +479,6 @@ impl AsyncEngine {
                     timeout,
                 )
             }
-            other => Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Unknown operation: {}",
-                other
-            ))),
         }
     }
 

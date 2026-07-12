@@ -307,6 +307,7 @@ OperationRegistry = _core.OperationRegistry
 # G1: Domain descriptors
 DomainDescriptor = _core.DomainDescriptorPy
 DomainRegistry = _core.DomainRegistry
+domain_maturity = _core.domain_maturity
 ExecutionSurface = _core.ExecutionSurfacePy
 ExecutionProfile = _core.ExecutionProfilePy
 PolicyDecision = _core.PolicyDecisionPy
@@ -336,6 +337,8 @@ AsyncEngine = _core.AsyncEngine
 ExecutionHandle = _core.ExecutionHandle
 ExecutionEvent = _core.ExecutionEvent
 EventLog = _core.EventLog
+ExecutionState = _core.ExecutionState
+TrackedExecutionHandle = _core.TrackedExecutionHandle
 CancellationToken = _core.CancellationToken
 PyFuture = _core.PyFuture
 PortScanResult = _core.PortScanResult
@@ -364,6 +367,8 @@ ExecutionStatus = _core.ExecutionStatus
 ExecutionStats = _core.ExecutionStats
 Artifact = _core.Artifact
 OperationResult = _core.OperationResult
+OperationError = _core.OperationError
+DispatchAuditEvent = _core.DispatchAuditEvent
 
 # Phase D: Recon types
 DnsRecordSet = _core.DnsRecordSet
@@ -406,6 +411,9 @@ ScanPlan = _core.ScanPlan
 # Checkpoint types
 Checkpoint = _core.Checkpoint
 CheckpointStore = _core.CheckpointStore
+PipelineCheckpoint = _core.PipelineCheckpoint
+CheckpointLoadResult = _core.CheckpointLoadResult
+create_checkpoint_store = _core.create_checkpoint_store
 
 # Phase F Track 1: WAF validation and HTTP fuzzing
 BypassResult = _core.BypassResultPy
@@ -741,6 +749,7 @@ EventConsumer = _core.EventConsumer
 AsyncCallback = _core.AsyncCallback
 CallbackScheduler = _core.CallbackScheduler
 BackpressureChannel = _core.PyBackpressureChannel
+EventDeliveryStats = _core.EventDeliveryStats
 
 # Milestone F: AI post-processing (feature-gated)
 try:
@@ -773,6 +782,7 @@ TimeoutError = _core.TimeoutError
 FeatureUnavailableError = _core.FeatureUnavailableError
 SerializationError = _core.SerializationError
 InternalError = _core.InternalError
+CancellationError = _core.CancellationError
 
 # G6: Experimental namespace (subpackage for unstable APIs)
 from . import experimental  # noqa: E402
@@ -828,6 +838,8 @@ __all__ = [
     "ExecutionHandle",
     "ExecutionEvent",
     "EventLog",
+    "ExecutionState",
+    "TrackedExecutionHandle",
     "CancellationToken",
     "PyFuture",
     "PortScanResult",
@@ -854,6 +866,8 @@ __all__ = [
     "ExecutionStats",
     "Artifact",
     "OperationResult",
+    "OperationError",
+    "DispatchAuditEvent",
     # Phase D: Recon types
     "DnsRecordSet",
     "MxRecord",
@@ -890,6 +904,9 @@ __all__ = [
     # Checkpoint types
     "Checkpoint",
     "CheckpointStore",
+    "PipelineCheckpoint",
+    "CheckpointLoadResult",
+    "create_checkpoint_store",
     # Phase F Track 1: WAF validation and HTTP fuzzing classes
     "BypassResult",
     "WafScanResult",
@@ -933,6 +950,7 @@ __all__ = [
     "OperationRegistry",
     "DomainDescriptor",
     "DomainRegistry",
+    "domain_maturity",
     "ExecutionSurface",
     "ExecutionProfile",
     "PolicyDecision",
@@ -1119,6 +1137,7 @@ __all__ = [
     "FeatureUnavailableError",
     "SerializationError",
     "InternalError",
+    "CancellationError",
     # G2: Event protocol
     "EVENT_SCHEMA_VERSION",
     "EventEnvelope",
@@ -1143,4 +1162,12 @@ __all__ = [
     "AsyncCallback",
     "CallbackScheduler",
     "BackpressureChannel",
+    "EventDeliveryStats",
 ]
+
+# Keep the runtime export contract truthful for feature-gated builds. The
+# compatibility list above documents every supported symbol, while this
+# filter removes names whose optional extension was not compiled in.
+for _name in tuple(__all__):
+    if _name not in globals():
+        __all__.remove(_name)

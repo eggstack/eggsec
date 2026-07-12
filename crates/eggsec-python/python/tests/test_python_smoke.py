@@ -41,10 +41,10 @@ def test_build_info_returns_dict():
 
 def test_scope_creation():
     import eggsec
-    scope = eggsec.Scope.allow_hosts(["example.com", "10.0.0.0/8"])
-    assert scope.is_target_allowed("example.com") is True
+    scope = eggsec.Scope.allow_hosts(["127.0.0.1", "10.0.0.0/8"])
+    assert scope.is_target_allowed("127.0.0.1") is True
     assert scope.is_target_allowed("10.0.0.1") is True
-    assert scope.is_target_allowed("evil.com") is False
+    assert scope.is_target_allowed("192.0.2.1") is False
 
 
 def test_scope_deny_all():

@@ -6,6 +6,7 @@ __abi_version__: str
 FINDING_SCHEMA_VERSION: str
 
 def api_surface() -> dict[str, dict]: ...
+def domain_maturity() -> dict[str, dict[str, str]]: ...
 def _deprecated(name: str, replacement: str | None = None) -> None: ...
 
 from .errors import (
@@ -19,6 +20,7 @@ from .errors import (
     FeatureUnavailableError as FeatureUnavailableError,
     SerializationError as SerializationError,
     InternalError as InternalError,
+    CancellationError as CancellationError,
 )
 from .scope import Scope as Scope
 from .client import Client as Client
@@ -26,6 +28,7 @@ from .async_client import AsyncClient as AsyncClient
 from .engine import Engine as Engine
 from .async_engine import AsyncEngine as AsyncEngine
 from .handles import ExecutionHandle as ExecutionHandle, ExecutionEvent as ExecutionEvent, EventLog as EventLog
+from .handles import ExecutionState as ExecutionState, TrackedExecutionHandle as TrackedExecutionHandle
 from .cancellation import CancellationToken as CancellationToken
 from .dto import (
     PortRange as PortRange,
@@ -58,6 +61,7 @@ from .status import (
     ExecutionStats as ExecutionStats,
     Artifact as Artifact,
     OperationResult as OperationResult,
+    OperationError as OperationError,
 )
 from .recon import (
     MxRecord as MxRecord,
@@ -98,7 +102,11 @@ from .planning import (
 from .checkpoint import (
     Checkpoint as Checkpoint,
     CheckpointStore as CheckpointStore,
+    PipelineCheckpoint as PipelineCheckpoint,
+    CheckpointLoadResult as CheckpointLoadResult,
+    create_checkpoint_store as create_checkpoint_store,
 )
+from .engine_state import DispatchAuditEvent as DispatchAuditEvent
 from .config_model import (
     SensitiveString as SensitiveString,
     HttpConfig as HttpConfig,
@@ -500,6 +508,7 @@ from .async_support import (
 )
 from .backpressure import (
     BackpressureChannel as BackpressureChannel,
+    EventDeliveryStats as EventDeliveryStats,
 )
 from .async_iter import (
     EventStreamAsyncIterator as EventStreamAsyncIterator,

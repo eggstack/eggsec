@@ -10,6 +10,20 @@ The remaining work is narrower but more consequential. It centers on completing 
 
 This plan intentionally avoids adding new tool families. No further feature expansion should occur until the gates in this document are complete.
 
+## Implementation status — 2026-07-12
+
+The integration pass implemented the stable-core registry/dispatch boundary,
+structured operation errors, mandatory policy/audit recording, reliable event
+delivery accounting, domain-maturity introspection, and the corresponding
+Python exports, stubs, tests, and documentation. The default Python test
+suite is green.
+
+This is a scoped pre-1.0 release-candidate checkpoint, not a 1.0 completion
+claim. Deterministic daemon/pipeline/secret fixtures, publication validation,
+and the repository-wide architecture guard debt remain release gates. The
+stable-core boundary is intentionally limited to the ten operations listed
+below; broader domains remain provisional or experimental.
+
 ---
 
 ## Current state

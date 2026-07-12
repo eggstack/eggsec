@@ -1,6 +1,16 @@
 from typing import Any, Optional
 from .status import ExecutionStatus, OperationResult
 
+class ExecutionState:
+    def name(self) -> str: ...
+
+class TrackedExecutionHandle:
+    def __init__(self, operation_id: str) -> None: ...
+    @property
+    def operation_id(self) -> str: ...
+    @property
+    def state(self) -> ExecutionState: ...
+
 class ExecutionHandle:
     def __init__(
         self,

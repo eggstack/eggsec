@@ -3,6 +3,13 @@
 Every public API in the `eggsec` Python package is classified into a stability
 level. This document is the canonical mapping from symbol to classification.
 
+> Release boundary (2026-07-12): this package is pre-1.0. The only stable
+> execution boundary is the ten-operation stable core described in
+> [domain-maturity.md](domain-maturity.md). Earlier milestone tables in this
+> document describe API shape, not a blanket compatibility promise; use the
+> machine-readable `api_surface()` and `domain_maturity()` results for the
+> current classification.
+
 ## Stability levels
 
 | Level | Guarantee |
@@ -404,8 +411,10 @@ These types have guaranteed correct behavior, but their serialized output
 
 ## Experimental
 
-The `eggsec.experimental` namespace exists but currently exports nothing.
-No APIs are classified as experimental at this time.
+Wireless, evasion, post-exploitation, C2, browser, dynamic mobile, proxy,
+packet-inspection, distributed, and AI-related domains are experimental. They
+may require system dependencies, privileges, external providers, or hazardous
+lab authorization and do not carry stable-core compatibility guarantees.
 
 ---
 
@@ -413,8 +422,10 @@ No APIs are classified as experimental at this time.
 
 The `api_surface()` function (defined in `src/lib.rs:807-1009`) returns a
 dict mapping symbol names to `{"stability": "...", "deprecated": bool, ...}`.
-All entries in `api_surface()` are marked `"stable"` except `deprecated_warning`
-which is marked `"deprecated"`.
+Stable entries are limited to validated core execution and introspection
+contracts. Provisional and experimental entries are intentionally present in
+the surface map so callers can reject them before building compatibility-
+sensitive workflows.
 
 Symbols not in `api_surface()` but present in the public API are those
 accessed via `try/except AttributeError` blocks in `__init__.py` (feature-gated)

@@ -114,9 +114,9 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ## Python Bindings
 
-Eggsec provides Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). The Python package is a **host-language binding** over the Rust engine — not an internal plugin runtime. **Status: Milestone G stabilization in progress — pre-release, not yet published to PyPI.** Windows is unsupported. See `crates/eggsec-python/README.md` for details.
+Eggsec provides Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). The Python package is a **host-language binding** over the Rust engine — not an internal plugin runtime. **Status: pre-1.0 release candidate work — stable-core only, not yet published to PyPI.** Windows is outside the primary support scope. The ten stable-core engine operations use a canonical registry, mandatory policy gate, structured errors, and typed results; broader domains remain provisional or experimental. See `crates/eggsec-python/README.md` and [`docs/python/domain-maturity.md`](docs/python/domain-maturity.md) for details.
 
-Milestone G brings the Python API toward 1.0 stability: domain registry and operation introspection, versioned event protocol with typed payloads, callback/sink contracts (AuditSink, FindingSink, etc.), Python-native ergonomics (pathlib, datetime, context managers, pickle), binary buffer protocol support, API surface introspection and feature matrix, performance benchmarks and regression gates, and a 1.0 readiness checklist.
+The final integration pass brings the Python API toward a scoped pre-1.0 release: canonical stable-operation dispatch, mandatory policy/audit decisions, versioned structured errors, reliable-event/backpressure accounting, domain maturity introspection, and release evidence. Broader domain parity, cross-platform wheel validation, and TestPyPI publication remain release gates.
 
 ```bash
 # Development build (requires Rust toolchain)
@@ -156,7 +156,7 @@ report.write_json("scan_report.json")
 
 The default wheel candidate includes: port scanning, endpoint discovery, service fingerprinting, passive recon (DNS/TLS/tech detection), WAF detection, findings/reporting, and scope enforcement. NSE, stress testing, packet inspection, headless browser, database, and cloud features are feature-gated experimental modules requiring builds from source with feature flags.
 
-See [`docs/python/`](docs/python/) for the full documentation: [Quick Start](docs/python/quickstart.md), [API Reference](docs/python/api-reference.md), [Sync API](docs/python/sync-api.md), [Async API](docs/python/async-api.md), [Scope & Safety](docs/python/scope-and-safety.md), [Packaging & Release](docs/python/packaging.md), [Events](docs/python/events.md), [Callbacks](docs/python/callbacks.md), [Versioning](docs/python/versioning.md), [Namespaces](docs/python/namespace.md), [Stability Classifications](docs/python/STABILITY_CLASSIFICATIONS.md), [1.0 Readiness Checklist](docs/python/README_1_0_CHECKLIST.md). The binding crate lives at `crates/eggsec-python/`.
+See [`docs/python/`](docs/python/) for the full documentation: [Quick Start](docs/python/quickstart.md), [API Reference](docs/python/api-reference.md), [Sync API](docs/python/sync-api.md), [Async API](docs/python/async-api.md), [Scope & Safety](docs/python/scope-and-safety.md), [Packaging & Release](docs/python/packaging.md), [Events](docs/python/events.md), [Callbacks](docs/python/callbacks.md), [Versioning](docs/python/versioning.md), [Namespaces](docs/python/namespace.md), [Domain Maturity](docs/python/domain-maturity.md), [Stability Classifications](docs/python/STABILITY_CLASSIFICATIONS.md), [1.0 Readiness Checklist](docs/python/README_1_0_CHECKLIST.md). The binding crate lives at `crates/eggsec-python/`.
 
 ## Quick Start
 
@@ -179,7 +179,7 @@ Eggsec is organized as a Cargo workspace with these crates:
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
 | `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), transport abstraction (Unix socket default; HTTP/SSE feature-gated via `http-api`), client library, multi-client registry (`ClientKind`/`ClientRole`), session access control, and role-based permission checks |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) |
-| `eggsec-python` | Python bindings (experimental — PyO3/maturin, host-language binding) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable core with provisional/experimental domains) |
 
 ### Prerequisites
 

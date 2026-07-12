@@ -442,8 +442,10 @@ class TestBackpressureChannel:
             payload = eggsec.PlanningEvent(f"op-{i}", "t.com", "s")
             env = eggsec.EventEnvelope("planning", payload)
             ch.send(env)
-        assert len(ch) == 2
-        assert ch.total_dropped() == 2
+        # Planning events are reliable and use the reserved reliable queue;
+        # progress traffic cannot evict them.
+        assert len(ch) == 4
+        assert ch.total_dropped() == 0
         # The oldest events were dropped; remaining should be op-2 and op-3
         e1 = ch.try_recv()
         e2 = ch.try_recv()

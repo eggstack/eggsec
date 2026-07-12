@@ -11,7 +11,12 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
-**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Milestone C adds: consolidated recon, GraphQL/OAuth/auth assessment, headless browser testing, and advanced vulnerability hunting. Milestone E adds: typed findings schema, artifact storage, workflow management, finding repository, baseline comparison, reporting engine, compliance mapping (feature-gated), external integrations, and schema migration. Milestone G adds: domain registry and operation introspection, versioned event protocol, callback/sink contracts, Python-native ergonomics, binary buffer protocol, API surface introspection, performance benchmarks, and 1.0 readiness checklist.
+**Status**: Scoped pre-1.0 release-candidate work (0.1.0). The stable-core
+boundary is the ten-operation `StableOperation` registry. Stable-core paths
+share the mandatory policy/audit gate, typed payloads, `OperationError`, and
+governed event delivery. Milestone C/E/G and feature-gated domains remain
+provisional or experimental until they satisfy the graduation checklist in
+`docs/python/domain-maturity.md`.
 
 ## Directory Structure
 
@@ -135,8 +140,8 @@ maturin develop --features full-no-system
 ## Test Commands
 
 ```bash
-# Python-side tests
-pytest crates/eggsec-python/tests/
+# Python-side tests (run from the workspace root)
+pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/
 
 # Rust-side tests
 cargo test -p eggsec-python
@@ -971,6 +976,22 @@ See `docs/python/` for user-facing guides:
 ## CI
 
 Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust tests.
+
+## Release-readiness contracts
+
+- `Engine` and `AsyncEngine` dispatch only the canonical ten-operation
+  `StableOperation` set (historical aliases are accepted for compatibility).
+- `OperationResult.error` is an `OperationError`; use `error_message` only for
+  legacy string consumers. `raise_for_status()` maps its `kind` to the
+  documented Eggsec exception classes.
+- `Engine.audit_events()` and `AsyncEngine.audit_events()` expose the
+  structured allow/deny decisions emitted by the mandatory policy gate.
+- `EventEnvelope.sequence` is monotonic within a producer stream.
+  `BackpressureChannel.stats()` reports emitted, delivered, dropped, queue
+  depth, and terminal-delivery counters; lifecycle/finding/artifact events are
+  reliable within the process queue while progress is best effort.
+- `domain_maturity()` is the authoritative whole-domain release boundary;
+  feature availability does not promote a provisional or experimental domain.
 
 ## Key Files
 

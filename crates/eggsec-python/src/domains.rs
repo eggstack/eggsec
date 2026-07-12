@@ -159,3 +159,103 @@ impl DomainRegistry {
         "DomainRegistry".to_string()
     }
 }
+
+/// Return the release boundary for each public assessment domain.
+///
+/// This table intentionally describes maturity independently from compile-time
+/// availability: an enabled feature can still be provisional or experimental.
+#[pyfunction]
+pub fn domain_maturity() -> pyo3::PyObject {
+    Python::with_gil(|py| {
+        let table = pyo3::types::PyDict::new_bound(py);
+        let entries = [
+            (
+                "stable-core",
+                "stable-core",
+                "canonical registry, policy gate, typed results, sync/async tests",
+            ),
+            (
+                "consolidated-recon",
+                "provisional",
+                "common-engine event and daemon parity pending",
+            ),
+            (
+                "graphql",
+                "provisional",
+                "common-engine event and daemon parity pending",
+            ),
+            (
+                "oauth",
+                "provisional",
+                "common-engine event and daemon parity pending",
+            ),
+            (
+                "authentication",
+                "provisional",
+                "deterministic integration fixtures pending",
+            ),
+            (
+                "daemon",
+                "provisional",
+                "transport capability negotiation and reconnect contract pending",
+            ),
+            (
+                "nse",
+                "provisional",
+                "stable operation mapping and fixture coverage pending",
+            ),
+            (
+                "database",
+                "provisional",
+                "typed errors/events and fixture coverage pending",
+            ),
+            (
+                "browser",
+                "experimental",
+                "platform and browser runtime dependent",
+            ),
+            (
+                "proxy",
+                "experimental",
+                "traffic interception semantics remain hazardous",
+            ),
+            (
+                "packet-inspection",
+                "experimental",
+                "platform/system dependency and lifecycle coverage pending",
+            ),
+            (
+                "mobile",
+                "experimental",
+                "dynamic device behavior is platform dependent",
+            ),
+            (
+                "wireless",
+                "experimental",
+                "hardware and privilege dependent",
+            ),
+            (
+                "evasion",
+                "experimental",
+                "defense-validation domain, not stable-core",
+            ),
+            ("postex", "experimental", "hazardous simulation domain"),
+            ("c2", "experimental", "hazardous simulation domain"),
+            (
+                "distributed",
+                "experimental",
+                "remote lifecycle contract pending",
+            ),
+            ("ai", "experimental", "provider-dependent advisory behavior"),
+        ];
+        for (domain, state, gates) in entries {
+            let entry = pyo3::types::PyDict::new_bound(py);
+            entry.set_item("state", state).expect("set maturity state");
+            entry
+                .set_item("required_gates", gates)
+                .expect("set maturity gates");
+            table.set_item(domain, entry).expect("set maturity domain");
+        }
+        table.into()
+    })
+}
