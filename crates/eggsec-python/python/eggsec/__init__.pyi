@@ -1,5 +1,12 @@
 __version__: str
 __version_info__: tuple[int, int, int]
+__schema_version__: str
+__protocol_version__: str
+__abi_version__: str
+FINDING_SCHEMA_VERSION: str
+
+def api_surface() -> dict[str, dict]: ...
+def _deprecated(name: str, replacement: str | None = None) -> None: ...
 
 from .errors import (
     EggsecError as EggsecError,
@@ -128,6 +135,10 @@ from .operation_metadata import (
     OperationMetadataViewPy as OperationMetadataViewPy,
     OperationRegistry as OperationRegistry,
 )
+from .domains import (
+    DomainDescriptorPy as DomainDescriptorPy,
+    DomainRegistry as DomainRegistry,
+)
 from .execution_context import (
     ExecutionSurfacePy as ExecutionSurfacePy,
     ExecutionProfilePy as ExecutionProfilePy,
@@ -158,7 +169,9 @@ from .runtime import PyFuture as PyFuture
 from .functions import (
     features as features,
     has_feature as has_feature,
+    feature_matrix as feature_matrix,
     build_info as build_info,
+    api_surface_version as api_surface_version,
     scan_ports as scan_ports,
     async_scan_ports as async_scan_ports,
     scan_endpoints as scan_endpoints,
@@ -448,4 +461,40 @@ from .ai_postprocess import (
     ai_generate_payloads as ai_generate_payloads,
     ai_suggest_waf_bypass as ai_suggest_waf_bypass,
     ai_generate_script as ai_generate_script,
+)
+from .event_protocol import (
+    EVENT_SCHEMA_VERSION as EVENT_SCHEMA_VERSION,
+    EventEnvelope as EventEnvelope,
+    PlanningEvent as PlanningEvent,
+    PreflightEvent as PreflightEvent,
+    StageLifecycleEvent as StageLifecycleEvent,
+    ProgressEvent as ProgressEvent,
+    FindingEvent as FindingEvent,
+    ArtifactEvent as ArtifactEvent,
+    CancellationEvent as CancellationEvent,
+    FailureEvent as FailureEvent,
+    CompletionEvent as CompletionEvent,
+    wrap_event as wrap_event,
+)
+from .event_stream import (
+    EventStream as EventStream,
+    event_stream_from_legacy as event_stream_from_legacy,
+)
+from .callbacks import (
+    AuditSink as AuditSink,
+    FindingSink as FindingSink,
+    ArtifactSink as ArtifactSink,
+    ProgressSink as ProgressSink,
+    EventConsumer as EventConsumer,
+)
+from .async_support import (
+    AsyncCallback as AsyncCallback,
+    CallbackScheduler as CallbackScheduler,
+)
+from .backpressure import (
+    BackpressureChannel as BackpressureChannel,
+)
+from .async_iter import (
+    EventStreamAsyncIterator as EventStreamAsyncIterator,
+    FindingStreamAsyncIterator as FindingStreamAsyncIterator,
 )

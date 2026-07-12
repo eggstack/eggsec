@@ -539,6 +539,19 @@ impl VersionedFindingPy {
             self.id, self.severity, self.title
         )
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.id.hash(&mut hasher);
+        self.fingerprint.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Default for FindingLocationPy {

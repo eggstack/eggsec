@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// A single open port from a scan result.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OpenPort {
     #[pyo3(get)]
     pub port: u16,
@@ -31,7 +31,7 @@ impl OpenPort {
 
 /// Scan statistics.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScanStats {
     #[pyo3(get)]
     pub ports_scanned: u32,
@@ -125,6 +125,24 @@ impl PortScanResult {
             self.scanned_ports,
             self.elapsed_ms
         )
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.target.hash(&mut hasher);
+        self.scanned_ports.hash(&mut hasher);
+        self.elapsed_ms.hash(&mut hasher);
+        self.open_ports.len().hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.target == other.target
+            && self.scanned_ports == other.scanned_ports
+            && self.elapsed_ms == other.elapsed_ms
+            && self.open_ports.len() == other.open_ports.len()
     }
 
     /// Convert open ports to a list of row dicts suitable for tabular output.

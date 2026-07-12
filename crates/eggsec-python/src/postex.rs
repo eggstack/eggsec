@@ -41,9 +41,7 @@ impl PostexCategoryPy {
             eggsec::postex::PostexCategory::Lotl => PostexCategoryPy::Lotl,
             eggsec::postex::PostexCategory::Persistence => PostexCategoryPy::Persistence,
             eggsec::postex::PostexCategory::LateralMovement => PostexCategoryPy::LateralMovement,
-            eggsec::postex::PostexCategory::CredentialAccess => {
-                PostexCategoryPy::CredentialAccess
-            }
+            eggsec::postex::PostexCategory::CredentialAccess => PostexCategoryPy::CredentialAccess,
         }
     }
 }
@@ -412,15 +410,9 @@ pub fn postex_scan(config: PostexScanConfigPy) -> PyResult<PostexReportPy> {
         let result = runtime_sync::block_on(py, async move {
             let scanner =
                 eggsec::postex::PostexScanner::new(config.dry_run, config.profile.to_engine());
-            scanner
-                .scan(&config.target)
-                .await
-                .map_err(|e| {
-                    pyo3::exceptions::PyRuntimeError::new_err(format!(
-                        "Postex scan failed: {}",
-                        e
-                    ))
-                })
+            scanner.scan(&config.target).await.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Postex scan failed: {}", e))
+            })
         })?;
 
         Ok(PostexReportPy::from_engine(result))
@@ -431,21 +423,13 @@ pub fn postex_scan(config: PostexScanConfigPy) -> PyResult<PostexReportPy> {
 ///
 /// Returns a PyFuture that resolves to a PostexReportPy.
 #[pyfunction]
-pub fn async_postex_scan(
-    config: PostexScanConfigPy,
-) -> PyResult<crate::runtime_async::PyFuture> {
+pub fn async_postex_scan(config: PostexScanConfigPy) -> PyResult<crate::runtime_async::PyFuture> {
     crate::runtime_async::spawn_async(async move {
         let scanner =
             eggsec::postex::PostexScanner::new(config.dry_run, config.profile.to_engine());
-        let report = scanner
-            .scan(&config.target)
-            .await
-            .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Postex scan failed: {}",
-                    e
-                ))
-            })?;
+        let report = scanner.scan(&config.target).await.map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Postex scan failed: {}", e))
+        })?;
         Ok(PostexReportPy::from_engine(report))
     })
 }

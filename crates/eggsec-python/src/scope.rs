@@ -1,6 +1,27 @@
 use pyo3::prelude::*;
+use std::path::PathBuf;
 
 use crate::error::{EnforcementError, ScopeError};
+
+/// PathLike helper — accepts str or pathlib.Path.
+///
+/// Tries str extraction first, then falls back to `path.__fspath__()`.
+fn resolve_path_arg(path: &Bound<'_, PyAny>) -> PyResult<PathBuf> {
+    // Try str first
+    if let Ok(s) = path.extract::<String>() {
+        return Ok(PathBuf::from(s));
+    }
+    // Try pathlib.Path via __fspath__()
+    let fspath = path.getattr("__fspath__")?;
+    let result = fspath.call0()?;
+    let pystr = result.downcast::<pyo3::types::PyString>().map_err(|_| {
+        pyo3::exceptions::PyTypeError::new_err("__fspath__() must return str or bytes")
+    })?;
+    let s = pystr
+        .to_str()
+        .map_err(|_| pyo3::exceptions::PyUnicodeDecodeError::new_err("path is not valid UTF-8"))?;
+    Ok(PathBuf::from(s))
+}
 
 /// Python wrapper for Eggsec scope enforcement.
 ///
@@ -18,6 +39,7 @@ impl Scope {
     ///
     /// Args:
     ///     hosts: List of hostnames or IPs to allow (e.g. ["example.com", "10.0.0.0/8"]).
+    ///         Each entry may be a str or a pathlib.Path (for consistency).
     ///
     /// Returns:
     ///     Scope: A new scope allowing only the specified hosts.
@@ -106,7 +128,7 @@ impl Scope {
     /// Load a scope from a TOML or YAML file.
     ///
     /// Args:
-    ///     path: Path to the scope file.
+    ///     path: Path to the scope file. Accepts str or pathlib.Path.
     ///
     /// Returns:
     ///     Scope: The loaded scope.
@@ -114,8 +136,12 @@ impl Scope {
     /// Raises:
     ///     ScopeError: If the file cannot be read or parsed.
     #[staticmethod]
-    fn from_file(path: &str) -> PyResult<Self> {
-        let scope = eggsec::config::Scope::from_file(path)
+    fn from_file(path: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let path_buf = resolve_path_arg(path)?;
+        let path_str = path_buf
+            .to_str()
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Path is not valid UTF-8"))?;
+        let scope = eggsec::config::Scope::from_file(path_str)
             .map_err(|e| ScopeError::new_err(e.to_string()))?;
         Ok(Self { inner: scope })
     }

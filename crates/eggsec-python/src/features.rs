@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use std::collections::HashMap;
 
 #[pyfunction]
@@ -79,4 +80,211 @@ pub fn has_feature(name: &str) -> bool {
         "daemon-client" => cfg!(feature = "daemon-client"),
         _ => false,
     }
+}
+
+/// Returns a machine-readable dict of all features with availability, description,
+/// and whether system dependencies are required.
+#[pyfunction]
+pub fn feature_matrix() -> PyObject {
+    Python::with_gil(|py| {
+        let dict = PyDict::new_bound(py);
+
+        macro_rules! add_feature {
+            ($name:expr, $available:expr, $desc:expr, $sys_deps:expr) => {
+                let entry = PyDict::new_bound(py);
+                entry.set_item("available", $available).unwrap();
+                entry.set_item("description", $desc).unwrap();
+                entry.set_item("requires_system_deps", $sys_deps).unwrap();
+                dict.set_item($name, entry).unwrap();
+            };
+        }
+
+        // Always available
+        add_feature!("core", true, "Core engine types and configuration", false);
+        add_feature!(
+            "scanner",
+            true,
+            "Port scanning and service fingerprinting",
+            false
+        );
+        add_feature!(
+            "async-api",
+            true,
+            "Async wrappers for all operations",
+            false
+        );
+        add_feature!(
+            "endpoint-discovery",
+            true,
+            "HTTP endpoint discovery and probing",
+            false
+        );
+        add_feature!(
+            "service-fingerprinting",
+            true,
+            "Service version and technology fingerprinting",
+            false
+        );
+        add_feature!(
+            "waf-detection",
+            true,
+            "Web Application Firewall detection",
+            false
+        );
+        add_feature!(
+            "waf-validation",
+            true,
+            "WAF bypass validation and testing",
+            false
+        );
+        add_feature!(
+            "http-fuzzing",
+            true,
+            "HTTP parameter and header fuzzing",
+            false
+        );
+        add_feature!(
+            "load-testing",
+            true,
+            "HTTP load testing and benchmarking",
+            false
+        );
+        add_feature!(
+            "findings-reporting",
+            true,
+            "Finding storage, correlation, and report generation",
+            false
+        );
+
+        // Feature-gated
+        add_feature!(
+            "websocket",
+            cfg!(feature = "websocket"),
+            "WebSocket security testing",
+            false
+        );
+        add_feature!(
+            "git-secrets",
+            cfg!(feature = "git-secrets"),
+            "Git repository secret detection",
+            false
+        );
+        add_feature!(
+            "sbom",
+            cfg!(feature = "sbom"),
+            "Software Bill of Materials generation",
+            false
+        );
+        add_feature!(
+            "db-pentest",
+            cfg!(feature = "db-pentest"),
+            "Database penetration testing (Postgres/MySQL/MSSQL)",
+            false
+        );
+        add_feature!(
+            "db-pentest-mongodb",
+            cfg!(feature = "db-pentest-mongodb"),
+            "MongoDB penetration testing",
+            false
+        );
+        add_feature!(
+            "db-pentest-redis",
+            cfg!(feature = "db-pentest-redis"),
+            "Redis penetration testing",
+            false
+        );
+        add_feature!(
+            "web-proxy",
+            cfg!(feature = "web-proxy"),
+            "HTTP/HTTPS interception proxy",
+            false
+        );
+        add_feature!(
+            "mobile",
+            cfg!(feature = "mobile"),
+            "Mobile app static analysis (APK/IPA)",
+            false
+        );
+        add_feature!(
+            "mobile-dynamic",
+            cfg!(feature = "mobile-dynamic"),
+            "Android dynamic analysis via ADB",
+            true
+        );
+        add_feature!(
+            "packet-inspection",
+            cfg!(feature = "packet-inspection"),
+            "Packet capture and network analysis",
+            true
+        );
+        add_feature!(
+            "stress-testing",
+            cfg!(feature = "stress-testing"),
+            "Network stress testing and DoS simulation",
+            false
+        );
+        add_feature!(
+            "nse",
+            cfg!(feature = "nse"),
+            "Nmap NSE script execution",
+            true
+        );
+        add_feature!(
+            "container",
+            cfg!(feature = "container"),
+            "Docker and Kubernetes security scanning",
+            false
+        );
+        add_feature!(
+            "daemon-client",
+            cfg!(feature = "daemon-client"),
+            "Daemon session management client",
+            false
+        );
+        add_feature!(
+            "headless-browser",
+            cfg!(feature = "headless-browser"),
+            "Headless browser security testing",
+            true
+        );
+        add_feature!(
+            "advanced-hunting",
+            cfg!(feature = "advanced-hunting"),
+            "Advanced vulnerability hunting (chains, race conditions)",
+            false
+        );
+        add_feature!(
+            "compliance",
+            cfg!(feature = "compliance"),
+            "Compliance framework mapping (OWASP, NIST, etc.)",
+            false
+        );
+        add_feature!(
+            "wireless",
+            cfg!(feature = "wireless"),
+            "WiFi network scanning and analysis",
+            true
+        );
+        add_feature!(
+            "evasion",
+            cfg!(feature = "evasion"),
+            "Evasion technique detection and validation",
+            false
+        );
+        add_feature!(
+            "postex",
+            cfg!(feature = "postex"),
+            "Post-exploitation simulation",
+            false
+        );
+        add_feature!("c2", cfg!(feature = "c2"), "C2 framework simulation", false);
+        add_feature!(
+            "ai-integration",
+            cfg!(feature = "ai-integration"),
+            "AI-assisted finding analysis and payload generation",
+            false
+        );
+
+        dict.into()
+    })
 }

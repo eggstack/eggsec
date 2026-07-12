@@ -1,10 +1,15 @@
 mod artifact;
 mod async_client;
 mod async_engine;
+mod async_iter;
+mod async_support;
 mod audit;
 mod auth_assess;
 mod authorization;
+mod backpressure;
 mod baseline;
+mod buffer_support;
+mod callbacks;
 mod cancellation;
 mod checkpoint;
 mod client;
@@ -16,11 +21,17 @@ mod cvss;
 mod daemon;
 #[cfg(feature = "db-pentest")]
 mod db_pentest;
+mod deprecated;
+mod domains;
 mod dto;
 mod endpoint;
 mod engine;
+mod ergonomics;
 mod error;
+mod event_protocol;
+mod event_stream;
 mod execution_context;
+mod experimental;
 mod features;
 mod finding;
 mod finding_schema;
@@ -30,6 +41,8 @@ mod fingerprint;
 mod git_secrets;
 mod graphql;
 mod handles;
+mod iter_support;
+mod lazy_load;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
@@ -62,27 +75,27 @@ mod version;
 mod waf;
 mod waf_validation;
 
+#[cfg(feature = "ai-integration")]
+mod ai_postprocess;
 #[cfg(feature = "headless-browser")]
 mod browser_assess;
+#[cfg(feature = "c2")]
+mod c2;
 #[cfg(feature = "compliance")]
 mod compliance;
 mod consolidated_recon;
+mod distributed;
+#[cfg(feature = "evasion")]
+mod evasion;
 #[cfg(feature = "advanced-hunting")]
 mod hunt;
 mod integrations;
 mod migration;
-#[cfg(feature = "wireless")]
-mod wireless;
-#[cfg(feature = "evasion")]
-mod evasion;
+mod notification;
 #[cfg(feature = "postex")]
 mod postex;
-#[cfg(feature = "c2")]
-mod c2;
-mod distributed;
-mod notification;
-#[cfg(feature = "ai-integration")]
-mod ai_postprocess;
+#[cfg(feature = "wireless")]
+mod wireless;
 
 pub use error::*;
 use pyo3::prelude::*;
@@ -149,6 +162,9 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<operation_metadata::OperationDescriptorPy>()?;
     m.add_class::<operation_metadata::OperationMetadataViewPy>()?;
     m.add_class::<operation_metadata::OperationRegistry>()?;
+    // G1: Domain descriptors
+    m.add_class::<domains::DomainDescriptorPy>()?;
+    m.add_class::<domains::DomainRegistry>()?;
     m.add_class::<client::Client>()?;
     m.add_class::<async_client::AsyncClient>()?;
     m.add_class::<engine::Engine>()?;
@@ -156,6 +172,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<handles::ExecutionHandle>()?;
     m.add_class::<handles::ExecutionEvent>()?;
     m.add_class::<handles::EventLog>()?;
+    m.add_class::<handles::LazyEventIterator>()?;
     m.add_class::<cancellation::CancellationToken>()?;
     m.add_class::<runtime_async::PyFuture>()?;
     m.add_class::<dto::PortScanResult>()?;
@@ -176,6 +193,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<finding::Evidence>()?;
     m.add_class::<finding::Finding>()?;
     m.add_class::<finding::FindingSet>()?;
+    m.add_class::<finding::FindingSetIteratorPy>()?;
     m.add_class::<finding::Report>()?;
     // E5: Repository abstraction
     m.add_class::<finding_schema::ConfidencePy>()?;
@@ -193,6 +211,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<artifact::ArtifactPy>()?;
     m.add_class::<artifact::ArtifactReferencePy>()?;
     m.add_class::<artifact::ArtifactStorePy>()?;
+    // G5: Buffer support and lazy loading
+    m.add_class::<buffer_support::BinaryBufferPy>()?;
+    m.add_class::<lazy_load::ArtifactMetaPy>()?;
+    m.add_class::<lazy_load::LazyArtifactPy>()?;
+    m.add_class::<iter_support::PaginatedResultsPy>()?;
     // E3: CVSS and vulnerability records
     m.add_class::<cvss::CvssScorePy>()?;
     m.add_class::<cvss::VulnerabilityRecordPy>()?;
@@ -383,7 +406,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scope_eval::validate_scope, m)?)?;
     m.add_function(wrap_pyfunction!(features::features, m)?)?;
     m.add_function(wrap_pyfunction!(features::has_feature, m)?)?;
+    m.add_function(wrap_pyfunction!(features::feature_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(version::build_info, m)?)?;
+    m.add_function(wrap_pyfunction!(version::api_surface_version, m)?)?;
+    m.add_function(wrap_pyfunction!(deprecated::deprecated_warning, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::scan_ports, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::async_scan_ports, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::scan_endpoints, m)?)?;
@@ -714,6 +740,33 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(notification::notify_scan_complete, m)?)?;
     m.add_function(wrap_pyfunction!(notification::notify_findings, m)?)?;
     m.add_function(wrap_pyfunction!(notification::notify_error, m)?)?;
+    // G2: Event protocol stabilization
+    m.add_class::<event_protocol::EventEnvelope>()?;
+    m.add_class::<event_protocol::PlanningEvent>()?;
+    m.add_class::<event_protocol::PreflightEvent>()?;
+    m.add_class::<event_protocol::StageLifecycleEvent>()?;
+    m.add_class::<event_protocol::ProgressEvent>()?;
+    m.add_class::<event_protocol::FindingEvent>()?;
+    m.add_class::<event_protocol::ArtifactEvent>()?;
+    m.add_class::<event_protocol::CancellationEvent>()?;
+    m.add_class::<event_protocol::FailureEvent>()?;
+    m.add_class::<event_protocol::CompletionEvent>()?;
+    m.add_function(wrap_pyfunction!(event_protocol::wrap_event, m)?)?;
+    m.add("EVENT_SCHEMA_VERSION", event_protocol::EVENT_SCHEMA_VERSION)?;
+    m.add_class::<event_stream::EventStream>()?;
+    m.add_function(wrap_pyfunction!(event_stream::event_stream_from_legacy, m)?)?;
+    // G4: Async iterators
+    m.add_class::<async_iter::EventStreamAsyncIterator>()?;
+    m.add_class::<async_iter::FindingStreamAsyncIterator>()?;
+    // G3: Callbacks and sinks
+    m.add_class::<callbacks::AuditSink>()?;
+    m.add_class::<callbacks::FindingSink>()?;
+    m.add_class::<callbacks::ArtifactSink>()?;
+    m.add_class::<callbacks::ProgressSink>()?;
+    m.add_class::<callbacks::EventConsumer>()?;
+    m.add_class::<async_support::AsyncCallback>()?;
+    m.add_class::<async_support::CallbackScheduler>()?;
+    m.add_class::<backpressure::PyBackpressureChannel>()?;
     // AI post-processing (feature-gated)
     #[cfg(feature = "ai-integration")]
     {
@@ -732,11 +785,225 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
             m
         )?)?;
         m.add_function(wrap_pyfunction!(ai_postprocess::ai_generate_payloads, m)?)?;
-        m.add_function(wrap_pyfunction!(
-            ai_postprocess::ai_suggest_waf_bypass,
-            m
-        )?)?;
+        m.add_function(wrap_pyfunction!(ai_postprocess::ai_suggest_waf_bypass, m)?)?;
     }
 
+    // G6: Deprecation and experimental markers
+    m.add_class::<deprecated::DeprecatedWarning>()?;
+    m.add("_experimental", true)?;
+    // G6: api_surface introspection
+    m.add_function(wrap_pyfunction!(api_surface, m)?)?;
+    // G7: Version constants
+    m.add("SCHEMA_VERSION", version::SCHEMA_VERSION)?;
+    m.add("PROTOCOL_VERSION", version::PROTOCOL_VERSION)?;
+    m.add("ABI_VERSION", version::ABI_VERSION)?;
+
     Ok(())
+}
+
+/// Returns a machine-readable dict of all exported names, their stability level,
+/// and any deprecation info.
+#[pyfunction]
+fn api_surface() -> PyObject {
+    Python::with_gil(|py| {
+        let dict = pyo3::types::PyDict::new_bound(py);
+
+        macro_rules! add_entry {
+            ($name:expr, $stability:expr) => {
+                let entry = pyo3::types::PyDict::new_bound(py);
+                entry.set_item("stability", $stability).unwrap();
+                entry.set_item::<_, bool>("deprecated", false).unwrap();
+                dict.set_item($name, entry).unwrap();
+            };
+            ($name:expr, $stability:expr, $deprecated:expr) => {
+                let entry = pyo3::types::PyDict::new_bound(py);
+                entry.set_item("stability", $stability).unwrap();
+                entry.set_item::<_, bool>("deprecated", true).unwrap();
+                entry.set_item("deprecated_with", $deprecated).unwrap();
+                dict.set_item($name, entry).unwrap();
+            };
+        }
+
+        // Always-available stable functions
+        add_entry!("scan_ports", "stable");
+        add_entry!("async_scan_ports", "stable");
+        add_entry!("scan_endpoints", "stable");
+        add_entry!("async_scan_endpoints", "stable");
+        add_entry!("fingerprint_services", "stable");
+        add_entry!("async_fingerprint_services", "stable");
+        add_entry!("features", "stable");
+        add_entry!("has_feature", "stable");
+        add_entry!("build_info", "stable");
+        add_entry!("feature_matrix", "stable");
+        add_entry!("api_surface_version", "stable");
+        add_entry!("api_surface", "stable");
+        add_entry!("recon_dns", "stable");
+        add_entry!("async_recon_dns", "stable");
+        add_entry!("inspect_tls", "stable");
+        add_entry!("async_inspect_tls", "stable");
+        add_entry!("detect_technology", "stable");
+        add_entry!("async_detect_technology", "stable");
+        add_entry!("detect_waf", "stable");
+        add_entry!("async_detect_waf", "stable");
+        add_entry!("validate_waf", "stable");
+        add_entry!("async_validate_waf", "stable");
+        add_entry!("fuzz_http", "stable");
+        add_entry!("async_fuzz_http", "stable");
+        add_entry!("generate_fuzz_payloads", "stable");
+        add_entry!("load_test_http", "stable");
+        add_entry!("async_load_test_http", "stable");
+        add_entry!("validate_scope", "stable");
+        add_entry!("preflight_operation", "stable");
+        add_entry!("preflight_with_descriptor", "stable");
+        add_entry!("audit_event_from_enforcement", "stable");
+        add_entry!("audit_event_from_preflight", "stable");
+        add_entry!("emit_audit_event", "stable");
+        add_entry!("run_consolidated_recon", "stable");
+        add_entry!("async_run_consolidated_recon", "stable");
+        add_entry!("graphql_test", "stable");
+        add_entry!("async_graphql_test", "stable");
+        add_entry!("oauth_discover_endpoints", "stable");
+        add_entry!("oauth_test", "stable");
+        add_entry!("async_oauth_test", "stable");
+        add_entry!("auth_test", "stable");
+        add_entry!("async_auth_test", "stable");
+        add_entry!("distributed_task_types", "stable");
+        add_entry!("distributed_generate_psk", "stable");
+        add_entry!("notify_scan_started", "stable");
+        add_entry!("notify_scan_complete", "stable");
+        add_entry!("notify_findings", "stable");
+        add_entry!("notify_error", "stable");
+
+        // Feature-gated functions (stable when available)
+        add_entry!("websocket_probe", "stable");
+        add_entry!("async_websocket_probe", "stable");
+        add_entry!("websocket_fuzz", "stable");
+        add_entry!("async_websocket_fuzz", "stable");
+        add_entry!("scan_git_secrets", "stable");
+        add_entry!("async_scan_git_secrets", "stable");
+        add_entry!("generate_sbom", "stable");
+        add_entry!("async_generate_sbom", "stable");
+        add_entry!("db_probe", "stable");
+        add_entry!("async_db_probe", "stable");
+        add_entry!("db_probe_with_config", "stable");
+        add_entry!("db_probe_postgres", "stable");
+        add_entry!("db_probe_mysql", "stable");
+        add_entry!("db_probe_mssql", "stable");
+        add_entry!("db_probe_mongodb", "stable");
+        add_entry!("db_probe_redis", "stable");
+        add_entry!("db_list_drivers", "stable");
+        add_entry!("db_get_capabilities", "stable");
+        add_entry!("db_run_with_config", "stable");
+        add_entry!("create_proxy_manager", "stable");
+        add_entry!("async_add_proxy", "stable");
+        add_entry!("async_proxy_health_check", "stable");
+        add_entry!("analyze_apk", "stable");
+        add_entry!("async_analyze_apk", "stable");
+        add_entry!("analyze_ipa", "stable");
+        add_entry!("async_analyze_ipa", "stable");
+        add_entry!("list_mobile_devices", "stable");
+        add_entry!("dynamic_mobile_analysis", "stable");
+        add_entry!("scan_docker_image", "stable");
+        add_entry!("async_scan_docker_image", "stable");
+        add_entry!("scan_kubernetes", "stable");
+        add_entry!("async_scan_kubernetes", "stable");
+        add_entry!("detect_escape_risks", "stable");
+        add_entry!("check_cis_docker_benchmark", "stable");
+        add_entry!("list_network_interfaces", "stable");
+        add_entry!("parse_pcap", "stable");
+        add_entry!("run_traceroute", "stable");
+        add_entry!("async_run_traceroute", "stable");
+        add_entry!("traceroute", "stable");
+        add_entry!("stress_test", "stable");
+        add_entry!("async_stress_test", "stable");
+        add_entry!("nse_run", "stable");
+        add_entry!("async_nse_run", "stable");
+        add_entry!("nse_list_libraries", "stable");
+        add_entry!("nse_list_scripts", "stable");
+        add_entry!("nse_get_script_metadata", "stable");
+        add_entry!("daemon_connect", "stable");
+        add_entry!("async_daemon_health", "stable");
+        add_entry!("async_daemon_declare_client", "stable");
+        add_entry!("async_daemon_create_session", "stable");
+        add_entry!("async_daemon_list_sessions", "stable");
+        add_entry!("async_daemon_get_snapshot", "stable");
+        add_entry!("async_daemon_close_session", "stable");
+        add_entry!("wireless_scan", "stable");
+        add_entry!("async_wireless_scan", "stable");
+        add_entry!("wireless_analyze_networks", "stable");
+        add_entry!("evasion_scan", "stable");
+        add_entry!("async_evasion_scan", "stable");
+        add_entry!("evasion_list_techniques", "stable");
+        add_entry!("postex_scan", "stable");
+        add_entry!("async_postex_scan", "stable");
+        add_entry!("postex_list_techniques", "stable");
+        add_entry!("c2_scan", "stable");
+        add_entry!("async_c2_scan", "stable");
+        add_entry!("c2_get_campaign", "stable");
+        add_entry!("browser_test", "stable");
+        add_entry!("async_browser_test", "stable");
+        add_entry!("hunt_test", "stable");
+        add_entry!("async_hunt_test", "stable");
+        add_entry!("ai_analyze_finding", "stable");
+        add_entry!("async_ai_analyze_finding", "stable");
+        add_entry!("ai_generate_payloads", "stable");
+        add_entry!("ai_suggest_waf_bypass", "stable");
+
+        // G1: Domain introspection
+        add_entry!("DomainDescriptorPy", "stable");
+        add_entry!("DomainRegistry", "stable");
+
+        // G2: Event protocol
+        add_entry!("EventEnvelope", "stable");
+        add_entry!("PlanningEvent", "stable");
+        add_entry!("PreflightEvent", "stable");
+        add_entry!("StageLifecycleEvent", "stable");
+        add_entry!("ProgressEvent", "stable");
+        add_entry!("FindingEvent", "stable");
+        add_entry!("ArtifactEvent", "stable");
+        add_entry!("CancellationEvent", "stable");
+        add_entry!("FailureEvent", "stable");
+        add_entry!("CompletionEvent", "stable");
+        add_entry!("wrap_event", "stable");
+        add_entry!("EVENT_SCHEMA_VERSION", "stable");
+        add_entry!("EventStream", "stable");
+        add_entry!("event_stream_from_legacy", "stable");
+        // G3: Callbacks and sinks
+        add_entry!("AuditSink", "stable");
+        add_entry!("FindingSink", "stable");
+        add_entry!("ArtifactSink", "stable");
+        add_entry!("ProgressSink", "stable");
+        add_entry!("EventConsumer", "stable");
+        add_entry!("AsyncCallback", "stable");
+        add_entry!("CallbackScheduler", "stable");
+        add_entry!("PyBackpressureChannel", "stable");
+
+        // Stable classes (always available)
+        add_entry!("Scope", "stable");
+        add_entry!("Client", "stable");
+        add_entry!("AsyncClient", "stable");
+        add_entry!("Engine", "stable");
+        add_entry!("AsyncEngine", "stable");
+        add_entry!("EggsecConfig", "stable");
+        add_entry!("Severity", "stable");
+        add_entry!("Finding", "stable");
+        add_entry!("Report", "stable");
+
+        // Version constants
+        add_entry!("__version__", "stable");
+        add_entry!("__version_info__", "stable");
+        add_entry!("FINDING_SCHEMA_VERSION", "stable");
+        add_entry!("SCHEMA_VERSION", "stable");
+        add_entry!("PROTOCOL_VERSION", "stable");
+        add_entry!("ABI_VERSION", "stable");
+
+        // Deprecated
+        add_entry!(
+            "deprecated_warning",
+            "deprecated",
+            "Use DeprecationWarning directly"
+        );
+
+        dict.into()
+    })
 }

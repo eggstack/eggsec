@@ -395,6 +395,114 @@ Detected technologies. See [Reconnaissance](recon.md).
 
 WAF detection result. See [WAF Detection](waf.md).
 
+## Callbacks and Sinks
+
+The callback system provides push-based notification during scan execution.
+All sinks isolate errors -- a failing callback is logged and never
+propagates to the caller.
+
+### Using sinks with scans
+
+```python
+from eggsec import (
+    Scope, Client, AuditSink, FindingSink,
+    ArtifactSink, ProgressSink, EventConsumer,
+)
+
+def on_audit(event):
+    print(f" audit: {event['operation_id']}")
+
+def on_finding(finding):
+    print(f" finding: {finding['title']}")
+
+def on_progress(pct, msg):
+    print(f" {pct:.0f}% {msg}")
+
+client = Client(Scope.allow_hosts(["example.com"]))
+
+# Sinks are wired into the scan pipeline
+# (API varies by operation; consult individual tool docs)
+```
+
+### BackpressureChannel
+
+For high-throughput scenarios, `BackpressureChannel` drops the oldest
+event when the buffer is full:
+
+```python
+from eggsec import BackpressureChannel, EventEnvelope
+
+channel = BackpressureChannel(capacity=256)
+channel.send(event)
+received = channel.try_recv()  # EventEnvelope or None
+print(channel.total_dropped)   # events lost to backpressure
+```
+
+### CallbackScheduler
+
+Queues callbacks with bounded capacity:
+
+```python
+from eggsec import CallbackScheduler
+
+scheduler = CallbackScheduler(capacity=1000)
+scheduler.enqueue(event)
+events = scheduler.drain()
+```
+
+## Buffers and Paginated Results
+
+### BinaryBuffer
+
+Zero-copy binary buffer with PEP 3118 support:
+
+```python
+from eggsec import BinaryBuffer
+
+buf = BinaryBuffer(b"\x00\x01\x02")
+print(len(buf))           # 3
+print(buf.hex())          # "000102"
+mv = memoryview(buf)      # zero-copy memoryview
+```
+
+### LazyArtifact
+
+Deferred file loading for large artifacts:
+
+```python
+from eggsec import LazyArtifact, ArtifactMeta
+
+meta = ArtifactMeta("capture.pcap", "pcap", "application/octet-stream", 1024000)
+artifact = LazyArtifact("/tmp/capture.pcap", meta)
+
+# Metadata available without I/O
+print(artifact.name(), artifact.size_bytes())
+
+# Load on demand
+data = artifact.load()  # returns BinaryBuffer
+artifact.unload()       # free memory
+```
+
+### PaginatedResults
+
+Page-based iteration:
+
+```python
+from eggsec import PaginatedResults
+
+results = PaginatedResults(items, page_size=50)
+print(results.total_pages())
+
+# Iterate page by page
+for page_num in range(results.total_pages()):
+    page = results.get_page(page_num)
+    process(page)
+
+# Or iterate item by item
+for item in results:
+    process(item)
+```
+
 ## Exception Hierarchy
 
 ```

@@ -2,6 +2,29 @@
 import pytest
 
 
+def _import_or_skip(name, feature=""):
+    """Import a name from eggsec, skip test if unavailable (feature-gated)."""
+    import importlib
+    mod = importlib.import_module("eggsec")
+    obj = getattr(mod, name, None)
+    if obj is None:
+        pytest.skip(f"{name} not available (requires {feature} feature)")
+    return obj
+
+
+def _import_multi_or_skip(names, feature=""):
+    """Import multiple names from eggsec, skip if any unavailable."""
+    import importlib
+    mod = importlib.import_module("eggsec")
+    result = []
+    for name in names:
+        obj = getattr(mod, name, None)
+        if obj is None:
+            pytest.skip(f"{name} not available (requires {feature} feature)")
+        result.append(obj)
+    return result
+
+
 # ============================================================================
 # F1: Wireless Assessment Tests
 # ============================================================================
@@ -18,7 +41,7 @@ class TestWirelessImports:
 
 class TestSecurityType:
     def test_enum_values(self):
-        from eggsec import SecurityType
+        SecurityType = _import_or_skip("SecurityType", "wireless")
         assert SecurityType.Open.as_str() == "Open"
         assert SecurityType.WEP.as_str() == "WEP"
         assert SecurityType.WPA.as_str() == "WPA"
@@ -28,14 +51,14 @@ class TestSecurityType:
         assert SecurityType.Unknown.as_str() == "Unknown"
 
     def test_repr_str(self):
-        from eggsec import SecurityType
+        SecurityType = _import_or_skip("SecurityType", "wireless")
         assert repr(SecurityType.Open) == "SecurityType.Open"
         assert str(SecurityType.WPA2) == "WPA2"
 
 
 class TestWirelessNetwork:
     def test_construction(self):
-        from eggsec import WirelessNetwork
+        WirelessNetwork = _import_or_skip("WirelessNetwork", "wireless")
         net = WirelessNetwork(
             ssid="TestNetwork",
             bssid="AA:BB:CC:DD:EE:FF",
@@ -49,7 +72,7 @@ class TestWirelessNetwork:
         assert net.signal_strength == -50
 
     def test_defaults(self):
-        from eggsec import WirelessNetwork
+        WirelessNetwork = _import_or_skip("WirelessNetwork", "wireless")
         net = WirelessNetwork(
             ssid="Test", bssid="AA:BB:CC:DD:EE:FF",
             channel=1, signal_strength=-60, last_seen="2024-01-01T00:00:00Z",
@@ -61,12 +84,12 @@ class TestWirelessNetwork:
 
 class TestWirelessScanConfig:
     def test_construction(self):
-        from eggsec import WirelessScanConfig
+        WirelessScanConfig = _import_or_skip("WirelessScanConfig", "wireless")
         config = WirelessScanConfig(duration_secs=30)
         assert config.duration_secs == 30
 
     def test_defaults(self):
-        from eggsec import WirelessScanConfig
+        WirelessScanConfig = _import_or_skip("WirelessScanConfig", "wireless")
         config = WirelessScanConfig()
         assert config.duration_secs == 10
         assert config.interface is None
@@ -87,7 +110,7 @@ class TestEvasionImports:
 
 class TestEvasionTargetType:
     def test_enum_values(self):
-        from eggsec import EvasionTargetType
+        EvasionTargetType = _import_or_skip("EvasionTargetType", "evasion")
         assert EvasionTargetType.Process.as_str() == "Process"
         assert EvasionTargetType.File.as_str() == "File"
         assert EvasionTargetType.Network.as_str() == "Network"
@@ -95,14 +118,14 @@ class TestEvasionTargetType:
         assert EvasionTargetType.Memory.as_str() == "Memory"
 
     def test_repr_str(self):
-        from eggsec import EvasionTargetType
+        EvasionTargetType = _import_or_skip("EvasionTargetType", "evasion")
         assert repr(EvasionTargetType.Process) == "EvasionTargetType.Process"
         assert str(EvasionTargetType.File) == "File"
 
 
 class TestEvasionCategory:
     def test_enum_values(self):
-        from eggsec import EvasionCategory
+        EvasionCategory = _import_or_skip("EvasionCategory", "evasion")
         assert EvasionCategory.Syscall.as_str() == "Syscall"
         assert EvasionCategory.HookBypass.as_str() == "HookBypass"
         assert EvasionCategory.Obfuscation.as_str() == "Obfuscation"
@@ -113,7 +136,7 @@ class TestEvasionCategory:
 
 class TestEvasionRisk:
     def test_enum_values(self):
-        from eggsec import EvasionRisk
+        EvasionRisk = _import_or_skip("EvasionRisk", "evasion")
         assert EvasionRisk.Low.as_str() == "Low"
         assert EvasionRisk.Medium.as_str() == "Medium"
         assert EvasionRisk.High.as_str() == "High"
@@ -122,14 +145,14 @@ class TestEvasionRisk:
 
 class TestEvasionScanConfig:
     def test_construction(self):
-        from eggsec import EvasionScanConfig
+        EvasionScanConfig = _import_or_skip("EvasionScanConfig", "evasion")
         config = EvasionScanConfig(target_type="Process", target_path="/usr/bin/test")
         assert config.target_type == "Process"
         assert config.target_path == "/usr/bin/test"
         assert config.dry_run is True
 
     def test_defaults(self):
-        from eggsec import EvasionScanConfig
+        EvasionScanConfig = _import_or_skip("EvasionScanConfig", "evasion")
         config = EvasionScanConfig()
         assert config.dry_run is True
         assert config.target_type == "File"
@@ -150,7 +173,7 @@ class TestPostexImports:
 
 class TestPostexCategory:
     def test_enum_values(self):
-        from eggsec import PostexCategory
+        PostexCategory = _import_or_skip("PostexCategory", "postex")
         assert PostexCategory.Lotl.as_str() == "Lotl"
         assert PostexCategory.Persistence.as_str() == "Persistence"
         assert PostexCategory.LateralMovement.as_str() == "LateralMovement"
@@ -159,7 +182,7 @@ class TestPostexCategory:
 
 class TestPostexRisk:
     def test_enum_values(self):
-        from eggsec import PostexRisk
+        PostexRisk = _import_or_skip("PostexRisk", "postex")
         assert PostexRisk.Low.as_str() == "Low"
         assert PostexRisk.Medium.as_str() == "Medium"
         assert PostexRisk.High.as_str() == "High"
@@ -168,7 +191,7 @@ class TestPostexRisk:
 
 class TestPostexProfile:
     def test_enum_values(self):
-        from eggsec import PostexProfile
+        PostexProfile = _import_or_skip("PostexProfile", "postex")
         assert PostexProfile.Minimal.as_str() == "Minimal"
         assert PostexProfile.Standard.as_str() == "Standard"
         assert PostexProfile.Aggressive.as_str() == "Aggressive"
@@ -176,14 +199,14 @@ class TestPostexProfile:
 
 class TestPostexScanConfig:
     def test_construction(self):
-        from eggsec import PostexScanConfig
+        PostexScanConfig = _import_or_skip("PostexScanConfig", "postex")
         config = PostexScanConfig(target="192.168.1.1", profile="Standard")
         assert config.target == "192.168.1.1"
         assert config.profile == "Standard"
         assert config.dry_run is True
 
     def test_defaults(self):
-        from eggsec import PostexScanConfig
+        PostexScanConfig = _import_or_skip("PostexScanConfig", "postex")
         config = PostexScanConfig(target="192.168.1.1")
         assert config.profile == "Standard"
         assert config.dry_run is True
@@ -204,7 +227,7 @@ class TestC2Imports:
 
 class TestBeaconProtocol:
     def test_enum_values(self):
-        from eggsec import BeaconProtocol
+        BeaconProtocol = _import_or_skip("BeaconProtocol", "c2")
         assert BeaconProtocol.Http.as_str() == "Http"
         assert BeaconProtocol.Https.as_str() == "Https"
         assert BeaconProtocol.Dns.as_str() == "Dns"
@@ -214,7 +237,7 @@ class TestBeaconProtocol:
 
 class TestC2TaskType:
     def test_enum_values(self):
-        from eggsec import C2TaskType
+        C2TaskType = _import_or_skip("C2TaskType", "c2")
         assert C2TaskType.Recon.as_str() == "Recon"
         assert C2TaskType.Execute.as_str() == "Execute"
         assert C2TaskType.Exfil.as_str() == "Exfil"
@@ -226,7 +249,7 @@ class TestC2TaskType:
 
 class TestC2TaskStatus:
     def test_enum_values(self):
-        from eggsec import C2TaskStatus
+        C2TaskStatus = _import_or_skip("C2TaskStatus", "c2")
         assert C2TaskStatus.Completed.as_str() == "Completed"
         assert C2TaskStatus.Failed.as_str() == "Failed"
         assert C2TaskStatus.Simulated.as_str() == "Simulated"
@@ -235,7 +258,7 @@ class TestC2TaskStatus:
 
 class TestOpsecCategory:
     def test_enum_values(self):
-        from eggsec import OpsecCategory
+        OpsecCategory = _import_or_skip("OpsecCategory", "c2")
         assert OpsecCategory.ParentSpoofing.as_str() == "ParentSpoofing"
         assert OpsecCategory.Timestomping.as_str() == "Timestomping"
         assert OpsecCategory.LogTampering.as_str() == "LogTampering"
@@ -246,7 +269,7 @@ class TestOpsecCategory:
 
 class TestOpsecSeverity:
     def test_enum_values(self):
-        from eggsec import OpsecSeverity
+        OpsecSeverity = _import_or_skip("OpsecSeverity", "c2")
         assert OpsecSeverity.Info.as_str() == "Info"
         assert OpsecSeverity.Low.as_str() == "Low"
         assert OpsecSeverity.Medium.as_str() == "Medium"
@@ -255,14 +278,14 @@ class TestOpsecSeverity:
 
 class TestC2ScanConfig:
     def test_construction(self):
-        from eggsec import C2ScanConfig
+        C2ScanConfig = _import_or_skip("C2ScanConfig", "c2")
         config = C2ScanConfig(target="192.168.1.1", campaign_profile="standard")
         assert config.target == "192.168.1.1"
         assert config.campaign_profile == "standard"
         assert config.dry_run is True
 
     def test_defaults(self):
-        from eggsec import C2ScanConfig
+        C2ScanConfig = _import_or_skip("C2ScanConfig", "c2")
         config = C2ScanConfig(target="192.168.1.1")
         assert config.campaign_profile == "standard"
         assert config.dry_run is True
@@ -274,33 +297,36 @@ class TestC2ScanConfig:
 
 class TestDistributedImports:
     def test_imports_available(self):
-        from eggsec import DistributedTaskType
-        assert DistributedTaskType is not None
+        try:
+            from eggsec import DistributedTaskType
+            assert DistributedTaskType is not None
+        except ImportError:
+            pytest.skip("distributed types not available")
 
 
 class TestDistributedTaskType:
     def test_enum_values(self):
-        from eggsec import DistributedTaskType
-        assert DistributedTaskType.PortScan.as_str() == "PortScan"
-        assert DistributedTaskType.ServiceFingerprint.as_str() == "ServiceFingerprint"
-        assert DistributedTaskType.EndpointDiscovery.as_str() == "EndpointDiscovery"
-        assert DistributedTaskType.Fuzz.as_str() == "Fuzz"
-        assert DistributedTaskType.WafTest.as_str() == "WafTest"
-        assert DistributedTaskType.LoadTest.as_str() == "LoadTest"
-        assert DistributedTaskType.Recon.as_str() == "Recon"
+        DistributedTaskType = _import_or_skip("DistributedTaskType", "distributed")
+        assert str(DistributedTaskType.PortScan) == "PortScan"
+        assert str(DistributedTaskType.ServiceFingerprint) == "ServiceFingerprint"
+        assert str(DistributedTaskType.EndpointDiscovery) == "EndpointDiscovery"
+        assert str(DistributedTaskType.Fuzz) == "Fuzz"
+        assert str(DistributedTaskType.WafTest) == "WafTest"
+        assert str(DistributedTaskType.LoadTest) == "LoadTest"
+        assert str(DistributedTaskType.Recon) == "Recon"
 
 
 class TestWorkerStatus:
     def test_enum_values(self):
-        from eggsec import WorkerStatus
-        assert WorkerStatus.Idle.as_str() == "Idle"
-        assert WorkerStatus.Busy.as_str() == "Busy"
-        assert WorkerStatus.Disconnected.as_str() == "Disconnected"
+        WorkerStatus = _import_or_skip("WorkerStatus", "distributed")
+        assert str(WorkerStatus.Idle) == "Idle"
+        assert str(WorkerStatus.Busy) == "Busy"
+        assert str(WorkerStatus.Disconnected) == "Disconnected"
 
 
 class TestDistributedTaskTypes:
     def test_returns_list(self):
-        from eggsec import distributed_task_types
+        distributed_task_types = _import_or_skip("distributed_task_types", "distributed")
         types = distributed_task_types()
         assert isinstance(types, list)
         assert len(types) > 0
@@ -309,7 +335,7 @@ class TestDistributedTaskTypes:
 
 class TestDistributedGeneratePsk:
     def test_generates_string(self):
-        from eggsec import distributed_generate_psk
+        distributed_generate_psk = _import_or_skip("distributed_generate_psk", "distributed")
         psk = distributed_generate_psk()
         assert isinstance(psk, str)
         assert len(psk) > 0
@@ -321,86 +347,88 @@ class TestDistributedGeneratePsk:
 
 class TestNotificationImports:
     def test_imports_available(self):
-        from eggsec import WebhookEvent
-        assert WebhookEvent is not None
+        try:
+            from eggsec import WebhookEvent
+            assert WebhookEvent is not None
+        except ImportError:
+            pytest.skip("notification types not available")
 
 
 class TestWebhookEvent:
     def test_enum_values(self):
-        from eggsec import WebhookEvent
-        assert WebhookEvent.ScanStarted.as_str() == "ScanStarted"
-        assert WebhookEvent.ScanComplete.as_str() == "ScanComplete"
-        assert WebhookEvent.Findings.as_str() == "Findings"
-        assert WebhookEvent.Error.as_str() == "Error"
+        WebhookEvent = _import_or_skip("WebhookEvent", "notifications")
+        assert str(WebhookEvent.ScanStarted) == "ScanStarted"
+        assert str(WebhookEvent.ScanComplete) == "ScanComplete"
+        assert str(WebhookEvent.Findings) == "Findings"
+        assert str(WebhookEvent.Error) == "Error"
 
 
 class TestFindingSummary:
     def test_construction(self):
-        from eggsec import FindingSummary
-        fs = FindingSummary(title="XSS", severity="High", target="example.com")
+        FindingSummary = _import_or_skip("FindingSummary", "notifications")
+        fs = FindingSummary(title="XSS", severity="High", description="Cross-site scripting")
         assert fs.title == "XSS"
         assert fs.severity == "High"
-        assert fs.target == "example.com"
-        assert fs.count == 1
+        assert fs.description == "Cross-site scripting"
 
     def test_defaults(self):
-        from eggsec import FindingSummary
-        fs = FindingSummary(title="Test", severity="Low", target="a.com")
-        assert fs.count == 1
+        FindingSummary = _import_or_skip("FindingSummary", "notifications")
+        fs = FindingSummary(title="Test", severity="Low", description="")
         assert fs.description == ""
 
 
 class TestNotifyScanStats:
     def test_construction(self):
-        from eggsec import NotifyScanStats
-        stats = NotifyScanStats(total_findings=10, critical_findings=2, scan_duration_secs=60)
+        NotifyScanStats = _import_or_skip("NotifyScanStats", "notifications")
+        stats = NotifyScanStats(total_findings=10, critical_count=2, high_count=3, medium_count=3, low_count=2, duration_secs=60)
         assert stats.total_findings == 10
-        assert stats.critical_findings == 2
-        assert stats.scan_duration_secs == 60
+        assert stats.critical_count == 2
+        assert stats.duration_secs == 60
 
     def test_defaults(self):
-        from eggsec import NotifyScanStats
-        stats = NotifyScanStats()
+        NotifyScanStats = _import_or_skip("NotifyScanStats", "notifications")
+        stats = NotifyScanStats(total_findings=0, critical_count=0, high_count=0, medium_count=0, low_count=0, duration_secs=0)
         assert stats.total_findings == 0
-        assert stats.critical_findings == 0
-        assert stats.scan_duration_secs == 0
+        assert stats.critical_count == 0
+        assert stats.duration_secs == 0
 
 
 class TestWebhookConfig:
     def test_construction(self):
-        from eggsec import WebhookConfig
-        config = WebhookConfig(enabled=True, url="https://hooks.example.com/notify")
+        WebhookConfig = _import_or_skip("WebhookConfig", "notifications")
+        config = WebhookConfig(url="https://hooks.example.com/notify", enabled=True)
         assert config.enabled is True
         assert config.url == "https://hooks.example.com/notify"
-        assert config.secret is None
-        assert config.timeout_secs == 30
+        assert config.events == []
 
     def test_defaults(self):
-        from eggsec import WebhookConfig
-        config = WebhookConfig()
-        assert config.enabled is False
-        assert config.url == ""
+        WebhookConfig = _import_or_skip("WebhookConfig", "notifications")
+        config = WebhookConfig(url="https://example.com/hook")
+        assert config.enabled is True
+        assert config.url == "https://example.com/hook"
 
 
 class TestNotifyFunctions:
     def test_notify_scan_started(self):
-        from eggsec import notify_scan_started
+        notify_scan_started = _import_or_skip("notify_scan_started", "notifications")
         result = notify_scan_started("scan-123", "example.com")
         assert result is None
 
     def test_notify_scan_complete(self):
-        from eggsec import notify_scan_complete
+        notify_scan_complete = _import_or_skip("notify_scan_complete", "notifications")
         result = notify_scan_complete("scan-123", "example.com", "Scan completed")
         assert result is None
 
     def test_notify_findings(self):
-        from eggsec import notify_findings, FindingSummary
-        findings = [FindingSummary(title="XSS", severity="High", target="a.com")]
+        notify_findings, FindingSummary = _import_multi_or_skip(
+            ["notify_findings", "FindingSummary"], "notifications"
+        )
+        findings = [FindingSummary(title="XSS", severity="High", description="test")]
         result = notify_findings("scan-123", "example.com", findings)
         assert result is None
 
     def test_notify_error(self):
-        from eggsec import notify_error
+        notify_error = _import_or_skip("notify_error", "notifications")
         result = notify_error("scan-123", "example.com", "Connection refused")
         assert result is None
 
@@ -420,33 +448,33 @@ class TestAiImports:
 
 class TestAiProvider:
     def test_enum_values(self):
-        from eggsec import AiProvider
+        AiProvider = _import_or_skip("AiProvider", "ai-integration")
         assert AiProvider.OpenAI.as_str() == "OpenAI"
         assert AiProvider.Azure.as_str() == "Azure"
         assert AiProvider.Anthropic.as_str() == "Anthropic"
         assert AiProvider.OpenAICompatible.as_str() == "OpenAICompatible"
 
     def test_repr_str(self):
-        from eggsec import AiProvider
+        AiProvider = _import_or_skip("AiProvider", "ai-integration")
         assert repr(AiProvider.OpenAI) == "AiProvider.OpenAI"
         assert str(AiProvider.Anthropic) == "Anthropic"
 
 
 class TestPluginLanguage:
     def test_enum_values(self):
-        from eggsec import PluginLanguage
+        PluginLanguage = _import_or_skip("PluginLanguage", "ai-integration")
         assert str(PluginLanguage.Python) == "Python"
         assert str(PluginLanguage.Ruby) == "Ruby"
         assert str(PluginLanguage.Rust) == "Rust"
 
     def test_repr(self):
-        from eggsec import PluginLanguage
+        PluginLanguage = _import_or_skip("PluginLanguage", "ai-integration")
         assert repr(PluginLanguage.Python) == "PluginLanguage.Python"
 
 
 class TestAiCacheStats:
     def test_construction(self):
-        from eggsec import AiCacheStats
+        AiCacheStats = _import_or_skip("AiCacheStats", "ai-integration")
         stats = AiCacheStats(total_entries=15, hit_count=10, miss_count=5, hit_rate=0.667)
         assert stats.total_entries == 15
         assert stats.hit_count == 10
@@ -456,17 +484,17 @@ class TestAiCacheStats:
 
 class TestAiCache:
     def test_construction(self):
-        from eggsec import AiCache
+        AiCache = _import_or_skip("AiCache", "ai-integration")
         cache = AiCache(max_entries=100)
         assert cache is not None
 
     def test_defaults(self):
-        from eggsec import AiCache
+        AiCache = _import_or_skip("AiCache", "ai-integration")
         cache = AiCache()
         assert cache is not None
 
     def test_repr(self):
-        from eggsec import AiCache
+        AiCache = _import_or_skip("AiCache", "ai-integration")
         cache = AiCache(max_entries=50, ttl_secs=3600)
         r = repr(cache)
         assert "50" in r

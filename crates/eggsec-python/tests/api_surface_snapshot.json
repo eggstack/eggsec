@@ -1,0 +1,647 @@
+{
+  "ABI_VERSION": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ArtifactEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ArtifactSink": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "AsyncCallback": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "AsyncClient": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "AsyncEngine": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "AuditSink": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "CallbackScheduler": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "CancellationEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Client": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "CompletionEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "DomainDescriptorPy": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "DomainRegistry": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "EVENT_SCHEMA_VERSION": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "EggsecConfig": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Engine": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "EventConsumer": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "EventEnvelope": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "EventStream": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "FINDING_SCHEMA_VERSION": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "FailureEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Finding": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "FindingEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "FindingSink": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "PROTOCOL_VERSION": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "PlanningEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "PreflightEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ProgressEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ProgressSink": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "PyBackpressureChannel": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Report": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "SCHEMA_VERSION": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Scope": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "Severity": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "StageLifecycleEvent": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "__version__": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "__version_info__": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ai_analyze_finding": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ai_generate_payloads": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "ai_suggest_waf_bypass": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "analyze_apk": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "analyze_ipa": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "api_surface": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "api_surface_version": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_add_proxy": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_ai_analyze_finding": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_analyze_apk": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_analyze_ipa": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_auth_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_browser_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_c2_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_close_session": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_create_session": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_declare_client": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_get_snapshot": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_health": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_daemon_list_sessions": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_db_probe": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_detect_technology": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_detect_waf": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_evasion_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_fingerprint_services": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_fuzz_http": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_generate_sbom": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_graphql_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_hunt_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_inspect_tls": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_load_test_http": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_nse_run": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_oauth_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_postex_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_proxy_health_check": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_recon_dns": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_run_consolidated_recon": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_run_traceroute": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_scan_docker_image": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_scan_endpoints": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_scan_git_secrets": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_scan_kubernetes": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_scan_ports": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_stress_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_validate_waf": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_websocket_fuzz": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_websocket_probe": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "async_wireless_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "audit_event_from_enforcement": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "audit_event_from_preflight": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "auth_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "browser_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "build_info": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "c2_get_campaign": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "c2_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "check_cis_docker_benchmark": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "create_proxy_manager": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "daemon_connect": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_get_capabilities": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_list_drivers": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_mongodb": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_mssql": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_mysql": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_postgres": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_redis": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_probe_with_config": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "db_run_with_config": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "deprecated_warning": {
+    "deprecated": true,
+    "deprecated_with": "Use DeprecationWarning directly",
+    "stability": "deprecated"
+  },
+  "detect_escape_risks": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "detect_technology": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "detect_waf": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "distributed_generate_psk": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "distributed_task_types": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "dynamic_mobile_analysis": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "emit_audit_event": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "evasion_list_techniques": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "evasion_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "event_stream_from_legacy": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "feature_matrix": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "features": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "fingerprint_services": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "fuzz_http": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "generate_fuzz_payloads": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "generate_sbom": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "graphql_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "has_feature": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "hunt_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "inspect_tls": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "list_mobile_devices": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "list_network_interfaces": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "load_test_http": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "notify_error": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "notify_findings": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "notify_scan_complete": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "notify_scan_started": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "nse_get_script_metadata": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "nse_list_libraries": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "nse_list_scripts": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "nse_run": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "oauth_discover_endpoints": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "oauth_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "parse_pcap": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "postex_list_techniques": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "postex_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "preflight_operation": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "preflight_with_descriptor": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "recon_dns": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "run_consolidated_recon": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "run_traceroute": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "scan_docker_image": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "scan_endpoints": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "scan_git_secrets": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "scan_kubernetes": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "scan_ports": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "stress_test": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "traceroute": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "validate_scope": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "validate_waf": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "websocket_fuzz": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "websocket_probe": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "wireless_analyze_networks": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "wireless_scan": {
+    "deprecated": false,
+    "stability": "stable"
+  },
+  "wrap_event": {
+    "deprecated": false,
+    "stability": "stable"
+  }
+}

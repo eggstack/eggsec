@@ -173,10 +173,7 @@ impl NotifyManagerPy {
 
     /// Check if notifications are enabled.
     fn is_enabled(&self) -> bool {
-        self.inner
-            .as_ref()
-            .map(|m| m.is_enabled())
-            .unwrap_or(false)
+        self.inner.as_ref().map(|m| m.is_enabled()).unwrap_or(false)
     }
 
     fn __repr__(&self) -> String {
@@ -195,11 +192,7 @@ impl NotifyManagerPy {
 ///     webhook_url: Optional webhook URL override.
 #[pyfunction]
 #[pyo3(signature = (scan_id, target, webhook_url=None))]
-pub fn notify_scan_started(
-    scan_id: &str,
-    target: &str,
-    webhook_url: Option<&str>,
-) -> PyResult<()> {
+pub fn notify_scan_started(scan_id: &str, target: &str, webhook_url: Option<&str>) -> PyResult<()> {
     let _ = webhook_url;
     // Stub implementation - in production this would use the actual notifier
     tracing::info!(

@@ -32,11 +32,32 @@ classifiers = [
 ]
 keywords = ["security", "penetration-testing", "scanner", "recon", "waf", "python"]
 
+[project.optional-dependencies]
+# System-dependent features require platform-specific system libraries.
+# These are only relevant when building with the full-with-system profile.
+db-pentest = []
+web-proxy = []
+mobile = []
+mobile-dynamic = ["mobile"]
+packet-inspection = []  # requires libpcap-dev at build time
+stress-testing = []
+nse = []  # requires libssl-dev at build time
+wireless = []  # requires wireless-tools at runtime
+headless-browser = []  # requires Chromium at runtime
+full-no-system = ["websocket", "git-secrets", "sbom", "container"]
+
 [project.urls]
 Homepage = "https://github.com/sugarwookie/eggsec"
 Documentation = "https://github.com/sugarwookie/eggsec/tree/main/docs/python"
 Repository = "https://github.com/sugarwookie/eggsec"
 Issues = "https://github.com/sugarwookie/eggsec/issues"
+
+# Wheel profiles:
+#   core:              maturin build --release (no optional features)
+#   full:              maturin build --release --features full-no-system
+#   full-with-system:  maturin build --release --features websocket,git-secrets,sbom,container,...
+#
+# See docs/python/packaging.md for the full feature matrix.
 
 [tool.pytest.ini_options]
 markers = [

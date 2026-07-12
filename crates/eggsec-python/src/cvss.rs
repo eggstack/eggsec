@@ -105,6 +105,19 @@ impl CvssScorePy {
             self.version, self.base_score, self.severity
         )
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.version.hash(&mut hasher);
+        self.vector.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.version == other.version && self.vector == other.vector
+    }
 }
 
 /// Structured vulnerability record with CVSS and reference data.

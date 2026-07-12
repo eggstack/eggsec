@@ -118,3 +118,88 @@ except eggsec.NetworkError as e:
 except eggsec.TimeoutError as e:
     print(f"Timeout: {e}")
 ```
+
+## EventStream
+
+`EventStream` provides push-based, filterable event iteration. It is
+useful for observing scan progress asynchronously:
+
+```python
+from eggsec import EventStream, EventEnvelope
+
+stream = EventStream()
+
+# Push events from callbacks
+def on_event(event_dict):
+    stream.push(EventEnvelope(event_dict["event_type"], event_dict["payload"]))
+
+# Filter by event type
+progress_only = stream.filter_by_type("progress")
+
+# Iterate
+for event in progress_only:
+    print(event)
+
+# Snapshot stream state
+print(stream.snapshot())
+```
+
+### Async iteration
+
+`EventStream` implements `__aiter__` / `__anext__` for use with
+`async for`:
+
+```python
+async for event in stream:
+    process(event)
+```
+
+### Filtering
+
+```python
+# Filter by correlation ID (e.g. for a specific scan run)
+run_events = stream.filter_by_correlation("run-42")
+
+# Chain filters
+filtered = stream.filter_by_type("finding").filter_by_correlation("run-42")
+```
+
+## Callbacks in async contexts
+
+### AsyncCallback
+
+Wraps an `async def` handler for invocation from Rust:
+
+```python
+from eggsec import AsyncCallback
+
+async def handler(event_dict):
+    await process(event_dict)
+
+cb = AsyncCallback(handler)
+result = cb.invoke(event)  # returns the coroutine result
+```
+
+### EventConsumer with async
+
+```python
+from eggsec import EventConsumer
+
+async def process_events(consumer):
+    # Wire consumer into scan pipeline
+    # Events arrive via the callback
+    pass
+
+consumer = EventConsumer(lambda e: asyncio.ensure_future(handler(e)))
+```
+
+## Thread safety
+
+The async bridge uses a dedicated background thread with its own Tokio
+runtime for each operation. The GIL is released during execution, and
+results are delivered via a polling protocol. This means:
+
+- Multiple async operations can run concurrently.
+- Callbacks execute on the background thread; synchronize with
+  `asyncio` if needed.
+- `BackpressureChannel` and `CallbackScheduler` are thread-safe.

@@ -1469,6 +1469,26 @@ WafDetectionResult.to_json() -> str
 
 ---
 
+## Version Constants
+
+Module-level constants for schema and ABI versioning (G7):
+
+| Constant | Type | Description |
+|---|---|---|
+| `SCHEMA_VERSION` | `str` | Finding schema version (`"1.0"`). |
+| `PROTOCOL_VERSION` | `str` | Daemon/gRPC protocol version (`"1.0.0"`). |
+| `ABI_VERSION` | `str` | Native ABI version (`"1"`). |
+| `EVENT_SCHEMA_VERSION` | `str` | Event schema version (`"1.0.0"`). |
+| `FINDING_SCHEMA_VERSION` | `str` | Finding schema version for versioned findings. |
+
+```python
+import eggsec
+print(eggsec.SCHEMA_VERSION)       # "1.0"
+print(eggsec.PROTOCOL_VERSION)     # "1.0.0"
+print(eggsec.ABI_VERSION)          # "1"
+print(eggsec.EVENT_SCHEMA_VERSION) # "1.0.0"
+```
+
 ## Policy, Configuration & Execution Context (Milestone B)
 
 These types are always available (no feature flags required). They expose the
@@ -1679,6 +1699,39 @@ OperationRegistry.find(operation_id: str) -> OperationMetadataView | None
 OperationRegistry.find_by_tool_id(tool_id: str) -> OperationMetadataView | None
 ```
 
+#### Additional static methods (G1)
+
+```python
+OperationRegistry.operation_count() -> int
+```
+
+Total number of registered operations.
+
+```python
+OperationRegistry.operations_for_feature(feature: str) -> list[OperationMetadataView]
+```
+
+Return operations requiring a specific feature flag.
+
+```python
+OperationRegistry.operations_for_surface(surface: str) -> list[OperationMetadataView]
+```
+
+Return operations supporting a specific execution surface (`"cli"`, `"tui"`,
+`"mcp"`, `"rest"`, `"agent"`, `"grpc"`).
+
+```python
+OperationRegistry.operation_ids() -> list[str]
+```
+
+All canonical operation identifiers.
+
+```python
+OperationRegistry.operation_names() -> list[str]
+```
+
+All human-readable operation display names.
+
 ---
 
 #### `OperationMetadataView`
@@ -1688,13 +1741,19 @@ Read-only view of an operation's metadata.
 | Property | Type | Description |
 |---|---|---|
 | `operation_id` | `str` | Unique operation identifier. |
-| `label` | `str` | Human-readable label. |
-| `description` | `str` | Operation description. |
-| `risk` | `OperationRisk` | Risk level. |
-| `required_features` | `list[str]` | Feature flags required. |
+| `operation_name` | `str` | Human-readable operation name. |
+| `default_risk` | `OperationRisk` | Default risk level. |
+| `default_mode` | `OperationMode` | Default operating mode. |
+| `target_policy` | `TargetPolicyKind` | Target policy requirement. |
+| `request_schema` | `str \| None` | JSON schema reference for the request type. |
+| `result_schema` | `str \| None` | JSON schema reference for the result type. |
+| `feature_required` | `str \| None` | Feature flag required, or None if always available. |
+| `python_async_available` | `bool` | Whether an async variant exists. |
+| `supported_surfaces` | `list[str]` | Execution surfaces supporting this operation. |
+| `default_timeout_ms` | `int \| None` | Suggested timeout in milliseconds. |
+| `required_features` | `list[str]` | Feature flags required (legacy field). |
 | `required_capabilities` | `list[Capability]` | Capabilities required. |
-| `target_required` | `bool` | Whether a target is required. |
-| `target_policy` | `TargetPolicyKind` | Target policy kind. |
+| `target_required` | `bool` | Whether a target is required (legacy field). |
 
 ```python
 OperationMetadataView.descriptor_for_target(target: str | None = None) -> OperationDescriptor
@@ -1930,6 +1989,319 @@ Capability enum. Static constructors: `passive_fingerprint`, `active_fingerprint
 `credential_test`, `web_crawl`, `web_fuzz`, `web_inject`, `proxy_required`,
 `packet_capture`, `packet_injection`, `stress_test`, `denial_of_service`,
 `nse_script`, `database_query`, `mobile_static`, `mobile_dynamic_analysis`.
+
+---
+
+## Events (G2)
+
+See [Events](events.md) for the full event protocol guide.
+
+### `EventEnvelope`
+
+Versioned wrapper for all events. Contains `schema_version`, `event_id`,
+`timestamp_ms`, `correlation_id`, `event_type`, and `payload`.
+
+```python
+EventEnvelope(
+    event_type: str,
+    payload: object,
+    *,
+    event_id: str | None = None,
+    timestamp_ms: int | None = None,
+    correlation_id: str | None = None,
+    schema_version: str | None = None,
+)
+```
+
+### Typed event payloads
+
+| Class | Key fields |
+|---|---|
+| `PlanningEvent` | `operation_id`, `target`, `scope_summary` |
+| `PreflightEvent` | `outcome`, `confirmations_required`, `suggested_flags` |
+| `StageLifecycleEvent` | `stage`, `status` |
+| `ProgressEvent` | `percentage`, `message`, `items_processed`, `items_total` |
+| `FindingEvent` | `finding_id`, `severity`, `title`, `auto_added` |
+| `ArtifactEvent` | `artifact_name`, `kind`, `mime_type`, `size_bytes` |
+| `CancellationEvent` | `reason`, `cancelled_by` |
+| `FailureEvent` | `error_type`, `error_message`, `is_retryable` |
+| `CompletionEvent` | `status`, `stats`, `duration_ms` |
+
+### `EventStream`
+
+Push-based event stream with filtering and iteration. See [Events](events.md).
+
+```python
+EventStream(event_log: EventLog | None = None)
+EventStream.empty() -> EventStream
+```
+
+### `wrap_event`
+
+```python
+eggsec.wrap_event(
+    event_type: str,
+    payload: object,
+    *,
+    correlation_id: str | None = None,
+    event_id: str | None = None,
+) -> EventEnvelope
+```
+
+---
+
+## Callbacks and Sinks (G3)
+
+See [Callbacks](callbacks.md) for the full callback/sink guide.
+
+### `AuditSink`
+
+Receives enforcement audit events.
+
+```python
+AuditSink(callback: Callable[[dict], None])
+```
+
+### `FindingSink`
+
+Receives findings as they are discovered.
+
+```python
+FindingSink(callback: Callable[[object], None])
+```
+
+### `ArtifactSink`
+
+Receives artifact metadata when artifacts are produced.
+
+```python
+ArtifactSink(callback: Callable[[object], None])
+```
+
+### `ProgressSink`
+
+Receives progress updates.
+
+```python
+ProgressSink(callback: Callable[[float, str], None])
+```
+
+### `EventConsumer`
+
+Receives versioned `EventEnvelope` dicts.
+
+```python
+EventConsumer(callback: Callable[[dict], None])
+```
+
+### `AsyncCallback`
+
+Wraps an `async def` handler for use from Rust callbacks.
+
+```python
+AsyncCallback(callback: CoroutineFunction)
+```
+
+### `CallbackScheduler`
+
+Bounded callback queue with backpressure.
+
+```python
+CallbackScheduler(capacity: int = 1000)
+```
+
+### `BackpressureChannel`
+
+Bounded in-process channel that drops oldest events when full.
+
+```python
+BackpressureChannel(capacity: int = 256)
+```
+
+---
+
+## Domains (G1)
+
+### `DomainDescriptorPy`
+
+Describes a capability domain -- what it can do, how it integrates with
+surfaces, and what feature gates control its availability.
+
+| Property | Type | Description |
+|---|---|---|
+| `id` | `str` | Domain identifier (e.g. `"db-pentest"`). |
+| `display_name` | `str` | Human-readable name. |
+| `description` | `str` | Brief purpose description. |
+| `category` | `str` | Classification (e.g. `"standard-assessment"`). |
+| `required_feature` | `str \| None` | Cargo feature flag, or None if always available. |
+| `operations` | `list[str]` | Operation IDs provided by this domain. |
+| `is_available` | `bool` | Whether the domain is available in this build. |
+
+```python
+DomainDescriptorPy.to_dict() -> dict
+```
+
+### `DomainRegistry`
+
+Static registry of domain descriptors.
+
+```python
+DomainRegistry.all_domains() -> list[DomainDescriptorPy]
+DomainRegistry.available_domains() -> list[DomainDescriptorPy]
+DomainRegistry.find(domain_id: str) -> DomainDescriptorPy | None
+```
+
+---
+
+## Buffers and Paginated Results (G5)
+
+### `BinaryBuffer`
+
+Binary buffer with PEP 3118 zero-copy support.
+
+```python
+BinaryBuffer(data: bytes)
+BinaryBuffer.from_bytes(data: bytes) -> BinaryBuffer
+BinaryBuffer.from_hex(hex_str: str) -> BinaryBuffer
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `to_bytes()` | `bytes` | Raw bytes. |
+| `memoryview()` | `memoryview` | PEP 3118 memoryview. |
+| `hex()` | `str` | Hex-encoded representation. |
+| `len()` | `int` | Number of bytes. |
+
+Supports `len()`, `==`, and the buffer protocol (`memoryview(buf)`).
+
+### `LazyArtifact`
+
+Deferred artifact loading. Holds path and metadata without reading file content.
+
+```python
+LazyArtifact(path: str | Path, metadata: ArtifactMeta)
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `name()` | `str` | Artifact name (no I/O). |
+| `kind()` | `str` | Artifact type. |
+| `mime_type()` | `str` | MIME type. |
+| `size_bytes()` | `int` | Size from metadata. |
+| `content_hash()` | `str \| None` | Content hash, if available. |
+| `path()` | `Path` | File path on disk. |
+| `load()` | `BinaryBuffer` | Read file into memory. |
+| `unload()` | `None` | Free loaded data. |
+| `is_loaded()` | `bool` | Whether content is in memory. |
+
+### `ArtifactMeta`
+
+Metadata about an artifact (no content).
+
+```python
+ArtifactMeta(
+    name: str,
+    kind: str,
+    mime_type: str,
+    size: int,
+    *,
+    content_hash: str | None = None,
+)
+```
+
+### `PaginatedResults`
+
+Page-based iteration over a pre-materialized list.
+
+```python
+PaginatedResults(items: list, page_size: int = 100)
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `total_pages()` | `int` | Number of pages. |
+| `get_page(page)` | `list` | Items on a specific page (0-indexed). |
+| `get_page_info(page)` | `dict` | Page items with metadata (`has_next`, `has_prev`, etc.). |
+| `to_list()` | `list` | All items. |
+| `reset()` | `None` | Reset iterator position. |
+| `count()` | `int` | Total item count. |
+
+Supports the iterator protocol (`for item in results`) and `len()`.
+
+---
+
+## Introspection and Deprecation (G6)
+
+### `api_surface()`
+
+```python
+eggsec.api_surface() -> dict[str, dict]
+```
+
+Returns a machine-readable dict of all exported names, their stability
+level, and deprecation info. Keys are names; values are dicts with
+`"stability"`, `"deprecated"`, and optionally `"deprecated_with"`.
+
+```python
+>>> surface = eggsec.api_surface()
+>>> surface["scan_ports"]
+{'stability': 'stable', 'deprecated': False}
+```
+
+### `feature_matrix()`
+
+```python
+eggsec.feature_matrix() -> dict[str, dict]
+```
+
+Returns a dict of all features with availability, description, and whether
+system dependencies are required.
+
+```python
+>>> matrix = eggsec.feature_matrix()
+>>> matrix["nse"]
+{'available': False, 'description': 'Nmap NSE script execution', 'requires_system_deps': True}
+```
+
+### `api_surface_version()`
+
+```python
+eggsec.api_surface_version() -> dict
+```
+
+Returns package version, schema version, protocol version, ABI version,
+and the list of available feature names.
+
+```python
+>>> info = eggsec.api_surface_version()
+>>> info["schema_version"]
+'1.0'
+```
+
+### `DeprecatedWarning`
+
+Custom deprecation warning class (subclass of `DeprecationWarning`).
+
+```python
+DeprecatedWarning(msg: str | None = None)
+```
+
+### `deprecated_warning()`
+
+```python
+eggsec.deprecated_warning(msg: str) -> None
+```
+
+Emit a `DeprecatedWarning` via Python's `warnings` module.
+
+### Experimental subpackage
+
+The `eggsec.experimental` namespace is available for preview APIs.
+Experimental APIs may change or be removed without notice.
+
+```python
+import eggsec.experimental  # available
+```
 
 ---
 

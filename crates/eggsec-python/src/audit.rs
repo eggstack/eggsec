@@ -403,6 +403,35 @@ impl EnforcementAuditEventPy {
     pub fn into_engine(self) -> eggsec::audit::EnforcementAuditEvent {
         self.inner
     }
+
+    pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("event_id", &self.inner.event_id)?;
+        dict.set_item("timestamp", self.inner.timestamp.to_rfc3339())?;
+        dict.set_item("surface", format!("{}", self.inner.surface))?;
+        dict.set_item("profile", format!("{}", self.inner.profile))?;
+        dict.set_item("operation_id", &self.inner.operation_id)?;
+        dict.set_item("target", &self.inner.target)?;
+        dict.set_item(
+            "outcome",
+            AuditOutcomePy::from_engine(self.inner.outcome).to_dict(py)?,
+        )?;
+        dict.set_item("decision_id", &self.inner.decision.decision_id)?;
+        dict.set_item("decision_allowed", self.inner.decision.allowed)?;
+        let confirmation_list = PyList::empty_bound(py);
+        for c in &self.inner.confirmation_classes {
+            confirmation_list.append(c.as_str())?;
+        }
+        dict.set_item("confirmation_classes", confirmation_list)?;
+        dict.set_item(
+            "manual_override_ignored",
+            self.inner.manual_override_ignored,
+        )?;
+        dict.set_item("policy_hash", &self.inner.policy_hash)?;
+        dict.set_item("metadata_id", &self.inner.metadata_id)?;
+        dict.set_item("correlation_id", &self.inner.correlation_id)?;
+        Ok(dict.into())
+    }
 }
 
 /// Create an audit event from an enforcement outcome.

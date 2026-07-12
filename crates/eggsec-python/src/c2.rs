@@ -530,10 +530,7 @@ impl OpsecAssessmentPy {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "OpsecAssessment(score={}/{})",
-            self.score, self.max_score
-        )
+        format!("OpsecAssessment(score={}/{})", self.score, self.max_score)
     }
 }
 
@@ -719,15 +716,9 @@ pub fn c2_scan(config: C2ScanConfigPy) -> PyResult<C2ReportPy> {
     Python::with_gil(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner = eggsec::c2::C2Scanner::new(config.dry_run, &config.campaign_profile);
-            scanner
-                .scan(&config.target)
-                .await
-                .map_err(|e| {
-                    pyo3::exceptions::PyRuntimeError::new_err(format!(
-                        "C2 scan failed: {}",
-                        e
-                    ))
-                })
+            scanner.scan(&config.target).await.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("C2 scan failed: {}", e))
+            })
         })?;
 
         Ok(C2ReportPy::from_engine(result))
@@ -741,15 +732,9 @@ pub fn c2_scan(config: C2ScanConfigPy) -> PyResult<C2ReportPy> {
 pub fn async_c2_scan(config: C2ScanConfigPy) -> PyResult<crate::runtime_async::PyFuture> {
     crate::runtime_async::spawn_async(async move {
         let scanner = eggsec::c2::C2Scanner::new(config.dry_run, &config.campaign_profile);
-        let report = scanner
-            .scan(&config.target)
-            .await
-            .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "C2 scan failed: {}",
-                    e
-                ))
-            })?;
+        let report = scanner.scan(&config.target).await.map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("C2 scan failed: {}", e))
+        })?;
         Ok(C2ReportPy::from_engine(report))
     })
 }

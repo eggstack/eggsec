@@ -321,7 +321,12 @@ impl AiCachePy {
     }
 }
 
-fn build_chat_body(model: &str, prompt: &str, max_tokens: Option<u32>, temperature: f64) -> serde_json::Value {
+fn build_chat_body(
+    model: &str,
+    prompt: &str,
+    max_tokens: Option<u32>,
+    temperature: f64,
+) -> serde_json::Value {
     serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -408,10 +413,18 @@ pub fn ai_analyze_finding(
 
             match eggsec::ai::AiClient::new(config) {
                 Ok(client) => match client.chat_completion_from_messages(&body).await {
-                    Ok(response) => Ok(AiAnalysisResultPy::from_engine(parse_analysis_response(&response))),
-                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI analysis failed: {}", e))),
+                    Ok(response) => Ok(AiAnalysisResultPy::from_engine(parse_analysis_response(
+                        &response,
+                    ))),
+                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "AI analysis failed: {}",
+                        e
+                    ))),
                 },
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI client creation failed: {}", e))),
+                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "AI client creation failed: {}",
+                    e
+                ))),
             }
         })
     })
@@ -451,10 +464,18 @@ pub fn async_ai_analyze_finding(
 
         match eggsec::ai::AiClient::new(config) {
             Ok(client) => match client.chat_completion_from_messages(&body).await {
-                Ok(response) => Ok(AiAnalysisResultPy::from_engine(parse_analysis_response(&response))),
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI analysis failed: {}", e))),
+                Ok(response) => Ok(AiAnalysisResultPy::from_engine(parse_analysis_response(
+                    &response,
+                ))),
+                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "AI analysis failed: {}",
+                    e
+                ))),
             },
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI client creation failed: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "AI client creation failed: {}",
+                e
+            ))),
         }
     })
 }
@@ -483,7 +504,10 @@ pub fn ai_generate_payloads(
             };
 
             match eggsec::ai::AiClient::new(config) {
-                Ok(client) => match client.suggest_payloads(&vulnerability_type, &target_context).await {
+                Ok(client) => match client
+                    .suggest_payloads(&vulnerability_type, &target_context)
+                    .await
+                {
                     Ok(payloads) => Ok(payloads
                         .into_iter()
                         .map(|p| AiPayloadSuggestionPy {
@@ -492,9 +516,15 @@ pub fn ai_generate_payloads(
                             expected_result: "Verify response".to_string(),
                         })
                         .collect()),
-                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI payload generation failed: {}", e))),
+                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "AI payload generation failed: {}",
+                        e
+                    ))),
                 },
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI client creation failed: {}", e))),
+                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "AI client creation failed: {}",
+                    e
+                ))),
             }
         })
     })
@@ -533,9 +563,15 @@ pub fn ai_suggest_waf_bypass(
                             explanation: format!("Bypass technique for {} WAF", waf_name),
                         })
                         .collect()),
-                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI WAF bypass suggestion failed: {}", e))),
+                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "AI WAF bypass suggestion failed: {}",
+                        e
+                    ))),
                 },
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("AI client creation failed: {}", e))),
+                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "AI client creation failed: {}",
+                    e
+                ))),
             }
         })
     })

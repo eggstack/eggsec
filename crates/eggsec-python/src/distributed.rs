@@ -248,7 +248,12 @@ pub struct DistributedTaskPy {
 #[pymethods]
 impl DistributedTaskPy {
     #[new]
-    fn new(task_id: String, task_type: DistributedTaskTypePy, target: String, parameters_json: String) -> Self {
+    fn new(
+        task_id: String,
+        task_type: DistributedTaskTypePy,
+        target: String,
+        parameters_json: String,
+    ) -> Self {
         Self {
             task_id,
             task_type,

@@ -112,10 +112,7 @@ impl WirelessNetworkPy {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "WirelessNetwork(ssid={}, bssid={})",
-            self.ssid, self.bssid
-        )
+        format!("WirelessNetwork(ssid={}, bssid={})", self.ssid, self.bssid)
     }
 }
 
@@ -290,15 +287,9 @@ pub fn wireless_scan(config: Option<WirelessScanConfigPy>) -> PyResult<WirelessS
             if let Some(iface) = &cfg.interface {
                 scanner = scanner.with_interface(iface.clone());
             }
-            scanner
-                .scan(cfg.duration_secs)
-                .await
-                .map_err(|e| {
-                    pyo3::exceptions::PyRuntimeError::new_err(format!(
-                        "Wireless scan failed: {}",
-                        e
-                    ))
-                })
+            scanner.scan(cfg.duration_secs).await.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Wireless scan failed: {}", e))
+            })
         })?;
 
         Ok(WirelessScanResultPy::from_engine(result))
@@ -323,15 +314,9 @@ pub fn async_wireless_scan(
         if let Some(iface) = &cfg.interface {
             scanner = scanner.with_interface(iface.clone());
         }
-        let result = scanner
-            .scan(cfg.duration_secs)
-            .await
-            .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Wireless scan failed: {}",
-                    e
-                ))
-            })?;
+        let result = scanner.scan(cfg.duration_secs).await.map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Wireless scan failed: {}", e))
+        })?;
         Ok(WirelessScanResultPy::from_engine(result))
     })
 }

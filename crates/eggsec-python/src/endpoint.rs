@@ -77,7 +77,7 @@ impl EndpointScanConfig {
 
 /// A single endpoint result from a scan.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EndpointFinding {
     #[pyo3(get)]
     pub url: String,
@@ -132,8 +132,8 @@ impl EndpointFinding {
 }
 
 /// Statistics for an endpoint scan.
-#[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[pyclass(frozen, eq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EndpointScanStats {
     #[pyo3(get)]
     pub endpoints_scanned: usize,
@@ -231,6 +231,22 @@ impl EndpointScanResult {
             "Endpoint scan of {}: {} endpoints found in {}ms",
             self.base_url, self.endpoints_found, self.elapsed_ms
         )
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.base_url.hash(&mut hasher);
+        self.endpoints_found.hash(&mut hasher);
+        self.elapsed_ms.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.base_url == other.base_url
+            && self.endpoints_found == other.endpoints_found
+            && self.elapsed_ms == other.elapsed_ms
     }
 
     /// Convert endpoint findings to a list of row dicts suitable for tabular output.

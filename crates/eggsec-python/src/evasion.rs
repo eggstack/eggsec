@@ -419,15 +419,9 @@ pub fn evasion_scan(config: EvasionScanConfigPy) -> PyResult<EvasionReportPy> {
                 path: config.path,
                 pid: config.pid,
             };
-            scanner
-                .scan(&target)
-                .await
-                .map_err(|e| {
-                    pyo3::exceptions::PyRuntimeError::new_err(format!(
-                        "Evasion scan failed: {}",
-                        e
-                    ))
-                })
+            scanner.scan(&target).await.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Evasion scan failed: {}", e))
+            })
         })?;
 
         Ok(EvasionReportPy::from_engine(result))
@@ -438,9 +432,7 @@ pub fn evasion_scan(config: EvasionScanConfigPy) -> PyResult<EvasionReportPy> {
 ///
 /// Returns a PyFuture that resolves to an EvasionReportPy.
 #[pyfunction]
-pub fn async_evasion_scan(
-    config: EvasionScanConfigPy,
-) -> PyResult<crate::runtime_async::PyFuture> {
+pub fn async_evasion_scan(config: EvasionScanConfigPy) -> PyResult<crate::runtime_async::PyFuture> {
     crate::runtime_async::spawn_async(async move {
         let scanner = eggsec::evasion::EvasionScanner::new(config.dry_run);
         let target = eggsec::evasion::EvasionTarget {
@@ -454,15 +446,9 @@ pub fn async_evasion_scan(
             path: config.path,
             pid: config.pid,
         };
-        let report = scanner
-            .scan(&target)
-            .await
-            .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Evasion scan failed: {}",
-                    e
-                ))
-            })?;
+        let report = scanner.scan(&target).await.map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Evasion scan failed: {}", e))
+        })?;
         Ok(EvasionReportPy::from_engine(report))
     })
 }

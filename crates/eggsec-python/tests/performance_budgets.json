@@ -1,0 +1,16 @@
+{
+  "import_cold": 2.0,
+  "import_attribute": 0.01,
+  "engine_creation": 0.1,
+  "scope_construction": 0.05,
+  "registry_all": 0.1,
+  "registry_find": 0.01,
+  "finding_to_dict": 0.01,
+  "finding_to_json": 0.01,
+  "event_envelope": 0.01,
+  "buffer_1mb": 0.01,
+  "finding_set_iteration_100": 0.1,
+  "api_surface": 0.1,
+  "feature_matrix": 0.1,
+  "callback_1000_calls": 0.5
+}

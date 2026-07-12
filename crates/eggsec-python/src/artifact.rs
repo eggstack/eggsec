@@ -1,7 +1,8 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBytes, PyDict, PyMemoryView};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::sync::RwLock;
 
 /// A binary or text artifact produced during security testing.
@@ -26,12 +27,14 @@ pub struct ArtifactPy {
     pub retention_policy: String,
     #[pyo3(get)]
     pub external_uri: Option<String>,
+    #[serde(skip)]
+    content: Option<Vec<u8>>,
 }
 
 #[pymethods]
 impl ArtifactPy {
     #[new]
-    #[pyo3(signature = (id, name, mime_type, size_bytes, content_hash, *, provenance=None, redacted=None, retention_policy=None, external_uri=None))]
+    #[pyo3(signature = (id, name, mime_type, size_bytes, content_hash, *, provenance=None, redacted=None, retention_policy=None, external_uri=None, content=None))]
     fn new(
         id: String,
         name: String,
@@ -42,6 +45,7 @@ impl ArtifactPy {
         redacted: Option<bool>,
         retention_policy: Option<String>,
         external_uri: Option<String>,
+        content: Option<Vec<u8>>,
     ) -> Self {
         Self {
             id,
@@ -53,8 +57,117 @@ impl ArtifactPy {
             redacted: redacted.unwrap_or(false),
             retention_policy: retention_policy.unwrap_or_else(|| "session".to_string()),
             external_uri,
+            content,
         }
     }
+
+    /// Create an artifact with embedded binary content.
+    #[staticmethod]
+    fn with_content(
+        id: String,
+        name: String,
+        mime_type: String,
+        content: Vec<u8>,
+        content_hash: String,
+    ) -> Self {
+        let size_bytes = content.len() as u64;
+        Self {
+            id,
+            name,
+            mime_type,
+            size_bytes,
+            content_hash,
+            provenance: "scan".to_string(),
+            redacted: false,
+            retention_policy: "session".to_string(),
+            external_uri: None,
+            content: Some(content),
+        }
+    }
+
+    /// Whether this artifact has embedded content.
+    fn has_content(&self) -> bool {
+        self.content.is_some()
+    }
+
+    /// Get the embedded content as bytes, if available.
+    fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        match &self.content {
+            Some(data) => Ok(Some(PyBytes::new_bound(py, data))),
+            None => Ok(None),
+        }
+    }
+
+    /// Get the embedded content as a BinaryBuffer.
+    fn buffer(&self) -> PyResult<crate::buffer_support::BinaryBufferPy> {
+        match &self.content {
+            Some(data) => Ok(crate::buffer_support::BinaryBufferPy::from_slice(data)),
+            None => Err(pyo3::exceptions::PyValueError::new_err(
+                "Artifact has no embedded content",
+            )),
+        }
+    }
+
+    /// Get the embedded content as hex string.
+    fn hex(&self) -> PyResult<Option<String>> {
+        match &self.content {
+            Some(data) => Ok(Some(hex_encode(data))),
+            None => Ok(None),
+        }
+    }
+
+    /// Get a PEP 3118 memoryview of the embedded content.
+    fn memoryview<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyMemoryView>>> {
+        match &self.content {
+            Some(data) => {
+                let bytes = PyBytes::new_bound(py, data);
+                Ok(Some(PyMemoryView::from_bound(&bytes)?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// PEP 3118 buffer protocol: expose the embedded content.
+    ///
+    /// # Safety
+    /// Fills a raw `ffi::Py_buffer` per PEP 3118.
+    unsafe fn __getbuffer__(
+        slf: PyRef<'_, Self>,
+        view: *mut pyo3::ffi::Py_buffer,
+        _flags: i32,
+    ) -> PyResult<()> {
+        if view.is_null() {
+            return Err(pyo3::exceptions::PyBufferError::new_err("view is null"));
+        }
+        match &slf.content {
+            Some(data) => {
+                let ptr = data.as_ptr() as *const c_void;
+                let len = data.len() as isize;
+
+                (*view).obj = std::ptr::null_mut();
+                (*view).buf = ptr as *mut c_void;
+                (*view).len = len;
+                (*view).readonly = 0;
+                (*view).itemsize = 1;
+                (*view).format = b"b\0".as_ptr() as *mut _;
+                (*view).ndim = 1;
+                (*view).shape = std::ptr::addr_of!(len) as *mut _;
+                (*view).strides = std::ptr::null_mut();
+                (*view).suboffsets = std::ptr::null_mut();
+                (*view).internal = std::ptr::null_mut();
+                Ok(())
+            }
+            None => Err(pyo3::exceptions::PyBufferError::new_err(
+                "Artifact has no embedded content",
+            )),
+        }
+    }
+
+    /// PEP 3118 buffer protocol: release.
+    ///
+    /// # Safety
+    /// Called by Python when the buffer is no longer needed.
+    unsafe fn __releasebuffer__(&self, _view: *mut pyo3::ffi::Py_buffer) {}
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
@@ -67,6 +180,7 @@ impl ArtifactPy {
         dict.set_item("redacted", self.redacted)?;
         dict.set_item("retention_policy", &self.retention_policy)?;
         dict.set_item("external_uri", &self.external_uri)?;
+        dict.set_item("has_content", self.content.is_some())?;
         Ok(dict.into())
     }
 
@@ -77,8 +191,11 @@ impl ArtifactPy {
 
     fn __repr__(&self) -> String {
         format!(
-            "Artifact(id={}, name={}, mime_type={})",
-            self.id, self.name, self.mime_type
+            "Artifact(id={}, name={}, mime_type={}, has_content={})",
+            self.id,
+            self.name,
+            self.mime_type,
+            self.content.is_some()
         )
     }
 }
@@ -211,4 +328,15 @@ impl ArtifactStorePy {
         let len = self.artifacts.read().unwrap().len();
         format!("ArtifactStore(artifacts={len})")
     }
+}
+
+const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+
+fn hex_encode(data: &[u8]) -> String {
+    let mut s = String::with_capacity(data.len() * 2);
+    for &byte in data {
+        s.push(HEX_CHARS[(byte >> 4) as usize] as char);
+        s.push(HEX_CHARS[(byte & 0x0f) as usize] as char);
+    }
+    s
 }

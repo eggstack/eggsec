@@ -291,6 +291,20 @@ impl PolicyDecisionPy {
     fn __str__(&self) -> String {
         self.to_human_readable()
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.inner.decision_id.hash(&mut hasher);
+        self.inner.allowed.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner.decision_id == other.inner.decision_id
+            && self.inner.allowed == other.inner.allowed
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -587,6 +601,21 @@ impl ApprovedOperationPy {
             self.inner.descriptor().operation,
             self.inner.descriptor().target
         )
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.inner.audit_event_id().map(|s| s.hash(&mut hasher));
+        self.inner.descriptor().operation.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner.audit_event_id() == other.inner.audit_event_id()
+            && self.inner.descriptor().operation == other.inner.descriptor().operation
+            && self.inner.descriptor().target == other.inner.descriptor().target
     }
 }
 

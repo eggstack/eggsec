@@ -4,7 +4,7 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Experimental / Alpha** — Pre-release. Not yet published to PyPI. See `RELEASE_CHECKLIST.md` for publication gates.
+**Pre-release (Milestone G stabilization in progress)** — Not yet published to PyPI. See `RELEASE_CHECKLIST.md` for publication gates and `docs/python/README_1_0_CHECKLIST.md` for the 1.0 readiness checklist.
 
 ## Installation
 
@@ -63,6 +63,14 @@ Prebuilt wheels are **not yet available on PyPI**. Build from source using matur
 - Compliance mapping and reporting (feature: `compliance`) (Milestone E)
 - External integrations with publication policies (Milestone E)
 - Schema versioning and finding migration (Milestone E)
+- Domain registry and operation introspection (Milestone G)
+- Versioned event protocol with typed payloads (Milestone G)
+- Callback/sink contracts: AuditSink, FindingSink, etc. (Milestone G)
+- Python-native ergonomics: pathlib, datetime, hash/eq, context managers, pickle (Milestone G)
+- Binary buffer protocol: BinaryBuffer, LazyArtifact, PaginatedResults (Milestone G)
+- API surface introspection and feature matrix (Milestone G)
+- Performance benchmarks and regression gates (Milestone G)
+- 1.0 readiness checklist and stability classifications (Milestone G)
 
 ### Not Included (default wheel)
 
@@ -350,6 +358,12 @@ This package ships `py.typed` and `.pyi` type stubs for full IDE support.
 - [WAF Detection](../../docs/python/waf.md)
 - [Reports](../../docs/python/reports.md)
 - [Packaging & Release](../../docs/python/packaging.md)
+- [Events](../../docs/python/events.md)
+- [Callbacks](../../docs/python/callbacks.md)
+- [Versioning](../../docs/python/versioning.md)
+- [Namespaces](../../docs/python/namespace.md)
+- [Stability Classifications](../../docs/python/STABILITY_CLASSIFICATIONS.md)
+- [1.0 Readiness Checklist](../../docs/python/README_1_0_CHECKLIST.md)
 
 ## Safety
 

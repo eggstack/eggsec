@@ -4,15 +4,53 @@ This is a host-language binding, not an internal plugin runtime.
 The core engine is implemented in Rust; this package provides a Python-native API.
 """
 
+import warnings
+
 from . import _core
 
 __version__ = _core.__version__
 __version_info__ = _core.__version_info__
 
+# G7: Machine-readable version constants
+__schema_version__ = _core.SCHEMA_VERSION
+__protocol_version__ = _core.PROTOCOL_VERSION
+__abi_version__ = _core.ABI_VERSION
+
+FINDING_SCHEMA_VERSION = _core.FINDING_SCHEMA_VERSION
+
+
+def _deprecated(name: str, replacement: str | None = None) -> None:
+    """Emit a DeprecationWarning for a deprecated API.
+
+    Args:
+        name: The deprecated symbol name.
+        replacement: Optional name of the recommended replacement.
+    """
+    msg = f"{name} is deprecated"
+    if replacement:
+        msg += f"; use {replacement} instead"
+    warnings.warn(msg, DeprecationWarning, stacklevel=3)
+
+
+def api_surface() -> dict:
+    """Return a machine-readable dict of all exported names, their stability
+    level, and any deprecation info.
+
+    Returns:
+        Dict mapping symbol names to info dicts with keys:
+        - "stability": one of "stable", "beta", "experimental"
+        - "deprecated": bool
+        - "deprecated_with": optional replacement name
+    """
+    return _core.api_surface()
+
 # Re-export functions
 features = _core.features
 has_feature = _core.has_feature
+feature_matrix = _core.feature_matrix
 build_info = _core.build_info
+api_surface_version = _core.api_surface_version
+deprecated_warning = _core.deprecated_warning
 scan_ports = _core.scan_ports
 async_scan_ports = _core.async_scan_ports
 scan_endpoints = _core.scan_endpoints
@@ -259,6 +297,9 @@ OperationDescriptor = _core.OperationDescriptor
 OperationDescriptorPy = _core.OperationDescriptorPy
 OperationMetadataView = _core.OperationMetadataView
 OperationRegistry = _core.OperationRegistry
+# G1: Domain descriptors
+DomainDescriptor = _core.DomainDescriptorPy
+DomainRegistry = _core.DomainRegistry
 ExecutionSurface = _core.ExecutionSurfacePy
 ExecutionProfile = _core.ExecutionProfilePy
 PolicyDecision = _core.PolicyDecisionPy
@@ -664,6 +705,36 @@ notify_scan_complete = _core.notify_scan_complete
 notify_findings = _core.notify_findings
 notify_error = _core.notify_error
 
+# G2: Event protocol stabilization (always-available)
+EVENT_SCHEMA_VERSION = _core.EVENT_SCHEMA_VERSION
+EventEnvelope = _core.EventEnvelope
+PlanningEvent = _core.PlanningEvent
+PreflightEvent = _core.PreflightEvent
+StageLifecycleEvent = _core.StageLifecycleEvent
+ProgressEvent = _core.ProgressEvent
+FindingEventPy = _core.FindingEvent
+ArtifactEventPy = _core.ArtifactEvent
+CancellationEvent = _core.CancellationEvent
+FailureEvent = _core.FailureEvent
+CompletionEvent = _core.CompletionEvent
+wrap_event = _core.wrap_event
+EventStream = _core.EventStream
+event_stream_from_legacy = _core.event_stream_from_legacy
+
+# G4: Async iterators
+EventStreamAsyncIterator = _core.EventStreamAsyncIterator
+FindingStreamAsyncIterator = _core.FindingStreamAsyncIterator
+
+# G3: Callbacks and sinks (always-available)
+AuditSink = _core.AuditSink
+FindingSink = _core.FindingSink
+ArtifactSink = _core.ArtifactSink
+ProgressSink = _core.ProgressSink
+EventConsumer = _core.EventConsumer
+AsyncCallback = _core.AsyncCallback
+CallbackScheduler = _core.CallbackScheduler
+BackpressureChannel = _core.PyBackpressureChannel
+
 # Milestone F: AI post-processing (feature-gated)
 try:
     AiProvider = _core.AiProviderPy
@@ -696,12 +767,25 @@ FeatureUnavailableError = _core.FeatureUnavailableError
 SerializationError = _core.SerializationError
 InternalError = _core.InternalError
 
+# G6: Experimental namespace (subpackage for unstable APIs)
+from . import experimental  # noqa: E402
+
 __all__ = [
     "__version__",
     "__version_info__",
+    "__schema_version__",
+    "__protocol_version__",
+    "__abi_version__",
+    "FINDING_SCHEMA_VERSION",
+    # G6/G7 introspection
+    "api_surface",
+    "api_surface_version",
+    "_deprecated",
+    "deprecated_warning",
     # Functions
     "features",
     "has_feature",
+    "feature_matrix",
     "build_info",
     "scan_ports",
     "async_scan_ports",
@@ -840,6 +924,8 @@ __all__ = [
     "OperationDescriptorPy",
     "OperationMetadataView",
     "OperationRegistry",
+    "DomainDescriptor",
+    "DomainRegistry",
     "ExecutionSurface",
     "ExecutionProfile",
     "PolicyDecision",
@@ -1026,4 +1112,28 @@ __all__ = [
     "FeatureUnavailableError",
     "SerializationError",
     "InternalError",
+    # G2: Event protocol
+    "EVENT_SCHEMA_VERSION",
+    "EventEnvelope",
+    "PlanningEvent",
+    "PreflightEvent",
+    "StageLifecycleEvent",
+    "ProgressEvent",
+    "FindingEventPy",
+    "ArtifactEventPy",
+    "CancellationEvent",
+    "FailureEvent",
+    "CompletionEvent",
+    "wrap_event",
+    "EventStream",
+    "event_stream_from_legacy",
+    # G3: Callbacks and sinks
+    "AuditSink",
+    "FindingSink",
+    "ArtifactSink",
+    "ProgressSink",
+    "EventConsumer",
+    "AsyncCallback",
+    "CallbackScheduler",
+    "BackpressureChannel",
 ]

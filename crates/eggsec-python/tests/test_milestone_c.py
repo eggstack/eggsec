@@ -8,6 +8,16 @@ from default test runs.
 import pytest
 
 
+def _import_or_skip(name, feature=""):
+    """Import a name from eggsec, skip test if unavailable (feature-gated)."""
+    import importlib
+    mod = importlib.import_module("eggsec")
+    obj = getattr(mod, name, None)
+    if obj is None:
+        pytest.skip(f"{name} not available (requires {feature} feature)")
+    return obj
+
+
 # ── Consolidated Recon ────────────────────────────────────────────────
 
 class TestConsolidatedReconConfig:
@@ -151,7 +161,7 @@ class TestAuthTestConfig:
 
 class TestBrowserTestConfig:
     def test_default_config(self):
-        from eggsec import BrowserTestConfig
+        BrowserTestConfig = _import_or_skip("BrowserTestConfig", "headless-browser")
 
         cfg = BrowserTestConfig()
         assert cfg.check_dom_xss is True
@@ -161,7 +171,7 @@ class TestBrowserTestConfig:
         assert "alert" in cfg.xss_payload
 
     def test_custom_config(self):
-        from eggsec import BrowserTestConfig
+        BrowserTestConfig = _import_or_skip("BrowserTestConfig", "headless-browser")
 
         cfg = BrowserTestConfig(
             check_dom_xss=False,
@@ -176,7 +186,7 @@ class TestBrowserTestConfig:
 
 class TestHuntTestConfig:
     def test_default_config(self):
-        from eggsec import HuntTestConfig
+        HuntTestConfig = _import_or_skip("HuntTestConfig", "advanced-hunting")
 
         cfg = HuntTestConfig()
         assert cfg.check_attack_chains is True
@@ -188,7 +198,7 @@ class TestHuntTestConfig:
         assert cfg.timeout_ms == 10000
 
     def test_custom_config(self):
-        from eggsec import HuntTestConfig
+        HuntTestConfig = _import_or_skip("HuntTestConfig", "advanced-hunting")
 
         cfg = HuntTestConfig(
             check_attack_chains=False,
@@ -259,40 +269,46 @@ class TestImports:
         assert callable(async_auth_test)
 
     def test_browser_types(self):
-        from eggsec import (
-            XssSource,
-            XssSink,
-            DomXssFinding,
-            DiscoveryMethod,
-            SpaRoute,
-            ClientIssueType,
-            ClientIssue,
-            BrowserTestConfig,
-            BrowserTestReport,
-            browser_test,
-            async_browser_test,
-        )
+        try:
+            from eggsec import (
+                XssSource,
+                XssSink,
+                DomXssFinding,
+                DiscoveryMethod,
+                SpaRoute,
+                ClientIssueType,
+                ClientIssue,
+                BrowserTestConfig,
+                BrowserTestReport,
+                browser_test,
+                async_browser_test,
+            )
+        except ImportError:
+            pytest.skip("headless-browser feature not enabled")
         assert callable(browser_test)
         assert callable(async_browser_test)
 
     def test_hunt_types(self):
-        from eggsec import (
-            ChainType,
-            ChainStep,
-            AttackChain,
-            FlawType,
-            BusinessLogicFlaw,
-            RaceType,
-            RaceCondition,
-            BypassType,
-            AuthzBypass,
-            SessionIssueType,
-            SessionIssue,
-            HuntTestConfig,
-            HuntReport,
-            hunt_test,
-            async_hunt_test,
-        )
+        try:
+            from eggsec import (
+                ChainType,
+                ChainStep,
+                AttackChain,
+                FlawType,
+                BusinessLogicFlaw,
+                RaceType,
+                RaceCondition,
+                BypassType,
+                AuthzBypass,
+                SessionIssueType,
+                SessionIssue,
+                HuntTestConfig,
+                HuntReport,
+                hunt_test,
+                async_hunt_test,
+            )
+        except ImportError:
+            pytest.skip("advanced-hunting feature not enabled")
         assert callable(hunt_test)
         assert callable(async_hunt_test)
 

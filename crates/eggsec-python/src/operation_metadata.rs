@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use std::collections::HashMap;
 
 /// Risk tier for operations. Higher variants are more dangerous.
 ///
@@ -702,6 +703,12 @@ pub struct OperationMetadataViewPy {
     default_risk: OperationRiskPy,
     default_mode: OperationModePy,
     target_policy: TargetPolicyKindPy,
+    request_schema: Option<String>,
+    result_schema: Option<String>,
+    feature_required: Option<String>,
+    python_async_available: bool,
+    supported_surfaces: Vec<String>,
+    default_timeout_ms: Option<i64>,
 }
 
 #[pymethods]
@@ -736,6 +743,42 @@ impl OperationMetadataViewPy {
         self.target_policy.clone()
     }
 
+    /// JSON schema reference or description for the request type.
+    #[getter]
+    fn request_schema(&self) -> Option<String> {
+        self.request_schema.clone()
+    }
+
+    /// JSON schema reference or description for the result type.
+    #[getter]
+    fn result_schema(&self) -> Option<String> {
+        self.result_schema.clone()
+    }
+
+    /// Feature flag required, or None if always available.
+    #[getter]
+    fn feature_required(&self) -> Option<String> {
+        self.feature_required.clone()
+    }
+
+    /// Whether async_scan_* variant exists for this operation.
+    #[getter]
+    fn python_async_available(&self) -> bool {
+        self.python_async_available
+    }
+
+    /// Which execution surfaces support this operation.
+    #[getter]
+    fn supported_surfaces(&self) -> Vec<String> {
+        self.supported_surfaces.clone()
+    }
+
+    /// Suggested timeout in milliseconds if known.
+    #[getter]
+    fn default_timeout_ms(&self) -> Option<i64> {
+        self.default_timeout_ms
+    }
+
     /// Generate an [`OperationDescriptor`] for a specific target.
     ///
     /// Args:
@@ -755,11 +798,69 @@ impl OperationMetadataViewPy {
         Ok(OperationDescriptorPy { inner: descriptor })
     }
 
+    /// Serialize all fields to a Python dict.
+    fn to_dict(&self) -> HashMap<String, pyo3::PyObject> {
+        Python::with_gil(|py| {
+            let mut d = HashMap::new();
+            d.insert("operation_id".into(), self.operation_id.clone().into_py(py));
+            d.insert(
+                "operation_name".into(),
+                self.operation_name.clone().into_py(py),
+            );
+            d.insert("default_risk".into(), self.default_risk.name().into_py(py));
+            d.insert(
+                "default_mode".into(),
+                self.default_mode.name().to_string().into_py(py),
+            );
+            d.insert(
+                "target_policy".into(),
+                self.target_policy.name().into_py(py),
+            );
+            d.insert(
+                "request_schema".into(),
+                self.request_schema.clone().into_py(py),
+            );
+            d.insert(
+                "result_schema".into(),
+                self.result_schema.clone().into_py(py),
+            );
+            d.insert(
+                "feature_required".into(),
+                self.feature_required.clone().into_py(py),
+            );
+            d.insert(
+                "python_async_available".into(),
+                self.python_async_available.into_py(py),
+            );
+            d.insert(
+                "supported_surfaces".into(),
+                self.supported_surfaces.clone().into_py(py),
+            );
+            d.insert(
+                "default_timeout_ms".into(),
+                self.default_timeout_ms.into_py(py),
+            );
+            d
+        })
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "OperationMetadataView(id={}, name={:?})",
             self.operation_id, self.operation_name
         )
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.operation_id.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.operation_id == other.operation_id
     }
 }
 
@@ -768,6 +869,176 @@ impl OperationMetadataViewPy {
 /// Provides static methods to query the canonical operation metadata registry.
 #[pyclass]
 pub struct OperationRegistry;
+
+/// Known async operation IDs that have `async_scan_*` Python variants.
+const ASYNC_OPERATION_IDS: &[&str] = &[
+    "scan-ports",
+    "scan-endpoints",
+    "fingerprint-services",
+    "recon",
+    "tls-inspect",
+    "tech-detect",
+    "waf-detect",
+    "waf-validate",
+    "http-fuzz",
+    "load-test",
+    "git-secrets",
+    "sbom",
+    "mobile-static",
+    "db-pentest",
+    "scan-docker",
+    "scan-k8s",
+    "packet-capture",
+    "traceroute",
+    "stress-test",
+    "nse-run",
+    "wireless-scan",
+    "evasion-scan",
+    "postex-scan",
+    "c2-scan",
+    "browser-test",
+    "hunt-test",
+    "ai-analyze",
+];
+
+/// Default timeout suggestions by operation risk tier (in milliseconds).
+fn default_timeout_for_risk(risk: eggsec::config::OperationRisk) -> Option<i64> {
+    match risk {
+        eggsec::config::OperationRisk::Passive => Some(5_000),
+        eggsec::config::OperationRisk::SafeActive => Some(30_000),
+        eggsec::config::OperationRisk::Intrusive => Some(60_000),
+        eggsec::config::OperationRisk::LoadTest => Some(120_000),
+        eggsec::config::OperationRisk::StressTest => Some(120_000),
+        eggsec::config::OperationRisk::RawPacket => Some(30_000),
+        eggsec::config::OperationRisk::CredentialTesting => Some(60_000),
+        eggsec::config::OperationRisk::DbPentest => Some(60_000),
+        eggsec::config::OperationRisk::TrafficInterception => Some(120_000),
+        eggsec::config::OperationRisk::ExploitAdjacent => Some(60_000),
+        eggsec::config::OperationRisk::EvasionTesting => Some(60_000),
+        eggsec::config::OperationRisk::PostExploitation => Some(60_000),
+        eggsec::config::OperationRisk::C2Operation => Some(120_000),
+        eggsec::config::OperationRisk::RemoteExecution => Some(60_000),
+        eggsec::config::OperationRisk::AgentAutonomous => Some(300_000),
+    }
+}
+
+/// Schema description for known request types by operation ID.
+fn request_schema_for_id(id: &str) -> Option<&'static str> {
+    match id {
+        "scan-ports" => Some("PortScanRequest { target, ports, timeout_ms }"),
+        "scan-endpoints" => Some("EndpointScanRequest { target, paths, timeout_ms }"),
+        "fingerprint-services" => Some("FingerprintRequest { target, ports, timeout_ms }"),
+        "recon" => Some("ReconDnsRequest { target, timeout_ms }"),
+        "tls-inspect" => Some("TlsInspectRequest { target, timeout_ms }"),
+        "tech-detect" => Some("TechDetectRequest { target, timeout_ms }"),
+        "waf-detect" => Some("WafDetectRequest { target, timeout_ms }"),
+        "waf-validate" => Some("WafValidateRequest { target, scope }"),
+        "http-fuzz" => Some("FuzzRequest { target, scope, concurrency }"),
+        "load-test" => Some("LoadTestRequest { target, total_requests, concurrency }"),
+        "git-secrets" => Some("GitSecretRequest { path, depth }"),
+        "sbom" => Some("SbomRequest { path, format }"),
+        "mobile-static" => Some("MobileStaticRequest { path }"),
+        "mobile-dynamic" => Some("DynamicMobileRequest { device, package }"),
+        "db-pentest" => Some("DbPentestConfig { connection, queries }"),
+        "scan-docker" => Some("DockerScanRequest { image }"),
+        "scan-k8s" => Some("KubernetesScanRequest { kubeconfig }"),
+        "stress-test" => Some("StressConfig { target, type, duration }"),
+        "nse-run" => Some("NseConfig { target, scripts }"),
+        "wireless-scan" => Some("WirelessScanConfig { interface }"),
+        "evasion-scan" => Some("EvasionScanConfig { target, techniques }"),
+        "postex-scan" => Some("PostexScanConfig { target, profile }"),
+        "c2-scan" => Some("C2ScanConfig { target, campaign }"),
+        "browser-test" => Some("BrowserTestConfig { target, routes }"),
+        "hunt-test" => Some("HuntTestConfig { target, hunt_types }"),
+        _ => None,
+    }
+}
+
+/// Schema description for known result types by operation ID.
+fn result_schema_for_id(id: &str) -> Option<&'static str> {
+    match id {
+        "scan-ports" => Some("PortScanResult { open_ports, stats }"),
+        "scan-endpoints" => Some("EndpointScanResult { findings, stats }"),
+        "fingerprint-services" => Some("FingerprintScanResult { services, stats }"),
+        "recon" => Some("DnsRecordSet { a, aaaa, mx, ns, txt, soa }"),
+        "tls-inspect" => Some("TlsInspectionResult { certificate, issues }"),
+        "tech-detect" => Some("TechDetectionResult { technologies }"),
+        "waf-detect" => Some("WafDetectionResult { detected, vendor, confidence }"),
+        "waf-validate" => Some("WafScanResult { bypasses, blocked }"),
+        "http-fuzz" => Some("FuzzResult { findings, stats }"),
+        "load-test" => Some("LoadTestResult { latency, throughput, errors }"),
+        "git-secrets" => Some("GitSecretsReport { findings, summary }"),
+        "sbom" => Some("SbomReport { components, vulnerabilities }"),
+        "mobile-static" => Some("MobileScanReport { findings, platform }"),
+        "mobile-dynamic" => Some("DynamicMobileReport { findings }"),
+        "db-pentest" => Some("DbPentestReport { findings, stats }"),
+        "scan-docker" => Some("DockerScanResult { misconfigs, layers }"),
+        "scan-k8s" => Some("KubernetesScanResult { findings }"),
+        "stress-test" => Some("StressResult { stats, errors }"),
+        "nse-run" => Some("NseReport { scripts, findings }"),
+        "wireless-scan" => Some("WirelessScanResult { networks, vulnerabilities }"),
+        "evasion-scan" => Some("EvasionReport { detections, summary }"),
+        "postex-scan" => Some("PostexReport { detections, summary }"),
+        "c2-scan" => Some("C2Report { campaigns, findings }"),
+        "browser-test" => Some("BrowserTestReport { xss, spa_routes, issues }"),
+        "hunt-test" => Some("HuntReport { chains, flaws, races, bypasses }"),
+        _ => None,
+    }
+}
+
+/// Compute supported surfaces from OperationMetadata fields.
+fn compute_surfaces(meta: &eggsec::config::OperationMetadata) -> Vec<String> {
+    let mut surfaces = Vec::new();
+    if meta.manual_exposable {
+        surfaces.push("cli".to_string());
+    }
+    if meta.tui_exposable {
+        surfaces.push("tui".to_string());
+    }
+    if meta.mcp_exposable {
+        surfaces.push("mcp".to_string());
+    }
+    if meta.rest_exposable {
+        surfaces.push("rest".to_string());
+    }
+    if meta.agent_exposable {
+        surfaces.push("agent".to_string());
+    }
+    if meta.grpc_exposable {
+        surfaces.push("grpc".to_string());
+    }
+    surfaces
+}
+
+/// Build an `OperationMetadataViewPy` from an engine `OperationMetadata` reference.
+fn build_view(meta: &eggsec::config::OperationMetadata) -> OperationMetadataViewPy {
+    let feature_required = if meta.required_features.is_empty() {
+        None
+    } else {
+        Some(meta.required_features[0].to_string())
+    };
+    let python_async_available = ASYNC_OPERATION_IDS.contains(&meta.id);
+    let supported_surfaces = compute_surfaces(meta);
+    let default_timeout_ms = default_timeout_for_risk(meta.risk);
+    let request_schema = request_schema_for_id(meta.id).map(|s| s.to_string());
+    let result_schema = result_schema_for_id(meta.id).map(|s| s.to_string());
+
+    OperationMetadataViewPy {
+        operation_id: meta.id.to_string(),
+        operation_name: meta.display_name.to_string(),
+        default_risk: OperationRiskPy { inner: meta.risk },
+        default_mode: OperationModePy { inner: meta.mode },
+        target_policy: TargetPolicyKindPy {
+            inner: meta.target_policy,
+        },
+        request_schema,
+        result_schema,
+        feature_required,
+        python_async_available,
+        supported_surfaces,
+        default_timeout_ms,
+    }
+}
 
 #[pymethods]
 impl OperationRegistry {
@@ -779,15 +1050,7 @@ impl OperationRegistry {
     fn all_operations() -> Vec<OperationMetadataViewPy> {
         eggsec::config::all_operation_metadata()
             .iter()
-            .map(|m| OperationMetadataViewPy {
-                operation_id: m.id.to_string(),
-                operation_name: m.display_name.to_string(),
-                default_risk: OperationRiskPy { inner: m.risk },
-                default_mode: OperationModePy { inner: m.mode },
-                target_policy: TargetPolicyKindPy {
-                    inner: m.target_policy,
-                },
-            })
+            .map(build_view)
             .collect()
     }
 
@@ -801,15 +1064,7 @@ impl OperationRegistry {
     #[staticmethod]
     fn find(operation_id: &str) -> Option<OperationMetadataViewPy> {
         let m = eggsec::config::operation_metadata(operation_id)?;
-        Some(OperationMetadataViewPy {
-            operation_id: m.id.to_string(),
-            operation_name: m.display_name.to_string(),
-            default_risk: OperationRiskPy { inner: m.risk },
-            default_mode: OperationModePy { inner: m.mode },
-            target_policy: TargetPolicyKindPy {
-                inner: m.target_policy,
-            },
-        })
+        Some(build_view(m))
     }
 
     /// Find metadata by tool ID, resolving aliases to canonical IDs.
@@ -822,15 +1077,75 @@ impl OperationRegistry {
     #[staticmethod]
     fn find_by_tool_id(tool_id: &str) -> Option<OperationMetadataViewPy> {
         let m = eggsec::config::metadata_for_tool_id(tool_id)?;
-        Some(OperationMetadataViewPy {
-            operation_id: m.id.to_string(),
-            operation_name: m.display_name.to_string(),
-            default_risk: OperationRiskPy { inner: m.risk },
-            default_mode: OperationModePy { inner: m.mode },
-            target_policy: TargetPolicyKindPy {
-                inner: m.target_policy,
-            },
-        })
+        Some(build_view(m))
+    }
+
+    /// Total number of registered operations.
+    ///
+    /// Returns:
+    ///     int: Count of all operation metadata entries.
+    #[staticmethod]
+    fn operation_count() -> usize {
+        eggsec::config::all_operation_metadata().len()
+    }
+
+    /// Operations requiring a specific feature flag.
+    ///
+    /// Args:
+    ///     feature: Feature flag name (e.g. "db-pentest", "mobile").
+    ///
+    /// Returns:
+    ///     list[OperationMetadataView]: Operations that require the given feature.
+    #[staticmethod]
+    fn operations_for_feature(feature: &str) -> Vec<OperationMetadataViewPy> {
+        eggsec::config::all_operation_metadata()
+            .iter()
+            .filter(|m| m.required_features.iter().any(|f| *f == feature))
+            .map(build_view)
+            .collect()
+    }
+
+    /// Operations supporting a specific execution surface.
+    ///
+    /// Args:
+    ///     surface: Surface name ("cli", "tui", "mcp", "rest", "agent", "grpc").
+    ///
+    /// Returns:
+    ///     list[OperationMetadataView]: Operations exposed on the given surface.
+    #[staticmethod]
+    fn operations_for_surface(surface: &str) -> Vec<OperationMetadataViewPy> {
+        eggsec::config::all_operation_metadata()
+            .iter()
+            .filter(|m| {
+                let surfaces = compute_surfaces(m);
+                surfaces.iter().any(|s| s == surface)
+            })
+            .map(build_view)
+            .collect()
+    }
+
+    /// All operation IDs.
+    ///
+    /// Returns:
+    ///     list[str]: Canonical operation identifiers.
+    #[staticmethod]
+    fn operation_ids() -> Vec<String> {
+        eggsec::config::all_operation_metadata()
+            .iter()
+            .map(|m| m.id.to_string())
+            .collect()
+    }
+
+    /// All operation display names.
+    ///
+    /// Returns:
+    ///     list[str]: Human-readable operation names.
+    #[staticmethod]
+    fn operation_names() -> Vec<String> {
+        eggsec::config::all_operation_metadata()
+            .iter()
+            .map(|m| m.display_name.to_string())
+            .collect()
     }
 
     fn __repr__(&self) -> String {

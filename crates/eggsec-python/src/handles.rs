@@ -113,6 +113,22 @@ impl ExecutionHandle {
             self.status.name()
         )
     }
+
+    /// Context manager __enter__.
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Context manager __exit__.
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        false
+    }
 }
 
 impl serde::Serialize for ExecutionHandle {
@@ -179,6 +195,22 @@ impl ExecutionEvent {
             self.handle_id, self.event_type, self.timestamp_ms
         )
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.handle_id.hash(&mut hasher);
+        self.event_type.hash(&mut hasher);
+        self.timestamp_ms.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.handle_id == other.handle_id
+            && self.event_type == other.event_type
+            && self.timestamp_ms == other.timestamp_ms
+    }
 }
 
 impl serde::Serialize for ExecutionEvent {
@@ -190,6 +222,18 @@ impl serde::Serialize for ExecutionEvent {
         s.serialize_field("timestamp_ms", &self.timestamp_ms)?;
         s.serialize_field("detail", &self.detail)?;
         s.end()
+    }
+}
+
+impl ExecutionEvent {
+    /// Serialize to a Python dict (crate-internal).
+    pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("handle_id", &self.handle_id)?;
+        dict.set_item("event_type", &self.event_type)?;
+        dict.set_item("timestamp_ms", self.timestamp_ms)?;
+        dict.set_item("detail", &self.detail)?;
+        Ok(dict.into())
     }
 }
 
@@ -247,11 +291,135 @@ impl EventLog {
             .collect()
     }
 
+    /// Return events wrapped in versioned EventEnvelope dicts.
+    fn to_versioned_list(&self, py: Python) -> PyResult<PyObject> {
+        let list = PyList::empty_bound(py);
+        for event in &self.events {
+            let env = crate::event_protocol::EventEnvelope::from_legacy(py, event)?;
+            list.append(env.to_dict_impl(py)?)?;
+        }
+        Ok(list.into())
+    }
+
+    /// Return the current event schema version.
+    fn schema_version(&self) -> String {
+        crate::event_protocol::EVENT_SCHEMA_VERSION.to_string()
+    }
+
+    /// Take all events from the log and clear it.
+    /// Returns the events wrapped in EventEnvelope dicts.
+    fn drain(&mut self, py: Python) -> PyResult<PyObject> {
+        let events: Vec<ExecutionEvent> = self.events.drain(..).collect();
+        let list = PyList::empty_bound(py);
+        for event in &events {
+            let env = crate::event_protocol::EventEnvelope::from_legacy(py, event)?;
+            list.append(env.to_dict_impl(py)?)?;
+        }
+        Ok(list.into())
+    }
+
     fn __repr__(&self) -> String {
         format!("EventLog(events={})", self.events.len())
     }
 
     fn __len__(&self) -> usize {
         self.events.len()
+    }
+
+    /// Iterate over events (yields ExecutionEvent objects).
+    fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
+        let list = PyList::empty_bound(py);
+        for event in slf.events.iter() {
+            let obj = event.clone().into_py(py);
+            list.append(obj)?;
+        }
+        list.call_method0("__iter__").map(|o| o.into())
+    }
+
+    /// Create a lazy iterator that yields events one at a time.
+    fn iter_lazy(&self) -> LazyEventIterator {
+        LazyEventIterator::new(self.events.clone())
+    }
+
+    /// Check if an event with the given handle_id exists in the log.
+    fn __contains__(&self, event: &ExecutionEvent) -> bool {
+        self.events.iter().any(|e| {
+            e.handle_id == event.handle_id
+                && e.event_type == event.event_type
+                && e.timestamp_ms == event.timestamp_ms
+        })
+    }
+
+    /// Create an async iterator for this EventLog.
+    fn __aiter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __anext__<'py>(slf: PyRef<'py, Self>, _py: Python<'py>) -> PyResult<Option<PyObject>> {
+        // For a non-async context, return None immediately (empty async iterator)
+        Ok(None)
+    }
+
+    /// Context manager __enter__.
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Context manager __exit__.
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        false
+    }
+}
+
+impl EventLog {
+    /// Access the raw events (crate-internal).
+    pub(crate) fn events(&self) -> &[ExecutionEvent] {
+        &self.events
+    }
+
+    /// Number of events (crate-internal).
+    pub(crate) fn event_count(&self) -> usize {
+        self.events.len()
+    }
+}
+
+/// Lazy iterator for EventLog — yields events one at a time without materializing a list.
+#[pyclass(name = "LazyEventIterator")]
+pub struct LazyEventIterator {
+    events: Vec<ExecutionEvent>,
+    index: usize,
+}
+
+#[pymethods]
+impl LazyEventIterator {
+    #[new]
+    fn new(events: Vec<ExecutionEvent>) -> Self {
+        Self { events, index: 0 }
+    }
+
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<Option<PyObject>> {
+        if slf.index >= slf.events.len() {
+            return Ok(None);
+        }
+        let event = slf.events[slf.index].clone();
+        slf.index += 1;
+        Ok(Some(event.into_py(py)))
+    }
+
+    fn __len__(&self) -> usize {
+        self.events.len() - self.index
     }
 }

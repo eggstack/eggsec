@@ -1,5 +1,7 @@
 # Python API Milestone G — Extensibility and API Stabilization
 
+Status: Executed
+
 ## Goal
 
 Finalize the long-term Python extension model, native ergonomics, compatibility policy, packaging matrix, documentation, and release gates required for a stable public API.

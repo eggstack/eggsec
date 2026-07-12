@@ -11,7 +11,7 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
-**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Milestone C adds: consolidated recon, GraphQL/OAuth/auth assessment, headless browser testing, and advanced vulnerability hunting. Milestone E adds: typed findings schema, artifact storage, workflow management, finding repository, baseline comparison, reporting engine, compliance mapping (feature-gated), external integrations, and schema migration.
+**Status**: Experimental (0.1.0). Default wheel includes: core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Milestone C adds: consolidated recon, GraphQL/OAuth/auth assessment, headless browser testing, and advanced vulnerability hunting. Milestone E adds: typed findings schema, artifact storage, workflow management, finding repository, baseline comparison, reporting engine, compliance mapping (feature-gated), external integrations, and schema migration. Milestone G adds: domain registry and operation introspection, versioned event protocol, callback/sink contracts, Python-native ergonomics, binary buffer protocol, API surface introspection, performance benchmarks, and 1.0 readiness checklist.
 
 ## Directory Structure
 
@@ -832,6 +832,116 @@ target_version = SchemaVersion(major=2, minor=0, patch=0)
 result = migration.migrate(old_findings, from_version=SchemaVersion(major=1, minor=0, patch=0), to_version=target_version)
 print(f"Migrated {result.migrated_count} findings, errors: {len(result.errors)}")
 ```
+
+## Milestone G — Extensibility and API Stabilization
+
+### G1: Domain Registry and Operation Introspection
+
+`DomainDescriptor` groups operations under capability domains. `DomainRegistry` provides read-only access to all registered domains. `OperationRegistry` gains enhanced methods for domain-scoped queries.
+
+- `DomainDescriptor`: domain ID, label, required feature, category, operations list
+- `DomainRegistry.all_domains()`, `.find(domain_id)`
+- `OperationRegistry.find_by_domain(domain_id)`, `.domains()`
+
+### G2: Event Protocol
+
+Versioned event protocol with typed payloads. `EventEnvelope` wraps all events with schema version, sequence, timestamp, and kind. `EventStream` provides an async iterator over events.
+
+- `EventEnvelope`: schema_version, sequence, timestamp, kind, payload
+- `EventStream`: async iterator yielding `EventEnvelope` instances
+- Typed payloads: `PlanningEvent`, `PreflightEvent`, `ProgressEvent`, `FindingEvent`, `ArtifactEvent`, `CompletionEvent`, `FailureEvent`, `CancellationEvent`
+
+### G3: Callback and Sink Contracts
+
+Finalized interfaces for extensibility points. Callbacks are guarded to prevent user exceptions from destabilizing Rust execution.
+
+- `AuditSink`: receives `EnforcementAuditEvent` records
+- `FindingSink`: receives `VersionedFinding` records
+- `ArtifactSink`: receives `MilestoneArtifact` records
+- `ProgressConsumer`: receives progress updates
+- `AsyncCallback`: generic async callback wrapper
+- `CallbackScheduler`: manages callback registration and invocation
+- `BackpressureChannel`: bounded channel with backpressure for high-volume event streams
+
+### G4: Python-Native Ergonomics
+
+Consistent Python conventions across all types.
+
+- `pathlib.Path` accepted for file paths (in addition to `str`)
+- Python `datetime` converted to/from Rust `OffsetDateTime`
+- `__hash__` and `__eq__` on immutable DTOs
+- Context manager support (`__enter__`/`__exit__`) for session-oriented types
+- Pickle support for versioned, secret-free DTOs only
+- Stable `__repr__` with redacted secrets
+
+### G5: Binary Buffer Protocol
+
+Efficient binary data handling without unnecessary copies.
+
+- `BinaryBuffer`: zero-copy buffer protocol (`memoryview` compatible) for packet and binary artifact data
+- `LazyArtifact`: deferred artifact loading (loads content on access)
+- `PaginatedResults`: iterator-based pagination for large result sets
+
+### G6: Namespace and Import Stability
+
+Finalized package layout and deprecation policy.
+
+- `api_surface()`: returns list of all public API names with stability classifications
+- `feature_matrix()`: returns dict of feature flags and their status
+- `DeprecatedWarning`: emitted when using deprecated APIs
+- `experimental`: namespace marker for pre-stability APIs
+
+### G7: Versioning and Governance
+
+Machine-readable version and schema metadata.
+
+- `API_VERSION`, `SCHEMA_VERSION`, `ABI_VERSION` constants
+- `api_surface_version()`: returns current API version tuple
+- Version metadata in events, results, findings, and daemon messages
+
+### G10: Release Hardening
+
+Extended CI test suite covering:
+
+- Runtime/stub export parity
+- API-surface snapshots
+- Minimal and feature-rich import tests
+- Sync/async contract parity
+- Cancellation/leak/shutdown tests
+- Policy-equivalence tests
+- Serialization compatibility fixtures
+- Documentation build and link checks
+- Wheel smoke tests
+- Deprecation warning tests
+
+### G11: Performance Budgets
+
+Benchmark suite tracking:
+
+- Engine startup time
+- Repeated-call overhead
+- Python/Rust transition cost
+- Event delivery latency
+- Large-result serialization throughput
+- Packet-stream backpressure
+- Callback overhead
+- Async concurrency scaling
+
+Regression budgets enforced in CI.
+
+### G12: 1.0 Readiness Checklist
+
+Final public API audit covering:
+
+- Naming consistency
+- Exception hierarchy completeness
+- Type consistency across stubs and runtime
+- Feature behavior documentation
+- Migration path from pre-1.0
+- Security semantics documentation
+- Packaging matrix validation
+
+See `docs/python/README_1_0_CHECKLIST.md` and `docs/python/STABILITY_CLASSIFICATIONS.md`.
 
 ## Type Stubs
 

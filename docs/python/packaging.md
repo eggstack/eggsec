@@ -34,7 +34,7 @@ Wheels are written to `target/wheels/`. Each wheel is a platform-specific
 Not applicable -- the package contains a compiled Rust extension. There is
 no pure-Python fallback.
 
-## Supported platforms
+## Platform support
 
 | OS | Architecture | Triple | Status |
 |---|---|---|---|
@@ -52,45 +52,99 @@ target explicitly:
 maturin build --release --manylinux 2_28 --target x86_64-unknown-linux-gnu
 ```
 
-## Default wheel feature set
+## ABI compatibility
 
-The default wheel compiles the engine with **no optional features
-enabled**. This keeps the binary small and avoids pulling in system
-dependencies (`libssl-dev`, `libpcap-dev`, etc.) that users may not have.
+The native ABI version is tracked by the `ABI_VERSION` constant (currently
+`"1"`). ABI-breaking changes include:
 
-**Note:** PyPI publication has not yet occurred. The wheel is a default
-wheel candidate — not a published artifact.
+- Removing or renaming a `#[pyclass]` or `#[pyfunction]`.
+- Changing the Python signature of an existing function.
+- Modifying the memory layout of a `#[pyclass]`.
 
-The default wheel includes:
+Non-breaking additions (new classes, new methods, new optional parameters)
+do not bump the ABI version. Consumers should check `ABI_VERSION` before
+loading a wheel compiled against a different version.
 
-- Core engine (`eggsec-core`, `eggsec-tool-core`)
-- Scanner (TCP port scan, endpoint discovery)
-- Service fingerprinting
-- Reconnaissance (DNS, TLS inspection, technology detection)
-- WAF detection
-- Findings & reporting (`Finding`, `FindingSet`, `Report`)
-- Scope enforcement
+The `api_surface_version()` function returns all version metadata in one
+call:
 
-## What is NOT included by default
+```python
+>>> eggsec.api_surface_version()
+{'package_version': '0.1.0', 'schema_version': '1.0', 'protocol_version': '1.0.0', 'abi_version': '1', ...}
+```
 
-The following features require custom builds or future optional extras:
+## Wheel profiles
 
-| Feature | Build flag | System dependency |
-|---|---|---|
-| Nmap NSE scripts | `--features nse` | `libssl-dev` |
-| Stress testing / raw sockets | `--features stress-testing` | Root / `CAP_NET_RAW` |
-| Packet inspection | `--features packet-inspection` | `libpcap-dev` |
-| Headless browser | `--features headless-browser` | Chromium / Playwright |
-| Database persistence | `--features database` | SQLx drivers |
-| Cloud integration | `--features cloud` | AWS/GCP/Azure SDKs |
-| SBOM generation | `--features sbom` | -- |
-| WebSocket testing | `--features websocket` | -- |
+Two wheel profiles are available:
 
-To build with specific features:
+### Core/default wheel
+
+Compiled with no optional features. Suitable for most users who need
+scanning, fingerprinting, recon, WAF detection, and reporting.
 
 ```bash
-maturin build --release --features nse,packet-inspection
+maturin build --release
 ```
+
+### Full wheel
+
+Compiled with all non-default features. Includes database pentest, web
+proxy, mobile analysis, NSE, stress testing, packet inspection, and more.
+Requires system dependencies at runtime.
+
+```bash
+maturin build --release --features full
+```
+
+Not all features can be combined in a single wheel. Some features (e.g.
+`packet-inspection`) require system libraries (`libpcap-dev`) that may not
+be available on all platforms.
+
+## Feature matrix
+
+| Feature | System Dep | Default Wheel | Full Wheel |
+|---|---|---|---|
+| `core` | -- | Yes | Yes |
+| `scanner` | -- | Yes | Yes |
+| `async-api` | -- | Yes | Yes |
+| `endpoint-discovery` | -- | Yes | Yes |
+| `service-fingerprinting` | -- | Yes | Yes |
+| `waf-detection` | -- | Yes | Yes |
+| `waf-validation` | -- | Yes | Yes |
+| `http-fuzzing` | -- | Yes | Yes |
+| `load-testing` | -- | Yes | Yes |
+| `findings-reporting` | -- | Yes | Yes |
+| `websocket` | -- | No | Yes |
+| `git-secrets` | -- | No | Yes |
+| `sbom` | -- | No | Yes |
+| `container` | -- | No | Yes |
+| `db-pentest` | -- | No | Yes |
+| `mobile` | -- | No | Yes |
+| `stress-testing` | -- | No | Yes |
+| `evasion` | -- | No | Yes |
+| `postex` | -- | No | Yes |
+| `c2` | -- | No | Yes |
+| `headless-browser` | Chromium | No | Yes |
+| `packet-inspection` | `libpcap-dev` | No | Yes |
+| `nse` | `libssl-dev` | No | Yes |
+| `wireless` | wireless-tools | No | Yes |
+| `web-proxy` | -- | No | Yes |
+
+## Python version support
+
+The package requires **Python >= 3.9**. The minimum is enforced in
+`pyproject.toml` and tested in CI.
+
+| Python | Status |
+|---|---|
+| 3.9 | Minimum supported |
+| 3.10 | Supported |
+| 3.11 | Supported |
+| 3.12 | Supported |
+| 3.13 | Supported |
+
+Python 3.8 and earlier are not supported due to reliance on `|` union
+type syntax in type annotations and `importlib.metadata` features.
 
 ## PyPI naming
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Evidence for a service fingerprint match.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FingerprintEvidence {
     #[pyo3(get)]
     pub probe: String,
@@ -26,7 +26,7 @@ impl FingerprintEvidence {
 
 /// Confidence level for a service fingerprint.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FingerprintConfidence {
     #[pyo3(get)]
     pub score: u8,
@@ -109,6 +109,20 @@ impl ServiceFingerprintResult {
             format!("{}/tcp - {} ({})", self.port, self.service, version_str)
         }
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.port.hash(&mut hasher);
+        self.service.hash(&mut hasher);
+        self.confidence.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.port == other.port && self.service == other.service
+    }
 }
 
 /// Result of a service fingerprinting scan.
@@ -174,6 +188,22 @@ impl FingerprintScanResult {
             "Fingerprint of {}: {} services identified in {}ms",
             self.target, self.services_identified, self.elapsed_ms
         )
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.target.hash(&mut hasher);
+        self.services_identified.hash(&mut hasher);
+        self.elapsed_ms.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.target == other.target
+            && self.services_identified == other.services_identified
+            && self.elapsed_ms == other.elapsed_ms
     }
 
     /// Convert service fingerprints to a list of row dicts suitable for tabular output.

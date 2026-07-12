@@ -3,7 +3,7 @@ use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 
 /// Severity level for findings.
-#[pyclass(frozen, eq, eq_int)]
+#[pyclass(frozen, eq, hash)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Severity {
     Critical,
@@ -75,7 +75,7 @@ impl Severity {
 
 /// Evidence supporting a finding.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Evidence {
     #[pyo3(get)]
     pub kind: String,
@@ -257,6 +257,24 @@ impl Finding {
             self.title
         )
     }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.id.hash(&mut hasher);
+        self.title.hash(&mut hasher);
+        self.target.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.id == other.id && self.title == other.title && self.target == other.target
+    }
+
+    fn __bool__(&self) -> bool {
+        true
+    }
 }
 
 /// A collection of findings.
@@ -264,6 +282,44 @@ impl Finding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FindingSet {
     findings: Vec<Finding>,
+}
+
+/// Python iterator for FindingSet — yields items one at a time.
+#[pyclass(name = "FindingSetIterator")]
+pub struct FindingSetIteratorPy {
+    findings: Vec<Finding>,
+    index: usize,
+}
+
+#[pymethods]
+impl FindingSetIteratorPy {
+    #[new]
+    fn new(findings: Vec<Finding>) -> Self {
+        Self {
+            findings,
+            index: 0,
+        }
+    }
+
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<Option<Finding>> {
+        if slf.index >= slf.findings.len() {
+            return Ok(None);
+        }
+        let finding = slf.findings[slf.index].clone();
+        slf.index += 1;
+        Ok(Some(finding))
+    }
+
+    fn __len__(&self) -> usize {
+        self.findings.len() - self.index
+    }
 }
 
 #[pymethods]
@@ -300,7 +356,31 @@ impl FindingSet {
         self.findings.clone()
     }
 
-    /// Convert to a list of dicts.
+    /// Filter findings by severity, returning a new FindingSet.
+    fn filter_by_severity(&self, severity: Severity) -> FindingSet {
+        FindingSet {
+            findings: self
+                .findings
+                .iter()
+                .filter(|f| f.severity == severity)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// Filter findings by category/type, returning a new FindingSet.
+    fn filter_by_type(&self, finding_type: &str) -> FindingSet {
+        FindingSet {
+            findings: self
+                .findings
+                .iter()
+                .filter(|f| f.category == finding_type)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// Convert to a list of dicts (materializes all findings).
     fn to_dicts(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty_bound(py);
         for f in &self.findings {
@@ -318,8 +398,24 @@ impl FindingSet {
         Ok(list.into())
     }
 
+    /// Create a lazy iterator that yields findings one at a time.
+    fn iter_lazy(&self) -> FindingSetIteratorPy {
+        FindingSetIteratorPy::new(self.findings.clone())
+    }
+
     fn __repr__(&self) -> String {
         format!("FindingSet(findings={})", self.findings.len())
+    }
+
+    /// Iterate over findings.
+    fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
+        let findings = slf.findings.clone();
+        Ok(FindingSetIteratorPy::new(findings).into_py(py))
+    }
+
+    /// Check if a finding with the given id exists in the set.
+    fn __contains__(&self, finding: &Finding) -> bool {
+        self.findings.iter().any(|f| f.id == finding.id)
     }
 }
 

@@ -118,12 +118,99 @@ eggsec.load_test_http("https://example.com", 0, 10, 30, scope)  # total_requests
 
 ## Best Practices
 
-1. **Be specific** — allow only the hosts and ports you need. Start with `deny_all()` and add rules.
+1. **Be specific** -- allow only the hosts and ports you need. Start with `deny_all()` and add rules.
 2. **Use `allow_cidrs()`** for network ranges, `allow_hosts()` for individual targets.
 3. **Load scope from files** for team-shared configurations rather than hardcoding in scripts.
 4. **Catch `EnforcementError`** explicitly to distinguish scope violations from network errors.
-5. **Prefer `Client` over the convenience function** when scanning multiple targets — the scope is validated once at construction, and the client object makes it clear what's authorized.
-6. **Never disable scope** — the `Scope` class has no "allow all" constructor. If you need to scan broad ranges, use `Scope.allow_cidrs(["0.0.0.0/0"])` and accept the authorization responsibility.
+5. **Prefer `Client` over the convenience function** when scanning multiple targets -- the scope is validated once at construction, and the client object makes it clear what's authorized.
+6. **Never disable scope** -- the `Scope` class has no "allow all" constructor. If you need to scan broad ranges, use `Scope.allow_cidrs(["0.0.0.0/0"])` and accept the authorization responsibility.
+7. **Use `DomainRegistry`** to discover available capability domains before dispatching operations.
+
+## Domain Descriptors
+
+Domains group operations under logical capability areas. Each domain
+declares what operations it provides, what feature gate controls it,
+and whether it is available in the current build.
+
+```python
+from eggsec import DomainRegistry
+
+# All known domains (including unavailable ones)
+all_domains = DomainRegistry.all_domains()
+
+# Only domains available in this build
+available = DomainRegistry.available_domains()
+
+# Find a specific domain
+db = DomainRegistry.find("db-pentest")
+if db and db.is_available:
+    print(f"DB pentest available: {db.operations}")
+```
+
+### DomainDescriptor fields
+
+| Property | Type | Description |
+|---|---|---|
+| `id` | `str` | Domain identifier (e.g. `"db-pentest"`, `"mobile-static"`). |
+| `display_name` | `str` | Human-readable name. |
+| `description` | `str` | Brief purpose. |
+| `category` | `str` | Classification (e.g. `"standard-assessment"`, `"defense-lab"`). |
+| `required_feature` | `str \| None` | Cargo feature flag, or None if always available. |
+| `operations` | `list[str]` | Operation IDs provided by this domain. |
+| `is_available` | `bool` | Whether the domain is compiled into this build. |
+
+## OperationRegistry Enhanced Methods
+
+The `OperationRegistry` provides static methods for querying operation
+metadata. Beyond the basic `all_operations()`, `find()`, and
+`find_by_tool_id()`, the following methods are available:
+
+```python
+from eggsec import OperationRegistry
+
+# Count all operations
+total = OperationRegistry.operation_count()
+
+# Operations requiring a specific feature
+db_ops = OperationRegistry.operations_for_feature("db-pentest")
+
+# Operations supporting a specific surface
+cli_ops = OperationRegistry.operations_for_surface("cli")
+
+# All operation IDs
+ids = OperationRegistry.operation_ids()
+
+# All display names
+names = OperationRegistry.operation_names()
+```
+
+These methods are useful for building dynamic UIs or validating that
+required operations are available before dispatching.
+
+## Event Schema Versioning
+
+All events produced by the engine are wrapped in `EventEnvelope` with a
+`schema_version` field. This enables backward-compatible evolution:
+
+- New event types can be added without breaking existing consumers.
+- Consumers should ignore unknown `event_type` values.
+- The `schema_version` field indicates the event schema version
+  (currently `"1.0.0"`).
+
+```python
+import eggsec
+
+# Check the current event schema version
+print(eggsec.EVENT_SCHEMA_VERSION)  # "1.0.0"
+
+# Consume events safely by checking the type
+for event in stream:
+    if event["event_type"] == "progress":
+        handle_progress(event["payload"])
+    elif event["event_type"] == "finding":
+        handle_finding(event["payload"])
+    # Unknown types are silently ignored
+```
 
 ## Exception Reference
 
