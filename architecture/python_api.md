@@ -73,3 +73,41 @@ Use Python `domain_maturity()` for whole-domain state and `api_surface()` for
 individual symbol state. A Cargo feature only controls compilation. It does
 not promote a domain to stable-core. See
 [`docs/python/domain-maturity.md`](../docs/python/domain-maturity.md).
+
+## Release 2: Network Programmability
+
+Release 2 introduces Python bindings for low-level network primitives. These
+types live in `eggsec.network`, `eggsec.transport`, `eggsec.probes`,
+`eggsec.http_client`, and `eggsec.websocket`.
+
+### Enforcement posture
+
+All Release 2 network operations pass through the engine's enforcement model:
+
+- **Low-level network primitives** (`TargetPy`, `ConnectionConfigPy`,
+  `RetryPolicyPy`, etc.) are scope-checked at construction time. Target
+  resolution validates against `LoadedScope` before DNS or TCP contact.
+- **TCP/UDP sessions** (`TcpSessionPy`, `UdpSocketPy`) use the existing
+  `EnforcementContext` via the transport layer. Session creation evaluates
+  scope and risk; connection attempts to out-of-scope targets raise
+  `EnforcementError`.
+- **HTTP client requests** (`HttpClientPy`, `AsyncHttpClientPy`) pass through
+  the policy gate for each request. The client enforces scope on the target
+  authority, records TLS metadata for audit, and redacts sensitive headers
+  from transcripts and reports.
+- **WebSocket assessments** (`websocket_assess()`) are canonical operations
+  with a policy check, structured events, and cooperative cancellation. They
+  follow the same dispatch contract as stable-core operations but are
+  classified provisional until graduation criteria are met.
+- **Raw packet injection** remains experimental (feature: `packet-inspection`).
+  It is not exposed through the Python bindings in the default wheel and
+  requires an explicit feature flag and elevated scope.
+
+### Stability classification
+
+Release 2 network types are **provisional**. The public API shape is useful
+and follows engine conventions (frozen pyclasses, `to_dict`/`to_json`,
+context managers for sessions), but they do not yet satisfy the graduation
+checklist in `docs/python/domain-maturity.md` for stable-core promotion.
+Use `api_surface()` to verify stability before relying on these types in
+compatibility-sensitive automation.

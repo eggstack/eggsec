@@ -2353,3 +2353,105 @@ except ScanError as e:
 except eggsec.EggsecError as e:
     print(f"Engine error: {e}")
 ```
+
+---
+
+## Release 2: Network Programmability
+
+### Network Configuration (`eggsec.network`)
+
+| Type | Description |
+|------|-------------|
+| `TargetPy` | Network target specification (host, port, scheme, path) |
+| `ResolvedTargetPy` | DNS resolution result with IPs and timing |
+| `ConnectionConfigPy` | Connection timeout and retry configuration |
+| `TimeoutConfigPy` | Distinguished phase timeouts (connect, read, write, TLS, idle) |
+| `RetryPolicyPy` | Retry policy with backoff configuration |
+| `SocketEndpointPy` | Socket endpoint info (address, port, family, loopback) |
+| `ConnectionTimingPy` | Timing breakdown (DNS, TCP, TLS, TTFB, total) |
+| `ConnectionMetadataPy` | Full connection metadata (endpoints, protocol, TLS, bytes) |
+| `NetworkEvidencePy` | Evidence from network operations |
+| `TranscriptEntryPy` | Single transcript entry (sent/received) |
+| `NetworkTranscriptPy` | Ordered transcript collection |
+
+**Functions:**
+- `resolve_target_sync(target, timeout_ms=5000)` — Synchronous DNS resolution
+- `async_resolve_target(target, timeout_ms=5000)` — Async DNS resolution
+
+### TCP Sessions (`eggsec.transport`)
+
+| Type | Description |
+|------|-------------|
+| `TcpConfigPy` | TCP connection configuration |
+| `TcpSessionPy` | Managed TCP session (context manager) |
+| `TcpConnectResultPy` | Connection result with endpoints and timing |
+| `TcpReadResultPy` | Read result with data, eof flag, and timing |
+| `TcpWriteResultPy` | Write result with byte count and timing |
+
+**Functions:**
+- `tcp_connect_probe(host, port, timeout_ms=5000)` — Single-shot TCP connect check
+- `banner_probe(host, port, timeout_ms=5000, max_banner_bytes=4096)` — Connect and read banner
+
+### UDP Sessions (`eggsec.transport`)
+
+| Type | Description |
+|------|-------------|
+| `UdpConfigPy` | UDP socket configuration |
+| `UdpSocketPy` | Managed UDP socket (context manager) |
+| `UdpSendResultPy` | Send result with byte count |
+| `UdpRecvResultPy` | Receive result with data and truncation flag |
+| `UdpRecvFromResultPy` | Receive result with source address |
+
+### Protocol Probes (`eggsec.probes`)
+
+| Type | Description |
+|------|-------------|
+| `DnsQueryConfigPy` | DNS query configuration |
+| `DnsRecordPy` | Individual DNS record |
+| `DnsQueryResultPy` | DNS query result with records and metadata |
+| `TlsProbeConfigPy` | TLS inspection configuration |
+| `CertificateInfoPy` | TLS certificate information |
+| `TlsProbeResultPy` | TLS probe result with cipher and version info |
+| `TlsIssuePy` | TLS security issue |
+| `HttpProbeConfigPy` | HTTP probe configuration |
+| `HttpProbeResultPy` | HTTP probe result with headers, body, and timing |
+
+**Functions:**
+- `dns_query(domain, record_types=None, resolver=None, timeout_ms=5000)` — DNS lookup
+- `tls_probe(host, port=443, sni=None, timeout_ms=10000, verify_certificate=True)` — TLS inspection
+- `http_probe(url, method="GET", timeout_ms=10000, follow_redirects=True)` — HTTP probe
+
+### HTTP Client (`eggsec.http_client`)
+
+| Type | Description |
+|------|-------------|
+| `HttpRequestPy` | HTTP request with duplicate-preserving headers |
+| `HttpHeadersPy` | Case-insensitive header container |
+| `HttpResponsePy` | Full HTTP response with timing and TLS metadata |
+| `HttpCookiePy` | HTTP cookie with security attributes |
+| `HttpClientConfigPy` | Client pool and timeout configuration |
+| `HttpClientPy` | Sync HTTP client (context manager) |
+| `AsyncHttpClientPy` | Async HTTP client (async context manager) |
+| `RedactConfigPy` | Sensitive header/body redaction configuration |
+
+**Functions:**
+- `create_http_client(config)` — Create sync HTTP client
+- `async_create_http_client(config)` — Create async HTTP client
+
+### WebSocket Sessions (`eggsec.websocket`)
+
+| Type | Description |
+|------|-------------|
+| `WebSocketSessionConfigPy` | Session configuration |
+| `WebSocketMessagePy` | Received message (text/binary) |
+| `WebSocketFramePy` | WebSocket frame details |
+| `WebSocketCloseInfoPy` | Close event information |
+| `WebSocketHandshakePy` | Handshake result |
+| `WebSocketSessionPy` | Sync WebSocket session (context manager) |
+| `AsyncWebSocketSessionPy` | Async WebSocket session (async context manager) |
+| `WebSocketAssessmentConfigPy` | Assessment configuration |
+| `WebSocketAssessmentResultPy` | Assessment result with findings |
+
+**Functions:**
+- `websocket_assess(url, timeout_ms=30000)` — Comprehensive WebSocket assessment
+- `async_websocket_assess(url, timeout_ms=30000)` — Async version

@@ -44,11 +44,13 @@ mod fingerprint;
 mod git_secrets;
 mod graphql;
 mod handles;
+mod http_client;
 mod iter_support;
 mod lazy_load;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
+mod network;
 #[cfg(feature = "nse")]
 mod nse;
 mod oauth;
@@ -59,6 +61,7 @@ mod packet_inspection;
 mod pipeline;
 mod planning;
 mod preflight;
+mod probes;
 #[cfg(feature = "web-proxy")]
 mod proxy;
 mod recon;
@@ -98,6 +101,9 @@ mod migration;
 mod notification;
 #[cfg(feature = "postex")]
 mod postex;
+mod transport;
+#[cfg(feature = "websocket")]
+mod websocket;
 #[cfg(feature = "wireless")]
 mod wireless;
 
@@ -400,6 +406,67 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Phase F Track 2: Load testing
     m.add_class::<loadtest::LoadTestResultPy>()?;
     m.add_class::<loadtest::LoadTestConfig>()?;
+    // Release 2: Network programmability DTOs
+    m.add_class::<network::TargetPy>()?;
+    m.add_class::<network::ResolvedTargetPy>()?;
+    m.add_class::<network::ConnectionConfigPy>()?;
+    m.add_class::<network::TimeoutConfigPy>()?;
+    m.add_class::<network::RetryPolicyPy>()?;
+    m.add_class::<network::SocketEndpointPy>()?;
+    m.add_class::<network::ConnectionTimingPy>()?;
+    m.add_class::<network::ConnectionMetadataPy>()?;
+    m.add_class::<network::NetworkEvidencePy>()?;
+    m.add_class::<network::TranscriptEntryPy>()?;
+    m.add_class::<network::NetworkTranscriptPy>()?;
+    // Release 2: TCP/UDP transport session primitives
+    m.add_class::<transport::TcpConfigPy>()?;
+    m.add_class::<transport::TcpSessionPy>()?;
+    m.add_class::<transport::TcpConnectResultPy>()?;
+    m.add_class::<transport::TcpReadResultPy>()?;
+    m.add_class::<transport::TcpWriteResultPy>()?;
+    m.add_class::<transport::UdpConfigPy>()?;
+    m.add_class::<transport::UdpSocketPy>()?;
+    m.add_class::<transport::UdpSendResultPy>()?;
+    m.add_class::<transport::UdpRecvResultPy>()?;
+    m.add_class::<transport::UdpRecvFromResultPy>()?;
+    m.add_class::<transport::BannerProbeResultPy>()?;
+    m.add_function(wrap_pyfunction!(transport::tcp_connect_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(transport::async_tcp_connect_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(transport::banner_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(transport::async_banner_probe, m)?)?;
+    // Release 2: Protocol probes
+    m.add_class::<probes::DnsQueryConfigPy>()?;
+    m.add_class::<probes::DnsRecordPy>()?;
+    m.add_class::<probes::DnsQueryResultPy>()?;
+    m.add_class::<probes::TlsProbeConfigPy>()?;
+    m.add_class::<probes::CertificateInfoPy>()?;
+    m.add_class::<probes::CertificateChainEntryPy>()?;
+    m.add_class::<probes::TlsProbeResultPy>()?;
+    m.add_class::<probes::TlsIssuePy>()?;
+    m.add_class::<probes::HttpProbeConfigPy>()?;
+    m.add_class::<probes::HttpProbeResultPy>()?;
+    m.add_function(wrap_pyfunction!(probes::dns_query, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::async_dns_query, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::tls_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::async_tls_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::http_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::async_http_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(network::resolve_target_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(network::async_resolve_target, m)?)?;
+    // Release 2: HTTP client
+    m.add_class::<http_client::RedactConfigPy>()?;
+    m.add_class::<http_client::HttpRequestPy>()?;
+    m.add_class::<http_client::HttpHeadersPy>()?;
+    m.add_class::<http_client::HttpCookiePy>()?;
+    m.add_class::<http_client::RedirectEntryPy>()?;
+    m.add_class::<http_client::TlsMetadataPy>()?;
+    m.add_class::<http_client::HttpTimingPy>()?;
+    m.add_class::<http_client::HttpResponsePy>()?;
+    m.add_class::<http_client::HttpClientConfigPy>()?;
+    m.add_class::<http_client::HttpClientPy>()?;
+    m.add_class::<http_client::AsyncHttpClientPy>()?;
+    m.add_function(wrap_pyfunction!(http_client::create_http_client, m)?)?;
+    m.add_function(wrap_pyfunction!(http_client::async_create_http_client, m)?)?;
     // Phase F Track 11: Stress testing
     #[cfg(feature = "stress-testing")]
     {
@@ -408,6 +475,19 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<stress::StressStatsPy>()?;
         m.add_class::<stress::StressConfigSummaryPy>()?;
         m.add_class::<stress::StressResultPy>()?;
+    }
+    // Release 2: WebSocket session API
+    #[cfg(feature = "websocket")]
+    {
+        m.add_class::<websocket::WebSocketSessionConfigPy>()?;
+        m.add_class::<websocket::WebSocketMessagePy>()?;
+        m.add_class::<websocket::WebSocketFramePy>()?;
+        m.add_class::<websocket::WebSocketCloseInfoPy>()?;
+        m.add_class::<websocket::WebSocketHandshakePy>()?;
+        m.add_class::<websocket::WebSocketSessionPy>()?;
+        m.add_class::<websocket::AsyncWebSocketSessionPy>()?;
+        m.add_class::<websocket::WebSocketAssessmentConfigPy>()?;
+        m.add_class::<websocket::WebSocketAssessmentResultPy>()?;
     }
     // Phase F Track 12: NSE bindings
     #[cfg(feature = "nse")]
@@ -540,6 +620,12 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     {
         m.add_function(wrap_pyfunction!(stress::stress_test, m)?)?;
         m.add_function(wrap_pyfunction!(stress::async_stress_test, m)?)?;
+    }
+    // Release 2: WebSocket session functions
+    #[cfg(feature = "websocket")]
+    {
+        m.add_function(wrap_pyfunction!(websocket::websocket_assess, m)?)?;
+        m.add_function(wrap_pyfunction!(websocket::async_websocket_assess, m)?)?;
     }
     // Phase F Track 12: NSE functions
     #[cfg(feature = "nse")]
@@ -967,6 +1053,19 @@ fn api_surface() -> PyObject {
         add_entry!("websocket_fuzz", "provisional");
         add_entry!("async_websocket_fuzz", "provisional");
 
+        // Provisional: WebSocket session API (Release 2 workstream 6)
+        add_entry!("WebSocketSessionConfig", "provisional");
+        add_entry!("WebSocketMessage", "provisional");
+        add_entry!("WebSocketFrame", "provisional");
+        add_entry!("WebSocketCloseInfo", "provisional");
+        add_entry!("WebSocketHandshake", "provisional");
+        add_entry!("WebSocketSession", "provisional");
+        add_entry!("AsyncWebSocketSession", "provisional");
+        add_entry!("WebSocketAssessmentConfig", "provisional");
+        add_entry!("WebSocketAssessmentResult", "provisional");
+        add_entry!("websocket_assess", "provisional");
+        add_entry!("async_websocket_assess", "provisional");
+
         // Provisional: feature-gated, implementation works but lacks full
         // backend/platform validation
         add_entry!("create_proxy_manager", "provisional");
@@ -1020,6 +1119,28 @@ fn api_surface() -> PyObject {
         add_entry!("dynamic_mobile_analysis", "experimental");
         add_entry!("stress_test", "experimental");
         add_entry!("async_stress_test", "experimental");
+
+        // Release 2: Protocol probes (provisional)
+        add_entry!("dns_query", "provisional");
+        add_entry!("async_dns_query", "provisional");
+        add_entry!("tls_probe", "provisional");
+        add_entry!("async_tls_probe", "provisional");
+        add_entry!("http_probe", "provisional");
+        add_entry!("async_http_probe", "provisional");
+        // Release 2: HTTP client (provisional)
+        add_entry!("create_http_client", "provisional");
+        add_entry!("async_create_http_client", "provisional");
+        add_entry!("HttpClientPy", "provisional");
+        add_entry!("AsyncHttpClientPy", "provisional");
+        add_entry!("HttpRequestPy", "provisional");
+        add_entry!("HttpResponsePy", "provisional");
+        add_entry!("HttpClientConfigPy", "provisional");
+        add_entry!("HttpHeadersPy", "provisional");
+        add_entry!("HttpCookiePy", "provisional");
+        add_entry!("HttpTimingPy", "provisional");
+        add_entry!("TlsMetadataPy", "provisional");
+        add_entry!("RedirectEntryPy", "provisional");
+        add_entry!("RedactConfigPy", "provisional");
 
         // G2: Event protocol (stable — versioned serialization)
         add_entry!("EventEnvelope", "stable");

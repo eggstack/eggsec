@@ -212,6 +212,8 @@ Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/egg
 
 The Python stable-core boundary is the twenty-two-operation engine registry: the original ten (`scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, `load_test`) plus twelve promoted domains (`scan_git_secrets`, `generate_sbom`, `run_consolidated_recon`, `graphql_test`, `oauth_test`, `auth_test`, `db_probe`, `nse_run`, `scan_docker_image`, `scan_kubernetes`, `analyze_apk`, `analyze_ipa`). The release guarantee covers local `Engine` and `AsyncEngine` execution; daemon-client APIs remain provisional until a separate transport parity milestone closes reconnect, replay, and result-retrieval semantics. Every stable-core dispatch passes through the structured policy gate and emits an audit decision. `OperationResult.error` is the versioned `OperationError` DTO; `error_message` is retained for compatibility. Release fixtures use managed loopback services and set `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for that explicit harness. See `docs/python/domain-maturity.md` for the provisional/experimental boundary and `crates/eggsec-python/README.md` for examples.
 
+Release 2 adds network programmability types: `eggsec.network` (target resolution, connection config, timing, evidence, transcripts), `eggsec.transport` (managed TCP/UDP sessions), `eggsec.probes` (DNS/TLS/HTTP one-shot probes), `eggsec.http_client` (security-oriented HTTP client), and `eggsec.websocket` (WebSocket sessions and assessment). These are provisional — scope-checked and policy-gated but not yet part of the stable-core operation registry. Raw packet injection remains experimental (feature: `packet-inspection`).
+
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|
 | `websocket` | `websocket` | WebSocket security testing |
@@ -223,7 +225,7 @@ The Python stable-core boundary is the twenty-two-operation engine registry: the
 | `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
 | `mobile` | `mobile` | APK/IPA static analysis |
 | `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
-| `packet-inspection` | `packet-inspection` | Packet capture |
+| `packet-inspection` | `packet-inspection` | Packet capture; raw packet injection remains experimental |
 | `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
 | `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
 | `container` | `container` | K8s/Docker scanning |

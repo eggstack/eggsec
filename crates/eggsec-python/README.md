@@ -335,6 +335,58 @@ report.write_json("scan_report.json")
 | `browser_test()` / `async_browser_test()` | experimental | Headless browser assessment (feature-gated) |
 | `hunt_test()` / `async_hunt_test()` | experimental | Advanced vulnerability hunting (feature-gated) |
 
+### Release 2: Network Programmability
+
+#### Network Configuration (`eggsec.network`)
+
+| Class | Description |
+|-------|-------------|
+| `TargetPy` | Network target specification |
+| `ResolvedTargetPy` | DNS resolution result |
+| `ConnectionConfigPy` | Connection timeout and retry configuration |
+| `TimeoutConfigPy` | Distinguished phase timeouts |
+| `RetryPolicyPy` | Retry policy with backoff |
+| `SocketEndpointPy` | Socket endpoint info |
+| `ConnectionTimingPy` | Timing breakdown (DNS, TCP, TLS, TTFB) |
+| `ConnectionMetadataPy` | Full connection metadata |
+| `NetworkEvidencePy` | Network operation evidence |
+| `TranscriptEntryPy` | Single transcript entry |
+| `NetworkTranscriptPy` | Transcript capture |
+
+#### Managed Sessions (`eggsec.transport`)
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TcpSessionPy` | Managed TCP session (context manager) |
+| `UdpSocketPy` | Managed UDP socket (context manager) |
+| `tcp_connect_probe()` | One-shot TCP connect probe |
+| `banner_probe()` | One-shot banner grab probe |
+
+#### Protocol Probes (`eggsec.probes`)
+
+| Function | Description |
+|----------|-------------|
+| `dns_query()` | DNS record lookup with TCP fallback |
+| `tls_probe()` | TLS certificate and cipher inspection |
+| `http_probe()` | HTTP request with redirect tracking |
+
+#### HTTP Client (`eggsec.http_client`)
+
+| Class | Description |
+|-------|-------------|
+| `HttpClientPy` | Security-oriented HTTP client (sync) |
+| `AsyncHttpClientPy` | Security-oriented HTTP client (async) |
+
+Features: duplicate-preserving headers, TLS metadata, redirect history, automatic redaction of sensitive headers.
+
+#### WebSocket Sessions (`eggsec.websocket`)
+
+| Class / Function | Description |
+|------------------|-------------|
+| `WebSocketSessionPy` | Managed WebSocket session (sync, context manager) |
+| `AsyncWebSocketSessionPy` | Managed WebSocket session (async, context manager) |
+| `websocket_assess()` | Comprehensive WebSocket security assessment |
+
 ### Policy, Configuration & Execution Context
 
 Milestone B adds Python bindings for the engine's enforcement model, configuration system, and operation metadata registry. These are always available (no feature flags required).

@@ -96,6 +96,31 @@ until they satisfy the graduation checklist:
 | `distributed` | experimental | Cluster architecture |
 | `ai` | experimental | LLM integration |
 
+## Release 2: Network Programmability (Provisional)
+
+| Symbol | Stability | Notes |
+|--------|-----------|-------|
+| `TargetPy` | provisional | Target specification |
+| `ResolvedTargetPy` | provisional | DNS resolution result |
+| `ConnectionConfigPy` | provisional | Connection configuration |
+| `TimeoutConfigPy` | provisional | Phase timeout configuration |
+| `RetryPolicyPy` | provisional | Retry policy |
+| `SocketEndpointPy` | provisional | Socket endpoint info |
+| `ConnectionTimingPy` | provisional | Timing breakdown |
+| `ConnectionMetadataPy` | provisional | Full connection metadata |
+| `NetworkEvidencePy` | provisional | Network operation evidence |
+| `TranscriptEntryPy` | provisional | Transcript entry |
+| `NetworkTranscriptPy` | provisional | Transcript collection |
+| `TcpConfigPy` | provisional | TCP configuration |
+| `TcpSessionPy` | provisional | Managed TCP session |
+| `UdpConfigPy` | provisional | UDP configuration |
+| `UdpSocketPy` | provisional | Managed UDP socket |
+| `HttpClientPy` | provisional | Sync HTTP client |
+| `AsyncHttpClientPy` | provisional | Async HTTP client |
+| `WebSocketSessionPy` | provisional | Sync WebSocket session |
+| `AsyncWebSocketSessionPy` | provisional | Async WebSocket session |
+| All probe functions | provisional | DNS, TLS, HTTP probes |
+
 1. canonical operation ID and request/result DTO;
 2. sync and async dispatch through the common policy gate;
 3. structured errors, events, cancellation, and serialization tests;

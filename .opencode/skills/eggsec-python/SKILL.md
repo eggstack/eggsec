@@ -1157,6 +1157,11 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 | `src/compliance.rs` | `ComplianceFramework`, `ComplianceControl`, `ComplianceMapper` (feature-gated, Milestone E) |
 | `src/integration.rs` | `IntegrationType`, `PublicationRecord`, `ExternalIntegration` (Milestone E) |
 | `src/migration.rs` | `SchemaVersion`, `MigrationResult`, `FindingMigration` (Milestone E) |
+| `src/network.rs` | `TargetPy`, `ConnectionConfigPy`, `TimeoutConfigPy`, `RetryPolicyPy`, timing/evidence/transcript types (Release 2) |
+| `src/transport.rs` | `TcpSessionPy`, `UdpSocketPy` managed sessions (Release 2) |
+| `src/probes.rs` | `dns_query()`, `tls_probe()`, `http_probe()` one-shot probes (Release 2) |
+| `src/http_client.rs` | `HttpClientPy`, `AsyncHttpClientPy` security-oriented HTTP client (Release 2) |
+| `src/websocket.rs` | `WebSocketSessionPy`, `AsyncWebSocketSessionPy`, `websocket_assess()` (Release 2, feature-gated) |
 | `python/eggsec/__init__.py` | Public API re-exports |
 | `python/eggsec/__init__.pyi` | Top-level type stubs |
 | `pyproject.toml` | maturin build configuration |
@@ -1183,3 +1188,60 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 - **GIL release**: GIL is released during network I/O (blocking calls use `py.allow_threads()`), but CPU-bound Rust work holds the GIL.
 - **Feature parity**: Not all engine features are exposed to Python. Feature-gated modules (e.g., `fuzzer`, `loadtest`, `stress`) require explicit `--features` at build time.
 - **Type stubs**: Generated manually, not auto-generated from Rust source. Keep `python/eggsec/*.pyi` in sync with `src/` changes.
+
+## Release 2: Network Programmability
+
+### Module Locations
+
+| Module | Rust Source | Purpose |
+|--------|------------|---------|
+| `eggsec.network` | `src/network.rs` | Target resolution, connection config, timing, evidence, transcripts |
+| `eggsec.transport` | `src/transport.rs` | Managed TCP/UDP sessions (context managers) |
+| `eggsec.probes` | `src/probes.rs` | One-shot DNS, TLS, HTTP probes |
+| `eggsec.http_client` | `src/http_client.rs` | Security-oriented HTTP client (sync/async) |
+| `eggsec.websocket` | `src/websocket.rs` | WebSocket sessions and assessment |
+
+### Convention Reminders
+
+Release 2 types follow existing eggsec-python conventions:
+
+- **Frozen pyclasses**: All DTOs (`TargetPy`, `ConnectionConfigPy`,
+  `TimeoutConfigPy`, `RetryPolicyPy`, `SocketEndpointPy`, `ConnectionTimingPy`,
+  `ConnectionMetadataPy`, `NetworkEvidencePy`, `TranscriptEntryPy`,
+  `NetworkTranscriptPy`) are `#[pyclass(frozen)]`. Use constructor methods or
+  factory functions — never mutate after construction.
+- **`to_dict()` / `to_json()`**: Every serializable type exposes both methods.
+  `to_dict()` returns a Python `dict`; `to_json()` returns a JSON string.
+- **Context managers**: `TcpSessionPy`, `UdpSocketPy`, `WebSocketSessionPy`,
+  and `AsyncWebSocketSessionPy` implement `__enter__`/`__exit__` (or async
+  equivalents). Always use `with` blocks to ensure cleanup.
+- **Scope enforcement**: All network operations validate targets against
+  `LoadedScope` before making contact. Out-of-scope targets raise
+  `EnforcementError`.
+- **Redaction**: `HttpClientPy` and `AsyncHttpClientPy` automatically redact
+  sensitive headers (`Authorization`, `Cookie`, etc.) from transcripts and
+  evidence.
+
+### How to Add New Network Types
+
+1. Implement the Rust struct in the appropriate `src/*.rs` file with
+   `#[pyclass(frozen)]` and `#[pymethods]`.
+2. Register in `src/lib.rs` via `m.add_class::<T>()`.
+3. Re-export in `python/eggsec/__init__.py`.
+4. Add a type stub in `python/eggsec/*.pyi`.
+5. Add tests in `tests/` (use loopback fixtures; set
+   `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for explicit fixture harnesses).
+6. If the type is a new operation (not just a DTO), register it in the
+   `OperationRegistry` and ensure it passes through `EnforcementContext`.
+
+### Feature Flags
+
+| Python Feature | Engine Feature | Notes |
+|----------------|----------------|-------|
+| `websocket` | `websocket` | WebSocket sessions and assessment; marker feature, no system deps |
+| `packet-inspection` | `packet-inspection` | Raw packet injection; requires `libpcap-dev`; experimental |
+
+Network programmability types in `eggsec.network`, `eggsec.transport`,
+`eggsec.probes`, and `eggsec.http_client` are included in the default wheel
+(no feature flag required). `eggsec.websocket` and raw packet injection
+require their respective feature flags.

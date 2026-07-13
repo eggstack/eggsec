@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 [features]
 default = []
 # Feature-gated engine modules exposed to Python
-websocket = ["eggsec/websocket"]
+websocket = ["eggsec/websocket", "dep:tokio-tungstenite", "dep:futures"]
 git-secrets = ["eggsec/git-secrets"]
 sbom = ["eggsec/sbom"]
 db-pentest = ["eggsec/db-pentest", "dep:eggsec-db-lab"]
@@ -60,4 +60,7 @@ anyhow = { workspace = true }
 rustc-hash = { workspace = true }
 uuid = { workspace = true }
 md-5 = { workspace = true }
+reqwest = { version = "0.13", features = ["rustls"], default-features = false }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
+futures = { version = "0.3", optional = true }
 url = "2"

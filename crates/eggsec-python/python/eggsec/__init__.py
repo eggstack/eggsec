@@ -90,6 +90,62 @@ try:
 except AttributeError:
     pass
 
+# Release 2: Network Programmability
+
+# Network types
+try:
+    from ._core import TargetPy, ResolvedTargetPy, ConnectionConfigPy, TimeoutConfigPy
+    from ._core import RetryPolicyPy, SocketEndpointPy, ConnectionTimingPy
+    from ._core import ConnectionMetadataPy, NetworkEvidencePy
+    from ._core import TranscriptEntryPy, NetworkTranscriptPy
+    from ._core import resolve_target_sync, async_resolve_target
+except AttributeError:
+    pass
+
+# Transport (TCP/UDP sessions)
+try:
+    from ._core import TcpConfigPy, TcpSessionPy, TcpConnectResultPy
+    from ._core import TcpReadResultPy, TcpWriteResultPy
+    from ._core import UdpConfigPy, UdpSocketPy, UdpSendResultPy
+    from ._core import UdpRecvResultPy, UdpRecvFromResultPy
+    from ._core import BannerProbeResultPy
+    from ._core import tcp_connect_probe, async_tcp_connect_probe
+    from ._core import banner_probe, async_banner_probe
+except AttributeError:
+    pass
+
+# Protocol probes
+try:
+    from ._core import DnsQueryConfigPy, DnsRecordPy, DnsQueryResultPy
+    from ._core import TlsProbeConfigPy, CertificateInfoPy, CertificateChainEntryPy
+    from ._core import TlsProbeResultPy, TlsIssuePy
+    from ._core import HttpProbeConfigPy, HttpProbeResultPy
+    from ._core import dns_query, async_dns_query
+    from ._core import tls_probe, async_tls_probe
+    from ._core import http_probe, async_http_probe
+except AttributeError:
+    pass
+
+# HTTP client
+try:
+    from ._core import HttpRequestPy, HttpHeadersPy, HttpResponsePy
+    from ._core import HttpCookiePy, RedirectEntryPy, TlsMetadataPy, HttpTimingPy
+    from ._core import HttpClientConfigPy, HttpClientPy, AsyncHttpClientPy
+    from ._core import RedactConfigPy
+    from ._core import create_http_client, async_create_http_client
+except AttributeError:
+    pass
+
+# WebSocket sessions (feature-gated)
+try:
+    from ._core import WebSocketSessionConfigPy, WebSocketMessagePy
+    from ._core import WebSocketFramePy, WebSocketCloseInfoPy, WebSocketHandshakePy
+    from ._core import WebSocketSessionPy, AsyncWebSocketSessionPy
+    from ._core import WebSocketAssessmentConfigPy, WebSocketAssessmentResultPy
+    from ._core import websocket_assess, async_websocket_assess
+except AttributeError:
+    pass
+
 # Phase F Track 4: Git secrets
 try:
     scan_git_secrets = _core.scan_git_secrets
@@ -1163,6 +1219,79 @@ __all__ = [
     "CallbackScheduler",
     "BackpressureChannel",
     "EventDeliveryStats",
+    # Release 2: Network Programmability - Network types
+    "TargetPy",
+    "ResolvedTargetPy",
+    "ConnectionConfigPy",
+    "TimeoutConfigPy",
+    "RetryPolicyPy",
+    "SocketEndpointPy",
+    "ConnectionTimingPy",
+    "ConnectionMetadataPy",
+    "NetworkEvidencePy",
+    "TranscriptEntryPy",
+    "NetworkTranscriptPy",
+    "resolve_target_sync",
+    "async_resolve_target",
+    # Release 2: Transport (TCP/UDP sessions)
+    "TcpConfigPy",
+    "TcpSessionPy",
+    "TcpConnectResultPy",
+    "TcpReadResultPy",
+    "TcpWriteResultPy",
+    "UdpConfigPy",
+    "UdpSocketPy",
+    "UdpSendResultPy",
+    "UdpRecvResultPy",
+    "UdpRecvFromResultPy",
+    "BannerProbeResultPy",
+    "tcp_connect_probe",
+    "async_tcp_connect_probe",
+    "banner_probe",
+    "async_banner_probe",
+    # Release 2: Protocol probes
+    "DnsQueryConfigPy",
+    "DnsRecordPy",
+    "DnsQueryResultPy",
+    "TlsProbeConfigPy",
+    "CertificateInfoPy",
+    "CertificateChainEntryPy",
+    "TlsProbeResultPy",
+    "TlsIssuePy",
+    "HttpProbeConfigPy",
+    "HttpProbeResultPy",
+    "dns_query",
+    "async_dns_query",
+    "tls_probe",
+    "async_tls_probe",
+    "http_probe",
+    "async_http_probe",
+    # Release 2: HTTP client
+    "HttpRequestPy",
+    "HttpHeadersPy",
+    "HttpResponsePy",
+    "HttpCookiePy",
+    "RedirectEntryPy",
+    "TlsMetadataPy",
+    "HttpTimingPy",
+    "HttpClientConfigPy",
+    "HttpClientPy",
+    "AsyncHttpClientPy",
+    "RedactConfigPy",
+    "create_http_client",
+    "async_create_http_client",
+    # Release 2: WebSocket sessions (feature-gated)
+    "WebSocketSessionConfigPy",
+    "WebSocketMessagePy",
+    "WebSocketFramePy",
+    "WebSocketCloseInfoPy",
+    "WebSocketHandshakePy",
+    "WebSocketSessionPy",
+    "AsyncWebSocketSessionPy",
+    "WebSocketAssessmentConfigPy",
+    "WebSocketAssessmentResultPy",
+    "websocket_assess",
+    "async_websocket_assess",
 ]
 
 # Keep the runtime export contract truthful for feature-gated builds. The
