@@ -670,6 +670,695 @@ impl serde::Serialize for FuzzRequest {
     }
 }
 
+/// Git secrets scan request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct GitSecretsScanRequest {
+    #[pyo3(get)]
+    pub repo_path: String,
+    #[pyo3(get)]
+    pub max_commits: Option<usize>,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl GitSecretsScanRequest {
+    #[new]
+    #[pyo3(signature = (repo_path, *, max_commits=None, timeout_ms=None))]
+    pub(crate) fn new(
+        repo_path: String,
+        max_commits: Option<usize>,
+        timeout_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            repo_path,
+            max_commits,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("repo_path", &self.repo_path)?;
+        dict.set_item("max_commits", &self.max_commits)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("GitSecretsScanRequest(repo_path={})", self.repo_path)
+    }
+}
+
+impl serde::Serialize for GitSecretsScanRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("repo_path", &self.repo_path)?;
+        map.serialize_entry("max_commits", &self.max_commits)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// SBOM generation request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct SbomRequest {
+    #[pyo3(get)]
+    pub project_path: String,
+    #[pyo3(get)]
+    pub ecosystem: Option<String>,
+    #[pyo3(get)]
+    pub format: Option<String>,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl SbomRequest {
+    #[new]
+    #[pyo3(signature = (project_path, *, ecosystem=None, format=None, timeout_ms=None))]
+    pub(crate) fn new(
+        project_path: String,
+        ecosystem: Option<String>,
+        format: Option<String>,
+        timeout_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            project_path,
+            ecosystem,
+            format,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("project_path", &self.project_path)?;
+        dict.set_item("ecosystem", &self.ecosystem)?;
+        dict.set_item("format", &self.format)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SbomRequest(project_path={})", self.project_path)
+    }
+}
+
+impl serde::Serialize for SbomRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(4))?;
+        map.serialize_entry("project_path", &self.project_path)?;
+        map.serialize_entry("ecosystem", &self.ecosystem)?;
+        map.serialize_entry("format", &self.format)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// Consolidated recon request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ConsolidatedReconRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub run_dns: Option<bool>,
+    #[pyo3(get)]
+    pub run_ssl: Option<bool>,
+    #[pyo3(get)]
+    pub run_tech_detect: Option<bool>,
+    #[pyo3(get)]
+    pub run_subdomain: Option<bool>,
+    #[pyo3(get)]
+    pub run_whois: Option<bool>,
+    #[pyo3(get)]
+    pub run_cors: Option<bool>,
+    #[pyo3(get)]
+    pub run_wayback: Option<bool>,
+    #[pyo3(get)]
+    pub run_js_analysis: Option<bool>,
+    #[pyo3(get)]
+    pub run_content: Option<bool>,
+    #[pyo3(get)]
+    pub run_email: Option<bool>,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl ConsolidatedReconRequest {
+    #[new]
+    #[pyo3(signature = (target, *, run_dns=None, run_ssl=None, run_tech_detect=None, run_subdomain=None, run_whois=None, run_cors=None, run_wayback=None, run_js_analysis=None, run_content=None, run_email=None, timeout_ms=None))]
+    pub(crate) fn new(
+        target: String,
+        run_dns: Option<bool>,
+        run_ssl: Option<bool>,
+        run_tech_detect: Option<bool>,
+        run_subdomain: Option<bool>,
+        run_whois: Option<bool>,
+        run_cors: Option<bool>,
+        run_wayback: Option<bool>,
+        run_js_analysis: Option<bool>,
+        run_content: Option<bool>,
+        run_email: Option<bool>,
+        timeout_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            target,
+            run_dns,
+            run_ssl,
+            run_tech_detect,
+            run_subdomain,
+            run_whois,
+            run_cors,
+            run_wayback,
+            run_js_analysis,
+            run_content,
+            run_email,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("run_dns", &self.run_dns)?;
+        dict.set_item("run_ssl", &self.run_ssl)?;
+        dict.set_item("run_tech_detect", &self.run_tech_detect)?;
+        dict.set_item("run_subdomain", &self.run_subdomain)?;
+        dict.set_item("run_whois", &self.run_whois)?;
+        dict.set_item("run_cors", &self.run_cors)?;
+        dict.set_item("run_wayback", &self.run_wayback)?;
+        dict.set_item("run_js_analysis", &self.run_js_analysis)?;
+        dict.set_item("run_content", &self.run_content)?;
+        dict.set_item("run_email", &self.run_email)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("ConsolidatedReconRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for ConsolidatedReconRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(12))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("run_dns", &self.run_dns)?;
+        map.serialize_entry("run_ssl", &self.run_ssl)?;
+        map.serialize_entry("run_tech_detect", &self.run_tech_detect)?;
+        map.serialize_entry("run_subdomain", &self.run_subdomain)?;
+        map.serialize_entry("run_whois", &self.run_whois)?;
+        map.serialize_entry("run_cors", &self.run_cors)?;
+        map.serialize_entry("run_wayback", &self.run_wayback)?;
+        map.serialize_entry("run_js_analysis", &self.run_js_analysis)?;
+        map.serialize_entry("run_content", &self.run_content)?;
+        map.serialize_entry("run_email", &self.run_email)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// GraphQL test request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct GraphqlTestRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl GraphqlTestRequest {
+    #[new]
+    #[pyo3(signature = (target, *, timeout_ms=None))]
+    pub(crate) fn new(target: String, timeout_ms: Option<u64>) -> Self {
+        Self { target, timeout_ms }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("GraphqlTestRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for GraphqlTestRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// OAuth test request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct OauthTestRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl OauthTestRequest {
+    #[new]
+    #[pyo3(signature = (target, *, timeout_ms=None))]
+    pub(crate) fn new(target: String, timeout_ms: Option<u64>) -> Self {
+        Self { target, timeout_ms }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("OauthTestRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for OauthTestRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// Auth test request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct AuthTestRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl AuthTestRequest {
+    #[new]
+    #[pyo3(signature = (target, *, timeout_ms=None))]
+    pub(crate) fn new(target: String, timeout_ms: Option<u64>) -> Self {
+        Self { target, timeout_ms }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("AuthTestRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for AuthTestRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// Database probe request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct DbProbeRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub port: Option<u16>,
+    #[pyo3(get)]
+    pub database: Option<String>,
+    #[pyo3(get)]
+    pub username: Option<String>,
+    #[pyo3(get)]
+    pub password: Option<String>,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl DbProbeRequest {
+    #[new]
+    #[pyo3(signature = (target, *, port=None, database=None, username=None, password=None, timeout_ms=None))]
+    pub(crate) fn new(
+        target: String,
+        port: Option<u16>,
+        database: Option<String>,
+        username: Option<String>,
+        password: Option<String>,
+        timeout_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            target,
+            port,
+            database,
+            username,
+            password,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("port", &self.port)?;
+        dict.set_item("database", &self.database)?;
+        dict.set_item("username", &self.username)?;
+        dict.set_item("password", &self.password)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbProbeRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for DbProbeRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(6))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("port", &self.port)?;
+        map.serialize_entry("database", &self.database)?;
+        map.serialize_entry("username", &self.username)?;
+        map.serialize_entry("password", &self.password)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// NSE run request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct NseRunRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub scripts: Option<Vec<String>>,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl NseRunRequest {
+    #[new]
+    #[pyo3(signature = (target, *, scripts=None, timeout_ms=None))]
+    pub(crate) fn new(
+        target: String,
+        scripts: Option<Vec<String>>,
+        timeout_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            target,
+            scripts,
+            timeout_ms,
+        }
+    }
+
+    #[getter]
+    fn scripts(&self) -> Option<Vec<String>> {
+        self.scripts.clone()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("scripts", &self.scripts)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("NseRunRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for NseRunRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("scripts", &self.scripts)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// Docker image scan request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct DockerImageScanRequest {
+    #[pyo3(get)]
+    pub image: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl DockerImageScanRequest {
+    #[new]
+    #[pyo3(signature = (image, *, timeout_ms=None))]
+    pub(crate) fn new(image: String, timeout_ms: Option<u64>) -> Self {
+        Self { image, timeout_ms }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("image", &self.image)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DockerImageScanRequest(image={})", self.image)
+    }
+}
+
+impl serde::Serialize for DockerImageScanRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("image", &self.image)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// Kubernetes scan request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct KubernetesScanRequest {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl KubernetesScanRequest {
+    #[new]
+    #[pyo3(signature = (target, *, timeout_ms=None))]
+    pub(crate) fn new(target: String, timeout_ms: Option<u64>) -> Self {
+        Self { target, timeout_ms }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("KubernetesScanRequest(target={})", self.target)
+    }
+}
+
+impl serde::Serialize for KubernetesScanRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("target", &self.target)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// APK analysis request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ApkAnalysisRequest {
+    #[pyo3(get)]
+    pub apk_path: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl ApkAnalysisRequest {
+    #[new]
+    #[pyo3(signature = (apk_path, *, timeout_ms=None))]
+    pub(crate) fn new(apk_path: String, timeout_ms: Option<u64>) -> Self {
+        Self {
+            apk_path,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("apk_path", &self.apk_path)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("ApkAnalysisRequest(apk_path={})", self.apk_path)
+    }
+}
+
+impl serde::Serialize for ApkAnalysisRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("apk_path", &self.apk_path)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
+/// IPA analysis request.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct IpaAnalysisRequest {
+    #[pyo3(get)]
+    pub ipa_path: String,
+    #[pyo3(get)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[pymethods]
+impl IpaAnalysisRequest {
+    #[new]
+    #[pyo3(signature = (ipa_path, *, timeout_ms=None))]
+    pub(crate) fn new(ipa_path: String, timeout_ms: Option<u64>) -> Self {
+        Self {
+            ipa_path,
+            timeout_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("ipa_path", &self.ipa_path)?;
+        dict.set_item("timeout_ms", &self.timeout_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("IpaAnalysisRequest(ipa_path={})", self.ipa_path)
+    }
+}
+
+impl serde::Serialize for IpaAnalysisRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("ipa_path", &self.ipa_path)?;
+        map.serialize_entry("timeout_ms", &self.timeout_ms)?;
+        map.end()
+    }
+}
+
 /// Fluent builder for constructing operation requests.
 #[pyclass]
 #[derive(Debug, Clone)]

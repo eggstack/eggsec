@@ -4,7 +4,7 @@
 contract covers. Importability and Cargo feature availability do not imply a
 compatibility guarantee.
 
-The stable release boundary is the ten-operation engine registry:
+The stable release boundary is the twenty-two-operation engine registry:
 
 - `scan_ports`
 - `scan_endpoints`
@@ -16,6 +16,18 @@ The stable release boundary is the ten-operation engine registry:
 - `validate_waf`
 - `fuzz_http`
 - `load_test`
+- `scan_git_secrets` (canonical operation ID for git-secrets domain)
+- `generate_sbom` (canonical operation ID for sbom domain)
+- `run_consolidated_recon` (canonical operation ID for consolidated-recon domain)
+- `graphql_test` (canonical operation ID for graphql domain)
+- `oauth_test` (canonical operation ID for oauth domain)
+- `auth_test` (canonical operation ID for authentication domain)
+- `db_probe` (canonical operation ID for database domain)
+- `nse_run` (canonical operation ID for nse domain)
+- `scan_docker_image` (canonical operation ID for container domain)
+- `scan_kubernetes` (canonical operation ID for container domain)
+- `analyze_apk` (canonical operation ID for mobile-static domain)
+- `analyze_ipa` (canonical operation ID for mobile-static domain)
 
 These operations use the canonical registry, mandatory policy gate, typed
 result payloads, structured errors, audit decisions, and sync/async dispatch.
@@ -34,8 +46,55 @@ reports, and checkpoints. Checkpoint release tests use unique sentinels to
 verify recursive redaction before persistence; `expose_secret()` remains an
 explicit manual-only operation.
 
-All other domains are classified as `provisional` or `experimental` until
-they satisfy the graduation checklist:
+## Domain Maturity Table
+
+All domains are classified as `stable`, `provisional`, or `experimental`
+until they satisfy the graduation checklist:
+
+### Graduation Checklist
+
+1. canonical operation ID and request/result DTO;
+2. sync and async dispatch through the common policy gate;
+3. structured errors, events, cancellation, and serialization tests;
+4. deterministic fixtures and local/daemon contract coverage where relevant;
+5. documentation, type stubs, and wheel-profile coverage.
+
+### Stable Domains
+
+| Domain | Operation ID(s) | Notes |
+|--------|-----------------|-------|
+| `stable-core` | `scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, `load_test` | Original ten operations; mandatory policy gate, typed results, sync/async tests |
+| `git-secrets` | `scan_git_secrets` | Policy gate, typed results, sync/async tests |
+| `sbom` | `generate_sbom` | Canonical operation ID, policy gate, typed results |
+| `consolidated-recon` | `run_consolidated_recon` | Canonical operation ID, policy gate, typed results |
+| `graphql` | `graphql_test` | Canonical operation ID, policy gate, typed results |
+| `oauth` | `oauth_test` | Canonical operation ID, policy gate, typed results |
+| `authentication` | `auth_test` | Canonical operation ID, policy gate, typed results |
+| `database` | `db_probe` | Canonical operation ID, policy gate, typed results |
+| `nse` | `nse_run` | Canonical operation ID, policy gate, typed results |
+| `container` | `scan_docker_image`, `scan_kubernetes` | Canonical operation IDs, policy gate, typed results |
+| `mobile-static` | `analyze_apk`, `analyze_ipa` | Canonical operation IDs, policy gate, typed results |
+
+### Experimental Domains (conditional graduation candidates)
+
+| Domain | Notes |
+|--------|-------|
+| `browser` | Conditional candidate, not yet graduated |
+| `hunt` | Conditional candidate, not yet graduated |
+
+### Provisional / Experimental (unchanged)
+
+| Domain | Status | Notes |
+|--------|--------|-------|
+| `daemon` | provisional | Transport parity pending |
+| `proxy` | provisional | MITM interception |
+| `packet-inspection` | provisional | Live capture, traceroute |
+| `wireless` | experimental | Platform-sensitive, root required |
+| `evasion` | experimental | MITRE ATT&CK mapped |
+| `postex` | experimental | Post-exploitation simulation |
+| `c2` | experimental | C2 simulation |
+| `distributed` | experimental | Cluster architecture |
+| `ai` | experimental | LLM integration |
 
 1. canonical operation ID and request/result DTO;
 2. sync and async dispatch through the common policy gate;

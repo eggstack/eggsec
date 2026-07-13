@@ -2,11 +2,27 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::collections::HashMap;
 
+use crate::auth_assess::AuthAssessmentReportPy;
+use crate::consolidated_recon::ConsolidatedReconReportPy;
+#[cfg(feature = "container")]
+use crate::container::{DockerImageReportPy, KubernetesReportPy};
+#[cfg(feature = "db-pentest")]
+use crate::db_pentest::DbProbeReportPy;
 use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
 use crate::fingerprint::FingerprintScanResult;
+#[cfg(feature = "git-secrets")]
+use crate::git_secrets::GitSecretsReportPy;
+use crate::graphql::GraphQLAssessmentReportPy;
 use crate::loadtest::LoadTestResultPy;
+#[cfg(feature = "mobile")]
+use crate::mobile::{ApkAnalysisReportPy, IpaAnalysisReportPy};
+#[cfg(feature = "nse")]
+use crate::nse::NseRunReportPy;
+use crate::oauth::OAuthAssessmentReportPy;
 use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
+#[cfg(feature = "sbom")]
+use crate::sbom::SbomReportPy;
 use crate::waf::WafDetectionResultPy;
 use crate::waf_validation::{FuzzSessionPy, WafScanResultPy};
 
@@ -175,6 +191,26 @@ pub(crate) enum OperationPayload {
     WafValidation(WafScanResultPy),
     HttpFuzz(FuzzSessionPy),
     LoadTest(LoadTestResultPy),
+    #[cfg(feature = "git-secrets")]
+    GitSecrets(GitSecretsReportPy),
+    #[cfg(feature = "sbom")]
+    Sbom(SbomReportPy),
+    ConsolidatedRecon(ConsolidatedReconReportPy),
+    Graphql(Vec<GraphQLAssessmentReportPy>),
+    Oauth(Vec<OAuthAssessmentReportPy>),
+    Auth(AuthAssessmentReportPy),
+    #[cfg(feature = "db-pentest")]
+    DbProbe(DbProbeReportPy),
+    #[cfg(feature = "nse")]
+    Nse(NseRunReportPy),
+    #[cfg(feature = "container")]
+    DockerImage(DockerImageReportPy),
+    #[cfg(feature = "container")]
+    Kubernetes(KubernetesReportPy),
+    #[cfg(feature = "mobile")]
+    Apk(ApkAnalysisReportPy),
+    #[cfg(feature = "mobile")]
+    Ipa(IpaAnalysisReportPy),
 }
 
 impl OperationPayload {
@@ -191,6 +227,26 @@ impl OperationPayload {
             OperationPayload::WafValidation(_) => "WafScanResult",
             OperationPayload::HttpFuzz(_) => "FuzzSession",
             OperationPayload::LoadTest(_) => "LoadTestResult",
+            #[cfg(feature = "git-secrets")]
+            OperationPayload::GitSecrets(_) => "GitSecretsReport",
+            #[cfg(feature = "sbom")]
+            OperationPayload::Sbom(_) => "SbomReport",
+            OperationPayload::ConsolidatedRecon(_) => "ConsolidatedReconReport",
+            OperationPayload::Graphql(_) => "GraphQLAssessmentReport",
+            OperationPayload::Oauth(_) => "OAuthAssessmentReport",
+            OperationPayload::Auth(_) => "AuthAssessmentReport",
+            #[cfg(feature = "db-pentest")]
+            OperationPayload::DbProbe(_) => "DbProbeReport",
+            #[cfg(feature = "nse")]
+            OperationPayload::Nse(_) => "NseRunReport",
+            #[cfg(feature = "container")]
+            OperationPayload::DockerImage(_) => "DockerImageReport",
+            #[cfg(feature = "container")]
+            OperationPayload::Kubernetes(_) => "KubernetesReport",
+            #[cfg(feature = "mobile")]
+            OperationPayload::Apk(_) => "ApkAnalysisReport",
+            #[cfg(feature = "mobile")]
+            OperationPayload::Ipa(_) => "IpaAnalysisReport",
         }
     }
 
@@ -207,6 +263,38 @@ impl OperationPayload {
             OperationPayload::WafValidation(r) => Py::new(py, r.clone())?.into_any(),
             OperationPayload::HttpFuzz(r) => Py::new(py, r.clone())?.into_any(),
             OperationPayload::LoadTest(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "git-secrets")]
+            OperationPayload::GitSecrets(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "sbom")]
+            OperationPayload::Sbom(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::ConsolidatedRecon(r) => Py::new(py, r.clone())?.into_any(),
+            OperationPayload::Graphql(items) => {
+                let list = pyo3::types::PyList::empty_bound(py);
+                for item in items {
+                    list.append(Py::new(py, item.clone())?)?;
+                }
+                list.into()
+            }
+            OperationPayload::Oauth(items) => {
+                let list = pyo3::types::PyList::empty_bound(py);
+                for item in items {
+                    list.append(Py::new(py, item.clone())?)?;
+                }
+                list.into()
+            }
+            OperationPayload::Auth(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "db-pentest")]
+            OperationPayload::DbProbe(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "nse")]
+            OperationPayload::Nse(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "container")]
+            OperationPayload::DockerImage(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "container")]
+            OperationPayload::Kubernetes(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "mobile")]
+            OperationPayload::Apk(r) => Py::new(py, r.clone())?.into_any(),
+            #[cfg(feature = "mobile")]
+            OperationPayload::Ipa(r) => Py::new(py, r.clone())?.into_any(),
         })
     }
 }
@@ -224,6 +312,26 @@ impl serde::Serialize for OperationPayload {
             OperationPayload::WafValidation(r) => r.serialize(serializer),
             OperationPayload::HttpFuzz(r) => r.serialize(serializer),
             OperationPayload::LoadTest(r) => r.serialize(serializer),
+            #[cfg(feature = "git-secrets")]
+            OperationPayload::GitSecrets(r) => r.serialize(serializer),
+            #[cfg(feature = "sbom")]
+            OperationPayload::Sbom(r) => r.serialize(serializer),
+            OperationPayload::ConsolidatedRecon(r) => r.serialize(serializer),
+            OperationPayload::Graphql(items) => items.serialize(serializer),
+            OperationPayload::Oauth(items) => items.serialize(serializer),
+            OperationPayload::Auth(r) => r.serialize(serializer),
+            #[cfg(feature = "db-pentest")]
+            OperationPayload::DbProbe(r) => r.serialize(serializer),
+            #[cfg(feature = "nse")]
+            OperationPayload::Nse(r) => r.serialize(serializer),
+            #[cfg(feature = "container")]
+            OperationPayload::DockerImage(r) => r.serialize(serializer),
+            #[cfg(feature = "container")]
+            OperationPayload::Kubernetes(r) => r.serialize(serializer),
+            #[cfg(feature = "mobile")]
+            OperationPayload::Apk(r) => r.serialize(serializer),
+            #[cfg(feature = "mobile")]
+            OperationPayload::Ipa(r) => r.serialize(serializer),
         }
     }
 }
@@ -779,6 +887,52 @@ impl<'de> serde::Deserialize<'de> for OperationResult {
                 serde_json::from_value(value).map_err(serde::de::Error::custom)?,
             )),
             (Some(value), Some("LoadTestResult")) => Some(OperationPayload::LoadTest(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "git-secrets")]
+            (Some(value), Some("GitSecretsReport")) => Some(OperationPayload::GitSecrets(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "sbom")]
+            (Some(value), Some("SbomReport")) => Some(OperationPayload::Sbom(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("ConsolidatedReconReport")) => {
+                Some(OperationPayload::ConsolidatedRecon(
+                    serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+                ))
+            }
+            (Some(value), Some("GraphQLAssessmentReport")) => Some(OperationPayload::Graphql(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("OAuthAssessmentReport")) => Some(OperationPayload::Oauth(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("AuthAssessmentReport")) => Some(OperationPayload::Auth(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "db-pentest")]
+            (Some(value), Some("DbProbeReport")) => Some(OperationPayload::DbProbe(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "nse")]
+            (Some(value), Some("NseRunReport")) => Some(OperationPayload::Nse(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "container")]
+            (Some(value), Some("DockerImageReport")) => Some(OperationPayload::DockerImage(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "container")]
+            (Some(value), Some("KubernetesReport")) => Some(OperationPayload::Kubernetes(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "mobile")]
+            (Some(value), Some("ApkAnalysisReport")) => Some(OperationPayload::Apk(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            #[cfg(feature = "mobile")]
+            (Some(value), Some("IpaAnalysisReport")) => Some(OperationPayload::Ipa(
                 serde_json::from_value(value).map_err(serde::de::Error::custom)?,
             )),
             (None, None) => None,

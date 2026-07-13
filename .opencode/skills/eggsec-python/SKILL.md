@@ -12,7 +12,7 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
 **Status**: Scoped pre-1.0 release candidate (0.1.0). The stable-core
-boundary is the ten-operation `StableOperation` registry. Stable-core paths
+boundary is the twenty-two-operation `StableOperation` registry. Stable-core paths
 share the mandatory policy/audit gate, typed payloads, `OperationError`, and
 governed event delivery. Milestone C/E/G and feature-gated domains remain
 provisional or experimental until they satisfy the graduation checklist in
@@ -155,7 +155,7 @@ pytest crates/eggsec-python/tests/test_policy_equivalence.py
 bash scripts/validate_python_release_candidate.sh
 ```
 
-The release fixture suite covers all ten stable operations using managed
+The release fixture suite covers all twenty-two stable operations using managed
 loopback services and must not be converted into conditional skips. Set
 `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for that explicit fixture harness or
 installed-wheel smoke test. The normal resolver and policy gate remain
@@ -305,6 +305,14 @@ unchanged for callers. The first-release contract is local `Engine` and
 | `oauth_discover_endpoints` | Sync | Discover OAuth/OIDC endpoints from issuer URL |
 | `oauth_test` / `async_oauth_test` | Both | OAuth/OIDC security assessment (redirect, state, scope, PKCE) |
 | `auth_test` / `async_auth_test` | Both | Authentication security assessment (brute force, lockout, MFA, etc.) |
+| `scan_git_secrets` / `async_scan_git_secrets` | Both | Git secrets scanning |
+| `generate_sbom` / `async_generate_sbom` | Both | SBOM generation (CycloneDX, SPDX) |
+| `nse_run` / `async_nse_run` | Both | Execute NSE scripts (feature: `nse`) |
+| `db_probe` / `async_db_probe` | Both | Database security probe (feature: `db-pentest`) |
+| `scan_docker_image` / `async_scan_docker_image` | Both | Docker image security scanning (feature: `container`) |
+| `scan_kubernetes` / `async_scan_kubernetes` | Both | Kubernetes manifest scanning (feature: `container`) |
+| `analyze_apk` / `async_analyze_apk` | Both | Android APK static analysis (feature: `mobile`) |
+| `analyze_ipa` / `async_analyze_ipa` | Both | iOS IPA static analysis (feature: `mobile`) |
 | `browser_test` / `async_browser_test` | Both | Headless browser assessment (DOM XSS, SPA, client checks) — feature-gated |
 | `hunt_test` / `async_hunt_test` | Both | Advanced vulnerability hunting (chains, business logic, race, authz) — feature-gated |
 
@@ -646,6 +654,107 @@ for finding in report.findings:
     print(f"  Recommendation: {finding.recommendation}")
 ```
 
+### Git Secrets Scanning
+
+```python
+from eggsec import scan_git_secrets
+
+result = scan_git_secrets("/path/to/repo")
+for secret in result.secrets:
+    print(f"[{secret.severity}] {secret.title}: {secret.file_path}:{secret.line}")
+```
+
+### SBOM Generation
+
+```python
+from eggsec import generate_sbom, SbomFormat
+
+result = generate_sbom("/path/to/project", format=SbomFormat.CYCLONEDX)
+print(f"Generated SBOM with {result.component_count} components")
+```
+
+### NSE Script Execution
+
+```python
+from eggsec import nse_run, NseRunRequest
+
+request = NseRunRequest(
+    scripts=["http-headers", "ssl-cert"],
+    target="example.com",
+    port=443,
+)
+report = nse_run(request)
+for result in report.results:
+    print(f"Script: {result.script}, Output: {result.output[:100]}")
+```
+
+### Database Probe
+
+```python
+from eggsec import db_probe, DbProbeRequest
+
+request = DbProbeRequest(
+    host="127.0.0.1",
+    port=5432,
+    database="labdb",
+    user="labuser",
+    checks=["auth", "config", "extensions"],
+)
+result = db_probe(request)
+for finding in result.findings:
+    print(f"[{finding.severity}] {finding.title}")
+```
+
+### Docker Image Scanning
+
+```python
+from eggsec import scan_docker_image
+
+result = scan_docker_image("nginx:latest")
+for vuln in result.vulnerabilities:
+    print(f"[{vuln.severity}] {vuln.cve}: {vuln.description}")
+```
+
+### APK Analysis
+
+```python
+from eggsec import analyze_apk
+
+result = analyze_apk("/path/to/app.apk")
+print(f"Package: {result.package_name}")
+print(f"Permissions: {len(result.permissions)}")
+for finding in result.findings:
+    print(f"[{finding.severity}] {finding.title}")
+```
+
+### Pipeline with Dependencies and Parallel Groups
+
+```python
+from eggsec import Pipeline, PipelineStep
+
+pipeline = Pipeline("advanced-scan")
+
+# Define steps with dependencies
+step1 = PipelineStep("recon", operation="recon_dns", target="example.com")
+step2 = PipelineStep("port-scan", operation="scan_ports", target="example.com")
+step3 = PipelineStep("fingerprint", operation="fingerprint_services", target="example.com",
+                     depends_on=["port-scan"])
+step4 = PipelineStep("fuzz", operation="fuzz_http", target="https://example.com",
+                     depends_on=["fingerprint"])
+
+# Add parallel group (recon and port-scan run concurrently)
+pipeline.add_step(step1)
+pipeline.add_step(step2)
+pipeline.add_step(step3)  # waits for step2
+pipeline.add_step(step4)  # waits for step3
+
+# Configure retry and failure policy
+pipeline.set_retry_policy(max_retries=2, backoff_ms=1000)
+pipeline.set_failure_policy("continue-on-error")  # or "fail-fast"
+
+result = pipeline.run(engine)
+```
+
 ### Headless Browser Assessment
 
 ```python
@@ -691,6 +800,15 @@ for race in report.race_conditions:
 for bypass in report.authz_bypasses:
     print(f"AuthZ Bypass: {bypass.bypass_type} [{bypass.severity}]")
 ```
+
+### Pipeline Features
+
+The pipeline supports advanced orchestration:
+
+- **Step dependencies**: declare prerequisite steps that must complete before a step runs
+- **Parallel execution groups**: run independent steps concurrently
+- **Retry policy**: configurable retry count and backoff for transient failures
+- **Failure policy**: choose between `fail-fast` (abort on first failure) and `continue-on-error` (collect all results)
 
 ### Milestone E: Findings, Reporting, Storage, and Integrations
 
@@ -993,7 +1111,7 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 
 ## Release-readiness contracts
 
-- `Engine` and `AsyncEngine` dispatch only the canonical ten-operation
+- `Engine` and `AsyncEngine` dispatch only the canonical twenty-two-operation
   `StableOperation` set (historical aliases are accepted for compatibility).
 - `OperationResult.error` is an `OperationError`; use `error_message` only for
   legacy string consumers. `raise_for_status()` maps its `kind` to the

@@ -45,7 +45,7 @@ impl AuthTestTypePy {
         }
     }
 
-    fn from_engine(engine: eggsec::auth::AuthTestType) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::auth::AuthTestType) -> Self {
         match engine {
             eggsec::auth::AuthTestType::BruteForce => AuthTestTypePy::BruteForce,
             eggsec::auth::AuthTestType::CredentialStuffing => AuthTestTypePy::CredentialStuffing,
@@ -76,7 +76,7 @@ pub struct AuthFindingPy {
 }
 
 impl AuthFindingPy {
-    fn from_engine(engine: eggsec::auth::AuthFinding) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::auth::AuthFinding) -> Self {
         Self {
             test_type: AuthTestTypePy::from_engine(engine.test_type),
             severity: Severity::from_engine(engine.severity),
@@ -188,6 +188,9 @@ impl AuthTestConfigPy {
     }
 }
 
+/// Type alias for the auth assessment report used by the operation registry.
+pub type AuthAssessmentReportPy = AuthTestReportPy;
+
 /// Complete authentication test report.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,7 +220,7 @@ pub struct AuthTestReportPy {
 }
 
 impl AuthTestReportPy {
-    fn from_engine(engine: eggsec::auth::AuthTestReport) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::auth::AuthTestReport) -> Self {
         Self {
             target: engine.target,
             tests_run: engine

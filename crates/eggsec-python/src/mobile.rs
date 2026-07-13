@@ -112,6 +112,12 @@ impl MobileFindingPy {
     }
 }
 
+/// Type alias for the APK analysis report used by the operation registry.
+pub type ApkAnalysisReportPy = MobileScanReportPy;
+
+/// Type alias for the IPA analysis report used by the operation registry.
+pub type IpaAnalysisReportPy = MobileScanReportPy;
+
 /// Full report from mobile app static analysis (APK or IPA).
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]

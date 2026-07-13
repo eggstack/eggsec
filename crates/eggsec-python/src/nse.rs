@@ -214,6 +214,9 @@ impl NseRuleEvaluationPy {
     }
 }
 
+/// Type alias for the NSE run report used by the operation registry.
+pub type NseRunReportPy = NseReportPy;
+
 /// Simplified result from an NSE script execution.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -341,7 +344,7 @@ impl NseReportPy {
 // Internal helpers
 // ═══════════════════════════════════════════════════════════════════
 
-fn build_nse_config(
+pub(crate) fn build_nse_config(
     target: &str,
     script: &str,
     script_args: Option<&str>,
@@ -350,7 +353,7 @@ fn build_nse_config(
     eggsec::nse::NseConfig::new(target, script, script_args, None, false, verbose)
 }
 
-fn run_nse_sync(config: eggsec::nse::NseConfig) -> PyResult<NseReportPy> {
+pub(crate) fn run_nse_sync(config: eggsec::nse::NseConfig) -> PyResult<NseReportPy> {
     Python::with_gil(|py| {
         let result = runtime_sync::block_on(py, async move {
             run_nse_inner(config)

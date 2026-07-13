@@ -479,6 +479,283 @@ impl AsyncEngine {
                     timeout,
                 )
             }
+            #[cfg(feature = "git-secrets")]
+            StableOperation::ScanGitSecrets => {
+                let repo_path = request
+                    .metadata
+                    .get("repo_path")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                let max_commits: usize = request
+                    .metadata
+                    .get("max_commits")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000);
+                self.run_git_secrets_async(repo_path, max_commits)
+            }
+            #[cfg(feature = "sbom")]
+            StableOperation::GenerateSbom => {
+                let project_path = request
+                    .metadata
+                    .get("project_path")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                let ecosystem = request
+                    .metadata
+                    .get("ecosystem")
+                    .cloned()
+                    .unwrap_or_else(|| "cargo".to_string());
+                let format = request
+                    .metadata
+                    .get("format")
+                    .cloned()
+                    .unwrap_or_else(|| "cyclonedx".to_string());
+                self.run_sbom_async(project_path, ecosystem, format)
+            }
+            StableOperation::RunConsolidatedRecon => {
+                let run_dns = request
+                    .metadata
+                    .get("run_dns")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_ssl = request
+                    .metadata
+                    .get("run_ssl")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_tech_detect = request
+                    .metadata
+                    .get("run_tech_detect")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_subdomain = request
+                    .metadata
+                    .get("run_subdomain")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_whois = request
+                    .metadata
+                    .get("run_whois")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_cors = request
+                    .metadata
+                    .get("run_cors")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_wayback = request
+                    .metadata
+                    .get("run_wayback")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_js_analysis = request
+                    .metadata
+                    .get("run_js_analysis")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_content = request
+                    .metadata
+                    .get("run_content")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let run_email = request
+                    .metadata
+                    .get("run_email")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let timeout_secs = request
+                    .metadata
+                    .get("timeout_secs")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30);
+                let concurrency = request
+                    .metadata
+                    .get("concurrency")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(10);
+                let config = crate::consolidated_recon::ConsolidatedReconConfigPy {
+                    run_dns,
+                    run_ssl,
+                    run_tech_detect,
+                    run_subdomain,
+                    run_whois,
+                    run_cors,
+                    run_wayback,
+                    run_js_analysis,
+                    run_content,
+                    run_email,
+                    timeout_secs,
+                    concurrency,
+                };
+                self.run_consolidated_recon_async(request.target, config)
+            }
+            StableOperation::GraphqlTest => {
+                let enable_introspection = request
+                    .metadata
+                    .get("enable_introspection")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let enable_depth_bypass = request
+                    .metadata
+                    .get("enable_depth_bypass")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let enable_alias_overload = request
+                    .metadata
+                    .get("enable_alias_overload")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let timeout_secs = request
+                    .metadata
+                    .get("timeout_secs")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(10);
+                let config = crate::graphql::GraphQLTestConfigPy {
+                    endpoint: request.target.clone(),
+                    enable_introspection,
+                    enable_depth_bypass,
+                    enable_alias_overload,
+                    timeout_secs,
+                };
+                self.run_graphql_async(config)
+            }
+            StableOperation::OauthTest => {
+                let client_id = request
+                    .metadata
+                    .get("client_id")
+                    .cloned()
+                    .unwrap_or_default();
+                let redirect_uri = request
+                    .metadata
+                    .get("redirect_uri")
+                    .cloned()
+                    .unwrap_or_default();
+                let client_secret = request.metadata.get("client_secret").cloned();
+                let issuer_url = request.metadata.get("issuer_url").cloned();
+                let enable_redirect_test = request
+                    .metadata
+                    .get("enable_redirect_test")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let enable_scope_test = request
+                    .metadata
+                    .get("enable_scope_test")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let enable_state_test = request
+                    .metadata
+                    .get("enable_state_test")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let enable_grant_test = request
+                    .metadata
+                    .get("enable_grant_test")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(true);
+                let timeout_secs = request
+                    .metadata
+                    .get("timeout_secs")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(10);
+                let config = crate::oauth::OAuthTestConfigPy {
+                    client_id,
+                    redirect_uri,
+                    client_secret,
+                    issuer_url,
+                    enable_redirect_test,
+                    enable_scope_test,
+                    enable_state_test,
+                    enable_grant_test,
+                    timeout_secs,
+                };
+                let auth_endpoint = request
+                    .metadata
+                    .get("auth_endpoint")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                self.run_oauth_async(config, auth_endpoint)
+            }
+            StableOperation::AuthTest => self.run_auth_test_async(request.target.clone()),
+            #[cfg(feature = "db-pentest")]
+            StableOperation::DbProbe => {
+                let db_type = request
+                    .metadata
+                    .get("db_type")
+                    .cloned()
+                    .unwrap_or_else(|| "all".to_string());
+                let user = request.metadata.get("username").cloned();
+                let password = request.metadata.get("password").cloned();
+                let database = request.metadata.get("database").cloned();
+                let port: Option<u16> = request.metadata.get("port").and_then(|s| s.parse().ok());
+                self.run_db_probe_async(request.target, db_type, user, password, database, port)
+            }
+            #[cfg(feature = "nse")]
+            StableOperation::NseRun => {
+                let scripts: Vec<String> = request
+                    .metadata
+                    .get("scripts")
+                    .map(|s| {
+                        s.split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let script_name = scripts
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "default".to_string());
+                let script_args = request.metadata.get("script_args").cloned();
+                self.run_nse_async(request.target, script_name, script_args)
+            }
+            #[cfg(feature = "container")]
+            StableOperation::ScanDockerImage => {
+                let image = request
+                    .metadata
+                    .get("image")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                self.run_docker_image_async(image)
+            }
+            #[cfg(feature = "container")]
+            StableOperation::ScanKubernetes => {
+                let api_server = request
+                    .metadata
+                    .get("api_server")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                let token = request.metadata.get("token").cloned();
+                let timeout_secs: u64 = request
+                    .metadata
+                    .get("timeout_secs")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30);
+                self.run_kubernetes_async(api_server, token, timeout_secs)
+            }
+            #[cfg(feature = "mobile")]
+            StableOperation::AnalyzeApk => {
+                let apk_path = request
+                    .metadata
+                    .get("apk_path")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                self.run_apk_async(apk_path)
+            }
+            #[cfg(feature = "mobile")]
+            StableOperation::AnalyzeIpa => {
+                let ipa_path = request
+                    .metadata
+                    .get("ipa_path")
+                    .cloned()
+                    .unwrap_or_else(|| request.target.clone());
+                self.run_ipa_async(ipa_path)
+            }
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Operation '{}' is not available in this build configuration",
+                    op
+                )));
+            }
         }
     }
 
@@ -1106,5 +1383,291 @@ impl AsyncEngine {
             concurrency,
             timeout,
         )
+    }
+
+    #[cfg(feature = "git-secrets")]
+    fn run_git_secrets_async(
+        &self,
+        repo_path: String,
+        max_commits: usize,
+    ) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let result = eggsec::recon::git_secrets::scan_git_secrets(&repo_path, max_commits)
+                .map_err(|e| anyhow::anyhow!("Git secrets scan failed: {}", e))?;
+            Ok(crate::git_secrets::GitSecretsReportPy {
+                repo_path: result.repo_path,
+                commits_scanned: result.commits_scanned,
+                files_scanned: result.files_scanned,
+                findings: result
+                    .findings
+                    .into_iter()
+                    .map(crate::git_secrets::GitSecretFindingPy::from_engine)
+                    .collect(),
+                summary: crate::git_secrets::GitSecretsSummaryPy::from_engine(result.summary),
+            })
+        })
+    }
+
+    #[cfg(feature = "sbom")]
+    fn run_sbom_async(
+        &self,
+        project_path: String,
+        ecosystem: String,
+        format: String,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let sbom_format = crate::sbom::SbomFormatPy::from_str_py(&format)
+            .unwrap_or(crate::sbom::SbomFormatPy::Cyclonedx);
+        let engine_format = sbom_format.to_engine();
+        runtime_async::spawn_async(async move {
+            let gen = eggsec::supply_chain::sbom::SbomGenerator::new();
+            let r = match ecosystem.as_str() {
+                "cargo" => gen.generate_from_cargo(&project_path, engine_format),
+                "npm" => gen.generate_from_npm(&project_path, engine_format),
+                "pip" => gen.generate_from_requirements(&project_path, engine_format),
+                other => return Err(anyhow::anyhow!("Unsupported ecosystem: '{}'", other)),
+            };
+            let result = r.map_err(|e| anyhow::anyhow!("SBOM generation failed: {}", e))?;
+            Ok(crate::sbom::SbomReportPy {
+                format: crate::sbom::SbomFormatPy::from_engine(result.format),
+                project_name: result.project_name,
+                version: result.version,
+                generated_at: result.generated_at,
+                components: result
+                    .components
+                    .into_iter()
+                    .map(crate::sbom::SbomComponentPy::from_engine)
+                    .collect(),
+                vulnerabilities: result
+                    .vulnerabilities
+                    .into_iter()
+                    .map(crate::sbom::SbomVulnerabilityPy::from_engine)
+                    .collect(),
+            })
+        })
+    }
+
+    fn run_consolidated_recon_async(
+        &self,
+        target: String,
+        config: crate::consolidated_recon::ConsolidatedReconConfigPy,
+    ) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let mut modules = Vec::new();
+            if config.run_dns {
+                let module_result =
+                    match eggsec::recon::dns_records::enumerate_dns_records(&target).await {
+                        Ok(_) => crate::consolidated_recon::ReconModuleResultPy {
+                            module: "dns_records".to_string(),
+                            success: true,
+                            data: Some("DNS records enumerated successfully".to_string()),
+                            error: None,
+                        },
+                        Err(e) => crate::consolidated_recon::ReconModuleResultPy {
+                            module: "dns_records".to_string(),
+                            success: false,
+                            data: None,
+                            error: Some(e.to_string()),
+                        },
+                    };
+                modules.push(module_result);
+            }
+            if config.run_ssl {
+                let module_result = match eggsec::recon::ssl::analyze_ssl(&target, 443).await {
+                    Ok(_) => crate::consolidated_recon::ReconModuleResultPy {
+                        module: "ssl".to_string(),
+                        success: true,
+                        data: Some("SSL/TLS analysis completed".to_string()),
+                        error: None,
+                    },
+                    Err(e) => crate::consolidated_recon::ReconModuleResultPy {
+                        module: "ssl".to_string(),
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    },
+                };
+                modules.push(module_result);
+            }
+            if config.run_tech_detect {
+                let module_result =
+                    match eggsec::recon::techdetect::detect_tech_stack(&target).await {
+                        Ok(_) => crate::consolidated_recon::ReconModuleResultPy {
+                            module: "tech_detect".to_string(),
+                            success: true,
+                            data: Some("Technology detection completed".to_string()),
+                            error: None,
+                        },
+                        Err(e) => crate::consolidated_recon::ReconModuleResultPy {
+                            module: "tech_detect".to_string(),
+                            success: false,
+                            data: None,
+                            error: Some(e.to_string()),
+                        },
+                    };
+                modules.push(module_result);
+            }
+            let modules_succeeded = modules.iter().filter(|m| m.success).count();
+            let modules_failed = modules.len() - modules_succeeded;
+            Ok(crate::consolidated_recon::ConsolidatedReconReportPy {
+                target,
+                modules_run: modules.len(),
+                modules_succeeded,
+                modules_failed,
+                modules,
+            })
+        })
+    }
+
+    fn run_graphql_async(
+        &self,
+        config: crate::graphql::GraphQLTestConfigPy,
+    ) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let mut fuzzer =
+                eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
+                    .with_introspection(config.enable_introspection)
+                    .with_depth_bypass(config.enable_depth_bypass)
+                    .with_alias_overload(config.enable_alias_overload);
+            let mut results = Vec::new();
+            results.extend(fuzzer.test_introspection_enabled());
+            results.extend(fuzzer.generate_injection_queries(
+                config.enable_depth_bypass,
+                config.enable_alias_overload,
+            ));
+            results.extend(fuzzer.generate_batch_queries(config.enable_alias_overload));
+            Ok(results
+                .into_iter()
+                .map(crate::graphql::GraphQLTestResultPy::from_engine)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    fn run_oauth_async(
+        &self,
+        config: crate::oauth::OAuthTestConfigPy,
+        auth_endpoint: String,
+    ) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let fuzzer = crate::oauth::build_oauth_fuzzer(&config)?;
+            let mut results = Vec::new();
+            if config.enable_redirect_test {
+                results.extend(fuzzer.test_redirect_uri(&auth_endpoint));
+            }
+            if config.enable_state_test {
+                results.extend(fuzzer.test_state_parameter(&auth_endpoint));
+            }
+            if config.enable_scope_test {
+                results.extend(fuzzer.test_scope_escalation(&auth_endpoint));
+            }
+            Ok::<_, PyErr>(
+                results
+                    .into_iter()
+                    .map(crate::oauth::OAuthTestResultPy::from_engine)
+                    .collect::<Vec<_>>(),
+            )
+        })
+    }
+
+    fn run_auth_test_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let mut engine = eggsec::auth::AuthEngine::new(100, 10, 30, true).map_pyerr()?;
+            let report = engine.run_full_test(&target).await.map_pyerr()?;
+            Ok(crate::auth_assess::AuthTestReportPy::from_engine(report))
+        })
+    }
+
+    #[cfg(feature = "db-pentest")]
+    fn run_db_probe_async(
+        &self,
+        target: String,
+        db_type: String,
+        user: Option<String>,
+        password: Option<String>,
+        database: Option<String>,
+        port: Option<u16>,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let args = crate::db_pentest::build_args(
+            Some(&target),
+            Some(&db_type),
+            "all",
+            200,
+            120,
+            false,
+            None,
+            port,
+            user.as_deref(),
+            password.as_deref(),
+            database.as_deref(),
+        );
+        crate::db_pentest::run_async(args)
+    }
+
+    #[cfg(feature = "nse")]
+    fn run_nse_async(
+        &self,
+        target: String,
+        script: String,
+        script_args: Option<String>,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let config = crate::nse::build_nse_config(&target, &script, script_args.as_deref(), false);
+        crate::nse::run_nse_async(config)
+    }
+
+    #[cfg(feature = "container")]
+    fn run_docker_image_async(&self, image_name: String) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let scanner = eggsec::container::docker::DockerScanner::new();
+            let result = scanner
+                .scan_image(&image_name)
+                .await
+                .map_err(|e| anyhow::anyhow!("Docker image scan failed: {}", e))?;
+            Ok(crate::container::DockerScanResultPy::from_engine(result))
+        })
+    }
+
+    #[cfg(feature = "container")]
+    fn run_kubernetes_async(
+        &self,
+        api_server: String,
+        token: Option<String>,
+        timeout_secs: u64,
+    ) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let scanner = eggsec::container::kubernetes::KubernetesScanner::new(
+                &api_server,
+                token,
+                timeout_secs,
+            )
+            .map_err(|e| anyhow::anyhow!("Kubernetes scanner init failed: {}", e))?;
+            let result = scanner
+                .scan()
+                .await
+                .map_err(|e| anyhow::anyhow!("Kubernetes scan failed: {}", e))?;
+            Ok(crate::container::KubernetesScanResultPy::from_engine(
+                result,
+            ))
+        })
+    }
+
+    #[cfg(feature = "mobile")]
+    fn run_apk_async(&self, apk_path: String) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let path_ref = std::path::Path::new(&apk_path);
+            let result = eggsec::mobile::analyze_apk(path_ref)
+                .await
+                .map_err(|e| anyhow::anyhow!("APK analysis failed: {}", e))?;
+            Ok(crate::mobile::MobileScanReportPy::from_engine(result))
+        })
+    }
+
+    #[cfg(feature = "mobile")]
+    fn run_ipa_async(&self, ipa_path: String) -> PyResult<runtime_async::PyFuture> {
+        runtime_async::spawn_async(async move {
+            let path_ref = std::path::Path::new(&ipa_path);
+            let result = eggsec::mobile::analyze_ipa(path_ref)
+                .await
+                .map_err(|e| anyhow::anyhow!("IPA analysis failed: {}", e))?;
+            Ok(crate::mobile::MobileScanReportPy::from_engine(result))
+        })
     }
 }

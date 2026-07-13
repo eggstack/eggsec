@@ -169,7 +169,7 @@ impl ReconModuleResultPy {
 pub struct ConsolidatedReconReportPy {
     #[pyo3(get)]
     pub target: String,
-    modules: Vec<ReconModuleResultPy>,
+    pub(crate) modules: Vec<ReconModuleResultPy>,
     #[pyo3(get)]
     pub modules_run: usize,
     #[pyo3(get)]

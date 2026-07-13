@@ -5,7 +5,7 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 ## Status
 
 **Scoped pre-1.0 release candidate** — Not yet published to PyPI. The
-stable-core compatibility boundary is the ten operations listed in
+stable-core compatibility boundary is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and
 `docs/python/README_1_0_CHECKLIST.md` for the remaining 1.0 readiness work.
@@ -21,8 +21,8 @@ Operations and types are classified according to WS9 criteria:
 
 | Level | Criteria | Examples |
 |-------|----------|----------|
-| **Stable-core** | Canonical registry, mandatory policy gate, typed payload, structured error, audit decision, and sync/async contract coverage | the ten operations in `domain-maturity.md`, plus their core DTOs |
-| **Provisional** | Public API shape is useful, but common-engine parity, deterministic fixtures, or transport/schema coverage is incomplete | consolidated recon, GraphQL, OAuth, auth, database, NSE, daemon, pipeline/configuration surfaces |
+| **Stable-core** | Canonical registry, mandatory policy gate, typed payload, structured error, audit decision, and sync/async contract coverage | the twenty-two operations in `domain-maturity.md`, plus their core DTOs |
+| **Provisional** | Public API shape is useful, but common-engine parity, deterministic fixtures, or transport/schema coverage is incomplete | daemon, proxy, packet-inspection, and pipeline/configuration surfaces |
 | **Experimental** | Platform-sensitive, hazardous, provider-dependent, or subject to substantial change | wireless, evasion, postex, C2, browser, mobile dynamic, proxy, packet, distributed, and AI domains |
 | **Internal** | No compatibility guarantee, not top-level exported | `deprecated_warning` |
 
@@ -72,8 +72,12 @@ checkpoint persistence, wheel smoke tests, and architecture guards.
 - Backpressure delivery statistics with reliable lifecycle-event handling
 - Domain maturity introspection via `domain_maturity()`
 - Policy, configuration, and execution context (provisional until common-engine parity closes)
-- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (provisional)
-- NSE script metadata and sandbox policy inspection (Milestone D)
+- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (stable; API convergence release)
+- NSE script metadata and sandbox policy inspection (stable; API convergence release)
+- Database driver enumeration, capability descriptors, and credential providers (stable; API convergence release)
+- Container scanning: Docker image and Kubernetes manifests (stable; API convergence release)
+- Mobile static analysis: APK and IPA analysis (stable; API convergence release)
+- Git secrets scanning and SBOM generation (stable; API convergence release)
 - Packet filter and flow record types (Milestone D)
 - Traceroute API (Milestone D)
 - Interception proxy config and captured exchanges (Milestone D)
@@ -104,6 +108,15 @@ The default wheel is a scoped stable-core release candidate, not a claim that
 all importable modules are stable. Use `eggsec.api_surface()` and
 `eggsec.domain_maturity()` before selecting a domain for compatibility-sensitive
 automation.
+
+### Pipeline Features
+
+The pipeline supports advanced orchestration:
+
+- **Step dependencies**: declare prerequisite steps that must complete before a step runs
+- **Parallel execution groups**: run independent steps concurrently
+- **Retry policy**: configurable retry count and backoff for transient failures
+- **Failure policy**: choose between `fail-fast` (abort on first failure) and `continue-on-error` (collect all results)
 
 ### Not Included (default wheel)
 
@@ -301,27 +314,26 @@ report.write_json("scan_report.json")
 | `validate_scope()` | stable | Scope validation |
 | `audit_event_from_enforcement()` | stable | Create audit event from enforcement outcome |
 | `audit_event_from_preflight()` | stable | Create audit event from preflight result |
-| `run_consolidated_recon()` / `async_run_consolidated_recon()` | provisional | Consolidated multi-module reconnaissance |
-| `graphql_test()` / `async_graphql_test()` | provisional | GraphQL security assessment |
-| `oauth_discover_endpoints()` | provisional | Discover OAuth/OIDC endpoints |
-| `oauth_test()` / `async_oauth_test()` | provisional | OAuth/OIDC security assessment |
-| `auth_test()` / `async_auth_test()` | provisional | Authentication security assessment |
+| `run_consolidated_recon()` / `async_run_consolidated_recon()` | stable | Consolidated multi-module reconnaissance |
+| `graphql_test()` / `async_graphql_test()` | stable | GraphQL security assessment |
+| `oauth_discover_endpoints()` | stable | Discover OAuth/OIDC endpoints |
+| `oauth_test()` / `async_oauth_test()` | stable | OAuth/OIDC security assessment |
+| `auth_test()` / `async_auth_test()` | stable | Authentication security assessment |
+| `scan_git_secrets()` / `async_scan_git_secrets()` | stable | Git secrets scanning |
+| `generate_sbom()` / `async_generate_sbom()` | stable | SBOM generation |
+| `nse_list_scripts()` | stable | List available NSE scripts (feature: `nse`) |
+| `nse_get_script_metadata()` | stable | Get NSE script metadata (feature: `nse`) |
+| `nse_run()` / `async_nse_run()` | stable | Execute NSE scripts (feature: `nse`) |
+| `db_probe()` / `async_db_probe()` | stable | Database security probe (feature: `db-pentest`) |
+| `db_list_drivers()` | stable | List available database drivers (feature: `db-pentest`) |
+| `db_get_capabilities()` | stable | Get DB driver capabilities (feature: `db-pentest`) |
+| `db_run_with_config()` | stable | Run DB pentest with config (feature: `db-pentest`) |
+| `scan_docker_image()` / `async_scan_docker_image()` | stable | Docker image security scanning (feature: `container`) |
+| `scan_kubernetes()` / `async_scan_kubernetes()` | stable | Kubernetes manifest scanning (feature: `container`) |
+| `analyze_apk()` / `async_analyze_apk()` | stable | Android APK static analysis (feature: `mobile`) |
+| `analyze_ipa()` / `async_analyze_ipa()` | stable | iOS IPA static analysis (feature: `mobile`) |
 | `browser_test()` / `async_browser_test()` | experimental | Headless browser assessment (feature-gated) |
 | `hunt_test()` / `async_hunt_test()` | experimental | Advanced vulnerability hunting (feature-gated) |
-| `nse_list_scripts()` | provisional | List available NSE scripts (feature: `nse`) |
-| `nse_get_script_metadata()` | provisional | Get NSE script metadata (feature: `nse`) |
-| `run_traceroute()` / `async_run_traceroute()` | provisional | Traceroute (feature: `packet-inspection`) |
-| `traceroute()` | provisional | Traceroute shorthand (feature: `packet-inspection`) |
-| `list_mobile_devices()` | experimental | List connected mobile devices (feature: `mobile`) |
-| `dynamic_mobile_analysis()` | experimental | Dynamic mobile analysis (feature: `mobile`) |
-| `db_list_drivers()` | provisional | List available database drivers (feature: `db-pentest`) |
-| `db_get_capabilities()` | provisional | Get DB driver capabilities (feature: `db-pentest`) |
-| `db_run_with_config()` | provisional | Run DB pentest with config (feature: `db-pentest`) |
-| `wireless_scan()` / `async_wireless_scan()` | experimental | WiFi scanning (feature: `wireless`) |
-| `evasion_scan()` / `async_evasion_scan()` | experimental | Evasion detection (feature: `evasion`) |
-| `postex_scan()` / `async_postex_scan()` | experimental | Post-exploitation (feature: `postex`) |
-| `c2_scan()` / `async_c2_scan()` | experimental | C2 simulation (feature: `c2`) |
-| `ai_analyze_finding()` / `async_ai_analyze_finding()` | experimental | AI finding analysis (feature: `ai-integration`) |
 
 ### Policy, Configuration & Execution Context
 
@@ -410,6 +422,18 @@ Each operation has a canonical ID used by `OperationRegistry` and the enforcemen
 | `waf-validate` | `validate_waf()` | `WafValidateRequest` | `WafScanResult` |
 | `http-fuzz` | `fuzz_http()` | `FuzzRequest` | `FuzzSession` |
 | `load-test` | `load_test_http()` | `LoadTestRequest` | `LoadTestResult` |
+| `scan-git-secrets` | `scan_git_secrets()` | `GitSecretsRequest` | `GitSecretsResult` |
+| `generate-sbom` | `generate_sbom()` | `SbomRequest` | `SbomResult` |
+| `consolidated-recon` | `run_consolidated_recon()` | `ConsolidatedReconConfig` | `ConsolidatedReconReport` |
+| `graphql-test` | `graphql_test()` | `GraphQLTestConfig` | `GraphQLTestResult` |
+| `oauth-test` | `oauth_test()` | `OAuthTestConfig` | `OAuthTestResult` |
+| `auth-test` | `auth_test()` | `AuthTestConfig` | `AuthTestReport` |
+| `nse-run` | `nse_run()` | `NseRunRequest` | `NseRunReport` |
+| `db-probe` | `db_probe()` | `DbProbeRequest` | `DbProbeResult` |
+| `scan-docker-image` | `scan_docker_image()` | `DockerImageRequest` | `DockerImageResult` |
+| `scan-kubernetes` | `scan_kubernetes()` | `KubernetesRequest` | `KubernetesResult` |
+| `analyze-apk` | `analyze_apk()` | `ApkAnalysisRequest` | `ApkAnalysisResult` |
+| `analyze-ipa` | `analyze_ipa()` | `IpaAnalysisRequest` | `IpaAnalysisResult` |
 
 Look up operation metadata at runtime:
 

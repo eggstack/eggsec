@@ -15,6 +15,18 @@ pub const OP_DETECT_WAF: &str = "detect_waf";
 pub const OP_VALIDATE_WAF: &str = "validate_waf";
 pub const OP_FUZZ_HTTP: &str = "fuzz_http";
 pub const OP_LOAD_TEST: &str = "load_test";
+pub const OP_SCAN_GIT_SECRETS: &str = "scan_git_secrets";
+pub const OP_GENERATE_SBOM: &str = "generate_sbom";
+pub const OP_RUN_CONSOLIDATED_RECON: &str = "run_consolidated_recon";
+pub const OP_GRAPHQL_TEST: &str = "graphql_test";
+pub const OP_OAUTH_TEST: &str = "oauth_test";
+pub const OP_AUTH_TEST: &str = "auth_test";
+pub const OP_DB_PROBE: &str = "db_probe";
+pub const OP_NSE_RUN: &str = "nse_run";
+pub const OP_SCAN_DOCKER_IMAGE: &str = "scan_docker_image";
+pub const OP_SCAN_KUBERNETES: &str = "scan_kubernetes";
+pub const OP_ANALYZE_APK: &str = "analyze_apk";
+pub const OP_ANALYZE_IPA: &str = "analyze_ipa";
 
 /// Compiler-enforced identity for the stable Python engine operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,6 +41,18 @@ pub enum StableOperation {
     ValidateWaf,
     FuzzHttp,
     LoadTest,
+    ScanGitSecrets,
+    GenerateSbom,
+    RunConsolidatedRecon,
+    GraphqlTest,
+    OauthTest,
+    AuthTest,
+    DbProbe,
+    NseRun,
+    ScanDockerImage,
+    ScanKubernetes,
+    AnalyzeApk,
+    AnalyzeIpa,
 }
 
 impl StableOperation {
@@ -43,6 +67,18 @@ impl StableOperation {
         Self::ValidateWaf,
         Self::FuzzHttp,
         Self::LoadTest,
+        Self::ScanGitSecrets,
+        Self::GenerateSbom,
+        Self::RunConsolidatedRecon,
+        Self::GraphqlTest,
+        Self::OauthTest,
+        Self::AuthTest,
+        Self::DbProbe,
+        Self::NseRun,
+        Self::ScanDockerImage,
+        Self::ScanKubernetes,
+        Self::AnalyzeApk,
+        Self::AnalyzeIpa,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -57,6 +93,18 @@ impl StableOperation {
             Self::ValidateWaf => OP_VALIDATE_WAF,
             Self::FuzzHttp => OP_FUZZ_HTTP,
             Self::LoadTest => OP_LOAD_TEST,
+            Self::ScanGitSecrets => OP_SCAN_GIT_SECRETS,
+            Self::GenerateSbom => OP_GENERATE_SBOM,
+            Self::RunConsolidatedRecon => OP_RUN_CONSOLIDATED_RECON,
+            Self::GraphqlTest => OP_GRAPHQL_TEST,
+            Self::OauthTest => OP_OAUTH_TEST,
+            Self::AuthTest => OP_AUTH_TEST,
+            Self::DbProbe => OP_DB_PROBE,
+            Self::NseRun => OP_NSE_RUN,
+            Self::ScanDockerImage => OP_SCAN_DOCKER_IMAGE,
+            Self::ScanKubernetes => OP_SCAN_KUBERNETES,
+            Self::AnalyzeApk => OP_ANALYZE_APK,
+            Self::AnalyzeIpa => OP_ANALYZE_IPA,
         }
     }
 
@@ -72,11 +120,44 @@ impl StableOperation {
             Self::ValidateWaf => "WAF Validation",
             Self::FuzzHttp => "HTTP Fuzzing",
             Self::LoadTest => "Load Test",
+            Self::ScanGitSecrets => "Git Secrets Scan",
+            Self::GenerateSbom => "SBOM Generation",
+            Self::RunConsolidatedRecon => "Consolidated Recon",
+            Self::GraphqlTest => "GraphQL Security Test",
+            Self::OauthTest => "OAuth Security Test",
+            Self::AuthTest => "Authentication Assessment",
+            Self::DbProbe => "Database Probe",
+            Self::NseRun => "NSE Script Execution",
+            Self::ScanDockerImage => "Docker Image Scan",
+            Self::ScanKubernetes => "Kubernetes Scan",
+            Self::AnalyzeApk => "APK Analysis",
+            Self::AnalyzeIpa => "IPA Analysis",
         }
     }
 
     pub const fn feature_required(self) -> Option<&'static str> {
-        None
+        match self {
+            Self::ScanPorts
+            | Self::ScanEndpoints
+            | Self::FingerprintServices
+            | Self::ReconDns
+            | Self::InspectTls
+            | Self::DetectTechnology
+            | Self::DetectWaf
+            | Self::ValidateWaf
+            | Self::FuzzHttp
+            | Self::LoadTest
+            | Self::RunConsolidatedRecon
+            | Self::GraphqlTest
+            | Self::OauthTest
+            | Self::AuthTest => None,
+            Self::ScanGitSecrets => Some("git-secrets"),
+            Self::GenerateSbom => Some("sbom"),
+            Self::DbProbe => Some("db-pentest"),
+            Self::NseRun => Some("nse"),
+            Self::ScanDockerImage | Self::ScanKubernetes => Some("container"),
+            Self::AnalyzeApk | Self::AnalyzeIpa => Some("mobile"),
+        }
     }
 
     /// Parse the stable public IDs plus the historical aliases accepted by
@@ -93,6 +174,18 @@ impl StableOperation {
             OP_VALIDATE_WAF | "waf_validate" => Some(Self::ValidateWaf),
             OP_FUZZ_HTTP | "http_fuzz" => Some(Self::FuzzHttp),
             OP_LOAD_TEST | "load_test_http" => Some(Self::LoadTest),
+            OP_SCAN_GIT_SECRETS => Some(Self::ScanGitSecrets),
+            OP_GENERATE_SBOM => Some(Self::GenerateSbom),
+            OP_RUN_CONSOLIDATED_RECON | "consolidated_recon" => Some(Self::RunConsolidatedRecon),
+            OP_GRAPHQL_TEST => Some(Self::GraphqlTest),
+            OP_OAUTH_TEST => Some(Self::OauthTest),
+            OP_AUTH_TEST => Some(Self::AuthTest),
+            OP_DB_PROBE => Some(Self::DbProbe),
+            OP_NSE_RUN => Some(Self::NseRun),
+            OP_SCAN_DOCKER_IMAGE => Some(Self::ScanDockerImage),
+            OP_SCAN_KUBERNETES => Some(Self::ScanKubernetes),
+            OP_ANALYZE_APK => Some(Self::AnalyzeApk),
+            OP_ANALYZE_IPA => Some(Self::AnalyzeIpa),
             _ => None,
         }
     }
@@ -274,7 +367,7 @@ mod tests {
     #[test]
     fn canonical_registry_is_exhaustive() {
         let registry = OperationExecutorRegistry::default_stable();
-        assert_eq!(StableOperation::ALL.len(), 10);
+        assert_eq!(StableOperation::ALL.len(), 22);
         for operation in StableOperation::ALL {
             assert!(registry.contains(operation.id()));
             assert_eq!(registry.get(operation.id()).unwrap().id, operation.id());

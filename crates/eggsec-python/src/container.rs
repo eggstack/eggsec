@@ -246,6 +246,9 @@ impl DockerMisconfigPy {
     }
 }
 
+/// Type alias for the Docker image report used by the operation registry.
+pub type DockerImageReportPy = DockerScanResultPy;
+
 /// Docker image scan result.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -463,6 +466,9 @@ impl K8sFindingPy {
         )
     }
 }
+
+/// Type alias for the Kubernetes report used by the operation registry.
+pub type KubernetesReportPy = KubernetesScanResultPy;
 
 /// Kubernetes scan result.
 #[pyclass(frozen)]

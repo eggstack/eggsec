@@ -44,7 +44,9 @@ impl GraphQLVulnerabilityPy {
         }
     }
 
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLVulnerability) -> Self {
+    pub(crate) fn from_engine(
+        engine: eggsec::fuzzer::payloads::graphql::GraphQLVulnerability,
+    ) -> Self {
         match engine {
             eggsec::fuzzer::payloads::graphql::GraphQLVulnerability::Introspection => {
                 GraphQLVulnerabilityPy::Introspection
@@ -74,6 +76,9 @@ impl GraphQLVulnerabilityPy {
     }
 }
 
+/// Type alias for the GraphQL assessment report used by the operation registry.
+pub type GraphQLAssessmentReportPy = GraphQLTestResultPy;
+
 /// A single GraphQL security test result.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +98,9 @@ pub struct GraphQLTestResultPy {
 }
 
 impl GraphQLTestResultPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLTestResult) -> Self {
+    pub(crate) fn from_engine(
+        engine: eggsec::fuzzer::payloads::graphql::GraphQLTestResult,
+    ) -> Self {
         Self {
             vulnerability: GraphQLVulnerabilityPy::from_engine(engine.vulnerability),
             success: engine.success,
@@ -156,7 +163,7 @@ pub struct GraphQLTypePy {
 }
 
 impl GraphQLTypePy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLType) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLType) -> Self {
         Self {
             name: engine.name,
             kind: engine.kind,
@@ -215,7 +222,7 @@ pub struct GraphQLFieldPy {
 }
 
 impl GraphQLFieldPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLField) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLField) -> Self {
         Self {
             name: engine.name,
             r#type: engine.r#type,
@@ -253,7 +260,7 @@ pub struct GraphQLArgPy {
 }
 
 impl GraphQLArgPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLArg) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLArg) -> Self {
         Self {
             name: engine.name,
             r#type: engine.r#type,
@@ -280,7 +287,9 @@ pub struct GraphQLInputFieldPy {
 }
 
 impl GraphQLInputFieldPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLInputField) -> Self {
+    pub(crate) fn from_engine(
+        engine: eggsec::fuzzer::payloads::graphql::GraphQLInputField,
+    ) -> Self {
         Self {
             name: engine.name,
             r#type: engine.r#type,
@@ -313,7 +322,7 @@ pub struct GraphQLSchemaPy {
 }
 
 impl GraphQLSchemaPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLSchema) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::graphql::GraphQLSchema) -> Self {
         Self {
             query_type: engine.query_type,
             mutation_type: engine.mutation_type,

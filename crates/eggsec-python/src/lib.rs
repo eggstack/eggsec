@@ -278,8 +278,23 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<requests::LoadTestRequest>()?;
     m.add_class::<requests::WafValidateRequest>()?;
     m.add_class::<requests::FuzzRequest>()?;
+    m.add_class::<requests::GitSecretsScanRequest>()?;
+    m.add_class::<requests::SbomRequest>()?;
+    m.add_class::<requests::ConsolidatedReconRequest>()?;
+    m.add_class::<requests::GraphqlTestRequest>()?;
+    m.add_class::<requests::OauthTestRequest>()?;
+    m.add_class::<requests::AuthTestRequest>()?;
+    m.add_class::<requests::DbProbeRequest>()?;
+    m.add_class::<requests::NseRunRequest>()?;
+    m.add_class::<requests::DockerImageScanRequest>()?;
+    m.add_class::<requests::KubernetesScanRequest>()?;
+    m.add_class::<requests::ApkAnalysisRequest>()?;
+    m.add_class::<requests::IpaAnalysisRequest>()?;
     m.add_class::<requests::RequestBuilder>()?;
     // Pipeline and assessment types
+    m.add_class::<pipeline::OutputRef>()?;
+    m.add_class::<pipeline::RetryPolicy>()?;
+    m.add_class::<pipeline::FailurePolicy>()?;
     m.add_class::<pipeline::PipelineStep>()?;
     m.add_class::<pipeline::StepResult>()?;
     m.add_class::<pipeline::PipelineResult>()?;
@@ -1133,6 +1148,18 @@ fn api_surface() -> PyObject {
         add_entry!("LoadTestRequest", "stable");
         add_entry!("WafValidateRequest", "stable");
         add_entry!("FuzzRequest", "stable");
+        add_entry!("GitSecretsScanRequest", "stable");
+        add_entry!("SbomRequest", "stable");
+        add_entry!("ConsolidatedReconRequest", "stable");
+        add_entry!("GraphqlTestRequest", "stable");
+        add_entry!("OauthTestRequest", "stable");
+        add_entry!("AuthTestRequest", "stable");
+        add_entry!("DbProbeRequest", "stable");
+        add_entry!("NseRunRequest", "stable");
+        add_entry!("DockerImageScanRequest", "stable");
+        add_entry!("KubernetesScanRequest", "stable");
+        add_entry!("ApkAnalysisRequest", "stable");
+        add_entry!("IpaAnalysisRequest", "stable");
         add_entry!("RequestBuilder", "stable");
 
         // Stable: Common result protocol types

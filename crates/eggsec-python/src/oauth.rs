@@ -40,7 +40,7 @@ impl OAuthVulnerabilityPy {
         }
     }
 
-    fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthVulnerability) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthVulnerability) -> Self {
         match engine {
             eggsec::fuzzer::payloads::oauth::OAuthVulnerability::RedirectUriValidation => {
                 OAuthVulnerabilityPy::RedirectUriValidation
@@ -101,7 +101,7 @@ impl OAuthEndpointKindPy {
         }
     }
 
-    fn from_engine(engine: eggsec::fuzzer::payloads::oauth::EndpointKind) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::oauth::EndpointKind) -> Self {
         match engine {
             eggsec::fuzzer::payloads::oauth::EndpointKind::OidcDiscovery => {
                 OAuthEndpointKindPy::OidcDiscovery
@@ -133,7 +133,7 @@ pub struct OAuthEndpointPy {
 }
 
 impl OAuthEndpointPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthEndpoint) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthEndpoint) -> Self {
         Self {
             url: engine.url,
             kind: OAuthEndpointKindPy::from_engine(engine.kind),
@@ -163,6 +163,9 @@ impl OAuthEndpointPy {
     }
 }
 
+/// Type alias for the OAuth assessment report used by the operation registry.
+pub type OAuthAssessmentReportPy = OAuthTestResultPy;
+
 /// A single OAuth/OIDC security test result.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,7 +185,7 @@ pub struct OAuthTestResultPy {
 }
 
 impl OAuthTestResultPy {
-    fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthTestResult) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::fuzzer::payloads::oauth::OAuthTestResult) -> Self {
         Self {
             vulnerability: OAuthVulnerabilityPy::from_engine(engine.vulnerability),
             success: engine.success,
@@ -405,7 +408,7 @@ pub fn async_oauth_test(
     })
 }
 
-fn build_oauth_fuzzer(
+pub(crate) fn build_oauth_fuzzer(
     config: &OAuthTestConfigPy,
 ) -> PyResult<eggsec::fuzzer::payloads::oauth::OAuthFuzzer> {
     let mut fuzzer = eggsec::fuzzer::payloads::oauth::OAuthFuzzer::new(
