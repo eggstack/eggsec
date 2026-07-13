@@ -171,43 +171,43 @@ pub fn domain_maturity() -> pyo3::PyObject {
         let entries = [
             (
                 "stable-core",
-                "stable-core",
+                "stable",
                 "canonical registry, policy gate, typed results, sync/async tests",
             ),
             (
+                "git-secrets",
+                "stable",
+                "artifact analysis, promoted domain",
+            ),
+            ("sbom", "stable", "artifact analysis, promoted domain"),
+            (
                 "consolidated-recon",
-                "provisional",
-                "common-engine event and daemon parity pending",
+                "stable",
+                "web assessment, promoted domain",
             ),
-            (
-                "graphql",
-                "provisional",
-                "common-engine event and daemon parity pending",
-            ),
-            (
-                "oauth",
-                "provisional",
-                "common-engine event and daemon parity pending",
-            ),
+            ("graphql", "stable", "web assessment, promoted domain"),
+            ("oauth", "stable", "web assessment, promoted domain"),
             (
                 "authentication",
-                "provisional",
-                "deterministic integration fixtures pending",
+                "stable",
+                "web assessment, promoted domain",
+            ),
+            ("database", "stable", "database pentest, promoted domain"),
+            ("nse", "stable", "scripting, promoted domain"),
+            (
+                "container",
+                "stable",
+                "container and cluster analysis, promoted domain",
+            ),
+            (
+                "mobile",
+                "stable",
+                "mobile analysis (static), promoted domain",
             ),
             (
                 "daemon",
                 "provisional",
                 "transport capability negotiation and reconnect contract pending",
-            ),
-            (
-                "nse",
-                "provisional",
-                "stable operation mapping and fixture coverage pending",
-            ),
-            (
-                "database",
-                "provisional",
-                "typed errors/events and fixture coverage pending",
             ),
             (
                 "browser",
@@ -223,11 +223,6 @@ pub fn domain_maturity() -> pyo3::PyObject {
                 "packet-inspection",
                 "experimental",
                 "platform/system dependency and lifecycle coverage pending",
-            ),
-            (
-                "mobile",
-                "experimental",
-                "dynamic device behavior is platform dependent",
             ),
             (
                 "wireless",

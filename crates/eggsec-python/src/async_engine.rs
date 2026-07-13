@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 
+use crate::cancellation::CancellationToken;
 use crate::config_model::PyEggsecConfig;
 use crate::dto::PortScanResult;
 use crate::endpoint::EndpointScanResult;
@@ -85,6 +86,7 @@ fn operation_ok(
         metadata,
         payload,
         payload_type,
+        schema_version: "1.0".to_string(),
     }
 }
 
@@ -105,6 +107,7 @@ fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult 
         metadata: std::collections::HashMap::new(),
         payload: None,
         payload_type: None,
+        schema_version: "1.0".to_string(),
     }
 }
 
@@ -176,7 +179,7 @@ impl AsyncEngine {
             .clone()
             .unwrap_or_else(|| "1-1024".to_string());
         let ports = parse_ports_string(&ports_str)?;
-        self.run_port_scan_async(request.target.clone(), ports, effective_timeout)
+        self.run_port_scan_async(request.target.clone(), ports, effective_timeout, None, None)
     }
 
     /// Run an endpoint scan (async).
@@ -186,7 +189,13 @@ impl AsyncEngine {
             .pre_dispatch_validate("scan_endpoints", &request.target)?;
         let endpoints = request.paths.clone().unwrap_or_default();
         let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        self.run_endpoint_scan_async(request.target.clone(), endpoints, effective_timeout)
+        self.run_endpoint_scan_async(
+            request.target.clone(),
+            endpoints,
+            effective_timeout,
+            None,
+            None,
+        )
     }
 
     /// Run service fingerprinting (async).
@@ -196,7 +205,7 @@ impl AsyncEngine {
             .pre_dispatch_validate("fingerprint_services", &request.target)?;
         let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
         let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        self.run_fingerprint_async(request.target.clone(), ports, effective_timeout)
+        self.run_fingerprint_async(request.target.clone(), ports, effective_timeout, None, None)
     }
 
     /// Run DNS reconnaissance (async).
@@ -204,7 +213,7 @@ impl AsyncEngine {
     fn run_recon_dns(&self, request: ReconDnsRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("recon_dns", &request.target)?;
-        self.run_recon_dns_async(request.target.clone())
+        self.run_recon_dns_async(request.target.clone(), None, None)
     }
 
     /// Run TLS inspection (async).
@@ -212,7 +221,7 @@ impl AsyncEngine {
     fn run_tls_inspect(&self, request: TlsInspectRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("inspect_tls", &request.target)?;
-        self.run_tls_inspect_async(request.target.clone())
+        self.run_tls_inspect_async(request.target.clone(), None, None)
     }
 
     /// Run technology detection (async).
@@ -220,7 +229,7 @@ impl AsyncEngine {
     fn run_tech_detect(&self, request: TechDetectRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("detect_technology", &request.target)?;
-        self.run_tech_detect_async(request.target.clone())
+        self.run_tech_detect_async(request.target.clone(), None, None)
     }
 
     /// Run WAF detection (async).
@@ -228,7 +237,7 @@ impl AsyncEngine {
     fn run_waf_detect(&self, request: WafDetectRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("detect_waf", &request.target)?;
-        self.run_waf_detect_async(request.target.clone())
+        self.run_waf_detect_async(request.target.clone(), None, None)
     }
 
     /// Run an HTTP load test (async).
@@ -246,6 +255,8 @@ impl AsyncEngine {
             concurrency,
             timeout_secs,
             method,
+            None,
+            None,
         )
     }
 
@@ -254,7 +265,7 @@ impl AsyncEngine {
     fn run_waf_validate(&self, request: WafValidateRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("validate_waf", &request.target)?;
-        self.run_waf_validate_async(request.target.clone())
+        self.run_waf_validate_async(request.target.clone(), None, None)
     }
 
     /// Run HTTP fuzzing (async).
@@ -268,7 +279,14 @@ impl AsyncEngine {
             .unwrap_or_else(|| "all".to_string());
         let threads = request.threads.unwrap_or(10) as usize;
         let timeout = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
-        self.run_fuzz_async(request.target.clone(), payload_type, threads, timeout)
+        self.run_fuzz_async(
+            request.target.clone(),
+            payload_type,
+            threads,
+            timeout,
+            None,
+            None,
+        )
     }
 
     /// Create a scan plan suggesting what operations to run against a target (async).
@@ -390,19 +408,84 @@ impl AsyncEngine {
     pub(crate) fn dispatch_async(
         &self,
         request: OperationRequest,
+        cancel_token: Option<CancellationToken>,
     ) -> PyResult<runtime_async::PyFuture> {
+        use crate::event_protocol::{
+            CancellationEvent, EventEnvelope, PlanningEvent, PreflightEvent,
+        };
         use crate::operation_registry::StableOperation;
         let op = request.operation.clone();
+        let target = request.target.clone();
+
+        // Emit: operation.planning (need GIL for Python objects)
+        let planning_event = EventEnvelope::create(
+            "operation.planning".to_string(),
+            Python::with_gil(|py| {
+                PlanningEvent::new(op.clone(), target.clone(), String::new()).into_py(py)
+            }),
+            None,
+            None,
+            Some(target.clone()),
+            None,
+        );
+        self.state.emit_event(planning_event);
 
         // Pre-dispatch validation: scope, feature gates, audit logging.
-        self.state.pre_dispatch_validate(&op, &request.target)?;
+        self.state.pre_dispatch_validate(&op, &target)?;
+
+        // Emit: operation.preflight
+        let preflight_event = EventEnvelope::create(
+            "operation.preflight".to_string(),
+            Python::with_gil(|py| {
+                PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new()).into_py(py)
+            }),
+            None,
+            None,
+            Some(target.clone()),
+            None,
+        );
+        self.state.emit_event(preflight_event);
+
+        // Compute deadline from request or engine timeout
+        let deadline = request
+            .timeout_ms
+            .or(Some(self.state.timeout_ms))
+            .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
+
+        // Clone cancel_token for move into async closures
+        let cancel_token_clone = cancel_token.clone();
 
         let operation = StableOperation::parse(&op).ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(format!("Unknown operation: {}", op))
         })?;
 
+        // Cancellation check helper macro
+        macro_rules! check_cancel {
+            ($op_id:expr) => {
+                if let Some(ref token) = cancel_token {
+                    if token.is_cancelled() {
+                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
+                        Python::with_gil(|py| {
+                            self.state.emit_event(EventEnvelope::create(
+                                "operation.cancelled".to_string(),
+                                CancellationEvent::new(reason, "operator".to_string()).into_py(py),
+                                None,
+                                None,
+                                Some($op_id.to_string()),
+                                None,
+                            ));
+                        });
+                        return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                            "Operation cancelled",
+                        ));
+                    }
+                }
+            };
+        }
+
         match operation {
             StableOperation::ScanPorts => {
+                check_cancel!("scan_ports");
                 let target = request.target.clone();
                 let ports_str = request
                     .metadata
@@ -411,9 +494,16 @@ impl AsyncEngine {
                     .unwrap_or_else(|| "1-1024".to_string());
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports = parse_ports_string(&ports_str)?;
-                self.run_port_scan_async(target, ports, effective_timeout)
+                self.run_port_scan_async(
+                    target,
+                    ports,
+                    effective_timeout,
+                    cancel_token_clone,
+                    deadline,
+                )
             }
             StableOperation::ScanEndpoints => {
+                check_cancel!("scan_endpoints");
                 let target = request.target.clone();
                 let endpoints: Vec<String> = request
                     .metadata
@@ -421,9 +511,16 @@ impl AsyncEngine {
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
                     .unwrap_or_default();
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-                self.run_endpoint_scan_async(target, endpoints, effective_timeout)
+                self.run_endpoint_scan_async(
+                    target,
+                    endpoints,
+                    effective_timeout,
+                    cancel_token_clone,
+                    deadline,
+                )
             }
             StableOperation::FingerprintServices => {
+                check_cancel!("fingerprint_services");
                 let target = request.target.clone();
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
@@ -432,13 +529,32 @@ impl AsyncEngine {
                     parse_ports_string(&ports_str)?
                 };
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-                self.run_fingerprint_async(target, ports, effective_timeout)
+                self.run_fingerprint_async(
+                    target,
+                    ports,
+                    effective_timeout,
+                    cancel_token_clone,
+                    deadline,
+                )
             }
-            StableOperation::ReconDns => self.run_recon_dns_async(request.target.clone()),
-            StableOperation::InspectTls => self.run_tls_inspect_async(request.target.clone()),
-            StableOperation::DetectTechnology => self.run_tech_detect_async(request.target.clone()),
-            StableOperation::DetectWaf => self.run_waf_detect_async(request.target.clone()),
+            StableOperation::ReconDns => {
+                check_cancel!("recon_dns");
+                self.run_recon_dns_async(request.target.clone(), cancel_token_clone, deadline)
+            }
+            StableOperation::InspectTls => {
+                check_cancel!("inspect_tls");
+                self.run_tls_inspect_async(request.target.clone(), cancel_token_clone, deadline)
+            }
+            StableOperation::DetectTechnology => {
+                check_cancel!("detect_technology");
+                self.run_tech_detect_async(request.target.clone(), cancel_token_clone, deadline)
+            }
+            StableOperation::DetectWaf => {
+                check_cancel!("detect_waf");
+                self.run_waf_detect_async(request.target.clone(), cancel_token_clone, deadline)
+            }
             StableOperation::LoadTest => {
+                check_cancel!("load_test");
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -461,10 +577,16 @@ impl AsyncEngine {
                     concurrency,
                     timeout_secs,
                     method,
+                    cancel_token_clone,
+                    deadline,
                 )
             }
-            StableOperation::ValidateWaf => self.run_waf_validate_async(request.target.clone()),
+            StableOperation::ValidateWaf => {
+                check_cancel!("validate_waf");
+                self.run_waf_validate_async(request.target.clone(), cancel_token_clone, deadline)
+            }
             StableOperation::FuzzHttp => {
+                check_cancel!("fuzz_http");
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: usize = request
                     .metadata
@@ -477,10 +599,13 @@ impl AsyncEngine {
                     payload_type.unwrap_or_else(|| "all".to_string()),
                     threads,
                     timeout,
+                    cancel_token_clone,
+                    deadline,
                 )
             }
             #[cfg(feature = "git-secrets")]
             StableOperation::ScanGitSecrets => {
+                check_cancel!("scan_git_secrets");
                 let repo_path = request
                     .metadata
                     .get("repo_path")
@@ -495,6 +620,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "sbom")]
             StableOperation::GenerateSbom => {
+                check_cancel!("generate_sbom");
                 let project_path = request
                     .metadata
                     .get("project_path")
@@ -513,6 +639,7 @@ impl AsyncEngine {
                 self.run_sbom_async(project_path, ecosystem, format)
             }
             StableOperation::RunConsolidatedRecon => {
+                check_cancel!("run_consolidated_recon");
                 let run_dns = request
                     .metadata
                     .get("run_dns")
@@ -590,6 +717,7 @@ impl AsyncEngine {
                 self.run_consolidated_recon_async(request.target, config)
             }
             StableOperation::GraphqlTest => {
+                check_cancel!("graphql_test");
                 let enable_introspection = request
                     .metadata
                     .get("enable_introspection")
@@ -675,9 +803,13 @@ impl AsyncEngine {
                     .unwrap_or_else(|| request.target.clone());
                 self.run_oauth_async(config, auth_endpoint)
             }
-            StableOperation::AuthTest => self.run_auth_test_async(request.target.clone()),
+            StableOperation::AuthTest => {
+                check_cancel!("auth_test");
+                self.run_auth_test_async(request.target.clone())
+            }
             #[cfg(feature = "db-pentest")]
             StableOperation::DbProbe => {
+                check_cancel!("db_probe");
                 let db_type = request
                     .metadata
                     .get("db_type")
@@ -691,6 +823,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "nse")]
             StableOperation::NseRun => {
+                check_cancel!("nse_run");
                 let scripts: Vec<String> = request
                     .metadata
                     .get("scripts")
@@ -710,6 +843,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanDockerImage => {
+                check_cancel!("scan_docker_image");
                 let image = request
                     .metadata
                     .get("image")
@@ -719,6 +853,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanKubernetes => {
+                check_cancel!("scan_kubernetes");
                 let api_server = request
                     .metadata
                     .get("api_server")
@@ -734,6 +869,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeApk => {
+                check_cancel!("analyze_apk");
                 let apk_path = request
                     .metadata
                     .get("apk_path")
@@ -743,6 +879,7 @@ impl AsyncEngine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeIpa => {
+                check_cancel!("analyze_ipa");
                 let ipa_path = request
                     .metadata
                     .get("ipa_path")
@@ -764,6 +901,8 @@ impl AsyncEngine {
         target: String,
         ports: Vec<u16>,
         effective_timeout_ms: u64,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
     ) -> PyResult<runtime_async::PyFuture> {
         self.state.scope.enforce_target(&target)?;
         for &port in &ports {
@@ -795,6 +934,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             let config = eggsec::scanner::PortScanConfig {
                 ports,
                 concurrency: effective_concurrency,
@@ -805,10 +957,22 @@ impl AsyncEngine {
                 max_results: None,
             };
 
-            match eggsec::scanner::scan_ports(&target_owned, config)
-                .await
-                .map_pyerr()
-            {
+            // Apply per-operation timeout if deadline is set
+            let scan_future = eggsec::scanner::scan_ports(&target_owned, config);
+            let result = if let Some(dl) = deadline {
+                let remaining = dl.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+                match tokio::time::timeout(remaining, scan_future).await {
+                    Ok(r) => r.map_pyerr(),
+                    Err(_) => return Ok(operation_err("Operation timed out".to_string())),
+                }
+            } else {
+                scan_future.await.map_pyerr()
+            };
+
+            match result {
                 Ok(r) => {
                     let py_result = PortScanResult::from_engine(r);
                     let items = py_result.scanned_ports as u64;
@@ -833,6 +997,8 @@ impl AsyncEngine {
         target: String,
         endpoints: Vec<String>,
         effective_timeout_ms: u64,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;
@@ -861,6 +1027,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             let config = eggsec::scanner::EndpointScanConfig {
                 base_url: target_owned.clone(),
                 endpoints,
@@ -897,6 +1076,8 @@ impl AsyncEngine {
         target: String,
         ports: Vec<u16>,
         effective_timeout_ms: u64,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
     ) -> PyResult<runtime_async::PyFuture> {
         self.state.scope.enforce_target(&target)?;
         for &port in &ports {
@@ -928,6 +1109,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             match eggsec::scanner::fingerprint_services(
                 &target_owned,
                 ports_owned,
@@ -957,7 +1151,12 @@ impl AsyncEngine {
         })
     }
 
-    fn run_recon_dns_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+    fn run_recon_dns_async(
+        &self,
+        target: String,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state.scope.enforce_target(&target)?;
 
         let domain_owned = target.clone();
@@ -984,6 +1183,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             match eggsec::recon::dns_records::enumerate_dns_records(&domain_owned)
                 .await
                 .map_pyerr()
@@ -1037,7 +1249,12 @@ impl AsyncEngine {
         })
     }
 
-    fn run_tls_inspect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+    fn run_tls_inspect_async(
+        &self,
+        target: String,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state.scope.enforce_target(&target)?;
 
         let host_owned = target.clone();
@@ -1064,6 +1281,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             match eggsec::recon::ssl::analyze_ssl(&host_owned, 443)
                 .await
                 .map_pyerr()
@@ -1112,7 +1342,12 @@ impl AsyncEngine {
         })
     }
 
-    fn run_tech_detect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+    fn run_tech_detect_async(
+        &self,
+        target: String,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;
 
@@ -1140,6 +1375,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             match eggsec::recon::techdetect::detect_tech_stack(&url_owned)
                 .await
                 .map_pyerr()
@@ -1183,7 +1431,12 @@ impl AsyncEngine {
         })
     }
 
-    fn run_waf_detect_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+    fn run_waf_detect_async(
+        &self,
+        target: String,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;
 
@@ -1211,6 +1464,19 @@ impl AsyncEngine {
         }
 
         runtime_async::spawn_async(async move {
+            // Deadline check
+            if let Some(dl) = deadline {
+                if std::time::Instant::now() >= dl {
+                    return Ok(operation_err("Operation timed out".to_string()));
+                }
+            }
+            // Cancellation check
+            if let Some(ref token) = cancel_token {
+                if token.is_cancelled() {
+                    return Ok(operation_err("Operation cancelled".to_string()));
+                }
+            }
+
             match async {
                 let detector = eggsec::waf::WafDetector::new().map_pyerr()?;
                 detector.detect(&url_owned).await.map_pyerr()
@@ -1253,6 +1519,8 @@ impl AsyncEngine {
         concurrency: usize,
         timeout_secs: u64,
         method: String,
+        _cancel_token: Option<CancellationToken>,
+        _deadline: Option<std::time::Instant>,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;
@@ -1304,7 +1572,12 @@ impl AsyncEngine {
         )
     }
 
-    fn run_waf_validate_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
+    fn run_waf_validate_async(
+        &self,
+        target: String,
+        _cancel_token: Option<CancellationToken>,
+        _deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;
 
@@ -1338,6 +1611,8 @@ impl AsyncEngine {
         payload_type: String,
         concurrency: usize,
         timeout: u64,
+        _cancel_token: Option<CancellationToken>,
+        _deadline: Option<std::time::Instant>,
     ) -> PyResult<runtime_async::PyFuture> {
         let host = extract_host_from_url(&target)?;
         self.state.scope.enforce_target(&host)?;

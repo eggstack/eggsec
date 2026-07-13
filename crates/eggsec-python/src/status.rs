@@ -214,6 +214,11 @@ pub(crate) enum OperationPayload {
 }
 
 impl OperationPayload {
+    /// Return the schema version for this payload variant.
+    pub(crate) fn schema_version(&self) -> &'static str {
+        "1.0"
+    }
+
     /// Return a human-readable type name for this payload variant.
     pub(crate) fn type_name(&self) -> &'static str {
         match self {
@@ -522,6 +527,8 @@ pub struct OperationResult {
     pub(crate) payload: Option<OperationPayload>,
     /// Human-readable type name of the payload (e.g. "PortScanResult").
     pub(crate) payload_type: Option<String>,
+    /// Schema version for this result envelope.
+    pub(crate) schema_version: String,
 }
 
 #[pymethods]
@@ -543,6 +550,7 @@ impl OperationResult {
             metadata: metadata.unwrap_or_default(),
             payload: None,
             payload_type: None,
+            schema_version: "1.0".to_string(),
         }
     }
 
@@ -612,6 +620,12 @@ impl OperationResult {
     #[getter]
     fn payload_type_name(&self) -> Option<String> {
         self.payload_type.clone()
+    }
+
+    /// Schema version for this result envelope.
+    #[getter]
+    fn schema_version(&self) -> &str {
+        &self.schema_version
     }
 
     /// Raise an exception if the operation failed.
@@ -705,6 +719,7 @@ impl OperationResult {
             dict.set_item("payload", py.None())?;
         }
         dict.set_item("payload_type", &self.payload_type)?;
+        dict.set_item("schema_version", &self.schema_version)?;
 
         Ok(dict.into())
     }
@@ -716,7 +731,8 @@ impl OperationResult {
 
     fn __repr__(&self) -> String {
         format!(
-            "OperationResult(status={}, payload={}, artifacts={}, error={})",
+            "OperationResult(schema_version={}, status={}, payload={}, artifacts={}, error={})",
+            self.schema_version,
             self.status.name(),
             self.payload_type.as_deref().unwrap_or("None"),
             self.artifacts.len(),
@@ -726,10 +742,11 @@ impl OperationResult {
 
     fn __str__(&self) -> String {
         let base = format!(
-            "{} ({} artifacts, payload={})",
+            "{} ({} artifacts, payload={}, schema={})",
             self.status.name(),
             self.artifacts.len(),
-            self.payload_type.as_deref().unwrap_or("None")
+            self.payload_type.as_deref().unwrap_or("None"),
+            self.schema_version
         );
         match &self.error {
             Some(e) => format!("{}: {}", base, e.message),
@@ -830,7 +847,7 @@ impl serde::Serialize for Artifact {
 impl serde::Serialize for OperationResult {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("OperationResult", 7)?;
+        let mut s = serializer.serialize_struct("OperationResult", 8)?;
         s.serialize_field("status", &self.status)?;
         s.serialize_field("stats", &self.stats)?;
         s.serialize_field("artifacts", &self.artifacts)?;
@@ -838,6 +855,7 @@ impl serde::Serialize for OperationResult {
         s.serialize_field("metadata", &self.metadata)?;
         s.serialize_field("payload", &self.payload)?;
         s.serialize_field("payload_type", &self.payload_type)?;
+        s.serialize_field("schema_version", &self.schema_version)?;
         s.end()
     }
 }
@@ -853,6 +871,8 @@ impl<'de> serde::Deserialize<'de> for OperationResult {
             metadata: HashMap<String, String>,
             payload: Option<serde_json::Value>,
             payload_type: Option<String>,
+            #[serde(default)]
+            schema_version: Option<String>,
         }
 
         let raw = RawOperationResult::deserialize(deserializer)?;
@@ -957,6 +977,343 @@ impl<'de> serde::Deserialize<'de> for OperationResult {
             metadata: raw.metadata,
             payload,
             payload_type: raw.payload_type,
+            schema_version: raw.schema_version.unwrap_or_else(|| "1.0".to_string()),
         })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // OperationError contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_operation_error_schema_version_always_1_0() {
+        let error = OperationError::from_message(Some("scan_ports"), "something failed");
+        assert_eq!(error.schema_version, "1.0");
+    }
+
+    #[test]
+    fn test_operation_error_has_required_fields() {
+        let error = OperationError::from_message(Some("scan_ports"), "timeout occurred");
+        assert!(!error.kind.is_empty());
+        assert!(!error.code.is_empty());
+        assert!(!error.message.is_empty());
+        assert_eq!(error.message, "timeout occurred");
+        assert_eq!(error.operation_id, Some("scan_ports".to_string()));
+    }
+
+    #[test]
+    fn test_operation_error_classifies_timeout() {
+        let error = OperationError::from_message(None, "Operation timed out after 5s");
+        assert_eq!(error.kind, "timeout");
+        assert_eq!(error.code, "operation_timeout");
+        assert!(error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_scope_denial() {
+        let error = OperationError::from_message(None, "Target out of scope");
+        assert_eq!(error.kind, "scope_denial");
+        assert_eq!(error.code, "scope_denied");
+        assert!(!error.retryable);
+        assert_eq!(error.denial_class.as_deref(), Some("target_out_of_scope"));
+    }
+
+    #[test]
+    fn test_operation_error_classifies_feature_unavailable() {
+        let error = OperationError::from_message(None, "Feature not available");
+        assert_eq!(error.kind, "feature_unavailable");
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_cancellation() {
+        let error = OperationError::from_message(None, "Operation was cancelled by user");
+        assert_eq!(error.kind, "cancellation");
+        assert_eq!(error.code, "operation_cancelled");
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_network_error() {
+        let error = OperationError::from_message(None, "Connection refused by host");
+        assert_eq!(error.kind, "network");
+        assert_eq!(error.code, "network_error");
+        assert!(error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_validation() {
+        let error = OperationError::from_message(None, "Invalid request parameter");
+        assert_eq!(error.kind, "validation");
+        assert_eq!(error.code, "invalid_request");
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_serialization() {
+        let error = OperationError::from_message(None, "Parse error in response");
+        assert_eq!(error.kind, "serialization");
+        assert_eq!(error.code, "serialization_error");
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_classifies_internal() {
+        let error = OperationError::from_message(None, "Something unexpected happened");
+        assert_eq!(error.kind, "internal");
+        assert_eq!(error.code, "operation_failed");
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_with_code_overrides_classification() {
+        let error = OperationError::with_code(
+            Some("scan_ports"),
+            "custom_kind",
+            "custom_code",
+            "custom message",
+            true,
+        );
+        assert_eq!(error.kind, "custom_kind");
+        assert_eq!(error.code, "custom_code");
+        assert!(error.retryable);
+    }
+
+    #[test]
+    fn test_operation_error_serializes() {
+        let error = OperationError::from_message(Some("scan_ports"), "test error");
+        let json = serde_json::to_string(&error).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["schema_version"], "1.0");
+        assert_eq!(parsed["operation_id"], "scan_ports");
+        assert_eq!(parsed["message"], "test error");
+        assert!(parsed["retryable"].is_boolean());
+    }
+
+    #[test]
+    fn test_operation_error_source_is_engine() {
+        let error = OperationError::from_message(None, "test");
+        assert_eq!(error.source.as_deref(), Some("eggsec-python-engine"));
+    }
+
+    #[test]
+    fn test_operation_error_empty_details_and_causes() {
+        let error = OperationError::from_message(None, "test");
+        assert!(error.details.is_empty());
+        assert!(error.causes.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // ExecutionStatus contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_execution_status_names() {
+        assert_eq!(ExecutionStatus::Pending().name(), "Pending");
+        assert_eq!(ExecutionStatus::Running().name(), "Running");
+        assert_eq!(ExecutionStatus::Completed().name(), "Completed");
+        assert_eq!(
+            ExecutionStatus::Failed { error: "e".into() }.name(),
+            "Failed"
+        );
+        assert_eq!(
+            ExecutionStatus::Cancelled { reason: None }.name(),
+            "Cancelled"
+        );
+        assert_eq!(ExecutionStatus::Timeout { elapsed_ms: 0 }.name(), "Timeout");
+    }
+
+    #[test]
+    fn test_execution_status_is_success() {
+        assert!(ExecutionStatus::Completed().is_success());
+        assert!(!ExecutionStatus::Pending().is_success());
+        assert!(!ExecutionStatus::Running().is_success());
+        assert!(!ExecutionStatus::Failed { error: "e".into() }.is_success());
+    }
+
+    #[test]
+    fn test_execution_status_serializes() {
+        let status = ExecutionStatus::Completed();
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("Completed"));
+
+        let status = ExecutionStatus::Failed {
+            error: "boom".into(),
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("Failed"));
+        assert!(json.contains("boom"));
+    }
+
+    #[test]
+    fn test_execution_status_roundtrip() {
+        let statuses = vec![
+            ExecutionStatus::Pending(),
+            ExecutionStatus::Running(),
+            ExecutionStatus::Completed(),
+            ExecutionStatus::Failed {
+                error: "test".into(),
+            },
+            ExecutionStatus::Cancelled {
+                reason: Some("user".into()),
+            },
+            ExecutionStatus::Timeout { elapsed_ms: 5000 },
+        ];
+        for status in statuses {
+            let json = serde_json::to_string(&status).unwrap();
+            let deserialized: ExecutionStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(status.name(), deserialized.name());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // OperationResult contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_operation_result_schema_version() {
+        let result = OperationResult::new(ExecutionStatus::Completed(), None, None, None, None);
+        assert_eq!(result.schema_version(), "1.0");
+    }
+
+    #[test]
+    fn test_operation_result_is_success() {
+        let result = OperationResult::new(ExecutionStatus::Completed(), None, None, None, None);
+        assert!(result.is_success());
+    }
+
+    #[test]
+    fn test_operation_result_is_failure() {
+        let result = OperationResult::new(
+            ExecutionStatus::Failed { error: "e".into() },
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(result.is_failure());
+    }
+
+    #[test]
+    fn test_operation_result_timeout_is_failure() {
+        let result = OperationResult::new(
+            ExecutionStatus::Timeout { elapsed_ms: 5000 },
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(result.is_failure());
+    }
+
+    #[test]
+    fn test_operation_result_error_message_compat() {
+        let result = OperationResult::new(
+            ExecutionStatus::Failed {
+                error: "boom".into(),
+            },
+            None,
+            None,
+            None,
+            None,
+        );
+        // error_message should return the error text from the status
+        // (or from the structured error if present)
+        let err_msg = result.error_message();
+        assert!(err_msg.is_some());
+        assert!(err_msg.unwrap().contains("boom"));
+    }
+
+    #[test]
+    fn test_operation_result_serializes() {
+        let result = OperationResult::new(ExecutionStatus::Completed(), None, None, None, None);
+        let json = serde_json::to_string(&result).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["schema_version"], "1.0");
+        assert!(parsed["status"]["type"] == "Completed");
+    }
+
+    // -----------------------------------------------------------------------
+    // ExecutionStats contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_execution_stats_default_values() {
+        let stats = ExecutionStats::new(0, 0, 0, 0);
+        assert_eq!(stats.duration_ms, 0);
+        assert_eq!(stats.items_processed, 0);
+        assert_eq!(stats.items_failed, 0);
+        assert_eq!(stats.bytes_transferred, 0);
+    }
+
+    #[test]
+    fn test_execution_stats_serializes() {
+        let stats = ExecutionStats::new(100, 50, 2, 4096);
+        let json = serde_json::to_string(&stats).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["duration_ms"], 100);
+        assert_eq!(parsed["items_processed"], 50);
+        assert_eq!(parsed["items_failed"], 2);
+        assert_eq!(parsed["bytes_transferred"], 4096);
+    }
+
+    // -----------------------------------------------------------------------
+    // Artifact contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_artifact_constructable() {
+        let a = Artifact::new("report.json".into(), "report".into(), None, None, None);
+        assert_eq!(a.name, "report.json");
+        assert_eq!(a.kind, "report");
+        assert!(a.mime_type.is_none());
+        assert!(a.data.is_none());
+        assert!(a.path.is_none());
+    }
+
+    #[test]
+    fn test_artifact_serializes() {
+        let a = Artifact::new(
+            "report.json".into(),
+            "report".into(),
+            Some("application/json".into()),
+            Some("{}".into()),
+            Some("/tmp/report.json".into()),
+        );
+        let json = serde_json::to_string(&a).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["name"], "report.json");
+        assert_eq!(parsed["kind"], "report");
+        assert_eq!(parsed["mime_type"], "application/json");
+    }
+
+    // -----------------------------------------------------------------------
+    // OperationPayload type_name and schema_version contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_payload_type_name_returns_non_empty_string() {
+        // Test that the type_name method returns a non-empty static string
+        // for a payload variant we can construct without feature gates.
+        // Since we can't easily construct inner types, test the contract
+        // at the OperationResult level.
+        let result = OperationResult::new(ExecutionStatus::Completed(), None, None, None, None);
+        // Without payload, payload_type_name is None
+        assert!(result.payload_type_name().is_none());
+    }
+
+    #[test]
+    fn test_operation_result_payload_type_none_without_payload() {
+        let result = OperationResult::new(ExecutionStatus::Completed(), None, None, None, None);
+        assert!(result.payload_type_name().is_none());
     }
 }

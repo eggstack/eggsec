@@ -868,6 +868,7 @@ impl Pipeline {
         let mut overall_status = ExecutionStatus::Completed();
         let correlation_id = format!("pipeline-{}", start.elapsed().as_millis());
         let mut retried_steps: u32 = 0;
+        let max_concurrency = self.max_concurrency;
 
         // Validate dependency graph before execution
         validate_dependency_graph(&self.steps)?;
@@ -972,7 +973,7 @@ impl Pipeline {
                 }
 
                 // Evaluate condition
-                if !evaluate_condition(step, &step_results) {
+                if !evaluate_condition(step, &step_results)? {
                     continue;
                 }
 
@@ -1062,7 +1063,7 @@ impl Pipeline {
                     break 'group_loop;
                 }
             } else {
-                // Parallel group — execute up to max_concurrency concurrently
+                // Parallel group — execute concurrently, bounded by max_concurrency
                 let step_names: Vec<String> = group.clone();
                 let steps_to_run: Vec<&PipelineStep> = step_names
                     .iter()
@@ -1091,12 +1092,23 @@ impl Pipeline {
                     )?);
                 }
 
-                // Execute sequentially within the group (bounded by max_concurrency)
-                let mut group_results: Vec<(String, StepResult)> = Vec::new();
-                for step in &steps_to_run {
-                    if !evaluate_condition(step, &step_results) {
-                        continue;
-                    }
+                // Evaluate conditions and filter steps
+                let steps_to_execute: Vec<&PipelineStep> = steps_to_run
+                    .iter()
+                    .filter(|s| evaluate_condition(s, &step_results).unwrap_or(false))
+                    .copied()
+                    .collect();
+
+                if steps_to_execute.is_empty() {
+                    continue;
+                }
+
+                // Collect results and update state — sequential within group,
+                // but structurally ready for parallel dispatch when GIL constraints allow.
+                // Steps are dispatched sequentially here because Pipeline::run() holds
+                // py: Python<'_> (the GIL). True concurrency requires the async pipeline
+                // or releasing the GIL via allow_threads (see AsyncPipeline::run).
+                for step in &steps_to_execute {
                     let effective_timeout = step.timeout_ms;
                     let (sr, _) = execute_step_with_retry(
                         py,
@@ -1108,11 +1120,7 @@ impl Pipeline {
                         &mut events,
                     )?;
                     retried_steps += if sr.attempt > 1 { 1 } else { 0 };
-                    group_results.push((step.name.clone(), sr));
-                }
 
-                // Collect results and update state
-                for (name, sr) in group_results {
                     let succeeded = sr.is_success();
                     if succeeded {
                         if let Some(ref store) = self.checkpoint_store {
@@ -1131,9 +1139,9 @@ impl Pipeline {
                                 &sr,
                             )?;
                         }
-                        completed_set.insert(name.clone());
+                        completed_set.insert(step.name.clone());
                     } else {
-                        failed_steps.insert(name.clone());
+                        failed_steps.insert(step.name.clone());
                         if self.failure_policy == FailurePolicy::StopPipeline
                             || self.stop_on_failure
                         {
@@ -1258,7 +1266,7 @@ impl Pipeline {
                     continue;
                 }
 
-                if !evaluate_condition(step, &step_results) {
+                if !evaluate_condition(step, &step_results)? {
                     continue;
                 }
 
@@ -1333,11 +1341,13 @@ impl Pipeline {
                     )?);
                 }
 
-                let mut group_results: Vec<(String, StepResult)> = Vec::new();
-                for step in &steps_to_run {
-                    if !evaluate_condition(step, &step_results) {
-                        continue;
-                    }
+                let steps_to_execute: Vec<&PipelineStep> = steps_to_run
+                    .iter()
+                    .filter(|s| evaluate_condition(s, &step_results).unwrap_or(false))
+                    .copied()
+                    .collect();
+
+                for step in &steps_to_execute {
                     let effective_timeout = step.timeout_ms;
                     let (sr, _) = execute_step_with_retry(
                         py,
@@ -1349,15 +1359,12 @@ impl Pipeline {
                         &mut events,
                     )?;
                     retried_steps += if sr.attempt > 1 { 1 } else { 0 };
-                    group_results.push((step.name.clone(), sr));
-                }
 
-                for (name, sr) in group_results {
                     let succeeded = sr.is_success();
                     if succeeded {
-                        failed_steps.remove(&name);
+                        failed_steps.remove(&step.name);
                     } else {
-                        failed_steps.insert(name.clone());
+                        failed_steps.insert(step.name.clone());
                         if self.failure_policy == FailurePolicy::StopPipeline
                             || self.stop_on_failure
                         {
@@ -1608,6 +1615,7 @@ impl AsyncPipeline {
                     completed_steps = load_result.checkpoint.completed_steps.clone();
                 }
             }
+            let mut completed_set: HashSet<String> = completed_steps.iter().cloned().collect();
 
             // Emit pipeline started — acquire GIL for event construction.
             Python::with_gil(|py| -> PyResult<()> {
@@ -1661,8 +1669,8 @@ impl AsyncPipeline {
                         continue;
                     }
 
-                    // Check condition (sync — no GIL needed for basic string check)
-                    if !evaluate_condition(step, &step_results) {
+                    // Check condition
+                    if !evaluate_condition(step, &step_results)? {
                         continue;
                     }
 
@@ -1682,7 +1690,8 @@ impl AsyncPipeline {
                     // Dispatch (GIL acquired/released inside dispatch)
                     let step_request = step.request.clone();
                     let step_start = std::time::Instant::now();
-                    let result = Python::with_gil(|py| sync_engine.dispatch(py, step_request));
+                    let result =
+                        Python::with_gil(|py| sync_engine.dispatch(py, step_request, None));
                     let duration = step_start.elapsed().as_millis() as u64;
 
                     // Emit step.completed / step.failed
@@ -1726,7 +1735,7 @@ impl AsyncPipeline {
                                     let retry_request = step.request.clone();
                                     let retry_start = std::time::Instant::now();
                                     let retry_result = Python::with_gil(|py| {
-                                        sync_engine.dispatch(py, retry_request)
+                                        sync_engine.dispatch(py, retry_request, None)
                                     });
                                     let retry_duration = retry_start.elapsed().as_millis() as u64;
 
@@ -1807,8 +1816,7 @@ impl AsyncPipeline {
                         break 'group_loop;
                     }
                 } else {
-                    // Parallel group — dispatch sequentially within the group
-                    // (bounded by max_concurrency at the group level)
+                    // Parallel group — execute concurrently, bounded by max_concurrency
                     let steps_to_run: Vec<PipelineStep> = group
                         .iter()
                         .filter_map(|name| steps.iter().find(|s| &s.name == name).cloned())
@@ -1839,91 +1847,239 @@ impl AsyncPipeline {
                         Ok(())
                     })?;
 
+                    // Spawn concurrent tasks bounded by semaphore
+                    let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+                    let mut join_handles: Vec<(
+                        String,
+                        tokio::task::JoinHandle<PyResult<(StepResult, Vec<EventEnvelope>, u32)>>,
+                    )> = Vec::new();
+
                     for step in &steps_to_run {
-                        if !evaluate_condition(step, &step_results) {
+                        if !evaluate_condition(step, &step_results)? {
+                            // Emit skipped event
+                            Python::with_gil(|py| -> PyResult<()> {
+                                events.push(wrap_event(
+                                    py,
+                                    "step.skipped".to_string(),
+                                    StageLifecycleEvent::new(
+                                        step.name.clone(),
+                                        "skipped".to_string(),
+                                    )
+                                    .into_py(py),
+                                    Some(correlation_id.clone()),
+                                    None,
+                                )?);
+                                Ok(())
+                            })?;
                             continue;
                         }
 
-                        let step_request = step.request.clone();
-                        let step_start = std::time::Instant::now();
-                        let result = Python::with_gil(|py| sync_engine.dispatch(py, step_request));
-                        let duration = step_start.elapsed().as_millis() as u64;
+                        let engine_clone = sync_engine.clone();
+                        let step_clone = step.clone();
+                        let sem_clone = semaphore.clone();
+                        let rp_clone = retry_policy.clone();
+                        let corr_id = correlation_id.clone();
 
-                        let step_status = if result.is_success() {
-                            "completed"
-                        } else {
-                            "failed"
-                        };
-                        Python::with_gil(|py| -> PyResult<()> {
-                            events.push(wrap_event(
-                                py,
-                                format!("step.{step_status}"),
-                                StageLifecycleEvent::new(
-                                    step.name.clone(),
-                                    step_status.to_string(),
-                                )
-                                .into_py(py),
-                                Some(correlation_id.clone()),
-                                None,
-                            )?);
-                            Ok(())
-                        })?;
+                        let handle = tokio::task::spawn_local(async move {
+                            let _permit = sem_clone.acquire().await.map_err(|e| {
+                                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                                    "semaphore closed: {e}"
+                                ))
+                            })?;
 
-                        let mut current_result = StepResult {
-                            step_name: step.name.clone(),
-                            status: result.status.clone(),
-                            result: Some(result.clone()),
-                            duration_ms: duration,
-                            attempt: 1,
-                        };
+                            let step_start = std::time::Instant::now();
+                            let step_request = step_clone.request.clone();
+                            let result = Python::with_gil(|py| {
+                                engine_clone.dispatch(py, step_request, None)
+                            });
+                            let duration = step_start.elapsed().as_millis() as u64;
 
-                        // Retry
-                        if let Some(ref rp) = retry_policy {
-                            if !current_result.is_success() {
-                                let error_kind = error_kind_of(&result);
-                                if rp.is_retryable(&error_kind) {
-                                    let mut attempt = 1u32;
-                                    while attempt < rp.max_attempts {
-                                        attempt += 1;
-                                        let delay = rp.delay_for_attempt(attempt - 2);
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                                            delay,
-                                        ))
-                                        .await;
+                            let mut local_events: Vec<EventEnvelope> = Vec::new();
+                            let step_status = if result.is_success() {
+                                "completed"
+                            } else {
+                                "failed"
+                            };
+                            Python::with_gil(|py| -> PyResult<()> {
+                                local_events.push(wrap_event(
+                                    py,
+                                    format!("step.{step_status}"),
+                                    StageLifecycleEvent::new(
+                                        step_clone.name.clone(),
+                                        step_status.to_string(),
+                                    )
+                                    .into_py(py),
+                                    Some(corr_id.clone()),
+                                    None,
+                                )?);
+                                Ok(())
+                            })?;
 
-                                        let retry_request = step.request.clone();
-                                        let retry_start = std::time::Instant::now();
-                                        let retry_result = Python::with_gil(|py| {
-                                            sync_engine.dispatch(py, retry_request)
-                                        });
-                                        let retry_duration =
-                                            retry_start.elapsed().as_millis() as u64;
+                            let mut current_result = StepResult {
+                                step_name: step_clone.name.clone(),
+                                status: result.status.clone(),
+                                result: Some(result.clone()),
+                                duration_ms: duration,
+                                attempt: 1,
+                            };
 
-                                        current_result = StepResult {
-                                            step_name: step.name.clone(),
-                                            status: retry_result.status.clone(),
-                                            result: Some(retry_result),
-                                            duration_ms: retry_duration,
-                                            attempt,
-                                        };
+                            let mut local_retried: u32 = 0;
 
-                                        if current_result.is_success() {
-                                            retried_steps += 1;
-                                            break;
+                            // Retry
+                            if let Some(ref rp) = rp_clone {
+                                if !current_result.is_success() {
+                                    let error_kind = error_kind_of(&result);
+                                    if rp.is_retryable(&error_kind) {
+                                        let mut attempt = 1u32;
+                                        while attempt < rp.max_attempts {
+                                            attempt += 1;
+                                            let delay = rp.delay_for_attempt(attempt - 2);
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(
+                                                delay,
+                                            ))
+                                            .await;
+
+                                            let retry_request = step_clone.request.clone();
+                                            let retry_start = std::time::Instant::now();
+                                            let retry_result = Python::with_gil(|py| {
+                                                engine_clone.dispatch(py, retry_request, None)
+                                            });
+                                            let retry_duration =
+                                                retry_start.elapsed().as_millis() as u64;
+
+                                            let retry_status = if retry_result.is_success() {
+                                                "completed"
+                                            } else {
+                                                "failed"
+                                            };
+                                            Python::with_gil(|py| -> PyResult<()> {
+                                                local_events.push(wrap_event(
+                                                    py,
+                                                    format!("step.retry.{retry_status}"),
+                                                    StageLifecycleEvent::new(
+                                                        step_clone.name.clone(),
+                                                        format!("retry_{retry_status}"),
+                                                    )
+                                                    .into_py(py),
+                                                    Some(corr_id.clone()),
+                                                    None,
+                                                )?);
+                                                Ok(())
+                                            })?;
+
+                                            current_result = StepResult {
+                                                step_name: step_clone.name.clone(),
+                                                status: retry_result.status.clone(),
+                                                result: Some(retry_result),
+                                                duration_ms: retry_duration,
+                                                attempt,
+                                            };
+
+                                            local_retried += 1;
+
+                                            if current_result.is_success() {
+                                                break;
+                                            }
                                         }
-                                        retried_steps += 1;
                                     }
                                 }
                             }
+
+                            Ok((current_result, local_events, local_retried))
+                        });
+
+                        join_handles.push((step.name.clone(), handle));
+                    }
+
+                    // Await all tasks and collect results
+                    let mut group_results: Vec<(String, StepResult)> = Vec::new();
+                    let mut group_events: Vec<EventEnvelope> = Vec::new();
+                    let mut group_retried: u32 = 0;
+
+                    for (name, handle) in join_handles {
+                        match handle.await {
+                            Ok(Ok((sr, evts, retried))) => {
+                                group_retried += retried;
+                                group_events.extend(evts);
+                                group_results.push((name, sr));
+                            }
+                            Ok(Err(e)) => {
+                                // Task returned a Python error — create a failed result
+                                Python::with_gil(|py| -> PyResult<()> {
+                                    events.push(wrap_event(
+                                        py,
+                                        "step.failed".to_string(),
+                                        StageLifecycleEvent::new(
+                                            name.clone(),
+                                            "failed".to_string(),
+                                        )
+                                        .into_py(py),
+                                        Some(correlation_id.clone()),
+                                        None,
+                                    )?);
+                                    Ok(())
+                                })?;
+                                group_results.push((
+                                    name.clone(),
+                                    StepResult::new(
+                                        name.clone(),
+                                        ExecutionStatus::Failed {
+                                            error: e.to_string(),
+                                        },
+                                        None,
+                                        0,
+                                        1,
+                                    ),
+                                ));
+                            }
+                            Err(e) => {
+                                // Task panicked
+                                group_results.push((
+                                    name.clone(),
+                                    StepResult::new(
+                                        name.clone(),
+                                        ExecutionStatus::Failed {
+                                            error: format!("task panicked: {e}"),
+                                        },
+                                        None,
+                                        0,
+                                        1,
+                                    ),
+                                ));
+                            }
                         }
+                    }
 
-                        let succeeded = current_result.is_success();
-                        step_results.push(current_result);
+                    retried_steps += group_retried;
+                    events.extend(group_events);
 
-                        if !succeeded {
-                            failed_steps.insert(step.name.clone());
-                            if stop_on_failure || failure_policy == FailurePolicy::StopPipeline {
-                                overall_status = step_results.last().unwrap().status.clone();
+                    // Collect results and update state
+                    for (name, sr) in group_results {
+                        let succeeded = sr.is_success();
+                        if succeeded {
+                            if let Some(ref store) = cp_store {
+                                Python::with_gil(|_py| -> PyResult<()> {
+                                    save_step_checkpoint(
+                                        store,
+                                        &pipeline_id,
+                                        &pipeline_name,
+                                        &steps,
+                                        stop_on_failure,
+                                        &retry_policy,
+                                        failure_policy,
+                                        max_concurrency,
+                                        &sync_engine,
+                                        &completed_steps,
+                                        &step_results,
+                                        &sr,
+                                    )
+                                })?;
+                            }
+                            completed_set.insert(name.clone());
+                        } else {
+                            failed_steps.insert(name.clone());
+                            if failure_policy == FailurePolicy::StopPipeline || stop_on_failure {
+                                overall_status = sr.status.clone();
                                 let error_msg = match &overall_status {
                                     ExecutionStatus::Failed { error } => error.clone(),
                                     other => format!("Step failed: {}", other.name()),
@@ -1943,9 +2099,11 @@ impl AsyncPipeline {
                                     )?);
                                     Ok(())
                                 })?;
+                                step_results.push(sr);
                                 break 'group_loop;
                             }
                         }
+                        step_results.push(sr);
                     }
                 }
             }
@@ -2011,6 +2169,7 @@ impl AsyncPipeline {
         let stop_on_failure = self.stop_on_failure;
         let retry_policy = self.retry_policy.clone();
         let failure_policy = self.failure_policy;
+        let max_concurrency = self.max_concurrency;
         let cancel_token = self.cancel_token.clone();
         let cp_store = self.checkpoint_store.clone();
         let checkpoint_completed = checkpoint.completed_steps.clone();
@@ -2078,7 +2237,7 @@ impl AsyncPipeline {
                         continue;
                     }
 
-                    if !evaluate_condition(step, &step_results) {
+                    if !evaluate_condition(step, &step_results)? {
                         continue;
                     }
 
@@ -2096,7 +2255,8 @@ impl AsyncPipeline {
 
                     let step_request = step.request.clone();
                     let step_start = std::time::Instant::now();
-                    let result = Python::with_gil(|py| sync_engine.dispatch(py, step_request));
+                    let result =
+                        Python::with_gil(|py| sync_engine.dispatch(py, step_request, None));
                     let duration = step_start.elapsed().as_millis() as u64;
 
                     let step_status = if result.is_success() {
@@ -2138,7 +2298,7 @@ impl AsyncPipeline {
                                     let retry_request = step.request.clone();
                                     let retry_start = std::time::Instant::now();
                                     let retry_result = Python::with_gil(|py| {
-                                        sync_engine.dispatch(py, retry_request)
+                                        sync_engine.dispatch(py, retry_request, None)
                                     });
                                     let retry_duration = retry_start.elapsed().as_millis() as u64;
 
@@ -2224,92 +2384,216 @@ impl AsyncPipeline {
                         Ok(())
                     })?;
 
+                    // Spawn concurrent tasks bounded by semaphore
+                    let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+                    let mut join_handles: Vec<(
+                        String,
+                        tokio::task::JoinHandle<PyResult<(StepResult, Vec<EventEnvelope>, u32)>>,
+                    )> = Vec::new();
+
                     for step in &steps_to_run {
-                        if !evaluate_condition(step, &step_results) {
+                        if !evaluate_condition(step, &step_results)? {
+                            Python::with_gil(|py| -> PyResult<()> {
+                                events.push(wrap_event(
+                                    py,
+                                    "step.skipped".to_string(),
+                                    StageLifecycleEvent::new(
+                                        step.name.clone(),
+                                        "skipped".to_string(),
+                                    )
+                                    .into_py(py),
+                                    Some(correlation_id.clone()),
+                                    None,
+                                )?);
+                                Ok(())
+                            })?;
                             continue;
                         }
 
-                        let step_request = step.request.clone();
-                        let step_start = std::time::Instant::now();
-                        let result = Python::with_gil(|py| sync_engine.dispatch(py, step_request));
-                        let duration = step_start.elapsed().as_millis() as u64;
+                        let engine_clone = sync_engine.clone();
+                        let step_clone = step.clone();
+                        let sem_clone = semaphore.clone();
+                        let rp_clone = retry_policy.clone();
+                        let corr_id = correlation_id.clone();
 
-                        let step_status = if result.is_success() {
-                            "completed"
-                        } else {
-                            "failed"
-                        };
-                        Python::with_gil(|py| -> PyResult<()> {
-                            events.push(wrap_event(
-                                py,
-                                format!("step.{step_status}"),
-                                StageLifecycleEvent::new(
-                                    step.name.clone(),
-                                    step_status.to_string(),
-                                )
-                                .into_py(py),
-                                Some(correlation_id.clone()),
-                                None,
-                            )?);
-                            Ok(())
-                        })?;
+                        let handle = tokio::task::spawn_local(async move {
+                            let _permit = sem_clone.acquire().await.map_err(|e| {
+                                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                                    "semaphore closed: {e}"
+                                ))
+                            })?;
 
-                        let mut current_result = StepResult {
-                            step_name: step.name.clone(),
-                            status: result.status.clone(),
-                            result: Some(result.clone()),
-                            duration_ms: duration,
-                            attempt: 1,
-                        };
+                            let step_start = std::time::Instant::now();
+                            let step_request = step_clone.request.clone();
+                            let result = Python::with_gil(|py| {
+                                engine_clone.dispatch(py, step_request, None)
+                            });
+                            let duration = step_start.elapsed().as_millis() as u64;
 
-                        if let Some(ref rp) = retry_policy {
-                            if !current_result.is_success() {
-                                let error_kind = error_kind_of(&result);
-                                if rp.is_retryable(&error_kind) {
-                                    let mut attempt = 1u32;
-                                    while attempt < rp.max_attempts {
-                                        attempt += 1;
-                                        let delay = rp.delay_for_attempt(attempt - 2);
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                                            delay,
-                                        ))
-                                        .await;
+                            let mut local_events: Vec<EventEnvelope> = Vec::new();
+                            let step_status = if result.is_success() {
+                                "completed"
+                            } else {
+                                "failed"
+                            };
+                            Python::with_gil(|py| -> PyResult<()> {
+                                local_events.push(wrap_event(
+                                    py,
+                                    format!("step.{step_status}"),
+                                    StageLifecycleEvent::new(
+                                        step_clone.name.clone(),
+                                        step_status.to_string(),
+                                    )
+                                    .into_py(py),
+                                    Some(corr_id.clone()),
+                                    None,
+                                )?);
+                                Ok(())
+                            })?;
 
-                                        let retry_request = step.request.clone();
-                                        let retry_start = std::time::Instant::now();
-                                        let retry_result = Python::with_gil(|py| {
-                                            sync_engine.dispatch(py, retry_request)
-                                        });
-                                        let retry_duration =
-                                            retry_start.elapsed().as_millis() as u64;
+                            let mut current_result = StepResult {
+                                step_name: step_clone.name.clone(),
+                                status: result.status.clone(),
+                                result: Some(result.clone()),
+                                duration_ms: duration,
+                                attempt: 1,
+                            };
 
-                                        current_result = StepResult {
-                                            step_name: step.name.clone(),
-                                            status: retry_result.status.clone(),
-                                            result: Some(retry_result),
-                                            duration_ms: retry_duration,
-                                            attempt,
-                                        };
+                            let mut local_retried: u32 = 0;
 
-                                        if current_result.is_success() {
-                                            retried_steps += 1;
-                                            break;
+                            if let Some(ref rp) = rp_clone {
+                                if !current_result.is_success() {
+                                    let error_kind = error_kind_of(&result);
+                                    if rp.is_retryable(&error_kind) {
+                                        let mut attempt = 1u32;
+                                        while attempt < rp.max_attempts {
+                                            attempt += 1;
+                                            let delay = rp.delay_for_attempt(attempt - 2);
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(
+                                                delay,
+                                            ))
+                                            .await;
+
+                                            let retry_request = step_clone.request.clone();
+                                            let retry_start = std::time::Instant::now();
+                                            let retry_result = Python::with_gil(|py| {
+                                                engine_clone.dispatch(py, retry_request, None)
+                                            });
+                                            let retry_duration =
+                                                retry_start.elapsed().as_millis() as u64;
+
+                                            let retry_status = if retry_result.is_success() {
+                                                "completed"
+                                            } else {
+                                                "failed"
+                                            };
+                                            Python::with_gil(|py| -> PyResult<()> {
+                                                local_events.push(wrap_event(
+                                                    py,
+                                                    format!("step.retry.{retry_status}"),
+                                                    StageLifecycleEvent::new(
+                                                        step_clone.name.clone(),
+                                                        format!("retry_{retry_status}"),
+                                                    )
+                                                    .into_py(py),
+                                                    Some(corr_id.clone()),
+                                                    None,
+                                                )?);
+                                                Ok(())
+                                            })?;
+
+                                            current_result = StepResult {
+                                                step_name: step_clone.name.clone(),
+                                                status: retry_result.status.clone(),
+                                                result: Some(retry_result),
+                                                duration_ms: retry_duration,
+                                                attempt,
+                                            };
+
+                                            local_retried += 1;
+
+                                            if current_result.is_success() {
+                                                break;
+                                            }
                                         }
-                                        retried_steps += 1;
                                     }
                                 }
                             }
+
+                            Ok((current_result, local_events, local_retried))
+                        });
+
+                        join_handles.push((step.name.clone(), handle));
+                    }
+
+                    // Await all tasks and collect results
+                    let mut group_results: Vec<(String, StepResult)> = Vec::new();
+                    let mut group_events: Vec<EventEnvelope> = Vec::new();
+                    let mut group_retried: u32 = 0;
+
+                    for (name, handle) in join_handles {
+                        match handle.await {
+                            Ok(Ok((sr, evts, retried))) => {
+                                group_retried += retried;
+                                group_events.extend(evts);
+                                group_results.push((name, sr));
+                            }
+                            Ok(Err(e)) => {
+                                Python::with_gil(|py| -> PyResult<()> {
+                                    events.push(wrap_event(
+                                        py,
+                                        "step.failed".to_string(),
+                                        StageLifecycleEvent::new(
+                                            name.clone(),
+                                            "failed".to_string(),
+                                        )
+                                        .into_py(py),
+                                        Some(correlation_id.clone()),
+                                        None,
+                                    )?);
+                                    Ok(())
+                                })?;
+                                group_results.push((
+                                    name.clone(),
+                                    StepResult::new(
+                                        name.clone(),
+                                        ExecutionStatus::Failed {
+                                            error: e.to_string(),
+                                        },
+                                        None,
+                                        0,
+                                        1,
+                                    ),
+                                ));
+                            }
+                            Err(e) => {
+                                group_results.push((
+                                    name.clone(),
+                                    StepResult::new(
+                                        name.clone(),
+                                        ExecutionStatus::Failed {
+                                            error: format!("task panicked: {e}"),
+                                        },
+                                        None,
+                                        0,
+                                        1,
+                                    ),
+                                ));
+                            }
                         }
+                    }
 
-                        let succeeded = current_result.is_success();
-                        step_results.push(current_result);
+                    retried_steps += group_retried;
+                    events.extend(group_events);
 
+                    for (name, sr) in group_results {
+                        let succeeded = sr.is_success();
                         if succeeded {
-                            failed_steps.remove(&step.name);
+                            failed_steps.remove(&name);
                         } else {
-                            failed_steps.insert(step.name.clone());
+                            failed_steps.insert(name.clone());
                             if stop_on_failure || failure_policy == FailurePolicy::StopPipeline {
-                                overall_status = step_results.last().unwrap().status.clone();
+                                overall_status = sr.status.clone();
                                 let error_msg = match &overall_status {
                                     ExecutionStatus::Failed { error } => error.clone(),
                                     other => format!("Step failed: {}", other.name()),
@@ -2329,9 +2613,11 @@ impl AsyncPipeline {
                                     )?);
                                     Ok(())
                                 })?;
+                                step_results.push(sr);
                                 break 'group_loop;
                             }
                         }
+                        step_results.push(sr);
                     }
                 }
             }
@@ -2441,7 +2727,7 @@ fn execute_step_with_retry(
     events: &mut Vec<EventEnvelope>,
 ) -> PyResult<(StepResult, bool)> {
     let step_start = std::time::Instant::now();
-    let result = engine.dispatch(py, step.request.clone());
+    let result = engine.dispatch(py, step.request.clone(), None);
     let duration = step_start.elapsed().as_millis() as u64;
 
     let step_status = if result.is_success() {
@@ -2477,7 +2763,7 @@ fn execute_step_with_retry(
                     std::thread::sleep(std::time::Duration::from_millis(delay));
 
                     let retry_start = std::time::Instant::now();
-                    let retry_result = engine.dispatch(py, step.request.clone());
+                    let retry_result = engine.dispatch(py, step.request.clone(), None);
                     let retry_duration = retry_start.elapsed().as_millis() as u64;
 
                     // Emit retry event
@@ -2619,12 +2905,138 @@ fn group_by_parallel(execution_order: &[String], steps: &[PipelineStep]) -> Vec<
 }
 
 /// Evaluate the condition on a step. Returns true if the step should run.
-fn evaluate_condition(step: &PipelineStep, _step_results: &[StepResult]) -> bool {
-    // Basic condition evaluation: if condition is None, always run.
-    // String-based conditions are evaluated as simple boolean expressions
-    // against step results. For now, a non-empty condition string means "run".
-    // Full expression evaluation is left as future work.
-    step.condition.is_none() || step.condition.as_deref() != Some("false")
+///
+/// Supported condition patterns:
+/// - `None` / empty string → always run
+/// - `status:<step_id> == success` → run only if prior step succeeded
+/// - `status:<step_id> == failure` → run only if prior step failed
+/// - `status:<step_id> == skipped` → run only if prior step was skipped
+/// - `findings:<step_id> > 0` → run only if prior step produced findings (artifacts)
+/// - `findings:<step_id> == 0` → run only if prior step produced no findings
+///
+/// Returns `Err` on invalid/unrecognised condition syntax.
+fn evaluate_condition(step: &PipelineStep, step_results: &[StepResult]) -> PyResult<bool> {
+    let condition = match &step.condition {
+        None => return Ok(true),
+        Some(c) if c.trim().is_empty() => return Ok(true),
+        Some(c) => c.trim(),
+    };
+
+    // Parse "status:<step_id> == <expected>"
+    if let Some(rest) = condition.strip_prefix("status:") {
+        let (step_id, expected) = parse_comparison(rest)?;
+        let status_str = find_step_status(step_results, &step_id);
+        return match status_str {
+            Some(s) => Ok(s.eq_ignore_ascii_case(expected)),
+            None => Ok(false),
+        };
+    }
+
+    // Parse "findings:<step_id> > 0" or "findings:<step_id> == 0"
+    if let Some(rest) = condition.strip_prefix("findings:") {
+        let (step_id, op, value) = parse_findings_comparison(rest)?;
+        let count = find_step_findings_count(step_results, &step_id);
+        return match op {
+            ComparisonOp::GreaterThan => Ok(count > value),
+            ComparisonOp::Equal => Ok(count == value),
+        };
+    }
+
+    Err(pyo3::exceptions::PyValueError::new_err(format!(
+        "invalid_condition: unrecognised condition '{}' on step '{}'",
+        condition, step.name
+    )))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ComparisonOp {
+    GreaterThan,
+    Equal,
+}
+
+/// Parse `" == expected"` from a comparison string, returning `(lhs_trimmed, expected)`.
+fn parse_comparison(rest: &str) -> PyResult<(&str, &str)> {
+    let rest = rest.trim();
+    if let Some(pos) = rest.find("==") {
+        let lhs = rest[..pos].trim();
+        let rhs = rest[pos + 2..].trim();
+        if lhs.is_empty() || rhs.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid_condition: malformed comparison '{}'",
+                rest
+            )));
+        }
+        Ok((lhs, rhs))
+    } else {
+        Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "invalid_condition: expected '==' in '{}'",
+            rest
+        )))
+    }
+}
+
+/// Parse `" > <number>"` or `" == <number>"` from a findings comparison.
+fn parse_findings_comparison(rest: &str) -> PyResult<(&str, ComparisonOp, u64)> {
+    let rest = rest.trim();
+
+    if let Some(pos) = rest.find('>') {
+        let step_id = rest[..pos].trim();
+        let val_str = rest[pos + 1..].trim();
+        let value: u64 = val_str.parse().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid_condition: expected integer after '>' in '{}'",
+                rest
+            ))
+        })?;
+        if step_id.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid_condition: empty step id in '{}'",
+                rest
+            )));
+        }
+        return Ok((step_id, ComparisonOp::GreaterThan, value));
+    }
+
+    if let Some(pos) = rest.find("==") {
+        let step_id = rest[..pos].trim();
+        let val_str = rest[pos + 2..].trim();
+        let value: u64 = val_str.parse().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid_condition: expected integer after '==' in '{}'",
+                rest
+            ))
+        })?;
+        if step_id.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid_condition: empty step id in '{}'",
+                rest
+            )));
+        }
+        return Ok((step_id, ComparisonOp::Equal, value));
+    }
+
+    Err(pyo3::exceptions::PyValueError::new_err(format!(
+        "invalid_condition: expected '>' or '==' in '{}'",
+        rest
+    )))
+}
+
+/// Find the status name for a given step in the results list.
+fn find_step_status(step_results: &[StepResult], step_id: &str) -> Option<&'static str> {
+    step_results
+        .iter()
+        .find(|r| r.step_name == step_id)
+        .map(|r| r.status.name())
+}
+
+/// Find the artifact (findings) count for a given step in the results list.
+fn find_step_findings_count(step_results: &[StepResult], step_id: &str) -> u64 {
+    step_results
+        .iter()
+        .find(|r| r.step_name == step_id)
+        .and_then(|r| r.result.as_ref())
+        .map(|r| r.artifacts.len() as u64)
+        .unwrap_or(0)
 }
 
 /// Save a checkpoint after a step completes.
@@ -2690,4 +3102,819 @@ fn save_step_checkpoint(
         artifact_store_id: compatibility.artifact_store_id.clone(),
     };
     store.save_inner(cp)
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper to build a minimal OperationRequest without Python.
+    fn make_request(operation: &str, target: &str) -> OperationRequest {
+        OperationRequest::new(operation.to_string(), target.to_string(), None, None)
+    }
+
+    /// Helper to build a PipelineStep with private fields accessible in-test.
+    fn make_step(
+        name: &str,
+        operation: &str,
+        target: &str,
+        dependencies: Vec<&str>,
+    ) -> PipelineStep {
+        PipelineStep {
+            name: name.to_string(),
+            request: make_request(operation, target),
+            condition: None,
+            dependencies: dependencies.into_iter().map(String::from).collect(),
+            timeout_ms: None,
+            parallel_group: None,
+        }
+    }
+
+    fn make_step_with_condition(
+        name: &str,
+        operation: &str,
+        target: &str,
+        condition: &str,
+    ) -> PipelineStep {
+        PipelineStep {
+            name: name.to_string(),
+            request: make_request(operation, target),
+            condition: Some(condition.to_string()),
+            dependencies: Vec::new(),
+            timeout_ms: None,
+            parallel_group: None,
+        }
+    }
+
+    fn make_step_with_group(
+        name: &str,
+        operation: &str,
+        target: &str,
+        group: &str,
+    ) -> PipelineStep {
+        PipelineStep {
+            name: name.to_string(),
+            request: make_request(operation, target),
+            condition: None,
+            dependencies: Vec::new(),
+            timeout_ms: None,
+            parallel_group: Some(group.to_string()),
+        }
+    }
+
+    fn make_step_with_deps_and_condition(
+        name: &str,
+        operation: &str,
+        target: &str,
+        dependencies: Vec<&str>,
+        condition: &str,
+    ) -> PipelineStep {
+        PipelineStep {
+            name: name.to_string(),
+            request: make_request(operation, target),
+            condition: Some(condition.to_string()),
+            dependencies: dependencies.into_iter().map(String::from).collect(),
+            timeout_ms: None,
+            parallel_group: None,
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Dependency resolution tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_topological_sort_linear() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["b"]),
+        ];
+        let order = topological_sort(&steps).unwrap();
+        assert_eq!(order.len(), 3);
+        // a must come before b, b before c
+        assert!(
+            order.iter().position(|n| n == "a").unwrap()
+                < order.iter().position(|n| n == "b").unwrap()
+        );
+        assert!(
+            order.iter().position(|n| n == "b").unwrap()
+                < order.iter().position(|n| n == "c").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_topological_sort_diamond() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("d", "scan_ports", "10.0.0.1", vec!["b", "c"]),
+        ];
+        let order = topological_sort(&steps).unwrap();
+        assert_eq!(order.len(), 4);
+        let pos = |name: &str| order.iter().position(|n| n == name).unwrap();
+        assert!(pos("a") < pos("b"));
+        assert!(pos("a") < pos("c"));
+        assert!(pos("b") < pos("d"));
+        assert!(pos("c") < pos("d"));
+    }
+
+    #[test]
+    fn test_topological_sort_no_deps() {
+        let steps = vec![
+            make_step("x", "scan_ports", "10.0.0.1", vec![]),
+            make_step("y", "scan_ports", "10.0.0.1", vec![]),
+            make_step("z", "scan_ports", "10.0.0.1", vec![]),
+        ];
+        let order = topological_sort(&steps).unwrap();
+        assert_eq!(order.len(), 3);
+        // All steps should be present
+        assert!(order.contains(&"x".to_string()));
+        assert!(order.contains(&"y".to_string()));
+        assert!(order.contains(&"z".to_string()));
+    }
+
+    #[test]
+    fn test_cycle_detection() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec!["b"]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+        ];
+        let result = topological_sort(&steps);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("circular dependency"),
+            "expected cycle error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_cycle_detection_three_node() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec!["c"]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["b"]),
+        ];
+        let result = topological_sort(&steps);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_dependency_error() {
+        let steps = vec![make_step(
+            "a",
+            "scan_ports",
+            "10.0.0.1",
+            vec!["nonexistent"],
+        )];
+        let result = topological_sort(&steps);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("nonexistent"),
+            "error should reference missing step: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_validate_dependency_graph_missing_dep() {
+        let steps = vec![make_step("a", "scan_ports", "10.0.0.1", vec!["ghost"])];
+        let result = validate_dependency_graph(&steps);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_dependency_graph_cycle() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec!["c"]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["b"]),
+        ];
+        let result = validate_dependency_graph(&steps);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_dependency_graph_valid() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+        ];
+        assert!(validate_dependency_graph(&steps).is_ok());
+    }
+
+    // -----------------------------------------------------------------------
+    // Condition evaluation tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_condition_empty_always_executes() {
+        let step = make_step("s1", "scan_ports", "10.0.0.1", vec![]);
+        let results = vec![];
+        assert!(evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_none_always_executes() {
+        let step = make_step("s1", "scan_ports", "10.0.0.1", vec![]);
+        let results = vec![];
+        assert!(evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_whitespace_only_always_executes() {
+        let mut step = make_step("s1", "scan_ports", "10.0.0.1", vec![]);
+        step.condition = Some("   ".to_string());
+        let results = vec![];
+        assert!(evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_status_check_success() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "status:s1 == success");
+        let results = vec![StepResult::new(
+            "s1".to_string(),
+            ExecutionStatus::Completed(),
+            None,
+            100,
+            1,
+        )];
+        assert!(evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_status_check_failure() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "status:s1 == success");
+        let results = vec![StepResult::new(
+            "s1".to_string(),
+            ExecutionStatus::Failed {
+                error: "boom".to_string(),
+            },
+            None,
+            100,
+            1,
+        )];
+        assert!(!evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_status_check_failure_expected() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "status:s1 == failure");
+        let results = vec![StepResult::new(
+            "s1".to_string(),
+            ExecutionStatus::Failed {
+                error: "boom".to_string(),
+            },
+            None,
+            100,
+            1,
+        )];
+        assert!(evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_status_missing_step() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "status:s1 == success");
+        let results = vec![];
+        assert!(!evaluate_condition(&step, &results).unwrap());
+    }
+
+    #[test]
+    fn test_condition_invalid_returns_error() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "bogus_syntax");
+        let results = vec![];
+        let result = evaluate_condition(&step, &results);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid_condition"));
+    }
+
+    #[test]
+    fn test_condition_invalid_missing_comparison() {
+        let step = make_step_with_condition("s2", "scan_ports", "10.0.0.1", "status:s1");
+        let results = vec![];
+        let result = evaluate_condition(&step, &results);
+        assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Retry policy tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_retry_delay_computation() {
+        let policy = RetryPolicy::new(3, None, 1000, 30000, false);
+        // attempt 0 → base = 1000 * 2^0 = 1000
+        assert_eq!(policy.delay_for_attempt(0), 1000);
+        // attempt 1 → base = 1000 * 2^1 = 2000
+        assert_eq!(policy.delay_for_attempt(1), 2000);
+        // attempt 2 → base = 1000 * 2^2 = 4000
+        assert_eq!(policy.delay_for_attempt(2), 4000);
+    }
+
+    #[test]
+    fn test_retry_delay_respects_max_delay() {
+        let policy = RetryPolicy::new(5, None, 1000, 5000, false);
+        // attempt 10 → base = 1000 * 2^10 = 1024000, capped at 5000
+        assert_eq!(policy.delay_for_attempt(10), 5000);
+        // attempt 20 → still capped
+        assert_eq!(policy.delay_for_attempt(20), 5000);
+    }
+
+    #[test]
+    fn test_retry_delay_jitter_bounded() {
+        let policy = RetryPolicy::new(5, None, 1000, 30000, true);
+        // With jitter, delay should be within [max_delay - jitter_range, max_delay + jitter_range]
+        // jitter_range = capped / 4 = 1000/4 = 250 for attempt 0
+        // So delay ∈ [750, 1250]
+        for _ in 0..100 {
+            let delay = policy.delay_for_attempt(0);
+            assert!(
+                delay >= 750 && delay <= 1250,
+                "delay {} out of expected range [750, 1250]",
+                delay
+            );
+        }
+    }
+
+    #[test]
+    fn test_retryable_error_matching() {
+        let policy = RetryPolicy::new(
+            3,
+            Some(vec!["timeout".to_string(), "network".to_string()]),
+            1000,
+            30000,
+            false,
+        );
+        assert!(policy.is_retryable("timeout"));
+        assert!(policy.is_retryable("network"));
+        assert!(policy.is_retryable("TIMEOUT")); // case insensitive
+        assert!(!policy.is_retryable("scope_denial"));
+        assert!(!policy.is_retryable("internal"));
+    }
+
+    #[test]
+    fn test_retryable_empty_set_matches_all() {
+        let policy = RetryPolicy::new(3, None, 1000, 30000, false);
+        // Empty retryable_errors means all errors are retryable
+        assert!(policy.is_retryable("timeout"));
+        assert!(policy.is_retryable("anything"));
+        assert!(policy.is_retryable("scope_denial"));
+    }
+
+    #[test]
+    fn test_max_attempts_respected() {
+        // RetryPolicy with max_attempts=1 means no retries
+        let policy = RetryPolicy::new(1, None, 1000, 30000, false);
+        assert_eq!(policy.max_attempts, 1);
+        // With max_attempts=5, we can retry up to 4 times (5 total attempts)
+        let policy2 = RetryPolicy::new(5, None, 1000, 30000, false);
+        assert_eq!(policy2.max_attempts, 5);
+    }
+
+    // -----------------------------------------------------------------------
+    // FailurePolicy tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_failure_policy_variants() {
+        assert_eq!(FailurePolicy::StopPipeline.name(), "StopPipeline");
+        assert_eq!(FailurePolicy::Continue.name(), "Continue");
+        assert_eq!(FailurePolicy::SkipDependents.name(), "SkipDependents");
+    }
+
+    #[test]
+    fn test_failure_policy_stop_pipeline() {
+        assert_eq!(FailurePolicy::StopPipeline as i32, 0);
+    }
+
+    #[test]
+    fn test_failure_policy_continue() {
+        assert_eq!(FailurePolicy::Continue as i32, 1);
+    }
+
+    #[test]
+    fn test_failure_policy_skip_dependents() {
+        assert_eq!(FailurePolicy::SkipDependents as i32, 2);
+    }
+
+    #[test]
+    fn test_failure_policy_equality() {
+        assert_eq!(FailurePolicy::StopPipeline, FailurePolicy::StopPipeline);
+        assert_ne!(FailurePolicy::StopPipeline, FailurePolicy::Continue);
+    }
+
+    // -----------------------------------------------------------------------
+    // group_by_parallel tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_group_by_parallel_no_groups() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+        ];
+        let order = vec!["a".to_string(), "b".to_string()];
+        let groups = group_by_parallel(&order, &steps);
+        // Without parallel_group, each step is its own group
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec!["a"]);
+        assert_eq!(groups[1], vec!["b"]);
+    }
+
+    #[test]
+    fn test_group_by_parallel_with_groups() {
+        let steps = vec![
+            make_step_with_group("a", "scan_ports", "10.0.0.1", "recon"),
+            make_step_with_group("b", "scan_ports", "10.0.0.1", "recon"),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["a", "b"]),
+        ];
+        let order = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let groups = group_by_parallel(&order, &steps);
+        // a and b in same group, c in its own
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], vec!["a", "b"]);
+        assert_eq!(groups[1], vec!["c"]);
+    }
+
+    #[test]
+    fn test_group_by_parallel_preserves_order() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec![]),
+            make_step("c", "scan_ports", "10.0.0.1", vec![]),
+        ];
+        let order = vec!["c".to_string(), "a".to_string(), "b".to_string()];
+        let groups = group_by_parallel(&order, &steps);
+        // Should preserve the given order
+        let flat: Vec<&str> = groups.iter().flatten().map(|s| s.as_str()).collect();
+        assert_eq!(flat, vec!["c", "a", "b"]);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_dependency_graph tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_build_dependency_graph_empty() {
+        let steps: Vec<PipelineStep> = vec![];
+        let (dependents, dependencies) = build_dependency_graph(&steps);
+        assert!(dependents.is_empty());
+        assert!(dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_build_dependency_graph_linear() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["b"]),
+        ];
+        let (dependents, dependencies) = build_dependency_graph(&steps);
+        // a has dependents: [b]
+        assert_eq!(dependents.get("a").unwrap().len(), 1);
+        assert!(dependents.get("a").unwrap().contains(&"b".to_string()));
+        // b has dependents: [c]
+        assert_eq!(dependents.get("b").unwrap().len(), 1);
+        assert!(dependents.get("b").unwrap().contains(&"c".to_string()));
+        // c has no dependents
+        assert!(dependents.get("c").is_none());
+        // b depends on a
+        assert!(dependencies.get("b").unwrap().contains(&"a".to_string()));
+        // c depends on b
+        assert!(dependencies.get("c").unwrap().contains(&"b".to_string()));
+        // a has no dependencies
+        assert!(dependencies.get("a").unwrap().is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // transitive_dependents tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_transitive_dependents_direct_only() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec![]),
+        ];
+        let failed: HashSet<String> = vec!["a".to_string()].into_iter().collect();
+        let skip = transitive_dependents(&steps, &failed);
+        assert!(skip.contains("a"));
+        assert!(skip.contains("b"));
+        assert!(!skip.contains("c"));
+    }
+
+    #[test]
+    fn test_transitive_dependents_transitive() {
+        let steps = vec![
+            make_step("a", "scan_ports", "10.0.0.1", vec![]),
+            make_step("b", "scan_ports", "10.0.0.1", vec!["a"]),
+            make_step("c", "scan_ports", "10.0.0.1", vec!["b"]),
+            make_step("d", "scan_ports", "10.0.0.1", vec![]),
+        ];
+        let failed: HashSet<String> = vec!["a".to_string()].into_iter().collect();
+        let skip = transitive_dependents(&steps, &failed);
+        assert!(skip.contains("a"));
+        assert!(skip.contains("b"));
+        assert!(skip.contains("c"));
+        assert!(!skip.contains("d"));
+    }
+
+    // -----------------------------------------------------------------------
+    // error_kind_of tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_error_kind_of_timeout() {
+        let result = OperationResult {
+            status: ExecutionStatus::Failed {
+                error: "Operation timed out after 5000ms".to_string(),
+            },
+            stats: None,
+            artifacts: Vec::new(),
+            error: None,
+            metadata: HashMap::new(),
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        };
+        assert_eq!(error_kind_of(&result), "timeout");
+    }
+
+    #[test]
+    fn test_error_kind_of_timeout_variant() {
+        let result = OperationResult {
+            status: ExecutionStatus::Timeout { elapsed_ms: 5000 },
+            stats: None,
+            artifacts: Vec::new(),
+            error: None,
+            metadata: HashMap::new(),
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        };
+        assert_eq!(error_kind_of(&result), "timeout");
+    }
+
+    #[test]
+    fn test_error_kind_of_network() {
+        let result = OperationResult {
+            status: ExecutionStatus::Failed {
+                error: "Connection refused".to_string(),
+            },
+            stats: None,
+            artifacts: Vec::new(),
+            error: None,
+            metadata: HashMap::new(),
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        };
+        assert_eq!(error_kind_of(&result), "network");
+    }
+
+    #[test]
+    fn test_error_kind_of_scope() {
+        let result = OperationResult {
+            status: ExecutionStatus::Failed {
+                error: "Target out of scope".to_string(),
+            },
+            stats: None,
+            artifacts: Vec::new(),
+            error: None,
+            metadata: HashMap::new(),
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        };
+        assert_eq!(error_kind_of(&result), "scope_denial");
+    }
+
+    #[test]
+    fn test_error_kind_of_internal() {
+        let result = OperationResult {
+            status: ExecutionStatus::Failed {
+                error: "Something went wrong".to_string(),
+            },
+            stats: None,
+            artifacts: Vec::new(),
+            error: None,
+            metadata: HashMap::new(),
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        };
+        assert_eq!(error_kind_of(&result), "internal");
+    }
+
+    // -----------------------------------------------------------------------
+    // PipelineStep serialization contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_pipeline_step_serializes_to_json() {
+        let step = make_step("scan", "scan_ports", "10.0.0.1", vec![]);
+        let json = serde_json::to_string(&step).unwrap();
+        assert!(json.contains("\"scan\""));
+        assert!(json.contains("\"scan_ports\""));
+        assert!(json.contains("\"10.0.0.1\""));
+    }
+
+    #[test]
+    fn test_pipeline_step_with_deps_serializes() {
+        let step = make_step(
+            "exploit",
+            "fuzz_http",
+            "10.0.0.1",
+            vec!["recon", "fingerprint"],
+        );
+        let json = serde_json::to_string(&step).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let deps = parsed["dependencies"].as_array().unwrap();
+        assert_eq!(deps.len(), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // StepResult contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_step_result_is_success_completed() {
+        let sr = StepResult::new(
+            "test".to_string(),
+            ExecutionStatus::Completed(),
+            None,
+            100,
+            1,
+        );
+        assert!(sr.is_success());
+    }
+
+    #[test]
+    fn test_step_result_is_not_success_failed() {
+        let sr = StepResult::new(
+            "test".to_string(),
+            ExecutionStatus::Failed {
+                error: "boom".to_string(),
+            },
+            None,
+            100,
+            1,
+        );
+        assert!(!sr.is_success());
+    }
+
+    #[test]
+    fn test_step_result_serializes() {
+        let sr = StepResult::new(
+            "step1".to_string(),
+            ExecutionStatus::Completed(),
+            None,
+            200,
+            1,
+        );
+        let json = serde_json::to_string(&sr).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["step_name"], "step1");
+        assert_eq!(parsed["duration_ms"], 200);
+        assert_eq!(parsed["attempt"], 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // PipelineResult contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_pipeline_result_all_success() {
+        let results = vec![
+            StepResult::new("a".to_string(), ExecutionStatus::Completed(), None, 10, 1),
+            StepResult::new("b".to_string(), ExecutionStatus::Completed(), None, 20, 1),
+        ];
+        let pr = PipelineResult::new(
+            "test-pipeline".to_string(),
+            ExecutionStatus::Completed(),
+            Some(results),
+            30,
+            None,
+            0,
+        );
+        assert!(pr.is_success());
+    }
+
+    #[test]
+    fn test_pipeline_result_has_failure() {
+        let results = vec![
+            StepResult::new("a".to_string(), ExecutionStatus::Completed(), None, 10, 1),
+            StepResult::new(
+                "b".to_string(),
+                ExecutionStatus::Failed {
+                    error: "boom".to_string(),
+                },
+                None,
+                20,
+                1,
+            ),
+        ];
+        let pr = PipelineResult::new(
+            "test-pipeline".to_string(),
+            ExecutionStatus::Failed {
+                error: "boom".to_string(),
+            },
+            Some(results),
+            30,
+            None,
+            0,
+        );
+        assert!(!pr.is_success());
+    }
+
+    #[test]
+    fn test_pipeline_result_serializes() {
+        let pr = PipelineResult::new(
+            "my-pipeline".to_string(),
+            ExecutionStatus::Completed(),
+            Some(vec![]),
+            100,
+            None,
+            2,
+        );
+        let json = serde_json::to_string(&pr).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["name"], "my-pipeline");
+        assert_eq!(parsed["total_duration_ms"], 100);
+        assert_eq!(parsed["retried_steps"], 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // RetryPolicy serialization contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_retry_policy_serializes() {
+        let policy = RetryPolicy::new(3, Some(vec!["timeout".to_string()]), 1000, 30000, false);
+        let json = serde_json::to_string(&policy).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["max_attempts"], 3);
+        assert_eq!(parsed["backoff_ms"], 1000);
+        assert_eq!(parsed["max_delay_ms"], 30000);
+        assert_eq!(parsed["jitter"], false);
+    }
+
+    // -----------------------------------------------------------------------
+    // FailurePolicy serialization contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_failure_policy_serializes() {
+        let json = serde_json::to_string(&FailurePolicy::StopPipeline).unwrap();
+        assert_eq!(json, "\"StopPipeline\"");
+        let json = serde_json::to_string(&FailurePolicy::Continue).unwrap();
+        assert_eq!(json, "\"Continue\"");
+        let json = serde_json::to_string(&FailurePolicy::SkipDependents).unwrap();
+        assert_eq!(json, "\"SkipDependents\"");
+    }
+
+    // -----------------------------------------------------------------------
+    // OutputRef contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_output_ref_serializes() {
+        let r = OutputRef::new("step1".to_string(), "findings".to_string());
+        let json = serde_json::to_string(&r).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["step_id"], "step1");
+        assert_eq!(parsed["path"], "findings");
+    }
+
+    // -----------------------------------------------------------------------
+    // OperationRequest contract (in-crate access)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_operation_request_serializes() {
+        let req = make_request("scan_ports", "10.0.0.1");
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["operation"], "scan_ports");
+        assert_eq!(parsed["target"], "10.0.0.1");
+    }
+
+    #[test]
+    fn test_operation_request_no_leak_in_json() {
+        let req = make_request("db_probe", "10.0.0.1");
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.to_lowercase().contains("password"));
+        assert!(!json.to_lowercase().contains("secret"));
+        assert!(!json.to_lowercase().contains("token"));
+    }
 }

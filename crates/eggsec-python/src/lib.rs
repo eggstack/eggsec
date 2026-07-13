@@ -918,50 +918,60 @@ fn api_surface() -> PyObject {
         add_entry!("notify_findings", "stable");
         add_entry!("notify_error", "stable");
 
+        // Stable: promoted domains — real execution path, result data preserved,
+        // policy integrated, serialization versioned, behavior tests pass
+        add_entry!("run_consolidated_recon", "stable");
+        add_entry!("async_run_consolidated_recon", "stable");
+        add_entry!("graphql_test", "stable");
+        add_entry!("async_graphql_test", "stable");
+        add_entry!("oauth_discover_endpoints", "stable");
+        add_entry!("oauth_test", "stable");
+        add_entry!("async_oauth_test", "stable");
+        add_entry!("auth_test", "stable");
+        add_entry!("async_auth_test", "stable");
+
+        // Stable: feature-gated promoted domains
+        add_entry!("scan_git_secrets", "stable");
+        add_entry!("async_scan_git_secrets", "stable");
+        add_entry!("generate_sbom", "stable");
+        add_entry!("async_generate_sbom", "stable");
+        add_entry!("db_probe", "stable");
+        add_entry!("async_db_probe", "stable");
+        add_entry!("db_probe_with_config", "stable");
+        add_entry!("db_probe_postgres", "stable");
+        add_entry!("db_probe_mysql", "stable");
+        add_entry!("db_probe_mssql", "stable");
+        add_entry!("db_probe_mongodb", "stable");
+        add_entry!("db_probe_redis", "stable");
+        add_entry!("db_list_drivers", "stable");
+        add_entry!("db_get_capabilities", "stable");
+        add_entry!("db_run_with_config", "stable");
+        add_entry!("analyze_apk", "stable");
+        add_entry!("async_analyze_apk", "stable");
+        add_entry!("analyze_ipa", "stable");
+        add_entry!("async_analyze_ipa", "stable");
+        add_entry!("scan_docker_image", "stable");
+        add_entry!("async_scan_docker_image", "stable");
+        add_entry!("scan_kubernetes", "stable");
+        add_entry!("async_scan_kubernetes", "stable");
+        add_entry!("nse_run", "stable");
+        add_entry!("async_nse_run", "stable");
+        add_entry!("nse_list_libraries", "stable");
+        add_entry!("nse_list_scripts", "stable");
+        add_entry!("nse_get_script_metadata", "stable");
+
         // Provisional: public API shape accepted, implementation works but
         // lacks full backend validation or end-to-end tests
-        add_entry!("run_consolidated_recon", "provisional");
-        add_entry!("async_run_consolidated_recon", "provisional");
-        add_entry!("graphql_test", "provisional");
-        add_entry!("async_graphql_test", "provisional");
-        add_entry!("oauth_discover_endpoints", "provisional");
-        add_entry!("oauth_test", "provisional");
-        add_entry!("async_oauth_test", "provisional");
-        add_entry!("auth_test", "provisional");
-        add_entry!("async_auth_test", "provisional");
-
-        // Provisional: feature-gated, implementation works but lacks full
-        // backend/platform validation
         add_entry!("websocket_probe", "provisional");
         add_entry!("async_websocket_probe", "provisional");
         add_entry!("websocket_fuzz", "provisional");
         add_entry!("async_websocket_fuzz", "provisional");
-        add_entry!("scan_git_secrets", "provisional");
-        add_entry!("async_scan_git_secrets", "provisional");
-        add_entry!("generate_sbom", "provisional");
-        add_entry!("async_generate_sbom", "provisional");
-        add_entry!("db_probe", "provisional");
-        add_entry!("async_db_probe", "provisional");
-        add_entry!("db_probe_with_config", "provisional");
-        add_entry!("db_probe_postgres", "provisional");
-        add_entry!("db_probe_mysql", "provisional");
-        add_entry!("db_probe_mssql", "provisional");
-        add_entry!("db_probe_mongodb", "provisional");
-        add_entry!("db_probe_redis", "provisional");
-        add_entry!("db_list_drivers", "provisional");
-        add_entry!("db_get_capabilities", "provisional");
-        add_entry!("db_run_with_config", "provisional");
+
+        // Provisional: feature-gated, implementation works but lacks full
+        // backend/platform validation
         add_entry!("create_proxy_manager", "provisional");
         add_entry!("async_add_proxy", "provisional");
         add_entry!("async_proxy_health_check", "provisional");
-        add_entry!("analyze_apk", "provisional");
-        add_entry!("async_analyze_apk", "provisional");
-        add_entry!("analyze_ipa", "provisional");
-        add_entry!("async_analyze_ipa", "provisional");
-        add_entry!("scan_docker_image", "provisional");
-        add_entry!("async_scan_docker_image", "provisional");
-        add_entry!("scan_kubernetes", "provisional");
-        add_entry!("async_scan_kubernetes", "provisional");
         add_entry!("detect_escape_risks", "provisional");
         add_entry!("check_cis_docker_benchmark", "provisional");
         add_entry!("list_network_interfaces", "provisional");
@@ -969,11 +979,6 @@ fn api_surface() -> PyObject {
         add_entry!("run_traceroute", "provisional");
         add_entry!("async_run_traceroute", "provisional");
         add_entry!("traceroute", "provisional");
-        add_entry!("nse_run", "provisional");
-        add_entry!("async_nse_run", "provisional");
-        add_entry!("nse_list_libraries", "provisional");
-        add_entry!("nse_list_scripts", "provisional");
-        add_entry!("nse_get_script_metadata", "provisional");
         add_entry!("daemon_connect", "provisional");
         add_entry!("async_daemon_health", "provisional");
         add_entry!("async_daemon_declare_client", "provisional");

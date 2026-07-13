@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -5,6 +7,15 @@ use crate::handles::ExecutionEvent;
 
 /// Event schema version for compatibility.
 pub const EVENT_SCHEMA_VERSION: &str = "1.0.0";
+
+/// Global monotonic event sequence counter.
+/// Starts at 1 so the first event has sequence=1.
+static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a new monotonic sequence number.
+fn next_sequence() -> u64 {
+    EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Base event envelope with version metadata.
 ///
@@ -89,7 +100,7 @@ impl EventEnvelope {
         Self {
             schema_version: schema_version.unwrap_or_else(|| EVENT_SCHEMA_VERSION.to_string()),
             event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
-            sequence: 0,
+            sequence: next_sequence(),
             timestamp_ms: timestamp_ms.unwrap_or(now_ms),
             correlation_id,
             event_type,
@@ -132,7 +143,7 @@ impl EventEnvelope {
         Ok(EventEnvelope {
             schema_version: EVENT_SCHEMA_VERSION.to_string(),
             event_id: format!("evt-{}", event.timestamp_ms),
-            sequence: 0,
+            sequence: next_sequence(),
             timestamp_ms: event.timestamp_ms,
             correlation_id: None,
             event_type: event.event_type.clone(),
@@ -155,7 +166,7 @@ impl EventEnvelope {
         Self {
             schema_version: schema_version.unwrap_or_else(|| EVENT_SCHEMA_VERSION.to_string()),
             event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
-            sequence: 0,
+            sequence: next_sequence(),
             timestamp_ms: timestamp_ms.unwrap_or(now_ms),
             correlation_id,
             event_type,
@@ -271,7 +282,7 @@ pub struct PlanningEvent {
 #[pymethods]
 impl PlanningEvent {
     #[new]
-    fn new(operation_id: String, target: String, scope_summary: String) -> Self {
+    pub(crate) fn new(operation_id: String, target: String, scope_summary: String) -> Self {
         Self {
             operation_id,
             target,
@@ -319,7 +330,7 @@ pub struct PreflightEvent {
 #[pymethods]
 impl PreflightEvent {
     #[new]
-    fn new(
+    pub(crate) fn new(
         outcome: String,
         confirmations_required: Vec<String>,
         suggested_flags: Vec<String>,
@@ -468,7 +479,12 @@ pub struct FindingEvent {
 #[pymethods]
 impl FindingEvent {
     #[new]
-    fn new(finding_id: String, severity: String, title: String, auto_added: bool) -> Self {
+    pub(crate) fn new(
+        finding_id: String,
+        severity: String,
+        title: String,
+        auto_added: bool,
+    ) -> Self {
         Self {
             finding_id,
             severity,
@@ -521,7 +537,12 @@ pub struct ArtifactEvent {
 #[pymethods]
 impl ArtifactEvent {
     #[new]
-    fn new(artifact_name: String, kind: String, mime_type: String, size_bytes: u64) -> Self {
+    pub(crate) fn new(
+        artifact_name: String,
+        kind: String,
+        mime_type: String,
+        size_bytes: u64,
+    ) -> Self {
         Self {
             artifact_name,
             kind,
@@ -570,7 +591,7 @@ pub struct CancellationEvent {
 #[pymethods]
 impl CancellationEvent {
     #[new]
-    fn new(reason: String, cancelled_by: String) -> Self {
+    pub(crate) fn new(reason: String, cancelled_by: String) -> Self {
         Self {
             reason,
             cancelled_by,
@@ -715,7 +736,7 @@ pub fn wrap_event(
     Ok(EventEnvelope {
         schema_version: EVENT_SCHEMA_VERSION.to_string(),
         event_id: event_id.unwrap_or_else(|| format!("evt-{}", now_ms)),
-        sequence: 0,
+        sequence: next_sequence(),
         timestamp_ms: now_ms,
         correlation_id,
         event_type,

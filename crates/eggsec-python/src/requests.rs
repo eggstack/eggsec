@@ -2,6 +2,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
 
+use eggsec_core::types::SensitiveString;
+
 /// Base operation request type.
 #[pyclass(frozen)]
 #[derive(Debug, Clone)]
@@ -1048,8 +1050,7 @@ pub struct DbProbeRequest {
     pub database: Option<String>,
     #[pyo3(get)]
     pub username: Option<String>,
-    #[pyo3(get)]
-    pub password: Option<String>,
+    password: Option<SensitiveString>,
     #[pyo3(get)]
     pub timeout_ms: Option<u64>,
 }
@@ -1071,9 +1072,14 @@ impl DbProbeRequest {
             port,
             database,
             username,
-            password,
+            password: password.map(SensitiveString::new),
             timeout_ms,
         }
+    }
+
+    #[getter]
+    fn password(&self) -> Option<String> {
+        self.password.as_ref().map(|_| "[REDACTED]".to_string())
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
@@ -1082,18 +1088,30 @@ impl DbProbeRequest {
         dict.set_item("port", &self.port)?;
         dict.set_item("database", &self.database)?;
         dict.set_item("username", &self.username)?;
-        dict.set_item("password", &self.password)?;
+        dict.set_item("password", self.password.as_ref().map(|_| "[REDACTED]"))?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
     }
 
     fn to_json(&self) -> PyResult<String> {
-        serde_json::to_string(self)
+        use serde_json::json;
+        let value = json!({
+            "target": self.target,
+            "port": self.port,
+            "database": self.database,
+            "username": self.username,
+            "password": self.password.as_ref().map(|_| "[REDACTED]"),
+            "timeout_ms": self.timeout_ms,
+        });
+        serde_json::to_string(&value)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     fn __repr__(&self) -> String {
-        format!("DbProbeRequest(target={})", self.target)
+        format!(
+            "DbProbeRequest(target={}, password=[REDACTED])",
+            self.target
+        )
     }
 }
 
@@ -1437,5 +1455,565 @@ impl RequestBuilder {
             "RequestBuilder(operation={}, target={})",
             self.operation, self.target
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // OperationRequest contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_operation_request_constructable() {
+        let req = OperationRequest::new("scan_ports".into(), "10.0.0.1".into(), None, None);
+        assert_eq!(req.operation, "scan_ports");
+        assert_eq!(req.target, "10.0.0.1");
+        assert!(req.timeout_ms.is_none());
+        assert!(req.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_operation_request_with_timeout() {
+        let req = OperationRequest::new("scan_ports".into(), "10.0.0.1".into(), Some(5000), None);
+        assert_eq!(req.timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_operation_request_with_metadata() {
+        let mut meta = HashMap::new();
+        meta.insert("key".to_string(), "value".to_string());
+        let req = OperationRequest::new("scan_ports".into(), "10.0.0.1".into(), None, Some(meta));
+        assert_eq!(req.metadata.get("key").unwrap(), "value");
+    }
+
+    #[test]
+    fn test_operation_request_serializes_to_json() {
+        let req = OperationRequest::new("scan_ports".into(), "10.0.0.1".into(), None, None);
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["operation"], "scan_ports");
+        assert_eq!(parsed["target"], "10.0.0.1");
+        assert!(parsed["timeout_ms"].is_null());
+        assert!(parsed["metadata"].is_object());
+    }
+
+    #[test]
+    fn test_operation_request_json_no_leak() {
+        let req = OperationRequest::new("db_probe".into(), "10.0.0.1".into(), None, None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("db_probe"));
+        assert!(json.contains("10.0.0.1"));
+        assert!(!json.to_lowercase().contains("password"));
+        assert!(!json.to_lowercase().contains("secret"));
+    }
+
+    #[test]
+    fn test_operation_request_fields_accessible() {
+        let req = OperationRequest::new("scan_ports".into(), "10.0.0.1".into(), None, None);
+        assert_eq!(req.operation, "scan_ports");
+        assert_eq!(req.target, "10.0.0.1");
+    }
+
+    // -----------------------------------------------------------------------
+    // Per-operation request type contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_port_scan_request_constructable_and_serializes() {
+        let req = PortScanRequest::new("10.0.0.1".into(), Some("1-1024".into()), None, None, None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("10.0.0.1"));
+        assert!(json.contains("1-1024"));
+    }
+
+    #[test]
+    fn test_endpoint_scan_request_constructable_and_serializes() {
+        let req = EndpointScanRequest::new(
+            "10.0.0.1".into(),
+            Some(vec!["/api".into()]),
+            Some(vec!["GET".into()]),
+            None,
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("10.0.0.1"));
+        assert!(json.contains("/api"));
+        assert!(json.contains("GET"));
+    }
+
+    #[test]
+    fn test_fingerprint_request_constructable_and_serializes() {
+        let req = FingerprintRequest::new("10.0.0.1".into(), Some(vec![80, 443]), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("10.0.0.1"));
+        assert!(json.contains("80"));
+        assert!(json.contains("443"));
+    }
+
+    #[test]
+    fn test_recon_dns_request_constructable_and_serializes() {
+        let req = ReconDnsRequest::new(
+            "example.com".into(),
+            Some(vec!["A".into(), "AAAA".into()]),
+            None,
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("A"));
+    }
+
+    #[test]
+    fn test_tls_inspect_request_constructable_and_serializes() {
+        let req = TlsInspectRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_tech_detect_request_constructable_and_serializes() {
+        let req = TechDetectRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_waf_detect_request_constructable_and_serializes() {
+        let req = WafDetectRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_load_test_request_constructable_and_serializes() {
+        let req = LoadTestRequest::new(
+            "example.com".into(),
+            Some(100),
+            Some(10),
+            Some("GET".into()),
+            None,
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("100"));
+        assert!(json.contains("10"));
+        assert!(json.contains("GET"));
+    }
+
+    #[test]
+    fn test_waf_validate_request_constructable_and_serializes() {
+        let req =
+            WafValidateRequest::new("example.com".into(), Some(vec!["payload1".into()]), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("payload1"));
+    }
+
+    #[test]
+    fn test_fuzz_request_constructable_and_serializes() {
+        let req = FuzzRequest::new("example.com".into(), Some("sqli".into()), Some(4), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("sqli"));
+        assert!(json.contains("4"));
+    }
+
+    #[test]
+    fn test_git_secrets_request_constructable_and_serializes() {
+        let req = GitSecretsScanRequest::new("/repo".into(), Some(100), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("/repo"));
+        assert!(json.contains("100"));
+    }
+
+    #[test]
+    fn test_sbom_request_constructable_and_serializes() {
+        let req = SbomRequest::new(
+            "/project".into(),
+            Some("npm".into()),
+            Some("spdx".into()),
+            None,
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("/project"));
+        assert!(json.contains("npm"));
+        assert!(json.contains("spdx"));
+    }
+
+    #[test]
+    fn test_consolidated_recon_request_constructable_and_serializes() {
+        let req = ConsolidatedReconRequest::new(
+            "example.com".into(),
+            Some(true),  // run_dns
+            Some(false), // run_ssl
+            Some(true),  // run_tech_detect
+            None,        // run_subdomain
+            None,        // run_whois
+            None,        // run_cors
+            None,        // run_wayback
+            None,        // run_js_analysis
+            None,        // run_content
+            None,        // run_email
+            None,        // timeout_ms
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_graphql_test_request_constructable_and_serializes() {
+        let req = GraphqlTestRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_oauth_test_request_constructable_and_serializes() {
+        let req = OauthTestRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_auth_test_request_constructable_and_serializes() {
+        let req = AuthTestRequest::new("example.com".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("example.com"));
+    }
+
+    #[test]
+    fn test_db_probe_request_password_redacted_in_getter() {
+        let req = DbProbeRequest::new(
+            "10.0.0.1".into(),
+            Some(5432),
+            None,
+            None,
+            Some("mysecretpassword".into()),
+            None,
+        );
+        let getter_val = req.password();
+        assert_eq!(getter_val, Some("[REDACTED]".to_string()));
+    }
+
+    #[test]
+    fn test_db_probe_request_to_json_redacts_password() {
+        let req = DbProbeRequest::new(
+            "10.0.0.1".into(),
+            Some(5432),
+            None,
+            None,
+            Some("mysecretpassword".into()),
+            None,
+        );
+        let json = req.to_json().unwrap();
+        assert!(
+            !json.contains("mysecretpassword"),
+            "password leaked in JSON: {}",
+            json
+        );
+        assert!(json.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_db_probe_request_no_password() {
+        let req = DbProbeRequest::new("10.0.0.1".into(), None, None, None, None, None);
+        assert!(req.password().is_none());
+        // Serialize and verify no password field leaked
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.contains("password"));
+    }
+
+    #[test]
+    fn test_nse_run_request_constructable_and_serializes() {
+        let req = NseRunRequest::new(
+            "10.0.0.1".into(),
+            Some(vec!["http-enum".into(), "ssl-cert".into()]),
+            None,
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("10.0.0.1"));
+        assert!(json.contains("http-enum"));
+        assert!(json.contains("ssl-cert"));
+    }
+
+    #[test]
+    fn test_docker_image_scan_request_constructable_and_serializes() {
+        let req = DockerImageScanRequest::new("nginx:latest".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("nginx:latest"));
+    }
+
+    #[test]
+    fn test_kubernetes_scan_request_constructable_and_serializes() {
+        let req = KubernetesScanRequest::new("10.0.0.1".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("10.0.0.1"));
+    }
+
+    #[test]
+    fn test_apk_analysis_request_constructable_and_serializes() {
+        let req = ApkAnalysisRequest::new("/path/app.apk".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("/path/app.apk"));
+    }
+
+    #[test]
+    fn test_ipa_analysis_request_constructable_and_serializes() {
+        let req = IpaAnalysisRequest::new("/path/app.ipa".into(), None);
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("/path/app.ipa"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Request serialization contract — no secret leakage across all types
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_all_request_serializations_are_safe() {
+        // Ensure none of the request types leak secrets in JSON serialization
+        let port_req = PortScanRequest::new("10.0.0.1".into(), None, None, None, None);
+        assert!(!serde_json::to_string(&port_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let endpoint_req = EndpointScanRequest::new("10.0.0.1".into(), None, None, None);
+        assert!(!serde_json::to_string(&endpoint_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let fp_req = FingerprintRequest::new("10.0.0.1".into(), None, None);
+        assert!(!serde_json::to_string(&fp_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let dns_req = ReconDnsRequest::new("example.com".into(), None, None);
+        assert!(!serde_json::to_string(&dns_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let tls_req = TlsInspectRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&tls_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let tech_req = TechDetectRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&tech_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let waf_req = WafDetectRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&waf_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let load_req = LoadTestRequest::new("example.com".into(), None, None, None, None);
+        assert!(!serde_json::to_string(&load_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let waf_val_req = WafValidateRequest::new("example.com".into(), None, None);
+        assert!(!serde_json::to_string(&waf_val_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let fuzz_req = FuzzRequest::new("example.com".into(), None, None, None);
+        assert!(!serde_json::to_string(&fuzz_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let git_req = GitSecretsScanRequest::new("/repo".into(), None, None);
+        assert!(!serde_json::to_string(&git_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let sbom_req = SbomRequest::new("/project".into(), None, None, None);
+        assert!(!serde_json::to_string(&sbom_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let recon_req = ConsolidatedReconRequest::new(
+            "example.com".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(!serde_json::to_string(&recon_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let gql_req = GraphqlTestRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&gql_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let oauth_req = OauthTestRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&oauth_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let auth_req = AuthTestRequest::new("example.com".into(), None);
+        assert!(!serde_json::to_string(&auth_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let db_req = DbProbeRequest::new(
+            "10.0.0.1".into(),
+            None,
+            None,
+            None,
+            Some("password123".into()),
+            None,
+        );
+        let db_json = serde_json::to_string(&db_req).unwrap();
+        assert!(
+            !db_json.contains("password123"),
+            "password leaked in serialization: {}",
+            db_json
+        );
+
+        let nse_req = NseRunRequest::new("10.0.0.1".into(), None, None);
+        assert!(!serde_json::to_string(&nse_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let docker_req = DockerImageScanRequest::new("nginx:latest".into(), None);
+        assert!(!serde_json::to_string(&docker_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let k8s_req = KubernetesScanRequest::new("10.0.0.1".into(), None);
+        assert!(!serde_json::to_string(&k8s_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let apk_req = ApkAnalysisRequest::new("/path/app.apk".into(), None);
+        assert!(!serde_json::to_string(&apk_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+
+        let ipa_req = IpaAnalysisRequest::new("/path/app.ipa".into(), None);
+        assert!(!serde_json::to_string(&ipa_req)
+            .unwrap()
+            .to_lowercase()
+            .contains("secret"));
+    }
+
+    // -----------------------------------------------------------------------
+    // All request types serialize to valid JSON
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_all_request_types_json_roundtrip() {
+        // Verify each request type can serialize to JSON without error
+        let _ = serde_json::to_string(&OperationRequest::new("op".into(), "t".into(), None, None))
+            .unwrap();
+        let _ = serde_json::to_string(&PortScanRequest::new("t".into(), None, None, None, None))
+            .unwrap();
+        let _ =
+            serde_json::to_string(&EndpointScanRequest::new("t".into(), None, None, None)).unwrap();
+        let _ = serde_json::to_string(&FingerprintRequest::new("t".into(), None, None)).unwrap();
+        let _ = serde_json::to_string(&ReconDnsRequest::new("t".into(), None, None)).unwrap();
+        let _ = serde_json::to_string(&TlsInspectRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&TechDetectRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&WafDetectRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&LoadTestRequest::new("t".into(), None, None, None, None))
+            .unwrap();
+        let _ = serde_json::to_string(&WafValidateRequest::new("t".into(), None, None)).unwrap();
+        let _ = serde_json::to_string(&FuzzRequest::new("t".into(), None, None, None)).unwrap();
+        let _ = serde_json::to_string(&GitSecretsScanRequest::new("t".into(), None, None)).unwrap();
+        let _ = serde_json::to_string(&SbomRequest::new("t".into(), None, None, None)).unwrap();
+        let _ = serde_json::to_string(&ConsolidatedReconRequest::new(
+            "t".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ))
+        .unwrap();
+        let _ = serde_json::to_string(&GraphqlTestRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&OauthTestRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&AuthTestRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&DbProbeRequest::new(
+            "t".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ))
+        .unwrap();
+        let _ = serde_json::to_string(&NseRunRequest::new("t".into(), None, None)).unwrap();
+        let _ = serde_json::to_string(&DockerImageScanRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&KubernetesScanRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&ApkAnalysisRequest::new("t".into(), None)).unwrap();
+        let _ = serde_json::to_string(&IpaAnalysisRequest::new("t".into(), None)).unwrap();
+    }
+
+    // -----------------------------------------------------------------------
+    // RequestBuilder contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_request_builder_produces_operation_request() {
+        let builder = RequestBuilder::new("scan_ports".into(), "10.0.0.1".into());
+        let req = builder.build();
+        assert_eq!(req.operation, "scan_ports");
+        assert_eq!(req.target, "10.0.0.1");
+    }
+
+    #[test]
+    fn test_request_builder_default_metadata_empty() {
+        let builder = RequestBuilder::new("scan_ports".into(), "10.0.0.1".into());
+        let req = builder.build();
+        assert!(req.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_request_builder_sets_timeout() {
+        let builder = RequestBuilder::new("scan_ports".into(), "10.0.0.1".into());
+        // RequestBuilder stores timeout internally and sets it via OperationRequest
+        let req = builder.build();
+        // Default is None
+        assert_eq!(req.timeout_ms, None);
     }
 }

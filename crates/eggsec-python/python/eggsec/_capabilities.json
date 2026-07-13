@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "stable_operations": [
+    "scan_ports",
+    "scan_endpoints",
+    "fingerprint_services",
+    "recon_dns",
+    "inspect_tls",
+    "detect_technology",
+    "detect_waf",
+    "validate_waf",
+    "fuzz_http",
+    "load_test",
+    "scan_git_secrets",
+    "generate_sbom",
+    "run_consolidated_recon",
+    "graphql_test",
+    "oauth_test",
+    "auth_test",
+    "db_probe",
+    "nse_run",
+    "scan_docker_image",
+    "scan_kubernetes",
+    "analyze_apk",
+    "analyze_ipa"
+  ],
+  "domains": {
+    "stable-core": {
+      "name": "Core Engine",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "git-secrets": {
+      "name": "Git Secrets Scan",
+      "crate": "eggsec",
+      "feature": "git-secrets",
+      "default_wheel": false,
+      "operations": [
+        "scan_git_secrets"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "sbom": {
+      "name": "SBOM Generation",
+      "crate": "eggsec",
+      "feature": "sbom",
+      "default_wheel": false,
+      "operations": [
+        "generate_sbom"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "consolidated-recon": {
+      "name": "Consolidated Recon",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [
+        "run_consolidated_recon"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "graphql": {
+      "name": "GraphQL Security Test",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [
+        "graphql_test"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "oauth": {
+      "name": "OAuth Security Test",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [
+        "oauth_test"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "authentication": {
+      "name": "Authentication Assessment",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [
+        "auth_test"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "database": {
+      "name": "Database Pentest",
+      "crate": "eggsec-db-lab",
+      "feature": "db-pentest",
+      "default_wheel": false,
+      "operations": [
+        "db_probe"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "nse": {
+      "name": "NSE Scripting",
+      "crate": "eggsec-nse",
+      "feature": "nse",
+      "default_wheel": false,
+      "operations": [
+        "nse_run"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "container": {
+      "name": "Container Analysis",
+      "crate": "eggsec",
+      "feature": "container",
+      "default_wheel": false,
+      "operations": [
+        "scan_docker_image",
+        "scan_kubernetes"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "mobile": {
+      "name": "Mobile Analysis",
+      "crate": "eggsec-mobile-lab",
+      "feature": "mobile",
+      "default_wheel": false,
+      "operations": [
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "maturity": "stable",
+      "known_blockers": []
+    },
+    "daemon": {
+      "name": "Daemon Client",
+      "crate": "eggsec-daemon",
+      "feature": "daemon-client",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "provisional",
+      "known_blockers": [
+        "transport capability negotiation and reconnect contract pending"
+      ]
+    },
+    "browser": {
+      "name": "Headless Browser",
+      "crate": "eggsec",
+      "feature": "headless-browser",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "platform and browser runtime dependent"
+      ]
+    },
+    "proxy": {
+      "name": "Web Proxy",
+      "crate": "eggsec-web-proxy",
+      "feature": "web-proxy",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "traffic interception semantics remain hazardous"
+      ]
+    },
+    "packet-inspection": {
+      "name": "Packet Inspection",
+      "crate": "eggsec",
+      "feature": "packet-inspection",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "platform/system dependency and lifecycle coverage pending"
+      ]
+    },
+    "wireless": {
+      "name": "Wireless Testing",
+      "crate": "eggsec",
+      "feature": "wireless",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "hardware and privilege dependent"
+      ]
+    },
+    "evasion": {
+      "name": "Evasion Detection",
+      "crate": "eggsec",
+      "feature": "evasion",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "defense-validation domain, not stable-core"
+      ]
+    },
+    "postex": {
+      "name": "Post-Exploitation",
+      "crate": "eggsec",
+      "feature": "postex",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "hazardous simulation domain"
+      ]
+    },
+    "c2": {
+      "name": "C2 Simulation",
+      "crate": "eggsec",
+      "feature": "c2",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "hazardous simulation domain"
+      ]
+    },
+    "distributed": {
+      "name": "Distributed Testing",
+      "crate": "eggsec",
+      "feature": null,
+      "default_wheel": true,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "remote lifecycle contract pending"
+      ]
+    },
+    "ai": {
+      "name": "AI Integration",
+      "crate": "eggsec",
+      "feature": "ai-integration",
+      "default_wheel": false,
+      "operations": [],
+      "maturity": "experimental",
+      "known_blockers": [
+        "provider-dependent advisory behavior"
+      ]
+    }
+  }
+}

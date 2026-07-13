@@ -3,6 +3,75 @@ use pyo3::prelude::*;
 use crate::requests::OperationRequest;
 use crate::status::{OperationError, OperationResult};
 
+/// Executor descriptor for a stable operation.
+///
+/// Bundles metadata, feature requirements, risk classification, and
+/// confirmation behavior. Returned by [`OperationExecutorRegistry::descriptor_for`]
+/// so pre-dispatch validation uses a single source of truth instead of
+/// constructing inline descriptors.
+#[derive(Debug, Clone)]
+pub struct OperationExecutorDescriptor {
+    /// The stable operation this descriptor describes.
+    pub operation: StableOperation,
+    /// Risk tier for the operation.
+    pub risk: eggsec::config::OperationRisk,
+    /// Feature flag required to execute (if any).
+    pub feature_required: Option<&'static str>,
+    /// Whether this operation requires explicit user confirmation.
+    pub confirmation_required: bool,
+    /// Message shown when confirmation is required.
+    pub confirmation_message: Option<&'static str>,
+    /// Intended use categories for the operation.
+    pub intended_uses: Vec<eggsec::config::IntendedUse>,
+}
+
+impl OperationExecutorDescriptor {
+    /// Classify risk level based on operation type.
+    fn classify_risk(operation: StableOperation) -> eggsec::config::OperationRisk {
+        match operation {
+            // Local artifact analysis — safe, no network impact
+            StableOperation::ScanGitSecrets
+            | StableOperation::GenerateSbom
+            | StableOperation::AnalyzeApk
+            | StableOperation::AnalyzeIpa => eggsec::config::OperationRisk::SafeActive,
+
+            // Web assessment — moderate risk
+            StableOperation::ReconDns
+            | StableOperation::InspectTls
+            | StableOperation::DetectTechnology
+            | StableOperation::DetectWaf
+            | StableOperation::ValidateWaf
+            | StableOperation::FingerprintServices
+            | StableOperation::RunConsolidatedRecon
+            | StableOperation::GraphqlTest
+            | StableOperation::OauthTest
+            | StableOperation::AuthTest => eggsec::config::OperationRisk::SafeActive,
+
+            // Network scanning — moderate risk
+            StableOperation::ScanPorts | StableOperation::ScanEndpoints => {
+                eggsec::config::OperationRisk::SafeActive
+            }
+
+            // Container scanning — moderate risk
+            StableOperation::ScanDockerImage | StableOperation::ScanKubernetes => {
+                eggsec::config::OperationRisk::SafeActive
+            }
+
+            // Database probing — intrusive
+            StableOperation::DbProbe => eggsec::config::OperationRisk::DbPentest,
+
+            // NSE scripts — intrusive (scripts can be aggressive)
+            StableOperation::NseRun => eggsec::config::OperationRisk::Intrusive,
+
+            // Fuzzing — intrusive
+            StableOperation::FuzzHttp => eggsec::config::OperationRisk::Intrusive,
+
+            // Load testing — load test tier
+            StableOperation::LoadTest => eggsec::config::OperationRisk::LoadTest,
+        }
+    }
+}
+
 /// Stable operation ID constants. These are generated from the canonical
 /// declaration below so metadata and dispatch cannot grow separate lists.
 pub const OP_SCAN_PORTS: &str = "scan_ports";
@@ -247,6 +316,7 @@ impl OperationExecutorRegistry {
                     metadata: std::collections::HashMap::new(),
                     payload: None,
                     payload_type: None,
+                    schema_version: "1.0".to_string(),
                 };
             }
         }
@@ -254,7 +324,7 @@ impl OperationExecutorRegistry {
         // The exhaustive dispatch match is implemented by Engine::dispatch.
         // Keeping the enum parse here means unknown IDs cannot reach it.
         debug_assert_eq!(operation.id(), StableOperation::parse(id).unwrap().id());
-        engine.dispatch(py, request.clone())
+        engine.dispatch(py, request.clone(), None)
     }
 
     pub fn execute_async(
@@ -276,7 +346,7 @@ impl OperationExecutorRegistry {
             }
         }
 
-        engine.dispatch_async(request.clone())
+        engine.dispatch_async(request.clone(), None)
     }
 
     pub fn list(&self) -> Vec<String> {
@@ -300,6 +370,35 @@ impl OperationExecutorRegistry {
 
     pub fn contains(&self, id: &str) -> bool {
         StableOperation::parse(id).is_some()
+    }
+
+    /// Return the executor descriptor for a stable operation.
+    ///
+    /// The descriptor bundles risk classification, feature requirements,
+    /// and confirmation behavior from a single authoritative source.
+    pub fn descriptor_for(&self, operation: StableOperation) -> OperationExecutorDescriptor {
+        let confirmation_required = matches!(
+            operation,
+            StableOperation::NseRun
+                | StableOperation::DbProbe
+                | StableOperation::FuzzHttp
+                | StableOperation::LoadTest
+        );
+
+        let confirmation_message = if confirmation_required {
+            Some("This operation may interact with external systems. Confirm to proceed.")
+        } else {
+            None
+        };
+
+        OperationExecutorDescriptor {
+            operation,
+            risk: OperationExecutorDescriptor::classify_risk(operation),
+            feature_required: operation.feature_required(),
+            confirmation_required,
+            confirmation_message,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+        }
     }
 }
 
@@ -357,12 +456,18 @@ fn unknown_operation(unknown: &str) -> OperationResult {
         metadata: std::collections::HashMap::new(),
         payload: None,
         payload_type: None,
+        schema_version: "1.0".to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::status::{ExecutionStatus, OperationError};
+
+    // -----------------------------------------------------------------------
+    // Registry contract tests
+    // -----------------------------------------------------------------------
 
     #[test]
     fn canonical_registry_is_exhaustive() {
@@ -400,5 +505,258 @@ mod tests {
     #[test]
     fn unknown_operations_keep_suggestions() {
         assert!(unknown_operation_message("scan_port").contains("scan_ports"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Registry contract: every operation has a descriptor with correct metadata
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_all_operations_have_descriptors() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert_eq!(desc.operation, op);
+        }
+    }
+
+    #[test]
+    fn test_all_operations_have_feature_requirements() {
+        for &op in StableOperation::ALL {
+            let feature = op.feature_required();
+            // All operations must have a deterministic feature (None or Some)
+            match feature {
+                None => {}
+                Some(f) => {
+                    assert!(!f.is_empty(), "feature string for {:?} is empty", op);
+                    assert!(
+                        f.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
+                        "feature '{}' for {:?} has invalid chars",
+                        f,
+                        op
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_operation_names_match_ids() {
+        for &op in StableOperation::ALL {
+            let name = op.name();
+            let id = op.id();
+            assert!(!name.is_empty(), "{:?} has empty name", op);
+            assert!(!id.is_empty(), "{:?} has empty id", op);
+            // IDs use snake_case
+            assert!(
+                id.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+                "id '{}' for {:?} is not snake_case",
+                id,
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_feature_gate_consistency() {
+        // Feature-gated operations must have a feature string
+        let feature_gated = [
+            (StableOperation::ScanGitSecrets, "git-secrets"),
+            (StableOperation::GenerateSbom, "sbom"),
+            (StableOperation::DbProbe, "db-pentest"),
+            (StableOperation::NseRun, "nse"),
+            (StableOperation::ScanDockerImage, "container"),
+            (StableOperation::ScanKubernetes, "container"),
+            (StableOperation::AnalyzeApk, "mobile"),
+            (StableOperation::AnalyzeIpa, "mobile"),
+        ];
+        for (op, expected_feature) in feature_gated {
+            assert_eq!(
+                op.feature_required(),
+                Some(expected_feature),
+                "{:?} should require feature '{}'",
+                op,
+                expected_feature
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_operations_parseable_by_id() {
+        for &op in StableOperation::ALL {
+            let id = op.id();
+            assert_eq!(
+                StableOperation::parse(id),
+                Some(op),
+                "parse('{}') should return {:?}",
+                id,
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_operation_names_are_distinct() {
+        let mut names: Vec<&str> = StableOperation::ALL.iter().map(|op| op.name()).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(
+            names.len(),
+            StableOperation::ALL.len(),
+            "operation names must be unique"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Descriptor metadata contract tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_confirmation_required_operations() {
+        let registry = OperationExecutorRegistry::default_stable();
+        let expected_confirm = [
+            StableOperation::NseRun,
+            StableOperation::DbProbe,
+            StableOperation::FuzzHttp,
+            StableOperation::LoadTest,
+        ];
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            if expected_confirm.contains(&op) {
+                assert!(
+                    desc.confirmation_required,
+                    "{:?} should require confirmation",
+                    op
+                );
+                assert!(
+                    desc.confirmation_message.is_some(),
+                    "{:?} should have confirmation message",
+                    op
+                );
+            } else {
+                assert!(
+                    !desc.confirmation_required,
+                    "{:?} should not require confirmation",
+                    op
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_descriptor_risk_classification() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            // Every operation must have a risk classification (not default)
+            // Just verify it doesn't panic and is deterministic
+            let desc2 = registry.descriptor_for(op);
+            assert_eq!(
+                format!("{:?}", desc.risk),
+                format!("{:?}", desc2.risk),
+                "risk classification for {:?} is not deterministic",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_descriptor_intended_uses_not_empty() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                !desc.intended_uses.is_empty(),
+                "{:?} has empty intended_uses",
+                op
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Registry list/get contract
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_registry_list_length_matches_all() {
+        let registry = OperationExecutorRegistry::default_stable();
+        assert_eq!(registry.len(), StableOperation::ALL.len());
+        assert_eq!(registry.len(), 22);
+    }
+
+    #[test]
+    fn test_registry_get_returns_operation_info() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let info = registry.get(op.id());
+            assert!(info.is_some(), "registry.get('{}') returned None", op.id());
+            let info = info.unwrap();
+            assert_eq!(info.id, op.id());
+            assert_eq!(info.name, op.name());
+        }
+    }
+
+    #[test]
+    fn test_registry_contains_all_ids() {
+        let registry = OperationExecutorRegistry::default_stable();
+        let ids = registry.list();
+        assert_eq!(ids.len(), 22);
+        for id in &ids {
+            assert!(registry.contains(id), "registry doesn't contain '{}'", id);
+        }
+    }
+
+    #[test]
+    fn test_registry_not_contains_unknown() {
+        let registry = OperationExecutorRegistry::default_stable();
+        assert!(!registry.contains("totally_fake_operation"));
+        assert!(!registry.contains(""));
+        assert!(!registry.contains("scan"));
+    }
+
+    #[test]
+    fn test_unknown_operation_result_status_is_failed() {
+        let result = unknown_operation("nonexistent");
+        assert!(matches!(result.status, ExecutionStatus::Failed { .. }));
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn test_unknown_operation_error_has_code() {
+        let result = unknown_operation("nonexistent");
+        let error = result.error.unwrap();
+        assert_eq!(error.code, "unknown_operation");
+        assert_eq!(error.kind, "validation");
+    }
+
+    #[test]
+    fn test_parse_returns_none_for_unknown() {
+        assert_eq!(StableOperation::parse("unknown_op"), None);
+        assert_eq!(StableOperation::parse(""), None);
+        assert_eq!(StableOperation::parse("SCAN_PORTS"), None);
+    }
+
+    #[test]
+    fn test_all_aliases_parse_correctly() {
+        let aliases = [
+            ("fingerprint", StableOperation::FingerprintServices),
+            ("recon", StableOperation::ReconDns),
+            ("tls_inspect", StableOperation::InspectTls),
+            ("tech_detect", StableOperation::DetectTechnology),
+            ("waf_detect", StableOperation::DetectWaf),
+            ("waf_validate", StableOperation::ValidateWaf),
+            ("http_fuzz", StableOperation::FuzzHttp),
+            ("load_test_http", StableOperation::LoadTest),
+            ("consolidated_recon", StableOperation::RunConsolidatedRecon),
+        ];
+        for (alias, expected) in aliases {
+            assert_eq!(
+                StableOperation::parse(alias),
+                Some(expected),
+                "alias '{}' should parse to {:?}",
+                alias,
+                expected
+            );
+        }
     }
 }

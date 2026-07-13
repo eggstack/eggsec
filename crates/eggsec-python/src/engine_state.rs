@@ -295,44 +295,79 @@ impl EngineState {
     // -- Pre-dispatch validation --
 
     /// Evaluate the mandatory structured policy gate before dispatch.
+    ///
+    /// Uses the registry's executor descriptor for risk classification
+    /// and confirmation requirements instead of constructing inline
+    /// descriptors. Returns `RequireConfirmation` if the operation
+    /// requires confirmation but the enforcement context does not
+    /// already satisfy it.
     pub fn pre_dispatch_validate(
         &self,
         operation: &str,
         target: &str,
     ) -> PyResult<DispatchDecision> {
-        let canonical =
-            crate::operation_registry::StableOperation::parse(operation).ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!("Unknown operation: {}", operation))
-            })?;
+        use crate::operation_registry::StableOperation;
+
+        let canonical = StableOperation::parse(operation).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("Unknown operation: {}", operation))
+        })?;
+
+        // Single source of truth: registry-owned executor descriptor.
+        let executor_desc = self.registry.descriptor_for(canonical);
+
         let descriptor = eggsec::config::OperationDescriptor {
             operation: canonical.id().replace('_', "-"),
             mode: eggsec::config::OperationMode::StandardAssessment,
-            risk: match canonical {
-                crate::operation_registry::StableOperation::ScanPorts
-                | crate::operation_registry::StableOperation::FingerprintServices
-                | crate::operation_registry::StableOperation::ReconDns
-                | crate::operation_registry::StableOperation::InspectTls => {
-                    eggsec::config::OperationRisk::Passive
-                }
-                crate::operation_registry::StableOperation::LoadTest => {
-                    eggsec::config::OperationRisk::LoadTest
-                }
-                _ => eggsec::config::OperationRisk::SafeActive,
-            },
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            risk: executor_desc.risk,
+            intended_uses: executor_desc.intended_uses,
             target: Some(target.to_string()),
-            required_features: self
-                .registry
-                .get(operation)
-                .and_then(|info| info.feature_required)
+            required_features: executor_desc
+                .feature_required
                 .into_iter()
+                .map(str::to_string)
                 .collect(),
             required_policy_flags: vec!["require_explicit_scope".to_string()],
             requires_private_or_local_target: false,
             requires_explicit_scope: true,
             required_capabilities: Vec::new(),
         };
+
         let outcome = self.enforcement.evaluate(&descriptor);
+
+        // Confirm-at-descriptor level: if the descriptor marks this
+        // operation as confirmation-required and the enforcement
+        // context returned RequireConfirmation, surface the confirmation
+        // message and deny access.
+        if executor_desc.confirmation_required {
+            if let eggsec::config::EnforcementOutcome::RequireConfirmation(_) = &outcome {
+                let msg = executor_desc
+                    .confirmation_message
+                    .unwrap_or("Operation requires confirmation.");
+                let event = DispatchAuditEvent {
+                    event_id: uuid::Uuid::new_v4().to_string(),
+                    timestamp_ms: chrono::Utc::now().timestamp_millis().max(0) as u64,
+                    operation_id: canonical.id().to_string(),
+                    target: target.to_string(),
+                    surface: self.enforcement.execution_profile.to_string(),
+                    outcome: "confirm_required".to_string(),
+                    allowed: false,
+                    decision_summary: msg.to_string(),
+                    redacted: true,
+                };
+                if let Ok(mut events) = self.audit_events.lock() {
+                    events.push(event);
+                }
+                tracing::info!(
+                    operation,
+                    target,
+                    outcome = "confirm_required",
+                    allowed = false,
+                    "confirmation required by executor descriptor"
+                );
+                return Err(crate::error::EnforcementError::new_err(msg.to_string()));
+            }
+        }
+
         let (outcome_name, allowed) = match &outcome {
             eggsec::config::EnforcementOutcome::Allow(_) => ("allow", true),
             eggsec::config::EnforcementOutcome::Warn(_) => ("warn", true),
