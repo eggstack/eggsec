@@ -79,6 +79,11 @@ fn parse_ports_string(ports: &str) -> PyResult<Vec<u16>> {
             result.push(port);
         }
     }
+    if result.is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "ports list must not be empty",
+        ));
+    }
     Ok(result)
 }
 

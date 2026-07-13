@@ -6,11 +6,21 @@ on:
     paths:
       - crates/eggsec-python/**
       - .github/workflows/python-wheels.yml
+      - scripts/**
+      - docs/python/**
   pull_request:
     paths:
       - crates/eggsec-python/**
       - .github/workflows/python-wheels.yml
+      - scripts/**
+      - docs/python/**
   workflow_dispatch:
+    inputs:
+      publish_pypi:
+        description: "Publish the already validated TestPyPI artifacts to PyPI"
+        required: false
+        default: false
+        type: boolean
 
 env:
   MATURIN_VERSION: "1.7"
@@ -71,6 +81,8 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             os: macos-14
+          - target: aarch64-apple-darwin
+            os: macos-14
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
     steps:
@@ -93,7 +105,7 @@ jobs:
           source .venv-test/bin/activate
           WHEEL=$(ls dist/*.whl)
           pip install "$WHEEL"
-          pip install pytest
+          pip install pytest pytest-timeout
           python -c "import eggsec; print(f'Installed eggsec {eggsec.__version__}')"
 
       - name: Import smoke test
@@ -173,19 +185,25 @@ jobs:
           print('Serialization/report smoke test passed')
           "
 
-      - name: Run pytest suite (optional)
-        if: success()
+      - name: Run installed-wheel pytest suite
         run: |
           source .venv-test/bin/activate
-          pip install pytest
-          pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30
 
-  publish:
-    name: Publish to PyPI
+  architecture:
+    name: Architecture guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run repository architecture guards
+        run: bash scripts/check-architecture-guards.sh
+
+  publish-testpypi:
+    name: Publish to TestPyPI
     needs: test
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: testpypi
     permissions:
       id-token: write
     steps:
@@ -224,6 +242,27 @@ jobs:
           assert eggsec.has_feature('core')
           print('TestPyPI smoke test passed')
           "
+
+      - name: Retain validated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: testpypi-validated-wheels
+          path: dist/*.whl
+
+  publish-pypi:
+    name: Publish to PyPI (manual approval)
+    needs: publish-testpypi
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_pypi == true
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download TestPyPI-validated artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: testpypi-validated-wheels
+          path: dist
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

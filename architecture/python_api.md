@@ -32,7 +32,40 @@ reliable queue for planning, preflight, stage lifecycle, finding, artifact,
 cancellation, failure, and completion events. `EventDeliveryStats` reports
 emission, delivery, drops by event kind, maximum depth, consumer lag, and
 terminal delivery failures. The guarantee is exactly-once within the in-process
-queue model; daemon replay requires the daemon contract to be completed.
+queue model. Daemon replay is deliberately outside the first-release stable
+contract.
+
+## Release boundary and daemon deferral
+
+The first public `0.x` release guarantees the ten stable operations through
+local `Engine` and `AsyncEngine` execution. The optional `daemon-client`
+feature remains provisional. Its APIs are available for integration testing,
+but no release documentation should describe daemon execution as stable until
+the follow-up daemon parity milestone closes request normalization, stable
+operation identity, policy/audit parity, structured errors, payload schemas,
+cancellation, timeouts, reconnect/result retrieval, event replay, and artifact
+metadata.
+
+## Checkpoint contract
+
+Stable-core pipeline checkpoints use schema version 3. A checkpoint records
+the operation schema, target-set hash, scope hash, execution profile, enabled
+feature-set hash, pipeline-definition hash, and artifact-store identity. A
+resume rejects any mismatch with a structured `checkpoint_incompatible` error.
+Persisted checkpoints are written to a sibling temporary file, flushed, and
+atomically renamed. Sensitive-key fields are redacted before in-memory or
+on-disk serialization; secrets are never required to resume a pipeline.
+
+## Secret handling
+
+The stable-core request DTOs do not accept credentials. Secret-bearing
+provisional domains must use `SensitiveString` at their public boundary and
+must not place raw values in repr, event envelopes, reports, or checkpoints.
+Checkpoint redaction recursively covers keys such as `authorization`,
+`password`, `token`, `secret`, `client_secret`, and `api_key`; release tests
+assert that unique sentinels are absent from serialized JSON and reloaded
+checkpoints. `SensitiveString.expose_secret()` is an explicit manual escape
+hatch and is not used by stable-core dispatch.
 
 ## Domain boundary
 

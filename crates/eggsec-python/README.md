@@ -4,11 +4,16 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Scoped pre-1.0 release-candidate work** — Not yet published to PyPI. The
+**Scoped pre-1.0 release candidate** — Not yet published to PyPI. The
 stable-core compatibility boundary is the ten operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and
 `docs/python/README_1_0_CHECKLIST.md` for the remaining 1.0 readiness work.
+
+The stable guarantee covers local `Engine` and `AsyncEngine` execution only.
+The optional daemon client is retained for integration work but is explicitly
+provisional until daemon request/result parity, reconnect/replay, and
+cancellation semantics are closed in a follow-up milestone.
 
 ### Stability Classifications
 
@@ -17,7 +22,7 @@ Operations and types are classified according to WS9 criteria:
 | Level | Criteria | Examples |
 |-------|----------|----------|
 | **Stable-core** | Canonical registry, mandatory policy gate, typed payload, structured error, audit decision, and sync/async contract coverage | the ten operations in `domain-maturity.md`, plus their core DTOs |
-| **Provisional** | Public API shape is useful, but common-engine parity, deterministic fixtures, or daemon/schema coverage is incomplete | consolidated recon, GraphQL, OAuth, auth, database, NSE, daemon, pipeline/configuration surfaces |
+| **Provisional** | Public API shape is useful, but common-engine parity, deterministic fixtures, or transport/schema coverage is incomplete | consolidated recon, GraphQL, OAuth, auth, database, NSE, daemon, pipeline/configuration surfaces |
 | **Experimental** | Platform-sensitive, hazardous, provider-dependent, or subject to substantial change | wireless, evasion, postex, C2, browser, mobile dynamic, proxy, packet, distributed, and AI domains |
 | **Internal** | No compatibility guarantee, not top-level exported | `deprecated_warning` |
 
@@ -46,6 +51,10 @@ pip install target/wheels/eggsec-*.whl
 | Windows | x86_64 | Not currently built |
 
 Prebuilt wheels are **not yet available on PyPI**. Build from source using maturin.
+
+For release validation, run `bash scripts/validate_python_release_candidate.sh`
+from the repository root. It exercises loopback TCP/HTTP/TLS fixtures,
+checkpoint persistence, wheel smoke tests, and architecture guards.
 
 ### Included Features (default wheel)
 
@@ -584,7 +593,11 @@ All operations enforce authorization scope. Scans only target hosts and ports ex
 
 ## Daemon Client (feature: `daemon-client`)
 
-The Python daemon client is **wire-compatible** with the Rust daemon protocol. All serialization is handled by the Rust `eggsec-daemon::client::DaemonClient` — Python functions delegate directly to it.
+The Python daemon client delegates to the Rust daemon protocol and is retained
+for integration work, but it is **provisional** for the scoped 0.x release.
+Wire compatibility alone is not the stable contract: request/result parity,
+reconnect and replay behavior, cancellation, checkpoint portability, and
+event ordering still require a dedicated follow-up gate.
 
 **Wire format:** JSON lines over Unix socket. Protocol version: `DAEMON_PROTOCOL_VERSION = 1`.
 

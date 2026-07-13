@@ -1,5 +1,9 @@
 # Eggsec Python API Release-Closure Plan
 
+> Status: Local closure pass implemented. The stable-core release contract is
+> local `Engine`/`AsyncEngine` only; daemon parity is deferred. TestPyPI upload,
+> multi-platform CI evidence, and manual publication remain external gates.
+
 ## Purpose
 
 This plan covers the remaining work required to move `eggsec-python` from a scoped pre-1.0 release-candidate state to a defensible first public `0.x` release of the stable core.
@@ -42,6 +46,23 @@ The remaining open gates are:
 6. clean wheel build/install and installed-wheel smoke tests;
 7. visible CI evidence across supported platforms;
 8. TestPyPI dry run and release metadata completion.
+
+## Closure-pass decisions
+
+- **Daemon boundary:** Option B. Daemon-client APIs remain provisional and are
+  excluded from the first-release stable-core guarantee until transport,
+  reconnect, checkpoint portability, and event-replay parity are tested.
+- **Fixture policy:** Required stable-core coverage uses managed loopback TCP,
+  HTTP, and TLS fixtures plus deterministic `localhost` resolution. The DNS
+  operation is covered through the host resolver with the same explicit local
+  fixture policy; a public DNS dependency is not part of the required suite.
+- **Checkpoint contract:** Checkpoints use schema version 3, atomic sibling
+  replacement, compatibility identity fields, typed result restoration, and
+  recursive redaction of sensitive keys before persistence.
+- **Publication boundary:** Local wheel/profile and installed-wheel checks are
+  automated by `scripts/validate_python_release_candidate.sh`. TestPyPI and
+  production publication remain manual CI/environment gates and are not
+  represented as completed by this repository-only pass.
 
 ---
 

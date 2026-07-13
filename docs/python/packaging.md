@@ -86,23 +86,33 @@ scanning, fingerprinting, recon, WAF detection, and reporting.
 maturin build --release
 ```
 
-### Full wheel
+### Full-no-system wheel
 
-Compiled with all non-default features. Includes database pentest, web
-proxy, mobile analysis, NSE, stress testing, packet inspection, and more.
-Requires system dependencies at runtime.
+Compiled with optional features that do not require external system
+libraries (`websocket`, `git-secrets`, `sbom`, and `container`). This is the
+portable second profile used by the release checks.
 
 ```bash
-maturin build --release --features full
+maturin build --release --features full-no-system
 ```
 
-Not all features can be combined in a single wheel. Some features (e.g.
-`packet-inspection`) require system libraries (`libpcap-dev`) that may not
-be available on all platforms.
+The repository-level helpers build both profiles and validate each in a clean
+virtual environment:
+
+```bash
+bash scripts/build_wheel_profiles.sh
+for wheel in target/python-wheels/*.whl; do
+  bash scripts/validate_wheel.sh "$wheel"
+done
+```
+
+Not all features can be combined in a single wheel. Features such as
+`packet-inspection`, `nse`, and `wireless` require system libraries or tools
+that may not be available on all platforms.
 
 ## Feature matrix
 
-| Feature | System Dep | Default Wheel | Full Wheel |
+| Feature | System Dep | Default Wheel | full-no-system Wheel |
 |---|---|---|---|
 | `core` | -- | Yes | Yes |
 | `scanner` | -- | Yes | Yes |
@@ -183,12 +193,22 @@ package name (controlled by `module-name = "eggsec._core"` in
 
 TestPyPI is used for validation before a production release.
 
-### 1. Build
+The first-release stable guarantee covers local `Engine` and `AsyncEngine`
+execution against the ten stable-core operations. Daemon-client execution is
+provisional until transport parity, checkpoint portability, and reconnect
+semantics have their own release gate.
+
+### 1. Build and validate locally
 
 ```bash
-cd crates/eggsec-python
-maturin build --release --manylinux auto
+bash scripts/validate_python_release_candidate.sh
 ```
+
+The required fixture suite starts only managed loopback services and does not
+use public DNS, HTTP, or TLS. Its fixture manager sets
+`EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only while those explicit release fixtures
+are active; ordinary package resolution continues to enforce the normal
+policy-approved path.
 
 ### 2. Upload to TestPyPI
 
@@ -244,7 +264,13 @@ twine upload target/wheels/*.whl
 
 ### CI publishing (GitHub Actions)
 
-Add a workflow triggered on tags:
+The repository workflow builds and tests platform wheels on pushes and pull
+requests. Manual dispatch first publishes to TestPyPI and verifies a clean
+installation. Production publication is a separate `publish_pypi` input and
+protected environment, so a TestPyPI dry run cannot publish to PyPI
+implicitly.
+
+For a separate tag-driven setup:
 
 ```yaml
 name: Publish Python package
@@ -267,10 +293,9 @@ jobs:
           cd crates/eggsec-python
           maturin build --release --manylinux auto
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload crates/eggsec-python/target/wheels/*.whl
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: crates/eggsec-python/target/wheels/
 ```
 
 ## Smoke test commands

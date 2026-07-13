@@ -59,4 +59,5 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 rustc-hash = { workspace = true }
 uuid = { workspace = true }
+md-5 = { workspace = true }
 url = "2"

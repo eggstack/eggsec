@@ -1,10 +1,13 @@
+use md5::{Digest, Md5};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Mutex;
 
 /// Current checkpoint schema version.
-pub const CHECKPOINT_SCHEMA_VERSION: u32 = 2;
+pub const CHECKPOINT_SCHEMA_VERSION: u32 = 3;
+pub const OPERATION_SCHEMA_VERSION: &str = "1.0";
 
 /// Version wrapper for checkpoint schema evolution.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -49,12 +52,40 @@ pub struct PipelineCheckpoint {
     /// Epoch milliseconds when the checkpoint was last updated.
     #[pyo3(get)]
     pub updated_at_ms: u64,
+    /// Version of the stable operation request/result contract.
+    #[serde(default = "default_operation_schema_version")]
+    #[pyo3(get)]
+    pub operation_schema_version: String,
+    /// Hash of the target set used by the pipeline.
+    #[serde(default)]
+    #[pyo3(get)]
+    pub target_set_hash: String,
+    /// Hash of the scope used by the pipeline.
+    #[serde(default)]
+    #[pyo3(get)]
+    pub scope_hash: String,
+    /// Enforcement profile used by the pipeline.
+    #[serde(default = "default_execution_profile")]
+    #[pyo3(get)]
+    pub execution_profile: String,
+    /// Hash of the compiled feature set.
+    #[serde(default)]
+    #[pyo3(get)]
+    pub enabled_features_hash: String,
+    /// Hash of the complete pipeline definition, including request payloads.
+    #[serde(default)]
+    #[pyo3(get)]
+    pub pipeline_definition_hash: String,
+    /// Optional external artifact store identity.
+    #[serde(default)]
+    #[pyo3(get)]
+    pub artifact_store_id: Option<String>,
 }
 
 #[pymethods]
 impl PipelineCheckpoint {
     #[new]
-    #[pyo3(signature = (pipeline_id, pipeline_name, *, completed_steps=None, current_step=None, step_results=None, created_at_ms=0, updated_at_ms=0))]
+    #[pyo3(signature = (pipeline_id, pipeline_name, *, completed_steps=None, current_step=None, step_results=None, created_at_ms=0, updated_at_ms=0, operation_schema_version=None, target_set_hash=None, scope_hash=None, execution_profile=None, enabled_features_hash=None, pipeline_definition_hash=None, artifact_store_id=None))]
     fn py_new(
         py: Python,
         pipeline_id: String,
@@ -64,17 +95,23 @@ impl PipelineCheckpoint {
         step_results: Option<PyObject>,
         created_at_ms: u64,
         updated_at_ms: u64,
-    ) -> Self {
+        operation_schema_version: Option<String>,
+        target_set_hash: Option<String>,
+        scope_hash: Option<String>,
+        execution_profile: Option<String>,
+        enabled_features_hash: Option<String>,
+        pipeline_definition_hash: Option<String>,
+        artifact_store_id: Option<String>,
+    ) -> PyResult<Self> {
         let now = current_epoch_ms();
-        let parsed_results = step_results
-            .map(|obj| {
+        let parsed_results: HashMap<String, serde_json::Value> = match step_results {
+            Some(obj) => {
                 let json_mod = py.import_bound("json")?;
                 let json_str = json_mod
                     .call_method1("dumps", (obj,))
                     .map_err(|e| {
                         pyo3::exceptions::PyTypeError::new_err(format!(
-                            "step_results must be JSON-serializable: {}",
-                            e
+                            "step_results must be JSON-serializable: {e}"
                         ))
                     })?
                     .extract::<String>()?;
@@ -85,12 +122,11 @@ impl PipelineCheckpoint {
                             e
                         ))
                     })?;
-                Ok::<_, PyErr>(map)
-            })
-            .transpose()
-            .unwrap_or_default()
-            .unwrap_or_default();
-        Self {
+                Ok::<HashMap<String, serde_json::Value>, PyErr>(redact_checkpoint_results(map))
+            }
+            None => Ok(HashMap::new()),
+        }?;
+        Ok(Self {
             version: CheckpointVersion::current(),
             pipeline_id,
             pipeline_name,
@@ -107,7 +143,15 @@ impl PipelineCheckpoint {
             } else {
                 updated_at_ms
             },
-        }
+            operation_schema_version: operation_schema_version
+                .unwrap_or_else(default_operation_schema_version),
+            target_set_hash: target_set_hash.unwrap_or_default(),
+            scope_hash: scope_hash.unwrap_or_default(),
+            execution_profile: execution_profile.unwrap_or_else(default_execution_profile),
+            enabled_features_hash: enabled_features_hash.unwrap_or_default(),
+            pipeline_definition_hash: pipeline_definition_hash.unwrap_or_default(),
+            artifact_store_id,
+        })
     }
 
     /// Returns true if this checkpoint is at the current schema version.
@@ -156,6 +200,13 @@ impl PipelineCheckpoint {
         dict.set_item("created_at_ms", self.created_at_ms)?;
         dict.set_item("updated_at_ms", self.updated_at_ms)?;
         dict.set_item("step_results", self.step_results(py)?)?;
+        dict.set_item("operation_schema_version", &self.operation_schema_version)?;
+        dict.set_item("target_set_hash", &self.target_set_hash)?;
+        dict.set_item("scope_hash", &self.scope_hash)?;
+        dict.set_item("execution_profile", &self.execution_profile)?;
+        dict.set_item("enabled_features_hash", &self.enabled_features_hash)?;
+        dict.set_item("pipeline_definition_hash", &self.pipeline_definition_hash)?;
+        dict.set_item("artifact_store_id", &self.artifact_store_id)?;
         Ok(dict.into())
     }
 
@@ -166,11 +217,10 @@ impl PipelineCheckpoint {
 
     fn __repr__(&self) -> String {
         format!(
-            "PipelineCheckpoint(version={}, pipeline_id={}, completed={}/{})",
+            "PipelineCheckpoint(version={}, pipeline_id={}, completed={})",
             self.version.0,
             self.pipeline_id,
             self.completed_steps.len(),
-            self.completed_steps.len() + if self.current_step.is_some() { 1 } else { 0 },
         )
     }
 }
@@ -341,13 +391,14 @@ impl CheckpointStore {
 
     /// Save a checkpoint (Rust-facing). Overwrites any existing checkpoint for the same pipeline.
     pub fn save_inner(&self, checkpoint: PipelineCheckpoint) -> PyResult<()> {
+        let checkpoint = redact_checkpoint_secrets(checkpoint);
         let mut store = self.checkpoints.lock().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Lock poisoned: {}", e))
         })?;
         store.insert(checkpoint.pipeline_id.clone(), checkpoint);
         drop(store);
 
-        if let Some(ref path) = self.persist_path {
+        if self.persist_path.is_some() {
             self.flush_to_disk()?;
         }
         Ok(())
@@ -427,12 +478,20 @@ impl CheckpointStore {
             ))
         })?;
 
-        std::fs::write(&path, json).map_err(|e| {
-            pyo3::exceptions::PyIOError::new_err(format!(
-                "Failed to write checkpoint file '{}': {}",
-                path, e
-            ))
-        })?;
+        let temp_path = format!("{}.tmp-{}", path, std::process::id());
+        let write_result = (|| -> std::io::Result<()> {
+            let mut file = std::fs::File::create(&temp_path)?;
+            file.write_all(json.as_bytes())?;
+            file.sync_all()?;
+            std::fs::rename(&temp_path, &path)
+        })();
+        if let Err(error) = write_result {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(pyo3::exceptions::PyIOError::new_err(format!(
+                "Failed to atomically write checkpoint file '{}': {}",
+                path, error
+            )));
+        }
 
         Ok(())
     }
@@ -459,8 +518,18 @@ pub fn migrate_checkpoint(cp: &mut PipelineCheckpoint) -> PyResult<bool> {
         }
     }
 
-    // Future migrations go here:
-    // if cp.version.0 < 3 { ... cp.version = CheckpointVersion(3); }
+    // v2 -> v3: add explicit compatibility identity fields. Legacy values
+    // remain empty and are rejected by Pipeline when a resume needs a
+    // release-grade identity comparison.
+    if cp.version.0 < 3 {
+        cp.version = CheckpointVersion(3);
+        if cp.operation_schema_version.is_empty() {
+            cp.operation_schema_version = default_operation_schema_version();
+        }
+        if cp.execution_profile.is_empty() {
+            cp.execution_profile = default_execution_profile();
+        }
+    }
 
     Ok(cp.version.0 != original)
 }
@@ -483,6 +552,156 @@ pub fn current_epoch_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn default_operation_schema_version() -> String {
+    OPERATION_SCHEMA_VERSION.to_string()
+}
+
+fn default_execution_profile() -> String {
+    "manual-permissive".to_string()
+}
+
+/// Stable digest helper used for checkpoint identity fields. This is an
+/// identity/versioning hash, not a security primitive.
+pub fn stable_digest(value: &str) -> String {
+    let mut hasher = Md5::new();
+    hasher.update(value.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Expected identity values for a pipeline resume.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckpointCompatibility {
+    pub operation_schema_version: String,
+    pub target_set_hash: String,
+    pub scope_hash: String,
+    pub execution_profile: String,
+    pub enabled_features_hash: String,
+    pub pipeline_definition_hash: String,
+    pub artifact_store_id: Option<String>,
+}
+
+impl CheckpointCompatibility {
+    pub fn validate(&self, checkpoint: &PipelineCheckpoint) -> PyResult<()> {
+        let checks = [
+            (
+                "operation schema version",
+                &self.operation_schema_version,
+                &checkpoint.operation_schema_version,
+            ),
+            (
+                "target set",
+                &self.target_set_hash,
+                &checkpoint.target_set_hash,
+            ),
+            ("scope", &self.scope_hash, &checkpoint.scope_hash),
+            (
+                "execution profile",
+                &self.execution_profile,
+                &checkpoint.execution_profile,
+            ),
+            (
+                "enabled feature set",
+                &self.enabled_features_hash,
+                &checkpoint.enabled_features_hash,
+            ),
+            (
+                "pipeline definition",
+                &self.pipeline_definition_hash,
+                &checkpoint.pipeline_definition_hash,
+            ),
+        ];
+        for (label, expected, actual) in checks {
+            if expected.is_empty() || actual.is_empty() || expected != actual {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "checkpoint_incompatible: {label} does not match"
+                )));
+            }
+        }
+        if self.artifact_store_id != checkpoint.artifact_store_id {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "checkpoint_incompatible: artifact store identity does not match",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    [
+        "secret",
+        "password",
+        "token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "credential",
+        "client_secret",
+        "access_key",
+    ]
+    .iter()
+    .any(|marker| key.contains(marker))
+}
+
+fn redact_json(value: &mut serde_json::Value, sensitive: bool) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                if is_sensitive_key(key) {
+                    *child = serde_json::Value::String("[REDACTED]".to_string());
+                } else {
+                    redact_json(child, false);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for child in values {
+                redact_json(child, sensitive);
+            }
+        }
+        serde_json::Value::String(text) if sensitive => {
+            *text = "[REDACTED]".to_string();
+        }
+        _ => {}
+    }
+}
+
+fn redact_checkpoint_secrets(mut checkpoint: PipelineCheckpoint) -> PipelineCheckpoint {
+    checkpoint.step_results = redact_checkpoint_results(checkpoint.step_results);
+    checkpoint
+}
+
+fn redact_checkpoint_results(
+    mut results: HashMap<String, serde_json::Value>,
+) -> HashMap<String, serde_json::Value> {
+    for value in results.values_mut() {
+        redact_json(value, false);
+    }
+    results
+}
+
+impl Default for PipelineCheckpoint {
+    fn default() -> Self {
+        Self {
+            version: CheckpointVersion::current(),
+            pipeline_id: String::new(),
+            pipeline_name: String::new(),
+            completed_steps: Vec::new(),
+            current_step: None,
+            step_results: HashMap::new(),
+            created_at_ms: 0,
+            updated_at_ms: 0,
+            operation_schema_version: default_operation_schema_version(),
+            target_set_hash: String::new(),
+            scope_hash: String::new(),
+            execution_profile: default_execution_profile(),
+            enabled_features_hash: String::new(),
+            pipeline_definition_hash: String::new(),
+            artifact_store_id: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,7 +720,7 @@ mod tests {
     }
 
     #[test]
-    fn test_migrate_checkpoint_v1_to_v2() {
+    fn test_migrate_checkpoint_v1_to_current() {
         let mut cp = PipelineCheckpoint {
             version: CheckpointVersion(1),
             pipeline_id: "test-pipeline".to_string(),
@@ -511,11 +730,12 @@ mod tests {
             step_results: HashMap::new(),
             created_at_ms: 1000,
             updated_at_ms: 0,
+            ..PipelineCheckpoint::default()
         };
 
         let migrated = migrate_checkpoint(&mut cp).unwrap();
         assert!(migrated);
-        assert_eq!(cp.version.0, 2);
+        assert_eq!(cp.version.0, CHECKPOINT_SCHEMA_VERSION);
         assert_eq!(cp.updated_at_ms, 1000);
     }
 
@@ -530,6 +750,7 @@ mod tests {
             step_results: HashMap::new(),
             created_at_ms: 1000,
             updated_at_ms: 2000,
+            ..PipelineCheckpoint::default()
         };
 
         let migrated = migrate_checkpoint(&mut cp).unwrap();
@@ -554,6 +775,7 @@ mod tests {
             step_results: results,
             created_at_ms: 1000,
             updated_at_ms: 1000,
+            ..PipelineCheckpoint::default()
         };
 
         store.save_inner(cp.clone()).unwrap();
@@ -580,6 +802,7 @@ mod tests {
             step_results: HashMap::new(),
             created_at_ms: 1000,
             updated_at_ms: 1000,
+            ..PipelineCheckpoint::default()
         };
         store.save_inner(cp).unwrap();
 
@@ -604,6 +827,7 @@ mod tests {
             step_results: HashMap::new(),
             created_at_ms: 1000,
             updated_at_ms: 1000,
+            ..PipelineCheckpoint::default()
         };
         store.save_inner(cp).unwrap();
 
@@ -624,6 +848,7 @@ mod tests {
             step_results: HashMap::new(),
             created_at_ms: 1000,
             updated_at_ms: 1000,
+            ..PipelineCheckpoint::default()
         };
         store.save_inner(cp).unwrap();
 
@@ -650,6 +875,7 @@ mod tests {
                 step_results: HashMap::new(),
                 created_at_ms: 5000,
                 updated_at_ms: 5000,
+                ..PipelineCheckpoint::default()
             };
             store.save_inner(cp).unwrap();
         }
@@ -679,6 +905,7 @@ mod tests {
                 step_results: HashMap::new(),
                 created_at_ms: 1000,
                 updated_at_ms: 1000,
+                ..PipelineCheckpoint::default()
             };
             store.save_inner(cp).unwrap();
         }

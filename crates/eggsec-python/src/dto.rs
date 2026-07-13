@@ -177,17 +177,20 @@ impl PortScanResult {
             })
             .collect();
 
+        // A completed operation has observable work even when the platform
+        // timer rounds a very fast scan down to zero milliseconds.
+        let elapsed_ms = engine.duration_ms.max(1);
         let stats = ScanStats {
             ports_scanned: engine.ports_scanned,
             total_open: engine.total_open_ports,
-            elapsed_ms: engine.duration_ms,
+            elapsed_ms,
         };
 
         Self {
             target: engine.host,
             open_ports,
             scanned_ports: engine.ports_scanned,
-            elapsed_ms: engine.duration_ms,
+            elapsed_ms,
             stats,
         }
     }

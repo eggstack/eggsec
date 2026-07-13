@@ -70,10 +70,18 @@ pub fn resolve_host(host: &str) -> Result<IpAddr> {
         .next()
         .ok_or_else(|| anyhow!("Could not resolve host: {}", host))?;
 
+    // The release test harness owns an explicit loopback fixture and opts in
+    // through an environment marker. Normal callers retain the historical
+    // private-address rejection. Scope enforcement still runs before every
+    // Python stable-core dispatch.
+    let local_fixture = std::env::var("EGGSEC_ALLOW_LOOPBACK_FIXTURE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
     if ip.is_loopback() {
-        anyhow::bail!("Resolved to loopback address blocked");
-    }
-    if is_private_ip(&ip) {
+        if !local_fixture {
+            anyhow::bail!("Resolved to loopback address blocked");
+        }
+    } else if is_private_ip(&ip) {
         anyhow::bail!("Resolved to private IP address blocked");
     }
     Ok(ip)

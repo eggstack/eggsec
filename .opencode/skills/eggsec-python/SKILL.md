@@ -11,12 +11,14 @@ Python bindings for the Eggsec security assessment engine via PyO3/maturin.
 
 The `eggsec-python` crate provides Python-native bindings over the Rust engine. It is a host-language binding (not an internal plugin runtime) that wraps `eggsec` and `eggsec-core` via PyO3. The GIL is released during network I/O.
 
-**Status**: Scoped pre-1.0 release-candidate work (0.1.0). The stable-core
+**Status**: Scoped pre-1.0 release candidate (0.1.0). The stable-core
 boundary is the ten-operation `StableOperation` registry. Stable-core paths
 share the mandatory policy/audit gate, typed payloads, `OperationError`, and
 governed event delivery. Milestone C/E/G and feature-gated domains remain
 provisional or experimental until they satisfy the graduation checklist in
 `docs/python/domain-maturity.md`.
+The release guarantee is local `Engine`/`AsyncEngine` only; daemon-client
+execution remains provisional pending transport parity.
 
 ## Directory Structure
 
@@ -148,7 +150,17 @@ cargo test -p eggsec-python
 
 # Policy equivalence tests (Milestone B)
 pytest crates/eggsec-python/tests/test_policy_equivalence.py
+
+# Release-closure validation from the workspace root
+bash scripts/validate_python_release_candidate.sh
 ```
+
+The release fixture suite covers all ten stable operations using managed
+loopback services and must not be converted into conditional skips. Set
+`EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for that explicit fixture harness or
+installed-wheel smoke test. The normal resolver and policy gate remain
+unchanged for callers. The first-release contract is local `Engine` and
+`AsyncEngine`; daemon-client execution is provisional.
 
 ## API Surface
 
@@ -174,6 +186,8 @@ pytest crates/eggsec-python/tests/test_policy_equivalence.py
 | `PolicyDecision` | Result of policy evaluation (allowed, denied, warnings, confirmation required). |
 | `EnforcementOutcome` | Rich outcome from `evaluate()` (outcome_type, decision, warnings, confirmation_classes). |
 | `PreflightResult` | Pre-dispatch preview (outcome, suggested CLI flags, scope status, risk level). |
+| `PipelineCheckpoint` | Versioned checkpoint with compatibility identity fields and redacted step results. |
+| `CheckpointStore` | Atomic in-memory or file-backed checkpoint persistence. |
 | `SensitiveString` | Zeroized secret wrapper. Use `SensitiveString.new("value")`, `.expose_secret()` to read. |
 | `EnforcementAuditEvent` | Audit trail entry with event_id, timestamp, surface, outcome, scope info, policy hash. |
 | `ScopeValidation` | Result of `validate_scope()` (valid, errors, warnings, target/exclusion counts). |

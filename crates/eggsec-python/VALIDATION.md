@@ -2,9 +2,10 @@
 
 ## Final integration checkpoint — 2026-07-12
 
-The final integration pass completed the scoped pre-1.0 stable-core gates:
+The closure pass completed the local scoped pre-1.0 stable-core gates:
 
-- Python suite: **1326 passed, 80 skipped, 23 deselected**.
+- Installed-wheel Python suite: **1353 passed, 58 skipped, 23 deselected**.
+- Focused regression and release fixture/checkpoint suite: **33 passed**.
 - Stable-core registry and sync/async dispatch use one canonical operation
   identifier source.
 - `OperationResult.error` is a versioned `OperationError` DTO with typed
@@ -16,13 +17,13 @@ The final integration pass completed the scoped pre-1.0 stable-core gates:
   ten-operation stable-core boundary separately from provisional and
   experimental domains.
 
-Remaining release gates are intentionally recorded in
-[`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): deterministic daemon/pipeline/
-secret fixtures, final verification in a clean environment, TestPyPI/PyPI
-publication, and the repository-wide architecture guard debt. The Python
-crate’s Rust test target remains link-limited in this environment because the
-`cdylib` test binary is not linked with the Python runtime; `cargo check`,
-`maturin develop`, and the installed-extension pytest suite pass.
+Remaining external gates are intentionally recorded in
+[`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): current multi-platform CI
+evidence and TestPyPI/PyPI publication. Daemon parity is explicitly deferred
+from the first-release contract. The Python crate’s Rust test target remains
+link-limited in this environment because the `cdylib` test binary is not linked
+with the Python runtime; `cargo check` and installed-extension pytest coverage
+pass.
 
 ## Validation Summary
 
@@ -37,8 +38,8 @@ crate’s Rust test target remains link-limited in this environment because the
 | Rust validation matrix | 14 PASS, 1 environment-limited |
 | Python build + smoke | PASS |
 | Network failure triage | RESOLVED (6 tests properly skipped) |
-| Async API tests | ADDED (5 new tests) |
-| Python suite | 1326 passed, 80 skipped, 23 deselected |
+| Async API tests | PASS (fixture equivalence plus existing async coverage) |
+| Python suite | 1353 passed, 58 skipped, 23 deselected |
 | Export checker | PASS (263 default exports resolve) |
 | GitHub Actions workflow | EXISTS, VALID |
 | Release checklist | UPDATED |
@@ -71,10 +72,10 @@ All warnings are pre-existing PyO3 `cfg` or downstream dead_code. None block the
 
 | Step | Result |
 |------|--------|
-| `maturin develop` | PASS (51.8s) |
+| `maturin develop` | ENVIRONMENT-LIMITED | Shared development venv is read-only; release-wheel installation used instead |
 | `import eggsec` | PASS (version 0.1.0, 24 features) |
-| Release wheel build | PASS (`eggsec-0.1.0-cp312-cp312-manylinux_2_38_x86_64.whl`) |
-| Clean venv wheel install | PASS |
+| Release wheel build | PASS (core and full-no-system profiles; manylinux 2.38/2.39) |
+| Clean venv wheel install | PASS (both profiles) |
 | `__all__` check | PASS (263 default names, all resolve) |
 | Scanner smoke | PASS (generate_fuzz_payloads, Scope, Client, scope enforcement) |
 | Report smoke | PASS (Report, Finding, FindingSet, Evidence, to_dict/to_json/write_json/to_rows/write_markdown) |
@@ -98,14 +99,18 @@ All warnings are pre-existing PyO3 `cfg` or downstream dead_code. None block the
 
 ## 4. Async API Tests
 
-Added 5 new tests to `tests/test_async.py`:
+Existing async tests plus the closure fixture suite cover:
 - `test_async_scan_ports_returns_future` — verifies `async_scan_ports` returns a `PyFuture`
 - `test_async_scan_ports_denied_scope` — verifies `EnforcementError` for out-of-scope target
 - `test_async_validate_waf_denied_scope` — verifies scope enforcement on async WAF validation
 - `test_async_fuzz_http_denied_scope` — verifies scope enforcement on async fuzzing
 - `test_async_load_test_denied_scope` — verifies scope enforcement on async load testing
 
-**Note:** Existing `test_async.py` tests are sync (they check signatures/attributes). The new tests verify scope enforcement at the Python layer. True `await`-based tests require `pytest-asyncio` and a running event loop — these are covered by the sync scope-enforcement tests which prove the enforcement path works before dispatch.
+The closure suite additionally compares normalized sync/async results for the
+stable-core network operations from an installed release wheel. True
+`await`-based tests still require `pytest-asyncio` and a running event loop;
+the extension’s polling awaitable is covered directly by those equivalence
+tests.
 
 ## 5. Export Checker
 
@@ -130,4 +135,5 @@ Created `scripts/check_eggsec_python_exports.py` which verifies:
 - [ ] Install from TestPyPI succeeds (requires manual trigger)
 - [ ] Final PyPI publish (requires ALL gates to pass)
 
-**Status:** Not yet PyPI-ready. All local validation gates pass. CI workflow exists. TestPyPI/PyPI requires manual workflow dispatch.
+**Status:** Local validation gates pass. Multi-platform CI evidence and
+TestPyPI/PyPI still require the manual workflow/environment gates.

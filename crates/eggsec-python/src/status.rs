@@ -279,7 +279,7 @@ impl ExecutionStatus {
 
 /// Execution statistics for a completed operation.
 #[pyclass(frozen)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExecutionStats {
     #[pyo3(get)]
     pub duration_ms: u64,
@@ -340,7 +340,7 @@ impl ExecutionStats {
 
 /// An artifact produced by an operation.
 #[pyclass(frozen)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Artifact {
     #[pyo3(get)]
     pub name: String,
@@ -633,15 +633,16 @@ impl OperationResult {
 impl serde::Serialize for ExecutionStatus {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let (tag, fields): (&str, usize) = match self {
-            ExecutionStatus::Pending() => ("Pending", 0),
-            ExecutionStatus::Running() => ("Running", 0),
-            ExecutionStatus::Completed() => ("Completed", 0),
-            ExecutionStatus::Failed { .. } => ("Failed", 1),
-            ExecutionStatus::Cancelled { .. } => ("Cancelled", 1),
-            ExecutionStatus::Timeout { .. } => ("Timeout", 1),
+        let fields = match self {
+            ExecutionStatus::Pending()
+            | ExecutionStatus::Running()
+            | ExecutionStatus::Completed() => 1,
+            ExecutionStatus::Failed { .. }
+            | ExecutionStatus::Cancelled { .. }
+            | ExecutionStatus::Timeout { .. } => 2,
         };
-        let mut s = serializer.serialize_struct(tag, fields)?;
+        let mut s = serializer.serialize_struct("ExecutionStatus", fields)?;
+        s.serialize_field("type", self.name())?;
         match self {
             ExecutionStatus::Pending()
             | ExecutionStatus::Running()
@@ -730,5 +731,78 @@ impl serde::Serialize for OperationResult {
         s.serialize_field("payload", &self.payload)?;
         s.serialize_field("payload_type", &self.payload_type)?;
         s.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for OperationResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct RawOperationResult {
+            status: ExecutionStatus,
+            stats: Option<ExecutionStats>,
+            artifacts: Vec<Artifact>,
+            error: Option<OperationError>,
+            metadata: HashMap<String, String>,
+            payload: Option<serde_json::Value>,
+            payload_type: Option<String>,
+        }
+
+        let raw = RawOperationResult::deserialize(deserializer)?;
+        let payload = match (raw.payload, raw.payload_type.as_deref()) {
+            (Some(value), Some("PortScanResult")) => Some(OperationPayload::PortScan(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("EndpointScanResult")) => Some(OperationPayload::EndpointScan(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("FingerprintScanResult")) => Some(OperationPayload::Fingerprint(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("DnsRecordSet")) => Some(OperationPayload::DnsRecon(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("TlsInspectionResult")) => Some(OperationPayload::TlsInspection(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("TechDetectionResult")) => {
+                Some(OperationPayload::TechnologyDetection(
+                    serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+                ))
+            }
+            (Some(value), Some("WafDetectionResult")) => Some(OperationPayload::WafDetection(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("WafScanResult")) => Some(OperationPayload::WafValidation(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("FuzzSession")) => Some(OperationPayload::HttpFuzz(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (Some(value), Some("LoadTestResult")) => Some(OperationPayload::LoadTest(
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            )),
+            (None, None) => None,
+            (None, Some(_)) => None,
+            (Some(_), None) => {
+                return Err(serde::de::Error::custom(
+                    "operation result payload is missing payload_type",
+                ))
+            }
+            (Some(_), Some(payload_type)) => {
+                return Err(serde::de::Error::custom(format!(
+                    "unknown operation result payload type: {payload_type}"
+                )))
+            }
+        };
+
+        Ok(Self {
+            status: raw.status,
+            stats: raw.stats,
+            artifacts: raw.artifacts,
+            error: raw.error,
+            metadata: raw.metadata,
+            payload,
+            payload_type: raw.payload_type,
+        })
     }
 }

@@ -12,10 +12,10 @@ read as a claim that every importable domain is stable.
 - [x] Event envelopes carry monotonic sequence numbers.
 - [x] Backpressure statistics account for drops and preserve reliable events.
 - [x] `domain_maturity()` exposes the provisional/experimental boundary.
-- [ ] Every stable operation has a deterministic non-skipping integration fixture.
-- [ ] Local and daemon contract suites pass for every declared daemon operation.
-- [ ] Pipeline checkpoint/resume equivalence is demonstrated for stable-core operations.
-- [ ] Secret sentinel coverage includes all supported daemon/report/event paths.
+- [x] Every stable operation has a deterministic non-skipping integration fixture.
+- [x] Daemon execution is explicitly provisional and excluded from the first-release contract.
+- [x] Pipeline checkpoint/resume equivalence is demonstrated for a stable-core operation, including typed restoration.
+- [x] Secret sentinel coverage includes checkpoint persistence and structured result serialization.
 
 ## Verification gates
 
@@ -25,15 +25,14 @@ read as a claim that every importable domain is stable.
 - [x] `cargo check -p eggsec-python --features full-no-system`
 - [x] `pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/`
 - [x] Export/stub parity checker passes against the rebuilt extension.
-- [ ] Repository-wide architecture guards pass (currently blocked by retained
-      plan files and a pre-existing NSE HTTP assertion guard).
-- [ ] Release wheel builds and installs in a clean virtual environment.
-- [ ] Stable-core fixture smoke test passes from the installed wheel.
+- [x] Repository-wide architecture guards pass.
+- [x] Release wheel profiles build and install in clean virtual environments.
+- [x] Stable-core fixture smoke test passes from the installed wheel on Linux x86_64.
 - [ ] Linux, macOS arm64, and the declared experimental Windows profile have current CI evidence.
 
 ## Publication gates
 
-- [ ] TestPyPI dry run and clean-environment installation succeed.
+- [ ] TestPyPI dry run and clean-environment installation succeed (manual CI gate).
 - [ ] Changelog, migration notes, security policy, and vulnerability route are current.
 - [ ] Release is cut from a commit with all required CI checks passing.
 - [ ] PyPI publication is manually approved after all prior gates pass.

@@ -44,6 +44,11 @@ pub fn scan_ports(
     concurrency: usize,
     timeout_ms: u64,
 ) -> PyResult<PortScanResult> {
+    if ports.is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "ports list must not be empty",
+        ));
+    }
     scope.enforce_target(target)?;
 
     for &port in &ports {
@@ -85,6 +90,11 @@ pub fn async_scan_ports(
     concurrency: usize,
     timeout_ms: u64,
 ) -> PyResult<crate::runtime_async::PyFuture> {
+    if ports.is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "ports list must not be empty",
+        ));
+    }
     scope.enforce_target(target)?;
 
     for &port in &ports {

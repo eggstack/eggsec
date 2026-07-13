@@ -76,7 +76,7 @@ impl serde::Serialize for PipelineStep {
 
 /// Result of executing a single pipeline step.
 #[pyclass(frozen)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct StepResult {
     #[pyo3(get)]
     step_name: String,
@@ -173,6 +173,55 @@ impl serde::Serialize for StepResult {
         s.serialize_field("result", &self.result)?;
         s.serialize_field("duration_ms", &self.duration_ms)?;
         s.end()
+    }
+}
+
+fn pipeline_definition_text(name: &str, steps: &[PipelineStep], stop_on_failure: bool) -> String {
+    let requests = steps
+        .iter()
+        .map(|step| {
+            serde_json::json!({
+                "name": step.name,
+                "request": step.request,
+                "condition": step.condition,
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "name": name,
+        "stop_on_failure": stop_on_failure,
+        "steps": requests,
+    })
+    .to_string()
+}
+
+fn checkpoint_compatibility(
+    name: &str,
+    steps: &[PipelineStep],
+    stop_on_failure: bool,
+    engine: &Engine,
+) -> checkpoint_store::CheckpointCompatibility {
+    let definition = pipeline_definition_text(name, steps, stop_on_failure);
+    let mut targets = steps
+        .iter()
+        .map(|step| step.request.target.clone())
+        .collect::<Vec<_>>();
+    targets.sort();
+    let feature_set = {
+        let mut features = crate::features::features().into_iter().collect::<Vec<_>>();
+        features.sort_by(|left, right| left.0.cmp(&right.0));
+        serde_json::to_string(&features).expect("feature map is JSON serializable")
+    };
+    let scope_definition =
+        serde_json::to_string(&engine.state.scope.inner).expect("scope is JSON serializable");
+    checkpoint_store::CheckpointCompatibility {
+        operation_schema_version: checkpoint_store::OPERATION_SCHEMA_VERSION.to_string(),
+        target_set_hash: checkpoint_store::stable_digest(&targets.join("\n")),
+        scope_hash: checkpoint_store::stable_digest(&scope_definition),
+        execution_profile: engine.state.enforcement.execution_profile.to_string(),
+        enabled_features_hash: checkpoint_store::stable_digest(&feature_set),
+        pipeline_definition_hash: checkpoint_store::stable_digest(&definition),
+        artifact_store_id: None,
     }
 }
 
@@ -366,12 +415,31 @@ impl Pipeline {
 
         // Determine pipeline ID for checkpointing
         let pipeline_id = self.pipeline_id();
+        let compatibility =
+            checkpoint_compatibility(&self.name, &self.steps, self.stop_on_failure, engine);
 
         // Check for existing checkpoint to resume from
         let mut completed_steps: Vec<String> = Vec::new();
         if let Some(ref store) = self.checkpoint_store {
-            if let Ok(Some(load_result)) = store.load_inner(&pipeline_id) {
+            if let Some(load_result) = store.load_inner(&pipeline_id)? {
+                compatibility.validate(&load_result.checkpoint)?;
                 completed_steps = load_result.checkpoint.completed_steps.clone();
+                for step_name in &completed_steps {
+                    let value = load_result
+                        .checkpoint
+                        .step_results
+                        .get(step_name)
+                        .ok_or_else(|| {
+                            pyo3::exceptions::PyValueError::new_err(format!(
+                                "checkpoint_incompatible: missing result for completed step '{step_name}'"
+                            ))
+                        })?;
+                    step_results.push(serde_json::from_value(value.clone()).map_err(|error| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "checkpoint_incompatible: invalid result for completed step '{step_name}': {error}"
+                        ))
+                    })?);
+                }
                 events.push(wrap_event(
                     py,
                     "pipeline.resumed_from_checkpoint".to_string(),
@@ -451,16 +519,19 @@ impl Pipeline {
                 if let Some(ref store) = self.checkpoint_store {
                     let mut step_results_map = std::collections::HashMap::new();
                     for sr in &step_results {
-                        if let Some(ref op_result) = sr.result {
-                            if let Ok(val) = serde_json::to_value(op_result) {
-                                step_results_map.insert(sr.step_name.clone(), val);
-                            }
-                        }
+                        let val = serde_json::to_value(sr).map_err(|error| {
+                            pyo3::exceptions::PyValueError::new_err(format!(
+                                "failed to serialize checkpoint result: {error}"
+                            ))
+                        })?;
+                        step_results_map.insert(sr.step_name.clone(), val);
                     }
-                    // Also add the current step's result
-                    if let Ok(val) = serde_json::to_value(&result) {
-                        step_results_map.insert(step.name.clone(), val);
-                    }
+                    let current_value = serde_json::to_value(&step_result).map_err(|error| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "failed to serialize checkpoint result: {error}"
+                        ))
+                    })?;
+                    step_results_map.insert(step_result.step_name.clone(), current_value);
 
                     let mut completed = completed_steps.clone();
                     completed.push(step.name.clone());
@@ -475,8 +546,15 @@ impl Pipeline {
                         step_results: step_results_map,
                         created_at_ms: now_ms,
                         updated_at_ms: now_ms,
+                        operation_schema_version: compatibility.operation_schema_version.clone(),
+                        target_set_hash: compatibility.target_set_hash.clone(),
+                        scope_hash: compatibility.scope_hash.clone(),
+                        execution_profile: compatibility.execution_profile.clone(),
+                        enabled_features_hash: compatibility.enabled_features_hash.clone(),
+                        pipeline_definition_hash: compatibility.pipeline_definition_hash.clone(),
+                        artifact_store_id: compatibility.artifact_store_id.clone(),
                     };
-                    let _ = store.save_inner(cp);
+                    store.save_inner(cp)?;
                 }
             }
 
@@ -683,8 +761,11 @@ impl Pipeline {
     /// Generate a deterministic pipeline ID from the pipeline name and step names.
     /// Used as the key for checkpoint storage.
     fn pipeline_id(&self) -> String {
-        let step_names: Vec<&str> = self.steps.iter().map(|s| s.name.as_str()).collect();
-        format!("{}:{}", self.name, step_names.join(","))
+        checkpoint_store::stable_digest(&pipeline_definition_text(
+            &self.name,
+            &self.steps,
+            self.stop_on_failure,
+        ))
     }
 
     fn __repr__(&self) -> String {

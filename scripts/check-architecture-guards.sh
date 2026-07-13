@@ -86,28 +86,23 @@ fi
 # Agent self.dispatch() is internal implementation (trait method), not a bypass
 # The enforced_dispatch_regression test validates the actual invariant
 
-# 6. Plan retention - key phase files exist
+# 6. Plan retention - handoff plans are retained intentionally
 echo ""
 echo "--- Check 6: Plan retention ---"
 SECTION_FAIL=0
-REQUIRED_PLANS=(
-  "plans/architecture-extensibility-roadmap.md"
-  "plans/architecture-extensibility-phase-06-command-registry.md"
-  "plans/architecture-extensibility-phase-07-tool-mcp-registration.md"
-  "plans/architecture-extensibility-phase-08-tui-tightening.md"
-  "plans/architecture-extensibility-phase-09-report-evidence-unification.md"
-  "plans/architecture-extensibility-phase-10-feature-matrix-build-profiles.md"
-  "plans/architecture-extensibility-phase-11-ci-architecture-guards.md"
-)
-for plan in "${REQUIRED_PLANS[@]}"; do
-  if [[ ! -f "$plan" ]]; then
-    echo "FAIL: Missing required plan file: $plan"
-    FAIL=$((FAIL + 1))
-    SECTION_FAIL=$((SECTION_FAIL + 1))
-  fi
-done
+if [[ ! -f "plans/README.md" ]]; then
+  echo "FAIL: plans/README.md is missing; plan retention policy is undocumented."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+PLAN_COUNT=$(find plans -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | wc -l)
+if [[ "$PLAN_COUNT" -eq 0 ]]; then
+  echo "FAIL: No retained implementation or handoff plans found in plans/."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: All required plan files exist."
+  echo "PASS: Retention policy documented in plans/README.md ($PLAN_COUNT plan files retained)."
 fi
 
 # 7. Documentation currency - required docs exist

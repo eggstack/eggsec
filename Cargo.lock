@@ -2023,6 +2023,7 @@ dependencies = [
  "eggsec-nse",
  "eggsec-runtime",
  "eggsec-web-proxy",
+ "md-5",
  "pyo3",
  "rustc-hash",
  "serde",
