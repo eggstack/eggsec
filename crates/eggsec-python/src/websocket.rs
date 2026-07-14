@@ -13,7 +13,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::error::{NetworkError, TimeoutError};
 use crate::finding::Severity;
-use crate::network::ConnectionTimingPy;
+use crate::network::{ConnectionTimingPy, NetworkTranscriptPy};
 use crate::runtime_async;
 use crate::runtime_sync;
 

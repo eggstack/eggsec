@@ -1205,3 +1205,87 @@ async fn resolve_host_async(
         resolution_time_ms: Some(elapsed_ms),
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// WS10: Evidence → Finding conversion
+// ═══════════════════════════════════════════════════════════════════
+
+use crate::finding_schema::{
+    AffectedAssetPy, ConfidencePy, EvidenceKindPy, FindingTypePy, VersionedEvidencePy,
+    VersionedFindingPy,
+};
+
+/// Convert a NetworkEvidencePy into a VersionedFindingPy.
+///
+/// This helper bridges low-level network evidence into the common finding
+/// model used by the reporting pipeline.
+#[pyfunction]
+pub fn evidence_to_finding(
+    evidence: &NetworkEvidencePy,
+    title: &str,
+    description: &str,
+    severity: &str,
+) -> VersionedFindingPy {
+    let evidence_data = evidence.to_json().unwrap_or_default();
+
+    let kind = match evidence.operation.as_str() {
+        "tls_probe" | "tls_inspect" => EvidenceKindPy::Certificate,
+        "http_probe" | "http_client" => EvidenceKindPy::HttpRequest,
+        "dns_query" | "dns_resolve" => EvidenceKindPy::DnsRecord,
+        "banner_probe" | "tcp_connect" => EvidenceKindPy::Banner,
+        "capture" | "packet_inspection" => EvidenceKindPy::PortState,
+        _ => EvidenceKindPy::LogLine,
+    };
+
+    let versioned_evidence = VersionedEvidencePy {
+        kind,
+        summary: format!("{} -> {}", evidence.operation, evidence.target),
+        data: evidence_data,
+        redacted: false,
+    };
+
+    let finding_type = match severity {
+        "critical" | "high" => FindingTypePy::Vulnerability,
+        "medium" | "low" => FindingTypePy::Misconfiguration,
+        _ => FindingTypePy::InformationLeak,
+    };
+
+    VersionedFindingPy {
+        schema_version: crate::finding_schema::FINDING_SCHEMA_VERSION.to_string(),
+        id: format!("net-{:x}", md5_hash(&evidence.operation, &evidence.target)),
+        fingerprint: String::new(),
+        title: title.to_string(),
+        description: description.to_string(),
+        severity: severity.to_string(),
+        confidence: ConfidencePy::Medium,
+        finding_type,
+        cwe: None,
+        owasp: None,
+        cve: None,
+        affected_asset: AffectedAssetPy {
+            asset_type: "network".to_string(),
+            identifier: evidence.target.clone(),
+            host: None,
+            port: None,
+            protocol: None,
+        },
+        location: crate::finding_schema::FindingLocationPy::default(),
+        evidence: vec![versioned_evidence],
+        remediation: None,
+        tags: Vec::new(),
+        discovered_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        source_tool: "eggsec".to_string(),
+        source_module: "network".to_string(),
+        metadata: String::new(),
+    }
+}
+
+/// Simple deterministic hash for finding IDs.
+fn md5_hash(operation: &str, target: &str) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    operation.hash(&mut hasher);
+    target.hash(&mut hasher);
+    hasher.finish()
+}

@@ -398,10 +398,34 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<packet_inspection::PacketFilterPy>()?;
         m.add_class::<packet_inspection::FlowRecordPy>()?;
         m.add_class::<packet_inspection::LiveCaptureResultPy>()?;
+        // WS7: Managed capture lifecycle
+        m.add_class::<packet_inspection::BackpressurePolicyPy>()?;
+        m.add_class::<packet_inspection::CaptureDropStatsPy>()?;
+        m.add_class::<packet_inspection::CapturedPacketPy>()?;
+        m.add_class::<packet_inspection::AsyncCaptureSessionPy>()?;
         // D3: Network probing
         m.add_class::<packet_inspection::TracerouteConfigPy>()?;
         m.add_class::<packet_inspection::TracerouteHopPy>()?;
         m.add_class::<packet_inspection::TracerouteResultPy>()?;
+        // WS8: Packet layer DTOs
+        m.add_class::<packet_inspection::EthernetFramePy>()?;
+        m.add_class::<packet_inspection::Ipv4PacketPy>()?;
+        m.add_class::<packet_inspection::Ipv6PacketPy>()?;
+        m.add_class::<packet_inspection::TcpSegmentPy>()?;
+        m.add_class::<packet_inspection::UdpDatagramPy>()?;
+        m.add_class::<packet_inspection::IcmpPacketPy>()?;
+        m.add_class::<packet_inspection::FlowKeyPy>()?;
+        m.add_class::<packet_inspection::FlowAggregatorPy>()?;
+        // WS9: Active probe types
+        m.add_class::<packet_inspection::IcmpProbeConfigPy>()?;
+        m.add_class::<packet_inspection::IcmpProbeReplyPy>()?;
+        m.add_class::<packet_inspection::IcmpProbeResultPy>()?;
+        m.add_class::<packet_inspection::TcpProbeConfigPy>()?;
+        m.add_class::<packet_inspection::TcpProbeResultPy>()?;
+        m.add_function(wrap_pyfunction!(packet_inspection::icmp_probe, m)?)?;
+        m.add_function(wrap_pyfunction!(packet_inspection::async_icmp_probe, m)?)?;
+        m.add_function(wrap_pyfunction!(packet_inspection::tcp_syn_probe, m)?)?;
+        m.add_function(wrap_pyfunction!(packet_inspection::async_tcp_syn_probe, m)?)?;
     }
     // Phase F Track 2: Load testing
     m.add_class::<loadtest::LoadTestResultPy>()?;
@@ -458,6 +482,8 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(probes::async_udp_probe, m)?)?;
     m.add_function(wrap_pyfunction!(network::resolve_target_sync, m)?)?;
     m.add_function(wrap_pyfunction!(network::async_resolve_target, m)?)?;
+    // WS10: Evidence-to-finding conversion
+    m.add_function(wrap_pyfunction!(network::evidence_to_finding, m)?)?;
     // Release 2: HTTP client
     m.add_class::<http_client::RedactConfigPy>()?;
     m.add_class::<http_client::HttpRequestPy>()?;
@@ -890,6 +916,12 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<event_protocol::CancellationEvent>()?;
     m.add_class::<event_protocol::FailureEvent>()?;
     m.add_class::<event_protocol::CompletionEvent>()?;
+    // WS11: Network-specific events
+    m.add_class::<event_protocol::ResolutionEvent>()?;
+    m.add_class::<event_protocol::ConnectionEvent>()?;
+    m.add_class::<event_protocol::ProbeEvent>()?;
+    m.add_class::<event_protocol::WebSocketMessageEvent>()?;
+    m.add_class::<event_protocol::CaptureStatsEvent>()?;
     m.add_function(wrap_pyfunction!(event_protocol::wrap_event, m)?)?;
     m.add("EVENT_SCHEMA_VERSION", event_protocol::EVENT_SCHEMA_VERSION)?;
     m.add_class::<event_stream::EventStream>()?;

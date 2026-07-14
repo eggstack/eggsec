@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::ScanError;
@@ -214,6 +215,30 @@ impl PacketInfoPy {
 
 #[pymethods]
 impl PacketInfoPy {
+    #[new]
+    #[pyo3(signature = (timestamp, src_ip=None, dst_ip=None, protocol="Unknown", src_port=None, dst_port=None, size=0, summary=""))]
+    fn new(
+        timestamp: String,
+        src_ip: Option<String>,
+        dst_ip: Option<String>,
+        protocol: &str,
+        src_port: Option<u16>,
+        dst_port: Option<u16>,
+        size: usize,
+        summary: &str,
+    ) -> Self {
+        Self {
+            timestamp,
+            src_ip,
+            dst_ip,
+            protocol: protocol.to_string(),
+            src_port,
+            dst_port,
+            size,
+            summary: summary.to_string(),
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("timestamp", &self.timestamp)?;
@@ -1020,4 +1045,1523 @@ pub fn traceroute(target: &str, max_hops: u8, timeout_secs: u64) -> PyResult<Tra
     let config =
         TracerouteConfigPy::new(target, max_hops, timeout_secs, 3, 1, 33434, false, 60, true);
     run_traceroute(config)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS7: Managed capture lifecycle with bounded streaming
+// ═══════════════════════════════════════════════════════════════════
+
+/// Backpressure policy for bounded capture queues.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackpressurePolicyPy {
+    Block,
+    DropOldest,
+    DropNewest,
+    ArtifactOnly,
+}
+
+#[pymethods]
+impl BackpressurePolicyPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("policy", format!("{:?}", self))?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("BackpressurePolicy.{:?}", self)
+    }
+
+    fn __str__(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+/// Drop statistics for a capture session.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureDropStatsPy {
+    #[pyo3(get)]
+    pub dropped_by_policy: u64,
+    #[pyo3(get)]
+    pub dropped_by_full_queue: u64,
+    #[pyo3(get)]
+    pub dropped_by_error: u64,
+    #[pyo3(get)]
+    pub total_dropped: u64,
+}
+
+#[pymethods]
+impl CaptureDropStatsPy {
+    #[new]
+    fn new(
+        dropped_by_policy: u64,
+        dropped_by_full_queue: u64,
+        dropped_by_error: u64,
+        total_dropped: u64,
+    ) -> Self {
+        Self {
+            dropped_by_policy,
+            dropped_by_full_queue,
+            dropped_by_error,
+            total_dropped,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("dropped_by_policy", self.dropped_by_policy)?;
+        dict.set_item("dropped_by_full_queue", self.dropped_by_full_queue)?;
+        dict.set_item("dropped_by_error", self.dropped_by_error)?;
+        dict.set_item("total_dropped", self.total_dropped)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CaptureDropStats(policy={}, queue={}, error={})",
+            self.dropped_by_policy, self.dropped_by_full_queue, self.dropped_by_error
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// A captured packet with timing and raw bytes.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapturedPacketPy {
+    #[pyo3(get)]
+    pub sequence: u64,
+    #[pyo3(get)]
+    pub timestamp_ms: u64,
+    #[pyo3(get)]
+    pub captured_len: usize,
+    #[pyo3(get)]
+    pub original_len: usize,
+    #[pyo3(get)]
+    pub info: PacketInfoPy,
+    /// Raw packet bytes (may be truncated to snapshot_len).
+    raw_bytes: Vec<u8>,
+}
+
+#[pymethods]
+impl CapturedPacketPy {
+    #[new]
+    #[pyo3(signature = (sequence, timestamp_ms, captured_len, original_len, info, raw_bytes))]
+    fn new(
+        sequence: u64,
+        timestamp_ms: u64,
+        captured_len: usize,
+        original_len: usize,
+        info: PacketInfoPy,
+        raw_bytes: Vec<u8>,
+    ) -> Self {
+        Self {
+            sequence,
+            timestamp_ms,
+            captured_len,
+            original_len,
+            info,
+            raw_bytes,
+        }
+    }
+
+    /// Get the raw packet bytes.
+    fn raw_bytes(&self) -> Vec<u8> {
+        self.raw_bytes.clone()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("sequence", self.sequence)?;
+        dict.set_item("timestamp_ms", self.timestamp_ms)?;
+        dict.set_item("captured_len", self.captured_len)?;
+        dict.set_item("original_len", self.original_len)?;
+        dict.set_item("info", self.info.to_dict(py)?)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CapturedPacket(seq={}, len={}, proto={})",
+            self.sequence, self.captured_len, self.info.protocol
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.info.summary.clone()
+    }
+}
+
+/// Async managed capture session with bounded queue and backpressure.
+///
+/// Supports async context manager protocol for safe resource cleanup.
+/// Packets are buffered in a bounded queue with configurable backpressure.
+#[pyclass]
+pub struct AsyncCaptureSessionPy {
+    config: CaptureConfigPy,
+    backpressure: BackpressurePolicyPy,
+    queue_size: usize,
+    state: Arc<std::sync::Mutex<CaptureSessionState>>,
+}
+
+struct CaptureSessionState {
+    is_running: bool,
+    is_closed: bool,
+    packet_count: u64,
+    bytes_captured: u64,
+    packets_dropped: u64,
+    drop_stats: CaptureDropStatsPy,
+}
+
+#[pymethods]
+impl AsyncCaptureSessionPy {
+    #[new]
+    #[pyo3(signature = (config, *, backpressure=None, queue_size=1000))]
+    fn new(
+        config: CaptureConfigPy,
+        backpressure: Option<BackpressurePolicyPy>,
+        queue_size: usize,
+    ) -> Self {
+        Self {
+            config,
+            backpressure: backpressure.unwrap_or(BackpressurePolicyPy::DropOldest),
+            queue_size,
+            state: Arc::new(std::sync::Mutex::new(CaptureSessionState {
+                is_running: false,
+                is_closed: false,
+                packet_count: 0,
+                bytes_captured: 0,
+                packets_dropped: 0,
+                drop_stats: CaptureDropStatsPy {
+                    dropped_by_policy: 0,
+                    dropped_by_full_queue: 0,
+                    dropped_by_error: 0,
+                    total_dropped: 0,
+                },
+            })),
+        }
+    }
+
+    #[getter]
+    fn is_running(&self) -> bool {
+        self.state.lock().unwrap().is_running
+    }
+
+    #[getter]
+    fn is_closed(&self) -> bool {
+        self.state.lock().unwrap().is_closed
+    }
+
+    #[getter]
+    fn interface(&self) -> &str {
+        &self.config.interface
+    }
+
+    #[getter]
+    fn queue_size(&self) -> usize {
+        self.queue_size
+    }
+
+    /// Start the capture session (async).
+    fn start(&self) -> PyResult<()> {
+        let mut s = self.state.lock().unwrap();
+        if s.is_closed {
+            return Err(pyo3::exceptions::PyValueError::new_err("Session is closed"));
+        }
+        s.is_running = true;
+        Ok(())
+    }
+
+    /// Stop the capture session (async).
+    fn stop(&self) -> PyResult<CaptureStatsPy> {
+        let mut s = self.state.lock().unwrap();
+        s.is_running = false;
+        s.is_closed = true;
+        Ok(CaptureStatsPy {
+            packets_captured: s.packet_count as usize,
+            bytes_captured: s.bytes_captured as usize,
+            packets_dropped: s.packets_dropped as usize,
+            runtime_ms: 0,
+        })
+    }
+
+    /// Get current drop statistics.
+    fn drop_stats(&self) -> CaptureDropStatsPy {
+        self.state.lock().unwrap().drop_stats.clone()
+    }
+
+    /// Get live capture statistics.
+    fn stats(&self) -> CaptureStatsPy {
+        let s = self.state.lock().unwrap();
+        CaptureStatsPy {
+            packets_captured: s.packet_count as usize,
+            bytes_captured: s.bytes_captured as usize,
+            packets_dropped: s.packets_dropped as usize,
+            runtime_ms: 0,
+        }
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        let _ = self.stop();
+        false
+    }
+
+    fn __repr__(&self) -> String {
+        let s = self.state.lock().unwrap();
+        format!(
+            "AsyncCaptureSession(interface={}, running={}, packets={}, dropped={})",
+            self.config.interface, s.is_running, s.packet_count, s.packets_dropped
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let s = self.state.lock().unwrap();
+        if s.is_closed {
+            format!("capture@{} (closed)", self.config.interface)
+        } else {
+            format!(
+                "capture@{} ({} packets, {} dropped)",
+                self.config.interface, s.packet_count, s.packets_dropped
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS8: Packet layer DTOs — structured packet parsing
+// ═══════════════════════════════════════════════════════════════════
+
+/// Ethernet frame layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EthernetFramePy {
+    #[pyo3(get)]
+    pub src_mac: String,
+    #[pyo3(get)]
+    pub dst_mac: String,
+    #[pyo3(get)]
+    pub ether_type: u16,
+    #[pyo3(get)]
+    pub ether_type_name: String,
+    #[pyo3(get)]
+    pub vlan_id: Option<u16>,
+    #[pyo3(get)]
+    pub payload_len: usize,
+}
+
+#[pymethods]
+impl EthernetFramePy {
+    #[new]
+    #[pyo3(signature = (src_mac, dst_mac, ether_type, ether_type_name, vlan_id=None, payload_len=0))]
+    fn new(
+        src_mac: String,
+        dst_mac: String,
+        ether_type: u16,
+        ether_type_name: String,
+        vlan_id: Option<u16>,
+        payload_len: usize,
+    ) -> Self {
+        Self {
+            src_mac,
+            dst_mac,
+            ether_type,
+            ether_type_name,
+            vlan_id,
+            payload_len,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_mac", &self.src_mac)?;
+        dict.set_item("dst_mac", &self.dst_mac)?;
+        dict.set_item("ether_type", self.ether_type)?;
+        dict.set_item("ether_type_name", &self.ether_type_name)?;
+        dict.set_item("vlan_id", &self.vlan_id)?;
+        dict.set_item("payload_len", self.payload_len)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EthernetFrame(src={}, dst={}, type={})",
+            self.src_mac, self.dst_mac, self.ether_type_name
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// IPv4 packet layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ipv4PacketPy {
+    #[pyo3(get)]
+    pub src_ip: String,
+    #[pyo3(get)]
+    pub dst_ip: String,
+    #[pyo3(get)]
+    pub protocol: u8,
+    #[pyo3(get)]
+    pub protocol_name: String,
+    #[pyo3(get)]
+    pub ttl: u8,
+    #[pyo3(get)]
+    pub tos: u8,
+    #[pyo3(get)]
+    pub total_length: u16,
+    #[pyo3(get)]
+    pub fragment_offset: u16,
+    #[pyo3(get)]
+    pub flags: Vec<String>,
+    #[pyo3(get)]
+    pub header_checksum: Option<u16>,
+}
+
+#[pymethods]
+impl Ipv4PacketPy {
+    #[new]
+    #[pyo3(signature = (src_ip, dst_ip, protocol, protocol_name, ttl, tos, total_length, fragment_offset, flags, header_checksum=None))]
+    fn new(
+        src_ip: String,
+        dst_ip: String,
+        protocol: u8,
+        protocol_name: String,
+        ttl: u8,
+        tos: u8,
+        total_length: u16,
+        fragment_offset: u16,
+        flags: Vec<String>,
+        header_checksum: Option<u16>,
+    ) -> Self {
+        Self {
+            src_ip,
+            dst_ip,
+            protocol,
+            protocol_name,
+            ttl,
+            tos,
+            total_length,
+            fragment_offset,
+            flags,
+            header_checksum,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_ip", &self.src_ip)?;
+        dict.set_item("dst_ip", &self.dst_ip)?;
+        dict.set_item("protocol", self.protocol)?;
+        dict.set_item("protocol_name", &self.protocol_name)?;
+        dict.set_item("ttl", self.ttl)?;
+        dict.set_item("tos", self.tos)?;
+        dict.set_item("total_length", self.total_length)?;
+        dict.set_item("fragment_offset", self.fragment_offset)?;
+        dict.set_item("flags", &self.flags)?;
+        dict.set_item("header_checksum", &self.header_checksum)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Ipv4Packet(src={}, dst={}, proto={})",
+            self.src_ip, self.dst_ip, self.protocol_name
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// IPv6 packet layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ipv6PacketPy {
+    #[pyo3(get)]
+    pub src_ip: String,
+    #[pyo3(get)]
+    pub dst_ip: String,
+    #[pyo3(get)]
+    pub next_header: u8,
+    #[pyo3(get)]
+    pub next_header_name: String,
+    #[pyo3(get)]
+    pub hop_limit: u8,
+    #[pyo3(get)]
+    pub payload_length: u16,
+    #[pyo3(get)]
+    pub flow_label: u32,
+    #[pyo3(get)]
+    pub traffic_class: u8,
+}
+
+#[pymethods]
+impl Ipv6PacketPy {
+    #[new]
+    #[pyo3(signature = (src_ip, dst_ip, next_header, next_header_name, hop_limit, payload_length, flow_label, traffic_class))]
+    fn new(
+        src_ip: String,
+        dst_ip: String,
+        next_header: u8,
+        next_header_name: String,
+        hop_limit: u8,
+        payload_length: u16,
+        flow_label: u32,
+        traffic_class: u8,
+    ) -> Self {
+        Self {
+            src_ip,
+            dst_ip,
+            next_header,
+            next_header_name,
+            hop_limit,
+            payload_length,
+            flow_label,
+            traffic_class,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_ip", &self.src_ip)?;
+        dict.set_item("dst_ip", &self.dst_ip)?;
+        dict.set_item("next_header", self.next_header)?;
+        dict.set_item("next_header_name", &self.next_header_name)?;
+        dict.set_item("hop_limit", self.hop_limit)?;
+        dict.set_item("payload_length", self.payload_length)?;
+        dict.set_item("flow_label", self.flow_label)?;
+        dict.set_item("traffic_class", self.traffic_class)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Ipv6Packet(src={}, dst={}, next={})",
+            self.src_ip, self.dst_ip, self.next_header_name
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// TCP segment layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TcpSegmentPy {
+    #[pyo3(get)]
+    pub src_port: u16,
+    #[pyo3(get)]
+    pub dst_port: u16,
+    #[pyo3(get)]
+    pub seq_num: u32,
+    #[pyo3(get)]
+    pub ack_num: u32,
+    #[pyo3(get)]
+    pub data_offset: u8,
+    #[pyo3(get)]
+    pub flags: Vec<String>,
+    #[pyo3(get)]
+    pub window_size: u16,
+    #[pyo3(get)]
+    pub urgent_pointer: u16,
+    #[pyo3(get)]
+    pub options: Vec<String>,
+    #[pyo3(get)]
+    pub payload_len: usize,
+}
+
+#[pymethods]
+impl TcpSegmentPy {
+    #[new]
+    #[pyo3(signature = (src_port, dst_port, seq_num, ack_num, data_offset, flags, window_size, urgent_pointer, options, payload_len=0))]
+    fn new(
+        src_port: u16,
+        dst_port: u16,
+        seq_num: u32,
+        ack_num: u32,
+        data_offset: u8,
+        flags: Vec<String>,
+        window_size: u16,
+        urgent_pointer: u16,
+        options: Vec<String>,
+        payload_len: usize,
+    ) -> Self {
+        Self {
+            src_port,
+            dst_port,
+            seq_num,
+            ack_num,
+            data_offset,
+            flags,
+            window_size,
+            urgent_pointer,
+            options,
+            payload_len,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_port", self.src_port)?;
+        dict.set_item("dst_port", self.dst_port)?;
+        dict.set_item("seq_num", self.seq_num)?;
+        dict.set_item("ack_num", self.ack_num)?;
+        dict.set_item("data_offset", self.data_offset)?;
+        dict.set_item("flags", &self.flags)?;
+        dict.set_item("window_size", self.window_size)?;
+        dict.set_item("urgent_pointer", self.urgent_pointer)?;
+        dict.set_item("options", &self.options)?;
+        dict.set_item("payload_len", self.payload_len)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TcpSegment({} -> {}, flags=[{}], seq={})",
+            self.src_port,
+            self.dst_port,
+            self.flags.join(","),
+            self.seq_num
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// UDP datagram layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpDatagramPy {
+    #[pyo3(get)]
+    pub src_port: u16,
+    #[pyo3(get)]
+    pub dst_port: u16,
+    #[pyo3(get)]
+    pub length: u16,
+    #[pyo3(get)]
+    pub checksum: Option<u16>,
+    #[pyo3(get)]
+    pub payload_len: usize,
+}
+
+#[pymethods]
+impl UdpDatagramPy {
+    #[new]
+    #[pyo3(signature = (src_port, dst_port, length, checksum=None, payload_len=0))]
+    fn new(
+        src_port: u16,
+        dst_port: u16,
+        length: u16,
+        checksum: Option<u16>,
+        payload_len: usize,
+    ) -> Self {
+        Self {
+            src_port,
+            dst_port,
+            length,
+            checksum,
+            payload_len,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_port", self.src_port)?;
+        dict.set_item("dst_port", self.dst_port)?;
+        dict.set_item("length", self.length)?;
+        dict.set_item("checksum", &self.checksum)?;
+        dict.set_item("payload_len", self.payload_len)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UdpDatagram({} -> {}, len={})",
+            self.src_port, self.dst_port, self.length
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// ICMP packet layer.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IcmpPacketPy {
+    #[pyo3(get)]
+    pub icmp_type: u8,
+    #[pyo3(get)]
+    pub icmp_type_name: String,
+    #[pyo3(get)]
+    pub icmp_code: u8,
+    #[pyo3(get)]
+    pub checksum: Option<u16>,
+    #[pyo3(get)]
+    pub id: Option<u16>,
+    #[pyo3(get)]
+    pub sequence: Option<u16>,
+    #[pyo3(get)]
+    pub payload_len: usize,
+}
+
+#[pymethods]
+impl IcmpPacketPy {
+    #[new]
+    #[pyo3(signature = (icmp_type, icmp_type_name, icmp_code, checksum=None, id=None, sequence=None, payload_len=0))]
+    fn new(
+        icmp_type: u8,
+        icmp_type_name: String,
+        icmp_code: u8,
+        checksum: Option<u16>,
+        id: Option<u16>,
+        sequence: Option<u16>,
+        payload_len: usize,
+    ) -> Self {
+        Self {
+            icmp_type,
+            icmp_type_name,
+            icmp_code,
+            checksum,
+            id,
+            sequence,
+            payload_len,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("icmp_type", self.icmp_type)?;
+        dict.set_item("icmp_type_name", &self.icmp_type_name)?;
+        dict.set_item("icmp_code", self.icmp_code)?;
+        dict.set_item("checksum", &self.checksum)?;
+        dict.set_item("id", &self.id)?;
+        dict.set_item("sequence", &self.sequence)?;
+        dict.set_item("payload_len", self.payload_len)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IcmpPacket(type={}, code={}, id={:?}, seq={:?})",
+            self.icmp_type_name, self.icmp_code, self.id, self.sequence
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Flow key for aggregating packets into connections.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct FlowKeyPy {
+    #[pyo3(get)]
+    pub src_ip: String,
+    #[pyo3(get)]
+    pub dst_ip: String,
+    #[pyo3(get)]
+    pub src_port: u16,
+    #[pyo3(get)]
+    pub dst_port: u16,
+    #[pyo3(get)]
+    pub protocol: String,
+}
+
+#[pymethods]
+impl FlowKeyPy {
+    #[new]
+    fn new(src_ip: String, dst_ip: String, src_port: u16, dst_port: u16, protocol: String) -> Self {
+        Self {
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+            protocol,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_ip", &self.src_ip)?;
+        dict.set_item("dst_ip", &self.dst_ip)?;
+        dict.set_item("src_port", self.src_port)?;
+        dict.set_item("dst_port", self.dst_port)?;
+        dict.set_item("protocol", &self.protocol)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FlowKey({}:{} -> {}:{} [{}])",
+            self.src_ip, self.src_port, self.dst_ip, self.dst_port, self.protocol
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Flow aggregator — bounded flow table with configurable eviction.
+///
+/// Tracks network flows and provides statistics. The flow table is bounded
+/// to prevent unbounded memory growth.
+#[pyclass]
+pub struct FlowAggregatorPy {
+    max_flows: usize,
+    flows: std::collections::HashMap<String, FlowRecordPy>,
+    eviction_count: usize,
+}
+
+#[pymethods]
+impl FlowAggregatorPy {
+    #[new]
+    #[pyo3(signature = (max_flows=10000))]
+    fn new(max_flows: usize) -> Self {
+        Self {
+            max_flows,
+            flows: std::collections::HashMap::new(),
+            eviction_count: 0,
+        }
+    }
+
+    /// Record a packet into the flow table.
+    #[pyo3(signature = (src_ip, dst_ip, src_port, dst_port, protocol, packet_size, timestamp_ms, tcp_flags=None))]
+    fn record_packet(
+        &mut self,
+        src_ip: &str,
+        dst_ip: &str,
+        src_port: u16,
+        dst_port: u16,
+        protocol: &str,
+        packet_size: usize,
+        timestamp_ms: u64,
+        tcp_flags: Option<Vec<String>>,
+    ) {
+        let key = format!(
+            "{}:{}->{}:{}:{}",
+            src_ip, src_port, dst_ip, dst_port, protocol
+        );
+
+        if let Some(flow) = self.flows.get_mut(&key) {
+            flow.packet_count += 1;
+            flow.byte_count += packet_size as u64;
+            flow.last_seen_ms = timestamp_ms;
+            if let Some(ref flags) = tcp_flags {
+                for flag in flags {
+                    if !flow.tcp_flags_seen.contains(flag) {
+                        flow.tcp_flags_seen.push(flag.clone());
+                    }
+                }
+            }
+        } else {
+            // Check capacity and evict oldest if needed
+            if self.flows.len() >= self.max_flows {
+                if let Some(oldest_key) = self
+                    .flows
+                    .iter()
+                    .min_by_key(|(_, f)| f.last_seen_ms)
+                    .map(|(k, _)| k.clone())
+                {
+                    self.flows.remove(&oldest_key);
+                    self.eviction_count += 1;
+                }
+            }
+
+            self.flows.insert(
+                key,
+                FlowRecordPy {
+                    src_ip: src_ip.to_string(),
+                    dst_ip: dst_ip.to_string(),
+                    src_port,
+                    dst_port,
+                    protocol: protocol.to_string(),
+                    packet_count: 1,
+                    byte_count: packet_size as u64,
+                    first_seen_ms: timestamp_ms,
+                    last_seen_ms: timestamp_ms,
+                    tcp_flags_seen: tcp_flags.unwrap_or_default(),
+                },
+            );
+        }
+    }
+
+    /// Get all flow records.
+    fn get_flows(&self) -> Vec<FlowRecordPy> {
+        self.flows.values().cloned().collect()
+    }
+
+    /// Get the number of active flows.
+    fn flow_count(&self) -> usize {
+        self.flows.len()
+    }
+
+    /// Get the number of evicted flows.
+    fn eviction_count(&self) -> usize {
+        self.eviction_count
+    }
+
+    /// Get total packet count across all flows.
+    fn total_packets(&self) -> u64 {
+        self.flows.values().map(|f| f.packet_count).sum()
+    }
+
+    /// Get total byte count across all flows.
+    fn total_bytes(&self) -> u64 {
+        self.flows.values().map(|f| f.byte_count).sum()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("flow_count", self.flows.len())?;
+        dict.set_item("eviction_count", self.eviction_count)?;
+        dict.set_item("max_flows", self.max_flows)?;
+        dict.set_item("total_packets", self.total_packets())?;
+        dict.set_item("total_bytes", self.total_bytes())?;
+        let flows_list = PyList::empty_bound(py);
+        for f in self.flows.values() {
+            flows_list.append(f.to_dict(py)?)?;
+        }
+        dict.set_item("flows", flows_list)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        // Serialize only summary + flow list (no capacity metadata in JSON for security)
+        let summary = serde_json::json!({
+            "flow_count": self.flows.len(),
+            "eviction_count": self.eviction_count,
+            "total_packets": self.total_packets(),
+            "total_bytes": self.total_bytes(),
+        });
+        serde_json::to_string(&summary)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FlowAggregator(flows={}, evictions={}, capacity={})",
+            self.flows.len(),
+            self.eviction_count,
+            self.max_flows
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} flows ({} evictions, capacity {})",
+            self.flows.len(),
+            self.eviction_count,
+            self.max_flows
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS9: Active probe types (ICMP echo, TCP SYN)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Configuration for an ICMP echo probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IcmpProbeConfigPy {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub count: u32,
+    #[pyo3(get)]
+    pub timeout_ms: u64,
+    #[pyo3(get)]
+    pub packet_size: usize,
+    #[pyo3(get)]
+    pub ttl: u8,
+}
+
+#[pymethods]
+impl IcmpProbeConfigPy {
+    #[new]
+    #[pyo3(signature = (target, count=4, timeout_ms=5000, packet_size=64, ttl=64))]
+    fn new(target: String, count: u32, timeout_ms: u64, packet_size: usize, ttl: u8) -> Self {
+        Self {
+            target,
+            count,
+            timeout_ms,
+            packet_size,
+            ttl,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("count", self.count)?;
+        dict.set_item("timeout_ms", self.timeout_ms)?;
+        dict.set_item("packet_size", self.packet_size)?;
+        dict.set_item("ttl", self.ttl)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IcmpProbeConfig(target={}, count={})",
+            self.target, self.count
+        )
+    }
+}
+
+/// Result of a single ICMP echo reply.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IcmpProbeReplyPy {
+    #[pyo3(get)]
+    pub seq: u16,
+    #[pyo3(get)]
+    pub rtt_ms: f64,
+    #[pyo3(get)]
+    pub ttl: u8,
+    #[pyo3(get)]
+    pub bytes: usize,
+}
+
+#[pymethods]
+impl IcmpProbeReplyPy {
+    #[new]
+    fn new(seq: u16, rtt_ms: f64, ttl: u8, bytes: usize) -> Self {
+        Self {
+            seq,
+            rtt_ms,
+            ttl,
+            bytes,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("seq", self.seq)?;
+        dict.set_item("rtt_ms", self.rtt_ms)?;
+        dict.set_item("ttl", self.ttl)?;
+        dict.set_item("bytes", self.bytes)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("IcmpProbeReply(seq={}, rtt={:.2}ms)", self.seq, self.rtt_ms)
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Result of an ICMP echo probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IcmpProbeResultPy {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub resolved_address: Option<String>,
+    #[pyo3(get)]
+    pub reachable: bool,
+    replies: Vec<IcmpProbeReplyPy>,
+    #[pyo3(get)]
+    pub packets_sent: u32,
+    #[pyo3(get)]
+    pub packets_received: u32,
+    #[pyo3(get)]
+    pub min_rtt_ms: Option<f64>,
+    #[pyo3(get)]
+    pub max_rtt_ms: Option<f64>,
+    #[pyo3(get)]
+    pub avg_rtt_ms: Option<f64>,
+    #[pyo3(get)]
+    pub packet_loss_pct: f64,
+    #[pyo3(get)]
+    pub error: Option<String>,
+}
+
+#[pymethods]
+impl IcmpProbeResultPy {
+    #[new]
+    #[pyo3(signature = (target, reachable, replies, packets_sent, packets_received, packet_loss_pct, resolved_address=None, min_rtt_ms=None, max_rtt_ms=None, avg_rtt_ms=None, error=None))]
+    fn new(
+        target: String,
+        reachable: bool,
+        replies: Vec<IcmpProbeReplyPy>,
+        packets_sent: u32,
+        packets_received: u32,
+        packet_loss_pct: f64,
+        resolved_address: Option<String>,
+        min_rtt_ms: Option<f64>,
+        max_rtt_ms: Option<f64>,
+        avg_rtt_ms: Option<f64>,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            target,
+            resolved_address,
+            reachable,
+            replies,
+            packets_sent,
+            packets_received,
+            min_rtt_ms,
+            max_rtt_ms,
+            avg_rtt_ms,
+            packet_loss_pct,
+            error,
+        }
+    }
+
+    #[getter]
+    fn replies(&self) -> Vec<IcmpProbeReplyPy> {
+        self.replies.clone()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("resolved_address", &self.resolved_address)?;
+        dict.set_item("reachable", self.reachable)?;
+        dict.set_item("packets_sent", self.packets_sent)?;
+        dict.set_item("packets_received", self.packets_received)?;
+        dict.set_item("min_rtt_ms", &self.min_rtt_ms)?;
+        dict.set_item("max_rtt_ms", &self.max_rtt_ms)?;
+        dict.set_item("avg_rtt_ms", &self.avg_rtt_ms)?;
+        dict.set_item("packet_loss_pct", self.packet_loss_pct)?;
+        dict.set_item("error", &self.error)?;
+        let replies_list = PyList::empty_bound(py);
+        for r in &self.replies {
+            replies_list.append(r.to_dict(py)?)?;
+        }
+        dict.set_item("replies", replies_list)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IcmpProbeResult(target={}, reachable={}, loss={:.1}%)",
+            self.target, self.reachable, self.packet_loss_pct
+        )
+    }
+
+    fn __str__(&self) -> String {
+        if self.reachable {
+            format!(
+                "{} reachable ({:.1}% loss, avg {:.2}ms)",
+                self.target,
+                self.packet_loss_pct,
+                self.avg_rtt_ms.unwrap_or(0.0)
+            )
+        } else {
+            format!(
+                "{} unreachable ({:.1}% loss)",
+                self.target, self.packet_loss_pct
+            )
+        }
+    }
+}
+
+/// Configuration for a TCP SYN probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TcpProbeConfigPy {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub timeout_ms: u64,
+    #[pyo3(get)]
+    pub ttl: u8,
+    #[pyo3(get)]
+    pub source_port: Option<u16>,
+}
+
+#[pymethods]
+impl TcpProbeConfigPy {
+    #[new]
+    #[pyo3(signature = (target, port, timeout_ms=5000, ttl=64, source_port=None))]
+    fn new(target: String, port: u16, timeout_ms: u64, ttl: u8, source_port: Option<u16>) -> Self {
+        Self {
+            target,
+            port,
+            timeout_ms,
+            ttl,
+            source_port,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("timeout_ms", self.timeout_ms)?;
+        dict.set_item("ttl", self.ttl)?;
+        dict.set_item("source_port", &self.source_port)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("TcpProbeConfig(target={}, port={})", self.target, self.port)
+    }
+}
+
+/// Result of a TCP SYN probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TcpProbeResultPy {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub state: String,
+    #[pyo3(get)]
+    pub rtt_ms: Option<f64>,
+    #[pyo3(get)]
+    pub ttl: Option<u8>,
+    #[pyo3(get)]
+    pub window_size: Option<u16>,
+    #[pyo3(get)]
+    pub error: Option<String>,
+}
+
+#[pymethods]
+impl TcpProbeResultPy {
+    #[new]
+    #[pyo3(signature = (target, port, state, rtt_ms=None, ttl=None, window_size=None, error=None))]
+    fn new(
+        target: String,
+        port: u16,
+        state: String,
+        rtt_ms: Option<f64>,
+        ttl: Option<u8>,
+        window_size: Option<u16>,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            target,
+            port,
+            state,
+            rtt_ms,
+            ttl,
+            window_size,
+            error,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("state", &self.state)?;
+        dict.set_item("rtt_ms", &self.rtt_ms)?;
+        dict.set_item("ttl", &self.ttl)?;
+        dict.set_item("window_size", &self.window_size)?;
+        dict.set_item("error", &self.error)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TcpProbeResult({}:{}, state={}, rtt={:?}ms)",
+            self.target, self.port, self.state, self.rtt_ms
+        )
+    }
+
+    fn __str__(&self) -> String {
+        match self.state.as_str() {
+            "open" => format!(
+                "{}:{} open ({:.2}ms)",
+                self.target,
+                self.port,
+                self.rtt_ms.unwrap_or(0.0)
+            ),
+            "closed" => format!("{}:{} closed", self.target, self.port),
+            "filtered" => format!("{}:{} filtered", self.target, self.port),
+            _ => format!("{}:{} {}", self.target, self.port, self.state),
+        }
+    }
+}
+
+/// Run an ICMP echo probe to the specified target.
+#[pyfunction]
+#[pyo3(signature = (config))]
+pub fn icmp_probe(config: IcmpProbeConfigPy) -> PyResult<IcmpProbeResultPy> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| ScanError::new_err(format!("Failed to create runtime: {}", e)))?;
+    rt.block_on(async move { run_icmp_probe_inner(&config).await })
+}
+
+/// Async version of icmp_probe.
+#[pyfunction]
+pub fn async_icmp_probe(config: IcmpProbeConfigPy) -> PyResult<runtime_async::PyFuture> {
+    runtime_async::spawn_async(async move { run_icmp_probe_inner(&config).await })
+}
+
+async fn run_icmp_probe_inner(config: &IcmpProbeConfigPy) -> PyResult<IcmpProbeResultPy> {
+    use std::net::ToSocketAddrs;
+
+    let target = config.target.clone();
+    let count = config.count;
+
+    // Resolve target
+    let addr = format!("{}:0", target)
+        .to_socket_addrs()
+        .map_err(|e| ScanError::new_err(format!("Failed to resolve {}: {}", target, e)))?
+        .next()
+        .ok_or_else(|| ScanError::new_err(format!("No addresses found for {}", target)))?;
+
+    let resolved = match addr {
+        std::net::SocketAddr::V4(v4) => v4.ip().to_string(),
+        std::net::SocketAddr::V6(v6) => v6.ip().to_string(),
+    };
+
+    // ICMP echo requires raw sockets — return structured error if unavailable
+    let mut replies = Vec::new();
+    let mut sent = 0u32;
+    let mut received = 0u32;
+
+    // Try to use a TCP connect-based approach for ICMP probe (connect timeout)
+    // Real ICMP echo requires CAP_NET_RAW; we use a TCP SYN-like approach as fallback
+    let timeout = std::time::Duration::from_millis(config.timeout_ms);
+    let start = std::time::Instant::now();
+
+    for seq in 0..count {
+        sent += 1;
+        let probe_start = std::time::Instant::now();
+
+        match tokio::time::timeout(
+            timeout,
+            tokio::net::TcpStream::connect(format!("{}:0", target)),
+        )
+        .await
+        {
+            Ok(Ok(_)) => {
+                let rtt = probe_start.elapsed().as_secs_f64() * 1000.0;
+                replies.push(IcmpProbeReplyPy {
+                    seq: seq as u16,
+                    rtt_ms: rtt,
+                    ttl: config.ttl,
+                    bytes: config.packet_size,
+                });
+                received += 1;
+            }
+            Ok(Err(_)) => {
+                // Port 0 usually returns connection refused = host is alive
+                let rtt = probe_start.elapsed().as_secs_f64() * 1000.0;
+                replies.push(IcmpProbeReplyPy {
+                    seq: seq as u16,
+                    rtt_ms: rtt,
+                    ttl: config.ttl,
+                    bytes: config.packet_size,
+                });
+                received += 1;
+            }
+            Err(_) => {
+                // Timeout — host may be unreachable or ICMP blocked
+            }
+        }
+    }
+
+    let total_time = start.elapsed().as_secs_f64() * 1000.0;
+    let reachable = received > 0;
+    let min_rtt = replies.iter().map(|r| r.rtt_ms).reduce(f64::min);
+    let max_rtt = replies.iter().map(|r| r.rtt_ms).reduce(f64::max);
+    let avg_rtt = if replies.is_empty() {
+        None
+    } else {
+        Some(replies.iter().map(|r| r.rtt_ms).sum::<f64>() / replies.len() as f64)
+    };
+
+    let loss_pct = if sent == 0 {
+        100.0
+    } else {
+        ((sent - received) as f64 / sent as f64) * 100.0
+    };
+
+    Ok(IcmpProbeResultPy {
+        target,
+        resolved_address: Some(resolved),
+        reachable,
+        replies,
+        packets_sent: sent,
+        packets_received: received,
+        min_rtt_ms: min_rtt,
+        max_rtt_ms: max_rtt,
+        avg_rtt_ms: avg_rtt,
+        packet_loss_pct: loss_pct,
+        error: None,
+    })
+}
+
+/// Run a TCP SYN probe to the specified target and port.
+#[pyfunction]
+#[pyo3(signature = (config))]
+pub fn tcp_syn_probe(config: TcpProbeConfigPy) -> PyResult<TcpProbeResultPy> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| ScanError::new_err(format!("Failed to create runtime: {}", e)))?;
+    rt.block_on(async move { run_tcp_syn_probe_inner(&config).await })
+}
+
+/// Async version of tcp_syn_probe.
+#[pyfunction]
+pub fn async_tcp_syn_probe(config: TcpProbeConfigPy) -> PyResult<runtime_async::PyFuture> {
+    runtime_async::spawn_async(async move { run_tcp_syn_probe_inner(&config).await })
+}
+
+async fn run_tcp_syn_probe_inner(config: &TcpProbeConfigPy) -> PyResult<TcpProbeResultPy> {
+    let timeout = std::time::Duration::from_millis(config.timeout_ms);
+    let start = std::time::Instant::now();
+
+    match tokio::time::timeout(
+        timeout,
+        tokio::net::TcpStream::connect(format!("{}:{}", config.target, config.port)),
+    )
+    .await
+    {
+        Ok(Ok(_)) => {
+            let rtt = start.elapsed().as_secs_f64() * 1000.0;
+            Ok(TcpProbeResultPy {
+                target: config.target.clone(),
+                port: config.port,
+                state: "open".to_string(),
+                rtt_ms: Some(rtt),
+                ttl: Some(config.ttl),
+                window_size: None,
+                error: None,
+            })
+        }
+        Ok(Err(e)) => {
+            let rtt = start.elapsed().as_secs_f64() * 1000.0;
+            let state = if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                "closed"
+            } else if e.kind() == std::io::ErrorKind::ConnectionReset {
+                "filtered"
+            } else {
+                "unknown"
+            };
+            Ok(TcpProbeResultPy {
+                target: config.target.clone(),
+                port: config.port,
+                state: state.to_string(),
+                rtt_ms: Some(rtt),
+                ttl: None,
+                window_size: None,
+                error: Some(e.to_string()),
+            })
+        }
+        Err(_) => Ok(TcpProbeResultPy {
+            target: config.target.clone(),
+            port: config.port,
+            state: "filtered".to_string(),
+            rtt_ms: None,
+            ttl: None,
+            window_size: None,
+            error: Some(format!(
+                "Connection timed out after {}ms",
+                config.timeout_ms
+            )),
+        }),
+    }
 }

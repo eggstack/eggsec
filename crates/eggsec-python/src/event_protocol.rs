@@ -743,3 +743,299 @@ pub fn wrap_event(
         payload,
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// WS11: Network-specific event types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Typed event: DNS resolution started or completed.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ResolutionEvent {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub resolved_address: Option<String>,
+    #[pyo3(get)]
+    pub status: String,
+    #[pyo3(get)]
+    pub resolution_time_ms: Option<f64>,
+}
+
+#[pymethods]
+impl ResolutionEvent {
+    #[new]
+    #[pyo3(signature = (target, status, resolved_address=None, resolution_time_ms=None))]
+    pub(crate) fn new(
+        target: String,
+        status: String,
+        resolved_address: Option<String>,
+        resolution_time_ms: Option<f64>,
+    ) -> Self {
+        Self {
+            target,
+            resolved_address,
+            status,
+            resolution_time_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("resolved_address", &self.resolved_address)?;
+        dict.set_item("status", &self.status)?;
+        dict.set_item("resolution_time_ms", &self.resolution_time_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "target": self.target,
+            "resolved_address": self.resolved_address,
+            "status": self.status,
+            "resolution_time_ms": self.resolution_time_ms,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ResolutionEvent(target={}, status={})",
+            self.target, self.status
+        )
+    }
+}
+
+/// Typed event: TCP connection started or completed.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ConnectionEvent {
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub status: String,
+    #[pyo3(get)]
+    pub rtt_ms: Option<f64>,
+}
+
+#[pymethods]
+impl ConnectionEvent {
+    #[new]
+    pub(crate) fn new(target: String, port: u16, status: String, rtt_ms: Option<f64>) -> Self {
+        Self {
+            target,
+            port,
+            status,
+            rtt_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("target", &self.target)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("status", &self.status)?;
+        dict.set_item("rtt_ms", &self.rtt_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "target": self.target,
+            "port": self.port,
+            "status": self.status,
+            "rtt_ms": self.rtt_ms,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ConnectionEvent({}:{}, status={})",
+            self.target, self.port, self.status
+        )
+    }
+}
+
+/// Typed event: protocol probe response received.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ProbeEvent {
+    #[pyo3(get)]
+    pub probe_type: String,
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub success: bool,
+    #[pyo3(get)]
+    pub rtt_ms: Option<f64>,
+}
+
+#[pymethods]
+impl ProbeEvent {
+    #[new]
+    pub(crate) fn new(
+        probe_type: String,
+        target: String,
+        success: bool,
+        rtt_ms: Option<f64>,
+    ) -> Self {
+        Self {
+            probe_type,
+            target,
+            success,
+            rtt_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("probe_type", &self.probe_type)?;
+        dict.set_item("target", &self.target)?;
+        dict.set_item("success", self.success)?;
+        dict.set_item("rtt_ms", &self.rtt_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "probe_type": self.probe_type,
+            "target": self.target,
+            "success": self.success,
+            "rtt_ms": self.rtt_ms,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ProbeEvent(type={}, target={}, success={})",
+            self.probe_type, self.target, self.success
+        )
+    }
+}
+
+/// Typed event: WebSocket message received.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct WebSocketMessageEvent {
+    #[pyo3(get)]
+    pub url: String,
+    #[pyo3(get)]
+    pub direction: String,
+    #[pyo3(get)]
+    pub message_type: String,
+    #[pyo3(get)]
+    pub size: usize,
+}
+
+#[pymethods]
+impl WebSocketMessageEvent {
+    #[new]
+    pub(crate) fn new(url: String, direction: String, message_type: String, size: usize) -> Self {
+        Self {
+            url,
+            direction,
+            message_type,
+            size,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("url", &self.url)?;
+        dict.set_item("direction", &self.direction)?;
+        dict.set_item("message_type", &self.message_type)?;
+        dict.set_item("size", self.size)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "url": self.url,
+            "direction": self.direction,
+            "message_type": self.message_type,
+            "size": self.size,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "WebSocketMessageEvent(url={}, dir={}, type={}, size={})",
+            self.url, self.direction, self.message_type, self.size
+        )
+    }
+}
+
+/// Typed event: capture statistics update.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct CaptureStatsEvent {
+    #[pyo3(get)]
+    pub interface: String,
+    #[pyo3(get)]
+    pub packets_captured: u64,
+    #[pyo3(get)]
+    pub packets_dropped: u64,
+    #[pyo3(get)]
+    pub bytes_captured: u64,
+    #[pyo3(get)]
+    pub runtime_ms: u64,
+}
+
+#[pymethods]
+impl CaptureStatsEvent {
+    #[new]
+    pub(crate) fn new(
+        interface: String,
+        packets_captured: u64,
+        packets_dropped: u64,
+        bytes_captured: u64,
+        runtime_ms: u64,
+    ) -> Self {
+        Self {
+            interface,
+            packets_captured,
+            packets_dropped,
+            bytes_captured,
+            runtime_ms,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("interface", &self.interface)?;
+        dict.set_item("packets_captured", self.packets_captured)?;
+        dict.set_item("packets_dropped", self.packets_dropped)?;
+        dict.set_item("bytes_captured", self.bytes_captured)?;
+        dict.set_item("runtime_ms", self.runtime_ms)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "interface": self.interface,
+            "packets_captured": self.packets_captured,
+            "packets_dropped": self.packets_dropped,
+            "bytes_captured": self.bytes_captured,
+            "runtime_ms": self.runtime_ms,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CaptureStatsEvent(iface={}, captured={}, dropped={})",
+            self.interface, self.packets_captured, self.packets_dropped
+        )
+    }
+}

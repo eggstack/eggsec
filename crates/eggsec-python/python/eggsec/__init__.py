@@ -99,6 +99,8 @@ try:
     from ._core import ConnectionMetadataPy, NetworkEvidencePy
     from ._core import TranscriptEntryPy, NetworkTranscriptPy
     from ._core import resolve_target_sync, async_resolve_target
+    # WS10: Evidence-to-finding conversion
+    from ._core import evidence_to_finding
 except AttributeError:
     pass
 
@@ -216,6 +218,11 @@ try:
     run_traceroute = _core.run_traceroute
     async_run_traceroute = _core.async_run_traceroute
     traceroute = _core.traceroute
+    # WS9: Active probe functions
+    icmp_probe = _core.icmp_probe
+    async_icmp_probe = _core.async_icmp_probe
+    tcp_syn_probe = _core.tcp_syn_probe
+    async_tcp_syn_probe = _core.async_tcp_syn_probe
 except AttributeError:
     pass
 
@@ -583,6 +590,26 @@ try:
     TracerouteConfig = _core.TracerouteConfigPy
     TracerouteHop = _core.TracerouteHopPy
     TracerouteResult = _core.TracerouteResultPy
+    # WS7: Managed capture lifecycle
+    BackpressurePolicy = _core.BackpressurePolicyPy
+    CaptureDropStats = _core.CaptureDropStatsPy
+    CapturedPacket = _core.CapturedPacketPy
+    AsyncCaptureSession = _core.AsyncCaptureSessionPy
+    # WS8: Packet layer DTOs
+    EthernetFrame = _core.EthernetFramePy
+    Ipv4Packet = _core.Ipv4PacketPy
+    Ipv6Packet = _core.Ipv6PacketPy
+    TcpSegment = _core.TcpSegmentPy
+    UdpDatagram = _core.UdpDatagramPy
+    IcmpPacket = _core.IcmpPacketPy
+    FlowKey = _core.FlowKeyPy
+    FlowAggregator = _core.FlowAggregatorPy
+    # WS9: Active probe types
+    IcmpProbeConfig = _core.IcmpProbeConfigPy
+    IcmpProbeReply = _core.IcmpProbeReplyPy
+    IcmpProbeResult = _core.IcmpProbeResultPy
+    TcpProbeConfig = _core.TcpProbeConfigPy
+    TcpProbeResult = _core.TcpProbeResultPy
 except AttributeError:
     pass
 
@@ -788,6 +815,12 @@ ArtifactEventPy = _core.ArtifactEvent
 CancellationEvent = _core.CancellationEvent
 FailureEvent = _core.FailureEvent
 CompletionEvent = _core.CompletionEvent
+# WS11: Network-specific events
+ResolutionEvent = _core.ResolutionEvent
+ConnectionEvent = _core.ConnectionEvent
+ProbeEvent = _core.ProbeEvent
+WebSocketMessageEvent = _core.WebSocketMessageEvent
+CaptureStatsEvent = _core.CaptureStatsEvent
 wrap_event = _core.wrap_event
 EventStream = _core.EventStream
 event_stream_from_legacy = _core.event_stream_from_legacy

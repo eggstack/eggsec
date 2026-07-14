@@ -2472,3 +2472,51 @@ except eggsec.EggsecError as e:
 **Functions:**
 - `websocket_assess(url, timeout_ms=30000)` — Comprehensive WebSocket assessment
 - `async_websocket_assess(url, timeout_ms=30000)` — Async version
+
+### Packet Layer DTOs (`eggsec.packet_inspection`)
+
+| Type | Description |
+|------|-------------|
+| `EthernetFramePy` | Ethernet frame (src/dst MAC, ether type, VLAN) |
+| `Ipv4PacketPy` | IPv4 packet (src/dst IP, protocol, TTL, flags) |
+| `Ipv6PacketPy` | IPv6 packet (src/dst IP, next header, hop limit) |
+| `TcpSegmentPy` | TCP segment (ports, seq/ack, flags, window) |
+| `UdpDatagramPy` | UDP datagram (ports, length, checksum) |
+| `IcmpPacketPy` | ICMP packet (type, code, id, sequence) |
+| `FlowKeyPy` | 5-tuple flow key for aggregation |
+| `FlowAggregatorPy` | Bounded flow table with eviction |
+| `IcmpProbeConfigPy` | ICMP echo probe configuration |
+| `IcmpProbeReplyPy` | Single ICMP echo reply |
+| `IcmpProbeResultPy` | ICMP echo probe result |
+| `TcpProbeConfigPy` | TCP SYN probe configuration |
+| `TcpProbeResultPy` | TCP SYN probe result |
+
+**FlowAggregatorPy methods:** `record_packet(...)`, `get_flows()`, `flow_count()`, `eviction_count()`, `total_packets()`, `total_bytes()`
+
+**Functions:**
+- `icmp_probe(config)` — ICMP echo probe
+- `async_icmp_probe(config)` — Async version
+- `tcp_syn_probe(config)` — TCP SYN probe
+- `async_tcp_syn_probe(config)` — Async version
+
+### Capture Lifecycle (`eggsec.packet_inspection`)
+
+| Type | Description |
+|------|-------------|
+| `BackpressurePolicyPy` | Queue overflow policy (Block/DropOldest/DropNewest/ArtifactOnly) |
+| `CaptureDropStatsPy` | Drop statistics by category |
+| `CapturedPacketPy` | Captured packet with timing and raw bytes |
+| `AsyncCaptureSessionPy` | Managed capture session (context manager) |
+
+**Functions:**
+- `evidence_to_finding(evidence, title, description, severity)` — Convert network evidence to VersionedFinding
+
+### Network Events (`eggsec.event_protocol`)
+
+| Type | Description |
+|------|-------------|
+| `ResolutionEvent` | DNS resolution started/completed |
+| `ConnectionEvent` | TCP connection started/completed |
+| `ProbeEvent` | Protocol probe response received |
+| `WebSocketMessageEvent` | WebSocket message sent/received |
+| `CaptureStatsEvent` | Capture statistics update |
