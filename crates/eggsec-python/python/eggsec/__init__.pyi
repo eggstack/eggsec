@@ -8,6 +8,7 @@ FINDING_SCHEMA_VERSION: str
 def api_surface() -> dict[str, dict]: ...
 def domain_maturity() -> dict[str, dict[str, str]]: ...
 def _deprecated(name: str, replacement: str | None = None) -> None: ...
+def deprecated_warning(name: str, replacement: str | None = None) -> None: ...
 
 from .errors import (
     EggsecError as EggsecError,
@@ -147,6 +148,11 @@ from .scope_eval import (
     ScopeValidationPy as ScopeValidationPy,
     validate_scope as validate_scope,
 )
+ScopeSource = ScopeSourcePy
+LoadedScope = LoadedScopePy
+ScopeRule = ScopeRulePy
+ScopeExplanation = ScopeExplanationPy
+ScopeValidation = ScopeValidationPy
 from .operation_metadata import (
     OperationRiskPy as OperationRiskPy,
     OperationModePy as OperationModePy,
@@ -158,10 +164,19 @@ from .operation_metadata import (
     OperationMetadataViewPy as OperationMetadataViewPy,
     OperationRegistry as OperationRegistry,
 )
+OperationRisk = OperationRiskPy
+OperationMode = OperationModePy
+IntendedUse = IntendedUsePy
+Capability = CapabilityPy
+DenialClass = DenialClassPy
+TargetPolicyKind = TargetPolicyKindPy
+OperationDescriptor = OperationDescriptorPy
+OperationMetadataView = OperationMetadataViewPy
 from .domains import (
     DomainDescriptorPy as DomainDescriptorPy,
     DomainRegistry as DomainRegistry,
 )
+DomainDescriptor = DomainDescriptorPy
 from .execution_context import (
     ExecutionSurfacePy as ExecutionSurfacePy,
     ExecutionProfilePy as ExecutionProfilePy,
@@ -170,15 +185,24 @@ from .execution_context import (
     ApprovedOperationPy as ApprovedOperationPy,
     EnforcementContextPy as EnforcementContextPy,
 )
+ExecutionSurface = ExecutionSurfacePy
+ExecutionProfile = ExecutionProfilePy
+PolicyDecision = PolicyDecisionPy
+EnforcementOutcome = EnforcementOutcomePy
+ApprovedOperation = ApprovedOperationPy
+EnforcementContext = EnforcementContextPy
 from .authorization import (
     ExecutionPolicyPy as ExecutionPolicyPy,
     ManualOverridePy as ManualOverridePy,
 )
+ExecutionPolicy = ExecutionPolicyPy
+ManualOverride = ManualOverridePy
 from .preflight import (
     PreflightResultPy as PreflightResultPy,
     preflight_operation as preflight_operation,
     preflight_with_descriptor as preflight_with_descriptor,
 )
+PreflightResult = PreflightResultPy
 from .audit import (
     AuditOutcomePy as AuditOutcomePy,
     ManualOverrideAuditPy as ManualOverrideAuditPy,
@@ -188,6 +212,10 @@ from .audit import (
     audit_event_from_preflight as audit_event_from_preflight,
     emit_audit_event as emit_audit_event,
 )
+AuditOutcome = AuditOutcomePy
+ManualOverrideAudit = ManualOverrideAuditPy
+ScopeAudit = ScopeAuditPy
+EnforcementAuditEvent = EnforcementAuditEventPy
 from .runtime import PyFuture as PyFuture
 from .functions import (
     features as features,
@@ -282,6 +310,10 @@ from .db_pentest import (
     db_get_capabilities as db_get_capabilities,
     db_run_with_config as db_run_with_config,
 )
+DbDriverInfo = DbDriverInfoPy
+DbCapability = DbCapabilityPy
+DbCredentialProvider = DbCredentialProviderPy
+DbSessionConfig = DbSessionConfigPy
 from .proxy import (
     ProxyTypePy as ProxyTypePy,
     RotationStrategyPy as RotationStrategyPy,
@@ -297,6 +329,9 @@ from .proxy import (
     CapturedExchangePy as CapturedExchangePy,
     InterceptSessionResultPy as InterceptSessionResultPy,
 )
+InterceptConfig = InterceptConfigPy
+CapturedExchange = CapturedExchangePy
+InterceptSessionResult = InterceptSessionResultPy
 from .mobile import (
     MobilePlatformPy as MobilePlatformPy,
     MobileFindingPy as MobileFindingPy,
@@ -311,6 +346,9 @@ from .mobile import (
     list_mobile_devices as list_mobile_devices,
     dynamic_mobile_analysis as dynamic_mobile_analysis,
 )
+MobileDevice = MobileDevicePy
+DynamicMobileConfig = DynamicMobileConfigPy
+DynamicMobileReport = DynamicMobileReportPy
 from .container import (
     ContainerScanTypePy as ContainerScanTypePy,
     EscapeRiskLevelPy as EscapeRiskLevelPy,
@@ -334,6 +372,15 @@ from .container import (
     detect_escape_risks as detect_escape_risks,
     check_cis_docker_benchmark as check_cis_docker_benchmark,
 )
+ContainerScanType = ContainerScanTypePy
+EscapeRiskLevel = EscapeRiskLevelPy
+CisCheckStatus = CisCheckStatusPy
+DockerScanResult = DockerScanResultPy
+KubernetesScanResult = KubernetesScanResultPy
+EscapeDetectionResult = EscapeDetectionResultPy
+CisBenchmarkResult = CisBenchmarkResultPy
+ContainerFinding = ContainerFindingPy
+ContainerReport = ContainerReportPy
 from .packet_inspection import (
     CaptureConfigPy as CaptureConfigPy,
     CaptureStatsPy as CaptureStatsPy,
@@ -352,6 +399,12 @@ from .packet_inspection import (
     async_run_traceroute as async_run_traceroute,
     traceroute as traceroute,
 )
+PacketFilter = PacketFilterPy
+FlowRecord = FlowRecordPy
+LiveCaptureResult = LiveCaptureResultPy
+TracerouteConfig = TracerouteConfigPy
+TracerouteHop = TracerouteHopPy
+TracerouteResult = TracerouteResultPy
 from .stress import (
     StressTypePy as StressTypePy,
     StressConfigPy as StressConfigPy,
@@ -375,6 +428,9 @@ from .nse import (
     nse_list_scripts as nse_list_scripts,
     nse_get_script_metadata as nse_get_script_metadata,
 )
+NseScriptMetadata = NseScriptMetadataPy
+NseSandboxPolicy = NseSandboxPolicyPy
+NseTargetContext = NseTargetContextPy
 from .daemon import (
     DaemonResponsePy as DaemonResponsePy,
     DaemonClientPy as DaemonClientPy,
@@ -399,6 +455,12 @@ from .daemon import (
     SessionSummaryPy as SessionSummaryPy,
     TransportMetadataPy as TransportMetadataPy,
 )
+DaemonCapabilities = DaemonCapabilitiesPy
+TaskHandle = TaskHandlePy
+TaskStatus = TaskStatusPy
+DaemonEvent = DaemonEventPy
+SessionSummary = SessionSummaryPy
+TransportMetadata = TransportMetadataPy
 from .wireless import (
     SecurityTypePy as SecurityTypePy,
     WirelessNetworkPy as WirelessNetworkPy,
@@ -409,6 +471,11 @@ from .wireless import (
     async_wireless_scan as async_wireless_scan,
     wireless_analyze_networks as wireless_analyze_networks,
 )
+SecurityType = SecurityTypePy
+WirelessNetwork = WirelessNetworkPy
+WirelessVulnerability = WirelessVulnerabilityPy
+WirelessScanResult = WirelessScanResultPy
+WirelessScanConfig = WirelessScanConfigPy
 from .evasion import (
     EvasionTargetTypePy as EvasionTargetTypePy,
     EvasionCategoryPy as EvasionCategoryPy,
@@ -422,6 +489,14 @@ from .evasion import (
     async_evasion_scan as async_evasion_scan,
     evasion_list_techniques as evasion_list_techniques,
 )
+EvasionTargetType = EvasionTargetTypePy
+EvasionCategory = EvasionCategoryPy
+EvasionRisk = EvasionRiskPy
+EvasionTechnique = EvasionTechniquePy
+EvasionDetection = EvasionDetectionPy
+EvasionSummary = EvasionSummaryPy
+EvasionReport = EvasionReportPy
+EvasionScanConfig = EvasionScanConfigPy
 from .postex import (
     PostexCategoryPy as PostexCategoryPy,
     PostexRiskPy as PostexRiskPy,
@@ -435,6 +510,14 @@ from .postex import (
     async_postex_scan as async_postex_scan,
     postex_list_techniques as postex_list_techniques,
 )
+PostexCategory = PostexCategoryPy
+PostexRisk = PostexRiskPy
+PostexProfile = PostexProfilePy
+PostexTechnique = PostexTechniquePy
+PostexDetection = PostexDetectionPy
+PostexSummary = PostexSummaryPy
+PostexReport = PostexReportPy
+PostexScanConfig = PostexScanConfigPy
 from .c2 import (
     BeaconProtocolPy as BeaconProtocolPy,
     TaskTypePy as TaskTypePy,
@@ -454,6 +537,20 @@ from .c2 import (
     async_c2_scan as async_c2_scan,
     c2_get_campaign as c2_get_campaign,
 )
+BeaconProtocol = BeaconProtocolPy
+C2TaskType = TaskTypePy
+C2TaskStatus = TaskStatusPy
+OpsecCategory = OpsecCategoryPy
+OpsecSeverity = OpsecSeverityPy
+CampaignPhase = CampaignPhasePy
+C2Campaign = C2CampaignPy
+BeaconResult = BeaconResultPy
+C2TaskResult = C2TaskResultPy
+OpsecFinding = OpsecFindingPy
+OpsecAssessment = OpsecAssessmentPy
+C2Summary = C2SummaryPy
+C2Report = C2ReportPy
+C2ScanConfig = C2ScanConfigPy
 from .distributed import (
     DistributedTaskTypePy as DistributedTaskTypePy,
     WorkerStatusPy as WorkerStatusPy,
@@ -464,6 +561,12 @@ from .distributed import (
     distributed_task_types as distributed_task_types,
     distributed_generate_psk as distributed_generate_psk,
 )
+DistributedTaskType = DistributedTaskTypePy
+WorkerStatus = WorkerStatusPy
+WorkerRegistration = WorkerRegistrationPy
+Heartbeat = HeartbeatPy
+DistributedTask = DistributedTaskPy
+DistributedTaskResult = DistributedTaskResultPy
 from .notification import (
     WebhookEventPy as WebhookEventPy,
     FindingSummaryPy as FindingSummaryPy,
@@ -475,6 +578,11 @@ from .notification import (
     notify_findings as notify_findings,
     notify_error as notify_error,
 )
+WebhookEvent = WebhookEventPy
+FindingSummary = FindingSummaryPy
+NotifyScanStats = NotifyScanStatsPy
+WebhookConfig = WebhookConfigPy
+NotifyManager = NotifyManagerPy
 from .ai_postprocess import (
     AiProviderPy as AiProviderPy,
     PluginLanguagePy as PluginLanguagePy,
@@ -528,4 +636,105 @@ from .backpressure import (
 from .async_iter import (
     EventStreamAsyncIterator as EventStreamAsyncIterator,
     FindingStreamAsyncIterator as FindingStreamAsyncIterator,
+)
+# Milestone E: Versioned finding schema
+from .finding_schema import (
+    FINDING_SCHEMA_VERSION as FINDING_SCHEMA_VERSION,
+    Confidence as Confidence,
+    FindingType as FindingType,
+    EvidenceKind as EvidenceKind,
+    AffectedAsset as AffectedAsset,
+    FindingLocation as FindingLocation,
+    VersionedEvidence as VersionedEvidence,
+    VersionedFinding as VersionedFinding,
+)
+# Milestone E: Evidence and artifact model
+from .artifact import (
+    MilestoneArtifact as MilestoneArtifact,
+    ArtifactReference as ArtifactReference,
+    ArtifactStore as ArtifactStore,
+)
+# Milestone E: CVSS and vulnerability records
+from .cvss import (
+    CvssScore as CvssScore,
+    VulnerabilityRecord as VulnerabilityRecord,
+    RemediationRecord as RemediationRecord,
+)
+# Milestone E: Finding workflow
+from .finding_workflow import (
+    FindingState as FindingState,
+    WorkflowTransition as WorkflowTransition,
+    Suppression as Suppression,
+    FindingWorkflow as FindingWorkflow,
+)
+# Milestone E: Repository abstraction
+from .repository import (
+    FindingRepository as FindingRepository,
+    Assessment as Assessment,
+    AssessmentRepository as AssessmentRepository,
+)
+# Milestone E: Baselines and comparisons
+from .baseline import (
+    FindingCorrelation as FindingCorrelation,
+    FindingDiff as FindingDiff,
+    AssessmentDiff as AssessmentDiff,
+    BaselineComparator as BaselineComparator,
+)
+# Milestone E: Reporting
+from .reporters import (
+    FindingReporter as FindingReporter,
+    SeveritySummary as SeveritySummary,
+    ReportEnvelope as ReportEnvelope,
+)
+# Milestone E: External integrations
+from .integrations import (
+    IntegrationType as IntegrationType,
+    PublicationRecord as PublicationRecord,
+    RetryPolicy as RetryPolicy,
+    PublicationPolicy as PublicationPolicy,
+    ExternalIntegration as ExternalIntegration,
+)
+# Milestone E: Migration and compatibility
+from .migration import (
+    SchemaVersion as SchemaVersion,
+    MigrationResult as MigrationResult,
+    FindingMigration as FindingMigration,
+)
+# Milestone E: Compliance mapping (feature-gated)
+from .compliance import (
+    ComplianceFramework as ComplianceFramework,
+    ComplianceControl as ComplianceControl,
+    ComplianceMapping as ComplianceMapping,
+    ComplianceResult as ComplianceResult,
+    ControlAssessment as ControlAssessment,
+    ComplianceReport as ComplianceReport,
+    ComplianceMapper as ComplianceMapper,
+)
+# Milestone C: Headless Browser (feature-gated)
+from .browser_assess import (
+    XssSource as XssSource,
+    XssSink as XssSink,
+    DomXssFinding as DomXssFinding,
+    DiscoveryMethod as DiscoveryMethod,
+    SpaRoute as SpaRoute,
+    ClientIssueType as ClientIssueType,
+    ClientIssue as ClientIssue,
+    BrowserTestConfig as BrowserTestConfig,
+    BrowserTestReport as BrowserTestReport,
+)
+# Milestone C: Advanced Hunting (feature-gated)
+from .hunt import (
+    ChainType as ChainType,
+    ChainStep as ChainStep,
+    AttackChain as AttackChain,
+    FlawType as FlawType,
+    BusinessLogicFlaw as BusinessLogicFlaw,
+    RaceType as RaceType,
+    RaceCondition as RaceCondition,
+    BypassType as BypassType,
+    AuthzBypass as AuthzBypass,
+    SessionIssueType as SessionIssueType,
+    SessionIssue as SessionIssue,
+    HuntTestConfig as HuntTestConfig,
+    HuntReport as HuntReport,
 )

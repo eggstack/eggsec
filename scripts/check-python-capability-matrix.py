@@ -103,6 +103,13 @@ REQUIRED_OPERATION_FIELDS = [
     "installed_wheel",
     "supported_platforms",
     "known_blockers",
+    "test_fixture",
+    "request_type",
+    "payload_type",
+    "schema_version",
+    "last_validated_commit",
+    "direct_function_delegates",
+    "fixture",
 ]
 
 VALID_MATURITY_LEVELS = {"stable", "provisional", "experimental"}
@@ -156,6 +163,7 @@ def validate_per_operation_fields(caps: dict) -> None:
             "stub",
             "secret_sentinel",
             "installed_wheel",
+            "direct_function_delegates",
         ]:
             val = op.get(bool_field)
             if not isinstance(val, bool):
@@ -170,6 +178,18 @@ def validate_per_operation_fields(caps: dict) -> None:
         blockers = op.get("known_blockers")
         if not isinstance(blockers, list):
             fail(f"Operation '{op_id}': known_blockers should be list")
+
+        # Validate capability manifest enrichment fields are non-empty strings
+        for str_field in [
+            "request_type",
+            "payload_type",
+            "schema_version",
+            "last_validated_commit",
+            "fixture",
+        ]:
+            val = op.get(str_field)
+            if not isinstance(val, str) or not val.strip():
+                fail(f"Operation '{op_id}': field '{str_field}' must be a non-empty string")
 
     # Check for operations in the operations map that aren't in stable_operations
     for op_id in operations:

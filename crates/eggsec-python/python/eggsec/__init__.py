@@ -87,7 +87,7 @@ try:
     async_websocket_probe = _core.async_websocket_probe
     websocket_fuzz = _core.websocket_fuzz
     async_websocket_fuzz = _core.async_websocket_fuzz
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Release 2: Network Programmability
@@ -101,7 +101,7 @@ try:
     from ._core import resolve_target_sync, async_resolve_target
     # WS10: Evidence-to-finding conversion
     from ._core import evidence_to_finding
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Transport (TCP/UDP sessions)
@@ -115,7 +115,7 @@ try:
     from ._core import AsyncTcpSessionPy, AsyncUdpSocketPy
     from ._core import tcp_connect_probe, async_tcp_connect_probe
     from ._core import banner_probe, async_banner_probe
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Protocol probes
@@ -124,10 +124,12 @@ try:
     from ._core import TlsProbeConfigPy, CertificateInfoPy, CertificateChainEntryPy
     from ._core import TlsProbeResultPy, TlsIssuePy
     from ._core import HttpProbeConfigPy, HttpProbeResultPy
+    from ._core import UdpProbeConfigPy, UdpProbeResultPy
     from ._core import dns_query, async_dns_query
     from ._core import tls_probe, async_tls_probe
     from ._core import http_probe, async_http_probe
-except AttributeError:
+    from ._core import udp_probe, async_udp_probe
+except (AttributeError, ImportError):
     pass
 
 # HTTP client
@@ -137,7 +139,7 @@ try:
     from ._core import HttpClientConfigPy, HttpClientPy, AsyncHttpClientPy
     from ._core import RedactConfigPy
     from ._core import create_http_client, async_create_http_client
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # WebSocket sessions (feature-gated)
@@ -147,21 +149,21 @@ try:
     from ._core import WebSocketSessionPy, AsyncWebSocketSessionPy
     from ._core import WebSocketAssessmentConfigPy, WebSocketAssessmentResultPy
     from ._core import websocket_assess, async_websocket_assess
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 4: Git secrets
 try:
     scan_git_secrets = _core.scan_git_secrets
     async_scan_git_secrets = _core.async_scan_git_secrets
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 5: SBOM
 try:
     generate_sbom = _core.generate_sbom
     async_generate_sbom = _core.async_generate_sbom
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 6: Database pentesting
@@ -178,7 +180,7 @@ try:
     db_list_drivers = _core.db_list_drivers
     db_get_capabilities = _core.db_get_capabilities
     db_run_with_config = _core.db_run_with_config
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 7: Proxy
@@ -186,7 +188,7 @@ try:
     create_proxy_manager = _core.create_proxy_manager
     async_add_proxy = _core.async_add_proxy
     async_proxy_health_check = _core.async_proxy_health_check
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 8: Mobile
@@ -198,7 +200,7 @@ try:
     # D5: Mobile dynamic functions
     list_mobile_devices = _core.list_mobile_devices
     dynamic_mobile_analysis = _core.dynamic_mobile_analysis
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 9: Container
@@ -209,7 +211,7 @@ try:
     async_scan_kubernetes = _core.async_scan_kubernetes
     detect_escape_risks = _core.detect_escape_risks
     check_cis_docker_benchmark = _core.check_cis_docker_benchmark
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 10: Packet inspection
@@ -225,14 +227,14 @@ try:
     async_icmp_probe = _core.async_icmp_probe
     tcp_syn_probe = _core.tcp_syn_probe
     async_tcp_syn_probe = _core.async_tcp_syn_probe
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 11: Stress testing
 try:
     stress_test = _core.stress_test
     async_stress_test = _core.async_stress_test
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 12: NSE
@@ -243,7 +245,7 @@ try:
     # D1: NSE runtime completion functions
     nse_list_scripts = _core.nse_list_scripts
     nse_get_script_metadata = _core.nse_get_script_metadata
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 13: Daemon client
@@ -262,7 +264,7 @@ try:
     async_daemon_list_persisted_sessions = _core.async_daemon_list_persisted_sessions
     async_daemon_get_persisted_snapshot = _core.async_daemon_get_persisted_snapshot
     async_daemon_subscribe = _core.async_daemon_subscribe
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone C: Consolidated Reconnaissance
@@ -315,7 +317,7 @@ try:
     ClientIssue = _core.ClientIssuePy
     BrowserTestConfig = _core.BrowserTestConfigPy
     BrowserTestReport = _core.BrowserTestReportPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone C: Advanced Hunting (feature-gated: advanced-hunting)
@@ -335,7 +337,7 @@ try:
     SessionIssue = _core.SessionIssuePy
     HuntTestConfig = _core.HuntTestConfigPy
     HuntReport = _core.HuntReportPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone B: Configuration, Policy, and Execution Context
@@ -501,7 +503,7 @@ try:
     OriginTestResult = _core.OriginTestResultPy
     FuzzTestResult = _core.FuzzTestResultPy
     WebSocketTestConfig = _core.WebSocketTestConfigPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 4: Git secrets (feature-gated)
@@ -510,7 +512,7 @@ try:
     GitSecretsSummary = _core.GitSecretsSummaryPy
     GitSecretFinding = _core.GitSecretFindingPy
     SecretFinding = _core.SecretFindingPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 5: SBOM (feature-gated)
@@ -519,7 +521,7 @@ try:
     SbomComponent = _core.SbomComponentPy
     SbomVulnerability = _core.SbomVulnerabilityPy
     SbomFormat = _core.SbomFormatPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 6: Database pentesting (feature-gated)
@@ -532,7 +534,7 @@ try:
     DbCapability = _core.DbCapabilityPy
     DbCredentialProvider = _core.DbCredentialProviderPy
     DbSessionConfig = _core.DbSessionConfigPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 7: Proxy (feature-gated)
@@ -548,7 +550,7 @@ try:
     InterceptConfig = _core.InterceptConfigPy
     CapturedExchange = _core.CapturedExchangePy
     InterceptSessionResult = _core.InterceptSessionResultPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 8: Mobile (feature-gated)
@@ -560,7 +562,7 @@ try:
     MobileDevice = _core.MobileDevicePy
     DynamicMobileConfig = _core.DynamicMobileConfigPy
     DynamicMobileReport = _core.DynamicMobileReportPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 9: Container (feature-gated)
@@ -574,7 +576,7 @@ try:
     CisBenchmarkResult = _core.CisBenchmarkResultPy
     ContainerFinding = _core.ContainerFindingPy
     ContainerReport = _core.ContainerReportPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 10: Packet inspection (feature-gated)
@@ -624,7 +626,7 @@ try:
     UdpReachabilityConfigPy = _core.UdpReachabilityConfigPy
     UdpReachabilityResultPy = _core.UdpReachabilityResultPy
     udp_reachability = _core.udp_reachability
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 11: Stress testing (feature-gated)
@@ -633,7 +635,7 @@ try:
     StressConfig = _core.StressConfigPy
     StressStats = _core.StressStatsPy
     StressResult = _core.StressResultPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 12: NSE (feature-gated)
@@ -646,7 +648,7 @@ try:
     NseScriptMetadata = _core.NseScriptMetadataPy
     NseSandboxPolicy = _core.NseSandboxPolicyPy
     NseTargetContext = _core.NseTargetContextPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Phase F Track 13: Daemon client (feature-gated)
@@ -660,7 +662,7 @@ try:
     DaemonEvent = _core.DaemonEventPy
     SessionSummary = _core.SessionSummaryPy
     TransportMetadata = _core.TransportMetadataPy
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone E: Versioned finding schema
@@ -726,7 +728,7 @@ try:
     ControlAssessment = _core.ControlAssessment
     ComplianceReport = _core.ComplianceReport
     ComplianceMapper = _core.ComplianceMapper
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone F: Wireless assessment (feature-gated)
@@ -739,7 +741,7 @@ try:
     wireless_scan = _core.wireless_scan
     async_wireless_scan = _core.async_wireless_scan
     wireless_analyze_networks = _core.wireless_analyze_networks
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone F: Evasion validation (feature-gated)
@@ -755,7 +757,7 @@ try:
     evasion_scan = _core.evasion_scan
     async_evasion_scan = _core.async_evasion_scan
     evasion_list_techniques = _core.evasion_list_techniques
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone F: Post-exploitation simulation (feature-gated)
@@ -771,7 +773,7 @@ try:
     postex_scan = _core.postex_scan
     async_postex_scan = _core.async_postex_scan
     postex_list_techniques = _core.postex_list_techniques
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone F: C2 simulation (feature-gated)
@@ -793,7 +795,7 @@ try:
     c2_scan = _core.c2_scan
     async_c2_scan = _core.async_c2_scan
     c2_get_campaign = _core.c2_get_campaign
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Milestone F: Distributed scanning (always-available)
@@ -880,7 +882,7 @@ try:
     ai_generate_payloads = _core.ai_generate_payloads
     ai_suggest_waf_bypass = _core.ai_suggest_waf_bypass
     ai_generate_script = _core.ai_generate_script
-except AttributeError:
+except (AttributeError, ImportError):
     pass
 
 # Re-export exceptions
@@ -1336,12 +1338,16 @@ __all__ = [
     "TlsIssuePy",
     "HttpProbeConfigPy",
     "HttpProbeResultPy",
+    "UdpProbeConfigPy",
+    "UdpProbeResultPy",
     "dns_query",
     "async_dns_query",
     "tls_probe",
     "async_tls_probe",
     "http_probe",
     "async_http_probe",
+    "udp_probe",
+    "async_udp_probe",
     # Release 2: HTTP client
     "HttpRequestPy",
     "HttpHeadersPy",

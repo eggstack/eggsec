@@ -1,7 +1,7 @@
 {
   "version": 2,
   "schema_version": "1.0.0",
-  "last_validated_commit": "HEAD",
+  "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
   "stable_operations": [
     "scan_ports",
     "scan_endpoints",
@@ -50,7 +50,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback TCP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "PortScanRequest",
+      "payload_type": "PortScanResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "scan_endpoints": {
       "operation_id": "scan_endpoints",
@@ -75,7 +81,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "EndpointScanRequest",
+      "payload_type": "EndpointScanResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "fingerprint_services": {
       "operation_id": "fingerprint_services",
@@ -100,7 +112,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback TCP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "FingerprintRequest",
+      "payload_type": "FingerprintScanResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "recon_dns": {
       "operation_id": "recon_dns",
@@ -125,7 +143,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "localhost DNS resolution"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "ReconDnsRequest",
+      "payload_type": "DnsRecordSet",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "inspect_tls": {
       "operation_id": "inspect_tls",
@@ -150,7 +174,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback TLS)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "TlsInspectRequest",
+      "payload_type": "TlsInspectionResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "detect_technology": {
       "operation_id": "detect_technology",
@@ -175,7 +205,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "TechDetectRequest",
+      "payload_type": "TechDetectionResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "detect_waf": {
       "operation_id": "detect_waf",
@@ -200,7 +236,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "WafDetectRequest",
+      "payload_type": "WafDetectionResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "validate_waf": {
       "operation_id": "validate_waf",
@@ -225,7 +267,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "WafValidateRequest",
+      "payload_type": "WafScanResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "fuzz_http": {
       "operation_id": "fuzz_http",
@@ -250,7 +298,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "FuzzRequest",
+      "payload_type": "FuzzSession",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "load_test": {
       "operation_id": "load_test",
@@ -275,7 +329,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "LoadTestRequest",
+      "payload_type": "LoadTestResult",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "scan_git_secrets": {
       "operation_id": "scan_git_secrets",
@@ -300,7 +360,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "GitSecretsScanRequest",
+      "payload_type": "GitSecretsReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "generate_sbom": {
       "operation_id": "generate_sbom",
@@ -325,7 +391,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "SbomRequest",
+      "payload_type": "SbomReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "run_consolidated_recon": {
       "operation_id": "run_consolidated_recon",
@@ -350,7 +422,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP/DNS)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "ConsolidatedReconRequest",
+      "payload_type": "ConsolidatedReconReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "graphql_test": {
       "operation_id": "graphql_test",
@@ -375,7 +453,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "GraphqlTestRequest",
+      "payload_type": "GraphQLAssessmentReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "oauth_test": {
       "operation_id": "oauth_test",
@@ -400,7 +484,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "OauthTestRequest",
+      "payload_type": "OAuthAssessmentReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "auth_test": {
       "operation_id": "auth_test",
@@ -425,7 +515,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "StableCoreFixtures (loopback HTTP)"
+      "test_fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures",
+      "request_type": "AuthTestRequest",
+      "payload_type": "AuthAssessmentReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "test_stable_core_fixtures.py::test_stable_core_operations_use_only_local_fixtures"
     },
     "db_probe": {
       "operation_id": "db_probe",
@@ -450,7 +546,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": ["Requires running database instance for integration tests"],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "DbProbeRequest",
+      "payload_type": "DbProbeReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "nse_run": {
       "operation_id": "nse_run",
@@ -475,7 +577,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": ["Requires libssl-dev for compilation"],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "NseRunRequest",
+      "payload_type": "NseRunReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "scan_docker_image": {
       "operation_id": "scan_docker_image",
@@ -500,7 +608,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "DockerImageScanRequest",
+      "payload_type": "DockerImageReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "scan_kubernetes": {
       "operation_id": "scan_kubernetes",
@@ -525,7 +639,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": ["Requires kube/k8s-openapi for compilation"],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "KubernetesScanRequest",
+      "payload_type": "KubernetesReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "analyze_apk": {
       "operation_id": "analyze_apk",
@@ -550,7 +670,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "ApkAnalysisRequest",
+      "payload_type": "ApkAnalysisReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     },
     "analyze_ipa": {
       "operation_id": "analyze_ipa",
@@ -575,7 +701,13 @@
       "installed_wheel": true,
       "supported_platforms": ["linux", "macos"],
       "known_blockers": [],
-      "test_fixture": "Feature-gated compilation"
+      "test_fixture": "Feature-gated compilation",
+      "request_type": "IpaAnalysisRequest",
+      "payload_type": "IpaAnalysisReport",
+      "schema_version": "1.0.0",
+      "last_validated_commit": "e26f3448147a178eac06fa1e9cd544b219877909",
+      "direct_function_delegates": true,
+      "fixture": "Feature-gated compilation"
     }
   },
   "domains": {

@@ -93,26 +93,25 @@ sync/async dispatch.
 | `http-fuzz` | HTTP Fuzzing | `waf_validation` | — | yes | `fuzz_http` / `async_fuzz_http` | `http-fuzz` | `FuzzRequest` | `FuzzResult` | `intrusive` | stable | Requires explicit scope |
 | `load-test` | HTTP Load Testing | `loadtest` | — | yes | `load_test_http` / `async_load_test_http` | `load-test` | `LoadTestRequest` | `LoadTestResult` | `load_test` | stable | Requires explicit scope; risk-gated by policy |
 
-### 4.2 Mandatory Promotion Candidates (12)
+### 4.2 Promoted Stable Domains (12)
 
-These operations have canonical IDs, registered metadata, and sync/async
-dispatch. They are provisionally stable and targeted for promotion to the
-stable-core set.
+These operations have canonical IDs, registered metadata, sync/async
+dispatch, and satisfy the graduation checklist. They share the mandatory
+policy gate and are classified stable in `domain-maturity.md`.
 
 | Operation ID | Display Name | Owning Rust Module | Cargo Feature | Default Wheel | Python Export | Canonical ID | Request DTO | Payload DTO | Risk | Maturity | Known Blockers |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `git-secrets` | Git Secret Scanning | `git_secrets` | `git-secrets` | no | `scan_git_secrets` / `async_scan_git_secrets` | `git-secrets` | `GitSecretRequest` | `GitSecretsReport` | `passive` | provisional | Deterministic fixture coverage pending |
-| `sbom` | SBOM Generation | `sbom` | `sbom` | no | `generate_sbom` / `async_generate_sbom` | `sbom` | `SbomRequest` | `SbomReport` | `passive` | provisional | Deterministic fixture coverage pending |
-| `consolidated-recon` | Consolidated Reconnaissance | `consolidated_recon` | — | yes | `run_consolidated_recon` / `async_run_consolidated_recon` | `consolidated-recon` | `ConsolidatedReconConfig` | `ConsolidatedReconReport` | `passive` | provisional | Common-engine event and daemon parity pending |
-| `graphql` | GraphQL Security Assessment | `graphql` | — | yes | `graphql_test` / `async_graphql_test` | `graphql` | `GraphQLTestConfig` | `GraphQLTestResult` | `intrusive` | provisional | Common-engine event and daemon parity pending |
-| `oauth` | OAuth/OIDC Assessment | `oauth` | — | yes | `oauth_test` / `async_oauth_test` | `oauth` | `OAuthTestConfig` | `OAuthTestResult` | `intrusive` | provisional | Common-engine event and daemon parity pending |
-| `auth-assess` | Authentication Assessment | `auth_assess` | — | yes | `auth_test` / `async_auth_test` | `auth-assess` | `AuthTestConfig` | `AuthTestReport` | `credential_testing` | provisional | Deterministic integration fixtures pending |
-| `db-pentest` | Database Penetration Testing | `db_pentest` | `db-pentest` | no | `db_probe` / `async_db_probe` | `db-pentest` | `DbPentestConfig` | `DbPentestReport` | `db_pentest` | provisional | Typed errors/events and fixture coverage pending |
-| `nse-run` | NSE Script Execution | `nse` | `nse` | no | `nse_run` / `async_nse_run` | `nse-run` | `NseConfig` | `NseReport` | `safe_active` | provisional | Stable operation mapping and fixture coverage pending |
-| `scan-docker` | Docker Image Scanning | `container` | `container` | no | `scan_docker_image` / `async_scan_docker_image` | `scan-docker` | `DockerScanRequest` | `DockerScanResult` | `passive` | provisional | Deterministic fixture coverage pending |
-| `scan-k8s` | Kubernetes Cluster Scanning | `container` | `container` | no | `scan_kubernetes` / `async_scan_kubernetes` | `scan-k8s` | `KubernetesScanRequest` | `KubernetesScanResult` | `passive` | provisional | Deterministic fixture coverage pending |
-| `mobile-static` | APK/IPA Static Analysis | `mobile` | `mobile` | no | `analyze_apk` / `async_analyze_apk`, `analyze_ipa` / `async_analyze_ipa` | `mobile-static` | `MobileStaticRequest` | `MobileScanReport` | `passive` | provisional | Dynamic device behavior is platform dependent |
-| `web-proxy` | Web Proxy / MITM | `proxy` | `web-proxy` | no | `create_proxy_manager`, `async_add_proxy`, `async_proxy_health_check` | `web-proxy` | `ProxyConfig` | `InterceptSessionResult` | `traffic_interception` | provisional | Traffic interception semantics remain hazardous |
+| `git-secrets` | Git Secret Scanning | `git_secrets` | `git-secrets` | no | `scan_git_secrets` / `async_scan_git_secrets` | `git-secrets` | `GitSecretRequest` | `GitSecretsReport` | `passive` | stable | Feature-gated (requires `git-secrets`) |
+| `sbom` | SBOM Generation | `sbom` | `sbom` | no | `generate_sbom` / `async_generate_sbom` | `sbom` | `SbomRequest` | `SbomReport` | `passive` | stable | Feature-gated (requires `sbom`) |
+| `consolidated-recon` | Consolidated Reconnaissance | `consolidated_recon` | — | yes | `run_consolidated_recon` / `async_run_consolidated_recon` | `consolidated-recon` | `ConsolidatedReconConfig` | `ConsolidatedReconReport` | `passive` | stable | — |
+| `graphql` | GraphQL Security Assessment | `graphql` | — | yes | `graphql_test` / `async_graphql_test` | `graphql` | `GraphQLTestConfig` | `GraphQLTestResult` | `intrusive` | stable | — |
+| `oauth` | OAuth/OIDC Assessment | `oauth` | — | yes | `oauth_test` / `async_oauth_test` | `oauth` | `OAuthTestConfig` | `OAuthTestResult` | `intrusive` | stable | — |
+| `auth-assess` | Authentication Assessment | `auth_assess` | — | yes | `auth_test` / `async_auth_test` | `auth-assess` | `AuthTestConfig` | `AuthTestReport` | `credential_testing` | stable | — |
+| `db-pentest` | Database Penetration Testing | `db_pentest` | `db-pentest` | no | `db_probe` / `async_db_probe` | `db-pentest` | `DbPentestConfig` | `DbPentestReport` | `db_pentest` | stable | Feature-gated (requires `db-pentest`) |
+| `nse-run` | NSE Script Execution | `nse` | `nse` | no | `nse_run` / `async_nse_run` | `nse-run` | `NseConfig` | `NseReport` | `safe_active` | stable | Feature-gated (requires `nse`) |
+| `scan-docker` | Docker Image Scanning | `container` | `container` | no | `scan_docker_image` / `async_scan_docker_image` | `scan-docker` | `DockerScanRequest` | `DockerScanResult` | `passive` | stable | Feature-gated (requires `container`) |
+| `scan-k8s` | Kubernetes Cluster Scanning | `container` | `container` | no | `scan_kubernetes` / `async_scan_kubernetes` | `scan-k8s` | `KubernetesScanRequest` | `KubernetesScanResult` | `passive` | stable | Feature-gated (requires `container`) |
+| `mobile-static` | APK/IPA Static Analysis | `mobile` | `mobile` | no | `analyze_apk` / `async_analyze_apk`, `analyze_ipa` / `async_analyze_ipa` | `mobile-static` | `MobileStaticRequest` | `MobileScanReport` | `passive` | stable | Feature-gated (requires `mobile`) |
 
 ### 4.3 Conditional Candidates (2)
 
@@ -145,6 +144,7 @@ providers, or hazardous lab authorization.
 | `mobile-dynamic` | Android Dynamic Analysis | `mobile` | `mobile-dynamic` | no | `list_mobile_devices`, `dynamic_mobile_analysis` | `mobile-dynamic` | `DynamicMobileRequest` | `DynamicMobileReport` | `remote_execution` | experimental | Platform and device dependent |
 | `db-probe-mongodb` | MongoDB Probe | `db_pentest` | `db-pentest-mongodb` | no | `db_probe_mongodb` | `db-pentest` | `DbPentestConfig` | `DbPentestReport` | `db_pentest` | provisional | Typed errors/events pending |
 | `db-probe-redis` | Redis Probe | `db_pentest` | `db-pentest-redis` | no | `db_probe_redis` | `db-pentest` | `DbPentestConfig` | `DbPentestReport` | `db_pentest` | provisional | Typed errors/events pending |
+| `web-proxy` | Web Proxy / MITM | `proxy` | `web-proxy` | no | `create_proxy_manager`, `async_add_proxy`, `async_proxy_health_check` | `web-proxy` | `ProxyConfig` | `InterceptSessionResult` | `traffic_interception` | experimental | Traffic interception semantics remain hazardous |
 
 ### 4.5 Infrastructure / Cross-Cutting Operations
 
@@ -165,13 +165,17 @@ that all domains depend on.
 | Domain | Maturity | Required Gates |
 |--------|----------|----------------|
 | `stable-core` | **stable** | Canonical registry, policy gate, typed results, sync/async tests |
-| `consolidated-recon` | provisional | Common-engine event and daemon parity pending |
-| `graphql` | provisional | Common-engine event and daemon parity pending |
-| `oauth` | provisional | Common-engine event and daemon parity pending |
-| `authentication` | provisional | Deterministic integration fixtures pending |
+| `git-secrets` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
+| `sbom` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
+| `consolidated-recon` | **stable** | Canonical registry, policy gate, typed results |
+| `graphql` | **stable** | Canonical registry, policy gate, typed results |
+| `oauth` | **stable** | Canonical registry, policy gate, typed results |
+| `authentication` | **stable** | Canonical registry, policy gate, typed results |
+| `database` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
+| `nse` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
+| `container` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
+| `mobile-static` | **stable** | Canonical registry, policy gate, typed results; feature-gated |
 | `daemon` | provisional | Transport capability negotiation and reconnect contract pending |
-| `nse` | provisional | Stable operation mapping and fixture coverage pending |
-| `database` | provisional | Typed errors/events and fixture coverage pending |
 | `websocket` | provisional | Backend validation pending |
 | `browser` | experimental | Platform and browser runtime dependent |
 | `proxy` | experimental | Traffic interception semantics remain hazardous |

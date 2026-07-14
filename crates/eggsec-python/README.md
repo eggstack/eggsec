@@ -72,12 +72,25 @@ checkpoint persistence, wheel smoke tests, and architecture guards.
 - Backpressure delivery statistics with reliable lifecycle-event handling
 - Domain maturity introspection via `domain_maturity()`
 - Policy, configuration, and execution context (provisional until common-engine parity closes)
-- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (stable; included in default wheel)
-- NSE script metadata and sandbox policy inspection (stable; requires feature: `nse`)
-- Database driver enumeration, capability descriptors, and credential providers (stable; requires feature: `db-pentest`)
-- Container scanning: Docker image and Kubernetes manifests (stable; requires feature: `container`)
-- Mobile static analysis: APK and IPA analysis (stable; requires feature: `mobile`)
-- Git secrets scanning and SBOM generation (stable; requires features: `git-secrets`, `sbom`)
+- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (stable, no feature gate required)
+
+### Stable Operations Requiring Feature Flags
+
+The following stable operations are compiled only when their feature flag is
+enabled. They share the same policy gate and contract as default-wheel
+operations but are not included in the default wheel:
+
+- Git secrets scanning and SBOM generation (feature: `git-secrets`, `sbom`)
+- Database probe and driver enumeration (feature: `db-pentest`)
+- NSE script execution (feature: `nse`)
+- Container scanning: Docker image and Kubernetes manifests (feature: `container`)
+- Mobile static analysis: APK and IPA analysis (feature: `mobile`)
+
+### Additional API Surface (default wheel)
+
+The default wheel also includes the following API surface beyond the core
+scanning and recon operations:
+
 - Packet filter and flow record types (Milestone D)
 - Traceroute API (Milestone D)
 - Interception proxy config and captured exchanges (Milestone D)

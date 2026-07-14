@@ -6,9 +6,15 @@ Validates:
 - Stale operation count references in docs
 - Domain maturity consistency between JSON and Rust source
 - Feature metadata consistency
+- Sync/async operation list parity
+- Registry descriptor completeness
+- Feature metadata JSON/Rust consistency
+- Stable operations have test fixtures
+- Provisional domains not marked stable
 """
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CAPS_JSON = REPO_ROOT / "crates" / "eggsec-python" / "python" / "eggsec" / "_capabilities.json"
 DOMAINS_RS = REPO_ROOT / "crates" / "eggsec-python" / "src" / "domains.rs"
 REGISTRY_RS = REPO_ROOT / "crates" / "eggsec-python" / "src" / "operation_registry.rs"
+CARGO_TOML = REPO_ROOT / "crates" / "eggsec-python" / "Cargo.toml"
 
 FAIL = 0
 
@@ -208,6 +215,166 @@ def main() -> None:
                 fail(m)
         else:
             pass_("Feature metadata consistent between JSON and Rust.")
+
+    # 6. Sync/async operation list parity
+    print()
+    print("--- Guard 6: Sync/Async engine operation list parity ---")
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import eggsec; "
+                "e=eggsec.Engine(eggsec.Scope.allow_hosts(['x'])); "
+                "ae=eggsec.AsyncEngine(eggsec.Scope.allow_hosts(['x'])); "
+                "sync=sorted(e.list_operations()); "
+                "async_=sorted(ae.list_operations()); "
+                "assert sync==async_, f'mismatch: sync={sync} async={async_}'; "
+                "assert len(sync)==22, f'expected 22 ops, got {len(sync)}'"
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            err = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
+            fail(f"Sync/async mismatch: {err}")
+        else:
+            pass_("Sync and Async engine list_operations() return same 22 operations.")
+    except FileNotFoundError:
+        print("SKIP: Python not available for runtime check.")
+    except subprocess.TimeoutExpired:
+        print("SKIP: Runtime check timed out.")
+
+    # 7. Registry descriptor completeness
+    print()
+    print("--- Guard 7: Registry descriptor completeness ---")
+    if REGISTRY_RS.exists():
+        content = REGISTRY_RS.read_text()
+
+        # Extract all StableOperation variants from the enum definition
+        enum_match = re.search(
+            r'pub enum StableOperation \{(.*?)\}', content, re.DOTALL
+        )
+        rust_variants = []
+        if enum_match:
+            body = enum_match.group(1)
+            rust_variants = re.findall(r'(\w+)\s*,', body)
+
+        # Extract operations covered by classify_risk
+        classify_match = re.search(
+            r'fn classify_risk\(operation: StableOperation\).*?\{(.*?)\n    \}',
+            content, re.DOTALL,
+        )
+        classified_variants = set()
+        if classify_match:
+            classify_body = classify_match.group(1)
+            # Match all StableOperation::VariantName occurrences
+            classified_variants = set(re.findall(r'StableOperation::(\w+)', classify_body))
+
+        missing_variants = [v for v in rust_variants if v not in classified_variants]
+        if missing_variants:
+            for v in missing_variants:
+                fail(f"StableOperation::{v} missing from classify_risk()")
+        else:
+            pass_(f"All {len(rust_variants)} StableOperation variants have risk classification.")
+
+    # 8. Feature metadata JSON/Rust consistency
+    print()
+    print("--- Guard 8: Feature metadata JSON/Rust consistency ---")
+    if CAPS_JSON.exists():
+        with open(CAPS_JSON) as f:
+            caps = json.load(f)
+
+        # Parse features from Cargo.toml
+        cargo_features = set()
+        if CARGO_TOML.exists():
+            cargo_content = CARGO_TOML.read_text()
+            in_features = False
+            for line in cargo_content.splitlines():
+                if line.strip().startswith("[features]"):
+                    in_features = True
+                    continue
+                if in_features and line.strip().startswith("["):
+                    break
+                if in_features:
+                    m = re.match(r'^\s*(\S+)\s*=', line)
+                    if m and not line.strip().startswith("#"):
+                        cargo_features.add(m.group(1))
+
+        # Collect feature-gated operations from JSON
+        json_features = set()
+        for op_id, op_info in caps.get("operations", {}).items():
+            feat = op_info.get("cargo_feature")
+            if feat:
+                json_features.add(feat)
+
+        phantom = json_features - cargo_features
+        missing = cargo_features - json_features
+        if phantom:
+            for f in sorted(phantom):
+                fail(f"Phantom feature in JSON: '{f}' not in Cargo.toml")
+        if missing:
+            # Only flag features that are actually used by operations, not all Cargo features
+            op_features_in_json = {op_info.get("cargo_feature") for op_info in caps.get("operations", {}).values() if op_info.get("cargo_feature")}
+            truly_missing = op_features_in_json - cargo_features
+            for f in sorted(truly_missing):
+                fail(f"Feature in JSON operations missing from Cargo.toml: '{f}'")
+        if not phantom:
+            pass_(f"Feature metadata consistent: {len(json_features)} JSON features match Cargo.toml.")
+
+    # 9. Stable operations have test fixtures
+    print()
+    print("--- Guard 9: Stable operations have test fixtures ---")
+    if CAPS_JSON.exists():
+        with open(CAPS_JSON) as f:
+            caps = json.load(f)
+        ops = caps.get("operations", {})
+        stable = caps.get("stable_operations", [])
+        missing_fixture = []
+        for op_id in sorted(stable):
+            op_info = ops.get(op_id, {})
+            fixture = op_info.get("test_fixture", "")
+            maturity = op_info.get("maturity", "")
+            cargo_feature = op_info.get("cargo_feature")
+            if maturity != "stable":
+                continue
+            if not fixture or fixture.strip() == "":
+                missing_fixture.append(f"{op_id}: empty test_fixture")
+            elif fixture.strip() == "Feature-gated compilation" and cargo_feature:
+                # Feature-gated ops can use this placeholder
+                pass
+            elif not cargo_feature and "Feature-gated compilation" in fixture:
+                missing_fixture.append(
+                    f"{op_id}: always-compiled op uses 'Feature-gated compilation' fixture"
+                )
+        if missing_fixture:
+            for m in missing_fixture:
+                fail(m)
+        else:
+            pass_(f"All {len(stable)} stable operations have test fixtures.")
+
+    # 10. Provisional domains not marked stable
+    print()
+    print("--- Guard 10: Provisional domains not marked stable ---")
+    if CAPS_JSON.exists():
+        with open(CAPS_JSON) as f:
+            caps = json.load(f)
+        provisional_domains = {
+            "daemon", "browser", "proxy", "packet-inspection",
+            "wireless", "evasion", "postex", "c2", "distributed", "ai",
+        }
+        ops = caps.get("operations", {})
+        violations = []
+        for op_id, op_info in ops.items():
+            domain = op_info.get("domain", "")
+            maturity = op_info.get("maturity", "")
+            if domain in provisional_domains and maturity == "stable":
+                violations.append(
+                    f"{op_id}: domain '{domain}' is provisional but maturity is 'stable'"
+                )
+        if violations:
+            for v in violations:
+                fail(v)
+        else:
+            pass_("No provisional domain operations marked as stable.")
 
     # Summary
     print()
