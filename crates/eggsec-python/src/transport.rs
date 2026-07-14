@@ -1402,6 +1402,1004 @@ impl UdpSocketPy {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Async TCP Session (mutable, GIL-releasing)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Internal state for an async TCP session.
+struct AsyncTcpSessionState {
+    stream: Option<tokio::net::TcpStream>,
+    is_closed: bool,
+    transcript: Vec<TranscriptEntryPy>,
+    bytes_sent: u64,
+    bytes_received: u64,
+    sequence: u64,
+}
+
+/// Async managed TCP session with transcript tracking.
+///
+/// Uses `Arc<tokio::sync::Mutex<>>` for internal state so the mutex
+/// can be held across `.await` points. All I/O methods return a
+/// `PyFuture` that can be `await`-ed from Python and release the GIL
+/// during the async operation.
+#[pyclass]
+pub struct AsyncTcpSessionPy {
+    config: TcpConfigPy,
+    state: Arc<tokio::sync::Mutex<AsyncTcpSessionState>>,
+}
+
+#[pymethods]
+impl AsyncTcpSessionPy {
+    #[new]
+    #[pyo3(signature = (config))]
+    fn new(config: TcpConfigPy) -> Self {
+        Self {
+            config,
+            state: Arc::new(tokio::sync::Mutex::new(AsyncTcpSessionState {
+                stream: None,
+                is_closed: false,
+                transcript: Vec::new(),
+                bytes_sent: 0,
+                bytes_received: 0,
+                sequence: 0,
+            })),
+        }
+    }
+
+    #[getter]
+    fn is_closed(&self) -> bool {
+        // Blocking lock is fine here — we never hold it across .await
+        self.state.blocking_lock().is_closed
+    }
+
+    #[getter]
+    fn config(&self) -> TcpConfigPy {
+        self.config.clone()
+    }
+
+    #[getter]
+    fn transcript(&self) -> NetworkTranscriptPy {
+        let s = self.state.blocking_lock();
+        let total_bytes = s.bytes_sent + s.bytes_received;
+        NetworkTranscriptPy {
+            entries: s.transcript.clone(),
+            total_bytes,
+            truncated: false,
+        }
+    }
+
+    #[getter]
+    fn bytes_sent(&self) -> u64 {
+        self.state.blocking_lock().bytes_sent
+    }
+
+    #[getter]
+    fn bytes_received(&self) -> u64 {
+        self.state.blocking_lock().bytes_received
+    }
+
+    /// Establish a TCP connection to the configured host:port.
+    fn connect(&self, py: Python) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let host = self.config.host.clone();
+        let port = self.config.port;
+        let connect_timeout = std::time::Duration::from_millis(self.config.connect_timeout_ms);
+        let nodelay = self.config.nodelay;
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed {
+                return Err(NetworkError::new_err("Session is closed"));
+            }
+            if s.stream.is_some() {
+                return Err(NetworkError::new_err("Already connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let addr = format!("{}:{}", host, port);
+                let connect_start = Instant::now();
+
+                let stream =
+                    tokio::time::timeout(connect_timeout, tokio::net::TcpStream::connect(&addr))
+                        .await
+                        .map_err(|_| {
+                            TimeoutError::new_err(format!(
+                                "TCP connect timed out after {}ms to {}:{}",
+                                connect_timeout.as_millis(),
+                                host,
+                                port
+                            ))
+                        })?
+                        .map_err(|e| {
+                            NetworkError::new_err(format!(
+                                "TCP connect failed to {}:{}: {}",
+                                host, port, e
+                            ))
+                        })?;
+
+                stream.set_nodelay(nodelay).map_err(|e| {
+                    NetworkError::new_err(format!("Failed to set TCP_NODELAY: {}", e))
+                })?;
+
+                let connect_duration_ms = connect_start.elapsed().as_secs_f64() * 1000.0;
+
+                let local_addr = stream.local_addr().map_err(|e| {
+                    NetworkError::new_err(format!("Failed to get local address: {}", e))
+                })?;
+                let remote_addr = stream.peer_addr().map_err(|e| {
+                    NetworkError::new_err(format!("Failed to get peer address: {}", e))
+                })?;
+
+                let local_endpoint = endpoint_from_socket_addr(local_addr);
+                let remote_endpoint = endpoint_from_socket_addr(remote_addr);
+
+                let timing = ConnectionTimingPy {
+                    dns_resolution_ms: None,
+                    tcp_connect_ms: Some(connect_duration_ms),
+                    tls_handshake_ms: None,
+                    first_byte_ms: None,
+                    total_ms: connect_duration_ms,
+                    connection_reused: false,
+                };
+
+                let metadata = ConnectionMetadataPy {
+                    local_endpoint: Some(local_endpoint.clone()),
+                    remote_endpoint: Some(remote_endpoint.clone()),
+                    resolved_address: None,
+                    transport_protocol: "tcp".to_string(),
+                    negotiated_protocol: None,
+                    connection_reused: false,
+                    timing: Some(timing.clone()),
+                    tls_version: None,
+                    tls_cipher: None,
+                    bytes_sent: 0,
+                    bytes_received: 0,
+                };
+
+                {
+                    let mut s = state.lock().await;
+                    s.stream = Some(stream);
+                }
+
+                Ok(TcpConnectResultPy {
+                    local_endpoint,
+                    remote_endpoint,
+                    timing,
+                    metadata,
+                })
+            })
+        })
+    }
+
+    /// Read up to max_bytes from the stream.
+    fn read(&self, py: Python, max_bytes: Option<usize>) -> PyResult<runtime_async::PyFuture> {
+        let max_bytes = max_bytes.unwrap_or(4096);
+        let state = Arc::clone(&self.state);
+        let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let stream = s
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let mut buf = vec![0u8; max_bytes];
+                let n = tokio::time::timeout(read_timeout, stream.read(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "TCP read timed out after {}ms",
+                            read_timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("TCP read error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+                let eof = n == 0;
+                let bytes_read = n;
+
+                buf.truncate(bytes_read);
+                s.bytes_received += bytes_read as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "received".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "data".to_string(),
+                    size: bytes_read,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(TcpReadResultPy {
+                    data: buf,
+                    bytes_read,
+                    eof,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Read exactly n bytes from the stream.
+    fn read_exact(&self, py: Python, n: usize) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let stream = s
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let mut buf = vec![0u8; n];
+                tokio::time::timeout(read_timeout, stream.read_exact(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "TCP read_exact timed out after {}ms",
+                            read_timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("TCP read_exact error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+                s.bytes_received += n as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "received".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "data".to_string(),
+                    size: n,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(TcpReadResultPy {
+                    data: buf,
+                    bytes_read: n,
+                    eof: false,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Read until the delimiter byte is encountered or max_len is reached.
+    fn read_until(
+        &self,
+        py: Python,
+        delimiter: Option<u8>,
+        max_len: Option<usize>,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let delimiter = delimiter.unwrap_or(0x0A);
+        let max_len = max_len.unwrap_or(65536);
+        let state = Arc::clone(&self.state);
+        let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let stream = s
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let mut buf = vec![0u8; max_len];
+                let total = tokio::time::timeout(read_timeout, async {
+                    let mut total = 0;
+                    for byte in buf.iter_mut().take(max_len) {
+                        match stream.read(std::slice::from_mut(byte)).await {
+                            Ok(0) => break,
+                            Ok(_) => {
+                                total += 1;
+                                if *byte == delimiter {
+                                    break;
+                                }
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    Ok::<usize, std::io::Error>(total)
+                })
+                .await
+                .map_err(|_| {
+                    TimeoutError::new_err(format!(
+                        "TCP read_until timed out after {}ms",
+                        read_timeout.as_millis()
+                    ))
+                })?
+                .map_err(|e| NetworkError::new_err(format!("TCP read_until error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+                let bytes_read = total;
+
+                buf.truncate(bytes_read);
+                s.bytes_received += bytes_read as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "received".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "data".to_string(),
+                    size: bytes_read,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(TcpReadResultPy {
+                    data: buf,
+                    bytes_read,
+                    eof: bytes_read == 0,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Write data to the stream.
+    fn write(&self, py: Python, data: Vec<u8>) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let write_timeout = std::time::Duration::from_millis(self.config.write_timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let stream = s
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let result = tokio::time::timeout(write_timeout, stream.write(&data))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "TCP write timed out after {}ms",
+                            write_timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("TCP write error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+                s.bytes_sent += result as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "sent".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "data".to_string(),
+                    size: result,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(TcpWriteResultPy {
+                    bytes_written: result,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Write all data to the stream.
+    fn write_all(&self, py: Python, data: Vec<u8>) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let write_timeout = std::time::Duration::from_millis(self.config.write_timeout_ms);
+        let len = data.len();
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let stream = s
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                tokio::time::timeout(write_timeout, stream.write_all(&data))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "TCP write_all timed out after {}ms",
+                            write_timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("TCP write_all error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+                s.bytes_sent += len as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "sent".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "data".to_string(),
+                    size: len,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(TcpWriteResultPy {
+                    bytes_written: len,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Close the TCP session.
+    fn close(&self) -> PyResult<()> {
+        let mut s = self.state.blocking_lock();
+        if s.is_closed {
+            return Ok(());
+        }
+        s.stream.take();
+        s.is_closed = true;
+        Ok(())
+    }
+
+    fn aclose(&self) -> PyResult<()> {
+        self.close()
+    }
+
+    fn __aenter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __aexit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        let _ = self.close();
+        false
+    }
+
+    fn __enter__(_slf: Py<Self>) -> PyResult<Py<Self>> {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "Use 'async with' for AsyncTcpSession",
+        ))
+    }
+
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "Use 'async with' for AsyncTcpSession",
+        ))
+    }
+
+    fn __repr__(&self) -> String {
+        let s = self.state.blocking_lock();
+        format!(
+            "AsyncTcpSession(host={}, port={}, closed={}, sent={}, received={})",
+            self.config.host, self.config.port, s.is_closed, s.bytes_sent, s.bytes_received
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let s = self.state.blocking_lock();
+        if s.is_closed {
+            format!(
+                "async tcp://{}:{} (closed, {} transcripts)",
+                self.config.host,
+                self.config.port,
+                s.transcript.len()
+            )
+        } else {
+            format!(
+                "async tcp://{}:{} (open, {} transcripts, sent={}B recv={}B)",
+                self.config.host,
+                self.config.port,
+                s.transcript.len(),
+                s.bytes_sent,
+                s.bytes_received
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Async UDP Socket (mutable, GIL-releasing)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Internal state for an async UDP socket.
+struct AsyncUdpSocketState {
+    socket: Option<tokio::net::UdpSocket>,
+    is_closed: bool,
+    bytes_sent: u64,
+    bytes_received: u64,
+    transcript: Vec<TranscriptEntryPy>,
+    sequence: u64,
+}
+
+/// Async managed UDP socket with send/recv operations.
+///
+/// Uses `Arc<tokio::sync::Mutex<>>` for internal state so the mutex
+/// can be held across `.await` points. All I/O methods return a
+/// `PyFuture` that can be `await`-ed from Python and release the GIL
+/// during the async operation.
+#[pyclass]
+pub struct AsyncUdpSocketPy {
+    config: UdpConfigPy,
+    state: Arc<tokio::sync::Mutex<AsyncUdpSocketState>>,
+}
+
+#[pymethods]
+impl AsyncUdpSocketPy {
+    #[new]
+    #[pyo3(signature = (config))]
+    fn new(config: UdpConfigPy) -> Self {
+        Self {
+            config,
+            state: Arc::new(tokio::sync::Mutex::new(AsyncUdpSocketState {
+                socket: None,
+                is_closed: false,
+                bytes_sent: 0,
+                bytes_received: 0,
+                transcript: Vec::new(),
+                sequence: 0,
+            })),
+        }
+    }
+
+    #[getter]
+    fn is_closed(&self) -> bool {
+        self.state.blocking_lock().is_closed
+    }
+
+    #[getter]
+    fn bytes_sent(&self) -> u64 {
+        self.state.blocking_lock().bytes_sent
+    }
+
+    #[getter]
+    fn bytes_received(&self) -> u64 {
+        self.state.blocking_lock().bytes_received
+    }
+
+    #[getter]
+    fn transcript(&self) -> NetworkTranscriptPy {
+        let s = self.state.blocking_lock();
+        let total_bytes = s.bytes_sent + s.bytes_received;
+        NetworkTranscriptPy {
+            entries: s.transcript.clone(),
+            total_bytes,
+            truncated: false,
+        }
+    }
+
+    /// Connect the UDP socket to the target host:port.
+    fn connect(&self, py: Python) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let bind_addr = self.config.bind_address.clone();
+        let target_addr = format!("{}:{}", self.config.host, self.config.port);
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed {
+                return Err(NetworkError::new_err("Socket is closed"));
+            }
+            if s.socket.is_some() {
+                return Err(NetworkError::new_err("Already connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let socket = if let Some(ref bind) = bind_addr {
+                    tokio::net::UdpSocket::bind(bind).await.map_err(|e| {
+                        NetworkError::new_err(format!("UDP bind failed to {}: {}", bind, e))
+                    })?
+                } else {
+                    tokio::net::UdpSocket::bind("0.0.0.0:0")
+                        .await
+                        .map_err(|e| NetworkError::new_err(format!("UDP bind failed: {}", e)))?
+                };
+
+                tokio::time::timeout(timeout, socket.connect(&target_addr))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP connect timed out after {}ms to {}",
+                            timeout.as_millis(),
+                            target_addr
+                        ))
+                    })?
+                    .map_err(|e| {
+                        NetworkError::new_err(format!(
+                            "UDP connect failed to {}: {}",
+                            target_addr, e
+                        ))
+                    })?;
+
+                let mut s = state.lock().await;
+                s.socket = Some(socket);
+                Ok(())
+            })
+        })
+    }
+
+    /// Send a datagram to the connected target.
+    fn send(&self, py: Python, data: Vec<u8>) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.socket.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let socket = s
+                    .socket
+                    .as_ref()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let result = tokio::time::timeout(timeout, socket.send(&data))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP send timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP send error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+                s.bytes_sent += result as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "sent".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "datagram".to_string(),
+                    size: result,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(UdpSendResultPy {
+                    bytes_sent: result,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Send a datagram to a specific address.
+    fn send_to(
+        &self,
+        py: Python,
+        data: Vec<u8>,
+        addr: String,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.socket.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let socket = s
+                    .socket
+                    .as_ref()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let result = tokio::time::timeout(timeout, socket.send_to(&data, &addr))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP send_to timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP send_to error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+                s.bytes_sent += result as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "sent".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "datagram".to_string(),
+                    size: result,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(UdpSendResultPy {
+                    bytes_sent: result,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Receive a datagram from the connected target.
+    fn recv(&self, py: Python, max_size: Option<usize>) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+        let max_datagram_size = self.config.max_datagram_size;
+        let max_size = max_size.unwrap_or(max_datagram_size);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.socket.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let socket = s
+                    .socket
+                    .as_ref()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let mut buf = vec![0u8; max_size];
+                let n = tokio::time::timeout(timeout, socket.recv(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP recv timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP recv error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+                let truncated = n == max_size;
+
+                buf.truncate(n);
+
+                s.bytes_received += n as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "received".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "datagram".to_string(),
+                    size: n,
+                    summary: None,
+                    redacted: false,
+                });
+
+                Ok(UdpRecvResultPy {
+                    data: buf,
+                    bytes_received: n,
+                    truncated,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Receive a datagram and return the source address.
+    fn recv_from(&self, py: Python, max_size: Option<usize>) -> PyResult<runtime_async::PyFuture> {
+        let state = Arc::clone(&self.state);
+        let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
+        let max_datagram_size = self.config.max_datagram_size;
+        let max_size = max_size.unwrap_or(max_datagram_size);
+
+        {
+            let s = state.blocking_lock();
+            if s.is_closed || s.socket.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        py.allow_threads(|| {
+            runtime_async::spawn_async(async move {
+                let start = Instant::now();
+                let mut s = state.lock().await;
+                let socket = s
+                    .socket
+                    .as_ref()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+
+                let mut buf = vec![0u8; max_size];
+                let (n, from) = tokio::time::timeout(timeout, socket.recv_from(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP recv_from timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP recv_from error: {}", e)))?;
+
+                let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+                let truncated = n == max_size;
+
+                buf.truncate(n);
+
+                let source_address = from.ip().to_string();
+                let source_port = from.port();
+
+                s.bytes_received += n as u64;
+                s.sequence += 1;
+                let seq = s.sequence;
+                let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+                s.transcript.push(TranscriptEntryPy {
+                    sequence: seq,
+                    direction: "received".to_string(),
+                    timestamp_ms: now_ms,
+                    data_type: "datagram".to_string(),
+                    size: n,
+                    summary: Some(format!("from {}:{}", source_address, source_port)),
+                    redacted: false,
+                });
+
+                Ok(UdpRecvFromResultPy {
+                    data: buf,
+                    bytes_received: n,
+                    source_address,
+                    source_port,
+                    truncated,
+                    duration_ms,
+                })
+            })
+        })
+    }
+
+    /// Close the UDP socket.
+    fn close(&self) -> PyResult<()> {
+        let mut s = self.state.blocking_lock();
+        if s.is_closed {
+            return Ok(());
+        }
+        s.socket.take();
+        s.is_closed = true;
+        Ok(())
+    }
+
+    fn aclose(&self) -> PyResult<()> {
+        self.close()
+    }
+
+    fn __aenter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __aexit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        let _ = self.close();
+        false
+    }
+
+    fn __enter__(_slf: Py<Self>) -> PyResult<Py<Self>> {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "Use 'async with' for AsyncUdpSocket",
+        ))
+    }
+
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "Use 'async with' for AsyncUdpSocket",
+        ))
+    }
+
+    fn __repr__(&self) -> String {
+        let s = self.state.blocking_lock();
+        format!(
+            "AsyncUdpSocket(host={}, port={}, closed={})",
+            self.config.host, self.config.port, s.is_closed
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let s = self.state.blocking_lock();
+        if s.is_closed {
+            format!(
+                "async udp://{}:{} (closed)",
+                self.config.host, self.config.port
+            )
+        } else {
+            format!(
+                "async udp://{}:{} (open)",
+                self.config.host, self.config.port
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Banner Probe Result
 // ═══════════════════════════════════════════════════════════════════
 

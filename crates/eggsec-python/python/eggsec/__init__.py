@@ -111,6 +111,8 @@ try:
     from ._core import UdpConfigPy, UdpSocketPy, UdpSendResultPy
     from ._core import UdpRecvResultPy, UdpRecvFromResultPy
     from ._core import BannerProbeResultPy
+    # Release 2: Async transport sessions
+    from ._core import AsyncTcpSessionPy, AsyncUdpSocketPy
     from ._core import tcp_connect_probe, async_tcp_connect_probe
     from ._core import banner_probe, async_banner_probe
 except AttributeError:
@@ -610,6 +612,18 @@ try:
     IcmpProbeResult = _core.IcmpProbeResultPy
     TcpProbeConfig = _core.TcpProbeConfigPy
     TcpProbeResult = _core.TcpProbeResultPy
+    # WS7: Additional capture types
+    PacketTimestampPy = _core.PacketTimestampPy
+    PacketStreamPy = _core.PacketStreamPy
+    PacketArtifactPy = _core.PacketArtifactPy
+    SyncCaptureSessionPy = _core.SyncCaptureSessionPy
+    # WS8: Additional layer DTOs
+    DnsPacketPy = _core.DnsPacketPy
+    TlsRecordInfoPy = _core.TlsRecordInfoPy
+    # WS9: UDP reachability
+    UdpReachabilityConfigPy = _core.UdpReachabilityConfigPy
+    UdpReachabilityResultPy = _core.UdpReachabilityResultPy
+    udp_reachability = _core.udp_reachability
 except AttributeError:
     pass
 
@@ -821,6 +835,15 @@ ConnectionEvent = _core.ConnectionEvent
 ProbeEvent = _core.ProbeEvent
 WebSocketMessageEvent = _core.WebSocketMessageEvent
 CaptureStatsEvent = _core.CaptureStatsEvent
+# WS11: Additional network events
+HandshakeCompletedEvent = _core.HandshakeCompletedEvent
+RequestSentEvent = _core.RequestSentEvent
+ResponseHeadersReceivedEvent = _core.ResponseHeadersReceivedEvent
+BodyProgressEvent = _core.BodyProgressEvent
+CaptureStartedEvent = _core.CaptureStartedEvent
+PacketSampledEvent = _core.PacketSampledEvent
+FlowObservedEvent = _core.FlowObservedEvent
+ArtifactCreatedEvent = _core.ArtifactCreatedEvent
 wrap_event = _core.wrap_event
 EventStream = _core.EventStream
 event_stream_from_legacy = _core.event_stream_from_legacy
@@ -1137,6 +1160,18 @@ __all__ = [
     "run_traceroute",
     "async_run_traceroute",
     "traceroute",
+    # WS7: Additional capture types (feature-gated)
+    "PacketTimestampPy",
+    "PacketStreamPy",
+    "PacketArtifactPy",
+    "SyncCaptureSessionPy",
+    # WS8: Additional layer DTOs (feature-gated)
+    "DnsPacketPy",
+    "TlsRecordInfoPy",
+    # WS9: UDP reachability (feature-gated)
+    "UdpReachabilityConfigPy",
+    "UdpReachabilityResultPy",
+    "udp_reachability",
     # Milestone D: Interception proxy (feature-gated)
     "InterceptConfig",
     "CapturedExchange",
@@ -1239,6 +1274,14 @@ __all__ = [
     "CancellationEvent",
     "FailureEvent",
     "CompletionEvent",
+    "HandshakeCompletedEvent",
+    "RequestSentEvent",
+    "ResponseHeadersReceivedEvent",
+    "BodyProgressEvent",
+    "CaptureStartedEvent",
+    "PacketSampledEvent",
+    "FlowObservedEvent",
+    "ArtifactCreatedEvent",
     "wrap_event",
     "EventStream",
     "event_stream_from_legacy",
@@ -1321,6 +1364,8 @@ __all__ = [
     "WebSocketHandshakePy",
     "WebSocketSessionPy",
     "AsyncWebSocketSessionPy",
+    "AsyncTcpSessionPy",
+    "AsyncUdpSocketPy",
     "WebSocketAssessmentConfigPy",
     "WebSocketAssessmentResultPy",
     "websocket_assess",

@@ -1038,4 +1038,583 @@ impl CaptureStatsEvent {
             self.interface, self.packets_captured, self.packets_dropped
         )
     }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: handshake completed (TCP, TLS, WebSocket).
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct HandshakeCompletedEvent {
+    #[pyo3(get)]
+    pub protocol: String,
+    #[pyo3(get)]
+    pub host: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub duration_ms: f64,
+    #[pyo3(get)]
+    pub negotiated_version: Option<String>,
+    #[pyo3(get)]
+    pub cipher_suite: Option<String>,
+}
+
+#[pymethods]
+impl HandshakeCompletedEvent {
+    #[new]
+    #[pyo3(signature = (protocol, host, port, duration_ms, negotiated_version=None, cipher_suite=None))]
+    pub(crate) fn new(
+        protocol: String,
+        host: String,
+        port: u16,
+        duration_ms: f64,
+        negotiated_version: Option<String>,
+        cipher_suite: Option<String>,
+    ) -> Self {
+        Self {
+            protocol,
+            host,
+            port,
+            duration_ms,
+            negotiated_version,
+            cipher_suite,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("protocol", &self.protocol)?;
+        dict.set_item("host", &self.host)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("duration_ms", self.duration_ms)?;
+        dict.set_item("negotiated_version", &self.negotiated_version)?;
+        dict.set_item("cipher_suite", &self.cipher_suite)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "protocol": self.protocol,
+            "host": self.host,
+            "port": self.port,
+            "duration_ms": self.duration_ms,
+            "negotiated_version": self.negotiated_version,
+            "cipher_suite": self.cipher_suite,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "HandshakeCompletedEvent(protocol={}, host={}, port={})",
+            self.protocol, self.host, self.port
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: HTTP request sent.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct RequestSentEvent {
+    #[pyo3(get)]
+    pub method: String,
+    #[pyo3(get)]
+    pub url: String,
+    #[pyo3(get)]
+    pub headers_count: usize,
+    #[pyo3(get)]
+    pub body_size: Option<usize>,
+    #[pyo3(get)]
+    pub request_index: u64,
+}
+
+#[pymethods]
+impl RequestSentEvent {
+    #[new]
+    #[pyo3(signature = (method, url, headers_count, body_size=None, request_index=0))]
+    pub(crate) fn new(
+        method: String,
+        url: String,
+        headers_count: usize,
+        body_size: Option<usize>,
+        request_index: u64,
+    ) -> Self {
+        Self {
+            method,
+            url,
+            headers_count,
+            body_size,
+            request_index,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("method", &self.method)?;
+        dict.set_item("url", &self.url)?;
+        dict.set_item("headers_count", self.headers_count)?;
+        dict.set_item("body_size", &self.body_size)?;
+        dict.set_item("request_index", self.request_index)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "method": self.method,
+            "url": self.url,
+            "headers_count": self.headers_count,
+            "body_size": self.body_size,
+            "request_index": self.request_index,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("RequestSentEvent(method={}, url={})", self.method, self.url)
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: response headers received.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ResponseHeadersReceivedEvent {
+    #[pyo3(get)]
+    pub status_code: u16,
+    #[pyo3(get)]
+    pub reason: String,
+    #[pyo3(get)]
+    pub headers_count: usize,
+    #[pyo3(get)]
+    pub content_length: Option<usize>,
+    #[pyo3(get)]
+    pub content_type: Option<String>,
+    #[pyo3(get)]
+    pub redirect_url: Option<String>,
+    #[pyo3(get)]
+    pub request_index: u64,
+}
+
+#[pymethods]
+impl ResponseHeadersReceivedEvent {
+    #[new]
+    #[pyo3(signature = (status_code, reason, headers_count, content_length=None, content_type=None, redirect_url=None, request_index=0))]
+    pub(crate) fn new(
+        status_code: u16,
+        reason: String,
+        headers_count: usize,
+        content_length: Option<usize>,
+        content_type: Option<String>,
+        redirect_url: Option<String>,
+        request_index: u64,
+    ) -> Self {
+        Self {
+            status_code,
+            reason,
+            headers_count,
+            content_length,
+            content_type,
+            redirect_url,
+            request_index,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("status_code", self.status_code)?;
+        dict.set_item("reason", &self.reason)?;
+        dict.set_item("headers_count", self.headers_count)?;
+        dict.set_item("content_length", &self.content_length)?;
+        dict.set_item("content_type", &self.content_type)?;
+        dict.set_item("redirect_url", &self.redirect_url)?;
+        dict.set_item("request_index", self.request_index)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "status_code": self.status_code,
+            "reason": self.reason,
+            "headers_count": self.headers_count,
+            "content_length": self.content_length,
+            "content_type": self.content_type,
+            "redirect_url": self.redirect_url,
+            "request_index": self.request_index,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ResponseHeadersReceivedEvent(status={}, reason={})",
+            self.status_code, self.reason
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: body download progress.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct BodyProgressEvent {
+    #[pyo3(get)]
+    pub bytes_received: u64,
+    #[pyo3(get)]
+    pub bytes_expected: Option<u64>,
+    #[pyo3(get)]
+    pub percentage: Option<f64>,
+    #[pyo3(get)]
+    pub is_complete: bool,
+}
+
+#[pymethods]
+impl BodyProgressEvent {
+    #[new]
+    #[pyo3(signature = (bytes_received, is_complete, bytes_expected=None, percentage=None))]
+    pub(crate) fn new(
+        bytes_received: u64,
+        is_complete: bool,
+        bytes_expected: Option<u64>,
+        percentage: Option<f64>,
+    ) -> Self {
+        Self {
+            bytes_received,
+            bytes_expected,
+            percentage,
+            is_complete,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("bytes_received", self.bytes_received)?;
+        dict.set_item("bytes_expected", &self.bytes_expected)?;
+        dict.set_item("percentage", &self.percentage)?;
+        dict.set_item("is_complete", self.is_complete)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "bytes_received": self.bytes_received,
+            "bytes_expected": self.bytes_expected,
+            "percentage": self.percentage,
+            "is_complete": self.is_complete,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "BodyProgressEvent(received={}, complete={})",
+            self.bytes_received, self.is_complete
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: packet capture started.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct CaptureStartedEvent {
+    #[pyo3(get)]
+    pub interface: String,
+    #[pyo3(get)]
+    pub filter: Option<String>,
+    #[pyo3(get)]
+    pub promiscuous: bool,
+    #[pyo3(get)]
+    pub snapshot_len: usize,
+}
+
+#[pymethods]
+impl CaptureStartedEvent {
+    #[new]
+    #[pyo3(signature = (interface, promiscuous, snapshot_len, filter=None))]
+    pub(crate) fn new(
+        interface: String,
+        promiscuous: bool,
+        snapshot_len: usize,
+        filter: Option<String>,
+    ) -> Self {
+        Self {
+            interface,
+            filter,
+            promiscuous,
+            snapshot_len,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("interface", &self.interface)?;
+        dict.set_item("filter", &self.filter)?;
+        dict.set_item("promiscuous", self.promiscuous)?;
+        dict.set_item("snapshot_len", self.snapshot_len)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "interface": self.interface,
+            "filter": self.filter,
+            "promiscuous": self.promiscuous,
+            "snapshot_len": self.snapshot_len,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CaptureStartedEvent(iface={}, promiscuous={})",
+            self.interface, self.promiscuous
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: individual packet sampled during capture.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct PacketSampledEvent {
+    #[pyo3(get)]
+    pub interface: String,
+    #[pyo3(get)]
+    pub packet_index: u64,
+    #[pyo3(get)]
+    pub captured_len: u32,
+    #[pyo3(get)]
+    pub original_len: u32,
+    #[pyo3(get)]
+    pub protocol_hint: Option<String>,
+}
+
+#[pymethods]
+impl PacketSampledEvent {
+    #[new]
+    #[pyo3(signature = (interface, packet_index, captured_len, original_len, protocol_hint=None))]
+    pub(crate) fn new(
+        interface: String,
+        packet_index: u64,
+        captured_len: u32,
+        original_len: u32,
+        protocol_hint: Option<String>,
+    ) -> Self {
+        Self {
+            interface,
+            packet_index,
+            captured_len,
+            original_len,
+            protocol_hint,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("interface", &self.interface)?;
+        dict.set_item("packet_index", self.packet_index)?;
+        dict.set_item("captured_len", self.captured_len)?;
+        dict.set_item("original_len", self.original_len)?;
+        dict.set_item("protocol_hint", &self.protocol_hint)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "interface": self.interface,
+            "packet_index": self.packet_index,
+            "captured_len": self.captured_len,
+            "original_len": self.original_len,
+            "protocol_hint": self.protocol_hint,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PacketSampledEvent(iface={}, index={}, captured={})",
+            self.interface, self.packet_index, self.captured_len
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: network flow observed.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct FlowObservedEvent {
+    #[pyo3(get)]
+    pub src_address: String,
+    #[pyo3(get)]
+    pub src_port: u16,
+    #[pyo3(get)]
+    pub dst_address: String,
+    #[pyo3(get)]
+    pub dst_port: u16,
+    #[pyo3(get)]
+    pub protocol: String,
+    #[pyo3(get)]
+    pub packet_count: u64,
+    #[pyo3(get)]
+    pub byte_count: u64,
+}
+
+#[pymethods]
+impl FlowObservedEvent {
+    #[new]
+    #[pyo3(signature = (src_address, src_port, dst_address, dst_port, protocol, packet_count, byte_count))]
+    pub(crate) fn new(
+        src_address: String,
+        src_port: u16,
+        dst_address: String,
+        dst_port: u16,
+        protocol: String,
+        packet_count: u64,
+        byte_count: u64,
+    ) -> Self {
+        Self {
+            src_address,
+            src_port,
+            dst_address,
+            dst_port,
+            protocol,
+            packet_count,
+            byte_count,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("src_address", &self.src_address)?;
+        dict.set_item("src_port", self.src_port)?;
+        dict.set_item("dst_address", &self.dst_address)?;
+        dict.set_item("dst_port", self.dst_port)?;
+        dict.set_item("protocol", &self.protocol)?;
+        dict.set_item("packet_count", self.packet_count)?;
+        dict.set_item("byte_count", self.byte_count)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "src_address": self.src_address,
+            "src_port": self.src_port,
+            "dst_address": self.dst_address,
+            "dst_port": self.dst_port,
+            "protocol": self.protocol,
+            "packet_count": self.packet_count,
+            "byte_count": self.byte_count,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FlowObservedEvent(src={}:{}, dst={}:{}, proto={})",
+            self.src_address, self.src_port, self.dst_address, self.dst_port, self.protocol
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Typed event: artifact created during execution.
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct ArtifactCreatedEvent {
+    #[pyo3(get)]
+    pub artifact_type: String,
+    #[pyo3(get)]
+    pub path: Option<String>,
+    #[pyo3(get)]
+    pub size: u64,
+    #[pyo3(get)]
+    pub mime_type: Option<String>,
+    #[pyo3(get)]
+    pub description: String,
+}
+
+#[pymethods]
+impl ArtifactCreatedEvent {
+    #[new]
+    #[pyo3(signature = (artifact_type, description, size, path=None, mime_type=None))]
+    pub(crate) fn new(
+        artifact_type: String,
+        description: String,
+        size: u64,
+        path: Option<String>,
+        mime_type: Option<String>,
+    ) -> Self {
+        Self {
+            artifact_type,
+            path,
+            size,
+            mime_type,
+            description,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("artifact_type", &self.artifact_type)?;
+        dict.set_item("path", &self.path)?;
+        dict.set_item("size", self.size)?;
+        dict.set_item("mime_type", &self.mime_type)?;
+        dict.set_item("description", &self.description)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self, _py: Python) -> PyResult<String> {
+        let val = serde_json::json!({
+            "artifact_type": self.artifact_type,
+            "path": self.path,
+            "size": self.size,
+            "mime_type": self.mime_type,
+            "description": self.description,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ArtifactCreatedEvent(type={}, size={})",
+            self.artifact_type, self.size
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
 }

@@ -403,6 +403,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<packet_inspection::CaptureDropStatsPy>()?;
         m.add_class::<packet_inspection::CapturedPacketPy>()?;
         m.add_class::<packet_inspection::AsyncCaptureSessionPy>()?;
+        // WS10: Timestamps, streaming, artifacts, sync capture
+        m.add_class::<packet_inspection::PacketTimestampPy>()?;
+        m.add_class::<packet_inspection::PacketStreamPy>()?;
+        m.add_class::<packet_inspection::PacketArtifactPy>()?;
+        m.add_class::<packet_inspection::SyncCaptureSessionPy>()?;
         // D3: Network probing
         m.add_class::<packet_inspection::TracerouteConfigPy>()?;
         m.add_class::<packet_inspection::TracerouteHopPy>()?;
@@ -416,16 +421,23 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<packet_inspection::IcmpPacketPy>()?;
         m.add_class::<packet_inspection::FlowKeyPy>()?;
         m.add_class::<packet_inspection::FlowAggregatorPy>()?;
+        // WS10: DNS and TLS decode DTOs
+        m.add_class::<packet_inspection::DnsPacketPy>()?;
+        m.add_class::<packet_inspection::TlsRecordInfoPy>()?;
         // WS9: Active probe types
         m.add_class::<packet_inspection::IcmpProbeConfigPy>()?;
         m.add_class::<packet_inspection::IcmpProbeReplyPy>()?;
         m.add_class::<packet_inspection::IcmpProbeResultPy>()?;
         m.add_class::<packet_inspection::TcpProbeConfigPy>()?;
         m.add_class::<packet_inspection::TcpProbeResultPy>()?;
+        // WS10: UDP reachability probe
+        m.add_class::<packet_inspection::UdpReachabilityConfigPy>()?;
+        m.add_class::<packet_inspection::UdpReachabilityResultPy>()?;
         m.add_function(wrap_pyfunction!(packet_inspection::icmp_probe, m)?)?;
         m.add_function(wrap_pyfunction!(packet_inspection::async_icmp_probe, m)?)?;
         m.add_function(wrap_pyfunction!(packet_inspection::tcp_syn_probe, m)?)?;
         m.add_function(wrap_pyfunction!(packet_inspection::async_tcp_syn_probe, m)?)?;
+        m.add_function(wrap_pyfunction!(packet_inspection::udp_reachability, m)?)?;
     }
     // Phase F Track 2: Load testing
     m.add_class::<loadtest::LoadTestResultPy>()?;
@@ -446,11 +458,13 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Release 2: TCP/UDP transport session primitives
     m.add_class::<transport::TcpConfigPy>()?;
     m.add_class::<transport::TcpSessionPy>()?;
+    m.add_class::<transport::AsyncTcpSessionPy>()?;
     m.add_class::<transport::TcpConnectResultPy>()?;
     m.add_class::<transport::TcpReadResultPy>()?;
     m.add_class::<transport::TcpWriteResultPy>()?;
     m.add_class::<transport::UdpConfigPy>()?;
     m.add_class::<transport::UdpSocketPy>()?;
+    m.add_class::<transport::AsyncUdpSocketPy>()?;
     m.add_class::<transport::UdpSendResultPy>()?;
     m.add_class::<transport::UdpRecvResultPy>()?;
     m.add_class::<transport::UdpRecvFromResultPy>()?;
@@ -922,6 +936,14 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<event_protocol::ProbeEvent>()?;
     m.add_class::<event_protocol::WebSocketMessageEvent>()?;
     m.add_class::<event_protocol::CaptureStatsEvent>()?;
+    m.add_class::<event_protocol::HandshakeCompletedEvent>()?;
+    m.add_class::<event_protocol::RequestSentEvent>()?;
+    m.add_class::<event_protocol::ResponseHeadersReceivedEvent>()?;
+    m.add_class::<event_protocol::BodyProgressEvent>()?;
+    m.add_class::<event_protocol::CaptureStartedEvent>()?;
+    m.add_class::<event_protocol::PacketSampledEvent>()?;
+    m.add_class::<event_protocol::FlowObservedEvent>()?;
+    m.add_class::<event_protocol::ArtifactCreatedEvent>()?;
     m.add_function(wrap_pyfunction!(event_protocol::wrap_event, m)?)?;
     m.add("EVENT_SCHEMA_VERSION", event_protocol::EVENT_SCHEMA_VERSION)?;
     m.add_class::<event_stream::EventStream>()?;
@@ -1191,6 +1213,15 @@ fn api_surface() -> PyObject {
         add_entry!("FailureEvent", "stable");
         add_entry!("CompletionEvent", "stable");
         add_entry!("EventDeliveryStats", "provisional");
+        // WS11: Network-specific events
+        add_entry!("HandshakeCompletedEvent", "provisional");
+        add_entry!("RequestSentEvent", "provisional");
+        add_entry!("ResponseHeadersReceivedEvent", "provisional");
+        add_entry!("BodyProgressEvent", "provisional");
+        add_entry!("CaptureStartedEvent", "provisional");
+        add_entry!("PacketSampledEvent", "provisional");
+        add_entry!("FlowObservedEvent", "provisional");
+        add_entry!("ArtifactCreatedEvent", "provisional");
         add_entry!("wrap_event", "stable");
         add_entry!("EVENT_SCHEMA_VERSION", "stable");
         add_entry!("EventStream", "stable");

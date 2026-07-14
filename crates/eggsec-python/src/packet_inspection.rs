@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use crate::error::ScanError;
 use crate::runtime_async;
+use crate::runtime_sync;
 
 /// Wrapper for CaptureConfig.
 #[pyclass(frozen)]
@@ -2564,4 +2565,762 @@ async fn run_tcp_syn_probe_inner(config: &TcpProbeConfigPy) -> PyResult<TcpProbe
             )),
         }),
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS10: Timestamps, streaming, artifacts, sync capture, DNS, TLS, UDP
+// ═══════════════════════════════════════════════════════════════════
+
+/// Frozen DTO for packet timestamps.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacketTimestampPy {
+    #[pyo3(get)]
+    pub seconds: u64,
+    #[pyo3(get)]
+    pub nanos: u32,
+    #[pyo3(get)]
+    pub epoch_micros: u64,
+}
+
+#[pymethods]
+impl PacketTimestampPy {
+    #[new]
+    fn new(seconds: u64, nanos: u32, epoch_micros: u64) -> Self {
+        Self {
+            seconds,
+            nanos,
+            epoch_micros,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("seconds", self.seconds)?;
+        dict.set_item("nanos", self.nanos)?;
+        dict.set_item("epoch_micros", self.epoch_micros)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PacketTimestamp(seconds={}, nanos={}, epoch_micros={})",
+            self.seconds, self.nanos, self.epoch_micros
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}.{}s ({}µs)", self.seconds, self.nanos, self.epoch_micros)
+    }
+}
+
+/// Packet streaming/iterator wrapper over a frozen vector of captured packets.
+///
+/// Supports the Python iterator protocol and provides synchronous packet-at-a-time
+/// access from a pre-collected batch.
+#[pyclass(frozen)]
+#[derive(Debug)]
+pub struct PacketStreamPy {
+    packets: Arc<Vec<CapturedPacketPy>>,
+    index: std::sync::atomic::AtomicUsize,
+}
+
+#[pymethods]
+impl PacketStreamPy {
+    #[new]
+    fn new(packets: Vec<CapturedPacketPy>) -> Self {
+        Self {
+            packets: Arc::new(packets),
+            index: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// Return the next packet, or None if exhausted.
+    fn next(&self) -> Option<CapturedPacketPy> {
+        let idx = self
+            .index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.packets.get(idx).cloned()
+    }
+
+    fn len(&self) -> usize {
+        self.packets.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.packets.is_empty()
+    }
+
+    fn to_list(&self) -> Vec<CapturedPacketPy> {
+        self.packets.as_ref().clone()
+    }
+
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__(&self) -> PyResult<CapturedPacketPy> {
+        let idx = self
+            .index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        match self.packets.get(idx) {
+            Some(pkt) => Ok(pkt.clone()),
+            None => Err(pyo3::exceptions::PyStopIteration::new_err("")),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("PacketStream(len={})", self.packets.len())
+    }
+
+    fn __len__(&self) -> usize {
+        self.packets.len()
+    }
+}
+
+/// Frozen DTO for packet artifacts (pcap files, raw bytes, parsed frames).
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacketArtifactPy {
+    #[pyo3(get)]
+    pub packet_index: usize,
+    #[pyo3(get)]
+    pub artifact_type: String,
+    #[pyo3(get)]
+    pub file_path: Option<String>,
+    #[pyo3(get)]
+    pub byte_offset: Option<u64>,
+    #[pyo3(get)]
+    pub description: String,
+}
+
+#[pymethods]
+impl PacketArtifactPy {
+    #[new]
+    #[pyo3(signature = (packet_index, artifact_type, description="", file_path=None, byte_offset=None))]
+    fn new(
+        packet_index: usize,
+        artifact_type: String,
+        description: &str,
+        file_path: Option<String>,
+        byte_offset: Option<u64>,
+    ) -> Self {
+        Self {
+            packet_index,
+            artifact_type,
+            file_path,
+            byte_offset,
+            description: description.to_string(),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("packet_index", self.packet_index)?;
+        dict.set_item("artifact_type", &self.artifact_type)?;
+        dict.set_item("file_path", &self.file_path)?;
+        dict.set_item("byte_offset", &self.byte_offset)?;
+        dict.set_item("description", &self.description)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PacketArtifact(index={}, type={})",
+            self.packet_index, self.artifact_type
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "artifact[{}] {} ({})",
+            self.packet_index, self.artifact_type, self.description
+        )
+    }
+}
+
+/// Synchronous capture session — counterpart to AsyncCaptureSessionPy.
+///
+/// Manages capture lifecycle (start/stop) with thread-safe state.
+/// Does not perform real captures (requires privileges); validates
+/// state transitions only.
+#[pyclass]
+pub struct SyncCaptureSessionPy {
+    config: CaptureConfigPy,
+    state: Arc<std::sync::Mutex<SyncCaptureState>>,
+}
+
+struct SyncCaptureState {
+    is_running: bool,
+    is_closed: bool,
+    packets: Vec<CapturedPacketPy>,
+    stats: CaptureStatsPy,
+    drop_stats: CaptureDropStatsPy,
+}
+
+#[pymethods]
+impl SyncCaptureSessionPy {
+    #[new]
+    #[pyo3(signature = (config, *, queue_size=1000))]
+    fn new(config: CaptureConfigPy, queue_size: usize) -> Self {
+        let _ = queue_size;
+        Self {
+            config,
+            state: Arc::new(std::sync::Mutex::new(SyncCaptureState {
+                is_running: false,
+                is_closed: false,
+                packets: Vec::new(),
+                stats: CaptureStatsPy {
+                    packets_captured: 0,
+                    bytes_captured: 0,
+                    packets_dropped: 0,
+                    runtime_ms: 0,
+                },
+                drop_stats: CaptureDropStatsPy {
+                    dropped_by_policy: 0,
+                    dropped_by_full_queue: 0,
+                    dropped_by_error: 0,
+                    total_dropped: 0,
+                },
+            })),
+        }
+    }
+
+    /// Start the capture session. Errors if already running or closed.
+    fn start(&self) -> PyResult<()> {
+        let mut s = self
+            .state
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Lock poisoned: {}", e)))?;
+        if s.is_closed {
+            return Err(pyo3::exceptions::PyValueError::new_err("Session is closed"));
+        }
+        if s.is_running {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Session is already running",
+            ));
+        }
+        s.is_running = true;
+        Ok(())
+    }
+
+    /// Stop the capture session. Errors if not running.
+    fn stop(&self) -> PyResult<CaptureStatsPy> {
+        let mut s = self
+            .state
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Lock poisoned: {}", e)))?;
+        if !s.is_running {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Session is not running",
+            ));
+        }
+        s.is_running = false;
+        s.is_closed = true;
+        Ok(s.stats.clone())
+    }
+
+    /// Return captured packets.
+    fn packets(&self) -> PyResult<Vec<CapturedPacketPy>> {
+        let s = self
+            .state
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Lock poisoned: {}", e)))?;
+        Ok(s.packets.clone())
+    }
+
+    fn stats(&self) -> PyResult<CaptureStatsPy> {
+        let s = self
+            .state
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Lock poisoned: {}", e)))?;
+        Ok(s.stats.clone())
+    }
+
+    fn drop_stats(&self) -> PyResult<CaptureDropStatsPy> {
+        let s = self
+            .state
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Lock poisoned: {}", e)))?;
+        Ok(s.drop_stats.clone())
+    }
+
+    #[getter]
+    fn is_running(&self) -> bool {
+        self.state.lock().unwrap().is_running
+    }
+
+    #[getter]
+    fn is_closed(&self) -> bool {
+        self.state.lock().unwrap().is_closed
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        let _ = self.stop();
+        false
+    }
+
+    fn __repr__(&self) -> String {
+        let s = self.state.lock().unwrap();
+        format!(
+            "SyncCaptureSession(interface={}, running={}, closed={})",
+            self.config.interface, s.is_running, s.is_closed
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let s = self.state.lock().unwrap();
+        if s.is_closed {
+            format!("sync_capture@{} (closed)", self.config.interface)
+        } else if s.is_running {
+            format!("sync_capture@{} (running)", self.config.interface)
+        } else {
+            format!("sync_capture@{} (idle)", self.config.interface)
+        }
+    }
+}
+
+/// Frozen DTO for decoded DNS packets.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsPacketPy {
+    #[pyo3(get)]
+    pub transaction_id: u16,
+    #[pyo3(get)]
+    pub is_response: bool,
+    #[pyo3(get)]
+    pub op_code: u8,
+    #[pyo3(get)]
+    pub authoritative: bool,
+    #[pyo3(get)]
+    pub truncated: bool,
+    #[pyo3(get)]
+    pub recursion_desired: bool,
+    #[pyo3(get)]
+    pub recursion_available: bool,
+    #[pyo3(get)]
+    pub response_code: u8,
+    #[pyo3(get)]
+    pub question_count: u16,
+    #[pyo3(get)]
+    pub answer_count: u16,
+    #[pyo3(get)]
+    pub authority_count: u16,
+    #[pyo3(get)]
+    pub additional_count: u16,
+}
+
+#[pymethods]
+impl DnsPacketPy {
+    #[new]
+    #[pyo3(signature = (transaction_id, is_response, op_code=0, authoritative=false, truncated=false, recursion_desired=false, recursion_available=false, response_code=0, question_count=0, answer_count=0, authority_count=0, additional_count=0))]
+    fn new(
+        transaction_id: u16,
+        is_response: bool,
+        op_code: u8,
+        authoritative: bool,
+        truncated: bool,
+        recursion_desired: bool,
+        recursion_available: bool,
+        response_code: u8,
+        question_count: u16,
+        answer_count: u16,
+        authority_count: u16,
+        additional_count: u16,
+    ) -> Self {
+        Self {
+            transaction_id,
+            is_response,
+            op_code,
+            authoritative,
+            truncated,
+            recursion_desired,
+            recursion_available,
+            response_code,
+            question_count,
+            answer_count,
+            authority_count,
+            additional_count,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("transaction_id", self.transaction_id)?;
+        dict.set_item("is_response", self.is_response)?;
+        dict.set_item("op_code", self.op_code)?;
+        dict.set_item("authoritative", self.authoritative)?;
+        dict.set_item("truncated", self.truncated)?;
+        dict.set_item("recursion_desired", self.recursion_desired)?;
+        dict.set_item("recursion_available", self.recursion_available)?;
+        dict.set_item("response_code", self.response_code)?;
+        dict.set_item("question_count", self.question_count)?;
+        dict.set_item("answer_count", self.answer_count)?;
+        dict.set_item("authority_count", self.authority_count)?;
+        dict.set_item("additional_count", self.additional_count)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DnsPacket(id={}, resp={}, rcode={}, answers={})",
+            self.transaction_id, self.is_response, self.response_code, self.answer_count
+        )
+    }
+
+    fn __str__(&self) -> String {
+        let msg_type = if self.is_response {
+            "response"
+        } else {
+            "query"
+        };
+        format!(
+            "DNS {} id={} rcode={} ({} questions, {} answers)",
+            msg_type,
+            self.transaction_id,
+            self.response_code,
+            self.question_count,
+            self.answer_count
+        )
+    }
+}
+
+/// Frozen DTO for TLS record info.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsRecordInfoPy {
+    #[pyo3(get)]
+    pub content_type: String,
+    #[pyo3(get)]
+    pub version: String,
+    #[pyo3(get)]
+    pub record_length: u16,
+    #[pyo3(get)]
+    pub handshake_type: Option<String>,
+    #[pyo3(get)]
+    pub cipher_suites: Vec<String>,
+    #[pyo3(get)]
+    pub extensions: Vec<String>,
+    #[pyo3(get)]
+    pub sni: Option<String>,
+    #[pyo3(get)]
+    pub alpn_protocols: Vec<String>,
+}
+
+#[pymethods]
+impl TlsRecordInfoPy {
+    #[new]
+    #[pyo3(signature = (content_type, version, record_length, handshake_type=None, cipher_suites=None, extensions=None, sni=None, alpn_protocols=None))]
+    fn new(
+        content_type: String,
+        version: String,
+        record_length: u16,
+        handshake_type: Option<String>,
+        cipher_suites: Option<Vec<String>>,
+        extensions: Option<Vec<String>>,
+        sni: Option<String>,
+        alpn_protocols: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            content_type,
+            version,
+            record_length,
+            handshake_type,
+            cipher_suites: cipher_suites.unwrap_or_default(),
+            extensions: extensions.unwrap_or_default(),
+            sni,
+            alpn_protocols: alpn_protocols.unwrap_or_default(),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("content_type", &self.content_type)?;
+        dict.set_item("version", &self.version)?;
+        dict.set_item("record_length", self.record_length)?;
+        dict.set_item("handshake_type", &self.handshake_type)?;
+        dict.set_item("cipher_suites", &self.cipher_suites)?;
+        dict.set_item("extensions", &self.extensions)?;
+        dict.set_item("sni", &self.sni)?;
+        dict.set_item("alpn_protocols", &self.alpn_protocols)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TlsRecordInfo(type={}, version={}, len={})",
+            self.content_type, self.version, self.record_length
+        )
+    }
+
+    fn __str__(&self) -> String {
+        match &self.handshake_type {
+            Some(ht) => format!("TLS {} {} ({})", self.version, self.content_type, ht),
+            None => format!("TLS {} {}", self.version, self.content_type),
+        }
+    }
+}
+
+/// Configuration for a UDP reachability probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpReachabilityConfigPy {
+    #[pyo3(get)]
+    pub host: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub payload: Option<Vec<u8>>,
+    #[pyo3(get)]
+    pub timeout_ms: u64,
+    #[pyo3(get)]
+    pub attempts: u32,
+}
+
+#[pymethods]
+impl UdpReachabilityConfigPy {
+    #[new]
+    #[pyo3(signature = (host, port, payload=None, timeout_ms=2000, attempts=1))]
+    fn new(
+        host: String,
+        port: u16,
+        payload: Option<Vec<u8>>,
+        timeout_ms: u64,
+        attempts: u32,
+    ) -> Self {
+        Self {
+            host,
+            port,
+            payload,
+            timeout_ms,
+            attempts,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("host", &self.host)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("payload", &self.payload)?;
+        dict.set_item("timeout_ms", self.timeout_ms)?;
+        dict.set_item("attempts", self.attempts)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UdpReachabilityConfig(host={}, port={}, attempts={})",
+            self.host, self.port, self.attempts
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "UDP probe {}:{} ({} attempts, {}ms timeout)",
+            self.host, self.port, self.attempts, self.timeout_ms
+        )
+    }
+}
+
+/// Result of a UDP reachability probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpReachabilityResultPy {
+    #[pyo3(get)]
+    pub reachable: bool,
+    #[pyo3(get)]
+    pub response: Option<Vec<u8>>,
+    #[pyo3(get)]
+    pub rtt_ms: Option<f64>,
+    #[pyo3(get)]
+    pub attempts: u32,
+    #[pyo3(get)]
+    pub responses_received: u32,
+    #[pyo3(get)]
+    pub error: Option<String>,
+}
+
+#[pymethods]
+impl UdpReachabilityResultPy {
+    #[new]
+    #[pyo3(signature = (reachable, attempts, responses_received, response=None, rtt_ms=None, error=None))]
+    fn new(
+        reachable: bool,
+        attempts: u32,
+        responses_received: u32,
+        response: Option<Vec<u8>>,
+        rtt_ms: Option<f64>,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            reachable,
+            response,
+            rtt_ms,
+            attempts,
+            responses_received,
+            error,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("reachable", self.reachable)?;
+        dict.set_item("response", &self.response)?;
+        dict.set_item("rtt_ms", &self.rtt_ms)?;
+        dict.set_item("attempts", self.attempts)?;
+        dict.set_item("responses_received", self.responses_received)?;
+        dict.set_item("error", &self.error)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UdpReachabilityResult(reachable={}, responses={}/{})",
+            self.reachable, self.responses_received, self.attempts
+        )
+    }
+
+    fn __str__(&self) -> String {
+        if self.reachable {
+            format!(
+                "reachable ({}/{} responses, {}ms)",
+                self.responses_received,
+                self.attempts,
+                self.rtt_ms.unwrap_or(0.0)
+            )
+        } else {
+            format!(
+                "unreachable ({}/{} responses)",
+                self.responses_received, self.attempts
+            )
+        }
+    }
+}
+
+/// Run a UDP reachability probe using the shared tokio runtime.
+///
+/// Creates a UDP socket, sends the payload (or empty bytes), and waits for
+/// a response with the configured timeout. Measures RTT for successful probes.
+#[pyfunction]
+pub(crate) fn udp_reachability(
+    py: Python,
+    config: UdpReachabilityConfigPy,
+) -> PyResult<UdpReachabilityResultPy> {
+    use std::net::ToSocketAddrs;
+
+    let host = config.host.clone();
+    let port = config.port;
+    let payload = config.payload.clone().unwrap_or_default();
+    let timeout = Duration::from_millis(config.timeout_ms);
+    let attempts = config.attempts;
+
+    // Resolve target
+    let addr_str = format!("{}:{}", host, port);
+    let addr = addr_str
+        .to_socket_addrs()
+        .map_err(|e| ScanError::new_err(format!("Failed to resolve {}: {}", addr_str, e)))?
+        .next()
+        .ok_or_else(|| ScanError::new_err(format!("No addresses found for {}", addr_str)))?;
+
+    let mut responses_received = 0u32;
+    let mut last_response: Option<Vec<u8>> = None;
+    let mut last_rtt: Option<f64> = None;
+    let mut last_error: Option<String> = None;
+
+    runtime_sync::block_on(py, async move {
+        use tokio::net::UdpSocket;
+
+        let socket = UdpSocket::bind("0.0.0.0:0")
+            .await
+            .map_err(|e| format!("Failed to bind UDP socket: {}", e))?;
+
+        socket
+            .connect(addr)
+            .await
+            .map_err(|e| format!("Failed to connect UDP socket: {}", e))?;
+
+        for _ in 0..attempts {
+            let start = std::time::Instant::now();
+
+            match tokio::time::timeout(timeout, socket.send(&payload)).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => {
+                    last_error = Some(e.to_string());
+                    continue;
+                }
+                Err(_) => {
+                    last_error = Some(format!("Send timed out after {}ms", config.timeout_ms));
+                    continue;
+                }
+            }
+
+            let mut buf = vec![0u8; 4096];
+            match tokio::time::timeout(timeout, socket.recv(&mut buf)).await {
+                Ok(Ok(n)) => {
+                    let rtt = start.elapsed().as_secs_f64() * 1000.0;
+                    buf.truncate(n);
+                    responses_received += 1;
+                    last_response = Some(buf);
+                    last_rtt = Some(rtt);
+                    last_error = None;
+                }
+                Ok(Err(e)) => {
+                    last_error = Some(e.to_string());
+                }
+                Err(_) => {
+                    last_error = Some(format!("Receive timed out after {}ms", config.timeout_ms));
+                }
+            }
+        }
+
+        let reachable = responses_received > 0;
+        Ok::<_, String>(UdpReachabilityResultPy {
+            reachable,
+            response: last_response,
+            rtt_ms: last_rtt,
+            attempts,
+            responses_received,
+            error: if reachable { None } else { last_error },
+        })
+    })
 }
