@@ -5,7 +5,7 @@ Machine-readable capability matrix for the `eggsec-python` crate. This is the
 operation maturity, and validation status.
 
 > **Release boundary**: pre-1.0 stable-core release candidate. Only the
-> ten-operation stable-core set carries a compatibility promise. All other
+> twenty-two-operation stable-core set carries a compatibility promise. All other
 > domains are provisional or experimental until they satisfy the graduation
 > checklist below.
 

@@ -87,8 +87,8 @@ until they satisfy the graduation checklist:
 | Domain | Status | Notes |
 |--------|--------|-------|
 | `daemon` | provisional | Transport parity pending |
-| `proxy` | provisional | MITM interception |
-| `packet-inspection` | provisional | Live capture, traceroute |
+| `proxy` | experimental | MITM interception semantics remain hazardous |
+| `packet-inspection` | experimental | Platform/system dependency and lifecycle coverage pending |
 | `wireless` | experimental | Platform-sensitive, root required |
 | `evasion` | experimental | MITRE ATT&CK mapped |
 | `postex` | experimental | Post-exploitation simulation |

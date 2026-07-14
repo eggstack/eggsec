@@ -4,7 +4,7 @@ Every public API in the `eggsec` Python package is classified into a stability
 level. This document is the canonical mapping from symbol to classification.
 
 > Release boundary (2026-07-12): this package is pre-1.0. The only stable
-> execution boundary is the ten-operation stable core described in
+> execution boundary is the twenty-two-operation stable core described in
 > [domain-maturity.md](domain-maturity.md). Earlier milestone tables in this
 > document describe API shape, not a blanket compatibility promise; use the
 > machine-readable `api_surface()` and `domain_maturity()` results for the

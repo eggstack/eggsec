@@ -379,10 +379,10 @@ as `cargo check -p eggsec --features web-proxy`.
 | `db-pentest` | `db-pentest` | provisional | Database pentest (requires `eggsec-db-lab`) |
 | `db-pentest-mongodb` | `db-pentest-mongodb` | provisional | MongoDB pentest |
 | `db-pentest-redis` | `db-pentest-redis` | provisional | Redis pentest |
-| `web-proxy` | `web-proxy` | provisional | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `web-proxy` | `web-proxy` | experimental | Web proxy MITM (requires `eggsec-web-proxy`) |
 | `mobile` | `mobile` | provisional | APK/IPA static analysis |
 | `mobile-dynamic` | `mobile-dynamic` | experimental | Android dynamic testing (requires ADB) |
-| `packet-inspection` | `packet-inspection` | provisional | Packet capture |
+| `packet-inspection` | `packet-inspection` | experimental | Packet capture (parser-only on most platforms) |
 | `stress-testing` | `stress-testing` | experimental | Stress testing (raw sockets, root required) |
 | `nse` | `nse` | provisional | Nmap NSE scripts (requires `eggsec-nse`) |
 | `container` | `container` | provisional | K8s/Docker scanning |
@@ -413,14 +413,14 @@ Default wheel: core + scanner + endpoint discovery + service fingerprinting + re
 | WAF validate | `validate_waf` | ✓ | ✓ | ✓ | ✓ | — | ✓ | **stable** |
 | HTTP fuzz | `fuzz_http` | ✓ | ✓ | ✓ | ✓ | — | ✓ | **stable** |
 | Load test | `load_test_http` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | **stable** |
-| Consolidated recon | `run_consolidated_recon` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
-| GraphQL test | `graphql_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
-| OAuth test | `oauth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
-| Auth test | `auth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **provisional** |
-| DB probe | `db_probe` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
-| APK analyze | `analyze_apk` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
-| Docker scan | `scan_docker_image` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
-| NSE run | `nse_run` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
+| Consolidated recon | `run_consolidated_recon` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| GraphQL test | `graphql_test` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| OAuth test | `oauth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| Auth test | `auth_test` | ✓ | ✓ | ✓ | ✓ | — | — | **stable** |
+| DB probe | `db_probe` | ✓ | ✓ | — | ✓ | — | — | **stable** |
+| APK analyze | `analyze_apk` | ✓ | ✓ | — | ✓ | — | — | **stable** |
+| Docker scan | `scan_docker_image` | ✓ | ✓ | — | ✓ | — | — | **stable** |
+| NSE run | `nse_run` | ✓ | ✓ | — | ✓ | — | — | **stable** |
 | Traceroute | `run_traceroute` | ✓ | ✓ | — | ✓ | — | — | **provisional** |
 | Daemon connect | `daemon_connect` | — | ✓ | — | — | ✓ | — | **provisional** |
 | Wireless scan | `wireless_scan` | ✓ | ✓ | — | ✓ | — | — | **experimental** |

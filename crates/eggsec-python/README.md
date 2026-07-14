@@ -72,12 +72,12 @@ checkpoint persistence, wheel smoke tests, and architecture guards.
 - Backpressure delivery statistics with reliable lifecycle-event handling
 - Domain maturity introspection via `domain_maturity()`
 - Policy, configuration, and execution context (provisional until common-engine parity closes)
-- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (stable; API convergence release)
-- NSE script metadata and sandbox policy inspection (stable; API convergence release)
-- Database driver enumeration, capability descriptors, and credential providers (stable; API convergence release)
-- Container scanning: Docker image and Kubernetes manifests (stable; API convergence release)
-- Mobile static analysis: APK and IPA analysis (stable; API convergence release)
-- Git secrets scanning and SBOM generation (stable; API convergence release)
+- Consolidated reconnaissance, GraphQL, OAuth/OIDC, and authentication assessment (stable; included in default wheel)
+- NSE script metadata and sandbox policy inspection (stable; requires feature: `nse`)
+- Database driver enumeration, capability descriptors, and credential providers (stable; requires feature: `db-pentest`)
+- Container scanning: Docker image and Kubernetes manifests (stable; requires feature: `container`)
+- Mobile static analysis: APK and IPA analysis (stable; requires feature: `mobile`)
+- Git secrets scanning and SBOM generation (stable; requires features: `git-secrets`, `sbom`)
 - Packet filter and flow record types (Milestone D)
 - Traceroute API (Milestone D)
 - Interception proxy config and captured exchanges (Milestone D)

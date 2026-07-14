@@ -5,7 +5,7 @@ Workstream G12 — Python API Milestone G completeness review.
 ## Release boundary
 
 This checklist is not a declaration that the full package is 1.0-ready. The
-current target is a scoped pre-1.0 stable-core release candidate. The ten
+current target is a scoped pre-1.0 stable-core release candidate. The twenty-two
 stable operations have a canonical registry, mandatory policy/audit gate,
 typed payloads, structured errors, and governed event backpressure. Broader
 domain parity, deterministic fixtures for every operation, daemon contract

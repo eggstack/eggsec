@@ -29,6 +29,18 @@ def test_stable_registry_and_policy_audit_contract():
         "validate_waf",
         "fuzz_http",
         "load_test",
+        "scan_git_secrets",
+        "generate_sbom",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa",
     ]
 
     result = engine.run_port_scan(
@@ -133,6 +145,9 @@ class TestRuntimeStubParity:
 
         # Known internal types registered in _core but not re-exported at
         # the top-level eggsec namespace. They are accessible via eggsec._core.
+        # Feature-gated request types are registered in _core but only re-exported
+        # in .pyi stubs, not in __init__.py at runtime.
+        # Constants are mapped to dunder names via separate parsing.
         known_internal = {
             "DeprecatedWarning",
             "ArtifactMeta",
@@ -141,6 +156,30 @@ class TestRuntimeStubParity:
             "LazyArtifact",
             "LazyEventIterator",
             "PaginatedResults",
+            "OutputRef",
+            "ProxyRoutePy",
+            "UdpProbeConfigPy",
+            "UdpProbeResultPy",
+            "ApkAnalysisRequest",
+            "AuthTestRequest",
+            "ConsolidatedReconRequest",
+            "DbProbeRequest",
+            "DockerImageScanRequest",
+            "GitSecretsScanRequest",
+            "GraphqlTestRequest",
+            "IpaAnalysisRequest",
+            "KubernetesScanRequest",
+            "NseRunRequest",
+            "OauthTestRequest",
+            "SbomRequest",
+            "async_udp_probe",
+            "udp_probe",
+            "evidence_to_finding",
+            "FailurePolicy",
+            # Constants mapped to dunder names
+            "ABI_VERSION",
+            "SCHEMA_VERSION",
+            "PROTOCOL_VERSION",
         }
 
         missing = []

@@ -5,7 +5,7 @@ pre-1.0 stable core is intentionally smaller than the importable package.
 
 ## Stable dispatch
 
-The ten stable engine operations are represented by the Rust
+The twenty-two stable engine operations are represented by the Rust
 `StableOperation` enum in `crates/eggsec-python/src/operation_registry.rs`.
 `Engine.run()` and `AsyncEngine.run()` parse the same enum before dispatch, so
 unknown IDs cannot silently reach a domain executor. Historical aliases are
@@ -37,7 +37,7 @@ contract.
 
 ## Release boundary and daemon deferral
 
-The first public `0.x` release guarantees the ten stable operations through
+The first public `0.x` release guarantees the twenty-two stable operations through
 local `Engine` and `AsyncEngine` execution. The optional `daemon-client`
 feature remains provisional. Its APIs are available for integration testing,
 but no release documentation should describe daemon execution as stable until

@@ -194,7 +194,7 @@ package name (controlled by `module-name = "eggsec._core"` in
 TestPyPI is used for validation before a production release.
 
 The first-release stable guarantee covers local `Engine` and `AsyncEngine`
-execution against the ten stable-core operations. Daemon-client execution is
+execution against the twenty-two stable-core operations. Daemon-client execution is
 provisional until transport parity, checkpoint portability, and reconnect
 semantics have their own release gate.
 

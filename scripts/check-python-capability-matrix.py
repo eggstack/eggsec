@@ -80,6 +80,127 @@ def parse_domain_maturity_from_rust(path: Path) -> dict[str, str]:
     return result
 
 
+REQUIRED_OPERATION_FIELDS = [
+    "operation_id",
+    "display_name",
+    "domain",
+    "maturity",
+    "cargo_feature",
+    "default_wheel",
+    "sync_dispatch",
+    "async_dispatch",
+    "engine_dispatch",
+    "direct_function",
+    "policy",
+    "scope",
+    "audit",
+    "events",
+    "timeout",
+    "cancellation",
+    "serialization",
+    "stub",
+    "secret_sentinel",
+    "installed_wheel",
+    "supported_platforms",
+    "known_blockers",
+]
+
+VALID_MATURITY_LEVELS = {"stable", "provisional", "experimental"}
+
+
+def validate_per_operation_fields(caps: dict) -> None:
+    """Validate that each operation has required fields with correct types."""
+    print("--- Per-Operation Field Validation ---")
+    operations = caps.get("operations", {})
+    stable_ops = set(caps.get("stable_operations", []))
+
+    for op_id in sorted(stable_ops):
+        if op_id not in operations:
+            fail(f"Operation '{op_id}' in stable_operations but missing from operations map")
+            continue
+
+        op = operations[op_id]
+        for field in REQUIRED_OPERATION_FIELDS:
+            if field not in op:
+                fail(f"Operation '{op_id}' missing required field '{field}'")
+
+        # Validate operation_id matches key
+        if op.get("operation_id") != op_id:
+            fail(
+                f"Operation '{op_id}': operation_id field is '{op.get('operation_id')}' "
+                f"(should be '{op_id}')"
+            )
+
+        # Validate maturity level
+        maturity = op.get("maturity")
+        if maturity not in VALID_MATURITY_LEVELS:
+            fail(
+                f"Operation '{op_id}': invalid maturity '{maturity}' "
+                f"(must be one of {VALID_MATURITY_LEVELS})"
+            )
+
+        # Validate boolean fields
+        for bool_field in [
+            "default_wheel",
+            "sync_dispatch",
+            "async_dispatch",
+            "engine_dispatch",
+            "direct_function",
+            "policy",
+            "scope",
+            "audit",
+            "events",
+            "timeout",
+            "cancellation",
+            "serialization",
+            "stub",
+            "secret_sentinel",
+            "installed_wheel",
+        ]:
+            val = op.get(bool_field)
+            if not isinstance(val, bool):
+                fail(f"Operation '{op_id}': field '{bool_field}' should be bool, got {type(val).__name__}")
+
+        # Validate supported_platforms is a list
+        platforms = op.get("supported_platforms")
+        if not isinstance(platforms, list):
+            fail(f"Operation '{op_id}': supported_platforms should be list")
+
+        # Validate known_blockers is a list
+        blockers = op.get("known_blockers")
+        if not isinstance(blockers, list):
+            fail(f"Operation '{op_id}': known_blockers should be list")
+
+    # Check for operations in the operations map that aren't in stable_operations
+    for op_id in operations:
+        if op_id not in stable_ops:
+            fail(f"Operation '{op_id}' in operations map but not in stable_operations")
+
+    passed_count = len(stable_ops) - sum(
+        1 for op_id in stable_ops if op_id not in operations
+    )
+    if passed_count > 0:
+        pass_(f"All {passed_count} operations have required per-operation fields.")
+
+
+def validate_domain_operation_consistency(caps: dict) -> None:
+    """Validate that domain operations lists match per-operation domain fields."""
+    print()
+    print("--- Domain-Operation Consistency ---")
+    operations = caps.get("operations", {})
+    domains = caps.get("domains", {})
+
+    for domain_id, domain_info in domains.items():
+        for op_id in domain_info.get("operations", []):
+            if op_id in operations:
+                op_domain = operations[op_id].get("domain")
+                if op_domain != domain_id:
+                    fail(
+                        f"Operation '{op_id}' claims domain='{op_domain}' "
+                        f"but is listed under domain '{domain_id}'"
+                    )
+
+
 def main() -> None:
     global FAIL
 
@@ -93,6 +214,10 @@ def main() -> None:
 
     with open(CAPABILITIES_JSON) as f:
         caps = json.load(f)
+
+    # Validate schema version
+    if caps.get("version") != 2:
+        fail(f"Expected capabilities schema version 2, got {caps.get('version')}")
 
     json_ops = set(caps["stable_operations"])
     json_domains = caps["domains"]
@@ -208,6 +333,13 @@ def main() -> None:
             pass_(f"StableOperation::ALL has {variants_in_all} variants (matches).")
     else:
         fail("Could not parse StableOperation::ALL")
+
+    # 11. Per-operation field validation
+    print()
+    validate_per_operation_fields(caps)
+
+    # 12. Domain-operation consistency
+    validate_domain_operation_consistency(caps)
 
     # Summary
     print()

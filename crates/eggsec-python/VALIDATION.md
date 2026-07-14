@@ -14,7 +14,7 @@ The closure pass completed the local scoped pre-1.0 stable-core gates:
 - Event envelopes carry monotonic sequence numbers; reliable lifecycle events
   are protected from progress-event drops and delivery statistics are exposed.
 - `domain_maturity()` and the architecture/release documentation now mark the
-  ten-operation stable-core boundary separately from provisional and
+  twenty-two-operation stable-core boundary separately from provisional and
   experimental domains.
 
 Remaining external gates are intentionally recorded in

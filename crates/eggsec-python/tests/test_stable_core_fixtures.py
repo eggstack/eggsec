@@ -1,4 +1,7 @@
-"""Hermetic release coverage for all ten stable-core operations."""
+"""Hermetic release coverage for the stable-core operations.
+
+Tests the ten always-available operations plus policy denial coverage for all
+twenty-two stable operations in the canonical registry."""
 
 from __future__ import annotations
 
