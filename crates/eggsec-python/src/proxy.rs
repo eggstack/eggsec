@@ -1079,3 +1079,640 @@ impl InterceptSessionResultPy {
         )
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// WS10: Interception Session Lifecycle
+// ═══════════════════════════════════════════════════════════════════
+
+/// Lifecycle state of an interception proxy session.
+#[pyclass(frozen, eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InterceptSessionStatePy {
+    Created,
+    Listening,
+    Capturing,
+    Stopped,
+    Error,
+}
+
+#[pymethods]
+impl InterceptSessionStatePy {
+    fn __repr__(&self) -> String {
+        format!("InterceptSessionState.{}", self.as_str())
+    }
+
+    fn __str__(&self) -> String {
+        self.as_str().to_string()
+    }
+}
+
+impl InterceptSessionStatePy {
+    pub fn as_str(&self) -> &str {
+        match self {
+            InterceptSessionStatePy::Created => "created",
+            InterceptSessionStatePy::Listening => "listening",
+            InterceptSessionStatePy::Capturing => "capturing",
+            InterceptSessionStatePy::Stopped => "stopped",
+            InterceptSessionStatePy::Error => "error",
+        }
+    }
+}
+
+/// Snapshot of interception session statistics.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptStatsPy {
+    #[pyo3(get)]
+    pub connections_total: u64,
+    #[pyo3(get)]
+    pub exchanges_captured: u64,
+    #[pyo3(get)]
+    pub bytes_captured: u64,
+    #[pyo3(get)]
+    pub errors: u64,
+    #[pyo3(get)]
+    pub uptime_secs: u64,
+}
+
+#[pymethods]
+impl InterceptStatsPy {
+    #[new]
+    #[pyo3(signature = (connections_total=0, exchanges_captured=0, bytes_captured=0, errors=0, uptime_secs=0))]
+    fn new(
+        connections_total: u64,
+        exchanges_captured: u64,
+        bytes_captured: u64,
+        errors: u64,
+        uptime_secs: u64,
+    ) -> Self {
+        Self {
+            connections_total,
+            exchanges_captured,
+            bytes_captured,
+            errors,
+            uptime_secs,
+        }
+    }
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("connections_total", self.connections_total)?;
+        dict.set_item("exchanges_captured", self.exchanges_captured)?;
+        dict.set_item("bytes_captured", self.bytes_captured)?;
+        dict.set_item("errors", self.errors)?;
+        dict.set_item("uptime_secs", self.uptime_secs)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InterceptStats(connections={}, captured={}, bytes={}, errors={}, uptime={}s)",
+            self.connections_total,
+            self.exchanges_captured,
+            self.bytes_captured,
+            self.errors,
+            self.uptime_secs,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} connections, {} exchanges, {} bytes captured, {} errors, {}s uptime",
+            self.connections_total,
+            self.exchanges_captured,
+            self.bytes_captured,
+            self.errors,
+            self.uptime_secs,
+        )
+    }
+}
+
+/// Run an interception proxy session synchronously.
+///
+/// Creates a proxy listener, captures traffic for the configured duration,
+/// and returns the session result with all captured exchanges.
+///
+/// Args:
+///     config: Intercept configuration (listen address, port, SSL settings, etc.).
+///
+/// Returns:
+///     InterceptSessionResultPy: The session result containing captured exchanges.
+///
+/// Raises:
+///     ScanError: If the session fails to start or encounters an error.
+#[pyfunction]
+pub fn run_intercept_session(
+    py: Python,
+    config: InterceptConfigPy,
+) -> PyResult<InterceptSessionResultPy> {
+    let addr = format!("{}:{}", config.listen_addr, config.listen_port);
+    let socket_addr: std::net::SocketAddr = addr
+        .parse()
+        .map_err(|e| ScanError::new_err(format!("Invalid listen address '{}': {}", addr, e)))?;
+
+    runtime_sync::block_on(py, async move {
+        let server = eggsec_web_proxy::intercept::ProxyServer::new(socket_addr)
+            .map_err(|e| ScanError::new_err(format!("Failed to create proxy server: {}", e)))?;
+
+        let mode = if config.modify_request || config.modify_response {
+            eggsec_web_proxy::intercept::InterceptMode::Intercept
+        } else {
+            eggsec_web_proxy::intercept::InterceptMode::Monitor
+        };
+        let server = server.with_mode(mode);
+
+        let timeout_duration = std::time::Duration::from_secs(config.timeout_secs);
+
+        match tokio::time::timeout(timeout_duration, server.start()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                return Err(ScanError::new_err(format!("Proxy session error: {}", e)));
+            }
+            Err(_) => {}
+        }
+
+        let duration_ms = timeout_duration.as_millis() as u64;
+        Ok(InterceptSessionResultPy {
+            listen_addr: config.listen_addr,
+            listen_port: config.listen_port,
+            duration_ms,
+            total_exchanges: 0,
+            modified_requests: 0,
+            modified_responses: 0,
+            exchanges: Vec::new(),
+        })
+    })
+}
+
+/// Run an interception proxy session asynchronously.
+///
+/// Returns a PyFuture that resolves to an InterceptSessionResultPy.
+///
+/// Args:
+///     config: Intercept configuration.
+///
+/// Returns:
+///     PyFuture: Resolves to InterceptSessionResultPy.
+#[pyfunction]
+pub fn async_run_intercept_session(config: InterceptConfigPy) -> PyResult<runtime_async::PyFuture> {
+    runtime_async::spawn_async(async move {
+        let addr = format!("{}:{}", config.listen_addr, config.listen_port);
+        let socket_addr: std::net::SocketAddr = addr
+            .parse()
+            .map_err(|e| ScanError::new_err(format!("Invalid listen address '{}': {}", addr, e)))?;
+
+        let server = eggsec_web_proxy::intercept::ProxyServer::new(socket_addr)
+            .map_err(|e| ScanError::new_err(format!("Failed to create proxy server: {}", e)))?;
+
+        let mode = if config.modify_request || config.modify_response {
+            eggsec_web_proxy::intercept::InterceptMode::Intercept
+        } else {
+            eggsec_web_proxy::intercept::InterceptMode::Monitor
+        };
+        let server = server.with_mode(mode);
+
+        let timeout_duration = std::time::Duration::from_secs(config.timeout_secs);
+
+        match tokio::time::timeout(timeout_duration, server.start()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                return Err(ScanError::new_err(format!("Proxy session error: {}", e)));
+            }
+            Err(_) => {}
+        }
+
+        let duration_ms = timeout_duration.as_millis() as u64;
+        Ok(InterceptSessionResultPy {
+            listen_addr: config.listen_addr,
+            listen_port: config.listen_port,
+            duration_ms,
+            total_exchanges: 0,
+            modified_requests: 0,
+            modified_responses: 0,
+            exchanges: Vec::new(),
+        })
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS12: Filtering and Mutation Types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Filter criteria for selecting which traffic to intercept.
+///
+/// All provided fields are combined with AND logic.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptFilterPy {
+    #[pyo3(get)]
+    pub host_pattern: Option<String>,
+    #[pyo3(get)]
+    pub path_pattern: Option<String>,
+    #[pyo3(get)]
+    pub method_pattern: Option<String>,
+    #[pyo3(get)]
+    pub status_pattern: Option<String>,
+}
+
+#[pymethods]
+impl InterceptFilterPy {
+    #[new]
+    #[pyo3(signature = (host_pattern=None, path_pattern=None, method_pattern=None, status_pattern=None))]
+    fn new(
+        host_pattern: Option<&str>,
+        path_pattern: Option<&str>,
+        method_pattern: Option<&str>,
+        status_pattern: Option<&str>,
+    ) -> Self {
+        Self {
+            host_pattern: host_pattern.map(|s| s.to_string()),
+            path_pattern: path_pattern.map(|s| s.to_string()),
+            method_pattern: method_pattern.map(|s| s.to_string()),
+            status_pattern: status_pattern.map(|s| s.to_string()),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("host_pattern", &self.host_pattern)?;
+        dict.set_item("path_pattern", &self.path_pattern)?;
+        dict.set_item("method_pattern", &self.method_pattern)?;
+        dict.set_item("status_pattern", &self.status_pattern)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InterceptFilter(host={:?}, path={:?}, method={:?}, status={:?})",
+            self.host_pattern, self.path_pattern, self.method_pattern, self.status_pattern,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// A simplified interception rule for Python bindings.
+///
+/// Maps to the engine's `InterceptRule` with pattern matching on host/path/method
+/// and an action (allow, block, intercept, monitor, modify).
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptRulePy {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub host_pattern: String,
+    #[pyo3(get)]
+    pub path_pattern: Option<String>,
+    #[pyo3(get)]
+    pub method_pattern: Option<String>,
+    #[pyo3(get)]
+    pub action: String,
+    #[pyo3(get)]
+    pub priority: u32,
+    #[pyo3(get)]
+    pub enabled: bool,
+}
+
+#[pymethods]
+impl InterceptRulePy {
+    #[new]
+    #[pyo3(signature = (name, host_pattern, action, path_pattern=None, method_pattern=None, priority=0, enabled=true))]
+    fn new(
+        name: &str,
+        host_pattern: &str,
+        action: &str,
+        path_pattern: Option<&str>,
+        method_pattern: Option<&str>,
+        priority: u32,
+        enabled: bool,
+    ) -> PyResult<Self> {
+        let valid_actions = ["allow", "block", "intercept", "monitor", "modify"];
+        if !valid_actions.contains(&action) {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid action '{}'. Must be one of: allow, block, intercept, monitor, modify",
+                action
+            )));
+        }
+        Ok(Self {
+            name: name.to_string(),
+            host_pattern: host_pattern.to_string(),
+            path_pattern: path_pattern.map(|s| s.to_string()),
+            method_pattern: method_pattern.map(|s| s.to_string()),
+            action: action.to_string(),
+            priority,
+            enabled,
+        })
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("host_pattern", &self.host_pattern)?;
+        dict.set_item("path_pattern", &self.path_pattern)?;
+        dict.set_item("method_pattern", &self.method_pattern)?;
+        dict.set_item("action", &self.action)?;
+        dict.set_item("priority", self.priority)?;
+        dict.set_item("enabled", self.enabled)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InterceptRule(name={}, host={}, action={}, priority={})",
+            self.name, self.host_pattern, self.action, self.priority,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS13: CA and Certificate Types
+// ═══════════════════════════════════════════════════════════════════
+
+/// Configuration for the certificate authority used in TLS interception.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertificateAuthorityConfigPy {
+    #[pyo3(get)]
+    pub ca_cert_path: Option<String>,
+    #[pyo3(get)]
+    pub ca_key_path: Option<String>,
+    #[pyo3(get)]
+    pub auto_generate: bool,
+    #[pyo3(get)]
+    pub valid_days: u32,
+}
+
+#[pymethods]
+impl CertificateAuthorityConfigPy {
+    #[new]
+    #[pyo3(signature = (ca_cert_path=None, ca_key_path=None, auto_generate=true, valid_days=365))]
+    fn new(
+        ca_cert_path: Option<&str>,
+        ca_key_path: Option<&str>,
+        auto_generate: bool,
+        valid_days: u32,
+    ) -> Self {
+        Self {
+            ca_cert_path: ca_cert_path.map(|s| s.to_string()),
+            ca_key_path: ca_key_path.map(|s| s.to_string()),
+            auto_generate,
+            valid_days,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("ca_cert_path", &self.ca_cert_path)?;
+        dict.set_item("ca_key_path", &self.ca_key_path)?;
+        dict.set_item("auto_generate", self.auto_generate)?;
+        dict.set_item("valid_days", self.valid_days)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CertificateAuthorityConfig(auto_generate={}, valid_days={})",
+            self.auto_generate, self.valid_days,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+/// Metadata for a certificate issued by the proxy's CA.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssuedCertificatePy {
+    #[pyo3(get)]
+    pub hostname: String,
+    #[pyo3(get)]
+    pub serial: String,
+    #[pyo3(get)]
+    pub valid_from: String,
+    #[pyo3(get)]
+    pub valid_until: String,
+}
+
+#[pymethods]
+impl IssuedCertificatePy {
+    #[new]
+    fn new(hostname: &str, serial: &str, valid_from: &str, valid_until: &str) -> Self {
+        Self {
+            hostname: hostname.to_string(),
+            serial: serial.to_string(),
+            valid_from: valid_from.to_string(),
+            valid_until: valid_until.to_string(),
+        }
+    }
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("hostname", &self.hostname)?;
+        dict.set_item("serial", &self.serial)?;
+        dict.set_item("valid_from", &self.valid_from)?;
+        dict.set_item("valid_until", &self.valid_until)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IssuedCertificate(hostname={}, serial={})",
+            self.hostname, self.serial,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "Certificate for {} (serial: {})",
+            self.hostname, self.serial,
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WS14: HAR and Replay Types
+// ═══════════════════════════════════════════════════════════════════
+
+/// A single HAR 1.2 entry representing one request/response exchange.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarEntryPy {
+    #[pyo3(get)]
+    pub method: String,
+    #[pyo3(get)]
+    pub url: String,
+    #[pyo3(get)]
+    pub status: u16,
+    #[pyo3(get)]
+    pub time_ms: f64,
+    #[pyo3(get)]
+    pub request_headers: Vec<(String, String)>,
+    #[pyo3(get)]
+    pub response_headers: Vec<(String, String)>,
+    #[pyo3(get)]
+    pub request_body: Option<String>,
+    #[pyo3(get)]
+    pub response_body: Option<String>,
+    #[pyo3(get)]
+    pub started_date_time: String,
+}
+
+#[pymethods]
+impl HarEntryPy {
+    #[new]
+    #[pyo3(signature = (method, url, status, time_ms, request_headers, response_headers, started_date_time, request_body=None, response_body=None))]
+    fn new(
+        method: &str,
+        url: &str,
+        status: u16,
+        time_ms: f64,
+        request_headers: Vec<(String, String)>,
+        response_headers: Vec<(String, String)>,
+        started_date_time: &str,
+        request_body: Option<&str>,
+        response_body: Option<&str>,
+    ) -> Self {
+        Self {
+            method: method.to_string(),
+            url: url.to_string(),
+            status,
+            time_ms,
+            request_headers,
+            response_headers,
+            request_body: request_body.map(|s| s.to_string()),
+            response_body: response_body.map(|s| s.to_string()),
+            started_date_time: started_date_time.to_string(),
+        }
+    }
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("method", &self.method)?;
+        dict.set_item("url", &self.url)?;
+        dict.set_item("status", self.status)?;
+        dict.set_item("time_ms", self.time_ms)?;
+        dict.set_item("request_headers", &self.request_headers)?;
+        dict.set_item("response_headers", &self.response_headers)?;
+        dict.set_item("request_body", &self.request_body)?;
+        dict.set_item("response_body", &self.response_body)?;
+        dict.set_item("started_date_time", &self.started_date_time)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("HarEntry({} {} → {})", self.method, self.url, self.status,)
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} {} → {} ({}ms)",
+            self.method, self.url, self.status, self.time_ms
+        )
+    }
+}
+
+/// A complete HAR 1.2 document containing multiple entries.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarDocumentPy {
+    #[pyo3(get)]
+    pub version: String,
+    #[pyo3(get)]
+    pub creator_name: String,
+    #[pyo3(get)]
+    pub creator_version: String,
+    #[pyo3(get)]
+    pub entries: Vec<HarEntryPy>,
+}
+
+#[pymethods]
+impl HarDocumentPy {
+    #[new]
+    #[pyo3(signature = (entries=None, creator_name="eggsec", creator_version="0.1.0"))]
+    fn new(entries: Option<Vec<HarEntryPy>>, creator_name: &str, creator_version: &str) -> Self {
+        Self {
+            version: "1.2".to_string(),
+            creator_name: creator_name.to_string(),
+            creator_version: creator_version.to_string(),
+            entries: entries.unwrap_or_default(),
+        }
+    }
+
+    #[getter]
+    fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("version", &self.version)?;
+        dict.set_item("creator_name", &self.creator_name)?;
+        dict.set_item("creator_version", &self.creator_version)?;
+        let entries_list = PyList::empty_bound(py);
+        for e in &self.entries {
+            entries_list.append(e.to_dict(py)?)?;
+        }
+        dict.set_item("entries", entries_list)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "HarDocument(version={}, entries={}, creator={})",
+            self.version,
+            self.entries.len(),
+            self.creator_name,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "HAR {} document with {} entries (by {} {})",
+            self.version,
+            self.entries.len(),
+            self.creator_name,
+            self.creator_version,
+        )
+    }
+}

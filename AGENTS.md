@@ -214,6 +214,8 @@ The Python stable-core boundary is the twenty-two-operation engine registry: the
 
 Release 2 adds network programmability types: `eggsec.network` (target resolution, connection config, timing, evidence, transcripts), `eggsec.transport` (managed TCP/UDP sessions), `eggsec.probes` (DNS/TLS/HTTP one-shot probes), `eggsec.http_client` (security-oriented HTTP client), and `eggsec.websocket` (WebSocket sessions and assessment). These are provisional — scope-checked and policy-gated but not yet part of the stable-core operation registry. Release 2 network types are now properly registered in the API surface with provisional stability (verified 2026-07-14). Raw packet injection remains experimental (feature: `packet-inspection`).
 
+Release 3 completes programmable Python surfaces for three major subsystems: NSE runtime (library registry, script validation, evidence), interception proxy (session lifecycle, filtering, CA management, HAR export), and database assessment (driver registry, session types, credential providers, query execution, schema/privilege inspection). Architecture docs: `docs/python/NSE_RUNTIME_ARCHITECTURE.md`, `docs/python/INTERCEPTION_PROXY_ARCHITECTURE.md`. Release 3 types are registered in the API surface with provisional stability; the underlying `nse_run` and `db_probe` operations remain stable.
+
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|
 | `websocket` | `websocket` | WebSocket security testing |

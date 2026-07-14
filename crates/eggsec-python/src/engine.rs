@@ -3113,19 +3113,20 @@ impl Engine {
         let database_owned = database.map(|s| s.to_string());
 
         let result = runtime_sync::block_on(py, async move {
-            crate::db_pentest::run_sync(crate::db_pentest::DbPentestArgs {
-                target: target_owned,
-                db_type: db_type_owned,
-                scan_type: "all".to_string(),
-                max_queries: 200,
-                max_duration: 120,
-                dry_run: false,
-                config_path: None,
+            let args = crate::db_pentest::build_args(
+                Some(&target_owned),
+                Some(&db_type_owned),
+                "all",
+                200,
+                120,
+                false,
+                None,
                 port,
-                user: user_owned,
-                password: password_owned,
-                database: database_owned,
-            })
+                user_owned.as_deref(),
+                password_owned.as_deref(),
+                database_owned.as_deref(),
+            );
+            crate::db_pentest::run_sync(args)
         });
 
         match result {

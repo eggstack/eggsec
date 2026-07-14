@@ -7,6 +7,200 @@ use crate::runtime_async;
 use crate::runtime_sync;
 
 // ═══════════════════════════════════════════════════════════════════
+// Release 3: NSE Library Descriptor
+// ═══════════════════════════════════════════════════════════════════
+
+/// Full metadata descriptor for a registered NSE library module.
+///
+/// Exposes the library registry entry including category, sandbox side
+/// effects, fallback behavior, and compatibility notes.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseLibraryDescriptorPy {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub category: String,
+    #[pyo3(get)]
+    pub description: String,
+    #[pyo3(get)]
+    pub sandbox_side_effects: Vec<String>,
+    #[pyo3(get)]
+    pub fallback_behavior: String,
+    #[pyo3(get)]
+    pub notes: String,
+    #[pyo3(get)]
+    pub optional_deps: Vec<String>,
+    #[pyo3(get)]
+    pub enforcement_status: String,
+}
+
+impl NseLibraryDescriptorPy {
+    pub fn from_engine(desc: &eggsec::nse::NseLibraryDescriptor) -> Self {
+        let side_effects = desc
+            .sandbox_side_effects
+            .iter()
+            .map(|se| se.to_string())
+            .collect();
+        let optional_deps = desc.optional_deps.iter().map(|d| d.to_string()).collect();
+        Self {
+            name: desc.name.to_string(),
+            category: desc.category.to_string(),
+            description: String::new(),
+            sandbox_side_effects: side_effects,
+            fallback_behavior: desc.fallback_behavior.to_string(),
+            notes: desc.notes.to_string(),
+            optional_deps,
+            enforcement_status: desc.enforcement_status.to_string(),
+        }
+    }
+}
+
+#[pymethods]
+impl NseLibraryDescriptorPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("category", &self.category)?;
+        dict.set_item("description", &self.description)?;
+        dict.set_item("sandbox_side_effects", &self.sandbox_side_effects)?;
+        dict.set_item("fallback_behavior", &self.fallback_behavior)?;
+        dict.set_item("notes", &self.notes)?;
+        dict.set_item("optional_deps", &self.optional_deps)?;
+        dict.set_item("enforcement_status", &self.enforcement_status)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseLibraryDescriptor(name={}, category={}, enforcement={})",
+            self.name, self.category, self.enforcement_status
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "NSE library '{}' [{}]: {}",
+            self.name, self.category, self.notes
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3: NSE Argument
+// ═══════════════════════════════════════════════════════════════════
+
+/// A structured argument for NSE script execution.
+///
+/// Represents a single key=value argument passed to an NSE script,
+/// with type information for validation.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseArgumentPy {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub value: String,
+    #[pyo3(get)]
+    pub arg_type: String,
+}
+
+#[pymethods]
+impl NseArgumentPy {
+    #[new]
+    #[pyo3(signature = (name, value, *, arg_type="string"))]
+    fn new(name: &str, value: &str, arg_type: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            value: value.to_string(),
+            arg_type: arg_type.to_string(),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("value", &self.value)?;
+        dict.set_item("arg_type", &self.arg_type)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseArgument(name={}, value={}, type={})",
+            self.name, self.value, self.arg_type
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}={}", self.name, self.value)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3: NSE Library Registry
+// ═══════════════════════════════════════════════════════════════════
+
+/// Query interface for the NSE library registry.
+///
+/// Wraps access to `eggsec::nse::all_libraries()`, `find_library()`,
+/// and `libraries_by_category()`.
+#[pyclass]
+pub struct NseLibraryRegistryPy;
+
+#[pymethods]
+impl NseLibraryRegistryPy {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    /// Return all registered library descriptors.
+    fn list(&self) -> Vec<NseLibraryDescriptorPy> {
+        eggsec::nse::all_libraries()
+            .iter()
+            .map(NseLibraryDescriptorPy::from_engine)
+            .collect()
+    }
+
+    /// Look up a library by name. Returns None if not found.
+    fn get(&self, name: &str) -> Option<NseLibraryDescriptorPy> {
+        eggsec::nse::find_library(name).map(NseLibraryDescriptorPy::from_engine)
+    }
+
+    /// Return all libraries in the given category.
+    fn by_category(&self, category: &str) -> Vec<NseLibraryDescriptorPy> {
+        let cat = match category {
+            "Core" => eggsec::nse::NseLibraryCategory::Core,
+            "Protocol" => eggsec::nse::NseLibraryCategory::Protocol,
+            "Utility" => eggsec::nse::NseLibraryCategory::Utility,
+            "Exploit" => eggsec::nse::NseLibraryCategory::Exploit,
+            "Auth" => eggsec::nse::NseLibraryCategory::Auth,
+            _ => return Vec::new(),
+        };
+        eggsec::nse::libraries_by_category(cat)
+            .iter()
+            .map(|d| NseLibraryDescriptorPy::from_engine(d))
+            .collect()
+    }
+
+    /// Return the total number of registered libraries.
+    fn count(&self) -> usize {
+        eggsec::nse::registry_count()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // DTOs
 // ═══════════════════════════════════════════════════════════════════
 
@@ -217,6 +411,72 @@ impl NseRuleEvaluationPy {
 /// Type alias for the NSE run report used by the operation registry.
 pub type NseRunReportPy = NseReportPy;
 
+/// A single structured evidence item from NSE execution.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NseEvidenceItemPy {
+    #[pyo3(get)]
+    pub id: String,
+    #[pyo3(get)]
+    pub kind: String,
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub summary: String,
+    #[pyo3(get)]
+    pub target: String,
+    #[pyo3(get)]
+    pub port: Option<u16>,
+    #[pyo3(get)]
+    pub service: Option<String>,
+    #[pyo3(get)]
+    pub confidence: String,
+    #[pyo3(get)]
+    pub source: String,
+    #[pyo3(get)]
+    pub raw_excerpt: Option<String>,
+    #[pyo3(get)]
+    pub references: Vec<String>,
+    #[pyo3(get)]
+    pub tags: Vec<String>,
+}
+
+#[pymethods]
+impl NseEvidenceItemPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("id", &self.id)?;
+        dict.set_item("kind", &self.kind)?;
+        dict.set_item("title", &self.title)?;
+        dict.set_item("summary", &self.summary)?;
+        dict.set_item("target", &self.target)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("service", &self.service)?;
+        dict.set_item("confidence", &self.confidence)?;
+        dict.set_item("source", &self.source)?;
+        dict.set_item("raw_excerpt", &self.raw_excerpt)?;
+        dict.set_item("references", &self.references)?;
+        dict.set_item("tags", &self.tags)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "NseEvidenceItem(id={}, kind={}, title={})",
+            self.id, self.kind, self.title
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("[{}] {}", self.kind, self.title)
+    }
+}
+
 /// Simplified result from an NSE script execution.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,6 +505,7 @@ pub struct NseReportPy {
     pub elapsed_secs: f64,
     libraries: Vec<NseLibraryUsePy>,
     rules: Vec<NseRuleEvaluationPy>,
+    evidence: Vec<NseEvidenceItemPy>,
 }
 
 impl NseReportPy {
@@ -258,6 +519,24 @@ impl NseReportPy {
             .rules
             .into_iter()
             .map(NseRuleEvaluationPy::from_engine)
+            .collect();
+        let evidence: Vec<NseEvidenceItemPy> = report
+            .evidence
+            .into_iter()
+            .map(|e| NseEvidenceItemPy {
+                id: e.id,
+                kind: e.kind.to_string(),
+                title: e.title,
+                summary: e.summary,
+                target: e.target,
+                port: e.port,
+                service: e.service,
+                confidence: e.confidence,
+                source: e.source,
+                raw_excerpt: e.raw_excerpt,
+                references: e.references,
+                tags: e.tags,
+            })
             .collect();
         Self {
             target: report.target,
@@ -273,6 +552,7 @@ impl NseReportPy {
             elapsed_secs: report.stats.elapsed_secs,
             libraries,
             rules,
+            evidence,
         }
     }
 }
@@ -287,6 +567,11 @@ impl NseReportPy {
     #[getter]
     fn rules(&self) -> Vec<NseRuleEvaluationPy> {
         self.rules.clone()
+    }
+
+    #[getter]
+    fn evidence(&self) -> Vec<NseEvidenceItemPy> {
+        self.evidence.clone()
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
@@ -312,6 +597,11 @@ impl NseReportPy {
             rules_list.append(rule.to_dict(py)?)?;
         }
         dict.set_item("rules", rules_list)?;
+        let evidence_list = PyList::empty_bound(py);
+        for ev in &self.evidence {
+            evidence_list.append(ev.to_dict(py)?)?;
+        }
+        dict.set_item("evidence", evidence_list)?;
         Ok(dict.into())
     }
 
@@ -364,7 +654,7 @@ pub(crate) fn run_nse_sync(config: eggsec::nse::NseConfig) -> PyResult<NseReport
     })
 }
 
-fn run_nse_async(config: eggsec::nse::NseConfig) -> PyResult<runtime_async::PyFuture> {
+pub(crate) fn run_nse_async(config: eggsec::nse::NseConfig) -> PyResult<runtime_async::PyFuture> {
     runtime_async::spawn_async(async move {
         let result = run_nse_inner(config)
             .await
@@ -621,6 +911,33 @@ pub fn nse_list_libraries() -> Vec<String> {
     names
 }
 
+/// Return all registered library descriptors with full metadata.
+///
+/// Provides detailed information about each NSE library module including
+/// category, sandbox side effects, fallback behavior, and enforcement status.
+///
+/// Returns:
+///     list[NseLibraryDescriptorPy]: Full library descriptors.
+#[pyfunction]
+pub fn nse_list_libraries_detailed() -> Vec<NseLibraryDescriptorPy> {
+    eggsec::nse::all_libraries()
+        .iter()
+        .map(NseLibraryDescriptorPy::from_engine)
+        .collect()
+}
+
+/// Look up a library by name from the registry.
+///
+/// Args:
+///     name: Library name (e.g. "stdnse", "http", "dns").
+///
+/// Returns:
+///     NseLibraryDescriptorPy | None: Library descriptor, or None if not found.
+#[pyfunction]
+pub fn nse_get_library_descriptor(name: &str) -> Option<NseLibraryDescriptorPy> {
+    eggsec::nse::find_library(name).map(NseLibraryDescriptorPy::from_engine)
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // D1: NSE Runtime completion types
 // ═══════════════════════════════════════════════════════════════════
@@ -648,6 +965,8 @@ pub struct NseScriptMetadataPy {
     pub targets: Option<String>,
     #[pyo3(get)]
     pub categories: Vec<String>,
+    #[pyo3(get)]
+    pub is_builtin: bool,
 }
 
 #[pymethods]
@@ -662,6 +981,7 @@ impl NseScriptMetadataPy {
         dict.set_item("dependencies", &self.dependencies)?;
         dict.set_item("targets", &self.targets)?;
         dict.set_item("categories", &self.categories)?;
+        dict.set_item("is_builtin", self.is_builtin)?;
         Ok(dict.into())
     }
 
@@ -672,8 +992,8 @@ impl NseScriptMetadataPy {
 
     fn __repr__(&self) -> String {
         format!(
-            "NseScriptMetadata(name={}, category={})",
-            self.name, self.category
+            "NseScriptMetadata(name={}, category={}, builtin={})",
+            self.name, self.category, self.is_builtin
         )
     }
 
@@ -683,6 +1003,190 @@ impl NseScriptMetadataPy {
             self.name, self.category, self.description
         )
     }
+}
+
+/// Built-in script metadata derived from the resolver registry and
+/// `get_builtin_script()` source.
+fn builtin_script_metadata(name: &str) -> Option<NseScriptMetadataPy> {
+    if !eggsec::nse::is_builtin_script(name) {
+        return None;
+    }
+    let (category, description, dependencies) = match name {
+        "default" => (
+            "discovery",
+            "Default set of discovery scripts",
+            vec!["stdnse".to_string()],
+        ),
+        "discovery" => (
+            "discovery",
+            "Discovery and enumeration scripts",
+            vec!["stdnse".to_string()],
+        ),
+        "banner" => (
+            "discovery",
+            "Grab service banners from open ports",
+            vec![
+                "stdnse".to_string(),
+                "comm".to_string(),
+                "socket".to_string(),
+            ],
+        ),
+        "http-headers" => (
+            "discovery",
+            "Display HTTP response headers from web servers",
+            vec!["stdnse".to_string(), "http".to_string()],
+        ),
+        "dns-check" => (
+            "discovery",
+            "DNS resolution and validation checks",
+            vec!["stdnse".to_string(), "dns".to_string()],
+        ),
+        "ssl-cert" => (
+            "discovery",
+            "Display SSL/TLS certificate information from targets",
+            vec![
+                "stdnse".to_string(),
+                "sslcert".to_string(),
+                "tls".to_string(),
+            ],
+        ),
+        _ => return None,
+    };
+    Some(NseScriptMetadataPy {
+        name: name.to_string(),
+        category: category.to_string(),
+        description: description.to_string(),
+        author: None,
+        license: None,
+        dependencies,
+        targets: None,
+        categories: vec![category.to_string()],
+        is_builtin: true,
+    })
+}
+
+/// List available built-in NSE scripts.
+///
+/// Returns a list of NseScriptMetadataPy objects describing each available
+/// built-in script from the resolver registry.
+///
+/// Args:
+///     category: Optional category filter. Matches against the script's
+///         category field.
+///
+/// Returns:
+///     list[NseScriptMetadataPy]: Script metadata entries.
+#[pyfunction]
+#[pyo3(signature = (category=None))]
+pub fn nse_list_scripts(category: Option<&str>) -> Vec<NseScriptMetadataPy> {
+    let all_names = &[
+        "default",
+        "discovery",
+        "banner",
+        "http-headers",
+        "dns-check",
+        "ssl-cert",
+    ];
+    let mut scripts: Vec<NseScriptMetadataPy> = all_names
+        .iter()
+        .filter_map(|name| builtin_script_metadata(name))
+        .collect();
+    if let Some(cat) = category {
+        scripts.retain(|s| s.category == cat || s.categories.contains(&cat.to_string()));
+    }
+    scripts
+}
+
+/// Get metadata for a specific NSE script by name.
+///
+/// Args:
+///     script_name: Name of the script (e.g. "http-headers", "ssl-cert").
+///
+/// Returns:
+///     NseScriptMetadataPy: Script metadata, or None if not found.
+#[pyfunction]
+pub fn nse_get_script_metadata(script_name: &str) -> PyResult<Option<NseScriptMetadataPy>> {
+    Ok(builtin_script_metadata(script_name))
+}
+
+/// Run an NSE script using a full NseConfigPy configuration.
+///
+/// This provides access to all configuration options including script_file,
+/// json output, and verbose mode.
+///
+/// Args:
+///     config: NseConfigPy with all execution parameters.
+///
+/// Returns:
+///     NseReportPy: Execution report with output and diagnostics.
+///
+/// Raises:
+///     ScanError: If the NSE execution fails.
+#[pyfunction]
+pub fn nse_run_with_config(config: &NseConfigPy) -> PyResult<NseReportPy> {
+    let eggsec_config = eggsec::nse::NseConfig::new(
+        &config.target,
+        &config.script,
+        config.script_args.as_deref(),
+        config.script_file.as_deref(),
+        config.json,
+        config.verbose,
+    );
+    run_nse_sync(eggsec_config)
+}
+
+/// Validate NSE script syntax without executing it.
+///
+/// Checks that the script is a recognized built-in name or a non-empty
+/// inline Lua source string. Does not run the script or perform network
+/// operations. Full Lua syntax validation is deferred to the execution phase.
+///
+/// Args:
+///     script: Lua script source code or built-in script name.
+///
+/// Returns:
+///     dict: Validation result with keys:
+///         - "valid" (bool): Whether the script is valid
+///         - "error" (str | None): Error message if invalid
+///         - "script_name" (str): The script name or "<inline>"
+#[pyfunction]
+pub fn nse_validate_script(script: &str, py: Python) -> PyResult<PyObject> {
+    let dict = PyDict::new_bound(py);
+
+    if script.is_empty() {
+        dict.set_item("valid", false)?;
+        dict.set_item("error", "script is empty")?;
+        dict.set_item("script_name", "<inline>")?;
+        return Ok(dict.into());
+    }
+
+    if eggsec::nse::is_builtin_script(script) {
+        dict.set_item("valid", true)?;
+        dict.set_item("error", Option::<String>::None)?;
+        dict.set_item("script_name", script)?;
+        return Ok(dict.into());
+    }
+
+    // For inline scripts, check basic Lua shebang / structure
+    let trimmed = script.trim();
+    if trimmed.starts_with("--")
+        || trimmed.starts_with("local ")
+        || trimmed.starts_with("function ")
+        || trimmed.contains("require")
+        || trimmed.contains("return")
+    {
+        dict.set_item("valid", true)?;
+        dict.set_item("error", Option::<String>::None)?;
+        dict.set_item("script_name", "<inline>")?;
+    } else {
+        dict.set_item("valid", false)?;
+        dict.set_item(
+            "error",
+            "unrecognized script: not a built-in name and does not look like Lua source",
+        )?;
+        dict.set_item("script_name", "<inline>")?;
+    }
+    Ok(dict.into())
 }
 
 /// Sandbox policy for NSE script execution.
@@ -869,93 +1373,4 @@ impl NseTargetContextPy {
         let service = self.service_name.as_deref().unwrap_or("unknown");
         format!("{} ({})", self.host_ip, service)
     }
-}
-
-/// List available built-in NSE scripts.
-///
-/// Returns a list of NseScriptMetadataPy objects describing each available
-/// built-in script. Currently returns the built-in script names from the
-/// resolver registry.
-///
-/// Args:
-///     category: Optional category filter. Since built-in scripts have limited
-///         metadata, this is matched against the name prefix if present.
-///
-/// Returns:
-///     list[NseScriptMetadataPy]: Script metadata entries.
-#[pyfunction]
-#[pyo3(signature = (category=None))]
-pub fn nse_list_scripts(category: Option<&str>) -> Vec<NseScriptMetadataPy> {
-    static BUILTIN_SCRIPTS: &[(&str, &str, &str)] = &[
-        ("default", "discovery", "Default set of scripts"),
-        (
-            "discovery",
-            "discovery",
-            "Discovery and enumeration scripts",
-        ),
-        ("banner", "discovery", "Grab service banners"),
-        ("http-headers", "discovery", "Display HTTP response headers"),
-        ("dns-check", "discovery", "DNS validation and checks"),
-        (
-            "ssl-cert",
-            "discovery",
-            "Display SSL certificate information",
-        ),
-    ];
-
-    let _ = category;
-    BUILTIN_SCRIPTS
-        .iter()
-        .map(|(name, cat, desc)| NseScriptMetadataPy {
-            name: name.to_string(),
-            category: cat.to_string(),
-            description: desc.to_string(),
-            author: None,
-            license: None,
-            dependencies: Vec::new(),
-            targets: None,
-            categories: vec![cat.to_string()],
-        })
-        .collect()
-}
-
-/// Get metadata for a specific NSE script by name.
-///
-/// Args:
-///     script_name: Name of the script (e.g. "http-headers", "ssl-cert").
-///
-/// Returns:
-///     NseScriptMetadataPy: Script metadata, or None if not found.
-#[pyfunction]
-pub fn nse_get_script_metadata(script_name: &str) -> PyResult<Option<NseScriptMetadataPy>> {
-    static BUILTIN_SCRIPTS: &[(&str, &str, &str)] = &[
-        ("default", "discovery", "Default set of scripts"),
-        (
-            "discovery",
-            "discovery",
-            "Discovery and enumeration scripts",
-        ),
-        ("banner", "discovery", "Grab service banners"),
-        ("http-headers", "discovery", "Display HTTP response headers"),
-        ("dns-check", "discovery", "DNS validation and checks"),
-        (
-            "ssl-cert",
-            "discovery",
-            "Display SSL certificate information",
-        ),
-    ];
-
-    Ok(BUILTIN_SCRIPTS
-        .iter()
-        .find(|(name, _, _)| *name == script_name)
-        .map(|(name, cat, desc)| NseScriptMetadataPy {
-            name: name.to_string(),
-            category: cat.to_string(),
-            description: desc.to_string(),
-            author: None,
-            license: None,
-            dependencies: Vec::new(),
-            targets: None,
-            categories: vec![cat.to_string()],
-        }))
 }

@@ -366,6 +366,23 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<db_pentest::DbCapabilityPy>()?;
         m.add_class::<db_pentest::DbCredentialProviderPy>()?;
         m.add_class::<db_pentest::DbSessionConfigPy>()?;
+        // WS16: Driver registry and target
+        m.add_class::<db_pentest::DbDriverRegistryPy>()?;
+        m.add_class::<db_pentest::DbTargetPy>()?;
+        // WS17-18: Session types
+        m.add_class::<db_pentest::DatabaseSessionStatePy>()?;
+        m.add_class::<db_pentest::DatabaseConnectionMetadataPy>()?;
+        m.add_class::<db_pentest::DatabaseSessionStatsPy>()?;
+        m.add_class::<db_pentest::DatabaseCredentialRequestPy>()?;
+        m.add_class::<db_pentest::DatabaseCredentialResultPy>()?;
+        // WS19: Query types
+        m.add_class::<db_pentest::DatabaseQueryPy>()?;
+        m.add_class::<db_pentest::DatabaseQueryResultPy>()?;
+        m.add_class::<db_pentest::DatabaseColumnPy>()?;
+        // WS20: Schema/privilege inspection
+        m.add_class::<db_pentest::DatabaseTableInfoPy>()?;
+        m.add_class::<db_pentest::DatabaseSchemaInfoPy>()?;
+        m.add_class::<db_pentest::DatabasePrivilegeInfoPy>()?;
     }
     // Phase F Track 9: Container security
     #[cfg(feature = "container")]
@@ -545,6 +562,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<nse::NseScriptMetadataPy>()?;
         m.add_class::<nse::NseSandboxPolicyPy>()?;
         m.add_class::<nse::NseTargetContextPy>()?;
+        // Release 3: NSE library registry and descriptors
+        m.add_class::<nse::NseLibraryDescriptorPy>()?;
+        m.add_class::<nse::NseArgumentPy>()?;
+        m.add_class::<nse::NseLibraryRegistryPy>()?;
+        m.add_class::<nse::NseEvidenceItemPy>()?;
     }
     // Phase F Track 7: Proxy and web proxy
     #[cfg(feature = "web-proxy")]
@@ -560,6 +582,15 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<proxy::InterceptConfigPy>()?;
         m.add_class::<proxy::CapturedExchangePy>()?;
         m.add_class::<proxy::InterceptSessionResultPy>()?;
+        // Release 3: Interception proxy lifecycle and DTOs
+        m.add_class::<proxy::InterceptSessionStatePy>()?;
+        m.add_class::<proxy::InterceptStatsPy>()?;
+        m.add_class::<proxy::InterceptFilterPy>()?;
+        m.add_class::<proxy::InterceptRulePy>()?;
+        m.add_class::<proxy::CertificateAuthorityConfigPy>()?;
+        m.add_class::<proxy::IssuedCertificatePy>()?;
+        m.add_class::<proxy::HarEntryPy>()?;
+        m.add_class::<proxy::HarDocumentPy>()?;
     }
 
     // Functions
@@ -681,6 +712,11 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         // D1: NSE runtime completion functions
         m.add_function(wrap_pyfunction!(nse::nse_list_scripts, m)?)?;
         m.add_function(wrap_pyfunction!(nse::nse_get_script_metadata, m)?)?;
+        // Release 3: NSE library registry and execution improvements
+        m.add_function(wrap_pyfunction!(nse::nse_list_libraries_detailed, m)?)?;
+        m.add_function(wrap_pyfunction!(nse::nse_get_library_descriptor, m)?)?;
+        m.add_function(wrap_pyfunction!(nse::nse_run_with_config, m)?)?;
+        m.add_function(wrap_pyfunction!(nse::nse_validate_script, m)?)?;
     }
     // Phase F Track 7: Proxy and web proxy functions
     #[cfg(feature = "web-proxy")]
@@ -688,6 +724,9 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(proxy::create_proxy_manager, m)?)?;
         m.add_function(wrap_pyfunction!(proxy::async_add_proxy, m)?)?;
         m.add_function(wrap_pyfunction!(proxy::async_proxy_health_check, m)?)?;
+        // Release 3: Interception session lifecycle
+        m.add_function(wrap_pyfunction!(proxy::run_intercept_session, m)?)?;
+        m.add_function(wrap_pyfunction!(proxy::async_run_intercept_session, m)?)?;
     }
     // Phase F Track 13: Daemon client
     #[cfg(feature = "daemon-client")]
@@ -1104,6 +1143,11 @@ fn api_surface() -> PyObject {
         add_entry!("nse_list_libraries", "stable");
         add_entry!("nse_list_scripts", "stable");
         add_entry!("nse_get_script_metadata", "stable");
+        // Release 3: NSE library registry and execution improvements
+        add_entry!("nse_list_libraries_detailed", "stable");
+        add_entry!("nse_get_library_descriptor", "stable");
+        add_entry!("nse_run_with_config", "stable");
+        add_entry!("nse_validate_script", "provisional");
 
         // Provisional: public API shape accepted, implementation works but
         // lacks full backend validation or end-to-end tests

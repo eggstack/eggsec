@@ -245,6 +245,11 @@ try:
     # D1: NSE runtime completion functions
     nse_list_scripts = _core.nse_list_scripts
     nse_get_script_metadata = _core.nse_get_script_metadata
+    # Release 3: NSE library registry and execution improvements
+    nse_list_libraries_detailed = _core.nse_list_libraries_detailed
+    nse_get_library_descriptor = _core.nse_get_library_descriptor
+    nse_run_with_config = _core.nse_run_with_config
+    nse_validate_script = _core.nse_validate_script
 except (AttributeError, ImportError):
     pass
 
@@ -534,6 +539,23 @@ try:
     DbCapability = _core.DbCapabilityPy
     DbCredentialProvider = _core.DbCredentialProviderPy
     DbSessionConfig = _core.DbSessionConfigPy
+    # WS16: Driver registry and target
+    DbDriverRegistry = _core.DbDriverRegistryPy
+    DbTarget = _core.DbTargetPy
+    # WS17-18: Session types
+    DatabaseSessionState = _core.DatabaseSessionStatePy
+    DatabaseConnectionMetadata = _core.DatabaseConnectionMetadataPy
+    DatabaseSessionStats = _core.DatabaseSessionStatsPy
+    DatabaseCredentialRequest = _core.DatabaseCredentialRequestPy
+    DatabaseCredentialResult = _core.DatabaseCredentialResultPy
+    # WS19: Query types
+    DatabaseQuery = _core.DatabaseQueryPy
+    DatabaseQueryResult = _core.DatabaseQueryResultPy
+    DatabaseColumn = _core.DatabaseColumnPy
+    # WS20: Schema/privilege inspection
+    DatabaseTableInfo = _core.DatabaseTableInfoPy
+    DatabaseSchemaInfo = _core.DatabaseSchemaInfoPy
+    DatabasePrivilegeInfo = _core.DatabasePrivilegeInfoPy
 except (AttributeError, ImportError):
     pass
 
@@ -550,6 +572,18 @@ try:
     InterceptConfig = _core.InterceptConfigPy
     CapturedExchange = _core.CapturedExchangePy
     InterceptSessionResult = _core.InterceptSessionResultPy
+    # Release 3: Interception proxy lifecycle and DTOs
+    InterceptSessionState = _core.InterceptSessionStatePy
+    InterceptStats = _core.InterceptStatsPy
+    InterceptFilter = _core.InterceptFilterPy
+    InterceptRule = _core.InterceptRulePy
+    CertificateAuthorityConfig = _core.CertificateAuthorityConfigPy
+    IssuedCertificate = _core.IssuedCertificatePy
+    HarEntry = _core.HarEntryPy
+    HarDocument = _core.HarDocumentPy
+    # Release 3: Interception session functions
+    run_intercept_session = _core.run_intercept_session
+    async_run_intercept_session = _core.async_run_intercept_session
 except (AttributeError, ImportError):
     pass
 
@@ -648,6 +682,11 @@ try:
     NseScriptMetadata = _core.NseScriptMetadataPy
     NseSandboxPolicy = _core.NseSandboxPolicyPy
     NseTargetContext = _core.NseTargetContextPy
+    # Release 3: NSE library registry and descriptors
+    NseLibraryDescriptor = _core.NseLibraryDescriptorPy
+    NseArgument = _core.NseArgumentPy
+    NseLibraryRegistry = _core.NseLibraryRegistryPy
+    NseEvidenceItem = _core.NseEvidenceItemPy
 except (AttributeError, ImportError):
     pass
 
@@ -1151,6 +1190,15 @@ __all__ = [
     "NseTargetContext",
     "nse_list_scripts",
     "nse_get_script_metadata",
+    # Release 3: NSE library registry (feature-gated)
+    "NseLibraryDescriptor",
+    "NseArgument",
+    "NseLibraryRegistry",
+    "NseEvidenceItem",
+    "nse_list_libraries_detailed",
+    "nse_get_library_descriptor",
+    "nse_run_with_config",
+    "nse_validate_script",
     # Milestone D: Live packet inspection (feature-gated)
     "PacketFilter",
     "FlowRecord",
@@ -1178,6 +1226,17 @@ __all__ = [
     "InterceptConfig",
     "CapturedExchange",
     "InterceptSessionResult",
+    # Release 3: Interception proxy lifecycle and DTOs (feature-gated)
+    "InterceptSessionState",
+    "InterceptStats",
+    "InterceptFilter",
+    "InterceptRule",
+    "CertificateAuthorityConfig",
+    "IssuedCertificate",
+    "HarEntry",
+    "HarDocument",
+    "run_intercept_session",
+    "async_run_intercept_session",
     # Milestone D: Mobile dynamic (feature-gated)
     "MobileDevice",
     "DynamicMobileConfig",
@@ -1199,6 +1258,23 @@ __all__ = [
     "db_list_drivers",
     "db_get_capabilities",
     "db_run_with_config",
+    # WS16: Driver registry and target
+    "DbDriverRegistry",
+    "DbTarget",
+    # WS17-18: Session types
+    "DatabaseSessionState",
+    "DatabaseConnectionMetadata",
+    "DatabaseSessionStats",
+    "DatabaseCredentialRequest",
+    "DatabaseCredentialResult",
+    # WS19: Query types
+    "DatabaseQuery",
+    "DatabaseQueryResult",
+    "DatabaseColumn",
+    # WS20: Schema/privilege inspection
+    "DatabaseTableInfo",
+    "DatabaseSchemaInfo",
+    "DatabasePrivilegeInfo",
     # Milestone E: Versioned finding schema
     "FINDING_SCHEMA_VERSION",
     "Confidence",

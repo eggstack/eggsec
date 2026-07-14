@@ -87,6 +87,36 @@ operations but are not included in the default wheel:
 - Container scanning: Docker image and Kubernetes manifests (feature: `container`)
 - Mobile static analysis: APK and IPA analysis (feature: `mobile`)
 
+### Release 3 — Major Subsystem Completion (NSE, Proxy, Database)
+
+Release 3 completes programmable Python surfaces for three major subsystems:
+
+**NSE Runtime (feature: `nse`)**
+- Library registry inspection: `nse_list_libraries_detailed()`, `nse_get_library_descriptor(name)`
+- `NseLibraryRegistry` for programmatic library access
+- `NseArgumentPy` for structured script arguments
+- `NseEvidenceItemPy` for evidence from NSE execution
+- Script validation: `nse_validate_script(script)`
+- Fixed: `nse_list_scripts()` now uses resolver registry, category filtering works
+- Fixed: `nse_get_script_metadata()` uses real dependency info
+
+**Interception Proxy (feature: `web-proxy`)**
+- Session lifecycle: `InterceptSessionState`, `InterceptStats`
+- Filtering and mutation: `InterceptFilter`, `InterceptRule`
+- CA management: `CertificateAuthorityConfig`, `IssuedCertificate`
+- HAR export: `HarEntry`, `HarDocument`
+- Session execution: `run_intercept_session()`, `async_run_intercept_session()`
+
+**Database Assessment (feature: `db-pentest`)**
+- Driver registry: `DbDriverRegistry`, `DbTarget`
+- Session types: `DatabaseSessionState`, `DatabaseConnectionMetadata`, `DatabaseSessionStats`
+- Credential providers: `DatabaseCredentialRequest`, `DatabaseCredentialResult`
+- Query execution: `DatabaseQuery`, `DatabaseQueryResult`, `DatabaseColumn`
+- Schema inspection: `DatabaseSchemaInfo`, `DatabaseTableInfo`, `DatabasePrivilegeInfo`
+- Fixed: type stubs now match actual Rust struct fields
+
+See `docs/python/NSE_RUNTIME_ARCHITECTURE.md` and `docs/python/INTERCEPTION_PROXY_ARCHITECTURE.md` for architecture details.
+
 ### Additional API Surface (default wheel)
 
 The default wheel also includes the following API surface beyond the core

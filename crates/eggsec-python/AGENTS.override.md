@@ -25,12 +25,12 @@ Python bindings via PyO3/maturin. Host-language binding over the Rust engine.
 | `src/auth_assess.rs` | `AuthTestConfig`, `AuthTestReport`, `auth_test()` |
 | `src/browser_assess.rs` | `BrowserTestConfig`, `BrowserTestReport`, `browser_test()` (feature-gated) |
 | `src/hunt.rs` | `HuntTestConfig`, `HuntReport`, `hunt_test()` (feature-gated) |
-| `src/nse.rs` | `NseConfig`, `NseReport`, `nse_run()` + D1 types: `NseScriptMetadata`, `NseSandboxPolicy`, `NseTargetContext` (feature: `nse`) |
+| `src/nse.rs` | `NseConfig`, `NseReport`, `nse_run()` + D1 types + Release 3: `NseLibraryDescriptor`, `NseLibraryRegistry`, `NseArgument`, `NseEvidenceItem`, `nse_list_libraries_detailed()`, `nse_get_library_descriptor()`, `nse_run_with_config()`, `nse_validate_script()` (feature: `nse`) |
 | `src/packet_inspection.rs` | `CaptureConfig`, `PacketInfo` + D2/D3 types: `PacketFilter`, `FlowRecord`, `LiveCaptureResult`, `TracerouteConfig`, `TracerouteResult` (feature: `packet-inspection`) |
-| `src/proxy.rs` | `ProxyManager`, `ProxyConfig` + D4 types: `InterceptConfig`, `CapturedExchange`, `InterceptSessionResult` (feature: `web-proxy`) |
+| `src/proxy.rs` | `ProxyManager`, `ProxyConfig` + D4 types + Release 3: `InterceptSessionState`, `InterceptStats`, `InterceptFilter`, `InterceptRule`, `CertificateAuthorityConfig`, `IssuedCertificate`, `HarEntry`, `HarDocument`, `run_intercept_session()` (feature: `web-proxy`) |
 | `src/mobile.rs` | `MobileScanReport`, `analyze_apk/ipa` + D5 types: `MobileDevice`, `DynamicMobileConfig`, `DynamicMobileReport` (feature: `mobile`) |
 | `src/daemon.rs` | `DaemonClient`, `daemon_connect` + D6 types: `DaemonCapabilities`, `TaskHandle`, `TaskStatus`, `DaemonEvent`, `SessionSummary`, `TransportMetadata` (feature: `daemon-client`) |
-| `src/db_pentest.rs` | `DbPentestReport`, `db_probe` + D7 types: `DbDriverInfo`, `DbCapability`, `DbCredentialProvider`, `DbSessionConfig` (feature: `db-pentest`) |
+| `src/db_pentest.rs` | `DbPentestReport`, `db_probe` + D7 types + Release 3: `DbDriverRegistry`, `DbTarget`, `DatabaseSessionState`, `DatabaseConnectionMetadata`, `DatabaseSessionStats`, `DatabaseCredentialRequest`, `DatabaseCredentialResult`, `DatabaseQuery`, `DatabaseQueryResult`, `DatabaseColumn`, `DatabaseSchemaInfo`, `DatabaseTableInfo`, `DatabasePrivilegeInfo` (feature: `db-pentest`) |
 | `src/error.rs` | Python exception hierarchy |
 | `src/runtime_sync.rs` | Sync blocking wrapper |
 | `src/runtime_async.rs` | Async runtime (`PyFuture`) |
