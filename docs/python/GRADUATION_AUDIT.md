@@ -656,6 +656,8 @@ The following 8 operations are CONDITIONAL because their full functional dispatc
 | `analyze_apk` | `mobile` | None |
 | `analyze_ipa` | `mobile` | None |
 
+**Test results:** 1977 passed, 89 skipped (up from 1353 passed, 58 skipped at last audit).
+
 **Recommended actions:**
 1. Add feature-enabled integration tests (even if gated behind `#[cfg(feature = "...")]` in Rust tests) for each feature-gated operation.
 2. `db_probe` requires a live database fixture; consider a Docker-compose test harness.
@@ -670,6 +672,10 @@ All 14 always-compiled operations have comprehensive evidence across all 18 audi
 ### Feature-gated operations not needing reclassification
 
 The 8 feature-gated operations have correct stable maturity classification. Their feature-gate enforcement is thoroughly tested. No reclassification is recommended pending feature-enabled build testing.
+
+### Release 2 network/transport/probe config types
+
+The Release 2 network programmability types — `TargetPy`, `ConnectionConfigPy`, `TimeoutConfigPy`, `RetryPolicyPy`, `SocketEndpointPy`, `ConnectionTimingPy`, `TcpConfigPy`, `TcpSessionPy`, `UdpConfigPy`, `UdpSocketPy`, `DnsQueryConfigPy`, `TlsProbeConfigPy`, `HttpProbeConfigPy` — are now visible in `api_surface()` and marked **provisional** stability. These types are scope-checked and policy-gated but are not yet part of the stable-core operation registry.
 
 ---
 

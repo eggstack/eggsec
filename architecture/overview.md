@@ -788,4 +788,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-07-12 — eggsec-python Milestone G (domain registry, event protocol, callbacks, ergonomics, 1.0 readiness)*
+*Last updated: 2026-07-14 — eggsec-python release closure pass (1977 passed, 89 skipped; Release 2 network/transport/probe types verified as provisionally registered)*

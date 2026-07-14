@@ -4,8 +4,9 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Scoped pre-1.0 release candidate** — Not yet published to PyPI. The
-stable-core compatibility boundary is the twenty-two operations listed in
+**Scoped pre-1.0 release candidate** — Release 1/2 closure pass completed
+2026-07-14. Not yet published to PyPI. The stable-core compatibility boundary
+is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and
 `docs/python/README_1_0_CHECKLIST.md` for the remaining 1.0 readiness work.
@@ -349,6 +350,10 @@ report.write_json("scan_report.json")
 | `hunt_test()` / `async_hunt_test()` | experimental | Advanced vulnerability hunting (feature-gated) |
 
 ### Release 2: Network Programmability
+
+Release 2 network/transport/probe types are properly registered in the API
+surface with **provisional** stability. These types are scope-checked and
+policy-gated but are not yet part of the stable-core operation registry.
 
 #### Network Configuration (`eggsec.network`)
 

@@ -20,6 +20,8 @@ provisional or experimental until they satisfy the graduation checklist in
 The release guarantee is local `Engine`/`AsyncEngine` only; daemon-client
 execution remains provisional pending transport parity.
 
+Release 1/2 closure pass completed 2026-07-14 (1977 passed, 89 skipped).
+
 ## Directory Structure
 
 ```
@@ -1189,7 +1191,11 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 - **Feature parity**: Not all engine features are exposed to Python. Feature-gated modules (e.g., `fuzzer`, `loadtest`, `stress`) require explicit `--features` at build time.
 - **Type stubs**: Generated manually, not auto-generated from Rust source. Keep `python/eggsec/*.pyi` in sync with `src/` changes.
 
-## Release 2: Network Programmability
+## Release 2: Network Programmability (Provisional Stability)
+
+Release 2 network, transport, and probe types are now registered in the API
+surface with provisional stability. They are scope-checked and policy-gated
+but not yet part of the stable-core operation registry.
 
 ### Module Locations
 
@@ -1218,6 +1224,10 @@ Release 2 types follow existing eggsec-python conventions:
 - **Scope enforcement**: All network operations validate targets against
   `LoadedScope` before making contact. Out-of-scope targets raise
   `EnforcementError`.
+- **`_require_packet_inspection` decorator**: Handles both class and method
+  decoration. When applied to a class, it gates all methods requiring the
+  `packet-inspection` feature. When applied to a single method, it gates only
+  that method.
 - **Redaction**: `HttpClientPy` and `AsyncHttpClientPy` automatically redact
   sensitive headers (`Authorization`, `Cookie`, etc.) from transcripts and
   evidence.

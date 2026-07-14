@@ -1200,6 +1200,22 @@ fn api_surface() -> PyObject {
         add_entry!("TlsMetadataPy", "provisional");
         add_entry!("RedirectEntryPy", "provisional");
         add_entry!("RedactConfigPy", "provisional");
+        // Release 2: Network types (provisional)
+        add_entry!("TargetPy", "provisional");
+        add_entry!("ConnectionConfigPy", "provisional");
+        add_entry!("TimeoutConfigPy", "provisional");
+        add_entry!("RetryPolicyPy", "provisional");
+        add_entry!("SocketEndpointPy", "provisional");
+        add_entry!("ConnectionTimingPy", "provisional");
+        // Release 2: Transport types (provisional)
+        add_entry!("TcpConfigPy", "provisional");
+        add_entry!("TcpSessionPy", "provisional");
+        add_entry!("UdpConfigPy", "provisional");
+        add_entry!("UdpSocketPy", "provisional");
+        // Release 2: Probe config types (provisional)
+        add_entry!("DnsQueryConfigPy", "provisional");
+        add_entry!("TlsProbeConfigPy", "provisional");
+        add_entry!("HttpProbeConfigPy", "provisional");
 
         // G2: Event protocol (stable — versioned serialization)
         add_entry!("EventEnvelope", "stable");

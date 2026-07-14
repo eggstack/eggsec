@@ -109,5 +109,8 @@ Release 2 network types are **provisional**. The public API shape is useful
 and follows engine conventions (frozen pyclasses, `to_dict`/`to_json`,
 context managers for sessions), but they do not yet satisfy the graduation
 checklist in `docs/python/domain-maturity.md` for stable-core promotion.
-Use `api_surface()` to verify stability before relying on these types in
+The 2026-07-14 release closure pass (1977 passed, 89 skipped) verified that
+all Release 2 network/transport/probe configuration types are properly
+registered in the API surface with provisional stability. Use
+`api_surface()` to verify stability before relying on these types in
 compatibility-sensitive automation.

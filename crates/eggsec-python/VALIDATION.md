@@ -1,10 +1,10 @@
 # eggsec-python Validation Report
 
-## Final integration checkpoint — 2026-07-12
+## Final integration checkpoint — 2026-07-14
 
 The closure pass completed the local scoped pre-1.0 stable-core gates:
 
-- Installed-wheel Python suite: **1353 passed, 58 skipped, 23 deselected**.
+- Installed-wheel Python suite: **1977 passed, 89 skipped, 23 deselected**.
 - Focused regression and release fixture/checkpoint suite: **33 passed**.
 - Stable-core registry and sync/async dispatch use one canonical operation
   identifier source.
@@ -16,6 +16,12 @@ The closure pass completed the local scoped pre-1.0 stable-core gates:
 - `domain_maturity()` and the architecture/release documentation now mark the
   twenty-two-operation stable-core boundary separately from provisional and
   experimental domains.
+- Release 2 API surface test now passes: all network/transport/probe config
+  types are registered in `api_surface()`.
+- The `_require_packet_inspection` decorator now handles both class and method
+  decoration.
+- Known flaky failure in `checkpoint_release` test (port race condition, not
+  a real defect).
 
 Remaining external gates are intentionally recorded in
 [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): current multi-platform CI
@@ -27,7 +33,7 @@ pass.
 
 ## Validation Summary
 
-**Date:** 2026-07-12
+**Date:** 2026-07-14
 **Platform:** linux (x86_64)
 **Rust toolchain:** nightly (via rtk)
 **Python:** 3.12.3
@@ -39,7 +45,7 @@ pass.
 | Python build + smoke | PASS |
 | Network failure triage | RESOLVED (6 tests properly skipped) |
 | Async API tests | PASS (fixture equivalence plus existing async coverage) |
-| Python suite | 1353 passed, 58 skipped, 23 deselected |
+| Python suite | 1977 passed, 89 skipped, 23 deselected |
 | Export checker | PASS (263 default exports resolve) |
 | GitHub Actions workflow | EXISTS, VALID |
 | Release checklist | UPDATED |

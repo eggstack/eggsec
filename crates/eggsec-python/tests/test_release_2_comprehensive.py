@@ -30,12 +30,15 @@ def _require_eggsec(cls):
 
 
 def _require_packet_inspection(cls):
-    """Skip the entire class if packet-inspection types are missing."""
+    """Skip the entire class or method if packet-inspection types are missing."""
     if not hasattr(eggsec, "PacketTimestampPy"):
-        @unittest.skip("packet-inspection feature not compiled")
-        class _Skip(cls):
-            pass
-        return _Skip
+        if isinstance(cls, type):
+            @unittest.skip("packet-inspection feature not compiled")
+            class _Skip(cls):
+                pass
+            return _Skip
+        else:
+            return unittest.skip("packet-inspection feature not compiled")(cls)
     return cls
 
 
