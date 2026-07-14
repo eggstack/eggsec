@@ -1003,6 +1003,83 @@ impl NetworkEvidencePy {
 }
 
 // ---------------------------------------------------------------------------
+// ProxyRoutePy
+// ---------------------------------------------------------------------------
+
+/// A proxy route configuration for routing network traffic through a proxy.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyRoutePy {
+    #[pyo3(get)]
+    pub proxy_type: String,
+    #[pyo3(get)]
+    pub host: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub username: Option<String>,
+    #[pyo3(get)]
+    pub password: Option<String>,
+    #[pyo3(get)]
+    pub no_proxy: Vec<String>,
+}
+
+#[pymethods]
+impl ProxyRoutePy {
+    #[new]
+    #[pyo3(signature = (host, port, proxy_type="http", username=None, password=None, no_proxy=None))]
+    fn new(
+        host: String,
+        port: u16,
+        proxy_type: &str,
+        username: Option<String>,
+        password: Option<String>,
+        no_proxy: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            proxy_type: proxy_type.to_string(),
+            host,
+            port,
+            username,
+            password,
+            no_proxy: no_proxy.unwrap_or_default(),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("proxy_type", &self.proxy_type)?;
+        dict.set_item("host", &self.host)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("username", &self.username)?;
+        dict.set_item("password", &self.password)?;
+        dict.set_item("no_proxy", &self.no_proxy)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ProxyRoutePy(type={}, host={}, port={}, user={:?})",
+            self.proxy_type, self.host, self.port, self.username
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}://{}:{}", self.proxy_type, self.host, self.port)
+    }
+
+    /// Return the URL string for this proxy (without credentials).
+    fn url(&self) -> String {
+        format!("{}://{}:{}", self.proxy_type, self.host, self.port)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
 
@@ -1023,17 +1100,24 @@ pub(crate) fn timing_to_dict(py: Python, timing: &ConnectionTimingPy) -> PyResul
 /// Args:
 ///     target: The target to resolve.
 ///     timeout_ms: DNS resolution timeout in milliseconds (default: 5000).
+///     max_results: Maximum number of results to return (default: 100).
 ///
 /// Returns:
 ///     ResolvedTargetPy with resolved IP addresses and metadata.
 #[pyfunction]
-#[pyo3(signature = (target, timeout_ms=5000))]
-pub fn resolve_target_sync(target: &TargetPy, timeout_ms: u64) -> PyResult<ResolvedTargetPy> {
+#[pyo3(signature = (target, timeout_ms=5000, max_results=100))]
+pub fn resolve_target_sync(
+    target: &TargetPy,
+    timeout_ms: u64,
+    max_results: usize,
+) -> PyResult<ResolvedTargetPy> {
     let host = target.host.clone();
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
     Python::with_gil(|py| {
-        crate::runtime_sync::block_on(py, async move { resolve_host_async(&host, timeout).await })
+        crate::runtime_sync::block_on(py, async move {
+            resolve_host_async(&host, timeout, max_results).await
+        })
     })
 }
 
@@ -1042,27 +1126,32 @@ pub fn resolve_target_sync(target: &TargetPy, timeout_ms: u64) -> PyResult<Resol
 /// Args:
 ///     target: The target to resolve.
 ///     timeout_ms: DNS resolution timeout in milliseconds (default: 5000).
+///     max_results: Maximum number of results to return (default: 100).
 ///
 /// Returns:
 ///     PyFuture that resolves to ResolvedTargetPy.
 #[pyfunction]
-#[pyo3(signature = (target, timeout_ms=5000))]
+#[pyo3(signature = (target, timeout_ms=5000, max_results=100))]
 pub fn async_resolve_target(
     target: &TargetPy,
     timeout_ms: u64,
+    max_results: usize,
 ) -> PyResult<runtime_async::PyFuture> {
     let host = target.host.clone();
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    runtime_async::spawn_async(async move { resolve_host_async(&host, timeout).await })
+    runtime_async::spawn_async(async move { resolve_host_async(&host, timeout, max_results).await })
 }
 
 /// Internal async DNS resolution implementation.
 async fn resolve_host_async(
     host: &str,
     timeout: std::time::Duration,
+    max_results: usize,
 ) -> PyResult<ResolvedTargetPy> {
     use tokio::net::lookup_host;
+
+    let start = std::time::Instant::now();
 
     let addrs = tokio::time::timeout(timeout, lookup_host(format!("{}:0", host)))
         .await
@@ -1079,6 +1168,9 @@ async fn resolve_host_async(
     let mut has_ipv6 = false;
 
     for addr in addrs {
+        if ips.len() >= max_results {
+            break;
+        }
         let ip = addr.ip();
         match ip {
             std::net::IpAddr::V4(_) => has_ipv4 = true,
@@ -1086,6 +1178,8 @@ async fn resolve_host_async(
         }
         ips.push(ip.to_string());
     }
+
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     if ips.is_empty() {
         return Err(NetworkError::new_err(format!(
@@ -1108,6 +1202,6 @@ async fn resolve_host_async(
         address_family: address_family.to_string(),
         resolver_source: "system".to_string(),
         canonical_name: None,
-        resolution_time_ms: None,
+        resolution_time_ms: Some(elapsed_ms),
     })
 }

@@ -8,7 +8,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::{NetworkError, TimeoutError};
 use crate::network::{
-    ConnectionMetadataPy, ConnectionTimingPy, SocketEndpointPy, TranscriptEntryPy,
+    ConnectionMetadataPy, ConnectionTimingPy, NetworkTranscriptPy, SocketEndpointPy,
+    TranscriptEntryPy,
 };
 use crate::runtime_async;
 use crate::runtime_sync;
@@ -322,6 +323,30 @@ impl TcpSessionPy {
     #[getter]
     fn config(&self) -> TcpConfigPy {
         self.config.clone()
+    }
+
+    /// Return the transcript of all read/write operations.
+    #[getter]
+    fn transcript(&self) -> NetworkTranscriptPy {
+        let s = self.state.lock().unwrap();
+        let total_bytes = s.bytes_sent + s.bytes_received;
+        NetworkTranscriptPy {
+            entries: s.transcript.clone(),
+            total_bytes,
+            truncated: false,
+        }
+    }
+
+    /// Return bytes sent counter.
+    #[getter]
+    fn bytes_sent(&self) -> u64 {
+        self.state.lock().unwrap().bytes_sent
+    }
+
+    /// Return bytes received counter.
+    #[getter]
+    fn bytes_received(&self) -> u64 {
+        self.state.lock().unwrap().bytes_received
     }
 
     /// Establish a TCP connection to the configured host:port.
@@ -1006,6 +1031,10 @@ impl UdpRecvFromResultPy {
 struct UdpSocketState {
     socket: Option<tokio::net::UdpSocket>,
     is_closed: bool,
+    bytes_sent: u64,
+    bytes_received: u64,
+    transcript: Vec<TranscriptEntryPy>,
+    sequence: u64,
 }
 
 /// Managed UDP socket with send/recv operations.
@@ -1027,6 +1056,10 @@ impl UdpSocketPy {
             state: Arc::new(std::sync::Mutex::new(UdpSocketState {
                 socket: None,
                 is_closed: false,
+                bytes_sent: 0,
+                bytes_received: 0,
+                transcript: Vec::new(),
+                sequence: 0,
             })),
         }
     }
@@ -1034,6 +1067,30 @@ impl UdpSocketPy {
     #[getter]
     fn is_closed(&self) -> bool {
         self.state.lock().unwrap().is_closed
+    }
+
+    /// Return bytes sent counter.
+    #[getter]
+    fn bytes_sent(&self) -> u64 {
+        self.state.lock().unwrap().bytes_sent
+    }
+
+    /// Return bytes received counter.
+    #[getter]
+    fn bytes_received(&self) -> u64 {
+        self.state.lock().unwrap().bytes_received
+    }
+
+    /// Return the transcript of all send/recv operations.
+    #[getter]
+    fn transcript(&self) -> NetworkTranscriptPy {
+        let s = self.state.lock().unwrap();
+        let total_bytes = s.bytes_sent + s.bytes_received;
+        NetworkTranscriptPy {
+            entries: s.transcript.clone(),
+            total_bytes,
+            truncated: false,
+        }
     }
 
     /// Connect the UDP socket to the target host:port.
@@ -1112,6 +1169,21 @@ impl UdpSocketPy {
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
+        let mut s = state.lock().unwrap();
+        s.bytes_sent += result as u64;
+        s.sequence += 1;
+        let seq = s.sequence;
+        let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+        s.transcript.push(TranscriptEntryPy {
+            sequence: seq,
+            direction: "sent".to_string(),
+            timestamp_ms: now_ms,
+            data_type: "datagram".to_string(),
+            size: result,
+            summary: None,
+            redacted: false,
+        });
+
         Ok(UdpSendResultPy {
             bytes_sent: result,
             duration_ms,
@@ -1145,6 +1217,21 @@ impl UdpSocketPy {
         })?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+        let mut s = state.lock().unwrap();
+        s.bytes_sent += result as u64;
+        s.sequence += 1;
+        let seq = s.sequence;
+        let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+        s.transcript.push(TranscriptEntryPy {
+            sequence: seq,
+            direction: "sent".to_string(),
+            timestamp_ms: now_ms,
+            data_type: "datagram".to_string(),
+            size: result,
+            summary: None,
+            redacted: false,
+        });
 
         Ok(UdpSendResultPy {
             bytes_sent: result,
@@ -1185,6 +1272,21 @@ impl UdpSocketPy {
 
         let mut data = buf;
         data.truncate(result);
+
+        let mut s = state.lock().unwrap();
+        s.bytes_received += result as u64;
+        s.sequence += 1;
+        let seq = s.sequence;
+        let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+        s.transcript.push(TranscriptEntryPy {
+            sequence: seq,
+            direction: "received".to_string(),
+            timestamp_ms: now_ms,
+            data_type: "datagram".to_string(),
+            size: result,
+            summary: None,
+            redacted: false,
+        });
 
         Ok(UdpRecvResultPy {
             data,
@@ -1230,6 +1332,21 @@ impl UdpSocketPy {
 
         let source_address = from_addr.ip().to_string();
         let source_port = from_addr.port();
+
+        let mut s = state.lock().unwrap();
+        s.bytes_received += result as u64;
+        s.sequence += 1;
+        let seq = s.sequence;
+        let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+        s.transcript.push(TranscriptEntryPy {
+            sequence: seq,
+            direction: "received".to_string(),
+            timestamp_ms: now_ms,
+            data_type: "datagram".to_string(),
+            size: result,
+            summary: Some(format!("from {}:{}", source_address, source_port)),
+            redacted: false,
+        });
 
         Ok(UdpRecvFromResultPy {
             data,

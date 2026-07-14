@@ -2367,6 +2367,7 @@ except eggsec.EggsecError as e:
 | `ConnectionConfigPy` | Connection timeout and retry configuration |
 | `TimeoutConfigPy` | Distinguished phase timeouts (connect, read, write, TLS, idle) |
 | `RetryPolicyPy` | Retry policy with backoff configuration |
+| `ProxyRoutePy` | Proxy route configuration (type, host, port, auth, no-proxy) |
 | `SocketEndpointPy` | Socket endpoint info (address, port, family, loopback) |
 | `ConnectionTimingPy` | Timing breakdown (DNS, TCP, TLS, TTFB, total) |
 | `ConnectionMetadataPy` | Full connection metadata (endpoints, protocol, TLS, bytes) |
@@ -2375,18 +2376,20 @@ except eggsec.EggsecError as e:
 | `NetworkTranscriptPy` | Ordered transcript collection |
 
 **Functions:**
-- `resolve_target_sync(target, timeout_ms=5000)` — Synchronous DNS resolution
-- `async_resolve_target(target, timeout_ms=5000)` — Async DNS resolution
+- `resolve_target_sync(target, timeout_ms=5000, max_results=100)` — Synchronous DNS resolution
+- `async_resolve_target(target, timeout_ms=5000, max_results=100)` — Async DNS resolution
 
 ### TCP Sessions (`eggsec.transport`)
 
 | Type | Description |
 |------|-------------|
 | `TcpConfigPy` | TCP connection configuration |
-| `TcpSessionPy` | Managed TCP session (context manager) |
+| `TcpSessionPy` | Managed TCP session (context manager) with transcript and byte counters |
 | `TcpConnectResultPy` | Connection result with endpoints and timing |
 | `TcpReadResultPy` | Read result with data, eof flag, and timing |
 | `TcpWriteResultPy` | Write result with byte count and timing |
+
+**Session properties:** `is_closed`, `config`, `transcript`, `bytes_sent`, `bytes_received`
 
 **Functions:**
 - `tcp_connect_probe(host, port, timeout_ms=5000)` — Single-shot TCP connect check
@@ -2397,10 +2400,12 @@ except eggsec.EggsecError as e:
 | Type | Description |
 |------|-------------|
 | `UdpConfigPy` | UDP socket configuration |
-| `UdpSocketPy` | Managed UDP socket (context manager) |
+| `UdpSocketPy` | Managed UDP socket (context manager) with transcript and byte counters |
 | `UdpSendResultPy` | Send result with byte count |
 | `UdpRecvResultPy` | Receive result with data and truncation flag |
 | `UdpRecvFromResultPy` | Receive result with source address |
+
+**Session properties:** `is_closed`, `bytes_sent`, `bytes_received`, `transcript`
 
 ### Protocol Probes (`eggsec.probes`)
 
@@ -2415,24 +2420,32 @@ except eggsec.EggsecError as e:
 | `TlsIssuePy` | TLS security issue |
 | `HttpProbeConfigPy` | HTTP probe configuration |
 | `HttpProbeResultPy` | HTTP probe result with headers, body, and timing |
+| `UdpProbeConfigPy` | UDP reachability probe configuration |
+| `UdpProbeResultPy` | UDP probe result with reachability and response data |
 
 **Functions:**
 - `dns_query(domain, record_types=None, resolver=None, timeout_ms=5000)` — DNS lookup
 - `tls_probe(host, port=443, sni=None, timeout_ms=10000, verify_certificate=True)` — TLS inspection
 - `http_probe(url, method="GET", timeout_ms=10000, follow_redirects=True)` — HTTP probe
+- `udp_probe(host, port, payload=None, timeout_ms=5000, max_response_size=65535, retries=2)` — UDP reachability probe
 
 ### HTTP Client (`eggsec.http_client`)
 
 | Type | Description |
 |------|-------------|
-| `HttpRequestPy` | HTTP request with duplicate-preserving headers |
+| `HttpRequestPy` | HTTP request with duplicate-preserving headers and response size limit |
 | `HttpHeadersPy` | Case-insensitive header container |
-| `HttpResponsePy` | Full HTTP response with timing and TLS metadata |
+| `HttpResponsePy` | Full HTTP response with timing, TLS metadata, and chunked body iteration |
 | `HttpCookiePy` | HTTP cookie with security attributes |
+| `RedirectEntryPy` | Redirect history entry |
+| `TlsMetadataPy` | TLS connection metadata |
+| `HttpTimingPy` | Request timing breakdown |
 | `HttpClientConfigPy` | Client pool and timeout configuration |
 | `HttpClientPy` | Sync HTTP client (context manager) |
 | `AsyncHttpClientPy` | Async HTTP client (async context manager) |
 | `RedactConfigPy` | Sensitive header/body redaction configuration |
+
+**HttpResponsePy methods:** `redacted_headers()`, `iter_body_chunks(chunk_size)`, `body_bytes_limited(max_bytes)`
 
 **Functions:**
 - `create_http_client(config)` — Create sync HTTP client
@@ -2443,14 +2456,18 @@ except eggsec.EggsecError as e:
 | Type | Description |
 |------|-------------|
 | `WebSocketSessionConfigPy` | Session configuration |
-| `WebSocketMessagePy` | Received message (text/binary) |
+| `WebSocketMessagePy` | Received message (text/binary/ping/pong) |
 | `WebSocketFramePy` | WebSocket frame details |
 | `WebSocketCloseInfoPy` | Close event information |
 | `WebSocketHandshakePy` | Handshake result |
-| `WebSocketSessionPy` | Sync WebSocket session (context manager) |
+| `WebSocketSessionPy` | Sync WebSocket session (context manager) with message batch receive |
 | `AsyncWebSocketSessionPy` | Async WebSocket session (async context manager) |
 | `WebSocketAssessmentConfigPy` | Assessment configuration |
 | `WebSocketAssessmentResultPy` | Assessment result with findings |
+
+**WebSocketMessagePy fields:** `is_text`, `is_binary`, `is_ping`, `is_pong`, `text_content`, `data`, `size`
+
+**WebSocketSessionPy methods:** `recv_available(max_count)`, `transcript()`
 
 **Functions:**
 - `websocket_assess(url, timeout_ms=30000)` — Comprehensive WebSocket assessment

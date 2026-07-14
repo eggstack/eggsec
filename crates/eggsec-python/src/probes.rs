@@ -1611,3 +1611,300 @@ async fn http_probe_impl(
         error: None,
     })
 }
+
+// ============================================================================
+// UDP Probe Types and Functions
+// ============================================================================
+
+/// Configuration for a UDP probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpProbeConfigPy {
+    #[pyo3(get)]
+    pub host: String,
+    #[pyo3(get)]
+    pub port: u16,
+    pub(crate) payload: Vec<u8>,
+    #[pyo3(get)]
+    pub timeout_ms: u64,
+    #[pyo3(get)]
+    pub max_response_size: usize,
+    #[pyo3(get)]
+    pub retries: u32,
+}
+
+#[pymethods]
+impl UdpProbeConfigPy {
+    #[new]
+    #[pyo3(signature = (host, port, payload=None, timeout_ms=5000, max_response_size=65535, retries=2))]
+    fn new(
+        host: String,
+        port: u16,
+        payload: Option<Vec<u8>>,
+        timeout_ms: u64,
+        max_response_size: usize,
+        retries: u32,
+    ) -> Self {
+        Self {
+            host,
+            port,
+            payload: payload.unwrap_or_default(),
+            timeout_ms,
+            max_response_size,
+            retries,
+        }
+    }
+
+    #[getter]
+    fn payload(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("host", &self.host)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("payload", &self.payload)?;
+        dict.set_item("timeout_ms", self.timeout_ms)?;
+        dict.set_item("max_response_size", self.max_response_size)?;
+        dict.set_item("retries", self.retries)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UdpProbeConfig(host={}, port={}, payload_len={}, timeout={}ms)",
+            self.host,
+            self.port,
+            self.payload.len(),
+            self.timeout_ms
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "UDP probe {}:{} ({}B payload, timeout={}ms)",
+            self.host,
+            self.port,
+            self.payload.len(),
+            self.timeout_ms
+        )
+    }
+}
+
+/// Result of a UDP probe.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpProbeResultPy {
+    #[pyo3(get)]
+    pub host: String,
+    #[pyo3(get)]
+    pub port: u16,
+    #[pyo3(get)]
+    pub reachable: bool,
+    #[pyo3(get)]
+    pub response_bytes: Vec<u8>,
+    #[pyo3(get)]
+    pub response_size: usize,
+    #[pyo3(get)]
+    pub truncated: bool,
+    #[pyo3(get)]
+    pub error: Option<String>,
+    #[pyo3(get)]
+    pub timing: ConnectionTimingPy,
+}
+
+#[pymethods]
+impl UdpProbeResultPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("host", &self.host)?;
+        dict.set_item("port", self.port)?;
+        dict.set_item("reachable", self.reachable)?;
+        dict.set_item("response_bytes", &self.response_bytes)?;
+        dict.set_item("response_size", self.response_size)?;
+        dict.set_item("truncated", self.truncated)?;
+        dict.set_item("error", &self.error)?;
+        dict.set_item("timing", crate::network::timing_to_dict(py, &self.timing)?)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UdpProbeResult(host={}:{}, reachable={}, response_size={})",
+            self.host, self.port, self.reachable, self.response_size
+        )
+    }
+
+    fn __str__(&self) -> String {
+        if self.reachable {
+            format!(
+                "UDP {}:{} reachable ({} bytes response)",
+                self.host, self.port, self.response_size
+            )
+        } else if let Some(ref err) = self.error {
+            format!("UDP {}:{} unreachable: {}", self.host, self.port, err)
+        } else {
+            format!("UDP {}:{} unreachable (timeout)", self.host, self.port)
+        }
+    }
+}
+
+/// Perform a UDP reachability probe.
+///
+/// Args:
+///     host: Target hostname or IP.
+///     port: Target UDP port.
+///     payload: Payload to send (default: empty).
+///     timeout_ms: Response timeout in milliseconds (default: 5000).
+///     max_response_size: Maximum response buffer size (default: 65535).
+///     retries: Number of retry attempts (default: 2).
+///
+/// Returns:
+///     UdpProbeResultPy with reachability and response data.
+#[pyfunction]
+#[pyo3(signature = (host, port, payload=None, timeout_ms=5000, max_response_size=65535, retries=2))]
+pub fn udp_probe(
+    host: &str,
+    port: u16,
+    payload: Option<Vec<u8>>,
+    timeout_ms: u64,
+    max_response_size: usize,
+    retries: u32,
+) -> PyResult<UdpProbeResultPy> {
+    let host_owned = host.to_string();
+    let payload_owned = payload.unwrap_or_default();
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+
+    Python::with_gil(|py| {
+        runtime_sync::block_on(py, async move {
+            udp_probe_impl(
+                &host_owned,
+                port,
+                &payload_owned,
+                timeout,
+                max_response_size,
+                retries,
+            )
+            .await
+        })
+    })
+}
+
+/// Perform an async UDP reachability probe.
+#[pyfunction]
+#[pyo3(signature = (host, port, payload=None, timeout_ms=5000, max_response_size=65535, retries=2))]
+pub fn async_udp_probe(
+    host: &str,
+    port: u16,
+    payload: Option<Vec<u8>>,
+    timeout_ms: u64,
+    max_response_size: usize,
+    retries: u32,
+) -> PyResult<runtime_async::PyFuture> {
+    let host_owned = host.to_string();
+    let payload_owned = payload.unwrap_or_default();
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+
+    runtime_async::spawn_async(async move {
+        udp_probe_impl(
+            &host_owned,
+            port,
+            &payload_owned,
+            timeout,
+            max_response_size,
+            retries,
+        )
+        .await
+    })
+}
+
+async fn udp_probe_impl(
+    host: &str,
+    port: u16,
+    payload: &[u8],
+    timeout: std::time::Duration,
+    max_response_size: usize,
+    retries: u32,
+) -> PyResult<UdpProbeResultPy> {
+    let start = std::time::Instant::now();
+    let target_addr = format!("{}:{}", host, port);
+
+    let socket = tokio::net::UdpSocket::bind("0.0.0.0:0")
+        .await
+        .map_err(|e| NetworkError::new_err(format!("Failed to bind UDP socket: {}", e)))?;
+
+    socket.connect(&target_addr).await.map_err(|e| {
+        NetworkError::new_err(format!("Failed to connect UDP to {}: {}", target_addr, e))
+    })?;
+
+    let mut last_error: Option<String> = None;
+    let mut response_buf = vec![0u8; max_response_size];
+    let mut got_response = false;
+
+    for attempt in 0..=retries {
+        let _ = attempt;
+        match tokio::time::timeout(timeout, socket.send(payload)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => {
+                last_error = Some(format!("Send failed: {}", e));
+                continue;
+            }
+            Err(_) => {
+                last_error = Some(format!("Send timed out after {}ms", timeout.as_millis()));
+                continue;
+            }
+        }
+
+        match tokio::time::timeout(timeout, socket.recv(&mut response_buf)).await {
+            Ok(Ok(n)) => {
+                response_buf.truncate(n);
+                got_response = true;
+                break;
+            }
+            Ok(Err(e)) => {
+                last_error = Some(format!("Recv failed: {}", e));
+            }
+            Err(_) => {
+                last_error = Some(format!("Recv timed out after {}ms", timeout.as_millis()));
+            }
+        }
+    }
+
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    let response_size = if got_response { response_buf.len() } else { 0 };
+    let truncated = got_response && response_size == max_response_size;
+
+    Ok(UdpProbeResultPy {
+        host: host.to_string(),
+        port,
+        reachable: got_response,
+        response_bytes: if got_response {
+            response_buf
+        } else {
+            Vec::new()
+        },
+        response_size,
+        truncated,
+        error: if got_response { None } else { last_error },
+        timing: ConnectionTimingPy {
+            dns_resolution_ms: None,
+            tcp_connect_ms: None,
+            tls_handshake_ms: None,
+            first_byte_ms: None,
+            total_ms: elapsed_ms,
+            connection_reused: false,
+        },
+    })
+}

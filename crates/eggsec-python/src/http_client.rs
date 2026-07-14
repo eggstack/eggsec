@@ -125,12 +125,14 @@ pub struct HttpRequestPy {
     pub user_agent: Option<String>,
     #[pyo3(get)]
     pub proxy_url: Option<String>,
+    #[pyo3(get)]
+    pub response_size_limit: Option<usize>,
 }
 
 #[pymethods]
 impl HttpRequestPy {
     #[new]
-    #[pyo3(signature = (method, url, *, headers=None, query_params=None, body_bytes=None, body_text=None, body_json=None, body_form=None, cookies=None, follow_redirects=true, max_redirects=10, verify_tls=true, timeout_ms=30000, connect_timeout_ms=5000, user_agent=None, proxy_url=None))]
+    #[pyo3(signature = (method, url, *, headers=None, query_params=None, body_bytes=None, body_text=None, body_json=None, body_form=None, cookies=None, follow_redirects=true, max_redirects=10, verify_tls=true, timeout_ms=30000, connect_timeout_ms=5000, user_agent=None, proxy_url=None, response_size_limit=None))]
     fn new(
         method: String,
         url: String,
@@ -148,6 +150,7 @@ impl HttpRequestPy {
         connect_timeout_ms: u64,
         user_agent: Option<String>,
         proxy_url: Option<String>,
+        response_size_limit: Option<usize>,
     ) -> Self {
         Self {
             method,
@@ -166,6 +169,7 @@ impl HttpRequestPy {
             connect_timeout_ms,
             user_agent,
             proxy_url,
+            response_size_limit,
         }
     }
 
@@ -212,6 +216,7 @@ impl HttpRequestPy {
         dict.set_item("connect_timeout_ms", self.connect_timeout_ms)?;
         dict.set_item("user_agent", &self.user_agent)?;
         dict.set_item("proxy_url", &self.proxy_url)?;
+        dict.set_item("response_size_limit", self.response_size_limit)?;
         Ok(dict.into())
     }
 
@@ -784,6 +789,29 @@ impl HttpResponsePy {
             self.status_code, self.final_url, self.bytes_received, self.timing.total_ms
         )
     }
+
+    /// Return the body as an iterator of chunks.
+    ///
+    /// Useful for processing large response bodies without loading
+    /// everything into memory at once. Each chunk is a bytes object.
+    fn iter_body_chunks(&self, chunk_size: Option<usize>) -> Vec<Vec<u8>> {
+        let chunk_size = chunk_size.unwrap_or(8192);
+        self.body_bytes
+            .chunks(chunk_size)
+            .map(|c| c.to_vec())
+            .collect()
+    }
+
+    /// Return body bytes up to the given limit, truncating if necessary.
+    fn body_bytes_limited(&self, max_bytes: usize) -> (Vec<u8>, bool) {
+        if self.body_bytes.len() <= max_bytes {
+            (self.body_bytes.clone(), false)
+        } else {
+            let mut data = self.body_bytes[..max_bytes].to_vec();
+            data.truncate(max_bytes);
+            (data, true)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,6 +1161,7 @@ async fn execute_with_redirects_async(
             connect_timeout_ms: req.connect_timeout_ms,
             user_agent: req.user_agent.clone(),
             proxy_url: req.proxy_url.clone(),
+            response_size_limit: None,
         };
 
         let resp = execute_request_async(&client, &mut current_req, None).await?;
@@ -1254,6 +1283,7 @@ impl HttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.request(py, req)
     }
@@ -1296,6 +1326,7 @@ impl HttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.request(py, req)
     }
@@ -1338,6 +1369,7 @@ impl HttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.request(py, req)
     }
@@ -1367,6 +1399,7 @@ impl HttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.request(py, req)
     }
@@ -1481,6 +1514,7 @@ impl AsyncHttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.async_request(req)
     }
@@ -1522,6 +1556,7 @@ impl AsyncHttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.async_request(req)
     }
@@ -1563,6 +1598,7 @@ impl AsyncHttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.async_request(req)
     }
@@ -1591,6 +1627,7 @@ impl AsyncHttpClientPy {
             connect_timeout_ms: self.config.connect_timeout_ms,
             user_agent: self.config.user_agent.clone(),
             proxy_url: self.config.proxy_url.clone(),
+            response_size_limit: None,
         };
         self.async_request(req)
     }

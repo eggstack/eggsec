@@ -418,6 +418,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<network::NetworkEvidencePy>()?;
     m.add_class::<network::TranscriptEntryPy>()?;
     m.add_class::<network::NetworkTranscriptPy>()?;
+    m.add_class::<network::ProxyRoutePy>()?;
     // Release 2: TCP/UDP transport session primitives
     m.add_class::<transport::TcpConfigPy>()?;
     m.add_class::<transport::TcpSessionPy>()?;
@@ -445,12 +446,16 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<probes::TlsIssuePy>()?;
     m.add_class::<probes::HttpProbeConfigPy>()?;
     m.add_class::<probes::HttpProbeResultPy>()?;
+    m.add_class::<probes::UdpProbeConfigPy>()?;
+    m.add_class::<probes::UdpProbeResultPy>()?;
     m.add_function(wrap_pyfunction!(probes::dns_query, m)?)?;
     m.add_function(wrap_pyfunction!(probes::async_dns_query, m)?)?;
     m.add_function(wrap_pyfunction!(probes::tls_probe, m)?)?;
     m.add_function(wrap_pyfunction!(probes::async_tls_probe, m)?)?;
     m.add_function(wrap_pyfunction!(probes::http_probe, m)?)?;
     m.add_function(wrap_pyfunction!(probes::async_http_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::udp_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(probes::async_udp_probe, m)?)?;
     m.add_function(wrap_pyfunction!(network::resolve_target_sync, m)?)?;
     m.add_function(wrap_pyfunction!(network::async_resolve_target, m)?)?;
     // Release 2: HTTP client

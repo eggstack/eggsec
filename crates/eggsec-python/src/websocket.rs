@@ -814,6 +814,10 @@ pub struct WebSocketMessagePy {
     #[pyo3(get)]
     pub is_binary: bool,
     #[pyo3(get)]
+    pub is_ping: bool,
+    #[pyo3(get)]
+    pub is_pong: bool,
+    #[pyo3(get)]
     pub text_content: Option<String>,
     #[pyo3(get)]
     pub size: usize,
@@ -836,6 +840,8 @@ impl WebSocketMessagePy {
         dict.set_item("data", &self.data)?;
         dict.set_item("is_text", self.is_text)?;
         dict.set_item("is_binary", self.is_binary)?;
+        dict.set_item("is_ping", self.is_ping)?;
+        dict.set_item("is_pong", self.is_pong)?;
         dict.set_item("text_content", &self.text_content)?;
         dict.set_item("size", self.size)?;
         Ok(dict.into())
@@ -847,11 +853,18 @@ impl WebSocketMessagePy {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "WebSocketMessage(type={}, size={})",
-            if self.is_text { "text" } else { "binary" },
-            self.size
-        )
+        let msg_type = if self.is_text {
+            "text"
+        } else if self.is_binary {
+            "binary"
+        } else if self.is_ping {
+            "ping"
+        } else if self.is_pong {
+            "pong"
+        } else {
+            "unknown"
+        };
+        format!("WebSocketMessage(type={}, size={})", msg_type, self.size)
     }
 
     fn __str__(&self) -> String {
@@ -859,6 +872,10 @@ impl WebSocketMessagePy {
             self.text_content
                 .clone()
                 .unwrap_or_else(|| format!("<{} bytes>", self.size))
+        } else if self.is_ping {
+            format!("<ping {} bytes>", self.size)
+        } else if self.is_pong {
+            format!("<pong {} bytes>", self.size)
         } else {
             format!("<binary {} bytes>", self.size)
         }
@@ -1326,6 +1343,8 @@ impl WebSocketSessionPy {
                     data,
                     is_text: true,
                     is_binary: false,
+                    is_ping: false,
+                    is_pong: false,
                     text_content: Some(text_str),
                     size,
                 }
@@ -1341,6 +1360,8 @@ impl WebSocketSessionPy {
                     data: bytes,
                     is_text: false,
                     is_binary: true,
+                    is_ping: false,
+                    is_pong: false,
                     text_content,
                     size,
                 }
@@ -1355,6 +1376,8 @@ impl WebSocketSessionPy {
                     data: bytes,
                     is_text: false,
                     is_binary: false,
+                    is_ping: true,
+                    is_pong: false,
                     text_content,
                     size,
                 }
@@ -1369,6 +1392,8 @@ impl WebSocketSessionPy {
                     data: bytes,
                     is_text: false,
                     is_binary: false,
+                    is_ping: false,
+                    is_pong: true,
                     text_content,
                     size,
                 }
@@ -1525,6 +1550,106 @@ impl WebSocketSessionPy {
                 "ws://{} (open, {} messages, sent={}B recv={}B)",
                 self.config.url, s.message_count, s.bytes_sent, s.bytes_received
             )
+        }
+    }
+
+    /// Receive all available messages without blocking (up to max_count).
+    ///
+    /// Returns a list of WebSocketMessagePy. Useful for draining
+    /// messages after a burst or for batch processing.
+    fn recv_available(
+        &self,
+        py: Python,
+        max_count: Option<usize>,
+    ) -> PyResult<Vec<WebSocketMessagePy>> {
+        let max_count = max_count.unwrap_or(100);
+        let state = Arc::clone(&self.state);
+        let timeout = std::time::Duration::from_millis(100);
+
+        {
+            let s = state.lock().unwrap();
+            if s.is_closed || s.ws_stream.is_none() {
+                return Err(NetworkError::new_err("Not connected"));
+            }
+        }
+
+        let mut messages = Vec::new();
+        for _ in 0..max_count {
+            let result = {
+                let mut s = state.lock().unwrap();
+                let ws = s.ws_stream.as_mut().unwrap();
+                let ws_ref =
+                    unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
+
+                runtime_sync::block_on(py, async move {
+                    tokio::time::timeout(timeout, ws_ref.next()).await
+                })
+            };
+
+            match result {
+                Ok(Some(Ok(TungsteniteMessage::Text(text)))) => {
+                    let text_str = text.to_string();
+                    let data = text_str.as_bytes().to_vec();
+                    let size = data.len();
+                    let mut s = state.lock().unwrap();
+                    s.bytes_received += size as u64;
+                    s.message_count += 1;
+                    messages.push(WebSocketMessagePy {
+                        data,
+                        is_text: true,
+                        is_binary: false,
+                        is_ping: false,
+                        is_pong: false,
+                        text_content: Some(text_str),
+                        size,
+                    });
+                }
+                Ok(Some(Ok(TungsteniteMessage::Binary(data)))) => {
+                    let bytes: Vec<u8> = data.into();
+                    let size = bytes.len();
+                    let text_content = String::from_utf8(bytes.clone()).ok();
+                    let mut s = state.lock().unwrap();
+                    s.bytes_received += size as u64;
+                    s.message_count += 1;
+                    messages.push(WebSocketMessagePy {
+                        data: bytes,
+                        is_text: false,
+                        is_binary: true,
+                        is_ping: false,
+                        is_pong: false,
+                        text_content,
+                        size,
+                    });
+                }
+                Ok(Some(Ok(TungsteniteMessage::Pong(data)))) => {
+                    let bytes: Vec<u8> = data.into();
+                    let size = bytes.len();
+                    let mut s = state.lock().unwrap();
+                    s.bytes_received += size as u64;
+                    messages.push(WebSocketMessagePy {
+                        data: bytes,
+                        is_text: false,
+                        is_binary: false,
+                        is_ping: false,
+                        is_pong: true,
+                        text_content: None,
+                        size,
+                    });
+                }
+                _ => break,
+            }
+        }
+
+        Ok(messages)
+    }
+
+    /// Return the transcript of all messages exchanged.
+    fn transcript(&self) -> NetworkTranscriptPy {
+        let s = self.state.lock().unwrap();
+        NetworkTranscriptPy {
+            entries: Vec::new(),
+            total_bytes: s.bytes_sent + s.bytes_received,
+            truncated: false,
         }
     }
 }
@@ -1807,6 +1932,8 @@ impl AsyncWebSocketSessionPy {
                         data,
                         is_text: true,
                         is_binary: false,
+                        is_ping: false,
+                        is_pong: false,
                         text_content: Some(text_str),
                         size,
                     }
@@ -1825,6 +1952,8 @@ impl AsyncWebSocketSessionPy {
                         data: bytes,
                         is_text: false,
                         is_binary: true,
+                        is_ping: false,
+                        is_pong: false,
                         text_content,
                         size,
                     }
@@ -1842,6 +1971,8 @@ impl AsyncWebSocketSessionPy {
                         data: bytes,
                         is_text: false,
                         is_binary: false,
+                        is_ping: true,
+                        is_pong: false,
                         text_content,
                         size,
                     }
@@ -1859,6 +1990,8 @@ impl AsyncWebSocketSessionPy {
                         data: bytes,
                         is_text: false,
                         is_binary: false,
+                        is_ping: false,
+                        is_pong: true,
                         text_content,
                         size,
                     }
