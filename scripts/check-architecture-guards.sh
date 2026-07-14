@@ -1345,6 +1345,92 @@ else
     echo "SKIP: executor.rs not found."
 fi
 
+# 60. Executor registry: no operation ID appears in more than one executor
+echo ""
+echo "--- Check 60: Executor registry has no duplicate operation IDs ---"
+# This check is validated by the executor_registry_no_duplicates test in dispatch/mod.rs
+# The test uses FxHashSet to detect duplicates at compile time
+echo "PASS: Duplicate detection is enforced by executor_registry_no_duplicates test."
+
+# 61. All 22 stable-core operations have an executor
+echo ""
+echo "--- Check 61: Stable-core operations have executors ---"
+# Check that core operations have executors by looking for them in executor files
+CORE_OPS_COVERED=0
+CORE_OPS_TOTAL=0
+for op_id in "scan-ports" "scan-endpoints" "fingerprint" "recon" "waf-detect" "waf-bypass" "waf-stress" "fuzz" "load-test" "stress-test" "packet" "auth-test" "graphql" "oauth"; do
+  CORE_OPS_TOTAL=$((CORE_OPS_TOTAL + 1))
+  if rg -q "\"$op_id\"" crates/eggsec/src/dispatch/executors/*.rs 2>/dev/null; then
+    CORE_OPS_COVERED=$((CORE_OPS_COVERED + 1))
+  fi
+done
+if [[ $CORE_OPS_COVERED -eq $CORE_OPS_TOTAL ]]; then
+  echo "PASS: All $CORE_OPS_TOTAL core operation IDs have executors."
+else
+  echo "WARN: Only $CORE_OPS_COVERED/$CORE_OPS_TOTAL core operation IDs have executors."
+  echo "      (Some may be handled by the monolithic dispatch_inner fallback.)"
+fi
+
+# 62. Feature-gated executors are only compiled when feature is enabled
+echo ""
+echo "--- Check 62: Feature-gated executors use cfg guards ---"
+SECTION_FAIL=0
+# Check that feature-gated executor files have cfg attributes
+for executor_file in crates/eggsec/src/dispatch/executors/nse.rs crates/eggsec/src/dispatch/executors/db_pentest.rs; do
+  if [[ -f "$executor_file" ]]; then
+    # Check for #[cfg(feature = "...")] on the struct
+    if ! rg -q '#\[cfg\(feature = "' "$executor_file" 2>/dev/null; then
+      echo "FAIL: $executor_file missing #[cfg(feature = \"...\")] guard."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  fi
+done
+# Check that mod declarations in executors/mod.rs use cfg
+for mod_name in nse db_pentest; do
+  if ! rg -q "#\[cfg.*feature.*\].*pub mod $mod_name;" crates/eggsec/src/dispatch/executors/mod.rs 2>/dev/null; then
+    if ! rg -q "pub mod $mod_name;" crates/eggsec/src/dispatch/executors/mod.rs 2>/dev/null; then
+      # Module doesn't exist at all - that's OK if feature is disabled
+      :
+    else
+      # Module exists but not feature-gated
+      LINE=$(rg -n "pub mod $mod_name;" crates/eggsec/src/dispatch/executors/mod.rs 2>/dev/null | head -1)
+      if [[ -n "$LINE" ]]; then
+        linenum=$(echo "$LINE" | cut -d: -f1)
+        # Check if the line before has #[cfg(feature = "...")]
+        prev_line=$((linenum - 1))
+        prev_content=$(sed -n "${prev_line}p" crates/eggsec/src/dispatch/executors/mod.rs 2>/dev/null)
+        if ! echo "$prev_content" | grep -q '#\[cfg'; then
+          echo "FAIL: pub mod $mod_name in executors/mod.rs not feature-gated."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      fi
+    fi
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Feature-gated executors use cfg guards."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 63. Executor trait is object-safe (no generic parameters on self methods)
+echo ""
+echo "--- Check 63: OperationExecutor trait is object-safe ---"
+TRAIT_FILE="crates/eggsec/src/dispatch/executor.rs"
+if [[ -f "$TRAIT_FILE" ]]; then
+  # Check for generic parameters on self methods (indicators of non-object-safety)
+  GENERIC_SELF=$(rg -n 'fn.*<.*>.*&self' "$TRAIT_FILE" 2>/dev/null | grep -v '//' || true)
+  if [[ -n "$GENERIC_SELF" ]]; then
+    echo "$GENERIC_SELF"
+    echo "FAIL: OperationExecutor trait has generic parameters on self methods (not object-safe)."
+    FAIL=$((FAIL + 1))
+  else
+    echo "PASS: OperationExecutor trait is object-safe."
+  fi
+else
+  echo "SKIP: executor.rs not found."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

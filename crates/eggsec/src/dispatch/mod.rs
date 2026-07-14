@@ -15,6 +15,9 @@
 //! eggsec engine functions (scanner, loadtest, fuzzer, etc.)
 //! ```
 
+pub mod executor;
+pub mod executors;
+
 mod api;
 mod auth;
 #[cfg(feature = "c2")]
@@ -440,6 +443,72 @@ mod tests {
                 // a Result, not () — the key invariant.
                 assert!(!e.to_string().is_empty());
             }
+        }
+    }
+
+    #[test]
+    fn executor_registry_covers_core_operations() {
+        let reg = executors::build_default_registry();
+
+        // All core operation IDs should be handled
+        let core_ops = &[
+            "scan-ports",
+            "scan-endpoints",
+            "fingerprint",
+            "recon",
+            "pipeline",
+            "waf-detect",
+            "waf-bypass",
+            "waf-stress",
+            "load-test",
+            "stress-test",
+            "packet",
+            "auth-test",
+            "fuzz",
+            "graphql",
+            "oauth",
+        ];
+
+        for &op_id in core_ops {
+            assert!(
+                reg.find_executor(op_id).is_some(),
+                "No executor registered for core operation: {}",
+                op_id
+            );
+        }
+    }
+
+    #[test]
+    fn executor_registry_feature_gated_operations() {
+        let reg = executors::build_default_registry();
+
+        // Feature-gated operations (only check if feature is enabled)
+        #[cfg(feature = "nse")]
+        assert!(
+            reg.find_executor("nse").is_some(),
+            "No executor registered for nse operation"
+        );
+
+        #[cfg(feature = "db-pentest")]
+        assert!(
+            reg.find_executor("db-pentest").is_some(),
+            "No executor registered for db-pentest operation"
+        );
+    }
+
+    #[test]
+    fn executor_registry_no_duplicates() {
+        let reg = executors::build_default_registry();
+        let ids = reg.all_operation_ids();
+
+        // Check for duplicates by collecting into a set
+        let mut seen = rustc_hash::FxHashSet::default();
+        for id in &ids {
+            assert!(
+                seen.insert(*id),
+                "Duplicate operation ID in registry: {}",
+                id
+            );
         }
     }
 }

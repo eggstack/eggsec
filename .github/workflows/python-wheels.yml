@@ -268,3 +268,185 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+
+  test-feature-profiles:
+    name: Feature profile (${{ matrix.feature }})
+    needs: [build]
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - full-no-system
+          - websocket
+          - git-secrets
+          - sbom
+          - container
+          - packet-inspection
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build with features
+        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml --features ${{ matrix.feature }}
+
+      - name: Run feature tests
+        run: |
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ -k "${{ matrix.feature }}" --timeout=30 -v
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-${{ matrix.feature }}-results
+          path: target/python-validation/
+
+  validation-matrix:
+    name: Release 1/2 validation matrix
+    needs: [build]
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheel for validation
+        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+
+      - name: Run validation matrix
+        run: |
+          bash scripts/validate_python_release_1_2.sh --all --ci
+
+      - name: Upload validation matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-1-2-validation-matrix
+          path: target/python-validation/release-1-2-matrix.json
+
+      - name: Upload binary size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-size-report
+          path: target/python-validation/binary-size-report.json
+
+  performance-report:
+    name: Performance report
+    needs: [build]
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build with default features
+        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+
+      - name: Run performance report
+        run: |
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/test_performance_report.py -v --timeout=120
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: target/python-validation/performance-report.json
+
+  skip-report:
+    name: Skip report
+    needs: [test, test-feature-profiles]
+    if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build with default features
+        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+
+      - name: Capture pytest skip reasons
+        run: |
+          mkdir -p target/python-validation
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30 --tb=no 2>&1 | \
+          python -c "
+          import sys, json, re
+
+          lines = sys.stdin.readlines()
+          skips = []
+          for line in lines:
+              m = re.match(r'.*SKIPPED.*\((.+)\)', line)
+              if m:
+                  skips.append(m.group(1))
+              m2 = re.match(r'.*::\w+ SKIPPED.*\((.+)\)', line)
+              if m2:
+                  reason = m2.group(1)
+                  if reason not in skips:
+                      skips.append(reason)
+
+          report = {
+              'total_skipped': len(skips),
+              'skip_reasons': skips,
+          }
+          with open('target/python-validation/skip-report.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          print(f'Captured {len(skips)} skip reasons')
+          "
+
+      - name: Upload skip report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skip-report
+          path: target/python-validation/skip-report.json
+
+  python-architecture-guards:
+    name: Python architecture guards
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check Python capability matrix
+        run: python scripts/check-python-capability-matrix.py
+
+      - name: Check Python architecture guards
+        run: python scripts/check-python-architecture-guards.py
+
+      - name: Check Python stub parity
+        run: python scripts/check_python_stub_parity.py
