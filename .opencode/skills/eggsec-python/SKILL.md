@@ -44,7 +44,7 @@ crates/eggsec-python/
 │   ├── features.rs          # features(), has_feature()
 │   ├── version.rs           # build_info()
 │   ├── runtime_sync.rs      # Sync blocking wrapper
-│   ├── runtime_async.rs     # Async runtime (PyFuture)
+│   ├── runtime_async.rs     # Async runtime (PyFuture, shared OnceLock<Runtime>)
 │   ├── config_model.rs      # SensitiveString, EggsecConfig, config sub-models
 │   ├── scope_eval.rs        # LoadedScope, ScopeSource, ScopeRule, validate_scope()
 │   ├── operation_metadata.rs # OperationRegistry, OperationDescriptor, OperationRisk, Capability
@@ -1186,7 +1186,7 @@ Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust te
 
 ## Known Limitations
 
-- **Async bridge**: Hand-rolled `PyFuture` wrapper, not `pyo3-async-runtimes`. The `AsyncClient` spawns a tokio task and polls from Python's event loop via `PyFuture`. This works but lacks integration with Python's native `asyncio` cancellation propagation.
+- **Async bridge**: Hand-rolled `PyFuture` wrapper, not `pyo3-async-runtimes`. A process-global shared Tokio runtime (via `OnceLock`) ensures stateful async resources survive across chained awaits. The `AsyncClient` spawns tasks on the shared runtime and polls from Python's event loop via `PyFuture`. Lacks integration with Python's native `asyncio` cancellation propagation.
 - **GIL release**: GIL is released during network I/O (blocking calls use `py.allow_threads()`), but CPU-bound Rust work holds the GIL.
 - **Feature parity**: Not all engine features are exposed to Python. Feature-gated modules (e.g., `fuzzer`, `loadtest`, `stress`) require explicit `--features` at build time.
 - **Type stubs**: Generated manually, not auto-generated from Rust source. Keep `python/eggsec/*.pyi` in sync with `src/` changes.

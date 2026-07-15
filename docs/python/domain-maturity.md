@@ -117,6 +117,16 @@ until they satisfy the graduation checklist:
 No operations are promoted in Release 4. All session types are provisional;
 the Releases 1-3 stable-core guarantees remain intact.
 
+### Async runtime ownership (Workstream 1 closure)
+
+The shared Tokio runtime in `runtime_async.rs` now uses a process-global
+`OnceLock<Runtime>` with a multi-thread worker pool. This ensures stateful
+async resources (`AsyncTcpSession`, `AsyncUdpSocket`, `AsyncHttpClient`,
+`AsyncWebSocketSession`, etc.) survive across chained awaits on a single
+session. Previously, each `PyFuture` spawned its own per-call runtime that
+shut down on completion, preventing chained operations. All async transport
+lifecycle tests now pass without skip markers.
+
 ## Release 2: Network Programmability (Provisional)
 
 | Symbol | Stability | Notes |

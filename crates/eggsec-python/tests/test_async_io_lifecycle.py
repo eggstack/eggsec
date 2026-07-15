@@ -45,49 +45,8 @@ if _WEBSOCKET_AVAILABLE:
     AsyncWebSocketSession = eggsec.AsyncWebSocketSessionPy
 
 
-def _async_transport_chaining_works() -> bool:
-    """Check if async transport sessions can chain operations (connect + write).
-
-    The PyO3 extension has a Tokio runtime lifecycle issue where the runtime
-    shuts down after each PyFuture completes, preventing chained operations
-    on AsyncTcpSession / AsyncUdpSocket.
-    """
-    try:
-        session = AsyncTcpSession(TcpConfig("127.0.0.1", 1, connect_timeout_ms=200))
-        f = session.connect()
-        deadline = time.monotonic() + 1.0
-        while time.monotonic() < deadline:
-            try:
-                next(f)
-            except StopIteration:
-                break
-            except BaseException:
-                session.close()
-                return False
-            time.sleep(0.005)
-        f2 = session.write(b"x")
-        deadline2 = time.monotonic() + 1.0
-        while time.monotonic() < deadline2:
-            try:
-                next(f2)
-            except StopIteration:
-                session.close()
-                return True
-            except BaseException:
-                session.close()
-                return False
-            time.sleep(0.005)
-        session.close()
-        return False
-    except Exception:
-        return False
-
-
-_TRANSPORT_CHAINING = _async_transport_chaining_works()
-_skip_chaining = pytest.mark.skipif(
-    not _TRANSPORT_CHAINING,
-    reason="async transport Tokio runtime lifecycle prevents chained operations",
-)
+# Async transport chaining now works with the shared Tokio runtime.
+# The _skip_chaining marker is removed; chained operations are expected to pass.
 
 # ---------------------------------------------------------------------------
 # PyFuture polling helper (from existing test patterns)
@@ -261,7 +220,6 @@ class TestAsyncTcpSessionContextManager:
         assert "closed=true" in r
 
 
-@_skip_chaining
 class TestAsyncTcpSessionNormalOperation:
     """Basic I/O operations against loopback server."""
 
@@ -325,7 +283,6 @@ class TestAsyncTcpSessionNormalOperation:
         session.close()
 
 
-@_skip_chaining
 class TestAsyncTcpSessionCancellation:
     """Cancellation during async operations."""
 
@@ -473,7 +430,6 @@ class TestAsyncTcpSessionConnectTimeout:
         session.close()
 
 
-@_skip_chaining
 class TestAsyncTcpSessionResourceLeak:
     """After cancellation or close, session is properly cleaned up."""
 
@@ -502,7 +458,6 @@ class TestAsyncTcpSessionResourceLeak:
             session2.close()
 
 
-@_skip_chaining
 class TestAsyncTcpSessionReadExact:
     """read_exact operation tests."""
 
@@ -527,7 +482,6 @@ class TestAsyncTcpSessionReadExact:
             _await_future(session.read_exact(10))
 
 
-@_skip_chaining
 class TestAsyncTcpSessionReadUntil:
     """read_until operation tests."""
 
@@ -538,7 +492,7 @@ class TestAsyncTcpSessionReadUntil:
             session = AsyncTcpSession(config)
             _await_future(session.connect())
             _await_future(session.write(b"line\n"))
-            result = _await_future(session.read_until(b"\n"))
+            result = _await_future(session.read_until(0x0A))
             assert result.bytes_read > 0
             session.close()
 
@@ -547,7 +501,7 @@ class TestAsyncTcpSessionReadUntil:
         session = AsyncTcpSession(config)
         session.close()
         with pytest.raises(Exception):
-            _await_future(session.read_until(b"\n"))
+            _await_future(session.read_until(0x0A))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -599,7 +553,6 @@ class TestAsyncUdpSocketContextManager:
         assert "closed=true" in r
 
 
-@_skip_chaining
 class TestAsyncUdpSocketNormalOperation:
     """Basic UDP I/O against loopback server."""
 
@@ -612,10 +565,10 @@ class TestAsyncUdpSocketNormalOperation:
             sock = AsyncUdpSocket(config)
             _await_future(sock.connect())
             send_result = _await_future(sock.send(b"udp-hello"))
-            assert send_result.bytes_sent == 8
+            assert send_result.bytes_sent == len(b"udp-hello")
 
             recv_result = _await_future(sock.recv(1024))
-            assert recv_result.bytes_received == 8
+            assert recv_result.bytes_received == len(b"udp-hello")
             assert bytes(recv_result.data) == b"udp-hello"
             sock.close()
         finally:
@@ -656,7 +609,6 @@ class TestAsyncUdpSocketNormalOperation:
             server.server_close()
 
 
-@_skip_chaining
 class TestAsyncUdpSocketCancellation:
     """Cancellation during UDP operations."""
 
@@ -765,7 +717,6 @@ class TestAsyncUdpSocketResourceLeak:
         assert sock.is_closed
 
 
-@_skip_chaining
 class TestAsyncUdpSocketSendTo:
     """send_to and recv_from operations."""
 
@@ -776,7 +727,7 @@ class TestAsyncUdpSocketSendTo:
             config = UdpConfig(HOST, port, timeout_ms=3000)
             sock = AsyncUdpSocket(config)
             _await_future(sock.connect())
-            _await_future(sock.send_to(b"sendto-test", HOST, port))
+            _await_future(sock.send_to(b"sendto-test", f"{HOST}:{port}"))
             recv_result = _await_future(sock.recv_from(1024))
             assert recv_result.bytes_received > 0
             assert recv_result.source_address == HOST
@@ -1509,7 +1460,6 @@ class TestPyFutureIteratorProtocol:
 class TestConcurrentSessions:
     """Multiple async sessions operating concurrently."""
 
-    @_skip_chaining
     def test_concurrent_tcp_sessions(self):
         """Multiple TCP sessions connect and I/O simultaneously."""
         with StableCoreFixtures() as fx:
@@ -1553,7 +1503,6 @@ class TestConcurrentSessions:
 
             client.close()
 
-    @_skip_chaining
     def test_mixed_session_types_concurrent(self):
         """TCP, UDP, and HTTP sessions operating in parallel."""
         with StableCoreFixtures() as fx:
@@ -1621,7 +1570,6 @@ class TestErrorPropagation:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-@_skip_chaining
 class TestAsyncTcpSessionWriteAll:
     """write_all operation tests."""
 

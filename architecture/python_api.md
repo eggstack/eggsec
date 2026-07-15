@@ -123,6 +123,30 @@ do not yet satisfy the graduation checklist in
 `docs/python/domain-maturity.md` for stable-core promotion. Releases 1-3
 stable-core guarantees remain intact.
 
+## Shared Async Runtime Ownership
+
+All async Python operations share a single process-global Tokio runtime
+(`OnceLock<Runtime>` in `runtime_async.rs`) with a 2-worker-thread pool.
+This replaces the previous per-`PyFuture` runtime pattern where each
+`spawn_async` call created and destroyed its own `new_current_thread()`
+runtime on a dedicated thread.
+
+### Guarantees
+
+- Stateful resources created in one awaited call remain valid for subsequent calls.
+- `connect()` → `write()` → `read()` → `close()` chains work on the same session.
+- Dropping a `PyFuture` does not drop the session runtime (shared).
+- Concurrent sessions share the runtime without global serialization.
+- Sync wrappers (`block_on`) use the separate `OnceLock` runtime in
+  `runtime_sync.rs` and release the GIL during I/O.
+
+### Affected APIs
+
+`AsyncTcpSession`, `AsyncUdpSocket`, `AsyncHttpClient`, `AsyncWebSocketSession`,
+`AsyncCaptureSession`, `AsyncMobileSession`, `AsyncBrowserSession`, daemon-backed
+`AsyncEngine`, async proxy and database sessions, and all one-shot async
+functions (recon, scanning, WAF, etc.) returning `PyFuture`.
+
 ## Release 2: Network Programmability
 
 Release 2 introduces Python bindings for low-level network primitives. These
