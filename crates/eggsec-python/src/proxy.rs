@@ -982,6 +982,51 @@ pub struct CapturedExchangePy {
 
 #[pymethods]
 impl CapturedExchangePy {
+    #[new]
+    #[pyo3(signature = (
+        id,
+        method,
+        uri,
+        request_headers=None,
+        request_body=None,
+        response_status=None,
+        response_headers=None,
+        response_body=None,
+        timestamp_ms=0,
+        latency_ms=None,
+        request_modified=false,
+        response_modified=false,
+    ))]
+    fn new(
+        id: usize,
+        method: String,
+        uri: String,
+        request_headers: Option<Vec<(String, String)>>,
+        request_body: Option<String>,
+        response_status: Option<u16>,
+        response_headers: Option<Vec<(String, String)>>,
+        response_body: Option<String>,
+        timestamp_ms: u64,
+        latency_ms: Option<u64>,
+        request_modified: bool,
+        response_modified: bool,
+    ) -> Self {
+        Self {
+            id,
+            method,
+            uri,
+            request_headers: request_headers.unwrap_or_default(),
+            request_body,
+            response_status,
+            response_headers: response_headers.unwrap_or_default(),
+            response_body,
+            timestamp_ms,
+            latency_ms,
+            request_modified,
+            response_modified,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("id", self.id)?;
@@ -1044,6 +1089,36 @@ pub struct InterceptSessionResultPy {
 
 #[pymethods]
 impl InterceptSessionResultPy {
+    #[new]
+    #[pyo3(signature = (
+        listen_addr,
+        listen_port,
+        duration_ms=0,
+        total_exchanges=0,
+        modified_requests=0,
+        modified_responses=0,
+        exchanges=None,
+    ))]
+    fn new(
+        listen_addr: String,
+        listen_port: u16,
+        duration_ms: u64,
+        total_exchanges: usize,
+        modified_requests: usize,
+        modified_responses: usize,
+        exchanges: Option<Vec<CapturedExchangePy>>,
+    ) -> Self {
+        Self {
+            listen_addr,
+            listen_port,
+            duration_ms,
+            total_exchanges,
+            modified_requests,
+            modified_responses,
+            exchanges: exchanges.unwrap_or_default(),
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("listen_addr", &self.listen_addr)?;

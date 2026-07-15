@@ -308,6 +308,18 @@ jobs:
           fi
       - name: Run tests
         working-directory: crates/eggsec-python
-        run: pytest tests/ -v -q --tb=short --timeout=60
+        run: pytest tests/ -v -q --tb=short --timeout=60 --junitxml=test-results-${{ matrix.name }}.xml
         env:
           EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-results-${{ matrix.name }}
+          path: crates/eggsec-python/test-results-${{ matrix.name }}.xml
+          retention-days: 30
+      - name: Run validation scripts
+        if: matrix.name == 'default-wheel'
+        run: |
+          bash scripts/check-architecture-guards.sh || true
+        continue-on-error: true

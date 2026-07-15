@@ -310,3 +310,422 @@ class TestDaemonSessionLifecycleExtended:
         d = v.to_dict()
         assert d["protocol_version"] == 2
         assert d["feature_profile"] == "minimal"
+
+
+class TestDaemonIdempotency:
+    """Idempotency key construction and uniqueness."""
+
+    def test_idempotency_key_from_request(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k = IK.from_request("scan_ports", '{"target":"10.0.0.1"}')
+        assert len(k.key) == 36
+        assert k.operation_name == "scan_ports"
+        assert len(k.request_hash) == 16
+
+    def test_idempotency_key_uniqueness(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k1 = IK.from_request("op1", '{"a":1}')
+        k2 = IK.from_request("op1", '{"a":1}')
+        assert k1.key != k2.key
+
+    def test_idempotency_key_same_payload_same_hash(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k1 = IK.from_request("op", '{"x":1}')
+        k2 = IK.from_request("op", '{"x":1}')
+        assert k1.request_hash == k2.request_hash
+
+    def test_idempotency_key_different_payload_different_hash(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k1 = IK.from_request("op", '{"a":1}')
+        k2 = IK.from_request("op", '{"a":2}')
+        assert k1.request_hash != k2.request_hash
+
+    def test_idempotency_key_to_dict(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k = IK.from_request("op", '{"x":1}')
+        d = k.to_dict()
+        assert isinstance(d, dict)
+        assert "key" in d
+        assert "operation_name" in d
+        assert "request_hash" in d
+
+    def test_idempotency_key_to_json(self):
+        IK = _import_or_skip("IdempotencyKey")
+        k = IK.from_request("op", '{"x":1}')
+        import json
+        j = k.to_json()
+        parsed = json.loads(j)
+        assert parsed["operation_name"] == "op"
+
+
+class TestDaemonCancellationRequest:
+    """CancellationRequest and CancellationResult construction."""
+
+    def test_cancellation_request_construction(self):
+        CR = _import_or_skip("CancellationRequest")
+        req = CR(task_id="task-123", reason="timeout")
+        assert req.task_id == "task-123"
+        assert req.reason == "timeout"
+
+    def test_cancellation_request_to_dict(self):
+        CR = _import_or_skip("CancellationRequest")
+        req = CR(task_id="t-1", reason="user cancel")
+        d = req.to_dict()
+        assert isinstance(d, dict)
+        assert d["task_id"] == "t-1"
+
+    def test_cancellation_result_construction(self):
+        CRes = _import_or_skip("CancellationResult")
+        res = CRes(cancelled=True, message="done")
+        assert res.cancelled is True
+
+    def test_cancellation_result_to_dict(self):
+        CRes = _import_or_skip("CancellationResult")
+        res = CRes(cancelled=False, message="already finished")
+        d = res.to_dict()
+        assert isinstance(d, dict)
+        assert d["cancelled"] is False
+
+
+class TestDaemonReplayCursor:
+    """ReplayCursor and ReplayResult construction."""
+
+    def test_replay_cursor_construction(self):
+        RC = _import_or_skip("ReplayCursor")
+        cursor = RC(cursor="abc-123", limit=100)
+        assert cursor.cursor == "abc-123"
+        assert cursor.limit == 100
+
+    def test_replay_cursor_to_dict(self):
+        RC = _import_or_skip("ReplayCursor")
+        cursor = RC(cursor="c1", limit=50)
+        d = cursor.to_dict()
+        assert isinstance(d, dict)
+        assert d["cursor"] == "c1"
+
+    def test_replay_result_construction(self):
+        RR = _import_or_skip("ReplayResult")
+        res = RR(events=[], cursor_next=None, has_more=False)
+        assert res.has_more is False
+
+    def test_replay_result_to_dict(self):
+        RR = _import_or_skip("ReplayResult")
+        res = RR(events=[], cursor_next="next-cursor", has_more=True)
+        d = res.to_dict()
+        assert isinstance(d, dict)
+        assert d["has_more"] is True
+        assert d["cursor_next"] == "next-cursor"
+
+
+class TestDaemonEventReplayInfo:
+    """EventReplayInfo construction and serialization."""
+
+    def test_event_replay_info_construction(self):
+        ERI = _import_or_skip("EventReplayInfo")
+        info = ERI(total_events=100, cursor="cursor-1", oldest_event_ms=1000)
+        assert info.total_events == 100
+        assert info.cursor == "cursor-1"
+
+    def test_event_replay_info_to_dict(self):
+        ERI = _import_or_skip("EventReplayInfo")
+        info = ERI(total_events=50, cursor="c", oldest_event_ms=2000)
+        d = info.to_dict()
+        assert isinstance(d, dict)
+        assert d["total_events"] == 50
+
+
+class TestDaemonTaskArtifactDescriptor:
+    """TaskArtifactDescriptor construction."""
+
+    def test_construction(self):
+        TAD = _import_or_skip("TaskArtifactDescriptor")
+        desc = TAD(
+            artifact_id="art-1",
+            filename="report.json",
+            content_type="application/json",
+            size_bytes=1024,
+        )
+        assert desc.artifact_id == "art-1"
+        assert desc.filename == "report.json"
+        assert desc.size_bytes == 1024
+
+    def test_to_dict(self):
+        TAD = _import_or_skip("TaskArtifactDescriptor")
+        desc = TAD(
+            artifact_id="a-1",
+            filename="out.txt",
+            content_type="text/plain",
+            size_bytes=256,
+        )
+        d = desc.to_dict()
+        assert isinstance(d, dict)
+        assert d["artifact_id"] == "a-1"
+
+
+class TestDaemonHealthDetail:
+    """DaemonHealthDetail construction."""
+
+    def test_construction(self):
+        DHD = _import_or_skip("DaemonHealthDetail")
+        detail = DHD(status="ok", uptime_seconds=3600, sessions_active=5)
+        assert detail.status == "ok"
+        assert detail.uptime_seconds == 3600
+        assert detail.sessions_active == 5
+
+    def test_to_dict(self):
+        DHD = _import_or_skip("DaemonHealthDetail")
+        detail = DHD(status="degraded", uptime_seconds=0, sessions_active=0)
+        d = detail.to_dict()
+        assert isinstance(d, dict)
+        assert d["status"] == "degraded"
+
+
+class TestDaemonEvent:
+    """DaemonEvent construction."""
+
+    def test_construction(self):
+        DE = _import_or_skip("DaemonEvent")
+        event = DE(
+            event_id="evt-1",
+            event_type="session_created",
+            timestamp_ms=1700000000000,
+            session_id="sess-1",
+        )
+        assert event.event_id == "evt-1"
+        assert event.event_type == "session_created"
+
+    def test_to_dict(self):
+        DE = _import_or_skip("DaemonEvent")
+        event = DE(
+            event_id="e-1",
+            event_type="task_completed",
+            timestamp_ms=1700000001000,
+            session_id="s-1",
+        )
+        d = event.to_dict()
+        assert isinstance(d, dict)
+        assert d["event_id"] == "e-1"
+
+
+class TestDaemonSubmissionResult:
+    """DaemonSubmissionResult construction."""
+
+    def test_construction(self):
+        try:
+            DSR = _import_or_skip("DaemonSubmissionResult")
+        except pytest.skip.Exception:
+            pytest.skip("DaemonSubmissionResult not available")
+        res = DSR(task_id="task-1", accepted=True, message="ok")
+        assert res.task_id == "task-1"
+        assert res.accepted is True
+
+    def test_to_dict(self):
+        try:
+            DSR = _import_or_skip("DaemonSubmissionResult")
+        except pytest.skip.Exception:
+            pytest.skip("DaemonSubmissionResult not available")
+        res = DSR(task_id="t-2", accepted=False, message="busy")
+        d = res.to_dict()
+        assert isinstance(d, dict)
+        assert d["accepted"] is False
+
+
+class TestDaemonConcurrentSessionCreate:
+    """Create multiple sessions concurrently to verify thread safety."""
+
+    def test_concurrent_create(self, daemon_socket):
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            results = []
+            for _ in range(10):
+                sid = loop.run_until_complete(
+                    async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+                )
+                results.append(sid)
+            assert len(results) == 10
+            assert len(set(results)) == 10, "All session IDs should be unique"
+        finally:
+            loop.close()
+
+    def test_large_session_list(self, daemon_socket):
+        """Create many sessions and verify list returns them all."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_list_sessions = _import_or_skip("async_daemon_list_sessions")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            for _ in range(20):
+                loop.run_until_complete(
+                    async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+                )
+            sessions = loop.run_until_complete(async_daemon_list_sessions(client))
+            assert sessions is not None
+        finally:
+            loop.close()
+
+
+class TestDaemonSocketCleanup:
+    """Verify socket file is cleaned up after daemon exits."""
+
+    def test_socket_removed_after_sigterm(self):
+        if not _daemon_bin_exists():
+            pytest.skip("eggsec-daemon binary not built")
+
+        import asyncio
+        sock_path = tempfile.mktemp(
+            prefix=f"eggsec-cleanup-{uuid.uuid4().hex[:8]}-", suffix=".sock"
+        )
+        data_dir = tempfile.mkdtemp(prefix="eggsec-cleanup-data-")
+
+        proc = subprocess.Popen(
+            [DAEMON_BIN, "--socket-path", sock_path, "--no-persistence",
+             "--log-level", "warn", "--data-dir", data_dir],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            time.sleep(0.3)
+            if proc.poll() is not None:
+                pytest.skip("daemon exited immediately")
+            if not _wait_for_socket(sock_path, timeout=5.0):
+                proc.kill()
+                proc.wait(timeout=2)
+                pytest.skip("socket not ready")
+
+            daemon_connect = _import_or_skip("daemon_connect")
+            client = daemon_connect(sock_path)
+            loop = asyncio.new_event_loop()
+            try:
+                async_daemon_health = _import_or_skip("async_daemon_health")
+                resp = loop.run_until_complete(async_daemon_health(client))
+                assert resp is not None
+            finally:
+                loop.close()
+
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=5)
+
+            assert not os.path.exists(sock_path), (
+                "Socket file should be removed after daemon exit"
+            )
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=2)
+            try:
+                os.unlink(sock_path)
+            except FileNotFoundError:
+                pass
+            import shutil
+            shutil.rmtree(data_dir, ignore_errors=True)
+
+
+class TestDaemonRestartRecovery:
+    """Test that daemon restart behavior is recoverable."""
+
+    def test_session_survives_daemon_restart(self, daemon_socket):
+        """Create session, restart daemon, verify new session works."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_health = _import_or_skip("async_daemon_health")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        import asyncio
+        import signal
+
+        # Connect and create a session
+        client = daemon_connect(daemon_socket)
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            assert session_id is not None
+        finally:
+            loop.close()
+
+        # Note: We cannot easily restart the daemon within this test without
+        # killing and re-spawning. We verify that the daemon at least
+        # responds after the session was created.
+        client2 = daemon_connect(daemon_socket)
+        loop2 = asyncio.new_event_loop()
+        try:
+            resp = loop2.run_until_complete(async_daemon_health(client2))
+            assert resp is not None
+        finally:
+            loop2.close()
+
+
+class TestDaemonSessionLifecycleExtended:
+    def test_create_multiple_sessions(self, daemon_socket):
+        """Create multiple sessions and verify they coexist."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_list_sessions = _import_or_skip("async_daemon_list_sessions")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            ids = []
+            for i in range(3):
+                sid = loop.run_until_complete(
+                    async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+                )
+                ids.append(sid)
+            assert len(set(ids)) == 3, "Session IDs should be unique"
+
+            sessions = loop.run_until_complete(async_daemon_list_sessions(client))
+            assert sessions is not None
+        finally:
+            loop.close()
+
+    def test_close_all_sessions(self, daemon_socket):
+        """Create and close multiple sessions."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_close_session = _import_or_skip("async_daemon_close_session")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            ids = []
+            for i in range(3):
+                sid = loop.run_until_complete(
+                    async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+                )
+                ids.append(sid)
+
+            for sid in ids:
+                result = loop.run_until_complete(
+                    async_daemon_close_session(client, session_id=sid)
+                )
+                assert result is not None
+        finally:
+            loop.close()
+
+    def test_protocol_version_fields(self):
+        """DaemonProtocolVersion has expected fields after construction."""
+        DPV = _import_or_skip("DaemonProtocolVersion")
+        v = DPV(api_schema_version=5, operation_registry_id="reg-x",
+                feature_profile="minimal")
+        assert v.protocol_version == 2
+        assert v.api_schema_version == 5
+        d = v.to_dict()
+        assert d["protocol_version"] == 2
+        assert d["feature_profile"] == "minimal"

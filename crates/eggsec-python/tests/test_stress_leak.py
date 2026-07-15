@@ -1034,3 +1034,218 @@ class TestStreamingReporterStressCycles:
             f"StreamingReporter lifecycle stress FD leak: {delta} fds gained "
             f"({fds_before} -> {fds_after})"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 15. TestSocketLeakDetection — verify /proc/net/tcp stability
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSocketLeakDetection:
+    """Verify no socket leak after repeated session cycles."""
+
+    def test_no_socket_leak_tcp_udp_cycles(self):
+        TcpConfig = _import_or_skip("TcpConfig")
+        UdpConfig = _import_or_skip("UdpConfig")
+
+        sockets_before = _measure_sockets()
+        if sockets_before == 0:
+            pytest.skip("Cannot measure sockets on this platform")
+
+        for i in range(500):
+            cfg_tcp = TcpConfig()
+            del cfg_tcp
+            cfg_udp = UdpConfig()
+            del cfg_udp
+
+        _wait_for_gc()
+        sockets_after = _measure_sockets()
+        delta = sockets_after - sockets_before
+        assert delta <= 10, (
+            f"Socket leak detected: {delta} sockets gained "
+            f"({sockets_before} -> {sockets_after})"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 16. TestThreadLeakDetection — verify thread count stability
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestThreadLeakDetection:
+    """Verify no thread leak after concurrent session creation."""
+
+    def test_concurrent_sessions_no_thread_leak(self):
+        TcpConfig = _import_or_skip("TcpConfig")
+
+        threads_before = _measure_threads()
+
+        def create_and_drop():
+            for _ in range(50):
+                cfg = TcpConfig()
+                del cfg
+
+        threads = [threading.Thread(target=create_and_drop) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        _wait_for_gc()
+        threads_after = _measure_threads()
+        delta = threads_after - threads_before
+        assert delta <= 5, (
+            f"Thread leak detected: {delta} threads gained "
+            f"({threads_before} -> {threads_after})"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 17. TestStreamingReporterStressCycles200 — 200 reporter cycles
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestStreamingReporterStressCycles200:
+    """200 reporter lifecycle cycles — extended stress test."""
+
+    def test_reporter_200_lifecycle_cycles(self):
+        StreamingReporter = _import_or_skip("StreamingReporter")
+        StreamingReportConfig = _import_or_skip("StreamingReportConfig")
+
+        fds_before = _measure_fds()
+
+        for i in range(200):
+            cfg = StreamingReportConfig("json")
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            for j in range(5):
+                reporter.write_finding(
+                    json.dumps({"id": f"r{i}-f{j}", "severity": "high", "title": "T"})
+                )
+            summary = reporter.finish()
+            assert summary.total_findings == 5
+
+        _wait_for_gc()
+        fds_after = _measure_fds()
+        delta = fds_after - fds_before
+        assert delta <= 10, (
+            f"StreamingReporter 200-cycle stress FD leak: {delta} fds gained "
+            f"({fds_before} -> {fds_after})"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 18. TestNseRuntimeReuseStressExtended — 200 NSE runtime cycles
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestNseRuntimeReuseStressExtended:
+    """200 NSE runtime create/run/drop cycles."""
+
+    def test_nse_runtime_200_cycles(self):
+        NseRuntime = _import_or_skip("NseRuntime")
+        NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
+
+        fds_before = _measure_fds()
+
+        for i in range(200):
+            cfg = NseRuntimeConfig(target="127.0.0.1")
+            rt = NseRuntime(cfg)
+            del rt
+
+        _wait_for_gc()
+        fds_after = _measure_fds()
+        delta = fds_after - fds_before
+        assert delta <= 10, (
+            f"NSE runtime 200-cycle stress FD leak: {delta} fds gained "
+            f"({fds_before} -> {fds_after})"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 19. TestRepositoryStressExtended — 500 JSONL inserts + 200 open/close
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestRepositoryStressExtended:
+    """Extended repository stress: 500 inserts and 200 open/close cycles."""
+
+    def test_jsonl_500_inserts(self):
+        JsonlRepo = _import_or_skip("JsonlFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = JsonlRepo(os.path.join(tmp, "stress500.jsonl"))
+            repo.initialize()
+            for i in range(500):
+                fid = repo.insert_finding(_make_finding_json(f"stress-{i}"))
+                assert fid == f"stress-{i}"
+            assert repo.count_findings(None, None) == 500
+            repo.flush()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_jsonl_200_open_close_cycles(self):
+        JsonlRepo = _import_or_skip("JsonlFindingRepository")
+        tmp = _tmp_dir()
+        db_path = os.path.join(tmp, "cycle200.jsonl")
+        try:
+            fds_before = _measure_fds()
+            for i in range(200):
+                repo = JsonlRepo(db_path)
+                repo.initialize()
+                repo.insert_finding(_make_finding_json(f"cycle-{i}"))
+                repo.flush()
+                del repo
+            _wait_for_gc()
+            fds_after = _measure_fds()
+            delta = fds_after - fds_before
+            assert delta <= 10, (
+                f"JSONL open/close stress FD leak: {delta} fds gained "
+                f"({fds_before} -> {fds_after})"
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 20. TestObjectCreationDropCycleExtended — 500 cycles per type
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestObjectCreationDropCycleExtended:
+    """Extended create/drop cycles for all DTO types — 500 each."""
+
+    def test_finding_500_cycles(self):
+        Finding = _import_or_skip("Finding")
+        Severity = _import_or_skip("Severity")
+        fds_before = _measure_fds()
+        for i in range(500):
+            f = Finding(
+                id=f"f-{i}",
+                severity=Severity.High,
+                title=f"Finding {i}",
+                description="test",
+                evidence=[],
+                target=f"host-{i}.example.com",
+                category="vuln",
+            )
+            d = f.to_dict()
+            assert "id" in d
+            del f
+        _wait_for_gc()
+        fds_after = _measure_fds()
+        delta = fds_after - fds_before
+        assert delta <= 10, f"Finding 500-cycle FD leak: {delta}"
+
+    def test_streaming_report_config_500_cycles(self):
+        StreamingReportConfig = _import_or_skip("StreamingReportConfig")
+        fds_before = _measure_fds()
+        for i in range(500):
+            cfg = StreamingReportConfig("json", buffer_size=50)
+            d = cfg.to_dict()
+            assert "format" in d
+            del cfg
+        _wait_for_gc()
+        fds_after = _measure_fds()
+        delta = fds_after - fds_before
+        assert delta <= 10, f"StreamingReportConfig 500-cycle FD leak: {delta}"

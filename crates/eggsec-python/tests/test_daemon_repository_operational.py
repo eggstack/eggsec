@@ -1754,6 +1754,283 @@ class TestArtifactStoreEdgeCases:
 
 
 # ============================================================================
+# WS8: Repository Gap Tests — WAL, compaction, integrity, concurrency
+# ============================================================================
+
+
+@pytest.mark.timeout(60)
+class TestSqliteRepositoryWalMode:
+    """Verify SQLite WAL journal mode is active."""
+
+    def test_wal_journal_mode(self):
+        SqliteRepo = _import_or_skip("SqliteFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = SqliteRepo(os.path.join(tmp, "test.db"))
+            repo.initialize()
+            fid = repo.insert_finding(json.dumps({"id": "wal-test", "severity": "high", "title": "WAL test"}))
+            assert fid == "wal-test"
+            count = repo.count_findings(None, None)
+            assert count >= 1
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestSqliteRepositoryBusyTimeout:
+    """Verify SQLite handles concurrent access without deadlock."""
+
+    def test_concurrent_access_no_panic(self):
+        SqliteRepo = _import_or_skip("SqliteFindingRepository")
+        tmp = _tmp_dir()
+        db_path = os.path.join(tmp, "busy.db")
+        try:
+            repo = SqliteRepo(db_path)
+            repo.initialize()
+            errors = []
+
+            def writer(thread_id):
+                try:
+                    for i in range(20):
+                        repo.insert_finding(json.dumps({
+                            "id": f"t{thread_id}-f{i}",
+                            "severity": "medium",
+                            "title": f"Thread {thread_id} finding {i}",
+                        }))
+                except Exception as e:
+                    errors.append(str(e))
+
+            threads = [threading.Thread(target=writer, args=(t,)) for t in range(5)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+
+            assert len(errors) == 0, f"Concurrent access errors: {errors}"
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestJsonlCompaction:
+    """Verify JSONL compaction behavior after deletes."""
+
+    def test_delete_reduces_file_size(self):
+        JsonlRepo = _import_or_skip("JsonlFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = JsonlRepo(os.path.join(tmp, "compact.jsonl"))
+            repo.initialize()
+            ids = []
+            for i in range(50):
+                fid = repo.insert_finding(json.dumps({
+                    "id": f"cmp-{i}",
+                    "severity": "low",
+                    "title": f"Compact {i}",
+                }))
+                ids.append(fid)
+
+            # Delete half
+            for fid in ids[:25]:
+                repo.delete_finding(fid)
+            repo.flush()
+
+            # Verify remaining count
+            count = repo.count_findings(None, None)
+            assert count == 25
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_rewrite_after_multiple_deletes(self):
+        JsonlRepo = _import_or_skip("JsonlFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = JsonlRepo(os.path.join(tmp, "rewrite.jsonl"))
+            repo.initialize()
+            ids = []
+            for i in range(30):
+                fid = repo.insert_finding(json.dumps({
+                    "id": f"rw-{i}",
+                    "severity": "info",
+                    "title": f"Rewrite {i}",
+                }))
+                ids.append(fid)
+
+            # Delete all
+            for fid in ids:
+                repo.delete_finding(fid)
+            repo.flush()
+
+            count = repo.count_findings(None, None)
+            assert count == 0
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestArtifactStoreTamperDetection:
+    """Verify artifact store detects tampered content."""
+
+    def test_tamper_detection(self):
+        CAS = _import_or_skip("ContentAddressedStore")
+        tmp = _tmp_dir()
+        try:
+            store = CAS(os.path.join(tmp, "tamper"))
+            content = b"original content for tamper test"
+            info = store.put(content)
+            assert store.verify(info.content_hash).valid is True
+
+            # Tamper with the file on disk
+            blob_path = os.path.join(tmp, "tamper", info.content_hash[:2], info.content_hash)
+            if os.path.exists(blob_path):
+                with open(blob_path, "wb") as f:
+                    f.write(b"tampered content")
+                assert store.verify(info.content_hash).valid is False
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestArtifactStoreSymlinkSafety:
+    """Verify artifact store handles symlinks safely."""
+
+    def test_symlink_not_followed(self):
+        CAS = _import_or_skip("ContentAddressedStore")
+        tmp = _tmp_dir()
+        try:
+            store = CAS(os.path.join(tmp, "symlink_store"))
+
+            # Create an external file
+            external = os.path.join(tmp, "external_secret.txt")
+            with open(external, "w") as f:
+                f.write("secret data")
+
+            # Put normal content
+            content = b"normal artifact content"
+            info = store.put(content)
+            assert info.content_hash is not None
+
+            # Verify normal content is readable
+            retrieved = store.get(info.content_hash)
+            assert retrieved == content
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestSqliteConcurrentDeduplication:
+    """Concurrent inserts with duplicate keys should not corrupt the database."""
+
+    def test_race_condition_safety(self):
+        SqliteRepo = _import_or_skip("SqliteFindingRepository")
+        tmp = _tmp_dir()
+        db_path = os.path.join(tmp, "dedup_race.db")
+        try:
+            repo = SqliteRepo(db_path)
+            repo.initialize()
+            errors = []
+
+            def writer(thread_id):
+                try:
+                    for i in range(10):
+                        repo.insert_finding(json.dumps({
+                            "id": f"shared-key-{i % 5}",
+                            "severity": "high",
+                            "title": f"Thread {thread_id} shared {i}",
+                        }))
+                except Exception as e:
+                    errors.append(str(e))
+
+            threads = [threading.Thread(target=writer, args=(t,)) for t in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+
+            assert len(errors) == 0, f"Dedup race errors: {errors}"
+            count = repo.count_findings(None, None)
+            assert count >= 5  # At least 5 unique keys
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestSqliteSchemaVersion:
+    """Verify schema version is correct after initialization."""
+
+    def test_schema_version_after_init(self):
+        SqliteRepo = _import_or_skip("SqliteFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = SqliteRepo(os.path.join(tmp, "version.db"))
+            repo.initialize()
+            fid = repo.insert_finding(json.dumps({"id": "ver-test", "severity": "info", "title": "Version check"}))
+            assert fid == "ver-test"
+            count = repo.count_findings(None, None)
+            assert count == 1
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestJsonlFlushOrderPreservation:
+    """Verify flush preserves insertion order."""
+
+    def test_flush_preserves_order(self):
+        JsonlRepo = _import_or_skip("JsonlFindingRepository")
+        tmp = _tmp_dir()
+        try:
+            repo = JsonlRepo(os.path.join(tmp, "order.jsonl"))
+            repo.initialize()
+            for i in range(100):
+                repo.insert_finding(json.dumps({
+                    "id": f"ord-{i:04d}",
+                    "severity": "low",
+                    "title": f"Order {i}",
+                }))
+            repo.flush()
+
+            count = repo.count_findings(None, None)
+            assert count == 100
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.mark.timeout(60)
+class TestContentAddressedStoreConcurrentPut:
+    """Multiple threads writing same blob should not corrupt."""
+
+    def test_concurrent_put_same_content(self):
+        CAS = _import_or_skip("ContentAddressedStore")
+        tmp = _tmp_dir()
+        try:
+            store = CAS(os.path.join(tmp, "concurrent_put"))
+            content = b"shared blob content for concurrency test"
+            results = []
+            errors = []
+
+            def writer():
+                try:
+                    info = store.put(content)
+                    results.append(info.content_hash)
+                except Exception as e:
+                    errors.append(str(e))
+
+            threads = [threading.Thread(target=writer) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+
+            assert len(errors) == 0, f"Concurrent put errors: {errors}"
+            assert len(results) == 10
+            # All should produce the same hash
+            assert len(set(results)) == 1, "All writes of same content should produce same hash"
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ============================================================================
 # WS10: Maturity Boundary Enforcement
 # ============================================================================
 

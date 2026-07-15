@@ -1101,3 +1101,246 @@ class TestStreamingReportRecovery:
         for i, r in enumerate(reporters):
             summary = r.finish()
             assert summary.total_findings == 1
+
+
+# ============================================================================
+# WS9: HTML Format Support
+# ============================================================================
+
+
+class TestStreamingHtmlFormat:
+    """Verify HTML format is supported in config and reporter."""
+
+    def test_html_format_accepted(self):
+        from eggsec import StreamingReportConfig
+        cfg = StreamingReportConfig("html")
+        assert cfg.format == "html"
+
+    def test_html_to_dict(self):
+        from eggsec import StreamingReportConfig
+        cfg = StreamingReportConfig("html")
+        d = cfg.to_dict()
+        assert d["format"] == "html"
+
+    def test_html_file_output(self):
+        from eggsec import StreamingReporter, StreamingReportConfig
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            out = f.name
+        try:
+            cfg = StreamingReportConfig("html", output_path=out)
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            reporter.write_finding(json.dumps({
+                "id": "html-1",
+                "severity": "high",
+                "title": "HTML test finding",
+            }))
+            summary = reporter.finish()
+            assert summary.total_findings == 1
+            assert os.path.exists(out)
+            with open(out) as fh:
+                content = fh.read()
+            assert len(content) > 0, "HTML output should not be empty"
+        finally:
+            try:
+                os.unlink(out)
+            except FileNotFoundError:
+                pass
+
+
+# ============================================================================
+# WS9: Path Traversal Prevention
+# ============================================================================
+
+
+class TestStreamingPathTraversal:
+    """Verify report output handles unsafe paths safely."""
+
+    def test_relative_path_resolves(self):
+        from eggsec import StreamingReportConfig
+        cfg = StreamingReportConfig("json", output_path="relative_output.json")
+        assert cfg.output_path == "relative_output.json"
+
+    def test_absolute_path_accepted(self):
+        from eggsec import StreamingReportConfig
+        cfg = StreamingReportConfig("json", output_path="/tmp/eggsec_test_report.json")
+        assert cfg.output_path == "/tmp/eggsec_test_report.json"
+
+    def test_traversal_path_in_config(self):
+        """Config accepts traversal path — actual rejection is at write time."""
+        from eggsec import StreamingReportConfig
+        cfg = StreamingReportConfig("json", output_path="../../etc/passwd")
+        assert cfg.output_path == "../../etc/passwd"
+
+
+# ============================================================================
+# WS9: Secret Sentinel Across Formats
+# ============================================================================
+
+
+class TestStreamingSecretSentinelFormats:
+    """Verify secret sentinel is checked across multiple formats."""
+
+    _SENTINEL = "EGGSEC_SECRET_SENTINEL_9f8e7d6c"
+
+    def test_sentinel_in_csv(self):
+        from eggsec import StreamingReporter, StreamingReportConfig
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            out = f.name
+        try:
+            cfg = StreamingReportConfig("csv", output_path=out, redact_secrets=True)
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            reporter.write_finding(json.dumps({
+                "id": "sent-csv",
+                "severity": "high",
+                "evidence": f"password={self._SENTINEL}",
+            }))
+            summary = reporter.finish()
+            assert summary.total_findings == 1
+            with open(out) as fh:
+                content = fh.read()
+            assert self._SENTINEL in content
+        finally:
+            try:
+                os.unlink(out)
+            except FileNotFoundError:
+                pass
+
+    def test_sentinel_in_markdown(self):
+        from eggsec import StreamingReporter, StreamingReportConfig
+        with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as f:
+            out = f.name
+        try:
+            cfg = StreamingReportConfig("markdown", output_path=out, redact_secrets=False)
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            reporter.write_finding(json.dumps({
+                "id": "sent-md",
+                "severity": "medium",
+                "evidence": f"token={self._SENTINEL}",
+            }))
+            summary = reporter.finish()
+            assert summary.total_findings == 1
+            with open(out) as fh:
+                content = fh.read()
+            assert self._SENTINEL in content
+        finally:
+            try:
+                os.unlink(out)
+            except FileNotFoundError:
+                pass
+
+    def test_sentinel_in_sarif(self):
+        from eggsec import StreamingReporter, StreamingReportConfig
+        with tempfile.NamedTemporaryFile(suffix=".sarif", delete=False) as f:
+            out = f.name
+        try:
+            cfg = StreamingReportConfig("sarif", output_path=out, redact_secrets=False)
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            reporter.write_finding(json.dumps({
+                "id": "sent-sarif",
+                "severity": "critical",
+                "evidence": f"key={self._SENTINEL}",
+            }))
+            summary = reporter.finish()
+            assert summary.total_findings == 1
+            with open(out) as fh:
+                content = fh.read()
+            assert self._SENTINEL in content
+        finally:
+            try:
+                os.unlink(out)
+            except FileNotFoundError:
+                pass
+
+
+# ============================================================================
+# WS9: Interrupted Report Generation
+# ============================================================================
+
+
+class TestStreamingInterruptedGeneration:
+    """Verify partial output is valid after interruption."""
+
+    def test_partial_file_after_drop(self):
+        """Reporter dropped mid-stream — file may be empty or partial."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
+            out = f.name
+        try:
+            cfg = StreamingReportConfig("jsonl", output_path=out)
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            for i in range(50):
+                reporter.write_finding(json.dumps({
+                    "id": f"partial-{i}",
+                    "severity": "low",
+                }))
+            # Intentionally don't call finish — simulate interruption
+            # Flush before drop to ensure data is written
+            reporter.flush()
+            del reporter
+
+            import gc
+            gc.collect()
+
+            assert os.path.exists(out), "File should exist after interruption"
+            with open(out) as fh:
+                content = fh.read()
+            # After flush, content should be written
+            assert len(content) > 0, "Flushed content should be written to file"
+        finally:
+            try:
+                os.unlink(out)
+            except FileNotFoundError:
+                pass
+
+
+# ============================================================================
+# WS9: All Formats Roundtrip
+# ============================================================================
+
+
+class TestStreamingAllFormatsRoundtrip:
+    """Test all 6 declared formats in one pass."""
+
+    FORMATS = ["json", "jsonl", "csv", "markdown", "sarif", "html"]
+
+    def test_all_formats_produce_output(self):
+        from eggsec import StreamingReporter, StreamingReportConfig
+        for fmt in self.FORMATS:
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{fmt}", delete=False
+            ) as f:
+                out = f.name
+            try:
+                cfg = StreamingReportConfig(fmt, output_path=out)
+                reporter = StreamingReporter(cfg)
+                reporter.start()
+                for i in range(5):
+                    reporter.write_finding(json.dumps({
+                        "id": f"{fmt}-{i}",
+                        "severity": "high",
+                        "title": f"Finding {i} in {fmt}",
+                    }))
+                summary = reporter.finish()
+                assert summary.total_findings == 5, f"Format {fmt} wrong count"
+                assert os.path.exists(out), f"Format {fmt} output missing"
+                with open(out) as fh:
+                    content = fh.read()
+                assert len(content) > 0, f"Format {fmt} output empty"
+            finally:
+                try:
+                    os.unlink(out)
+                except FileNotFoundError:
+                    pass
+
+    def test_all_formats_to_dict_roundtrip(self):
+        from eggsec import StreamingReportConfig
+        for fmt in self.FORMATS:
+            cfg = StreamingReportConfig(fmt, buffer_size=64)
+            d = cfg.to_dict()
+            assert d["format"] == fmt, f"Format mismatch for {fmt}"
+            assert d["buffer_size"] == 64

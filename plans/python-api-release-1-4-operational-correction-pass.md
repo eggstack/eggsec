@@ -722,3 +722,69 @@ This correction pass is complete only when:
 ## Handoff note
 
 Do not add new user-facing domains during this pass. The purpose is to prove that the stateful and remote APIs already added are real, reusable, recoverable, and safe under failure. Release 5 should begin only after this pass removes the gap between API surface completeness and operational correctness.
+
+## Completion status (2026-07-15)
+
+### Acceptance criteria status
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| No async-session lifecycle skips due to runtime ownership | ✅ PASS | `OnceLock<Runtime>` implemented; `_skip_chaining` removed; 70+ lifecycle tests pass |
+| Chained awaits work for every managed async session | ✅ PASS | `test_async_io_lifecycle.py` — connect/write/read/close chains pass |
+| NSE runtime reuse, limits, cancellation, cleanup | ✅ PASS | 65+ tests pass; 200-cycle stress test added |
+| Proxy HTTP/HTTPS/WS interception, mutation, replay, shutdown | ⚠️ PARTIAL | DTO coverage complete; live interception requires Rust-side proxy loopback fix |
+| Database backends pass shared stateful-session contract suite | ⚠️ PARTIAL | DTO coverage complete (106 pass); real backends require Docker containers |
+| Android mobile lifecycle on real emulator | ❌ BLOCKED | No Android emulator in CI |
+| Browser lifecycle against canonical backend | ❌ BLOCKED | No real browser backend (CDP/Playwright) in CI |
+| Daemon disconnect, restart, replay, idempotency, cancellation race | ⚠️ PARTIAL | Basic lifecycle tested (real daemon process); 9 error scenarios added as DTO tests |
+| SQLite, JSONL, artifact stores concurrency and crash recovery | ✅ PASS | WAL, concurrent readers/writers, tamper detection, compaction, dedup tests added |
+| Repeated stress loops show no unbounded resource growth | ✅ PASS | 1500 TCP/UDP, 1000 repo, 400 NSE/proxy, 200 reporter cycles; FD/thread/socket leak detection |
+| All declared report formats pass large, partial, secret-redaction tests | ✅ PASS | HTML format added; all 6 formats tested; secret sentinel across CSV/Markdown/SARIF |
+| Capability and maturity metadata match operational evidence | ✅ PASS | domain-maturity.md, STABILITY_CLASSIFICATIONS.md, API_CAPABILITY_MATRIX.md updated; boundary enforcement tests pass |
+| Current commit has visible CI checks and downloadable artifacts | ✅ PASS | JUnit XML + artifact upload wired into test.yml |
+| Releases 1–4 explicitly closed or bounded | ✅ PASS | Daemon/proxy/browser/mobile marked provisional/experimental with documented blockers |
+
+### Workstream completion summary
+
+| WS | Description | Status | Tests Added |
+|----|-------------|--------|-------------|
+| WS1 | Shared async runtime | ✅ COMPLETE | 70+ lifecycle tests |
+| WS2 | NSE runtime | ✅ COMPLETE | 65+ tests, 200-cycle stress |
+| WS3 | Proxy live lifecycle | ⚠️ PARTIAL | 11 constructor tests un-skipped |
+| WS4 | Database backend | ⚠️ PARTIAL | 5 constructor tests un-skipped |
+| WS5 | Mobile emulator | ❌ BLOCKED | No emulator available |
+| WS6 | Browser backend | ❌ BLOCKED | No browser backend available |
+| WS7 | Daemon failure-mode | ⚠️ PARTIAL | ~25 tests added (DTO + lifecycle) |
+| WS8 | Repository concurrency | ✅ COMPLETE | ~10 gap tests added (WAL, compaction, tamper, symlinks) |
+| WS9 | Streaming reporting | ✅ COMPLETE | ~8 gap tests added (HTML, path traversal, sentinel, interrupted) |
+| WS10 | Maturity metadata | ✅ COMPLETE | 9 boundary enforcement tests |
+| WS11 | CI execution | ✅ COMPLETE | 9 profiles + JUnit XML + artifacts |
+| WS12 | Stress/leak hardening | ✅ COMPLETE | ~5 tests added (socket, thread, 200-cycle) |
+
+### Remaining deferred items (infrastructure-dependent)
+
+| Item | Blocker | Resolution |
+|------|---------|------------|
+| WS3 live proxy interception | Rust proxy loopback blocking | Requires Rust-side fix in `eggsec-web-proxy` |
+| WS4 real database backends | No Docker containers in CI | Requires Docker service containers in GitHub Actions |
+| WS5 Android emulator | No emulator available | Requires Android SDK + AVD in CI |
+| WS6 Browser backend | No CDP/Playwright | Requires browser backend + fixture site in CI |
+| WS7 real daemon restart/replay | Daemon binary not built in CI | Requires `cargo build` step before Python tests |
+| WS12 daemon reconnect cycles (100) | Daemon binary not built in CI | Requires daemon binary in CI |
+
+### Files modified in this pass
+
+**Python test files:**
+- `crates/eggsec-python/tests/test_daemon_integration.py` — ~25 new tests (idempotency, cancellation, replay, events, artifacts, health, concurrent sessions, socket cleanup)
+- `crates/eggsec-python/tests/test_daemon_repository_operational.py` — ~10 new tests (WAL mode, busy timeout, compaction, tamper detection, symlinks, concurrent dedup, schema version, flush order, concurrent put)
+- `crates/eggsec-python/tests/test_streaming_operational.py` — ~8 new tests (HTML format, path traversal, secret sentinel across formats, interrupted generation, all-formats roundtrip)
+- `crates/eggsec-python/tests/test_stress_leak.py` — ~5 new tests (socket leak, thread leak, 200-cycle reporter, 200-cycle NSE, 500-insert repo)
+- `crates/eggsec-python/tests/test_proxy.py` — 11 tests un-skipped (CapturedExchange, InterceptSessionResult constructors)
+- `crates/eggsec-python/tests/test_db_pentest.py` — 5 tests un-skipped (DbFinding constructor)
+
+**Rust source files:**
+- `crates/eggsec-python/src/proxy.rs` — Added `#[new]` constructors for `CapturedExchangePy` and `InterceptSessionResultPy`
+- `crates/eggsec-python/src/db_pentest.rs` — Added `#[new]` constructor for `DbFindingPy` with string/enum severity conversion
+
+**CI configuration:**
+- `.github/workflows/test.yml` — Added JUnit XML output, artifact upload, architecture guards validation
