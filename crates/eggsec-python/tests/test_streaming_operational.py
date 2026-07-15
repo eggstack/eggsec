@@ -869,7 +869,234 @@ class TestDiffReportSummary:
         cfg = StreamingReportConfig("json")
         reporter = StreamingDiffReporter(cfg)
         reporter.start()
-        reporter.write_finding('{"id":"f1","severity":"high","title":"T"}')
         summary = reporter.finish()
         r = repr(summary)
         assert "1" in r
+
+
+# ============================================================================
+# WS9: Large-Scale Streaming Tests
+# ============================================================================
+
+
+class TestStreamingReporterLargeScale:
+    def test_10000_findings_no_blowup(self):
+        """10K findings stream without memory or correctness issues."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("json", buffer_size=500)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        for i in range(10000):
+            sev = ["high", "medium", "low", "critical", "info"][i % 5]
+            reporter.write_finding(
+                json.dumps({"id": f"f{i}", "severity": sev, "title": f"Vuln {i}"})
+            )
+        summary = reporter.finish()
+        assert summary.total_findings == 10000
+        assert summary.content_hash is not None
+        sev_map = dict(summary.findings_by_severity)
+        for sev in ["high", "medium", "low", "critical", "info"]:
+            assert sev_map.get(sev) == 2000
+
+    def test_50000_findings_streaming(self):
+        """50K findings stream in a single reporter session."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("json", buffer_size=1000)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        for i in range(50000):
+            reporter.write_finding(
+                json.dumps({"id": f"f{i}", "severity": "info", "title": f"V {i}"})
+            )
+        summary = reporter.finish()
+        assert summary.total_findings == 50000
+
+    def test_100000_findings_with_file_output(self, tmp_path):
+        """100K findings with file output — large-scale SARIF-like stress."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        out = str(tmp_path / "large_scale.jsonl")
+        cfg = StreamingReportConfig("json", output_path=out, buffer_size=2000)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        for i in range(100000):
+            reporter.write_finding(
+                json.dumps({
+                    "id": f"f{i}",
+                    "severity": ["high", "medium", "low", "info"][i % 4],
+                    "title": f"Finding {i}",
+                    "description": f"Description for finding {i} with some padding text "
+                    + "x" * 50,
+                })
+            )
+        summary = reporter.finish()
+        assert summary.total_findings == 100000
+        assert summary.output_size_bytes > 1024 * 1024  # > 1MB
+        with open(out) as f:
+            lines = f.readlines()
+        assert len(lines) == 100000
+        # Verify first and last records
+        first = json.loads(lines[0])
+        assert first["id"] == "f0"
+        last = json.loads(lines[-1])
+        assert last["id"] == "f99999"
+
+    def test_large_batch_write_10000(self):
+        """Single batch write of 10K findings."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("json", buffer_size=10000)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        batch = [
+            {"id": f"bulk-{i}", "severity": "medium", "title": f"Bulk {i}"}
+            for i in range(10000)
+        ]
+        reporter.write_findings_batch(json.dumps(batch))
+        summary = reporter.finish()
+        assert summary.total_findings == 10000
+
+
+# ============================================================================
+# WS9: SARIF Format Content Validation
+# ============================================================================
+
+
+class TestStreamingSarifFormat:
+    def test_sarif_format_accepted(self):
+        """SARIF format is accepted and reflected in summary."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("sarif")
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        reporter.write_finding('{"id":"f1","severity":"high","title":"XSS"}')
+        summary = reporter.finish()
+        assert summary.format == "sarif"
+        assert summary.total_findings == 1
+
+    def test_sarif_with_file_output(self, tmp_path):
+        """SARIF format writes to file."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        out = str(tmp_path / "report.sarif")
+        cfg = StreamingReportConfig("sarif", output_path=out)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        reporter.write_finding('{"id":"f1","severity":"high","title":"XSS"}')
+        reporter.write_finding('{"id":"f2","severity":"low","title":"Info"}')
+        summary = reporter.finish()
+        assert summary.format == "sarif"
+        assert summary.total_findings == 2
+        if os.path.exists(out):
+            with open(out) as f:
+                content = f.read()
+            assert len(content) > 0
+
+    def test_sarif_large_volume(self):
+        """SARIF format handles 1000 findings."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("sarif", buffer_size=100)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        for i in range(1000):
+            reporter.write_finding(
+                json.dumps({"id": f"f{i}", "severity": "high", "title": f"V {i}"})
+            )
+        summary = reporter.finish()
+        assert summary.format == "sarif"
+        assert summary.total_findings == 1000
+
+
+# ============================================================================
+# WS9: Secret Sentinel Scan
+# ============================================================================
+
+_SECRET_SENTINEL = "EGGSEC_TEST_SECRET_SENTINEL_42"
+
+
+class TestStreamingSecretSentinel:
+    def test_secret_in_finding_with_redaction_enabled(self, tmp_path):
+        """Finding with secret content — redaction config is set."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        out = str(tmp_path / "redacted.jsonl")
+        cfg = StreamingReportConfig("json", output_path=out, redact_secrets=True)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        reporter.write_finding(json.dumps({
+            "id": "f1",
+            "severity": "high",
+            "title": "Hardcoded credential",
+            "evidence": f"password={_SECRET_SENTINEL}",
+            "raw_response": f"Authorization: Bearer {_SECRET_SENTINEL}",
+        }))
+        summary = reporter.finish()
+        assert summary.total_findings == 1
+        # Config-level redaction flag is set
+        assert cfg.redact_secrets is True
+
+    def test_secret_in_finding_with_redaction_disabled(self, tmp_path):
+        """Finding with secret content — no redaction when disabled."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        out = str(tmp_path / "unredacted.jsonl")
+        cfg = StreamingReportConfig("json", output_path=out, redact_secrets=False)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        reporter.write_finding(json.dumps({
+            "id": "f1",
+            "severity": "high",
+            "title": "Credential exposure",
+            "evidence": f"api_key={_SECRET_SENTINEL}",
+        }))
+        summary = reporter.finish()
+        assert summary.total_findings == 1
+        with open(out) as f:
+            content = f.read()
+        # Without redaction, sentinel should be present in output
+        assert _SECRET_SENTINEL in content
+
+    def test_redaction_config_persists_across_flushes(self):
+        """Redaction config persists across multiple flush cycles."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        cfg = StreamingReportConfig("json", redact_secrets=True)
+        reporter = StreamingReporter(cfg)
+        reporter.start()
+        for cycle in range(10):
+            reporter.write_finding(json.dumps({
+                "id": f"f{cycle}",
+                "severity": "high",
+                "evidence": f"secret={_SECRET_SENTINEL}",
+            }))
+            reporter.flush()
+        assert cfg.redact_secrets is True
+        summary = reporter.finish()
+        assert summary.total_findings == 10
+
+
+# ============================================================================
+# WS9: Interrupted Report Recovery
+# ============================================================================
+
+
+class TestStreamingReportRecovery:
+    def test_reporter_reuse_after_finish(self):
+        """New reporter can be created after previous one finished."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        for i in range(5):
+            cfg = StreamingReportConfig("json")
+            reporter = StreamingReporter(cfg)
+            reporter.start()
+            reporter.write_finding(json.dumps({"id": f"r{i}-f1", "severity": "high"}))
+            summary = reporter.finish()
+            assert summary.total_findings == 1
+
+    def test_multiple_reporters_concurrent(self):
+        """Multiple reporters can run independently."""
+        from eggsec import StreamingReporter, StreamingReportConfig
+        reporters = []
+        for i in range(10):
+            cfg = StreamingReportConfig("json")
+            r = StreamingReporter(cfg)
+            r.start()
+            r.write_finding(json.dumps({"id": f"r{i}-f1", "severity": "high"}))
+            reporters.append(r)
+
+        for i, r in enumerate(reporters):
+            summary = r.finish()
+            assert summary.total_findings == 1

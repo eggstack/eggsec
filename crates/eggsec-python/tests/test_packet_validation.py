@@ -820,7 +820,7 @@ class TestCapturedPacketRawBytes:
 
 class TestCaptureSessionLifecycle:
     def test_capture_session_loopback(self):
-        pass
+        pytest.skip("Requires root and live capture interface")
 
     def test_sync_capture_session_construction(self):
         cfg = eggsec.CaptureConfig(interface="lo")
