@@ -1854,17 +1854,8 @@ impl NseRuntimePy {
 /// Resolve a profile kind string to a ResolvedNseExecutionProfile.
 fn resolve_profile(kind: &str, target: &str) -> eggsec::nse::ResolvedNseExecutionProfile {
     match kind {
-        "manual-permissive" => {
-            eggsec::nse::ResolvedNseExecutionProfile::manual_permissive(Some(target))
-        }
-        "manual-strict" => {
-            eggsec::nse::ResolvedNseExecutionProfile::manual_strict(Some(target), &[])
-        }
         "agent-safe" => eggsec::nse::ResolvedNseExecutionProfile::agent_safe(target, &[]),
         "ci-safe" => eggsec::nse::ResolvedNseExecutionProfile::ci_safe(),
-        "compatibility-lab" => {
-            eggsec::nse::ResolvedNseExecutionProfile::compatibility_lab(Some(target))
-        }
         _ => eggsec::nse::ResolvedNseExecutionProfile::agent_safe(target, &[]),
     }
 }

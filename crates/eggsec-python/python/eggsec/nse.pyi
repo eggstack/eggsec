@@ -542,3 +542,15 @@ class NseExecutionResultPy:
     def to_json(self) -> str: ...
     def __repr__(self) -> str: ...
     def __str__(self) -> str: ...
+
+NseLibraryDescriptor = NseLibraryDescriptorPy
+NseArgument = NseArgumentPy
+NseLibraryRegistry = NseLibraryRegistryPy
+NseEvidenceItem = NseEvidenceItemPy
+NseCapabilityContext = NseCapabilityContextPy
+NseLibraryVersion = NseLibraryVersionPy
+NseLibraryConflict = NseLibraryConflictPy
+NseExecutionRequest = NseExecutionRequestPy
+NseExecutionResult = NseExecutionResultPy
+NseScriptResult = NseScriptResultPy
+NseOutputValue = NseOutputValuePy

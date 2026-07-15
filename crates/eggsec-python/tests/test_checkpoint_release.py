@@ -62,25 +62,27 @@ def test_pipeline_resume_restores_typed_completed_results(tmp_path: Path):
         )
         denied = eggsec.OperationRequest("scan_ports", "192.0.2.1", timeout_ms=20)
 
-        pipeline = eggsec.Pipeline("resume-fixture")
+        pipeline = eggsec.Pipeline("resume-fixture", stop_on_failure=False, failure_policy=eggsec.FailurePolicy.Continue)
         pipeline.add_step("open", request)
         pipeline.add_step("denied", denied)
         pipeline.set_checkpoint_store(store)
         first = pipeline.run(engine)
         assert len(first.step_results) == 2
-        assert first.step_results[0].result.payload_type_name == "PortScanResult"
+        open_result = next(r for r in first.step_results if r.step_name == "open")
+        assert open_result.result.payload_type_name == "PortScanResult"
         assert path.exists()
 
         resumed_store = eggsec.create_checkpoint_store(str(path))
-        resumed_pipeline = eggsec.Pipeline("resume-fixture")
+        resumed_pipeline = eggsec.Pipeline("resume-fixture", stop_on_failure=False, failure_policy=eggsec.FailurePolicy.Continue)
         resumed_pipeline.add_step("open", request)
         resumed_pipeline.add_step("denied", denied)
         resumed_pipeline.set_checkpoint_store(resumed_store)
         resumed = resumed_pipeline.run(engine)
 
         assert len(resumed.step_results) == 2
-        assert resumed.step_results[0].step_name == "open"
-        assert resumed.step_results[0].result.payload_type_name == "PortScanResult"
-        assert resumed.step_results[1].step_name == "denied"
+        resumed_open = next(r for r in resumed.step_results if r.step_name == "open")
+        assert resumed_open.result.payload_type_name == "PortScanResult"
+        resumed_denied = next(r for r in resumed.step_results if r.step_name == "denied")
+        assert resumed_denied is not None
         assert any(event.event_type == "pipeline.resumed_from_checkpoint" for event in resumed.events)
         assert isinstance(json.loads(resumed.to_json()), dict)

@@ -21,6 +21,7 @@ The release guarantee is local `Engine`/`AsyncEngine` only; daemon-client
 execution remains provisional pending transport parity.
 
 Release 1/2 closure pass completed 2026-07-14 (1977 passed, 89 skipped).
+Release 1-4 operational correction pass completed 2026-07-15 (2969 passed, 0 failed).
 
 ## Directory Structure
 

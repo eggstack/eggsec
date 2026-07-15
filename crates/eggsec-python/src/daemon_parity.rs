@@ -215,6 +215,26 @@ pub struct DaemonSubmissionResult {
 
 #[pymethods]
 impl DaemonSubmissionResult {
+    #[new]
+    #[pyo3(signature = (task_id, session_id="", idempotency_key="", is_duplicate=false, submitted_at_ms=0, estimated_duration_ms=None))]
+    fn new(
+        task_id: String,
+        session_id: &str,
+        idempotency_key: &str,
+        is_duplicate: bool,
+        submitted_at_ms: u64,
+        estimated_duration_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            task_id,
+            session_id: session_id.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            is_duplicate,
+            submitted_at_ms,
+            estimated_duration_ms,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("task_id", &self.task_id)?;
@@ -332,6 +352,26 @@ pub struct ReplayCursor {
 
 #[pymethods]
 impl ReplayCursor {
+    #[new]
+    #[pyo3(signature = (session_id, last_sequence=0, total_events=0, gap_count=0, duplicate_count=0, timestamp_ms=0))]
+    fn new(
+        session_id: String,
+        last_sequence: u64,
+        total_events: u64,
+        gap_count: usize,
+        duplicate_count: usize,
+        timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            session_id,
+            last_sequence,
+            total_events,
+            gap_count,
+            duplicate_count,
+            timestamp_ms,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("session_id", &self.session_id)?;
@@ -421,6 +461,24 @@ pub struct CancellationRequest {
 
 #[pymethods]
 impl CancellationRequest {
+    #[new]
+    #[pyo3(signature = (task_id, session_id="", reason=None, force=false, requested_at_ms=0))]
+    fn new(
+        task_id: String,
+        session_id: &str,
+        reason: Option<String>,
+        force: bool,
+        requested_at_ms: u64,
+    ) -> Self {
+        Self {
+            session_id: session_id.to_string(),
+            task_id,
+            reason,
+            force,
+            requested_at_ms,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("session_id", &self.session_id)?;
@@ -469,6 +527,24 @@ pub struct CancellationResult {
 
 #[pymethods]
 impl CancellationResult {
+    #[new]
+    #[pyo3(signature = (acknowledged, task_was_running=false, task_was_completed=false, cleanup_started=false, message=None))]
+    fn new(
+        acknowledged: bool,
+        task_was_running: bool,
+        task_was_completed: bool,
+        cleanup_started: bool,
+        message: Option<String>,
+    ) -> Self {
+        Self {
+            acknowledged,
+            task_was_running,
+            task_was_completed,
+            cleanup_started,
+            message,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("acknowledged", self.acknowledged)?;
@@ -527,6 +603,34 @@ pub struct TaskArtifactDescriptor {
 
 #[pymethods]
 impl TaskArtifactDescriptor {
+    #[new]
+    #[pyo3(signature = (artifact_id, task_id="", session_id="", kind="report", content_type="application/octet-stream", size_bytes=0, content_hash="", created_at_ms=0, redacted=false, download_url=None))]
+    fn new(
+        artifact_id: String,
+        task_id: &str,
+        session_id: &str,
+        kind: &str,
+        content_type: &str,
+        size_bytes: u64,
+        content_hash: &str,
+        created_at_ms: u64,
+        redacted: bool,
+        download_url: Option<String>,
+    ) -> Self {
+        Self {
+            artifact_id,
+            task_id: task_id.to_string(),
+            session_id: session_id.to_string(),
+            kind: kind.to_string(),
+            content_type: content_type.to_string(),
+            size_bytes,
+            content_hash: content_hash.to_string(),
+            created_at_ms,
+            redacted,
+            download_url,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("artifact_id", &self.artifact_id)?;
@@ -580,6 +684,24 @@ pub struct EventReplayInfo {
 
 #[pymethods]
 impl EventReplayInfo {
+    #[new]
+    #[pyo3(signature = (session_id, from_sequence=0, to_sequence=0, event_count=0, ordered=true))]
+    fn new(
+        session_id: String,
+        from_sequence: u64,
+        to_sequence: u64,
+        event_count: usize,
+        ordered: bool,
+    ) -> Self {
+        Self {
+            session_id,
+            from_sequence,
+            to_sequence,
+            event_count,
+            ordered,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("session_id", &self.session_id)?;
@@ -633,6 +755,30 @@ pub struct DaemonHealthDetail {
 
 #[pymethods]
 impl DaemonHealthDetail {
+    #[new]
+    #[pyo3(signature = (status, uptime_secs=0, protocol_version=2, active_sessions=0, active_clients=0, total_tasks_completed=0, persistence_backend="none", transport="unix_socket"))]
+    fn new(
+        status: String,
+        uptime_secs: u64,
+        protocol_version: u32,
+        active_sessions: usize,
+        active_clients: usize,
+        total_tasks_completed: u64,
+        persistence_backend: &str,
+        transport: &str,
+    ) -> Self {
+        Self {
+            status,
+            uptime_secs,
+            protocol_version,
+            active_sessions,
+            active_clients,
+            total_tasks_completed,
+            persistence_backend: persistence_backend.to_string(),
+            transport: transport.to_string(),
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("status", &self.status)?;

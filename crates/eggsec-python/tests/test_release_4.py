@@ -4,6 +4,17 @@ import os
 import tempfile
 import pytest
 
+import eggsec
+
+_skip_mobile = pytest.mark.skipif(
+    not hasattr(eggsec, 'has_feature') or not eggsec.has_feature("mobile"),
+    reason="mobile feature not compiled"
+)
+_skip_browser = pytest.mark.skipif(
+    not hasattr(eggsec, 'has_feature') or not eggsec.has_feature("headless-browser"),
+    reason="headless-browser feature not compiled"
+)
+
 
 # ============================================================================
 # Import tests (Section 9)
@@ -21,6 +32,7 @@ class TestImports:
             SessionCapabilities,
         )
 
+    @_skip_mobile
     def test_mobile_session_imports(self):
         from eggsec import (
             MobileDeviceDescriptor,
@@ -33,6 +45,7 @@ class TestImports:
             MobileDeviceRegistry,
         )
 
+    @_skip_browser
     def test_browser_session_imports(self):
         from eggsec import (
             BrowserCapabilities,
@@ -311,6 +324,7 @@ class TestSessionCapabilities:
 # WS2-6: Mobile Session Tests
 # ============================================================================
 
+@_skip_mobile
 class TestMobileDeviceDescriptor:
     def test_construction_not_direct(self):
         """MobileDeviceDescriptor is not directly constructible from Python."""
@@ -327,6 +341,7 @@ class TestMobileDeviceDescriptor:
         assert hasattr(MobileDeviceDescriptor, 'to_json')
 
 
+@_skip_mobile
 class TestMobileDeviceCapabilities:
     def test_has_serialization_methods(self):
         from eggsec import MobileDeviceCapabilities
@@ -335,6 +350,7 @@ class TestMobileDeviceCapabilities:
         assert hasattr(MobileDeviceCapabilities, '__repr__')
 
 
+@_skip_mobile
 class TestMobileSessionConfig:
     def test_construction_minimal(self):
         from eggsec import MobileSessionConfig
@@ -390,6 +406,7 @@ class TestMobileSessionConfig:
         assert "serial-123" in repr(cfg)
 
 
+@_skip_mobile
 class TestMobileSessionState:
     def test_enum_variants(self):
         from eggsec import MobileSessionState
@@ -403,6 +420,7 @@ class TestMobileSessionState:
             assert repr(getattr(MobileSessionState, name)) == f"MobileSessionState.{name}"
 
 
+@_skip_mobile
 class TestMobileSessionStats:
     def test_has_serialization_methods(self):
         from eggsec import MobileSessionStats
@@ -411,6 +429,7 @@ class TestMobileSessionStats:
         assert hasattr(MobileSessionStats, '__repr__')
 
 
+@_skip_mobile
 class TestMobileDeviceRegistry:
     def test_construction(self):
         from eggsec import MobileDeviceRegistry
@@ -431,6 +450,7 @@ class TestMobileDeviceRegistry:
         assert "[]" in j
 
 
+@_skip_mobile
 class TestMobileSession:
     def test_construction(self):
         from eggsec import MobileSession, MobileSessionConfig
@@ -517,6 +537,7 @@ class TestMobileSession:
         assert stats.duration_ms == 0
 
 
+@_skip_mobile
 class TestAsyncMobileSession:
     def test_construction(self):
         from eggsec import AsyncMobileSession, MobileSessionConfig
@@ -546,6 +567,7 @@ class TestAsyncMobileSession:
 # WS7-11: Browser Session Tests
 # ============================================================================
 
+@_skip_browser
 class TestBrowserCapabilities:
     def test_has_serialization_methods(self):
         from eggsec import BrowserCapabilities
@@ -554,6 +576,7 @@ class TestBrowserCapabilities:
         assert hasattr(BrowserCapabilities, '__repr__')
 
 
+@_skip_browser
 class TestBrowserSessionState:
     def test_enum_variants(self):
         from eggsec import BrowserSessionState
@@ -567,6 +590,7 @@ class TestBrowserSessionState:
             assert repr(getattr(BrowserSessionState, name)) == f"BrowserSessionState.{name}"
 
 
+@_skip_browser
 class TestBrowserSessionConfig:
     def test_construction_defaults(self):
         from eggsec import BrowserSessionConfig
@@ -627,6 +651,7 @@ class TestBrowserSessionConfig:
         assert "1280" in r
 
 
+@_skip_browser
 class TestBrowserSessionStats:
     def test_has_serialization_methods(self):
         from eggsec import BrowserSessionStats
@@ -635,6 +660,7 @@ class TestBrowserSessionStats:
         assert hasattr(BrowserSessionStats, '__repr__')
 
 
+@_skip_browser
 class TestBrowserNavigationEvent:
     def test_has_serialization_methods(self):
         from eggsec import BrowserNavigationEvent
@@ -643,6 +669,7 @@ class TestBrowserNavigationEvent:
         assert hasattr(BrowserNavigationEvent, '__repr__')
 
 
+@_skip_browser
 class TestBrowserConsoleEvent:
     def test_has_serialization_methods(self):
         from eggsec import BrowserConsoleEvent
@@ -651,6 +678,7 @@ class TestBrowserConsoleEvent:
         assert hasattr(BrowserConsoleEvent, '__repr__')
 
 
+@_skip_browser
 class TestBrowserNetworkEvent:
     def test_has_serialization_methods(self):
         from eggsec import BrowserNetworkEvent
@@ -659,6 +687,7 @@ class TestBrowserNetworkEvent:
         assert hasattr(BrowserNetworkEvent, '__repr__')
 
 
+@_skip_browser
 class TestBrowserDomSnapshot:
     def test_has_serialization_methods(self):
         from eggsec import BrowserDomSnapshot
@@ -667,6 +696,7 @@ class TestBrowserDomSnapshot:
         assert hasattr(BrowserDomSnapshot, '__repr__')
 
 
+@_skip_browser
 class TestBrowserFormInfo:
     def test_has_serialization_methods(self):
         from eggsec import BrowserFormInfo
@@ -674,6 +704,7 @@ class TestBrowserFormInfo:
         assert hasattr(BrowserFormInfo, 'to_json')
 
 
+@_skip_browser
 class TestBrowserFormField:
     def test_has_serialization_methods(self):
         from eggsec import BrowserFormField
@@ -681,6 +712,7 @@ class TestBrowserFormField:
         assert hasattr(BrowserFormField, 'to_json')
 
 
+@_skip_browser
 class TestBrowserLinkInfo:
     def test_has_serialization_methods(self):
         from eggsec import BrowserLinkInfo
@@ -688,6 +720,7 @@ class TestBrowserLinkInfo:
         assert hasattr(BrowserLinkInfo, 'to_json')
 
 
+@_skip_browser
 class TestBrowserStorageInfo:
     def test_has_serialization_methods(self):
         from eggsec import BrowserStorageInfo
@@ -695,6 +728,7 @@ class TestBrowserStorageInfo:
         assert hasattr(BrowserStorageInfo, 'to_json')
 
 
+@_skip_browser
 class TestBrowserCookieInfo:
     def test_has_serialization_methods(self):
         from eggsec import BrowserCookieInfo
@@ -702,6 +736,7 @@ class TestBrowserCookieInfo:
         assert hasattr(BrowserCookieInfo, 'to_json')
 
 
+@_skip_browser
 class TestBrowserSession:
     def test_construction(self):
         from eggsec import BrowserSession, BrowserSessionConfig
@@ -777,6 +812,7 @@ class TestBrowserSession:
             assert str(session.state) == "Created"
 
 
+@_skip_browser
 class TestAsyncBrowserSession:
     def test_construction(self):
         from eggsec import AsyncBrowserSession, BrowserSessionConfig
@@ -1690,6 +1726,7 @@ class TestSerializationRoundTrips:
         assert parsed["supports_cancellation"] is True
         assert parsed["max_concurrent_operations"] == 4
 
+    @_skip_mobile
     def test_mobile_session_config_roundtrip(self):
         import json as json_mod
         from eggsec import MobileSessionConfig
@@ -1699,6 +1736,7 @@ class TestSerializationRoundTrips:
         assert parsed["device_serial"] == "serial-1"
         assert parsed["dry_run"] is True
 
+    @_skip_browser
     def test_browser_session_config_roundtrip(self):
         import json as json_mod
         from eggsec import BrowserSessionConfig
@@ -1779,6 +1817,8 @@ class TestSerializationRoundTrips:
         assert parsed["report_id"] == "rep-1"
         assert parsed["finding_count"] == 5
 
+    @_skip_mobile
+    @_skip_browser
     def test_valid_json_output(self):
         """All to_json() outputs must be valid JSON."""
         from eggsec import (
@@ -1816,6 +1856,8 @@ class TestSerializationRoundTrips:
 # ============================================================================
 
 class TestReprStr:
+    @_skip_mobile
+    @_skip_browser
     def test_all_constructible_types_have_repr(self):
         from eggsec import (
             SessionState, SessionIdentity, SessionStats, SessionCloseMode,

@@ -363,28 +363,28 @@ class TestDaemonCancellationRequest:
 
     def test_cancellation_request_construction(self):
         CR = _import_or_skip("CancellationRequest")
-        req = CR(task_id="task-123", reason="timeout")
+        req = CR(task_id="task-123", session_id="s-1", reason="timeout")
         assert req.task_id == "task-123"
         assert req.reason == "timeout"
 
     def test_cancellation_request_to_dict(self):
         CR = _import_or_skip("CancellationRequest")
-        req = CR(task_id="t-1", reason="user cancel")
+        req = CR(task_id="t-1", session_id="s-1", reason="user cancel")
         d = req.to_dict()
         assert isinstance(d, dict)
         assert d["task_id"] == "t-1"
 
     def test_cancellation_result_construction(self):
         CRes = _import_or_skip("CancellationResult")
-        res = CRes(cancelled=True, message="done")
-        assert res.cancelled is True
+        res = CRes(acknowledged=True, message="done")
+        assert res.acknowledged is True
 
     def test_cancellation_result_to_dict(self):
         CRes = _import_or_skip("CancellationResult")
-        res = CRes(cancelled=False, message="already finished")
+        res = CRes(acknowledged=False, message="already finished")
         d = res.to_dict()
         assert isinstance(d, dict)
-        assert d["cancelled"] is False
+        assert d["acknowledged"] is False
 
 
 class TestDaemonReplayCursor:
@@ -392,29 +392,32 @@ class TestDaemonReplayCursor:
 
     def test_replay_cursor_construction(self):
         RC = _import_or_skip("ReplayCursor")
-        cursor = RC(cursor="abc-123", limit=100)
-        assert cursor.cursor == "abc-123"
-        assert cursor.limit == 100
+        cursor = RC(session_id="abc-123", last_sequence=100)
+        assert cursor.session_id == "abc-123"
+        assert cursor.last_sequence == 100
 
     def test_replay_cursor_to_dict(self):
         RC = _import_or_skip("ReplayCursor")
-        cursor = RC(cursor="c1", limit=50)
+        cursor = RC(session_id="c1", last_sequence=50)
         d = cursor.to_dict()
         assert isinstance(d, dict)
-        assert d["cursor"] == "c1"
+        assert d["session_id"] == "c1"
 
     def test_replay_result_construction(self):
         RR = _import_or_skip("ReplayResult")
-        res = RR(events=[], cursor_next=None, has_more=False)
+        RC = _import_or_skip("ReplayCursor")
+        inner_cursor = RC(session_id="s-1", last_sequence=10)
+        res = RR(cursor=inner_cursor, has_more=False)
         assert res.has_more is False
 
     def test_replay_result_to_dict(self):
         RR = _import_or_skip("ReplayResult")
-        res = RR(events=[], cursor_next="next-cursor", has_more=True)
+        RC = _import_or_skip("ReplayCursor")
+        inner_cursor = RC(session_id="s-1", last_sequence=20)
+        res = RR(cursor=inner_cursor, has_more=True)
         d = res.to_dict()
         assert isinstance(d, dict)
         assert d["has_more"] is True
-        assert d["cursor_next"] == "next-cursor"
 
 
 class TestDaemonEventReplayInfo:
@@ -422,16 +425,16 @@ class TestDaemonEventReplayInfo:
 
     def test_event_replay_info_construction(self):
         ERI = _import_or_skip("EventReplayInfo")
-        info = ERI(total_events=100, cursor="cursor-1", oldest_event_ms=1000)
-        assert info.total_events == 100
-        assert info.cursor == "cursor-1"
+        info = ERI(session_id="s-1", event_count=100, from_sequence=1, to_sequence=100)
+        assert info.event_count == 100
+        assert info.session_id == "s-1"
 
     def test_event_replay_info_to_dict(self):
         ERI = _import_or_skip("EventReplayInfo")
-        info = ERI(total_events=50, cursor="c", oldest_event_ms=2000)
+        info = ERI(session_id="s-1", event_count=50, from_sequence=1, to_sequence=50)
         d = info.to_dict()
         assert isinstance(d, dict)
-        assert d["total_events"] == 50
+        assert d["event_count"] == 50
 
 
 class TestDaemonTaskArtifactDescriptor:
@@ -441,19 +444,16 @@ class TestDaemonTaskArtifactDescriptor:
         TAD = _import_or_skip("TaskArtifactDescriptor")
         desc = TAD(
             artifact_id="art-1",
-            filename="report.json",
             content_type="application/json",
             size_bytes=1024,
         )
         assert desc.artifact_id == "art-1"
-        assert desc.filename == "report.json"
         assert desc.size_bytes == 1024
 
     def test_to_dict(self):
         TAD = _import_or_skip("TaskArtifactDescriptor")
         desc = TAD(
             artifact_id="a-1",
-            filename="out.txt",
             content_type="text/plain",
             size_bytes=256,
         )
@@ -467,14 +467,14 @@ class TestDaemonHealthDetail:
 
     def test_construction(self):
         DHD = _import_or_skip("DaemonHealthDetail")
-        detail = DHD(status="ok", uptime_seconds=3600, sessions_active=5)
+        detail = DHD(status="ok", uptime_secs=3600, active_sessions=5)
         assert detail.status == "ok"
-        assert detail.uptime_seconds == 3600
-        assert detail.sessions_active == 5
+        assert detail.uptime_secs == 3600
+        assert detail.active_sessions == 5
 
     def test_to_dict(self):
         DHD = _import_or_skip("DaemonHealthDetail")
-        detail = DHD(status="degraded", uptime_seconds=0, sessions_active=0)
+        detail = DHD(status="degraded", uptime_secs=0, active_sessions=0)
         d = detail.to_dict()
         assert isinstance(d, dict)
         assert d["status"] == "degraded"
@@ -515,19 +515,19 @@ class TestDaemonSubmissionResult:
             DSR = _import_or_skip("DaemonSubmissionResult")
         except pytest.skip.Exception:
             pytest.skip("DaemonSubmissionResult not available")
-        res = DSR(task_id="task-1", accepted=True, message="ok")
+        res = DSR(task_id="task-1")
         assert res.task_id == "task-1"
-        assert res.accepted is True
+        assert res.is_duplicate is False
 
     def test_to_dict(self):
         try:
             DSR = _import_or_skip("DaemonSubmissionResult")
         except pytest.skip.Exception:
             pytest.skip("DaemonSubmissionResult not available")
-        res = DSR(task_id="t-2", accepted=False, message="busy")
+        res = DSR(task_id="t-2", is_duplicate=True)
         d = res.to_dict()
         assert isinstance(d, dict)
-        assert d["accepted"] is False
+        assert d["is_duplicate"] is True
 
 
 class TestDaemonConcurrentSessionCreate:

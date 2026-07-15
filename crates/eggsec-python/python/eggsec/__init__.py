@@ -475,6 +475,7 @@ StepResult = _core.StepResult
 PipelineResult = _core.PipelineResult
 Pipeline = _core.Pipeline
 AsyncPipeline = _core.AsyncPipeline
+FailurePolicy = _core.FailurePolicy
 
 # Planning types
 PlanStep = _core.PlanStep
@@ -1194,6 +1195,7 @@ __all__ = [
     "PipelineResult",
     "Pipeline",
     "AsyncPipeline",
+    "FailurePolicy",
     # Planning types
     "PlanStep",
     "ScanPlan",

@@ -4,8 +4,8 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Scoped pre-1.0 release candidate** — Release 1/2 closure pass completed
-2026-07-14. Not yet published to PyPI. The stable-core compatibility boundary
+**Scoped pre-1.0 release candidate** — Release 4 closure pass completed
+2026-07-15. Not yet published to PyPI. The stable-core compatibility boundary
 is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and

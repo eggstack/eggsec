@@ -103,7 +103,7 @@ from .requests import (
 )
 from .pipeline import (
     OutputRef as OutputRef,
-    RetryPolicy as RetryPolicy,
+    RetryPolicy as PipelineRetryPolicy,
     FailurePolicy as FailurePolicy,
     PipelineStep as PipelineStep,
     StepResult as StepResult,
@@ -273,7 +273,7 @@ from .websocket import (
     async_websocket_fuzz as async_websocket_fuzz,
 )
 from .git_secrets import (
-    Confidence as Confidence,
+    Confidence as GitSecretConfidence,
     SecretType as SecretType,
     SecretFindingPy as SecretFindingPy,
     GitSecretFindingPy as GitSecretFindingPy,
@@ -450,7 +450,7 @@ from .daemon import (
     async_daemon_subscribe as async_daemon_subscribe,
     DaemonCapabilitiesPy as DaemonCapabilitiesPy,
     TaskHandlePy as TaskHandlePy,
-    TaskStatusPy as TaskStatusPy,
+    TaskStatusPy as DaemonTaskStatusPy,
     DaemonEventPy as DaemonEventPy,
     SessionSummaryPy as SessionSummaryPy,
     TransportMetadataPy as TransportMetadataPy,
@@ -614,6 +614,8 @@ from .event_protocol import (
     CompletionEvent as CompletionEvent,
     wrap_event as wrap_event,
 )
+FindingEventPy = FindingEvent
+ArtifactEventPy = ArtifactEvent
 from .event_stream import (
     EventStream as EventStream,
     event_stream_from_legacy as event_stream_from_legacy,

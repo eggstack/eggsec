@@ -723,7 +723,7 @@ This correction pass is complete only when:
 
 Do not add new user-facing domains during this pass. The purpose is to prove that the stateful and remote APIs already added are real, reusable, recoverable, and safe under failure. Release 5 should begin only after this pass removes the gap between API surface completeness and operational correctness.
 
-## Completion status (2026-07-15)
+## Completion status (2026-07-15, updated 2026-07-15 follow-up)
 
 ### Acceptance criteria status
 
@@ -731,30 +731,34 @@ Do not add new user-facing domains during this pass. The purpose is to prove tha
 |-----------|--------|----------|
 | No async-session lifecycle skips due to runtime ownership | ✅ PASS | `OnceLock<Runtime>` implemented; `_skip_chaining` removed; 70+ lifecycle tests pass |
 | Chained awaits work for every managed async session | ✅ PASS | `test_async_io_lifecycle.py` — connect/write/read/close chains pass |
-| NSE runtime reuse, limits, cancellation, cleanup | ✅ PASS | 65+ tests pass; 200-cycle stress test added |
+| NSE runtime reuse, limits, cancellation, cleanup | ✅ PASS | 65+ tests pass; 200-cycle stress test added; manual-permissive removed from Python surface |
 | Proxy HTTP/HTTPS/WS interception, mutation, replay, shutdown | ⚠️ PARTIAL | DTO coverage complete; live interception requires Rust-side proxy loopback fix |
 | Database backends pass shared stateful-session contract suite | ⚠️ PARTIAL | DTO coverage complete (106 pass); real backends require Docker containers |
 | Android mobile lifecycle on real emulator | ❌ BLOCKED | No Android emulator in CI |
 | Browser lifecycle against canonical backend | ❌ BLOCKED | No real browser backend (CDP/Playwright) in CI |
-| Daemon disconnect, restart, replay, idempotency, cancellation race | ⚠️ PARTIAL | Basic lifecycle tested (real daemon process); 9 error scenarios added as DTO tests |
+| Daemon disconnect, restart, replay, idempotency, cancellation race | ⚠️ PARTIAL | Basic lifecycle tested (real daemon process); 9 error scenarios added as DTO tests; daemon DTO constructors added |
 | SQLite, JSONL, artifact stores concurrency and crash recovery | ✅ PASS | WAL, concurrent readers/writers, tamper detection, compaction, dedup tests added |
 | Repeated stress loops show no unbounded resource growth | ✅ PASS | 1500 TCP/UDP, 1000 repo, 400 NSE/proxy, 200 reporter cycles; FD/thread/socket leak detection |
 | All declared report formats pass large, partial, secret-redaction tests | ✅ PASS | HTML format added; all 6 formats tested; secret sentinel across CSV/Markdown/SARIF |
 | Capability and maturity metadata match operational evidence | ✅ PASS | domain-maturity.md, STABILITY_CLASSIFICATIONS.md, API_CAPABILITY_MATRIX.md updated; boundary enforcement tests pass |
 | Current commit has visible CI checks and downloadable artifacts | ✅ PASS | JUnit XML + artifact upload wired into test.yml |
 | Releases 1–4 explicitly closed or bounded | ✅ PASS | Daemon/proxy/browser/mobile marked provisional/experimental with documented blockers |
+| Architecture guards pass for Python NSE surface | ✅ PASS | Manual-only profiles removed from `resolve_profile()`; guard 26 passes |
+| Python test suite passes with proper feature gating | ✅ PASS | 2969 passed, 0 failed; mobile/browser tests skipped when features absent |
+| Type stub parity complete | ✅ PASS | 46 aliases added for non-Py re-exports; stub parity check passes |
+| Pipeline resume test deterministic | ✅ PASS | Flaky test fixed with `stop_on_failure=False` and order-independent assertions |
 
 ### Workstream completion summary
 
 | WS | Description | Status | Tests Added |
 |----|-------------|--------|-------------|
 | WS1 | Shared async runtime | ✅ COMPLETE | 70+ lifecycle tests |
-| WS2 | NSE runtime | ✅ COMPLETE | 65+ tests, 200-cycle stress |
+| WS2 | NSE runtime | ✅ COMPLETE | 65+ tests, 200-cycle stress, Python surface hardened |
 | WS3 | Proxy live lifecycle | ⚠️ PARTIAL | 11 constructor tests un-skipped |
 | WS4 | Database backend | ⚠️ PARTIAL | 5 constructor tests un-skipped |
 | WS5 | Mobile emulator | ❌ BLOCKED | No emulator available |
 | WS6 | Browser backend | ❌ BLOCKED | No browser backend available |
-| WS7 | Daemon failure-mode | ⚠️ PARTIAL | ~25 tests added (DTO + lifecycle) |
+| WS7 | Daemon failure-mode | ⚠️ PARTIAL | ~25 tests added (DTO + lifecycle); DTO constructors added |
 | WS8 | Repository concurrency | ✅ COMPLETE | ~10 gap tests added (WAL, compaction, tamper, symlinks) |
 | WS9 | Streaming reporting | ✅ COMPLETE | ~8 gap tests added (HTML, path traversal, sentinel, interrupted) |
 | WS10 | Maturity metadata | ✅ COMPLETE | 9 boundary enforcement tests |
@@ -775,16 +779,26 @@ Do not add new user-facing domains during this pass. The purpose is to prove tha
 ### Files modified in this pass
 
 **Python test files:**
-- `crates/eggsec-python/tests/test_daemon_integration.py` — ~25 new tests (idempotency, cancellation, replay, events, artifacts, health, concurrent sessions, socket cleanup)
+- `crates/eggsec-python/tests/test_daemon_integration.py` — ~25 new tests (idempotency, cancellation, replay, events, artifacts, health, concurrent sessions, socket cleanup); DTO constructor fixes
 - `crates/eggsec-python/tests/test_daemon_repository_operational.py` — ~10 new tests (WAL mode, busy timeout, compaction, tamper detection, symlinks, concurrent dedup, schema version, flush order, concurrent put)
 - `crates/eggsec-python/tests/test_streaming_operational.py` — ~8 new tests (HTML format, path traversal, secret sentinel across formats, interrupted generation, all-formats roundtrip)
 - `crates/eggsec-python/tests/test_stress_leak.py` — ~5 new tests (socket leak, thread leak, 200-cycle reporter, 200-cycle NSE, 500-insert repo)
 - `crates/eggsec-python/tests/test_proxy.py` — 11 tests un-skipped (CapturedExchange, InterceptSessionResult constructors)
 - `crates/eggsec-python/tests/test_db_pentest.py` — 5 tests un-skipped (DbFinding constructor)
+- `crates/eggsec-python/tests/test_release_4.py` — Feature-gated skip markers for mobile/browser session types
+- `crates/eggsec-python/tests/test_checkpoint_release.py` — Fixed flaky pipeline resume test
 
 **Rust source files:**
 - `crates/eggsec-python/src/proxy.rs` — Added `#[new]` constructors for `CapturedExchangePy` and `InterceptSessionResultPy`
-- `crates/eggsec-python/src/db_pentest.rs` — Added `#[new]` constructor for `DbFindingPy` with string/enum severity conversion
+- `crates/eggsec-python/src/db_pentest.rs` — Added `#[new]` constructor for `DbFindingPy` with string/enum severity conversion; renamed `from` field to `from_severity`
+- `crates/eggsec-python/src/daemon_parity.rs` — Added `#[new]` constructors for 7 daemon parity types
+- `crates/eggsec-python/src/nse.rs` — Removed manual-permissive/manual-strict/compatibility-lab profiles from `resolve_profile()`
+
+**Type stubs:**
+- `crates/eggsec-python/python/eggsec/nse.pyi` — 11 type aliases for non-Py re-exports
+- `crates/eggsec-python/python/eggsec/db_pentest.pyi` — 20 type aliases for non-Py re-exports
+- `crates/eggsec-python/python/eggsec/proxy.pyi` — 15 type aliases for non-Py re-exports
+- `crates/eggsec-python/python/eggsec/__init__.pyi` — 2 type aliases (ArtifactEventPy, FindingEventPy); re-export conflict fixes
 
 **CI configuration:**
 - `.github/workflows/test.yml` — Added JUnit XML output, artifact upload, architecture guards validation
