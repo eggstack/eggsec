@@ -19,6 +19,19 @@ use crate::status::{
 };
 use crate::waf::WafDetectionResultPy;
 
+/// Internal state for daemon-backed engine execution.
+///
+/// When present, `Engine::run()` routes requests through the daemon
+/// instead of the local in-process engine.
+#[cfg(feature = "daemon-client")]
+#[derive(Clone)]
+struct DaemonBackend {
+    client: crate::daemon::DaemonClientPy,
+    session_id: Option<String>,
+    #[allow(dead_code)]
+    socket_path: String,
+}
+
 /// Sync engine for running scoped security operations.
 ///
 /// Wraps the Rust engine directly. Each `run_*` method returns an `OperationResult`
@@ -31,6 +44,8 @@ use crate::waf::WafDetectionResultPy;
 #[derive(Clone)]
 pub struct Engine {
     pub(crate) state: Arc<EngineState>,
+    #[cfg(feature = "daemon-client")]
+    daemon_backend: Option<DaemonBackend>,
 }
 
 /// Extract hostname from a URL for scope enforcement.
@@ -132,6 +147,128 @@ fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult 
     }
 }
 
+/// Convert an OperationRequest to a TaskKind JSON string for daemon submission.
+///
+/// Maps the operation ID to the corresponding `eggsec_runtime::TaskKind` variant
+/// and fills in the target and timeout from the request.
+#[cfg(feature = "daemon-client")]
+pub(crate) fn operation_request_to_task_kind_json(request: &OperationRequest) -> PyResult<String> {
+    let task_kind = match request.operation.as_str() {
+        "scan_ports" | "scan-ports" => serde_json::json!({
+            "kind": "PortScan",
+            "params": { "target": request.target, "timeout_ms": request.timeout_ms }
+        }),
+        "scan_endpoints" | "scan-endpoints" => serde_json::json!({
+            "kind": "EndpointScan",
+            "params": { "target": request.target }
+        }),
+        "fingerprint_services" | "fingerprint" => serde_json::json!({
+            "kind": "Fingerprint",
+            "params": { "target": request.target }
+        }),
+        "recon_dns" | "recon" => serde_json::json!({
+            "kind": "Recon",
+            "params": { "target": request.target, "modules": ["dns"] }
+        }),
+        "detect_waf" | "waf-detect" => serde_json::json!({
+            "kind": "Waf",
+            "params": { "target": request.target }
+        }),
+        "detect_technology" => serde_json::json!({
+            "kind": "Recon",
+            "params": { "target": request.target, "modules": ["tech"] }
+        }),
+        "inspect_tls" => serde_json::json!({
+            "kind": "Recon",
+            "params": { "target": request.target, "modules": ["tls"] }
+        }),
+        "fuzz_http" | "fuzz" => serde_json::json!({
+            "kind": "Fuzz",
+            "params": { "target": request.target }
+        }),
+        "load_test" | "load-test" => serde_json::json!({
+            "kind": "LoadTest",
+            "params": { "target": request.target, "method": "GET" }
+        }),
+        "nse_run" | "nse" => serde_json::json!({
+            "kind": "Nse",
+            "params": { "target": request.target, "script": "default" }
+        }),
+        "graphql_test" | "graphql" => serde_json::json!({
+            "kind": "GraphQl",
+            "params": { "target": request.target }
+        }),
+        "oauth_test" | "oauth" => serde_json::json!({
+            "kind": "OAuth",
+            "params": { "target": request.target }
+        }),
+        "auth_test" | "auth-test" => serde_json::json!({
+            "kind": "AuthTest",
+            "params": { "target": request.target }
+        }),
+        "scan_git_secrets" | "git-secrets" => serde_json::json!({
+            "kind": "Storage",
+            "params": { "storage_type": "git-secrets", "path": request.target }
+        }),
+        "generate_sbom" | "sbom" => serde_json::json!({
+            "kind": "Storage",
+            "params": { "storage_type": "sbom", "path": request.target }
+        }),
+        "run_consolidated_recon" => serde_json::json!({
+            "kind": "Recon",
+            "params": { "target": request.target, "modules": ["dns","ssl","tech"] }
+        }),
+        "scan_docker_image" | "scan_kubernetes" | "container" => serde_json::json!({
+            "kind": "Storage",
+            "params": { "storage_type": "container", "path": request.target }
+        }),
+        "analyze_apk" | "analyze_ipa" | "mobile" => serde_json::json!({
+            "kind": "Storage",
+            "params": { "storage_type": "mobile", "path": request.target }
+        }),
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Cannot convert operation '{}' to TaskKind for daemon dispatch",
+                other
+            )));
+        }
+    };
+
+    serde_json::to_string(&task_kind)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Convert a daemon `DaemonResponsePy` to an `OperationResult`.
+#[cfg(feature = "daemon-client")]
+fn daemon_response_to_operation_result(
+    response: &crate::daemon::DaemonResponsePy,
+    operation: &str,
+) -> OperationResult {
+    if response.ok {
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("daemon_message".to_string(), response.message.clone());
+        metadata.insert("daemon_request_id".to_string(), response.request_id.clone());
+        metadata.insert("policy_decision".to_string(), "allow".to_string());
+        OperationResult {
+            status: ExecutionStatus::Completed(),
+            stats: Some(ExecutionStats::new(0, 0, 0, 0)),
+            artifacts: Vec::new(),
+            error: None,
+            metadata,
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        }
+    } else {
+        let error_msg = response
+            .error_code
+            .as_deref()
+            .map(|code| format!("{}: {}", code, response.message))
+            .unwrap_or_else(|| response.message.clone());
+        operation_err_for(Some(operation), error_msg)
+    }
+}
+
 #[pymethods]
 impl Engine {
     /// Create a new engine.
@@ -148,6 +285,76 @@ impl Engine {
     #[pyo3(signature = (scope, *, mode="manual", concurrency=100, timeout_ms=5000))]
     fn new(scope: Scope, mode: &str, concurrency: usize, timeout_ms: u64) -> PyResult<Self> {
         Self::new_inner(scope, mode, concurrency, timeout_ms)
+    }
+
+    /// Construct an engine backed by the in-process Rust engine.
+    ///
+    /// This is equivalent to ``Engine(scope, mode=mode, ...)`` but uses the
+    /// explicit constructor name for clarity in mixed local/daemon codebases.
+    #[staticmethod]
+    #[pyo3(signature = (scope, *, mode="manual", concurrency=100, timeout_ms=5000))]
+    fn local(scope: Scope, mode: &str, concurrency: usize, timeout_ms: u64) -> PyResult<Self> {
+        Self::new_inner(scope, mode, concurrency, timeout_ms)
+    }
+
+    /// Construct an engine backed by a daemon over a Unix socket.
+    ///
+    /// The engine auto-creates a daemon session on first dispatch. All
+    /// subsequent operations are submitted to the daemon using the same
+    /// request DTOs as the local engine.
+    ///
+    /// Args:
+    ///     socket_path: Path to the daemon Unix socket.
+    ///     session_id: Optional pre-existing session ID. If not provided,
+    ///                 a session is created automatically on first dispatch.
+    ///     mode: Execution mode ("manual" or "automation").
+    ///     concurrency: Max concurrent connections (default: 100).
+    ///     timeout_ms: Connection timeout in milliseconds (default: 5000).
+    ///
+    /// Raises:
+    ///     FeatureUnavailableError: If the daemon-client feature is not enabled.
+    ///     NetworkError: If the connection fails.
+    #[staticmethod]
+    #[pyo3(signature = (socket_path, *, session_id=None, mode="manual", concurrency=100, timeout_ms=5000))]
+    fn daemon(
+        py: Python<'_>,
+        socket_path: &str,
+        session_id: Option<&str>,
+        mode: &str,
+        concurrency: usize,
+        timeout_ms: u64,
+    ) -> PyResult<Self> {
+        #[cfg(feature = "daemon-client")]
+        {
+            let client = crate::daemon::daemon_connect(py, socket_path)?;
+            let scope = Scope {
+                inner: eggsec::config::Scope {
+                    allowed_targets: vec![eggsec::config::ScopeRule {
+                        pattern: "*".to_string(),
+                        cidr: None,
+                        description: Some("daemon wildcard scope".to_string()),
+                    }],
+                    require_explicit_scope: true,
+                    ..Default::default()
+                },
+            };
+            let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
+            Ok(Self {
+                state,
+                daemon_backend: Some(DaemonBackend {
+                    client,
+                    session_id: session_id.map(|s| s.to_string()),
+                    socket_path: socket_path.to_string(),
+                }),
+            })
+        }
+        #[cfg(not(feature = "daemon-client"))]
+        {
+            let _ = (py, socket_path, session_id, mode, concurrency, timeout_ms);
+            Err(crate::error::FeatureUnavailableError::new_err(
+                "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+            ))
+        }
     }
 
     /// List all registered operation IDs.
@@ -179,10 +386,20 @@ impl Engine {
     /// Routes through the OperationExecutorRegistry, which checks feature gates
     /// and provides "Did you mean?" suggestions for unknown operations.
     /// Returns an OperationResult with status and artifacts.
-    fn run(&self, py: Python<'_>, request: OperationRequest) -> OperationResult {
-        self.state
+    ///
+    /// When the engine was constructed via `Engine.daemon(...)`, the request
+    /// is submitted to the daemon session instead of executing locally.
+    fn run(&self, py: Python<'_>, request: OperationRequest) -> PyResult<OperationResult> {
+        #[cfg(feature = "daemon-client")]
+        {
+            if let Some(daemon) = &self.daemon_backend {
+                return self.run_via_daemon(py, &request, daemon);
+            }
+        }
+        Ok(self
+            .state
             .registry
-            .execute(py, &request.operation, &request, self)
+            .execute(py, &request.operation, &request, self))
     }
 
     /// Run a port scan.
@@ -388,7 +605,11 @@ impl Engine {
         timeout_ms: u64,
     ) -> PyResult<Self> {
         let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
-        Ok(Self { state })
+        Ok(Self {
+            state,
+            #[cfg(feature = "daemon-client")]
+            daemon_backend: None,
+        })
     }
 
     /// Internal constructor from a full EggsecConfig.
@@ -400,7 +621,11 @@ impl Engine {
         timeout_ms: Option<u64>,
     ) -> PyResult<Self> {
         let state = EngineState::from_config(scope, config, mode, concurrency, timeout_ms)?;
-        Ok(Self { state })
+        Ok(Self {
+            state,
+            #[cfg(feature = "daemon-client")]
+            daemon_backend: None,
+        })
     }
 
     /// Enforce that a target is within scope, raising EnforcementError if denied.
@@ -1738,6 +1963,94 @@ impl Engine {
                 op
             )),
         }
+    }
+
+    /// Dispatch an OperationRequest through the daemon backend.
+    ///
+    /// Creates a session on first use if none was provided at construction time.
+    /// Converts the request to a `TaskKind` JSON payload and submits it to the
+    /// daemon, returning an `OperationResult` with the daemon response.
+    #[cfg(feature = "daemon-client")]
+    fn run_via_daemon(
+        &self,
+        py: Python<'_>,
+        request: &OperationRequest,
+        daemon: &DaemonBackend,
+    ) -> PyResult<OperationResult> {
+        // Ensure we have a session ID
+        let session_id = match &daemon.session_id {
+            Some(sid) => sid.clone(),
+            None => {
+                // Create a session on first use
+                let client = daemon.client.clone();
+                let response: crate::daemon::DaemonResponsePy =
+                    runtime_sync::block_on(py, async move {
+                        let client_arc = client.client.clone();
+                        let mut guard = client_arc.lock().await;
+                        let inner = guard.as_mut().ok_or_else(|| {
+                            crate::error::NetworkError::new_err("daemon client is closed")
+                        })?;
+                        let msg = inner
+                            .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
+                            .await
+                            .map_err(|e| {
+                                crate::error::NetworkError::new_err(format!(
+                                    "daemon create_session failed: {}",
+                                    e
+                                ))
+                            })?;
+                        Ok::<_, PyErr>(crate::daemon::server_message_to_response(msg))
+                    })?;
+                // Extract session_id from response message: "session_id=<uuid>"
+                response
+                    .message
+                    .strip_prefix("session_id=")
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| {
+                        crate::error::NetworkError::new_err(format!(
+                            "Unexpected create_session response: {}",
+                            response.message
+                        ))
+                    })?
+            }
+        };
+
+        // Convert request to TaskKind JSON
+        let task_kind_json = operation_request_to_task_kind_json(request)?;
+
+        // Submit via daemon
+        let client = daemon.client.clone();
+        let sid = session_id.clone();
+        let op = request.operation.clone();
+        let response: crate::daemon::DaemonResponsePy = runtime_sync::block_on(py, async move {
+            let client_arc = client.client.clone();
+            let task_kind: eggsec_runtime::TaskKind = serde_json::from_str(&task_kind_json)
+                .map_err(|e| {
+                    crate::error::ConfigError::new_err(format!("Invalid task_kind JSON: {}", e))
+                })?;
+            let run_request = eggsec_runtime::RunRequest {
+                task_kind,
+                requested_by: None,
+                surface: eggsec_runtime::RuntimeSurface::CliManual,
+                labels: vec![],
+            };
+            let session_id: eggsec_runtime::SessionId = sid.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!("Invalid session ID: {}", sid))
+            })?;
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("daemon client is closed"))?;
+            let msg = inner
+                .submit_task(session_id, run_request)
+                .await
+                .map_err(|e| {
+                    crate::error::NetworkError::new_err(format!("daemon submit_task failed: {}", e))
+                })?;
+            Ok::<_, PyErr>(crate::daemon::server_message_to_response(msg))
+        })?;
+
+        Ok(daemon_response_to_operation_result(&response, &op))
     }
 
     fn run_port_scan_inner(

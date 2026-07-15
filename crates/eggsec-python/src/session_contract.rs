@@ -156,10 +156,7 @@ impl SessionIdentity {
     }
 
     fn __str__(&self) -> String {
-        format!(
-            "Session {} ({})",
-            self.session_id, self.session_type
-        )
+        format!("Session {} ({})", self.session_id, self.session_type)
     }
 }
 
@@ -258,12 +255,7 @@ pub struct SessionEvent {
 impl SessionEvent {
     #[new]
     #[pyo3(signature = (sequence, timestamp_ms, event_type, message=None))]
-    fn new(
-        sequence: u64,
-        timestamp_ms: u64,
-        event_type: String,
-        message: Option<&str>,
-    ) -> Self {
+    fn new(sequence: u64, timestamp_ms: u64, event_type: String, message: Option<&str>) -> Self {
         Self {
             sequence,
             timestamp_ms,
@@ -295,10 +287,7 @@ impl SessionEvent {
 
     fn __str__(&self) -> String {
         let msg = self.message.as_deref().unwrap_or("");
-        format!(
-            "[{}] {} {}",
-            self.sequence, self.event_type, msg
-        )
+        format!("[{}] {} {}", self.sequence, self.event_type, msg)
     }
 }
 
@@ -323,11 +312,7 @@ impl SessionEventStream {
 impl SessionEventStream {
     #[new]
     #[pyo3(signature = (session_id, events=None, sequence=0))]
-    fn new(
-        session_id: String,
-        events: Option<Vec<SessionEvent>>,
-        sequence: u64,
-    ) -> Self {
+    fn new(session_id: String, events: Option<Vec<SessionEvent>>, sequence: u64) -> Self {
         Self {
             session_id,
             events: events.unwrap_or_default(),
@@ -420,10 +405,7 @@ impl SessionCapabilities {
         dict.set_item("supports_timeout", self.supports_timeout)?;
         dict.set_item("supports_artifacts", self.supports_artifacts)?;
         dict.set_item("supports_streaming", self.supports_streaming)?;
-        dict.set_item(
-            "max_concurrent_operations",
-            self.max_concurrent_operations,
-        )?;
+        dict.set_item("max_concurrent_operations", self.max_concurrent_operations)?;
         Ok(dict.into())
     }
 

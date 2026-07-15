@@ -18,6 +18,16 @@ use crate::status::{
 };
 use crate::waf::WafDetectionResultPy;
 
+/// Internal state for daemon-backed async engine execution.
+#[cfg(feature = "daemon-client")]
+#[derive(Clone)]
+struct DaemonBackend {
+    client: crate::daemon::DaemonClientPy,
+    session_id: Option<String>,
+    #[allow(dead_code)]
+    socket_path: String,
+}
+
 /// Extract hostname from a URL for scope enforcement.
 fn extract_host_from_url(url: &str) -> PyResult<String> {
     let parsed = url::Url::parse(url)
@@ -111,6 +121,37 @@ fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult 
     }
 }
 
+/// Convert a daemon `DaemonResponsePy` to an `OperationResult`.
+#[cfg(feature = "daemon-client")]
+fn daemon_response_to_operation_result(
+    response: &crate::daemon::DaemonResponsePy,
+    operation: &str,
+) -> OperationResult {
+    if response.ok {
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("daemon_message".to_string(), response.message.clone());
+        metadata.insert("daemon_request_id".to_string(), response.request_id.clone());
+        metadata.insert("policy_decision".to_string(), "allow".to_string());
+        OperationResult {
+            status: ExecutionStatus::Completed(),
+            stats: Some(ExecutionStats::new(0, 0, 0, 0)),
+            artifacts: Vec::new(),
+            error: None,
+            metadata,
+            payload: None,
+            payload_type: None,
+            schema_version: "1.0".to_string(),
+        }
+    } else {
+        let error_msg = response
+            .error_code
+            .as_deref()
+            .map(|code| format!("{}: {}", code, response.message))
+            .unwrap_or_else(|| response.message.clone());
+        operation_err_for(Some(operation), error_msg)
+    }
+}
+
 /// Async engine for running scoped security operations.
 ///
 /// Provides the same operations as Engine but returns Python awaitables.
@@ -122,6 +163,8 @@ fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult 
 #[pyclass]
 pub struct AsyncEngine {
     pub(crate) state: Arc<EngineState>,
+    #[cfg(feature = "daemon-client")]
+    daemon_backend: Option<DaemonBackend>,
 }
 
 #[pymethods]
@@ -142,12 +185,91 @@ impl AsyncEngine {
         Self::new_inner(scope, mode, concurrency, timeout_ms)
     }
 
+    /// Construct an async engine backed by the in-process Rust engine.
+    ///
+    /// This is equivalent to ``AsyncEngine(scope, mode=mode, ...)`` but uses the
+    /// explicit constructor name for clarity in mixed local/daemon codebases.
+    #[staticmethod]
+    #[pyo3(signature = (scope, *, mode="manual", concurrency=100, timeout_ms=5000))]
+    fn local(scope: Scope, mode: &str, concurrency: usize, timeout_ms: u64) -> PyResult<Self> {
+        Self::new_inner(scope, mode, concurrency, timeout_ms)
+    }
+
+    /// Construct an async engine backed by a daemon over a Unix socket.
+    ///
+    /// The engine auto-creates a daemon session on first dispatch. All
+    /// subsequent operations are submitted to the daemon using the same
+    /// request DTOs as the local engine.
+    ///
+    /// Args:
+    ///     socket_path: Path to the daemon Unix socket.
+    ///     session_id: Optional pre-existing session ID. If not provided,
+    ///                 a session is created automatically on first dispatch.
+    ///     mode: Execution mode ("manual" or "automation").
+    ///     concurrency: Max concurrent connections (default: 100).
+    ///     timeout_ms: Connection timeout in milliseconds (default: 5000).
+    ///
+    /// Raises:
+    ///     FeatureUnavailableError: If the daemon-client feature is not enabled.
+    ///     NetworkError: If the connection fails.
+    #[staticmethod]
+    #[pyo3(signature = (socket_path, *, session_id=None, mode="manual", concurrency=100, timeout_ms=5000))]
+    fn daemon(
+        py: Python<'_>,
+        socket_path: &str,
+        session_id: Option<&str>,
+        mode: &str,
+        concurrency: usize,
+        timeout_ms: u64,
+    ) -> PyResult<Self> {
+        #[cfg(feature = "daemon-client")]
+        {
+            let client = crate::daemon::daemon_connect(py, socket_path)?;
+            let scope = Scope {
+                inner: eggsec::config::Scope {
+                    allowed_targets: vec![eggsec::config::ScopeRule {
+                        pattern: "*".to_string(),
+                        cidr: None,
+                        description: Some("daemon wildcard scope".to_string()),
+                    }],
+                    require_explicit_scope: true,
+                    ..Default::default()
+                },
+            };
+            let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
+            Ok(Self {
+                state,
+                daemon_backend: Some(DaemonBackend {
+                    client,
+                    session_id: session_id.map(|s| s.to_string()),
+                    socket_path: socket_path.to_string(),
+                }),
+            })
+        }
+        #[cfg(not(feature = "daemon-client"))]
+        {
+            let _ = (py, socket_path, session_id, mode, concurrency, timeout_ms);
+            Err(crate::error::FeatureUnavailableError::new_err(
+                "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+            ))
+        }
+    }
+
     /// Dispatch a generic operation request to the appropriate engine function.
     ///
     /// Routes through the OperationExecutorRegistry, which checks feature gates
     /// and provides "Did you mean?" suggestions for unknown operations.
     /// Returns a PyFuture that resolves to an OperationResult.
-    fn run(&self, request: OperationRequest) -> PyResult<runtime_async::PyFuture> {
+    ///
+    /// When the engine was constructed via `AsyncEngine.daemon(...)`, the request
+    /// is submitted to the daemon session instead of executing locally.
+    fn run(&self, py: Python<'_>, request: OperationRequest) -> PyResult<runtime_async::PyFuture> {
+        #[cfg(feature = "daemon-client")]
+        {
+            if let Some(daemon) = &self.daemon_backend {
+                return self.run_via_daemon_async(py, &request, daemon);
+            }
+        }
         self.state
             .registry
             .execute_async(&request.operation, &request, self)
@@ -356,7 +478,11 @@ impl AsyncEngine {
         timeout_ms: u64,
     ) -> PyResult<Self> {
         let state = EngineState::from_params(scope, mode, concurrency, timeout_ms)?;
-        Ok(Self { state })
+        Ok(Self {
+            state,
+            #[cfg(feature = "daemon-client")]
+            daemon_backend: None,
+        })
     }
 
     /// Internal constructor from a full EggsecConfig.
@@ -368,7 +494,11 @@ impl AsyncEngine {
         timeout_ms: Option<u64>,
     ) -> PyResult<Self> {
         let state = EngineState::from_config(scope, config, mode, concurrency, timeout_ms)?;
-        Ok(Self { state })
+        Ok(Self {
+            state,
+            #[cfg(feature = "daemon-client")]
+            daemon_backend: None,
+        })
     }
 
     /// Enforce that a target is within scope, raising EnforcementError if denied.
@@ -894,6 +1024,90 @@ impl AsyncEngine {
                 )));
             }
         }
+    }
+
+    /// Dispatch an OperationRequest through the daemon backend (async).
+    ///
+    /// Creates a session on first use if none was provided at construction time.
+    /// Converts the request to a `TaskKind` JSON payload and submits it to the
+    /// daemon, returning a PyFuture that resolves to an `OperationResult`.
+    #[cfg(feature = "daemon-client")]
+    fn run_via_daemon_async(
+        &self,
+        py: Python<'_>,
+        request: &OperationRequest,
+        daemon: &DaemonBackend,
+    ) -> PyResult<runtime_async::PyFuture> {
+        // Ensure we have a session ID (sync step — quick I/O)
+        let session_id = match &daemon.session_id {
+            Some(sid) => sid.clone(),
+            None => {
+                let client = daemon.client.clone();
+                let response: crate::daemon::DaemonResponsePy =
+                    crate::runtime_sync::block_on(py, async move {
+                        let client_arc = client.client.clone();
+                        let mut guard = client_arc.lock().await;
+                        let inner = guard.as_mut().ok_or_else(|| {
+                            crate::error::NetworkError::new_err("daemon client is closed")
+                        })?;
+                        let msg = inner
+                            .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
+                            .await
+                            .map_err(|e| {
+                                crate::error::NetworkError::new_err(format!(
+                                    "daemon create_session failed: {}",
+                                    e
+                                ))
+                            })?;
+                        Ok::<_, PyErr>(crate::daemon::server_message_to_response(msg))
+                    })?;
+                response
+                    .message
+                    .strip_prefix("session_id=")
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| {
+                        crate::error::NetworkError::new_err(format!(
+                            "Unexpected create_session response: {}",
+                            response.message
+                        ))
+                    })?
+            }
+        };
+
+        // Convert request to TaskKind JSON
+        let task_kind_json = crate::engine::operation_request_to_task_kind_json(request)?;
+        let client = daemon.client.clone();
+        let sid = session_id.clone();
+        let op = request.operation.clone();
+
+        runtime_async::spawn_async(async move {
+            let client_arc = client.client.clone();
+            let task_kind: eggsec_runtime::TaskKind = serde_json::from_str(&task_kind_json)
+                .map_err(|e| {
+                    crate::error::ConfigError::new_err(format!("Invalid task_kind JSON: {}", e))
+                })?;
+            let run_request = eggsec_runtime::RunRequest {
+                task_kind,
+                requested_by: None,
+                surface: eggsec_runtime::RuntimeSurface::CliManual,
+                labels: vec![],
+            };
+            let session_id: eggsec_runtime::SessionId = sid.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!("Invalid session ID: {}", sid))
+            })?;
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("daemon client is closed"))?;
+            let msg = inner
+                .submit_task(session_id, run_request)
+                .await
+                .map_err(|e| {
+                    crate::error::NetworkError::new_err(format!("daemon submit_task failed: {}", e))
+                })?;
+            let response = crate::daemon::server_message_to_response(msg);
+            Ok(daemon_response_to_operation_result(&response, &op))
+        })
     }
 
     fn run_port_scan_async(
@@ -1928,9 +2142,9 @@ impl AsyncEngine {
     fn run_apk_async(&self, apk_path: String) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
             let path_ref = std::path::Path::new(&apk_path);
-            let result = eggsec::mobile::analyze_apk(path_ref)
-                .await
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("APK analysis failed: {}", e)))?;
+            let result = eggsec::mobile::analyze_apk(path_ref).await.map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!("APK analysis failed: {}", e))
+            })?;
             Ok(crate::mobile::MobileScanReportPy::from_engine(result))
         })
     }
@@ -1939,9 +2153,9 @@ impl AsyncEngine {
     fn run_ipa_async(&self, ipa_path: String) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
             let path_ref = std::path::Path::new(&ipa_path);
-            let result = eggsec::mobile::analyze_ipa(path_ref)
-                .await
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("IPA analysis failed: {}", e)))?;
+            let result = eggsec::mobile::analyze_ipa(path_ref).await.map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!("IPA analysis failed: {}", e))
+            })?;
             Ok(crate::mobile::MobileScanReportPy::from_engine(result))
         })
     }

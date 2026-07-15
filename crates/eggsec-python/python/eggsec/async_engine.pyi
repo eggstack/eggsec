@@ -47,6 +47,23 @@ class AsyncEngine:
         concurrency: int = 100,
         timeout_ms: int = 5000,
     ) -> None: ...
+    @staticmethod
+    def local(
+        scope: Scope,
+        *,
+        mode: str = "manual",
+        concurrency: int = 100,
+        timeout_ms: int = 5000,
+    ) -> AsyncEngine: ...
+    @staticmethod
+    def daemon(
+        socket_path: str,
+        *,
+        session_id: Optional[str] = None,
+        mode: str = "manual",
+        concurrency: int = 100,
+        timeout_ms: int = 5000,
+    ) -> AsyncEngine: ...
     def run(
         self,
         request: OperationRequest,

@@ -351,10 +351,7 @@ impl ReplayCursor {
     fn __repr__(&self) -> String {
         format!(
             "ReplayCursor(session={}, seq={}, gaps={}, dupes={})",
-            self.session_id,
-            self.last_sequence,
-            self.gap_count,
-            self.duplicate_count
+            self.session_id, self.last_sequence, self.gap_count, self.duplicate_count
         )
     }
 }
@@ -490,10 +487,7 @@ impl CancellationResult {
     fn __repr__(&self) -> String {
         format!(
             "CancellationResult(ack={}, running={}, completed={}, cleanup={})",
-            self.acknowledged,
-            self.task_was_running,
-            self.task_was_completed,
-            self.cleanup_started
+            self.acknowledged, self.task_was_running, self.task_was_completed, self.cleanup_started
         )
     }
 }
@@ -604,11 +598,7 @@ impl EventReplayInfo {
     fn __repr__(&self) -> String {
         format!(
             "EventReplayInfo(session={}, seq={}..{}, count={}, ordered={})",
-            self.session_id,
-            self.from_sequence,
-            self.to_sequence,
-            self.event_count,
-            self.ordered
+            self.session_id, self.from_sequence, self.to_sequence, self.event_count, self.ordered
         )
     }
 }

@@ -976,6 +976,7 @@ SessionCloseMode = _core.SessionCloseMode
 SessionEvent = _core.SessionEvent
 SessionEventStream = _core.SessionEventStream
 SessionCapabilities = _core.SessionCapabilities
+create_session_event = _core.create_session_event
 
 # Release 4: Mobile session lifecycle (WS2-6) (feature-gated: mobile)
 try:
@@ -987,6 +988,17 @@ try:
     MobileSession = _core.MobileSession
     AsyncMobileSession = _core.AsyncMobileSession
     MobileDeviceRegistry = _core.MobileDeviceRegistry
+    # WS4-6: Mobile convergence, instrumentation, evidence
+    StaticAnalysisSummary = _core.StaticAnalysisSummary
+    AnalysisTarget = _core.AnalysisTarget
+    DynamicAnalysisPlan = _core.DynamicAnalysisPlan
+    InstrumentationConfig = _core.InstrumentationConfig
+    InstrumentationScript = _core.InstrumentationScript
+    InstrumentationEvent = _core.InstrumentationEvent
+    InstrumentationResult = _core.InstrumentationResult
+    MobileEvidenceKind = _core.MobileEvidenceKind
+    MobileEvidence = _core.MobileEvidence
+    MobileEvidenceCollection = _core.MobileEvidenceCollection
 except (AttributeError, ImportError):
     pass
 
@@ -1007,6 +1019,10 @@ try:
     BrowserCookieInfo = _core.BrowserCookieInfo
     BrowserSession = _core.BrowserSession
     AsyncBrowserSession = _core.AsyncBrowserSession
+    # WS10: Browser event types
+    BrowserDomEvent = _core.BrowserDomEvent
+    BrowserDownloadEvent = _core.BrowserDownloadEvent
+    BrowserSecurityObservation = _core.BrowserSecurityObservation
 except (AttributeError, ImportError):
     pass
 
@@ -1029,6 +1045,10 @@ SqliteFindingRepository = _core.SqliteFindingRepository
 SqliteAssessmentRepository = _core.SqliteAssessmentRepository
 SqliteMigration = _core.SqliteMigration
 SqliteMigrationResult = _core.SqliteMigrationResult
+
+# Release 4: JSONL repository (WS22) (always available)
+JsonlFindingRepository = _core.JsonlFindingRepository
+JsonlAssessmentRepository = _core.JsonlAssessmentRepository
 
 # Release 4: Content-addressed artifact store (WS23) (always available)
 ContentAddressedArtifactStore = _core.ContentAddressedArtifactStore
@@ -1608,6 +1628,7 @@ __all__ = [
     "SessionEvent",
     "SessionEventStream",
     "SessionCapabilities",
+    "create_session_event",
     # Release 4: Mobile session lifecycle (WS2-6) (feature-gated)
     "MobileDeviceDescriptor",
     "MobileDeviceCapabilities",
@@ -1617,6 +1638,17 @@ __all__ = [
     "MobileSession",
     "AsyncMobileSession",
     "MobileDeviceRegistry",
+    # Release 4: Mobile convergence, instrumentation, evidence (WS4-6) (feature-gated)
+    "StaticAnalysisSummary",
+    "AnalysisTarget",
+    "DynamicAnalysisPlan",
+    "InstrumentationConfig",
+    "InstrumentationScript",
+    "InstrumentationEvent",
+    "InstrumentationResult",
+    "MobileEvidenceKind",
+    "MobileEvidence",
+    "MobileEvidenceCollection",
     # Release 4: Browser session lifecycle (WS7-11) (feature-gated)
     "BrowserCapabilities",
     "BrowserSessionState",
@@ -1633,6 +1665,10 @@ __all__ = [
     "BrowserCookieInfo",
     "BrowserSession",
     "AsyncBrowserSession",
+    # Release 4: Browser event types (WS10) (feature-gated)
+    "BrowserDomEvent",
+    "BrowserDownloadEvent",
+    "BrowserSecurityObservation",
     # Release 4: Daemon parity types (WS12-18)
     "DaemonProtocolVersion",
     "IdempotencyKey",
@@ -1651,6 +1687,9 @@ __all__ = [
     "SqliteAssessmentRepository",
     "SqliteMigration",
     "SqliteMigrationResult",
+    # Release 4: JSONL repository (WS22)
+    "JsonlFindingRepository",
+    "JsonlAssessmentRepository",
     # Release 4: Content-addressed artifact store (WS23)
     "ContentAddressedArtifactStore",
     "DirectoryArtifactStore",

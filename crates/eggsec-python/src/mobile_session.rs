@@ -120,7 +120,10 @@ impl MobileDeviceCapabilities {
         dict.set_item("supports_log_capture", self.supports_log_capture)?;
         dict.set_item("supports_screenshot", self.supports_screenshot)?;
         dict.set_item("supports_network_capture", self.supports_network_capture)?;
-        dict.set_item("supports_filesystem_extract", self.supports_filesystem_extract)?;
+        dict.set_item(
+            "supports_filesystem_extract",
+            self.supports_filesystem_extract,
+        )?;
         dict.set_item(
             "supports_permission_management",
             self.supports_permission_management,
@@ -385,11 +388,7 @@ pub struct MobileSession {
 impl MobileSession {
     #[new]
     #[pyo3(signature = (session_id, device_serial, config))]
-    fn new(
-        session_id: String,
-        device_serial: String,
-        config: MobileSessionConfig,
-    ) -> Self {
+    fn new(session_id: String, device_serial: String, config: MobileSessionConfig) -> Self {
         Self {
             session_id,
             state: MobileSessionState::Created,
@@ -452,9 +451,11 @@ impl MobileSession {
     /// Raises:
     ///     ScanError: If no package_id is configured or the device is not connected.
     fn uninstall_app(&mut self) -> PyResult<()> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         self.state = MobileSessionState::Uninstalling;
         self.state = MobileSessionState::Failed;
         Err(ScanError::new_err(
@@ -467,9 +468,11 @@ impl MobileSession {
     /// Raises:
     ///     ScanError: If no package_id is configured or the device is not connected.
     fn launch_app(&mut self) -> PyResult<()> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         self.state = MobileSessionState::Launching;
         self.state = MobileSessionState::Failed;
         Err(ScanError::new_err(
@@ -482,9 +485,11 @@ impl MobileSession {
     /// Raises:
     ///     ScanError: If no package_id is configured or the device is not connected.
     fn stop_app(&mut self) -> PyResult<()> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         Err(ScanError::new_err(
             "Mobile session stop_app requires a connected device and device runtime support. Use list_mobile_devices() to verify connectivity.",
         ))
@@ -577,11 +582,7 @@ pub struct AsyncMobileSession {
 impl AsyncMobileSession {
     #[new]
     #[pyo3(signature = (session_id, device_serial, config))]
-    fn new(
-        session_id: String,
-        device_serial: String,
-        config: MobileSessionConfig,
-    ) -> Self {
+    fn new(session_id: String, device_serial: String, config: MobileSessionConfig) -> Self {
         Self {
             session_id,
             state: MobileSessionState::Created,
@@ -641,9 +642,11 @@ impl AsyncMobileSession {
 
     /// Uninstall the current application from the device.
     fn async_uninstall_app(&mut self) -> PyResult<PyFuture> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         self.state = MobileSessionState::Uninstalling;
         runtime_async::spawn_async(async {
             Err::<(), PyErr>(ScanError::new_err(
@@ -654,9 +657,11 @@ impl AsyncMobileSession {
 
     /// Launch the configured application on the device.
     fn async_launch_app(&mut self) -> PyResult<PyFuture> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         self.state = MobileSessionState::Launching;
         runtime_async::spawn_async(async {
             Err::<(), PyErr>(ScanError::new_err(
@@ -667,9 +672,11 @@ impl AsyncMobileSession {
 
     /// Stop the currently running application on the device.
     fn async_stop_app(&mut self) -> PyResult<PyFuture> {
-        let _ = self.config.package_id.as_ref().ok_or_else(|| {
-            ScanError::new_err("No package_id configured for session")
-        })?;
+        let _ = self
+            .config
+            .package_id
+            .as_ref()
+            .ok_or_else(|| ScanError::new_err("No package_id configured for session"))?;
         runtime_async::spawn_async(async {
             Err::<(), PyErr>(ScanError::new_err(
                 "Mobile session stop_app requires device runtime support. Use list_mobile_devices() to verify connectivity.",
@@ -790,11 +797,7 @@ impl MobileDeviceRegistry {
                     }
                 }
                 let is_emulator = serial.contains("emulator");
-                let transport = if is_emulator {
-                    "adb_remote"
-                } else {
-                    "usb"
-                };
+                let transport = if is_emulator { "adb_remote" } else { "usb" };
 
                 devices.push(MobileDeviceDescriptor {
                     serial: serial.clone(),
@@ -848,9 +851,6 @@ impl MobileDeviceRegistry {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "MobileDeviceRegistry(device_count={})",
-            self.devices.len()
-        )
+        format!("MobileDeviceRegistry(device_count={})", self.devices.len())
     }
 }

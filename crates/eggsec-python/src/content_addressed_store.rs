@@ -279,11 +279,7 @@ pub struct ContentAddressedArtifactStore {
 
 impl Clone for ContentAddressedArtifactStore {
     fn clone(&self) -> Self {
-        let entries = self
-            .entries
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
+        let entries = self.entries.lock().map(|g| g.clone()).unwrap_or_default();
         Self {
             base_dir: self.base_dir.clone(),
             entries: Mutex::new(entries),
@@ -445,15 +441,17 @@ impl ContentAddressedArtifactStore {
         })?;
         let mut infos: Vec<ArtifactInfo> = entries
             .iter()
-            .map(|(hash, (_, content_type, size, created_at_ms, metadata))| ArtifactInfo {
-                artifact_id: hash.clone(),
-                content_hash: hash.clone(),
-                content_type: content_type.clone(),
-                size_bytes: *size,
-                created_at_ms: *created_at_ms,
-                metadata: metadata.clone(),
-                redacted: false,
-            })
+            .map(
+                |(hash, (_, content_type, size, created_at_ms, metadata))| ArtifactInfo {
+                    artifact_id: hash.clone(),
+                    content_hash: hash.clone(),
+                    content_type: content_type.clone(),
+                    size_bytes: *size,
+                    created_at_ms: *created_at_ms,
+                    metadata: metadata.clone(),
+                    redacted: false,
+                },
+            )
             .collect();
         // Sort by created_at_ms descending for stable ordering
         infos.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
@@ -550,7 +548,10 @@ impl ContentAddressedArtifactStore {
         dict.set_item("count", entries.len())?;
         dict.set_item(
             "total_size_bytes",
-            entries.values().map(|(_, _, size, _, _)| *size).sum::<u64>(),
+            entries
+                .values()
+                .map(|(_, _, size, _, _)| *size)
+                .sum::<u64>(),
         )?;
         Ok(dict.into())
     }
@@ -583,11 +584,7 @@ impl ContentAddressedArtifactStore {
     }
 
     fn __repr__(&self) -> String {
-        let count = self
-            .entries
-            .lock()
-            .map(|g| g.len())
-            .unwrap_or(0);
+        let count = self.entries.lock().map(|g| g.len()).unwrap_or(0);
         format!(
             "ContentAddressedArtifactStore(base_dir={}, artifacts={})",
             self.base_dir, count,
@@ -615,11 +612,7 @@ pub struct DirectoryArtifactStore {
 
 impl Clone for DirectoryArtifactStore {
     fn clone(&self) -> Self {
-        let entries = self
-            .entries
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
+        let entries = self.entries.lock().map(|g| g.clone()).unwrap_or_default();
         Self {
             base_dir: self.base_dir.clone(),
             flat: self.flat,
@@ -757,15 +750,17 @@ impl DirectoryArtifactStore {
         })?;
         let mut infos: Vec<ArtifactInfo> = entries
             .iter()
-            .map(|(name, (_, content_type, size, created_at_ms))| ArtifactInfo {
-                artifact_id: name.clone(),
-                content_hash: String::new(),
-                content_type: content_type.clone(),
-                size_bytes: *size,
-                created_at_ms: *created_at_ms,
-                metadata: None,
-                redacted: false,
-            })
+            .map(
+                |(name, (_, content_type, size, created_at_ms))| ArtifactInfo {
+                    artifact_id: name.clone(),
+                    content_hash: String::new(),
+                    content_type: content_type.clone(),
+                    size_bytes: *size,
+                    created_at_ms: *created_at_ms,
+                    metadata: None,
+                    redacted: false,
+                },
+            )
             .collect();
         infos.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
         let start = offset as usize;
@@ -828,11 +823,7 @@ impl DirectoryArtifactStore {
     }
 
     fn __repr__(&self) -> String {
-        let count = self
-            .entries
-            .lock()
-            .map(|g| g.len())
-            .unwrap_or(0);
+        let count = self.entries.lock().map(|g| g.len()).unwrap_or(0);
         format!(
             "DirectoryArtifactStore(base_dir={}, flat={}, artifacts={})",
             self.base_dir, self.flat, count,

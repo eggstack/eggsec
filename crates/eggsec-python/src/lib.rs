@@ -8,6 +8,8 @@ mod auth_assess;
 mod authorization;
 mod backpressure;
 mod baseline;
+#[cfg(feature = "headless-browser")]
+mod browser_events;
 mod buffer_support;
 mod callbacks;
 mod cancellation;
@@ -48,10 +50,13 @@ mod graphql;
 mod handles;
 mod http_client;
 mod iter_support;
+mod jsonl_repository;
 mod lazy_load;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
+#[cfg(feature = "mobile")]
+mod mobile_convergence;
 #[cfg(feature = "mobile")]
 mod mobile_session;
 mod network;
@@ -82,9 +87,9 @@ mod scope_eval;
 mod session_contract;
 mod sqlite_repository;
 mod status;
+mod streaming_reporter;
 #[cfg(feature = "stress-testing")]
 mod stress;
-mod streaming_reporter;
 mod version;
 mod waf;
 mod waf_validation;
@@ -372,6 +377,17 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<mobile_session::MobileSession>()?;
         m.add_class::<mobile_session::AsyncMobileSession>()?;
         m.add_class::<mobile_session::MobileDeviceRegistry>()?;
+        // WS4-6: Mobile convergence, instrumentation, evidence
+        m.add_class::<mobile_convergence::StaticAnalysisSummary>()?;
+        m.add_class::<mobile_convergence::AnalysisTarget>()?;
+        m.add_class::<mobile_convergence::DynamicAnalysisPlan>()?;
+        m.add_class::<mobile_convergence::InstrumentationConfig>()?;
+        m.add_class::<mobile_convergence::InstrumentationScript>()?;
+        m.add_class::<mobile_convergence::InstrumentationEvent>()?;
+        m.add_class::<mobile_convergence::InstrumentationResult>()?;
+        m.add_class::<mobile_convergence::MobileEvidenceKind>()?;
+        m.add_class::<mobile_convergence::MobileEvidence>()?;
+        m.add_class::<mobile_convergence::MobileEvidenceCollection>()?;
     }
     // WS7-11: Browser session lifecycle
     #[cfg(feature = "headless-browser")]
@@ -391,6 +407,10 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<browser_session::BrowserCookieInfo>()?;
         m.add_class::<browser_session::BrowserSession>()?;
         m.add_class::<browser_session::AsyncBrowserSession>()?;
+        // WS10: Browser event types
+        m.add_class::<browser_events::BrowserDomEvent>()?;
+        m.add_class::<browser_events::BrowserDownloadEvent>()?;
+        m.add_class::<browser_events::BrowserSecurityObservation>()?;
     }
     // Phase F Track 6: Database pentesting
     #[cfg(feature = "db-pentest")]
@@ -865,6 +885,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<session_contract::SessionEvent>()?;
     m.add_class::<session_contract::SessionEventStream>()?;
     m.add_class::<session_contract::SessionCapabilities>()?;
+    m.add_function(wrap_pyfunction!(session_contract::create_session_event, m)?)?;
     // Release 4: Daemon parity types (WS12-18)
     m.add_class::<daemon_parity::DaemonProtocolVersion>()?;
     m.add_class::<daemon_parity::IdempotencyKey>()?;
@@ -883,6 +904,9 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sqlite_repository::SqliteAssessmentRepository>()?;
     m.add_class::<sqlite_repository::SqliteMigration>()?;
     m.add_class::<sqlite_repository::MigrationResult>()?;
+    // Release 4: JSONL repository (WS22)
+    m.add_class::<jsonl_repository::JsonlFindingRepository>()?;
+    m.add_class::<jsonl_repository::JsonlAssessmentRepository>()?;
     // Release 4: Content-addressed artifact store (WS23)
     m.add_class::<content_addressed_store::ContentAddressedArtifactStore>()?;
     m.add_class::<content_addressed_store::DirectoryArtifactStore>()?;
@@ -1651,6 +1675,7 @@ fn api_surface() -> PyObject {
         add_entry!("SessionEvent", "provisional");
         add_entry!("SessionEventStream", "provisional");
         add_entry!("SessionCapabilities", "provisional");
+        add_entry!("create_session_event", "provisional");
         // Release 4: Mobile session lifecycle (WS2-6)
         add_entry!("MobileDeviceDescriptor", "provisional");
         add_entry!("MobileDeviceCapabilities", "provisional");
@@ -1676,6 +1701,21 @@ fn api_surface() -> PyObject {
         add_entry!("BrowserCookieInfo", "provisional");
         add_entry!("BrowserSession", "provisional");
         add_entry!("AsyncBrowserSession", "provisional");
+        // Release 4: Browser event types (WS10)
+        add_entry!("BrowserDomEvent", "provisional");
+        add_entry!("BrowserDownloadEvent", "provisional");
+        add_entry!("BrowserSecurityObservation", "provisional");
+        // Release 4: Mobile convergence, instrumentation, evidence (WS4-6)
+        add_entry!("StaticAnalysisSummary", "provisional");
+        add_entry!("AnalysisTarget", "provisional");
+        add_entry!("DynamicAnalysisPlan", "provisional");
+        add_entry!("InstrumentationConfig", "provisional");
+        add_entry!("InstrumentationScript", "provisional");
+        add_entry!("InstrumentationEvent", "provisional");
+        add_entry!("InstrumentationResult", "provisional");
+        add_entry!("MobileEvidenceKind", "provisional");
+        add_entry!("MobileEvidence", "provisional");
+        add_entry!("MobileEvidenceCollection", "provisional");
         // Release 4: Daemon parity (WS12-18)
         add_entry!("DaemonProtocolVersion", "provisional");
         add_entry!("IdempotencyKey", "provisional");
@@ -1692,6 +1732,9 @@ fn api_surface() -> PyObject {
         add_entry!("SqliteFindingRepository", "provisional");
         add_entry!("SqliteAssessmentRepository", "provisional");
         add_entry!("SqliteMigration", "provisional");
+        // Release 4: JSONL repository (WS22)
+        add_entry!("JsonlFindingRepository", "provisional");
+        add_entry!("JsonlAssessmentRepository", "provisional");
         // Release 4: Content-addressed artifact store (WS23)
         add_entry!("ContentAddressedArtifactStore", "provisional");
         add_entry!("DirectoryArtifactStore", "provisional");

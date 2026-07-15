@@ -50,7 +50,10 @@ impl BrowserCapabilities {
         dict.set_item("version", &self.version)?;
         dict.set_item("supports_javascript", self.supports_javascript)?;
         dict.set_item("supports_dom", self.supports_dom)?;
-        dict.set_item("supports_network_intercept", self.supports_network_intercept)?;
+        dict.set_item(
+            "supports_network_intercept",
+            self.supports_network_intercept,
+        )?;
         dict.set_item("supports_console_capture", self.supports_console_capture)?;
         dict.set_item("supports_screenshot", self.supports_screenshot)?;
         dict.set_item("supports_pdf_export", self.supports_pdf_export)?;
@@ -965,10 +968,7 @@ impl BrowserSession {
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
 
         inner.stats.screenshots_taken += 1;
-        let artifact_id = format!(
-            "screenshot-{}",
-            inner.stats.screenshots_taken
-        );
+        let artifact_id = format!("screenshot-{}", inner.stats.screenshots_taken);
 
         Ok(ArtifactReferencePy {
             artifact_id,
@@ -1217,7 +1217,11 @@ impl AsyncBrowserSession {
     }
 
     /// Wait for a selector asynchronously.
-    fn async_wait_for_selector(&self, selector: &str, timeout_ms: Option<u64>) -> PyResult<PyFuture> {
+    fn async_wait_for_selector(
+        &self,
+        selector: &str,
+        timeout_ms: Option<u64>,
+    ) -> PyResult<PyFuture> {
         let _ = timeout_ms;
         let selector_owned = selector.to_string();
         runtime_async::spawn_async(async move {

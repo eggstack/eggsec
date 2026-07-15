@@ -99,7 +99,9 @@ impl DaemonResponsePy {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "daemon-client")]
-fn server_message_to_response(msg: eggsec_daemon::protocol::ServerMessage) -> DaemonResponsePy {
+pub(crate) fn server_message_to_response(
+    msg: eggsec_daemon::protocol::ServerMessage,
+) -> DaemonResponsePy {
     use eggsec_daemon::protocol::ServerMessage;
     match msg {
         ServerMessage::Ok { request_id } => DaemonResponsePy {
@@ -239,7 +241,7 @@ fn server_message_to_response(msg: eggsec_daemon::protocol::ServerMessage) -> Da
 pub struct DaemonClientPy {
     socket_path: String,
     #[cfg(feature = "daemon-client")]
-    client: Arc<Mutex<Option<eggsec_daemon::client::DaemonClient>>>,
+    pub(crate) client: Arc<Mutex<Option<eggsec_daemon::client::DaemonClient>>>,
 }
 
 #[pymethods]

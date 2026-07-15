@@ -1,14 +1,14 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use serde::{Deserialize, Serialize};
 
-/// Current schema version for the SQLite-backed repositories.
-pub const SQLITE_REPOSITORY_SCHEMA_VERSION: u32 = 1;
+const JSONL_REPOSITORY_SCHEMA_VERSION: u32 = 1;
 
-/// Epoch milliseconds helper.
 fn current_epoch_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -17,162 +17,95 @@ fn current_epoch_ms() -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// SqliteMigration
+// JsonlFindingRepository
 // ---------------------------------------------------------------------------
 
-/// A single applied schema migration.
-#[pyclass(frozen, name = "SqliteMigration")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SqliteMigration {
-    #[pyo3(get)]
-    pub version: u32,
-    #[pyo3(get)]
-    pub description: String,
-    #[pyo3(get)]
-    pub applied_at_ms: u64,
-}
-
-#[pymethods]
-impl SqliteMigration {
-    #[new]
-    fn py_new(version: u32, description: String, applied_at_ms: u64) -> Self {
-        Self {
-            version,
-            description,
-            applied_at_ms,
-        }
-    }
-
-    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        dict.set_item("version", self.version)?;
-        dict.set_item("description", &self.description)?;
-        dict.set_item("applied_at_ms", self.applied_at_ms)?;
-        Ok(dict.into())
-    }
-
-    fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "SqliteMigration(version={}, description={})",
-            self.version, self.description
-        )
-    }
-
-    fn __str__(&self) -> String {
-        self.__repr__()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// MigrationResult
-// ---------------------------------------------------------------------------
-
-/// Result of running database migrations.
-#[pyclass(frozen, name = "SqliteMigrationResult")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MigrationResult {
-    #[pyo3(get)]
-    pub applied: bool,
-    #[pyo3(get)]
-    pub from_version: u32,
-    #[pyo3(get)]
-    pub to_version: u32,
-    #[pyo3(get)]
-    pub migrations_applied: Vec<SqliteMigration>,
-}
-
-#[pymethods]
-impl MigrationResult {
-    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        dict.set_item("applied", self.applied)?;
-        dict.set_item("from_version", self.from_version)?;
-        dict.set_item("to_version", self.to_version)?;
-        let list = pyo3::types::PyList::empty_bound(py);
-        for m in &self.migrations_applied {
-            list.append(m.to_dict(py)?)?;
-        }
-        dict.set_item("migrations_applied", list)?;
-        Ok(dict.into())
-    }
-
-    fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "MigrationResult(applied={}, from_version={}, to_version={}, migrations={})",
-            self.applied,
-            self.from_version,
-            self.to_version,
-            self.migrations_applied.len()
-        )
-    }
-
-    fn __str__(&self) -> String {
-        self.__repr__()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// SqliteFindingRepository
-// ---------------------------------------------------------------------------
-
-/// SQLite-backed finding repository with HashMap simulation.
-///
-/// Provides a persistence-oriented API for findings with deduplication,
-/// filtering, and pagination. The backend is an in-memory HashMap that
-/// simulates what a real SQLite store would provide.
-#[pyclass(name = "SqliteFindingRepository")]
-pub struct SqliteFindingRepository {
+#[pyclass(name = "JsonlFindingRepository")]
+pub struct JsonlFindingRepository {
     findings: Arc<Mutex<HashMap<String, String>>>,
     dedup_index: Arc<Mutex<HashMap<String, String>>>,
     next_id: Arc<Mutex<u64>>,
-    db_path: String,
+    path: String,
     initialized: bool,
 }
 
-impl Clone for SqliteFindingRepository {
+impl Clone for JsonlFindingRepository {
     fn clone(&self) -> Self {
         Self {
             findings: Arc::clone(&self.findings),
             dedup_index: Arc::clone(&self.dedup_index),
             next_id: Arc::clone(&self.next_id),
-            db_path: self.db_path.clone(),
+            path: self.path.clone(),
             initialized: self.initialized,
         }
     }
 }
 
 #[pymethods]
-impl SqliteFindingRepository {
-    /// Create a new finding repository backed by the given database path.
-    /// The actual SQLite file is not opened until `initialize()` is called.
+impl JsonlFindingRepository {
     #[new]
-    fn new(db_path: String) -> Self {
+    fn new(path: String) -> Self {
         Self {
             findings: Arc::new(Mutex::new(HashMap::new())),
             dedup_index: Arc::new(Mutex::new(HashMap::new())),
             next_id: Arc::new(Mutex::new(1)),
-            db_path,
+            path,
             initialized: false,
         }
     }
 
-    /// Initialize the repository, creating tables if they do not exist.
-    /// For the in-memory simulation this sets an initialized flag.
     fn initialize(&mut self) -> PyResult<()> {
+        let p = Path::new(&self.path);
+        if p.exists() {
+            let file =
+                File::open(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let reader = BufReader::new(file);
+            let mut findings = self
+                .findings
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let mut dedup = self
+                .dedup_index
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let mut max_id: u64 = 0;
+            for line_result in reader.lines() {
+                let line =
+                    line_result.map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    if let Some(id) = val.get("id").and_then(|v| v.as_str()) {
+                        findings.insert(id.to_string(), trimmed.to_string());
+                        if let Some(dk) = val.get("dedup_key").and_then(|v| v.as_str()) {
+                            dedup.insert(dk.to_string(), id.to_string());
+                        }
+                        if id.starts_with("find-") {
+                            if let Ok(n) = id[5..].parse::<u64>() {
+                                if n >= max_id {
+                                    max_id = n + 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mut next = self
+                .next_id
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            if max_id > *next {
+                *next = max_id;
+            }
+        } else {
+            File::create(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
         self.initialized = true;
         Ok(())
     }
 
-    /// Insert a finding from its JSON representation.
-    /// Returns the generated finding ID.
     fn insert_finding(&self, finding_json: &str) -> PyResult<String> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -183,7 +116,6 @@ impl SqliteFindingRepository {
         let parsed: serde_json::Value = serde_json::from_str(finding_json)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
-        // Use provided ID or generate one.
         let id = if let Some(id_val) = parsed.get("id").and_then(|v| v.as_str()) {
             id_val.to_string()
         } else {
@@ -196,7 +128,6 @@ impl SqliteFindingRepository {
             id
         };
 
-        // Check dedup index.
         if let Some(dedup_key) = parsed.get("dedup_key").and_then(|v| v.as_str()) {
             let dedup = self
                 .dedup_index
@@ -216,7 +147,6 @@ impl SqliteFindingRepository {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         findings.insert(id.clone(), finding_json.to_string());
 
-        // Register in dedup index if present.
         if let Some(dedup_key) = parsed.get("dedup_key").and_then(|v| v.as_str()) {
             let mut dedup = self
                 .dedup_index
@@ -228,7 +158,6 @@ impl SqliteFindingRepository {
         Ok(id)
     }
 
-    /// Get a finding by ID. Returns the JSON string or None.
     fn get_finding(&self, finding_id: &str) -> PyResult<Option<String>> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -242,7 +171,6 @@ impl SqliteFindingRepository {
         Ok(findings.get(finding_id).cloned())
     }
 
-    /// Update an existing finding. Returns true if the finding was found and updated.
     fn update_finding(&self, finding_id: &str, finding_json: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -250,7 +178,6 @@ impl SqliteFindingRepository {
             ));
         }
 
-        // Validate JSON.
         let _parsed: serde_json::Value = serde_json::from_str(finding_json)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
@@ -267,7 +194,6 @@ impl SqliteFindingRepository {
         }
     }
 
-    /// Delete a finding by ID. Returns true if found and removed.
     fn delete_finding(&self, finding_id: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -281,8 +207,6 @@ impl SqliteFindingRepository {
         Ok(findings.remove(finding_id).is_some())
     }
 
-    /// Query findings with optional filters and pagination.
-    /// Returns a vector of JSON strings.
     #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (assessment_id=None, severity=None, state=None, finding_type=None, limit=100, offset=0))]
     fn query_findings(
@@ -337,7 +261,6 @@ impl SqliteFindingRepository {
             .cloned()
             .collect();
 
-        // Apply pagination.
         let start = offset as usize;
         let end = start + limit as usize;
         if start >= results.len() {
@@ -349,7 +272,6 @@ impl SqliteFindingRepository {
         Ok(results)
     }
 
-    /// Count findings with optional filters.
     #[pyo3(signature = (assessment_id=None, severity=None))]
     fn count_findings(&self, assessment_id: Option<&str>, severity: Option<&str>) -> PyResult<u64> {
         if !self.initialized {
@@ -387,8 +309,6 @@ impl SqliteFindingRepository {
         Ok(count)
     }
 
-    /// Check for a duplicate finding by dedup_key.
-    /// Returns the existing finding ID if a duplicate exists, None otherwise.
     fn deduplicate(&self, dedup_key: &str) -> PyResult<Option<String>> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -402,17 +322,48 @@ impl SqliteFindingRepository {
         Ok(dedup.get(dedup_key).cloned())
     }
 
-    /// Close the repository and release resources.
+    fn flush(&self) -> PyResult<()> {
+        if !self.initialized {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Repository not initialized. Call initialize() first.",
+            ));
+        }
+        let findings = self
+            .findings
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        let dir = Path::new(&self.path)
+            .parent()
+            .unwrap_or_else(|| Path::new("."));
+        let tmp_path = dir.join(format!(".jsonl_finding_tmp_{}", current_epoch_ms()));
+        let final_path = Path::new(&self.path);
+
+        {
+            let mut tmp_file = File::create(&tmp_path)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            for json in findings.values() {
+                writeln!(tmp_file, "{}", json)
+                    .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            }
+            tmp_file
+                .sync_all()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+
+        std::fs::rename(&tmp_path, final_path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
     fn close(&mut self) {
         self.initialized = false;
     }
 
-    /// Context manager __enter__.
     fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// Context manager __exit__ — closes the repository.
     #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
     fn __exit__(
         &self,
@@ -420,9 +371,6 @@ impl SqliteFindingRepository {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        // Intentionally does not call self.close() since __exit__ takes &self
-        // and close takes &mut self. The flag is left as-is; explicit close()
-        // is recommended.
         false
     }
 
@@ -441,8 +389,9 @@ impl SqliteFindingRepository {
         }
         dict.set_item("findings", list)?;
         dict.set_item("count", findings.len())?;
-        dict.set_item("db_path", &self.db_path)?;
+        dict.set_item("path", &self.path)?;
         dict.set_item("initialized", self.initialized)?;
+        dict.set_item("schema_version", JSONL_REPOSITORY_SCHEMA_VERSION)?;
         Ok(dict.into())
     }
 
@@ -458,8 +407,8 @@ impl SqliteFindingRepository {
     fn __repr__(&self) -> String {
         let count = self.findings.lock().map(|f| f.len()).unwrap_or(0);
         format!(
-            "SqliteFindingRepository(db_path={}, count={}, initialized={})",
-            self.db_path, count, self.initialized
+            "JsonlFindingRepository(path={}, count={}, initialized={})",
+            self.path, count, self.initialized
         )
     }
 
@@ -469,55 +418,100 @@ impl SqliteFindingRepository {
 }
 
 // ---------------------------------------------------------------------------
-// SqliteAssessmentRepository
+// JsonlAssessmentRepository
 // ---------------------------------------------------------------------------
 
-/// SQLite-backed assessment repository with HashMap simulation.
-///
-/// Provides a persistence-oriented API for assessments with finding/artifact
-/// attachment, state management, and pagination.
-#[pyclass(name = "SqliteAssessmentRepository")]
-pub struct SqliteAssessmentRepository {
+#[pyclass(name = "JsonlAssessmentRepository")]
+pub struct JsonlAssessmentRepository {
     assessments: Arc<Mutex<HashMap<String, String>>>,
     assessment_findings: Arc<Mutex<HashMap<String, Vec<String>>>>,
     next_id: Arc<Mutex<u64>>,
-    db_path: String,
+    path: String,
     initialized: bool,
 }
 
-impl Clone for SqliteAssessmentRepository {
+impl Clone for JsonlAssessmentRepository {
     fn clone(&self) -> Self {
         Self {
             assessments: Arc::clone(&self.assessments),
             assessment_findings: Arc::clone(&self.assessment_findings),
             next_id: Arc::clone(&self.next_id),
-            db_path: self.db_path.clone(),
+            path: self.path.clone(),
             initialized: self.initialized,
         }
     }
 }
 
 #[pymethods]
-impl SqliteAssessmentRepository {
-    /// Create a new assessment repository backed by the given database path.
+impl JsonlAssessmentRepository {
     #[new]
-    fn new(db_path: String) -> Self {
+    fn new(path: String) -> Self {
         Self {
             assessments: Arc::new(Mutex::new(HashMap::new())),
             assessment_findings: Arc::new(Mutex::new(HashMap::new())),
             next_id: Arc::new(Mutex::new(1)),
-            db_path,
+            path,
             initialized: false,
         }
     }
 
-    /// Initialize the repository, creating tables if they do not exist.
     fn initialize(&mut self) -> PyResult<()> {
+        let p = Path::new(&self.path);
+        if p.exists() {
+            let file =
+                File::open(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let reader = BufReader::new(file);
+            let mut assessments = self
+                .assessments
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let mut links = self
+                .assessment_findings
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let mut max_id: u64 = 0;
+            for line_result in reader.lines() {
+                let line =
+                    line_result.map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    if let Some(id) = val.get("id").and_then(|v| v.as_str()) {
+                        if let Some(fids) = val.get("finding_ids").and_then(|v| v.as_array()) {
+                            links.insert(
+                                id.to_string(),
+                                fids.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect(),
+                            );
+                        }
+                        assessments.insert(id.to_string(), trimmed.to_string());
+                        if id.starts_with("assess-") {
+                            if let Ok(n) = id[7..].parse::<u64>() {
+                                if n >= max_id {
+                                    max_id = n + 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mut next = self
+                .next_id
+                .lock()
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            if max_id > *next {
+                *next = max_id;
+            }
+        } else {
+            File::create(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
         self.initialized = true;
         Ok(())
     }
 
-    /// Create a new assessment and return its generated ID.
     fn create_assessment(
         &self,
         name: &str,
@@ -557,7 +551,6 @@ impl SqliteAssessmentRepository {
         Ok(id)
     }
 
-    /// Get an assessment by ID. Returns the JSON string or None.
     fn get_assessment(&self, assessment_id: &str) -> PyResult<Option<String>> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -571,7 +564,6 @@ impl SqliteAssessmentRepository {
         Ok(assessments.get(assessment_id).cloned())
     }
 
-    /// Update the state of an assessment. Returns true if found and updated.
     fn update_assessment_state(&self, assessment_id: &str, state: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -596,7 +588,6 @@ impl SqliteAssessmentRepository {
         }
     }
 
-    /// Attach a finding to an assessment. Returns true if found and attached.
     fn attach_finding(&self, assessment_id: &str, finding_id: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -604,7 +595,6 @@ impl SqliteAssessmentRepository {
             ));
         }
 
-        // Verify assessment exists.
         {
             let assessments = self
                 .assessments
@@ -626,7 +616,6 @@ impl SqliteAssessmentRepository {
             finding_ids.push(finding_id.to_string());
         }
 
-        // Update the assessment JSON to reflect the attached finding.
         let mut assessments = self
             .assessments
             .lock()
@@ -646,7 +635,6 @@ impl SqliteAssessmentRepository {
         Ok(true)
     }
 
-    /// Attach an artifact (as JSON) to an assessment. Returns true if found and attached.
     fn attach_artifact(&self, assessment_id: &str, artifact_json: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -654,7 +642,6 @@ impl SqliteAssessmentRepository {
             ));
         }
 
-        // Validate artifact JSON.
         let _parsed: serde_json::Value = serde_json::from_str(artifact_json)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
@@ -679,7 +666,6 @@ impl SqliteAssessmentRepository {
         }
     }
 
-    /// List assessments with pagination. Returns a vector of JSON strings.
     #[pyo3(signature = (limit=100, offset=0))]
     fn list_assessments(&self, limit: u64, offset: u64) -> PyResult<Vec<String>> {
         if !self.initialized {
@@ -695,7 +681,6 @@ impl SqliteAssessmentRepository {
 
         let mut results: Vec<String> = assessments.values().cloned().collect();
 
-        // Apply pagination.
         let start = offset as usize;
         let end = start + limit as usize;
         if start >= results.len() {
@@ -707,7 +692,6 @@ impl SqliteAssessmentRepository {
         Ok(results)
     }
 
-    /// Delete an assessment and its finding links. Returns true if found and removed.
     fn delete_assessment(&self, assessment_id: &str) -> PyResult<bool> {
         if !self.initialized {
             return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -732,17 +716,48 @@ impl SqliteAssessmentRepository {
         Ok(removed)
     }
 
-    /// Close the repository and release resources.
+    fn flush(&self) -> PyResult<()> {
+        if !self.initialized {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Repository not initialized. Call initialize() first.",
+            ));
+        }
+        let assessments = self
+            .assessments
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        let dir = Path::new(&self.path)
+            .parent()
+            .unwrap_or_else(|| Path::new("."));
+        let tmp_path = dir.join(format!(".jsonl_assessment_tmp_{}", current_epoch_ms()));
+        let final_path = Path::new(&self.path);
+
+        {
+            let mut tmp_file = File::create(&tmp_path)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            for json in assessments.values() {
+                writeln!(tmp_file, "{}", json)
+                    .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            }
+            tmp_file
+                .sync_all()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+
+        std::fs::rename(&tmp_path, final_path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
     fn close(&mut self) {
         self.initialized = false;
     }
 
-    /// Context manager __enter__.
     fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// Context manager __exit__ — closes the repository.
     #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
     fn __exit__(
         &self,
@@ -768,8 +783,9 @@ impl SqliteAssessmentRepository {
         }
         dict.set_item("assessments", list)?;
         dict.set_item("count", assessments.len())?;
-        dict.set_item("db_path", &self.db_path)?;
+        dict.set_item("path", &self.path)?;
         dict.set_item("initialized", self.initialized)?;
+        dict.set_item("schema_version", JSONL_REPOSITORY_SCHEMA_VERSION)?;
         Ok(dict.into())
     }
 
@@ -785,8 +801,8 @@ impl SqliteAssessmentRepository {
     fn __repr__(&self) -> String {
         let count = self.assessments.lock().map(|a| a.len()).unwrap_or(0);
         format!(
-            "SqliteAssessmentRepository(db_path={}, count={}, initialized={})",
-            self.db_path, count, self.initialized
+            "JsonlAssessmentRepository(path={}, count={}, initialized={})",
+            self.path, count, self.initialized
         )
     }
 
@@ -798,42 +814,20 @@ impl SqliteAssessmentRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
-    #[test]
-    fn test_migration_roundtrip() {
-        let m = SqliteMigration {
-            version: 1,
-            description: "Initial schema".to_string(),
-            applied_at_ms: 1234567890,
-        };
-        let json = m.to_json();
-        let m2: SqliteMigration = serde_json::from_str(&json).unwrap();
-        assert_eq!(m2.version, 1);
-        assert_eq!(m2.description, "Initial schema");
+    fn tmp_path(name: &str) -> String {
+        let dir = std::env::temp_dir().join("eggsec_jsonl_test");
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join(format!("{}.jsonl", name));
+        let _ = fs::remove_file(&path);
+        path.to_string_lossy().to_string()
     }
 
     #[test]
-    fn test_migration_result_roundtrip() {
-        let mr = MigrationResult {
-            applied: true,
-            from_version: 0,
-            to_version: 1,
-            migrations_applied: vec![SqliteMigration {
-                version: 1,
-                description: "Create tables".to_string(),
-                applied_at_ms: 1000,
-            }],
-        };
-        let json = mr.to_json();
-        let mr2: MigrationResult = serde_json::from_str(&json).unwrap();
-        assert!(mr2.applied);
-        assert_eq!(mr2.migrations_applied.len(), 1);
-    }
-
-    #[test]
-    fn test_finding_repository_insert_and_get() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_insert_and_get() {
+        let path = tmp_path("insert_get");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
         let finding = r#"{"id":"f1","title":"Test finding","severity":"high"}"#;
@@ -842,28 +836,33 @@ mod tests {
 
         let got = repo.get_finding("f1").unwrap().unwrap();
         assert!(got.contains("Test finding"));
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_generated_id() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_generated_id() {
+        let path = tmp_path("gen_id");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
-        let finding = r#"{"title":"No ID","severity":"low"}"#;
-        let id = repo.insert_finding(finding).unwrap();
+        let id = repo
+            .insert_finding(r#"{"title":"No ID","severity":"low"}"#)
+            .unwrap();
         assert_eq!(id, "find-1");
 
         let id2 = repo
             .insert_finding(r#"{"title":"Second","severity":"medium"}"#)
             .unwrap();
         assert_eq!(id2, "find-2");
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_query_filters() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_query_filters() {
+        let path = tmp_path("query_filters");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
         repo.insert_finding(r#"{"id":"f1","severity":"high","state":"open"}"#)
@@ -897,12 +896,14 @@ mod tests {
 
         let count = repo.count_findings(None, Some("high")).unwrap();
         assert_eq!(count, 2);
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_pagination() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_pagination() {
+        let path = tmp_path("pagination");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
         for i in 0..10 {
@@ -921,12 +922,14 @@ mod tests {
 
         let page_past = repo.query_findings(None, None, None, None, 3, 10).unwrap();
         assert!(page_past.is_empty());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_update_and_delete() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_update_and_delete() {
+        let path = tmp_path("update_delete");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
         repo.insert_finding(r#"{"id":"f1","title":"Original"}"#)
@@ -943,12 +946,14 @@ mod tests {
         assert!(repo.delete_finding("f1").unwrap());
         assert!(!repo.delete_finding("f1").unwrap());
         assert!(repo.get_finding("f1").unwrap().is_none());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_deduplication() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_deduplication() {
+        let path = tmp_path("dedup");
+        let mut repo = JsonlFindingRepository::new(path.clone());
         repo.initialize().unwrap();
 
         repo.insert_finding(r#"{"id":"f1","dedup_key":"dk1"}"#)
@@ -959,19 +964,64 @@ mod tests {
 
         let no_dup = repo.deduplicate("dk2").unwrap();
         assert!(no_dup.is_none());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_finding_repository_not_initialized() {
-        let repo = SqliteFindingRepository::new(":memory:".to_string());
+    fn test_jsonl_finding_not_initialized() {
+        let path = tmp_path("not_init");
+        let repo = JsonlFindingRepository::new(path.clone());
         let result = repo.insert_finding(r#"{"id":"f1"}"#);
         assert!(result.is_err());
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_create_and_get() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_finding_flush_and_reload() {
+        let path = tmp_path("flush_reload");
+        {
+            let mut repo = JsonlFindingRepository::new(path.clone());
+            repo.initialize().unwrap();
+            repo.insert_finding(r#"{"id":"f1","title":"Persisted"}"#)
+                .unwrap();
+            repo.flush().unwrap();
+        }
+
+        let mut repo2 = JsonlFindingRepository::new(path.clone());
+        repo2.initialize().unwrap();
+        assert_eq!(repo2.findings.lock().unwrap().len(), 1);
+        let got = repo2.get_finding("f1").unwrap().unwrap();
+        assert!(got.contains("Persisted"));
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_finding_delete_flush() {
+        let path = tmp_path("delete_flush");
+        {
+            let mut repo = JsonlFindingRepository::new(path.clone());
+            repo.initialize().unwrap();
+            repo.insert_finding(r#"{"id":"f1"}"#).unwrap();
+            repo.insert_finding(r#"{"id":"f2"}"#).unwrap();
+            repo.delete_finding("f1").unwrap();
+            repo.flush().unwrap();
+        }
+
+        let mut repo2 = JsonlFindingRepository::new(path.clone());
+        repo2.initialize().unwrap();
+        assert_eq!(repo2.findings.lock().unwrap().len(), 1);
+        assert!(repo2.get_finding("f1").unwrap().is_none());
+        assert!(repo2.get_finding("f2").unwrap().is_some());
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_assessment_create_and_get() {
+        let path = tmp_path("assess_create");
+        let mut repo = JsonlAssessmentRepository::new(path.clone());
         repo.initialize().unwrap();
 
         let id = repo
@@ -982,12 +1032,14 @@ mod tests {
         let got = repo.get_assessment(&id).unwrap().unwrap();
         assert!(got.contains("Test"));
         assert!(got.contains("10.0.0.1"));
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_state_update() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_assessment_state_update() {
+        let path = tmp_path("assess_state");
+        let mut repo = JsonlAssessmentRepository::new(path.clone());
         repo.initialize().unwrap();
 
         let id = repo
@@ -1001,12 +1053,14 @@ mod tests {
         assert!(!repo
             .update_assessment_state("nonexistent", "running")
             .unwrap());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_attach_finding() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_assessment_attach_finding() {
+        let path = tmp_path("assess_attach");
+        let mut repo = JsonlAssessmentRepository::new(path.clone());
         repo.initialize().unwrap();
 
         let id = repo
@@ -1014,16 +1068,17 @@ mod tests {
             .unwrap();
         assert!(repo.attach_finding(&id, "find-1").unwrap());
         assert!(repo.attach_finding(&id, "find-2").unwrap());
-        // Duplicate attachment is idempotent.
         assert!(repo.attach_finding(&id, "find-1").unwrap());
 
         assert!(!repo.attach_finding("nonexistent", "find-1").unwrap());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_attach_artifact() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_assessment_attach_artifact() {
+        let path = tmp_path("assess_artifact");
+        let mut repo = JsonlAssessmentRepository::new(path.clone());
         repo.initialize().unwrap();
 
         let id = repo
@@ -1036,12 +1091,14 @@ mod tests {
         assert!(got.contains("pcap"));
 
         assert!(!repo.attach_artifact("nonexistent", artifact).unwrap());
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_list_and_delete() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
-        let mut repo = repo;
+    fn test_jsonl_assessment_list_and_delete() {
+        let path = tmp_path("assess_list");
+        let mut repo = JsonlAssessmentRepository::new(path.clone());
         repo.initialize().unwrap();
 
         for i in 0..5 {
@@ -1060,12 +1117,36 @@ mod tests {
 
         let after_delete = repo.list_assessments(100, 0).unwrap();
         assert_eq!(after_delete.len(), 4);
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
-    fn test_assessment_repository_not_initialized() {
-        let repo = SqliteAssessmentRepository::new(":memory:".to_string());
+    fn test_jsonl_assessment_not_initialized() {
+        let path = tmp_path("assess_not_init");
+        let repo = JsonlAssessmentRepository::new(path.clone());
         let result = repo.create_assessment("Test", "10.0.0.1", "scan");
         assert!(result.is_err());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_assessment_flush_and_reload() {
+        let path = tmp_path("assess_flush");
+        {
+            let mut repo = JsonlAssessmentRepository::new(path.clone());
+            repo.initialize().unwrap();
+            repo.create_assessment("Persistent", "10.0.0.1", "full-scan")
+                .unwrap();
+            repo.flush().unwrap();
+        }
+
+        let mut repo2 = JsonlAssessmentRepository::new(path.clone());
+        repo2.initialize().unwrap();
+        assert_eq!(repo2.assessments.lock().unwrap().len(), 1);
+        let got = repo2.get_assessment("assess-1").unwrap().unwrap();
+        assert!(got.contains("Persistent"));
+
+        let _ = fs::remove_file(&path);
     }
 }

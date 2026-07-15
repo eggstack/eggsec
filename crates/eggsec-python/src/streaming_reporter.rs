@@ -46,8 +46,7 @@ impl StreamingReportConfigPy {
             include_artifacts,
             include_evidence,
             redact_secrets,
-            timestamp_format: timestamp_format
-                .unwrap_or_else(|| "rfc3339".to_string()),
+            timestamp_format: timestamp_format.unwrap_or_else(|| "rfc3339".to_string()),
         }
     }
 
@@ -260,16 +259,13 @@ impl StreamingReporterPy {
         for line in &self.buffer {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
                 if let Some(sev) = val.get("severity").and_then(|v| v.as_str()) {
-                    *severity_counts
-                        .entry(sev.to_lowercase())
-                        .or_insert(0) += 1;
+                    *severity_counts.entry(sev.to_lowercase()).or_insert(0) += 1;
                 }
             }
         }
 
-        let mut findings_by_severity: Vec<(String, usize)> = severity_counts
-            .into_iter()
-            .collect::<Vec<_>>();
+        let mut findings_by_severity: Vec<(String, usize)> =
+            severity_counts.into_iter().collect::<Vec<_>>();
         findings_by_severity.sort_by(|a, b| b.1.cmp(&a.1));
 
         let duration_ms = self
@@ -315,7 +311,9 @@ impl StreamingReporterPy {
     fn __repr__(&self) -> String {
         format!(
             "StreamingReporter(format={}, started={}, buffered={})",
-            self.config.format, self.started, self.buffer.len(),
+            self.config.format,
+            self.started,
+            self.buffer.len(),
         )
     }
 
@@ -555,16 +553,11 @@ impl StreamingDiffReporterPy {
                                 let base_title =
                                     bf.get("title").and_then(|v| v.as_str()).unwrap_or("");
                                 if base_title != title {
-                                    changes.push(format!(
-                                        "title: {} -> {}",
-                                        base_title, title
-                                    ));
+                                    changes.push(format!("title: {} -> {}", base_title, title));
                                 }
 
-                                let base_desc = bf
-                                    .get("description")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                let base_desc =
+                                    bf.get("description").and_then(|v| v.as_str()).unwrap_or("");
                                 let cur_desc = finding
                                     .get("description")
                                     .and_then(|v| v.as_str())
@@ -686,10 +679,7 @@ impl StreamingDiffReporterPy {
         dict.set_item("output_path", &self.config.output_path)?;
         dict.set_item("started", self.started)?;
         dict.set_item("diff_count", self.diff_results.len())?;
-        dict.set_item(
-            "has_baseline",
-            self.baseline.is_some(),
-        )?;
+        dict.set_item("has_baseline", self.baseline.is_some())?;
         Ok(dict.into())
     }
 
@@ -729,7 +719,11 @@ impl StreamingDiffReporterPy {
         self.output_size += self
             .diff_results
             .iter()
-            .map(|d| serde_json::to_string(d).map(|s| s.len() as u64 + 1).unwrap_or(1))
+            .map(|d| {
+                serde_json::to_string(d)
+                    .map(|s| s.len() as u64 + 1)
+                    .unwrap_or(1)
+            })
             .sum::<u64>();
         self.diff_results.clear();
         Ok(())
@@ -775,10 +769,8 @@ impl ReportManifestPy {
         Self {
             report_id,
             format,
-            schema_version: schema_version
-                .unwrap_or_else(|| "1.0.0".to_string()),
-            tool_version: tool_version
-                .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
+            schema_version: schema_version.unwrap_or_else(|| "1.0.0".to_string()),
+            tool_version: tool_version.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
             created_at_ms,
             finding_count,
             artifact_ids: artifact_ids.unwrap_or_default(),
