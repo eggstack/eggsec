@@ -556,6 +556,16 @@ try:
     DatabaseTableInfo = _core.DatabaseTableInfoPy
     DatabaseSchemaInfo = _core.DatabaseSchemaInfoPy
     DatabasePrivilegeInfo = _core.DatabasePrivilegeInfoPy
+    # Release 3 WS18: Credential provider variants
+    StaticCredentialProvider = _core.StaticCredentialProviderPy
+    EnvironmentCredentialProvider = _core.EnvironmentCredentialProviderPy
+    CallbackCredentialProvider = _core.CallbackCredentialProviderPy
+    # Release 3 WS19: Row stream and query plan
+    DatabaseRowStream = _core.DatabaseRowStreamPy
+    DatabaseQueryPlan = _core.DatabaseQueryPlanPy
+    # Release 3 WS20: Index and extension metadata
+    DatabaseIndexInfo = _core.DatabaseIndexInfoPy
+    DatabaseExtensionInfo = _core.DatabaseExtensionInfoPy
 except (AttributeError, ImportError):
     pass
 
@@ -581,6 +591,17 @@ try:
     IssuedCertificate = _core.IssuedCertificatePy
     HarEntry = _core.HarEntryPy
     HarDocument = _core.HarDocumentPy
+    # Release 3 WS12: Mutation decision/error
+    MutationDecision = _core.MutationDecisionPy
+    MutationError = _core.MutationErrorPy
+    # Release 3 WS13: CA and cert store
+    CertificateAuthority = _core.CertificateAuthorityPy
+    CertificateStore = _core.CertificateStorePy
+    # Release 3 WS14: Replay and comparison
+    ReplayRequest = _core.ReplayRequestPy
+    ReplayResult = _core.ReplayResultPy
+    ResponseComparison = _core.ResponseComparisonPy
+    ComparisonRule = _core.ComparisonRulePy
     # Release 3: Interception session functions
     run_intercept_session = _core.run_intercept_session
     async_run_intercept_session = _core.async_run_intercept_session
@@ -687,6 +708,29 @@ try:
     NseArgument = _core.NseArgumentPy
     NseLibraryRegistry = _core.NseLibraryRegistryPy
     NseEvidenceItem = _core.NseEvidenceItemPy
+    # Release 3 WS2: Runtime lifecycle
+    NseExecutionLimits = _core.NseExecutionLimitsPy
+    NseCancellationToken = _core.NseCancellationTokenPy
+    NseRuntimeStats = _core.NseRuntimeStatsPy
+    NseRuntimeConfig = _core.NseRuntimeConfigPy
+    NseRuntime = _core.NseRuntimePy
+    # Release 3 WS3: Script inspection
+    NseScriptSource = _core.NseScriptSourcePy
+    NseDiagnostic = _core.NseDiagnosticPy
+    # Release 3 WS2: Capability context
+    NseCapabilityContext = _core.NseCapabilityContextPy
+    # Release 3 WS4: Rule evaluation
+    NseHostContext = _core.NseHostContextPy
+    NsePortContext = _core.NsePortContextPy
+    NseRuleResult = _core.NseRuleResultPy
+    # Release 3 WS6: Library version and conflicts
+    NseLibraryVersion = _core.NseLibraryVersionPy
+    NseLibraryConflict = _core.NseLibraryConflictPy
+    # Release 3 WS7: Execution request/result types
+    NseExecutionRequest = _core.NseExecutionRequestPy
+    NseExecutionResult = _core.NseExecutionResultPy
+    NseScriptResult = _core.NseScriptResultPy
+    NseOutputValue = _core.NseOutputValuePy
 except (AttributeError, ImportError):
     pass
 
@@ -1195,6 +1239,13 @@ __all__ = [
     "NseArgument",
     "NseLibraryRegistry",
     "NseEvidenceItem",
+    "NseCapabilityContext",
+    "NseLibraryVersion",
+    "NseLibraryConflict",
+    "NseExecutionRequest",
+    "NseExecutionResult",
+    "NseScriptResult",
+    "NseOutputValue",
     "nse_list_libraries_detailed",
     "nse_get_library_descriptor",
     "nse_run_with_config",
@@ -1235,6 +1286,14 @@ __all__ = [
     "IssuedCertificate",
     "HarEntry",
     "HarDocument",
+    "MutationDecision",
+    "MutationError",
+    "CertificateAuthority",
+    "CertificateStore",
+    "ReplayRequest",
+    "ReplayResult",
+    "ResponseComparison",
+    "ComparisonRule",
     "run_intercept_session",
     "async_run_intercept_session",
     # Milestone D: Mobile dynamic (feature-gated)
@@ -1275,6 +1334,16 @@ __all__ = [
     "DatabaseTableInfo",
     "DatabaseSchemaInfo",
     "DatabasePrivilegeInfo",
+    # Release 3: DB credential providers (feature-gated)
+    "StaticCredentialProvider",
+    "EnvironmentCredentialProvider",
+    "CallbackCredentialProvider",
+    # Release 3: DB row stream and query plan (feature-gated)
+    "DatabaseRowStream",
+    "DatabaseQueryPlan",
+    # Release 3: DB index and extension metadata (feature-gated)
+    "DatabaseIndexInfo",
+    "DatabaseExtensionInfo",
     # Milestone E: Versioned finding schema
     "FINDING_SCHEMA_VERSION",
     "Confidence",

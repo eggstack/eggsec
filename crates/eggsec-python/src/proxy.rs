@@ -1299,6 +1299,172 @@ pub fn async_run_intercept_session(config: InterceptConfigPy) -> PyResult<runtim
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// WS12: Request and Response Modification Types
+// ═══════════════════════════════════════════════════════════════════
+
+/// A request modification to apply when a rule matches.
+///
+/// All fields are optional; at least one should be provided.
+/// Maps to the engine's `RequestModification` type.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestModificationPy {
+    #[pyo3(get)]
+    pub header_name: Option<String>,
+    #[pyo3(get)]
+    pub header_value: Option<String>,
+    #[pyo3(get)]
+    pub new_path: Option<String>,
+    #[pyo3(get)]
+    pub new_body: Option<String>,
+}
+
+#[pymethods]
+impl RequestModificationPy {
+    #[new]
+    #[pyo3(signature = (header_name=None, header_value=None, new_path=None, new_body=None))]
+    fn new(
+        header_name: Option<&str>,
+        header_value: Option<&str>,
+        new_path: Option<&str>,
+        new_body: Option<&str>,
+    ) -> Self {
+        Self {
+            header_name: header_name.map(|s| s.to_string()),
+            header_value: header_value.map(|s| s.to_string()),
+            new_path: new_path.map(|s| s.to_string()),
+            new_body: new_body.map(|s| s.to_string()),
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("header_name", &self.header_name)?;
+        dict.set_item("header_value", &self.header_value)?;
+        dict.set_item("new_path", &self.new_path)?;
+        dict.set_item("new_body", &self.new_body)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "RequestModification(header={:?}, path={:?}, body={:?})",
+            self.header_name, self.new_path, self.new_body,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+impl RequestModificationPy {
+    pub fn from_engine(engine: eggsec_web_proxy::intercept::RequestModification) -> Self {
+        Self {
+            header_name: engine.header_name,
+            header_value: engine.header_value,
+            new_path: engine.new_path,
+            new_body: engine.new_body,
+        }
+    }
+
+    pub fn to_engine(&self) -> eggsec_web_proxy::intercept::RequestModification {
+        let mut mod_req = eggsec_web_proxy::intercept::RequestModification::new();
+        mod_req.header_name = self.header_name.clone();
+        mod_req.header_value = self.header_value.clone();
+        mod_req.new_path = self.new_path.clone();
+        mod_req.new_body = self.new_body.clone();
+        mod_req
+    }
+}
+
+/// A response modification to apply when a rule matches.
+///
+/// All fields are optional; at least one should be provided.
+/// Maps to the engine's `ResponseModification` type.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseModificationPy {
+    #[pyo3(get)]
+    pub header_name: Option<String>,
+    #[pyo3(get)]
+    pub header_value: Option<String>,
+    #[pyo3(get)]
+    pub new_body: Option<String>,
+    #[pyo3(get)]
+    pub new_status: Option<u16>,
+}
+
+#[pymethods]
+impl ResponseModificationPy {
+    #[new]
+    #[pyo3(signature = (header_name=None, header_value=None, new_body=None, new_status=None))]
+    fn new(
+        header_name: Option<&str>,
+        header_value: Option<&str>,
+        new_body: Option<&str>,
+        new_status: Option<u16>,
+    ) -> Self {
+        Self {
+            header_name: header_name.map(|s| s.to_string()),
+            header_value: header_value.map(|s| s.to_string()),
+            new_body: new_body.map(|s| s.to_string()),
+            new_status,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("header_name", &self.header_name)?;
+        dict.set_item("header_value", &self.header_value)?;
+        dict.set_item("new_body", &self.new_body)?;
+        dict.set_item("new_status", self.new_status)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ResponseModification(header={:?}, status={:?}, body={:?})",
+            self.header_name, self.new_status, self.new_body,
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+impl ResponseModificationPy {
+    pub fn from_engine(engine: eggsec_web_proxy::intercept::ResponseModification) -> Self {
+        Self {
+            header_name: engine.header_name,
+            header_value: engine.header_value,
+            new_body: engine.new_body,
+            new_status: engine.new_status,
+        }
+    }
+
+    pub fn to_engine(&self) -> eggsec_web_proxy::intercept::ResponseModification {
+        let mut mod_resp = eggsec_web_proxy::intercept::ResponseModification::new();
+        mod_resp.header_name = self.header_name.clone();
+        mod_resp.header_value = self.header_value.clone();
+        mod_resp.new_body = self.new_body.clone();
+        mod_resp.new_status = self.new_status;
+        mod_resp
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // WS12: Filtering and Mutation Types
 // ═══════════════════════════════════════════════════════════════════
 
@@ -1362,10 +1528,11 @@ impl InterceptFilterPy {
     }
 }
 
-/// A simplified interception rule for Python bindings.
+/// An interception rule for Python bindings.
 ///
 /// Maps to the engine's `InterceptRule` with pattern matching on host/path/method
-/// and an action (allow, block, intercept, monitor, modify).
+/// and an action (allow, block, intercept, monitor, modify, inject_response, delay, tag).
+/// Supports request and response modifications.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterceptRulePy {
@@ -1383,12 +1550,27 @@ pub struct InterceptRulePy {
     pub priority: u32,
     #[pyo3(get)]
     pub enabled: bool,
+    #[pyo3(get)]
+    pub request_modifications: Vec<RequestModificationPy>,
+    #[pyo3(get)]
+    pub response_modifications: Vec<ResponseModificationPy>,
 }
+
+const VALID_ACTIONS: &[&str] = &[
+    "allow",
+    "block",
+    "intercept",
+    "monitor",
+    "modify",
+    "inject_response",
+    "delay",
+    "tag",
+];
 
 #[pymethods]
 impl InterceptRulePy {
     #[new]
-    #[pyo3(signature = (name, host_pattern, action, path_pattern=None, method_pattern=None, priority=0, enabled=true))]
+    #[pyo3(signature = (name, host_pattern, action, path_pattern=None, method_pattern=None, priority=0, enabled=true, request_modifications=None, response_modifications=None))]
     fn new(
         name: &str,
         host_pattern: &str,
@@ -1397,12 +1579,14 @@ impl InterceptRulePy {
         method_pattern: Option<&str>,
         priority: u32,
         enabled: bool,
+        request_modifications: Option<Vec<RequestModificationPy>>,
+        response_modifications: Option<Vec<ResponseModificationPy>>,
     ) -> PyResult<Self> {
-        let valid_actions = ["allow", "block", "intercept", "monitor", "modify"];
-        if !valid_actions.contains(&action) {
+        if !VALID_ACTIONS.contains(&action) {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Invalid action '{}'. Must be one of: allow, block, intercept, monitor, modify",
-                action
+                "Invalid action '{}'. Must be one of: {}",
+                action,
+                VALID_ACTIONS.join(", ")
             )));
         }
         Ok(Self {
@@ -1413,6 +1597,8 @@ impl InterceptRulePy {
             action: action.to_string(),
             priority,
             enabled,
+            request_modifications: request_modifications.unwrap_or_default(),
+            response_modifications: response_modifications.unwrap_or_default(),
         })
     }
 
@@ -1425,6 +1611,18 @@ impl InterceptRulePy {
         dict.set_item("action", &self.action)?;
         dict.set_item("priority", self.priority)?;
         dict.set_item("enabled", self.enabled)?;
+        let req_mods: Vec<PyObject> = self
+            .request_modifications
+            .iter()
+            .map(|m| m.to_dict(py))
+            .collect::<PyResult<_>>()?;
+        dict.set_item("request_modifications", req_mods)?;
+        let resp_mods: Vec<PyObject> = self
+            .response_modifications
+            .iter()
+            .map(|m| m.to_dict(py))
+            .collect::<PyResult<_>>()?;
+        dict.set_item("response_modifications", resp_mods)?;
         Ok(dict.into())
     }
 
@@ -1435,13 +1633,98 @@ impl InterceptRulePy {
 
     fn __repr__(&self) -> String {
         format!(
-            "InterceptRule(name={}, host={}, action={}, priority={})",
-            self.name, self.host_pattern, self.action, self.priority,
+            "InterceptRule(name={}, host={}, action={}, priority={}, req_mods={}, resp_mods={})",
+            self.name,
+            self.host_pattern,
+            self.action,
+            self.priority,
+            self.request_modifications.len(),
+            self.response_modifications.len(),
         )
     }
 
     fn __str__(&self) -> String {
         self.__repr__()
+    }
+}
+
+impl InterceptRulePy {
+    pub fn from_engine(engine: eggsec_web_proxy::intercept::InterceptRule) -> Self {
+        Self {
+            name: engine.id.unwrap_or_else(|| "unnamed".to_string()),
+            host_pattern: engine.host_pattern,
+            path_pattern: engine.path_pattern,
+            method_pattern: engine.method_pattern,
+            action: match engine.action {
+                eggsec_web_proxy::intercept::RuleAction::Allow => "allow".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::Block => "block".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::Intercept => "intercept".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::Monitor => "monitor".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::Modify => "modify".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::InjectResponse => {
+                    "inject_response".to_string()
+                }
+                eggsec_web_proxy::intercept::RuleAction::Delay => "delay".to_string(),
+                eggsec_web_proxy::intercept::RuleAction::Tag => "tag".to_string(),
+            },
+            priority: engine.priority,
+            enabled: true,
+            request_modifications: engine
+                .request_modifications
+                .into_iter()
+                .map(RequestModificationPy::from_engine)
+                .collect(),
+            response_modifications: engine
+                .response_modifications
+                .into_iter()
+                .map(ResponseModificationPy::from_engine)
+                .collect(),
+        }
+    }
+
+    pub fn to_engine(&self) -> PyResult<eggsec_web_proxy::intercept::InterceptRule> {
+        let action = match self.action.as_str() {
+            "allow" => eggsec_web_proxy::intercept::RuleAction::Allow,
+            "block" => eggsec_web_proxy::intercept::RuleAction::Block,
+            "intercept" => eggsec_web_proxy::intercept::RuleAction::Intercept,
+            "monitor" => eggsec_web_proxy::intercept::RuleAction::Monitor,
+            "modify" => eggsec_web_proxy::intercept::RuleAction::Modify,
+            "inject_response" => eggsec_web_proxy::intercept::RuleAction::InjectResponse,
+            "delay" => eggsec_web_proxy::intercept::RuleAction::Delay,
+            "tag" => eggsec_web_proxy::intercept::RuleAction::Tag,
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Invalid action '{}'",
+                    self.action
+                )));
+            }
+        };
+
+        let mut rule = eggsec_web_proxy::intercept::InterceptRule::new(
+            self.host_pattern.clone(),
+            self.path_pattern.clone(),
+            action,
+        );
+
+        if !self.name.is_empty() {
+            rule = rule.with_id(&self.name);
+        }
+
+        rule = rule.with_priority(self.priority);
+
+        if let Some(ref method) = self.method_pattern {
+            rule = rule.with_method(method.clone());
+        }
+
+        for mod_py in &self.request_modifications {
+            rule.add_request_modification(mod_py.to_engine());
+        }
+
+        for mod_py in &self.response_modifications {
+            rule.add_response_modification(mod_py.to_engine());
+        }
+
+        Ok(rule)
     }
 }
 
@@ -1714,5 +1997,594 @@ impl HarDocumentPy {
             self.creator_name,
             self.creator_version,
         )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS12: Mutation Decision
+// ═══════════════════════════════════════════════════════════════════
+
+/// Decision outcome when evaluating a mutation rule against traffic.
+///
+/// Returned by the interception engine after rule matching to indicate
+/// whether the mutation was applied, skipped, or caused an error.
+#[pyclass(frozen, eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MutationDecisionPy {
+    /// Mutation was applied successfully.
+    Applied,
+    /// Rule matched but mutation was skipped (e.g., condition not met).
+    Skipped,
+    /// Mutation timed out before completion.
+    TimedOut,
+    /// Mutation caused an error during application.
+    Error,
+    /// No rules matched this exchange.
+    NoMatch,
+}
+
+#[pymethods]
+impl MutationDecisionPy {
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("decision", format!("{:?}", self))?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("MutationDecision.{:?}", self)
+    }
+
+    fn __str__(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS12: Mutation Error
+// ═══════════════════════════════════════════════════════════════════
+
+/// Error produced during a mutation attempt.
+///
+/// Captures the error kind, the rule that caused it, and a human-readable
+/// message for diagnostics and logging.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MutationErrorPy {
+    #[pyo3(get)]
+    pub error_kind: String,
+    #[pyo3(get)]
+    pub rule_name: Option<String>,
+    #[pyo3(get)]
+    pub message: String,
+    #[pyo3(get)]
+    pub flow_index: Option<u64>,
+}
+
+#[pymethods]
+impl MutationErrorPy {
+    #[new]
+    #[pyo3(signature = (error_kind, message, rule_name=None, flow_index=None))]
+    fn new(
+        error_kind: &str,
+        message: &str,
+        rule_name: Option<&str>,
+        flow_index: Option<u64>,
+    ) -> Self {
+        Self {
+            error_kind: error_kind.to_string(),
+            rule_name: rule_name.map(|s| s.to_string()),
+            message: message.to_string(),
+            flow_index,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("error_kind", &self.error_kind)?;
+        dict.set_item("rule_name", &self.rule_name)?;
+        dict.set_item("message", &self.message)?;
+        dict.set_item("flow_index", &self.flow_index)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "MutationError(kind={}, rule={:?})",
+            self.error_kind, self.rule_name
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS13: Certificate Authority
+// ═══════════════════════════════════════════════════════════════════
+
+/// Active certificate authority for TLS interception.
+///
+/// Manages CA material, issues leaf certificates for intercepted
+/// connections, and tracks issued certificate metadata.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertificateAuthorityPy {
+    #[pyo3(get)]
+    pub ca_fingerprint: String,
+    #[pyo3(get)]
+    pub ca_subject: String,
+    #[pyo3(get)]
+    pub valid_from: String,
+    #[pyo3(get)]
+    pub valid_until: String,
+    #[pyo3(get)]
+    pub issued_count: usize,
+    #[pyo3(get)]
+    pub key_type: String,
+    #[pyo3(get)]
+    pub key_bits: u32,
+}
+
+#[pymethods]
+impl CertificateAuthorityPy {
+    #[new]
+    #[pyo3(signature = (ca_fingerprint, ca_subject, valid_from, valid_until, key_type="RSA", key_bits=2048, issued_count=0))]
+    fn new(
+        ca_fingerprint: &str,
+        ca_subject: &str,
+        valid_from: &str,
+        valid_until: &str,
+        key_type: &str,
+        key_bits: u32,
+        issued_count: usize,
+    ) -> Self {
+        Self {
+            ca_fingerprint: ca_fingerprint.to_string(),
+            ca_subject: ca_subject.to_string(),
+            valid_from: valid_from.to_string(),
+            valid_until: valid_until.to_string(),
+            issued_count,
+            key_type: key_type.to_string(),
+            key_bits,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("ca_fingerprint", &self.ca_fingerprint)?;
+        dict.set_item("ca_subject", &self.ca_subject)?;
+        dict.set_item("valid_from", &self.valid_from)?;
+        dict.set_item("valid_until", &self.valid_until)?;
+        dict.set_item("issued_count", self.issued_count)?;
+        dict.set_item("key_type", &self.key_type)?;
+        dict.set_item("key_bits", self.key_bits)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CertificateAuthority(fingerprint={}, issued={})",
+            &self.ca_fingerprint[..12.min(self.ca_fingerprint.len())],
+            self.issued_count
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS13: Certificate Store
+// ═══════════════════════════════════════════════════════════════════
+
+/// Store of certificates issued by the interception CA.
+///
+/// Tracks issued leaf certificates by hostname with expiry metadata,
+/// enabling cache lookups and revocation checks.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertificateStorePy {
+    #[pyo3(get)]
+    pub total_issued: usize,
+    #[pyo3(get)]
+    pub total_expired: usize,
+    #[pyo3(get)]
+    pub entries: Vec<IssuedCertificatePy>,
+}
+
+#[pymethods]
+impl CertificateStorePy {
+    #[new]
+    #[pyo3(signature = (entries=None))]
+    fn new(entries: Option<Vec<IssuedCertificatePy>>) -> Self {
+        let certs = entries.unwrap_or_default();
+        let total_issued = certs.len();
+        let total_expired = 0;
+        Self {
+            total_issued,
+            total_expired,
+            entries: certs,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("total_issued", self.total_issued)?;
+        dict.set_item("total_expired", self.total_expired)?;
+        let entry_list = PyList::empty_bound(py);
+        for e in &self.entries {
+            entry_list.append(e.to_dict(py)?)?;
+        }
+        dict.set_item("entries", entry_list)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CertificateStore(issued={}, expired={})",
+            self.total_issued, self.total_expired
+        )
+    }
+
+    fn find_by_hostname(&self, hostname: &str) -> Option<IssuedCertificatePy> {
+        self.entries
+            .iter()
+            .find(|e| e.hostname == hostname)
+            .cloned()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS14: Replay Request
+// ═══════════════════════════════════════════════════════════════════
+
+/// A request to replay a captured HTTP exchange.
+///
+/// Specifies the target exchange to replay, optional destination
+/// overrides, auth handling, and timeout configuration.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplayRequestPy {
+    #[pyo3(get)]
+    pub exchange_id: String,
+    #[pyo3(get)]
+    pub method: String,
+    #[pyo3(get)]
+    pub url: String,
+    #[pyo3(get)]
+    pub headers: std::collections::HashMap<String, String>,
+    #[pyo3(get)]
+    pub body: Option<String>,
+    #[pyo3(get)]
+    pub override_host: Option<String>,
+    #[pyo3(get)]
+    pub override_port: Option<u16>,
+    #[pyo3(get)]
+    pub preserve_auth: bool,
+    #[pyo3(get)]
+    pub timeout_secs: u64,
+}
+
+#[pymethods]
+impl ReplayRequestPy {
+    #[new]
+    #[pyo3(signature = (exchange_id, method, url, headers=None, body=None, override_host=None, override_port=None, preserve_auth=true, timeout_secs=30))]
+    fn new(
+        exchange_id: &str,
+        method: &str,
+        url: &str,
+        headers: Option<std::collections::HashMap<String, String>>,
+        body: Option<&str>,
+        override_host: Option<&str>,
+        override_port: Option<u16>,
+        preserve_auth: bool,
+        timeout_secs: u64,
+    ) -> Self {
+        Self {
+            exchange_id: exchange_id.to_string(),
+            method: method.to_string(),
+            url: url.to_string(),
+            headers: headers.unwrap_or_default(),
+            body: body.map(|s| s.to_string()),
+            override_host: override_host.map(|s| s.to_string()),
+            override_port,
+            preserve_auth,
+            timeout_secs,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("exchange_id", &self.exchange_id)?;
+        dict.set_item("method", &self.method)?;
+        dict.set_item("url", &self.url)?;
+        dict.set_item("headers", &self.headers)?;
+        dict.set_item("body", &self.body)?;
+        dict.set_item("override_host", &self.override_host)?;
+        dict.set_item("override_port", &self.override_port)?;
+        dict.set_item("preserve_auth", self.preserve_auth)?;
+        dict.set_item("timeout_secs", self.timeout_secs)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ReplayRequest(exchange={}, {} {})",
+            self.exchange_id, self.method, self.url
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS14: Replay Result
+// ═══════════════════════════════════════════════════════════════════
+
+/// Result of replaying a captured HTTP exchange.
+///
+/// Contains the replayed response, timing, any errors, and
+/// an optional comparison against the original exchange.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplayResultPy {
+    #[pyo3(get)]
+    pub exchange_id: String,
+    #[pyo3(get)]
+    pub status_code: u16,
+    #[pyo3(get)]
+    pub response_headers: std::collections::HashMap<String, String>,
+    #[pyo3(get)]
+    pub response_body: Option<String>,
+    #[pyo3(get)]
+    pub latency_ms: u64,
+    #[pyo3(get)]
+    pub success: bool,
+    #[pyo3(get)]
+    pub error: Option<String>,
+    #[pyo3(get)]
+    pub comparison: Option<ResponseComparisonPy>,
+}
+
+#[pymethods]
+impl ReplayResultPy {
+    #[new]
+    #[pyo3(signature = (exchange_id, status_code=0, latency_ms=0, success=true, response_headers=None, response_body=None, error=None, comparison=None))]
+    fn new(
+        exchange_id: &str,
+        status_code: u16,
+        latency_ms: u64,
+        success: bool,
+        response_headers: Option<std::collections::HashMap<String, String>>,
+        response_body: Option<&str>,
+        error: Option<&str>,
+        comparison: Option<ResponseComparisonPy>,
+    ) -> Self {
+        Self {
+            exchange_id: exchange_id.to_string(),
+            status_code,
+            response_headers: response_headers.unwrap_or_default(),
+            response_body: response_body.map(|s| s.to_string()),
+            latency_ms,
+            success,
+            error: error.map(|s| s.to_string()),
+            comparison,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("exchange_id", &self.exchange_id)?;
+        dict.set_item("status_code", self.status_code)?;
+        dict.set_item("response_headers", &self.response_headers)?;
+        dict.set_item("response_body", &self.response_body)?;
+        dict.set_item("latency_ms", self.latency_ms)?;
+        dict.set_item("success", self.success)?;
+        dict.set_item("error", &self.error)?;
+        if let Some(ref c) = self.comparison {
+            dict.set_item("comparison", c.to_dict(py)?)?;
+        } else {
+            dict.set_item("comparison", py.None())?;
+        }
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ReplayResult(exchange={}, status={}, latency={}ms)",
+            self.exchange_id, self.status_code, self.latency_ms
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS14: Response Comparison
+// ═══════════════════════════════════════════════════════════════════
+
+/// Comparison between an original and replayed HTTP response.
+///
+/// Highlights differences in status code, headers, body, and timing
+/// to detect non-deterministic behavior or caching effects.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseComparisonPy {
+    #[pyo3(get)]
+    pub status_match: bool,
+    #[pyo3(get)]
+    pub original_status: u16,
+    #[pyo3(get)]
+    pub replayed_status: u16,
+    #[pyo3(get)]
+    pub headers_differ: bool,
+    #[pyo3(get)]
+    pub body_differ: bool,
+    #[pyo3(get)]
+    pub body_diff_size: i64,
+    #[pyo3(get)]
+    pub timing_diff_ms: i64,
+    #[pyo3(get)]
+    pub volatile_headers: Vec<String>,
+    #[pyo3(get)]
+    pub identical: bool,
+}
+
+#[pymethods]
+impl ResponseComparisonPy {
+    #[new]
+    #[pyo3(signature = (original_status, replayed_status, headers_differ=false, body_differ=false, body_diff_size=0, timing_diff_ms=0, volatile_headers=None))]
+    fn new(
+        original_status: u16,
+        replayed_status: u16,
+        headers_differ: bool,
+        body_differ: bool,
+        body_diff_size: i64,
+        timing_diff_ms: i64,
+        volatile_headers: Option<Vec<String>>,
+    ) -> Self {
+        let status_match = original_status == replayed_status;
+        let identical = status_match && !headers_differ && !body_differ;
+        Self {
+            status_match,
+            original_status,
+            replayed_status,
+            headers_differ,
+            body_differ,
+            body_diff_size,
+            timing_diff_ms,
+            volatile_headers: volatile_headers.unwrap_or_default(),
+            identical,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("status_match", self.status_match)?;
+        dict.set_item("original_status", self.original_status)?;
+        dict.set_item("replayed_status", self.replayed_status)?;
+        dict.set_item("headers_differ", self.headers_differ)?;
+        dict.set_item("body_differ", self.body_differ)?;
+        dict.set_item("body_diff_size", self.body_diff_size)?;
+        dict.set_item("timing_diff_ms", self.timing_diff_ms)?;
+        dict.set_item("volatile_headers", &self.volatile_headers)?;
+        dict.set_item("identical", self.identical)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ResponseComparison(status_match={}, identical={})",
+            self.status_match, self.identical
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Release 3 WS14: Comparison Rule
+// ═══════════════════════════════════════════════════════════════════
+
+/// Rule for comparing original and replayed HTTP responses.
+///
+/// Defines which fields to compare, normalization for volatile headers,
+/// and tolerance thresholds for body and timing comparisons.
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComparisonRulePy {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub compare_status: bool,
+    #[pyo3(get)]
+    pub compare_headers: bool,
+    #[pyo3(get)]
+    pub compare_body: bool,
+    #[pyo3(get)]
+    pub compare_timing: bool,
+    #[pyo3(get)]
+    pub volatile_headers: Vec<String>,
+    #[pyo3(get)]
+    pub body_diff_threshold: i64,
+    #[pyo3(get)]
+    pub timing_diff_threshold_ms: u64,
+    #[pyo3(get)]
+    pub ignore_header_order: bool,
+}
+
+#[pymethods]
+impl ComparisonRulePy {
+    #[new]
+    #[pyo3(signature = (name="default", compare_status=true, compare_headers=true, compare_body=true, compare_timing=false, volatile_headers=None, body_diff_threshold=0, timing_diff_threshold_ms=100, ignore_header_order=true))]
+    fn new(
+        name: &str,
+        compare_status: bool,
+        compare_headers: bool,
+        compare_body: bool,
+        compare_timing: bool,
+        volatile_headers: Option<Vec<String>>,
+        body_diff_threshold: i64,
+        timing_diff_threshold_ms: u64,
+        ignore_header_order: bool,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            compare_status,
+            compare_headers,
+            compare_body,
+            compare_timing,
+            volatile_headers: volatile_headers.unwrap_or_default(),
+            body_diff_threshold,
+            timing_diff_threshold_ms,
+            ignore_header_order,
+        }
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("compare_status", self.compare_status)?;
+        dict.set_item("compare_headers", self.compare_headers)?;
+        dict.set_item("compare_body", self.compare_body)?;
+        dict.set_item("compare_timing", self.compare_timing)?;
+        dict.set_item("volatile_headers", &self.volatile_headers)?;
+        dict.set_item("body_diff_threshold", self.body_diff_threshold)?;
+        dict.set_item("timing_diff_threshold_ms", self.timing_diff_threshold_ms)?;
+        dict.set_item("ignore_header_order", self.ignore_header_order)?;
+        Ok(dict.into())
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("ComparisonRule(name={})", self.name)
     }
 }

@@ -1885,7 +1885,7 @@ impl AsyncEngine {
         script_args: Option<String>,
     ) -> PyResult<runtime_async::PyFuture> {
         let config = crate::nse::build_nse_config(&target, &script, script_args.as_deref(), false);
-        crate::nse::run_nse_async(config)
+        crate::nse::run_nse_async(config, None)
     }
 
     #[cfg(feature = "container")]

@@ -684,6 +684,39 @@ pub struct RequestModification {
     pub new_body: Option<String>,
 }
 
+impl RequestModification {
+    pub fn new() -> Self {
+        Self {
+            header_name: None,
+            header_value: None,
+            new_path: None,
+            new_body: None,
+        }
+    }
+
+    pub fn with_header(mut self, name: &str, value: &str) -> Self {
+        self.header_name = Some(name.to_string());
+        self.header_value = Some(value.to_string());
+        self
+    }
+
+    pub fn with_path(mut self, path: &str) -> Self {
+        self.new_path = Some(path.to_string());
+        self
+    }
+
+    pub fn with_body(mut self, body: &str) -> Self {
+        self.new_body = Some(body.to_string());
+        self
+    }
+}
+
+impl Default for RequestModification {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ResponseModification {
@@ -691,6 +724,39 @@ pub struct ResponseModification {
     pub header_value: Option<String>,
     pub new_body: Option<String>,
     pub new_status: Option<u16>,
+}
+
+impl ResponseModification {
+    pub fn new() -> Self {
+        Self {
+            header_name: None,
+            header_value: None,
+            new_body: None,
+            new_status: None,
+        }
+    }
+
+    pub fn with_header(mut self, name: &str, value: &str) -> Self {
+        self.header_name = Some(name.to_string());
+        self.header_value = Some(value.to_string());
+        self
+    }
+
+    pub fn with_body(mut self, body: &str) -> Self {
+        self.new_body = Some(body.to_string());
+        self
+    }
+
+    pub fn with_status(mut self, status: u16) -> Self {
+        self.new_status = Some(status);
+        self
+    }
+}
+
+impl Default for ResponseModification {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Shared host matching logic.

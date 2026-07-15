@@ -3163,7 +3163,7 @@ impl Engine {
                 script_args_owned.as_deref(),
                 false,
             );
-            crate::nse::run_nse_sync(config)
+            crate::nse::run_nse_sync(config, None)
         });
 
         match result {

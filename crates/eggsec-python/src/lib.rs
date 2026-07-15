@@ -383,6 +383,29 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<db_pentest::DatabaseTableInfoPy>()?;
         m.add_class::<db_pentest::DatabaseSchemaInfoPy>()?;
         m.add_class::<db_pentest::DatabasePrivilegeInfoPy>()?;
+        // Compliance types
+        m.add_class::<db_pentest::ComplianceMappingPy>()?;
+        m.add_class::<db_pentest::ComplianceHitPy>()?;
+        m.add_class::<db_pentest::ComplianceSummaryPy>()?;
+        m.add_class::<db_pentest::ComplianceResultPy>()?;
+        // Correlation types
+        m.add_class::<db_pentest::DbCorrelationTypePy>()?;
+        m.add_class::<db_pentest::DbCorrelatedFindingPy>()?;
+        m.add_class::<db_pentest::DbCorrelationSummaryPy>()?;
+        m.add_class::<db_pentest::DbCorrelationResultPy>()?;
+        // Baseline / regression types
+        m.add_class::<db_pentest::SeverityChangePy>()?;
+        m.add_class::<db_pentest::DbRegressionResultPy>()?;
+        // Release 3 WS18: Credential provider variants
+        m.add_class::<db_pentest::StaticCredentialProviderPy>()?;
+        m.add_class::<db_pentest::EnvironmentCredentialProviderPy>()?;
+        m.add_class::<db_pentest::CallbackCredentialProviderPy>()?;
+        // Release 3 WS19: Row stream and query plan
+        m.add_class::<db_pentest::DatabaseRowStreamPy>()?;
+        m.add_class::<db_pentest::DatabaseQueryPlanPy>()?;
+        // Release 3 WS20: Index and extension metadata
+        m.add_class::<db_pentest::DatabaseIndexInfoPy>()?;
+        m.add_class::<db_pentest::DatabaseExtensionInfoPy>()?;
     }
     // Phase F Track 9: Container security
     #[cfg(feature = "container")]
@@ -567,6 +590,29 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<nse::NseArgumentPy>()?;
         m.add_class::<nse::NseLibraryRegistryPy>()?;
         m.add_class::<nse::NseEvidenceItemPy>()?;
+        // Release 3 WS2: Runtime lifecycle
+        m.add_class::<nse::NseExecutionLimitsPy>()?;
+        m.add_class::<nse::NseCancellationTokenPy>()?;
+        m.add_class::<nse::NseRuntimeStatsPy>()?;
+        m.add_class::<nse::NseRuntimeConfigPy>()?;
+        m.add_class::<nse::NseRuntimePy>()?;
+        // Release 3 WS3: Script inspection
+        m.add_class::<nse::NseScriptSourcePy>()?;
+        m.add_class::<nse::NseDiagnosticPy>()?;
+        // Release 3 WS7: Capability context
+        m.add_class::<nse::NseCapabilityContextPy>()?;
+        // Release 3 WS6: Library version and conflicts
+        m.add_class::<nse::NseLibraryVersionPy>()?;
+        m.add_class::<nse::NseLibraryConflictPy>()?;
+        // Release 3 WS7: Execution request/result types
+        m.add_class::<nse::NseExecutionRequestPy>()?;
+        m.add_class::<nse::NseExecutionResultPy>()?;
+        m.add_class::<nse::NseScriptResultPy>()?;
+        m.add_class::<nse::NseOutputValuePy>()?;
+        // Release 3 WS4: Rule evaluation
+        m.add_class::<nse::NseHostContextPy>()?;
+        m.add_class::<nse::NsePortContextPy>()?;
+        m.add_class::<nse::NseRuleResultPy>()?;
     }
     // Phase F Track 7: Proxy and web proxy
     #[cfg(feature = "web-proxy")]
@@ -586,11 +632,24 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<proxy::InterceptSessionStatePy>()?;
         m.add_class::<proxy::InterceptStatsPy>()?;
         m.add_class::<proxy::InterceptFilterPy>()?;
+        m.add_class::<proxy::RequestModificationPy>()?;
+        m.add_class::<proxy::ResponseModificationPy>()?;
         m.add_class::<proxy::InterceptRulePy>()?;
         m.add_class::<proxy::CertificateAuthorityConfigPy>()?;
         m.add_class::<proxy::IssuedCertificatePy>()?;
         m.add_class::<proxy::HarEntryPy>()?;
         m.add_class::<proxy::HarDocumentPy>()?;
+        // Release 3 WS12: Mutation decision/error
+        m.add_class::<proxy::MutationDecisionPy>()?;
+        m.add_class::<proxy::MutationErrorPy>()?;
+        // Release 3 WS13: CA and cert store
+        m.add_class::<proxy::CertificateAuthorityPy>()?;
+        m.add_class::<proxy::CertificateStorePy>()?;
+        // Release 3 WS14: Replay and comparison
+        m.add_class::<proxy::ReplayRequestPy>()?;
+        m.add_class::<proxy::ReplayResultPy>()?;
+        m.add_class::<proxy::ResponseComparisonPy>()?;
+        m.add_class::<proxy::ComparisonRulePy>()?;
     }
 
     // Functions

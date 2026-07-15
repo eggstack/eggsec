@@ -30,8 +30,8 @@ pub use bundle::{
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{
-    EnhancedRule, EnhancedRuleSet, InjectResponseConfig, InterceptRule, RuleAction, RuleCondition,
-    RuleContext, RuleId, RuleSet,
+    EnhancedRule, EnhancedRuleSet, InjectResponseConfig, InterceptRule, RequestModification,
+    ResponseModification, RuleAction, RuleCondition, RuleContext, RuleId, RuleSet,
 };
 
 pub use protocols::{
