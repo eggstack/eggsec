@@ -1475,7 +1475,7 @@ class TestStreamingReporter:
         reporter.write_finding('{"id":"f2","severity":"low","title":"Test2"}')
         summary = reporter.finish()
         assert summary.format == "json"
-        assert summary.total_findings == 0
+        assert summary.total_findings == 2
 
     def test_start_already_started_error(self):
         from eggsec import StreamingReporter, StreamingReportConfig
@@ -1566,8 +1566,8 @@ class TestStreamingDiffReporter:
         reporter.start()
         reporter.write_finding('{"id":"f1","severity":"high","title":"New"}')
         summary = reporter.finish()
-        assert summary.total_findings == 0
-        assert summary.new_findings == 0
+        assert summary.total_findings == 1
+        assert summary.new_findings == 1
 
     def test_serialization(self):
         from eggsec import StreamingDiffReporter, StreamingReportConfig

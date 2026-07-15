@@ -1,23 +1,42 @@
 """Tests for eggsec Python bindings - Interception Proxy types (Release 3)."""
 
 import pytest
-from eggsec import (
-    ProxyType,
-    RotationStrategy,
-    ProxyConfig,
-    ProxyEntry,
-    InterceptConfig,
-    CapturedExchange,
-    InterceptSessionResult,
-    InterceptSessionState,
-    InterceptStats,
-    InterceptFilter,
-    InterceptRule,
-    CertificateAuthorityConfig,
-    IssuedCertificate,
-    HarEntry,
-    HarDocument,
-)
+import importlib
+
+pytestmark = [pytest.mark.timeout(60)]
+
+# Feature-gate: skip entire module if web-proxy feature not compiled
+_mod = importlib.import_module("eggsec")
+_PROXY_AVAILABLE = getattr(_mod, "ProxyType", None) is not None
+
+if not _PROXY_AVAILABLE:
+    pytest.skip("web-proxy feature not compiled", allow_module_level=True)
+
+
+def _import_or_skip(name, feature="web-proxy"):
+    """Import a name from eggsec, skip test if unavailable (feature-gated)."""
+    obj = getattr(_mod, name, None)
+    if obj is None:
+        pytest.skip(f"{name} not available (requires {feature} feature)")
+    return obj
+
+
+# Eagerly import types for backward compatibility with existing test code
+ProxyType = _mod.ProxyType
+RotationStrategy = _mod.RotationStrategy
+ProxyConfig = _mod.ProxyConfig
+ProxyEntry = _mod.ProxyEntry
+InterceptConfig = _mod.InterceptConfig
+CapturedExchange = _mod.CapturedExchange
+InterceptSessionResult = _mod.InterceptSessionResult
+InterceptSessionState = _mod.InterceptSessionState
+InterceptStats = _mod.InterceptStats
+InterceptFilter = _mod.InterceptFilter
+InterceptRule = _mod.InterceptRule
+CertificateAuthorityConfig = _mod.CertificateAuthorityConfig
+IssuedCertificate = _mod.IssuedCertificate
+HarEntry = _mod.HarEntry
+HarDocument = _mod.HarDocument
 
 
 # ---------------------------------------------------------------------------
@@ -529,3 +548,324 @@ class TestHarDocument:
         s = str(doc)
         assert "HAR" in s
         assert "1.2" in s
+
+
+# ---------------------------------------------------------------------------
+# CapturedExchange - detailed field coverage
+# ---------------------------------------------------------------------------
+
+class TestCapturedExchangeDetailed:
+    def test_all_fields(self):
+        exchange = CapturedExchange(
+            id=1,
+            method="POST",
+            uri="https://api.example.com/login",
+            request_headers=[("Content-Type", "application/json"), ("Authorization", "Bearer tok")],
+            request_body='{"user":"admin","pass":"test"}',
+            response_status=200,
+            response_headers=[("Content-Type", "application/json")],
+            response_body='{"token":"abc123"}',
+            timestamp_ms=1700000000000,
+            latency_ms=42,
+            request_modified=False,
+            response_modified=True,
+        )
+        assert exchange.id == 1
+        assert exchange.method == "POST"
+        assert exchange.uri == "https://api.example.com/login"
+        assert len(exchange.request_headers) == 2
+        assert exchange.request_body == '{"user":"admin","pass":"test"}'
+        assert exchange.response_status == 200
+        assert len(exchange.response_headers) == 1
+        assert exchange.response_body == '{"token":"abc123"}'
+        assert exchange.timestamp_ms == 1700000000000
+        assert exchange.latency_ms == 42
+        assert exchange.request_modified is False
+        assert exchange.response_modified is True
+
+    def test_to_dict(self):
+        exchange = CapturedExchange(
+            id=5,
+            method="GET",
+            uri="https://example.com/health",
+            request_headers=[],
+            response_status=204,
+            response_headers=[],
+            timestamp_ms=1000,
+        )
+        d = exchange.to_dict()
+        assert d["id"] == 5
+        assert d["method"] == "GET"
+        assert d["uri"] == "https://example.com/health"
+        assert d["response_status"] == 204
+        assert d["timestamp_ms"] == 1000
+        assert d["request_modified"] is False
+        assert d["response_modified"] is False
+
+    def test_to_json(self):
+        exchange = CapturedExchange(
+            id=1,
+            method="DELETE",
+            uri="https://example.com/resource",
+            request_headers=[],
+            response_status=404,
+            response_headers=[],
+            timestamp_ms=2000,
+        )
+        j = exchange.to_json()
+        assert isinstance(j, str)
+        assert "DELETE" in j
+        assert "404" in j
+
+    def test_repr(self):
+        exchange = CapturedExchange(
+            id=1,
+            method="PUT",
+            uri="https://example.com/update",
+            request_headers=[],
+            response_status=201,
+            response_headers=[],
+            timestamp_ms=3000,
+        )
+        r = repr(exchange)
+        assert "CapturedExchange" in r
+        assert "PUT" in r
+        assert "201" in r
+
+    def test_str(self):
+        exchange = CapturedExchange(
+            id=1,
+            method="GET",
+            uri="https://example.com/data",
+            request_headers=[],
+            response_status=200,
+            response_headers=[],
+            timestamp_ms=4000,
+        )
+        s = str(exchange)
+        assert "GET" in s
+        assert "200" in s
+
+    def test_no_response_status(self):
+        exchange = CapturedExchange(
+            id=1,
+            method="GET",
+            uri="https://example.com/timeout",
+            request_headers=[],
+            response_status=None,
+            response_headers=[],
+            timestamp_ms=5000,
+        )
+        assert exchange.response_status is None
+        s = str(exchange)
+        assert "?" in s
+
+
+# ---------------------------------------------------------------------------
+# InterceptSessionState - detailed state transitions
+# ---------------------------------------------------------------------------
+
+class TestInterceptSessionStateDetailed:
+    def test_all_variants(self):
+        states = [
+            (InterceptSessionState.Created, "created"),
+            (InterceptSessionState.Listening, "listening"),
+            (InterceptSessionState.Capturing, "capturing"),
+            (InterceptSessionState.Stopped, "stopped"),
+            (InterceptSessionState.Error, "error"),
+        ]
+        for state, expected_str in states:
+            assert str(state) == expected_str
+            assert repr(state) == f"InterceptSessionState.{expected_str}"
+
+    def test_equality(self):
+        assert InterceptSessionState.Created == InterceptSessionState.Created
+        assert InterceptSessionState.Created != InterceptSessionState.Listening
+        assert InterceptSessionState.Capturing != InterceptSessionState.Stopped
+
+    def test_hash(self):
+        states = {
+            InterceptSessionState.Created,
+            InterceptSessionState.Listening,
+            InterceptSessionState.Capturing,
+            InterceptSessionState.Stopped,
+            InterceptSessionState.Error,
+        }
+        assert len(states) == 5
+
+
+# ---------------------------------------------------------------------------
+# ProxyConfig - serialization roundtrip
+# ---------------------------------------------------------------------------
+
+class TestProxyConfigSerialization:
+    def test_json_roundtrip(self):
+        config = ProxyConfig(
+            rotation_strategy=RotationStrategy.Weighted,
+            health_check_enabled=False,
+            health_check_interval_secs=120,
+            health_check_timeout_ms=10000,
+            max_failures_before_disable=5,
+            chain_proxies=True,
+            max_chain_length=5,
+        )
+        j = config.to_json()
+        assert "weighted" in j
+        assert "chain_proxies" in j
+
+    def test_dict_roundtrip(self):
+        config = ProxyConfig(
+            rotation_strategy=RotationStrategy.LowestLatency,
+            health_check_enabled=True,
+            health_check_frequency_secs=30,
+        )
+        d = config.to_dict()
+        assert d["rotation_strategy"] == "lowest_latency"
+        assert d["health_check_enabled"] is True
+        assert d["health_check_frequency_secs"] == 30
+        assert d["chain_proxies"] is False
+        assert d["max_chain_length"] == 3
+
+    def test_all_fields_in_dict(self):
+        config = ProxyConfig()
+        d = config.to_dict()
+        expected_keys = {
+            "rotation_strategy", "health_check_enabled",
+            "health_check_interval_secs", "health_check_timeout_ms",
+            "test_url", "health_check_url", "health_check_frequency_secs",
+            "max_failures_before_disable", "chain_proxies", "max_chain_length",
+        }
+        assert expected_keys == set(d.keys())
+
+    def test_optional_urls(self):
+        config = ProxyConfig(
+            test_url="https://example.com/health",
+            health_check_url="https://example.com/ping",
+        )
+        assert config.test_url == "https://example.com/health"
+        assert config.health_check_url == "https://example.com/ping"
+        d = config.to_dict()
+        assert d["test_url"] == "https://example.com/health"
+        assert d["health_check_url"] == "https://example.com/ping"
+
+
+# ---------------------------------------------------------------------------
+# ProxyRotationStrategies - all 5 strategies
+# ---------------------------------------------------------------------------
+
+class TestProxyRotationStrategies:
+    def test_round_robin(self):
+        s = RotationStrategy.from_str("round_robin")
+        assert s == RotationStrategy.RoundRobin
+        assert str(s) == "round_robin"
+        assert repr(s) == "RotationStrategy.round_robin"
+
+    def test_random(self):
+        s = RotationStrategy.from_str("random")
+        assert s == RotationStrategy.Random
+        assert str(s) == "random"
+
+    def test_weighted(self):
+        s = RotationStrategy.from_str("weighted")
+        assert s == RotationStrategy.Weighted
+        assert str(s) == "weighted"
+
+    def test_least_used(self):
+        s = RotationStrategy.from_str("least_used")
+        assert s == RotationStrategy.LeastUsed
+        assert str(s) == "least_used"
+
+    def test_lowest_latency(self):
+        s = RotationStrategy.from_str("lowest_latency")
+        assert s == RotationStrategy.LowestLatency
+        assert str(s) == "lowest_latency"
+
+    def test_from_str_roundtrip_all(self):
+        strategies = ["round_robin", "random", "weighted", "least_used", "lowest_latency"]
+        for name in strategies:
+            s = RotationStrategy.from_str(name)
+            assert str(s) == name
+
+    def test_invalid_all(self):
+        for name in ["", "unknown", "ROUND_ROBIN", "RoundRobin"]:
+            with pytest.raises(ValueError, match="Invalid rotation strategy"):
+                RotationStrategy.from_str(name)
+
+
+# ---------------------------------------------------------------------------
+# ProxyTypeAllVariants - all 5 proxy types
+# ---------------------------------------------------------------------------
+
+class TestProxyTypeAllVariants:
+    def test_socks4(self):
+        pt = ProxyType.from_str("socks4")
+        assert pt == ProxyType.Socks4
+        assert str(pt) == "socks4"
+        assert repr(pt) == "ProxyType.socks4"
+
+    def test_socks5(self):
+        pt = ProxyType.from_str("socks5")
+        assert pt == ProxyType.Socks5
+        assert str(pt) == "socks5"
+
+    def test_http(self):
+        pt = ProxyType.from_str("http")
+        assert pt == ProxyType.Http
+        assert str(pt) == "http"
+
+    def test_https(self):
+        pt = ProxyType.from_str("https")
+        assert pt == ProxyType.Https
+        assert str(pt) == "https"
+
+    def test_tor(self):
+        pt = ProxyType.from_str("tor")
+        assert pt == ProxyType.Tor
+        assert str(pt) == "tor"
+
+    def test_from_str_roundtrip_all(self):
+        types = ["socks4", "socks5", "http", "https", "tor"]
+        for name in types:
+            pt = ProxyType.from_str(name)
+            assert str(pt) == name
+
+    def test_invalid_all(self):
+        for name in ["", "unknown", "SOCKS5", "HTTP"]:
+            with pytest.raises(ValueError, match="Invalid proxy type"):
+                ProxyType.from_str(name)
+
+
+# ---------------------------------------------------------------------------
+# ProxyChaining - config with chain_proxies
+# ---------------------------------------------------------------------------
+
+class TestProxyChaining:
+    def test_chain_proxies_enabled(self):
+        config = ProxyConfig(chain_proxies=True, max_chain_length=5)
+        assert config.chain_proxies is True
+        assert config.max_chain_length == 5
+
+    def test_chain_proxies_disabled(self):
+        config = ProxyConfig(chain_proxies=False)
+        assert config.chain_proxies is False
+        assert config.max_chain_length == 3
+
+    def test_max_chain_length_in_dict(self):
+        config = ProxyConfig(chain_proxies=True, max_chain_length=10)
+        d = config.to_dict()
+        assert d["chain_proxies"] is True
+        assert d["max_chain_length"] == 10
+
+    def test_max_chain_length_in_json(self):
+        config = ProxyConfig(chain_proxies=True, max_chain_length=7)
+        j = config.to_json()
+        assert "chain_proxies" in j
+
+    def test_chained_proxy_entries(self):
+        entry1 = ProxyEntry(ProxyType.Http, "proxy1.example.com", 8080, weight=2)
+        entry2 = ProxyEntry(ProxyType.Socks5, "proxy2.example.com", 1080, weight=1)
+        assert entry1.weight == 2
+        assert entry2.weight == 1
+        config = ProxyConfig(chain_proxies=True, max_chain_length=2)
+        d = config.to_dict()
+        assert d["max_chain_length"] == 2

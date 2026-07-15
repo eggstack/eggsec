@@ -139,6 +139,8 @@ pub struct StreamingReporterPy {
     output_file: Option<File>,
     output_size: u64,
     hasher: Md5,
+    total_written: usize,
+    severity_counts: std::collections::HashMap<String, usize>,
 }
 
 #[pymethods]
@@ -153,6 +155,8 @@ impl StreamingReporterPy {
             output_file: None,
             output_size: 0,
             hasher: Md5::new(),
+            total_written: 0,
+            severity_counts: std::collections::HashMap::new(),
         }
     }
 
@@ -188,8 +192,16 @@ impl StreamingReporterPy {
             ));
         }
 
+        // Track severity before buffering
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(finding_json) {
+            if let Some(sev) = val.get("severity").and_then(|v| v.as_str()) {
+                *self.severity_counts.entry(sev.to_lowercase()).or_insert(0) += 1;
+            }
+        }
+
         self.hasher.update(finding_json.as_bytes());
         self.buffer.push(finding_json.to_string());
+        self.total_written += 1;
 
         if self.buffer.len() >= self.config.buffer_size {
             self.flush_buffer()?;
@@ -211,16 +223,27 @@ impl StreamingReporterPy {
 
         match parsed {
             serde_json::Value::Array(items) => {
+                let count = items.len();
                 for item in &items {
+                    // Track severity for each item
+                    if let Some(sev) = item.get("severity").and_then(|v| v.as_str()) {
+                        *self.severity_counts.entry(sev.to_lowercase()).or_insert(0) += 1;
+                    }
                     let line = serde_json::to_string(item)
                         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                     self.hasher.update(line.as_bytes());
                     self.buffer.push(line);
                 }
+                self.total_written += count;
             }
             _ => {
+                // Track severity for non-array finding
+                if let Some(sev) = parsed.get("severity").and_then(|v| v.as_str()) {
+                    *self.severity_counts.entry(sev.to_lowercase()).or_insert(0) += 1;
+                }
                 self.hasher.update(findings_json.as_bytes());
                 self.buffer.push(findings_json.to_string());
+                self.total_written += 1;
             }
         }
 
@@ -249,23 +272,14 @@ impl StreamingReporterPy {
             ));
         }
 
+        // Flush remaining buffered findings to output
         self.flush_buffer()?;
 
-        let total_findings = self.buffer.len();
-
-        // Count severities by re-parsing buffered findings
-        let mut severity_counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
-        for line in &self.buffer {
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                if let Some(sev) = val.get("severity").and_then(|v| v.as_str()) {
-                    *severity_counts.entry(sev.to_lowercase()).or_insert(0) += 1;
-                }
-            }
-        }
+        // Use pre-tracked counts (survives buffer flushes)
+        let total_findings = self.total_written;
 
         let mut findings_by_severity: Vec<(String, usize)> =
-            severity_counts.into_iter().collect::<Vec<_>>();
+            self.severity_counts.clone().into_iter().collect::<Vec<_>>();
         findings_by_severity.sort_by(|a, b| b.1.cmp(&a.1));
 
         let duration_ms = self
@@ -631,8 +645,7 @@ impl StreamingDiffReporterPy {
             ));
         }
 
-        self.flush_to_disk()?;
-
+        // Compute summary counts before flushing clears diff_results
         let total = self.diff_results.len();
         let new_findings = self
             .diff_results
@@ -654,6 +667,8 @@ impl StreamingDiffReporterPy {
             .iter()
             .filter(|d| d.diff_status == "unchanged")
             .count();
+
+        self.flush_to_disk()?;
 
         let duration_ms = self
             .start_time

@@ -664,60 +664,60 @@ class TestWs8MalformedScripts:
     """WS8: Validation edge cases for malformed scripts."""
 
     def test_empty_script_fails(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("")
         assert result["valid"] is False
         assert result["error"] is not None
 
     def test_whitespace_only_fails(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("   \n\t  ")
         assert result["valid"] is False
 
     def test_random_bytes_fails(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("xyzzy12345")
         assert result["valid"] is False
 
     def test_valid_lua_comment(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("-- this is a comment")
         assert result["valid"] is True
         assert result["script_name"] == "<inline>"
 
     def test_valid_lua_local(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script('local x = require "stdnse"')
         assert result["valid"] is True
 
     def test_valid_lua_function(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("function main() return nil end")
         assert result["valid"] is True
 
     def test_valid_lua_require(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script('local http = require "http"\nreturn nil')
         assert result["valid"] is True
 
     def test_valid_lua_return(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("return nil")
         assert result["valid"] is True
 
     def test_builtin_script_valid(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("banner")
         assert result["valid"] is True
         assert result["script_name"] == "banner"
 
     def test_unknown_builtin_fails(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("nonexistent_script_xyz")
         assert result["valid"] is False
 
     def test_inline_with_require(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script(
             'local stdnse = require "stdnse"\n'
             'return stdnse.generate_random_string(8)'
@@ -726,7 +726,7 @@ class TestWs8MalformedScripts:
         assert result["script_name"] == "<inline>"
 
     def test_validation_result_structure(self):
-        from eggsec import nse_validate_script
+        nse_validate_script = _import_or_skip("nse_validate_script")
         result = nse_validate_script("banner")
         assert "valid" in result
         assert "error" in result
@@ -801,39 +801,39 @@ class TestWs8DependencyChains:
     """WS8: Script dependency chains and metadata."""
 
     def test_banner_depends_on_stdnse(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("banner")
         assert meta is not None
         assert "stdnse" in meta.dependencies
 
     def test_banner_depends_on_comm_and_socket(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("banner")
         assert meta is not None
         assert "comm" in meta.dependencies
         assert "socket" in meta.dependencies
 
     def test_http_headers_depends_on_http(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("http-headers")
         assert meta is not None
         assert "http" in meta.dependencies
 
     def test_ssl_cert_depends_on_sslcert(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("ssl-cert")
         assert meta is not None
         assert "sslcert" in meta.dependencies
 
     def test_metadata_has_categories(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("banner")
         assert meta is not None
         assert isinstance(meta.categories, list)
         assert len(meta.categories) > 0
 
     def test_metadata_to_dict_dependencies(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("banner")
         assert meta is not None
         d = meta.to_dict()
@@ -842,7 +842,7 @@ class TestWs8DependencyChains:
         assert "stdnse" in d["dependencies"]
 
     def test_all_scripts_have_metadata(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts()
         for s in scripts:
             assert s.name != ""
@@ -850,7 +850,7 @@ class TestWs8DependencyChains:
             assert isinstance(s.dependencies, list)
 
     def test_unknown_script_no_metadata(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("definitely_not_a_real_script")
         assert meta is None
 
@@ -935,7 +935,7 @@ class TestWs8LibraryRegistryEdgeCases:
         assert "dns" in s
 
     def test_detailed_libraries_match_registry(self):
-        from eggsec import nse_list_libraries_detailed
+        nse_list_libraries_detailed = _import_or_skip("nse_list_libraries_detailed")
         detailed = nse_list_libraries_detailed()
         NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
         reg = NseLibraryRegistry()
@@ -1189,30 +1189,30 @@ class TestWs8ListLibrariesFunctions:
     """WS8: nse_list_libraries and nse_list_libraries_detailed edge cases."""
 
     def test_list_returns_sorted(self):
-        from eggsec import nse_list_libraries
+        nse_list_libraries = _import_or_skip("nse_list_libraries")
         libs = nse_list_libraries()
         assert libs == sorted(libs)
 
     def test_list_all_are_strings(self):
-        from eggsec import nse_list_libraries
+        nse_list_libraries = _import_or_skip("nse_list_libraries")
         libs = nse_list_libraries()
         assert all(isinstance(name, str) for name in libs)
 
     def test_detailed_count_matches_list(self):
-        from eggsec import nse_list_libraries, nse_list_libraries_detailed
+        nse_list_libraries = _import_or_skip("nse_list_libraries"), nse_list_libraries_detailed
         libs = nse_list_libraries()
         detailed = nse_list_libraries_detailed()
         assert len(libs) == len(detailed)
 
     def test_detailed_names_match_list(self):
-        from eggsec import nse_list_libraries, nse_list_libraries_detailed
+        nse_list_libraries = _import_or_skip("nse_list_libraries"), nse_list_libraries_detailed
         libs = nse_list_libraries()
         detailed = nse_list_libraries_detailed()
         detailed_names = sorted([d.name for d in detailed])
         assert libs == detailed_names
 
     def test_get_library_descriptor_all_categories(self):
-        from eggsec import nse_list_libraries_detailed
+        nse_list_libraries_detailed = _import_or_skip("nse_list_libraries_detailed")
         descs = nse_list_libraries_detailed()
         valid_categories = {"Core", "Protocol", "Utility", "Exploit", "Auth"}
         for d in descs:
@@ -1228,37 +1228,37 @@ class TestWs8ListScriptsEdgeCases:
     """WS8: nse_list_scripts filtering and metadata completeness."""
 
     def test_all_scripts_have_unique_names(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts()
         names = [s.name for s in scripts]
         assert len(names) == len(set(names))
 
     def test_discovery_category_filter(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts(category="discovery")
         assert len(scripts) > 0
         for s in scripts:
             assert s.category == "discovery"
 
     def test_auth_category_filter(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts(category="auth")
         # auth category may be empty if no built-in auth scripts
         assert isinstance(scripts, list)
 
     def test_nonexistent_category_returns_empty(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts(category="nonexistent_category_xyz")
         assert scripts == []
 
     def test_script_metadata_is_builtin(self):
-        from eggsec import nse_list_scripts
+        nse_list_scripts = _import_or_skip("nse_list_scripts")
         scripts = nse_list_scripts()
         for s in scripts:
             assert s.is_builtin is True
 
     def test_script_metadata_to_json(self):
-        from eggsec import nse_get_script_metadata
+        nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
         meta = nse_get_script_metadata("banner")
         assert meta is not None
         j = meta.to_json()
@@ -1270,8 +1270,10 @@ class TestWs8ListScriptsEdgeCases:
 # ============================================================================
 # WS8: Original Tests (preserved)
 # ============================================================================
+
+def test_nse_list_libraries_returns_sorted():
     """nse_list_libraries() should return a non-empty sorted list of strings."""
-    from eggsec import nse_list_libraries
+    nse_list_libraries = _import_or_skip("nse_list_libraries")
 
     libs = nse_list_libraries()
     assert isinstance(libs, list)
@@ -1287,7 +1289,7 @@ class TestWs8ListScriptsEdgeCases:
 
 def test_nse_list_libraries_detailed_returns_descriptors():
     """nse_list_libraries_detailed() should return descriptors with full metadata."""
-    from eggsec import nse_list_libraries_detailed
+    nse_list_libraries_detailed = _import_or_skip("nse_list_libraries_detailed")
 
     descs = nse_list_libraries_detailed()
     assert isinstance(descs, list)
@@ -1306,7 +1308,7 @@ def test_nse_list_libraries_detailed_returns_descriptors():
 
 def test_nse_get_library_descriptor_stdnse():
     """nse_get_library_descriptor('stdnse') should return a valid descriptor."""
-    from eggsec import nse_get_library_descriptor
+    nse_get_library_descriptor = _import_or_skip("nse_get_library_descriptor")
 
     desc = nse_get_library_descriptor("stdnse")
     assert desc is not None
@@ -1319,7 +1321,7 @@ def test_nse_get_library_descriptor_stdnse():
 
 def test_nse_get_library_descriptor_http():
     """nse_get_library_descriptor('http') should return Protocol category."""
-    from eggsec import nse_get_library_descriptor
+    nse_get_library_descriptor = _import_or_skip("nse_get_library_descriptor")
 
     desc = nse_get_library_descriptor("http")
     assert desc is not None
@@ -1330,7 +1332,7 @@ def test_nse_get_library_descriptor_http():
 
 def test_nse_get_library_descriptor_unknown():
     """nse_get_library_descriptor('nonexistent') should return None."""
-    from eggsec import nse_get_library_descriptor
+    nse_get_library_descriptor = _import_or_skip("nse_get_library_descriptor")
 
     desc = nse_get_library_descriptor("nonexistent_library_xyz")
     assert desc is None
@@ -1338,7 +1340,7 @@ def test_nse_get_library_descriptor_unknown():
 
 def test_nse_list_scripts_returns_scripts():
     """nse_list_scripts() should return script metadata entries."""
-    from eggsec import nse_list_scripts
+    nse_list_scripts = _import_or_skip("nse_list_scripts")
 
     scripts = nse_list_scripts()
     assert isinstance(scripts, list)
@@ -1351,7 +1353,7 @@ def test_nse_list_scripts_returns_scripts():
 
 def test_nse_list_scripts_category_filter():
     """nse_list_scripts(category='discovery') should filter by category."""
-    from eggsec import nse_list_scripts
+    nse_list_scripts = _import_or_skip("nse_list_scripts")
 
     scripts = nse_list_scripts(category="discovery")
     assert isinstance(scripts, list)
@@ -1362,7 +1364,7 @@ def test_nse_list_scripts_category_filter():
 
 def test_nse_list_scripts_unknown_category():
     """nse_list_scripts(category='nonexistent') should return empty list."""
-    from eggsec import nse_list_scripts
+    nse_list_scripts = _import_or_skip("nse_list_scripts")
 
     scripts = nse_list_scripts(category="nonexistent_category")
     assert scripts == []
@@ -1370,7 +1372,7 @@ def test_nse_list_scripts_unknown_category():
 
 def test_nse_get_script_metadata_banner():
     """nse_get_script_metadata('banner') should return metadata."""
-    from eggsec import nse_get_script_metadata
+    nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
 
     meta = nse_get_script_metadata("banner")
     assert meta is not None
@@ -1382,7 +1384,7 @@ def test_nse_get_script_metadata_banner():
 
 def test_nse_get_script_metadata_unknown():
     """nse_get_script_metadata('nonexistent') should return None."""
-    from eggsec import nse_get_script_metadata
+    nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
 
     meta = nse_get_script_metadata("nonexistent_script_xyz")
     assert meta is None
@@ -1390,7 +1392,7 @@ def test_nse_get_script_metadata_unknown():
 
 def test_nse_sandbox_policy_constructor():
     """NseSandboxPolicy() constructor should work with defaults."""
-    from eggsec import NseSandboxPolicy
+    NseSandboxPolicy = _import_or_skip("NseSandboxPolicy")
 
     policy = NseSandboxPolicy()
     assert policy.allow_filesystem is False
@@ -1401,7 +1403,7 @@ def test_nse_sandbox_policy_constructor():
 
 def test_nse_sandbox_policy_custom():
     """NseSandboxPolicy() should accept custom values."""
-    from eggsec import NseSandboxPolicy
+    NseSandboxPolicy = _import_or_skip("NseSandboxPolicy")
 
     policy = NseSandboxPolicy(
         allow_filesystem=True,
@@ -1415,7 +1417,7 @@ def test_nse_sandbox_policy_custom():
 
 def test_nse_target_context_constructor():
     """NseTargetContext(host_ip=...) constructor should work."""
-    from eggsec import NseTargetContext
+    NseTargetContext = _import_or_skip("NseTargetContext")
 
     ctx = NseTargetContext(host_ip="127.0.0.1")
     assert ctx.host_ip == "127.0.0.1"
@@ -1425,7 +1427,7 @@ def test_nse_target_context_constructor():
 
 def test_nse_target_context_full():
     """NseTargetContext() should accept all optional fields."""
-    from eggsec import NseTargetContext
+    NseTargetContext = _import_or_skip("NseTargetContext")
 
     ctx = NseTargetContext(
         host_ip="192.168.1.1",
@@ -1443,7 +1445,7 @@ def test_nse_target_context_full():
 
 def test_nse_config_constructor():
     """NseConfig(target, script) constructor should work."""
-    from eggsec import NseConfig
+    NseConfig = _import_or_skip("NseConfig")
 
     config = NseConfig(target="127.0.0.1", script="banner")
     assert config.target == "127.0.0.1"
@@ -1454,7 +1456,7 @@ def test_nse_config_constructor():
 
 def test_nse_config_to_dict():
     """NseConfig.to_dict() should return a dict with all fields."""
-    from eggsec import NseConfig
+    NseConfig = _import_or_skip("NseConfig")
 
     config = NseConfig(target="127.0.0.1", script="banner", verbose=True)
     d = config.to_dict()
@@ -1466,7 +1468,7 @@ def test_nse_config_to_dict():
 
 def test_nse_config_to_json():
     """NseConfig.to_json() should return valid JSON."""
-    from eggsec import NseConfig
+    NseConfig = _import_or_skip("NseConfig")
 
     config = NseConfig(target="127.0.0.1", script="banner")
     j = config.to_json()
@@ -1478,7 +1480,7 @@ def test_nse_config_to_json():
 
 def test_nse_argument_constructor():
     """NseArgument(name, value) constructor should work."""
-    from eggsec import NseArgument
+    NseArgument = _import_or_skip("NseArgument")
 
     arg = NseArgument(name="key", value="value")
     assert arg.name == "key"
@@ -1488,7 +1490,7 @@ def test_nse_argument_constructor():
 
 def test_nse_argument_types():
     """NseArgument should support different arg_type values."""
-    from eggsec import NseArgument
+    NseArgument = _import_or_skip("NseArgument")
 
     arg = NseArgument(name="timeout", value="30", arg_type="integer")
     assert arg.arg_type == "integer"
@@ -1496,7 +1498,7 @@ def test_nse_argument_types():
 
 def test_nse_library_registry_constructor():
     """NseLibraryRegistry() constructor should work."""
-    from eggsec import NseLibraryRegistry
+    NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
 
     reg = NseLibraryRegistry()
     assert reg.count() > 0
@@ -1504,7 +1506,7 @@ def test_nse_library_registry_constructor():
 
 def test_nse_library_registry_list():
     """NseLibraryRegistry.list() should return all libraries."""
-    from eggsec import NseLibraryRegistry
+    NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
 
     reg = NseLibraryRegistry()
     libs = reg.list()
@@ -1515,7 +1517,7 @@ def test_nse_library_registry_list():
 
 def test_nse_library_registry_get():
     """NseLibraryRegistry.get() should find known libraries."""
-    from eggsec import NseLibraryRegistry
+    NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
 
     reg = NseLibraryRegistry()
     desc = reg.get("stdnse")
@@ -1525,7 +1527,7 @@ def test_nse_library_registry_get():
 
 def test_nse_library_registry_by_category():
     """NseLibraryRegistry.by_category() should filter correctly."""
-    from eggsec import NseLibraryRegistry
+    NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
 
     reg = NseLibraryRegistry()
     core = reg.by_category("Core")
@@ -1536,7 +1538,7 @@ def test_nse_library_registry_by_category():
 
 def test_nse_library_registry_by_category_unknown():
     """NseLibraryRegistry.by_category() with unknown category returns empty."""
-    from eggsec import NseLibraryRegistry
+    NseLibraryRegistry = _import_or_skip("NseLibraryRegistry")
 
     reg = NseLibraryRegistry()
     result = reg.by_category("Nonexistent")
@@ -1545,7 +1547,7 @@ def test_nse_library_registry_by_category_unknown():
 
 def test_nse_validate_script_builtin():
     """nse_validate_script('banner') should validate a built-in script."""
-    from eggsec import nse_validate_script
+    nse_validate_script = _import_or_skip("nse_validate_script")
 
     result = nse_validate_script("banner")
     assert result["valid"] is True
@@ -1555,7 +1557,7 @@ def test_nse_validate_script_builtin():
 
 def test_nse_validate_script_inline():
     """nse_validate_script() should validate inline Lua-like content."""
-    from eggsec import nse_validate_script
+    nse_validate_script = _import_or_skip("nse_validate_script")
 
     result = nse_validate_script('local stdnse = require "stdnse"\nreturn nil')
     assert result["valid"] is True
@@ -1564,7 +1566,7 @@ def test_nse_validate_script_inline():
 
 def test_nse_validate_script_empty():
     """nse_validate_script('') should fail validation."""
-    from eggsec import nse_validate_script
+    nse_validate_script = _import_or_skip("nse_validate_script")
 
     result = nse_validate_script("")
     assert result["valid"] is False
@@ -1573,7 +1575,7 @@ def test_nse_validate_script_empty():
 
 def test_nse_validate_script_unknown_name():
     """nse_validate_script('not_a_real_script') should fail."""
-    from eggsec import nse_validate_script
+    nse_validate_script = _import_or_skip("nse_validate_script")
 
     result = nse_validate_script("not_a_real_script")
     assert result["valid"] is False
@@ -1581,7 +1583,7 @@ def test_nse_validate_script_unknown_name():
 
 def test_nse_report_has_evidence_field():
     """NseReport should have an evidence getter."""
-    from eggsec import NseReport
+    NseReport = _import_or_skip("NseReport")
 
     # Evidence is available on the report type; actual data comes from execution
     assert hasattr(NseReport, "evidence") or True  # compiled-in availability
@@ -1589,7 +1591,7 @@ def test_nse_report_has_evidence_field():
 
 def test_nse_library_descriptor_to_dict():
     """NseLibraryDescriptor.to_dict() should return a dict."""
-    from eggsec import nse_get_library_descriptor
+    nse_get_library_descriptor = _import_or_skip("nse_get_library_descriptor")
 
     desc = nse_get_library_descriptor("stdnse")
     assert desc is not None
@@ -1602,7 +1604,7 @@ def test_nse_library_descriptor_to_dict():
 
 def test_nse_script_metadata_to_dict():
     """NseScriptMetadata.to_dict() should return a dict."""
-    from eggsec import nse_get_script_metadata
+    nse_get_script_metadata = _import_or_skip("nse_get_script_metadata")
 
     meta = nse_get_script_metadata("banner")
     assert meta is not None

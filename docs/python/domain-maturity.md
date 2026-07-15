@@ -127,6 +127,38 @@ session. Previously, each `PyFuture` spawned its own per-call runtime that
 shut down on completion, preventing chained operations. All async transport
 lifecycle tests now pass without skip markers.
 
+## Operational Correction Pass Status (Releases 1-4)
+
+| Workstream | Status | Evidence |
+|------------|--------|----------|
+| WS1: Shared async runtime | Closed | `OnceLock<Runtime>`, 94/94 lifecycle tests pass |
+| WS2: NSE runtime types | In progress | Library registry, script validation, evidence types registered; test coverage expanding |
+| WS3: Interception proxy types | In progress | Session lifecycle, filtering, CA management, HAR export types registered |
+| WS4: Database assessment types | In progress | Driver registry, session types, credential providers, query execution types registered |
+| WS5: Network programmability | In progress | Target resolution, managed sessions, probes, HTTP client, WebSocket types registered |
+| WS6: Policy & execution context | In progress | EnforcementContext, OperationRegistry, PreflightResult, audit types registered |
+| WS7: Finding workflow & storage | In progress | FindingRepository, AssessmentRepository, BaselineComparator, compliance types registered |
+| WS8: Domain registry & events | In progress | Domain registry, versioned event protocol, callback/sink contracts registered |
+| WS9: Streaming reporting | Closed | StreamingReporter, StreamingDiffReporter, ReportManifest with artifact integration tests |
+| WS10: Capability metadata | Closed | `_capabilities.json` validated against 22-operation registry; domain-maturity.md operational evidence added |
+| WS11: Type stubs & API surface | In progress | Type stubs generated; runtime `api_surface()` introspection available |
+| WS12: Release fixtures & validation | In progress | Loopback fixtures, wheel smoke tests, architecture guards |
+
+WS9 closure evidence: 40+ streaming operational tests covering config
+construction, incremental finding writes, buffer flush, summary generation,
+severity distribution, large-volume handling (1000+ findings), output formats
+(JSON/JSONL/CSV/Markdown), cancellation with partial report consistency,
+secret redaction configuration, diff reporter with baseline comparison
+(new/unchanged/changed finding tracking), ReportManifest construction with
+artifact references and content hash verification.
+
+WS10 closure evidence: `_capabilities.json` version 2 schema validated against
+the twenty-two-operation stable registry. All operation entries include
+`last_validated_commit`, `installed_wheel`, `direct_function_delegates`, and
+`test_fixture` fields. Domain maturity table cross-referenced with operation
+metadata. Streaming reporting types (`StreamingReporter`, `ReportDiff`,
+`ReportManifest`) added to Release 4 provisional table.
+
 ## Release 2: Network Programmability (Provisional)
 
 | Symbol | Stability | Notes |

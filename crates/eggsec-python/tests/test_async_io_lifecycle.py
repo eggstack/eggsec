@@ -34,9 +34,14 @@ AsyncUdpSocket = eggsec.AsyncUdpSocketPy
 HttpClientConfig = eggsec.HttpClientConfigPy
 AsyncHttpClient = eggsec.AsyncHttpClientPy
 
-# Capture types are already aliased in eggsec.__init__
-CaptureConfig = eggsec.CaptureConfig
-AsyncCaptureSession = eggsec.AsyncCaptureSession
+# Capture types — feature-gated (packet-inspection)
+_CAPTURE_AVAILABLE = hasattr(eggsec, "CaptureConfigPy")
+if _CAPTURE_AVAILABLE:
+    CaptureConfig = eggsec.CaptureConfigPy
+    AsyncCaptureSession = eggsec.AsyncCaptureSessionPy
+else:
+    CaptureConfig = None
+    AsyncCaptureSession = None
 
 # WebSocket types — feature-gated
 _WEBSOCKET_AVAILABLE = hasattr(eggsec, "AsyncWebSocketSessionPy")
