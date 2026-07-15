@@ -1930,7 +1930,7 @@ impl AsyncEngine {
             let path_ref = std::path::Path::new(&apk_path);
             let result = eggsec::mobile::analyze_apk(path_ref)
                 .await
-                .map_err(|e| anyhow::anyhow!("APK analysis failed: {}", e))?;
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("APK analysis failed: {}", e)))?;
             Ok(crate::mobile::MobileScanReportPy::from_engine(result))
         })
     }
@@ -1941,7 +1941,7 @@ impl AsyncEngine {
             let path_ref = std::path::Path::new(&ipa_path);
             let result = eggsec::mobile::analyze_ipa(path_ref)
                 .await
-                .map_err(|e| anyhow::anyhow!("IPA analysis failed: {}", e))?;
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("IPA analysis failed: {}", e)))?;
             Ok(crate::mobile::MobileScanReportPy::from_engine(result))
         })
     }

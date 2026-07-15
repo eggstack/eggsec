@@ -968,6 +968,85 @@ try:
 except (AttributeError, ImportError):
     pass
 
+# Release 4: Common managed-session contract (WS1) (always available)
+SessionState = _core.SessionState
+SessionIdentity = _core.SessionIdentity
+SessionStats = _core.SessionStats
+SessionCloseMode = _core.SessionCloseMode
+SessionEvent = _core.SessionEvent
+SessionEventStream = _core.SessionEventStream
+SessionCapabilities = _core.SessionCapabilities
+
+# Release 4: Mobile session lifecycle (WS2-6) (feature-gated: mobile)
+try:
+    MobileDeviceDescriptor = _core.MobileDeviceDescriptor
+    MobileDeviceCapabilities = _core.MobileDeviceCapabilities
+    MobileSessionConfig = _core.MobileSessionConfig
+    MobileSessionState = _core.MobileSessionState
+    MobileSessionStats = _core.MobileSessionStats
+    MobileSession = _core.MobileSession
+    AsyncMobileSession = _core.AsyncMobileSession
+    MobileDeviceRegistry = _core.MobileDeviceRegistry
+except (AttributeError, ImportError):
+    pass
+
+# Release 4: Browser session lifecycle (WS7-11) (feature-gated: headless-browser)
+try:
+    BrowserCapabilities = _core.BrowserCapabilities
+    BrowserSessionState = _core.BrowserSessionState
+    BrowserSessionConfig = _core.BrowserSessionConfig
+    BrowserSessionStats = _core.BrowserSessionStats
+    BrowserNavigationEvent = _core.BrowserNavigationEvent
+    BrowserConsoleEvent = _core.BrowserConsoleEvent
+    BrowserNetworkEvent = _core.BrowserNetworkEvent
+    BrowserDomSnapshot = _core.BrowserDomSnapshot
+    BrowserFormInfo = _core.BrowserFormInfo
+    BrowserFormField = _core.BrowserFormField
+    BrowserLinkInfo = _core.BrowserLinkInfo
+    BrowserStorageInfo = _core.BrowserStorageInfo
+    BrowserCookieInfo = _core.BrowserCookieInfo
+    BrowserSession = _core.BrowserSession
+    AsyncBrowserSession = _core.AsyncBrowserSession
+except (AttributeError, ImportError):
+    pass
+
+# Release 4: Daemon parity types (WS12-18) (always available)
+DaemonProtocolVersion = _core.DaemonProtocolVersion
+IdempotencyKey = _core.IdempotencyKey
+DaemonSubmissionResult = _core.DaemonSubmissionResult
+ReconnectOptions = _core.ReconnectOptions
+ReplayCursor = _core.ReplayCursor
+ReplayResult = _core.ReplayResult
+DaemonEventPy = _core.DaemonEventPy
+CancellationRequest = _core.CancellationRequest
+CancellationResult = _core.CancellationResult
+TaskArtifactDescriptor = _core.TaskArtifactDescriptor
+EventReplayInfo = _core.EventReplayInfo
+DaemonHealthDetail = _core.DaemonHealthDetail
+
+# Release 4: SQLite repository (WS20-22) (always available)
+SqliteFindingRepository = _core.SqliteFindingRepository
+SqliteAssessmentRepository = _core.SqliteAssessmentRepository
+SqliteMigration = _core.SqliteMigration
+SqliteMigrationResult = _core.SqliteMigrationResult
+
+# Release 4: Content-addressed artifact store (WS23) (always available)
+ContentAddressedArtifactStore = _core.ContentAddressedArtifactStore
+DirectoryArtifactStore = _core.DirectoryArtifactStore
+ArtifactInfo = _core.ArtifactInfo
+ArtifactData = _core.ArtifactData
+IntegrityResult = _core.IntegrityResult
+ArtifactQuery = _core.ArtifactQuery
+
+# Release 4: Streaming reporting (WS26-27) (always available)
+StreamingReportConfig = _core.StreamingReportConfig
+StreamingReporter = _core.StreamingReporter
+ReportSummary = _core.ReportSummary
+StreamingDiffReporter = _core.StreamingDiffReporter
+FindingDiffResult = _core.FindingDiffResult
+DiffReportSummary = _core.DiffReportSummary
+ReportManifest = _core.ReportManifest
+
 # Re-export exceptions
 EggsecError = _core.EggsecError
 ConfigError = _core.ConfigError
@@ -1521,6 +1600,72 @@ __all__ = [
     "WebSocketAssessmentResultPy",
     "websocket_assess",
     "async_websocket_assess",
+    # Release 4: Common managed-session contract (WS1)
+    "SessionState",
+    "SessionIdentity",
+    "SessionStats",
+    "SessionCloseMode",
+    "SessionEvent",
+    "SessionEventStream",
+    "SessionCapabilities",
+    # Release 4: Mobile session lifecycle (WS2-6) (feature-gated)
+    "MobileDeviceDescriptor",
+    "MobileDeviceCapabilities",
+    "MobileSessionConfig",
+    "MobileSessionState",
+    "MobileSessionStats",
+    "MobileSession",
+    "AsyncMobileSession",
+    "MobileDeviceRegistry",
+    # Release 4: Browser session lifecycle (WS7-11) (feature-gated)
+    "BrowserCapabilities",
+    "BrowserSessionState",
+    "BrowserSessionConfig",
+    "BrowserSessionStats",
+    "BrowserNavigationEvent",
+    "BrowserConsoleEvent",
+    "BrowserNetworkEvent",
+    "BrowserDomSnapshot",
+    "BrowserFormInfo",
+    "BrowserFormField",
+    "BrowserLinkInfo",
+    "BrowserStorageInfo",
+    "BrowserCookieInfo",
+    "BrowserSession",
+    "AsyncBrowserSession",
+    # Release 4: Daemon parity types (WS12-18)
+    "DaemonProtocolVersion",
+    "IdempotencyKey",
+    "DaemonSubmissionResult",
+    "ReconnectOptions",
+    "ReplayCursor",
+    "ReplayResult",
+    "DaemonEventPy",
+    "CancellationRequest",
+    "CancellationResult",
+    "TaskArtifactDescriptor",
+    "EventReplayInfo",
+    "DaemonHealthDetail",
+    # Release 4: SQLite repository (WS20-22)
+    "SqliteFindingRepository",
+    "SqliteAssessmentRepository",
+    "SqliteMigration",
+    "SqliteMigrationResult",
+    # Release 4: Content-addressed artifact store (WS23)
+    "ContentAddressedArtifactStore",
+    "DirectoryArtifactStore",
+    "ArtifactInfo",
+    "ArtifactData",
+    "IntegrityResult",
+    "ArtifactQuery",
+    # Release 4: Streaming reporting (WS26-27)
+    "StreamingReportConfig",
+    "StreamingReporter",
+    "ReportSummary",
+    "StreamingDiffReporter",
+    "FindingDiffResult",
+    "DiffReportSummary",
+    "ReportManifest",
 ]
 
 # Keep the runtime export contract truthful for feature-gated builds. The

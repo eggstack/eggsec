@@ -17,9 +17,11 @@ mod client;
 mod config_model;
 #[cfg(feature = "container")]
 mod container;
+mod content_addressed_store;
 mod cvss;
 #[cfg(feature = "daemon-client")]
 mod daemon;
+mod daemon_parity;
 #[cfg(feature = "db-pentest")]
 mod db_pentest;
 mod deprecated;
@@ -50,6 +52,8 @@ mod lazy_load;
 mod loadtest;
 #[cfg(feature = "mobile")]
 mod mobile;
+#[cfg(feature = "mobile")]
+mod mobile_session;
 mod network;
 #[cfg(feature = "nse")]
 mod nse;
@@ -75,9 +79,12 @@ mod sbom;
 mod scanner;
 mod scope;
 mod scope_eval;
+mod session_contract;
+mod sqlite_repository;
 mod status;
 #[cfg(feature = "stress-testing")]
 mod stress;
+mod streaming_reporter;
 mod version;
 mod waf;
 mod waf_validation;
@@ -86,6 +93,8 @@ mod waf_validation;
 mod ai_postprocess;
 #[cfg(feature = "headless-browser")]
 mod browser_assess;
+#[cfg(feature = "headless-browser")]
+mod browser_session;
 #[cfg(feature = "c2")]
 mod c2;
 #[cfg(feature = "compliance")]
@@ -354,6 +363,34 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<mobile::MobileDevicePy>()?;
         m.add_class::<mobile::DynamicMobileConfigPy>()?;
         m.add_class::<mobile::DynamicMobileReportPy>()?;
+        // WS2-6: Mobile session lifecycle
+        m.add_class::<mobile_session::MobileDeviceDescriptor>()?;
+        m.add_class::<mobile_session::MobileDeviceCapabilities>()?;
+        m.add_class::<mobile_session::MobileSessionConfig>()?;
+        m.add_class::<mobile_session::MobileSessionState>()?;
+        m.add_class::<mobile_session::MobileSessionStats>()?;
+        m.add_class::<mobile_session::MobileSession>()?;
+        m.add_class::<mobile_session::AsyncMobileSession>()?;
+        m.add_class::<mobile_session::MobileDeviceRegistry>()?;
+    }
+    // WS7-11: Browser session lifecycle
+    #[cfg(feature = "headless-browser")]
+    {
+        m.add_class::<browser_session::BrowserCapabilities>()?;
+        m.add_class::<browser_session::BrowserSessionState>()?;
+        m.add_class::<browser_session::BrowserSessionConfig>()?;
+        m.add_class::<browser_session::BrowserSessionStats>()?;
+        m.add_class::<browser_session::BrowserNavigationEvent>()?;
+        m.add_class::<browser_session::BrowserConsoleEvent>()?;
+        m.add_class::<browser_session::BrowserNetworkEvent>()?;
+        m.add_class::<browser_session::BrowserDomSnapshot>()?;
+        m.add_class::<browser_session::BrowserFormInfo>()?;
+        m.add_class::<browser_session::BrowserFormField>()?;
+        m.add_class::<browser_session::BrowserLinkInfo>()?;
+        m.add_class::<browser_session::BrowserStorageInfo>()?;
+        m.add_class::<browser_session::BrowserCookieInfo>()?;
+        m.add_class::<browser_session::BrowserSession>()?;
+        m.add_class::<browser_session::AsyncBrowserSession>()?;
     }
     // Phase F Track 6: Database pentesting
     #[cfg(feature = "db-pentest")]
@@ -820,6 +857,47 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         )?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_subscribe, m)?)?;
     }
+    // Release 4: Common managed-session contract (WS1)
+    m.add_class::<session_contract::SessionState>()?;
+    m.add_class::<session_contract::SessionIdentity>()?;
+    m.add_class::<session_contract::SessionStats>()?;
+    m.add_class::<session_contract::SessionCloseMode>()?;
+    m.add_class::<session_contract::SessionEvent>()?;
+    m.add_class::<session_contract::SessionEventStream>()?;
+    m.add_class::<session_contract::SessionCapabilities>()?;
+    // Release 4: Daemon parity types (WS12-18)
+    m.add_class::<daemon_parity::DaemonProtocolVersion>()?;
+    m.add_class::<daemon_parity::IdempotencyKey>()?;
+    m.add_class::<daemon_parity::DaemonSubmissionResult>()?;
+    m.add_class::<daemon_parity::ReconnectOptions>()?;
+    m.add_class::<daemon_parity::ReplayCursor>()?;
+    m.add_class::<daemon_parity::ReplayResult>()?;
+    m.add_class::<daemon_parity::DaemonEventPy>()?;
+    m.add_class::<daemon_parity::CancellationRequest>()?;
+    m.add_class::<daemon_parity::CancellationResult>()?;
+    m.add_class::<daemon_parity::TaskArtifactDescriptor>()?;
+    m.add_class::<daemon_parity::EventReplayInfo>()?;
+    m.add_class::<daemon_parity::DaemonHealthDetail>()?;
+    // Release 4: SQLite repository (WS20-22)
+    m.add_class::<sqlite_repository::SqliteFindingRepository>()?;
+    m.add_class::<sqlite_repository::SqliteAssessmentRepository>()?;
+    m.add_class::<sqlite_repository::SqliteMigration>()?;
+    m.add_class::<sqlite_repository::MigrationResult>()?;
+    // Release 4: Content-addressed artifact store (WS23)
+    m.add_class::<content_addressed_store::ContentAddressedArtifactStore>()?;
+    m.add_class::<content_addressed_store::DirectoryArtifactStore>()?;
+    m.add_class::<content_addressed_store::ArtifactInfo>()?;
+    m.add_class::<content_addressed_store::ArtifactData>()?;
+    m.add_class::<content_addressed_store::IntegrityResult>()?;
+    m.add_class::<content_addressed_store::ArtifactQuery>()?;
+    // Release 4: Streaming reporting (WS26-27)
+    m.add_class::<streaming_reporter::StreamingReportConfigPy>()?;
+    m.add_class::<streaming_reporter::StreamingReporterPy>()?;
+    m.add_class::<streaming_reporter::ReportSummaryPy>()?;
+    m.add_class::<streaming_reporter::StreamingDiffReporterPy>()?;
+    m.add_class::<streaming_reporter::FindingDiffResultPy>()?;
+    m.add_class::<streaming_reporter::DiffReportSummaryPy>()?;
+    m.add_class::<streaming_reporter::ReportManifestPy>()?;
     // Milestone C: Core assessment domains
     // C1: Consolidated recon
     m.add_class::<consolidated_recon::ConsolidatedReconConfigPy>()?;
@@ -1564,6 +1642,70 @@ fn api_surface() -> PyObject {
         add_entry!("SCHEMA_VERSION", "stable");
         add_entry!("PROTOCOL_VERSION", "stable");
         add_entry!("ABI_VERSION", "stable");
+
+        // Release 4: Common managed-session contract (WS1)
+        add_entry!("SessionState", "provisional");
+        add_entry!("SessionIdentity", "provisional");
+        add_entry!("SessionStats", "provisional");
+        add_entry!("SessionCloseMode", "provisional");
+        add_entry!("SessionEvent", "provisional");
+        add_entry!("SessionEventStream", "provisional");
+        add_entry!("SessionCapabilities", "provisional");
+        // Release 4: Mobile session lifecycle (WS2-6)
+        add_entry!("MobileDeviceDescriptor", "provisional");
+        add_entry!("MobileDeviceCapabilities", "provisional");
+        add_entry!("MobileSessionConfig", "provisional");
+        add_entry!("MobileSessionState", "provisional");
+        add_entry!("MobileSessionStats", "provisional");
+        add_entry!("MobileSession", "provisional");
+        add_entry!("AsyncMobileSession", "provisional");
+        add_entry!("MobileDeviceRegistry", "provisional");
+        // Release 4: Browser session lifecycle (WS7-11)
+        add_entry!("BrowserCapabilities", "provisional");
+        add_entry!("BrowserSessionState", "provisional");
+        add_entry!("BrowserSessionConfig", "provisional");
+        add_entry!("BrowserSessionStats", "provisional");
+        add_entry!("BrowserNavigationEvent", "provisional");
+        add_entry!("BrowserConsoleEvent", "provisional");
+        add_entry!("BrowserNetworkEvent", "provisional");
+        add_entry!("BrowserDomSnapshot", "provisional");
+        add_entry!("BrowserFormInfo", "provisional");
+        add_entry!("BrowserFormField", "provisional");
+        add_entry!("BrowserLinkInfo", "provisional");
+        add_entry!("BrowserStorageInfo", "provisional");
+        add_entry!("BrowserCookieInfo", "provisional");
+        add_entry!("BrowserSession", "provisional");
+        add_entry!("AsyncBrowserSession", "provisional");
+        // Release 4: Daemon parity (WS12-18)
+        add_entry!("DaemonProtocolVersion", "provisional");
+        add_entry!("IdempotencyKey", "provisional");
+        add_entry!("DaemonSubmissionResult", "provisional");
+        add_entry!("ReconnectOptions", "provisional");
+        add_entry!("ReplayCursor", "provisional");
+        add_entry!("ReplayResult", "provisional");
+        add_entry!("CancellationRequest", "provisional");
+        add_entry!("CancellationResult", "provisional");
+        add_entry!("TaskArtifactDescriptor", "provisional");
+        add_entry!("EventReplayInfo", "provisional");
+        add_entry!("DaemonHealthDetail", "provisional");
+        // Release 4: SQLite repository (WS20-22)
+        add_entry!("SqliteFindingRepository", "provisional");
+        add_entry!("SqliteAssessmentRepository", "provisional");
+        add_entry!("SqliteMigration", "provisional");
+        // Release 4: Content-addressed artifact store (WS23)
+        add_entry!("ContentAddressedArtifactStore", "provisional");
+        add_entry!("DirectoryArtifactStore", "provisional");
+        add_entry!("ArtifactInfo", "provisional");
+        add_entry!("IntegrityResult", "provisional");
+        add_entry!("ArtifactQuery", "provisional");
+        // Release 4: Streaming reporting (WS26-27)
+        add_entry!("StreamingReportConfig", "provisional");
+        add_entry!("StreamingReporter", "provisional");
+        add_entry!("ReportSummary", "provisional");
+        add_entry!("StreamingDiffReporter", "provisional");
+        add_entry!("FindingDiffResult", "provisional");
+        add_entry!("DiffReportSummary", "provisional");
+        add_entry!("ReportManifest", "provisional");
 
         // Deprecated
         add_entry!(

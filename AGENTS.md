@@ -45,7 +45,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 4 completed) |
 
 ## Build & Test Commands
 
@@ -208,9 +208,9 @@ Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `insecure-tls`, `
 
 CLI features: `tui` (default), `daemon-client`, `headless`
 
-Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Type stubs included. Release 1/2 closure pass completed 2026-07-14 (1977 passed, 89 skipped).
+Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. Default wheel includes core binding, scanner, endpoint discovery, service fingerprinting, recon, WAF detection, reporting, and policy/configuration/execution context (Milestone B). Type stubs included. Release 1/2 closure pass completed 2026-07-14 (1977 passed, 89 skipped). Release 4 closure pass completed.
 
-The Python stable-core boundary is the twenty-two-operation engine registry: the original ten (`scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, `load_test`) plus twelve promoted domains (`scan_git_secrets`, `generate_sbom`, `run_consolidated_recon`, `graphql_test`, `oauth_test`, `auth_test`, `db_probe`, `nse_run`, `scan_docker_image`, `scan_kubernetes`, `analyze_apk`, `analyze_ipa`). The release guarantee covers local `Engine` and `AsyncEngine` execution; daemon-client APIs remain provisional until a separate transport parity milestone closes reconnect, replay, and result-retrieval semantics. Every stable-core dispatch passes through the structured policy gate and emits an audit decision. `OperationResult.error` is the versioned `OperationError` DTO; `error_message` is retained for compatibility. Release fixtures use managed loopback services and set `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for that explicit harness. See `docs/python/domain-maturity.md` for the provisional/experimental boundary and `crates/eggsec-python/README.md` for examples.
+The Python stable-core boundary is the twenty-two-operation engine registry: the original ten (`scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, `load_test`) plus twelve promoted domains (`scan_git_secrets`, `generate_sbom`, `run_consolidated_recon`, `graphql_test`, `oauth_test`, `auth_test`, `db_probe`, `nse_run`, `scan_docker_image`, `scan_kubernetes`, `analyze_apk`, `analyze_ipa`). Release 4 adds stateful session types for mobile and headless-browser subsystems. The release guarantee covers local `Engine` and `AsyncEngine` execution; daemon-client APIs remain provisional until a separate transport parity milestone closes reconnect, replay, and result-retrieval semantics. Every stable-core dispatch passes through the structured policy gate and emits an audit decision. `OperationResult.error` is the versioned `OperationError` DTO; `error_message` is retained for compatibility. Release fixtures use managed loopback services and set `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` only for that explicit harness. See `docs/python/domain-maturity.md` for the provisional/experimental boundary and `crates/eggsec-python/README.md` for examples.
 
 Release 2 adds network programmability types: `eggsec.network` (target resolution, connection config, timing, evidence, transcripts), `eggsec.transport` (managed TCP/UDP sessions), `eggsec.probes` (DNS/TLS/HTTP one-shot probes), `eggsec.http_client` (security-oriented HTTP client), and `eggsec.websocket` (WebSocket sessions and assessment). These are provisional — scope-checked and policy-gated but not yet part of the stable-core operation registry. Release 2 network types are now properly registered in the API surface with provisional stability (verified 2026-07-14). Raw packet injection remains experimental (feature: `packet-inspection`).
 
@@ -225,12 +225,13 @@ Release 3 completes programmable Python surfaces for three major subsystems: NSE
 | `db-pentest-mongodb` | `db-pentest-mongodb` | MongoDB pentest |
 | `db-pentest-redis` | `db-pentest-redis` | Redis pentest |
 | `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
-| `mobile` | `mobile` | APK/IPA static analysis |
+| `mobile` | `mobile` | APK/IPA static analysis; mobile session types (Release 4) |
 | `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
 | `packet-inspection` | `packet-inspection` | Packet capture; raw packet injection remains experimental |
 | `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
 | `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
 | `container` | `container` | K8s/Docker scanning |
+| `headless-browser` | `headless-browser` | Browser session types (Release 4) |
 | `daemon-client` | — | Daemon session access |
 | `full-no-system` | — | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
 

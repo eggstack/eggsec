@@ -1255,3 +1255,249 @@ Network programmability types in `eggsec.network`, `eggsec.transport`,
 `eggsec.probes`, and `eggsec.http_client` are included in the default wheel
 (no feature flag required). `eggsec.websocket` and raw packet injection
 require their respective feature flags.
+
+## Release 4: Stateful and Remote Execution
+
+Release 4 adds session-oriented state management, daemon protocol parity,
+SQLite-backed persistence, content-addressed artifact storage, and streaming
+reporting. These types enable long-running assessments with resumable state,
+durable findings, and incremental report generation.
+
+### New Types
+
+#### Session Contract
+
+Core abstractions for stateful, resumable assessment sessions.
+
+| Type | Purpose |
+|------|---------|
+| `SessionState` | Enum: `Created`, `Running`, `Paused`, `Completed`, `Failed`, `Cancelled` |
+| `SessionIdentity` | Session ID, name, target, creation time, owner |
+| `SessionStats` | Elapsed time, operations executed, findings collected, bytes transferred |
+| `SessionCloseMode` | Enum: `Graceful`, `Immediate`, `Rollback` |
+| `SessionEvent` | Lifecycle event: `Started`, `Progress`, `Finding`, `Artifact`, `Completed`, `Failed` |
+| `SessionEventStream` | Async iterator yielding `SessionEvent` records for a session |
+| `SessionCapabilities` | Declared capabilities: max concurrency, timeout, supported operation kinds |
+
+#### Mobile Session
+
+Stateful mobile device analysis sessions (feature: `mobile`).
+
+| Type | Purpose |
+|------|---------|
+| `MobileDeviceDescriptor` | Device ID, OS version, manufacturer, model, connection type |
+| `MobileDeviceCapabilities` | Supported features: ADB, screen capture, logcat, package management |
+| `MobileSessionConfig` | Session config: device target, timeout, operation set, artifact output dir |
+| `MobileSessionState` | Current device state: screen on/off, foreground app, battery, storage |
+| `MobileSessionStats` | Per-session stats: apps analyzed, permissions extracted, findings collected |
+| `MobileSession` | Sync session with context manager; manages device lifecycle |
+| `AsyncMobileSession` | Async session with async context manager |
+| `MobileDeviceRegistry` | Registry of discovered/connected devices |
+
+#### Browser Session
+
+Stateful headless browser assessment sessions (feature: `headless-browser`).
+
+| Type | Purpose |
+|------|---------|
+| `BrowserCapabilities` | Supported features: navigation, JS execution, screenshots, network capture |
+| `BrowserSessionState` | Current state: URL, ready state, JS errors, cookies, storage |
+| `BrowserSessionConfig` | Session config: base URL, viewport, timeouts, permitted origins |
+| `BrowserSessionStats` | Per-session stats: pages visited, DOM snapshots, findings collected |
+| `BrowserNavigationEvent` | Navigation event: URL, method, status, redirect chain |
+| `BrowserConsoleEvent` | Console event: level, message, source, timestamp |
+| `BrowserNetworkEvent` | Network event: request/response, status, headers, timing |
+| `BrowserDomSnapshot` | DOM snapshot: HTML, title, forms, links, scripts, storage |
+| `BrowserFormInfo` | Form metadata: action, method, fields |
+| `BrowserFormField` | Field: name, type, required, autocomplete, value |
+| `BrowserLinkInfo` | Link: href, text, rel, target |
+| `BrowserStorageInfo` | Storage: localStorage, sessionStorage, indexedDB keys |
+| `BrowserCookieInfo` | Cookie: name, value, domain, path, expires, secure, httponly |
+| `BrowserSession` | Sync session with context manager |
+| `AsyncBrowserSession` | Async session with async context manager |
+
+#### Daemon Parity
+
+Protocol and reliability types for daemon session access.
+
+| Type | Purpose |
+|------|---------|
+| `DaemonProtocolVersion` | Protocol version: major, minor, compatibility |
+| `IdempotencyKey` | Unique key for idempotent operation submission |
+| `DaemonSubmissionResult` | Submission result: task ID, accepted, queue position |
+| `ReconnectOptions` | Reconnect config: max retries, backoff, session resume |
+| `ReplayCursor` | Cursor for replaying missed events from a session |
+| `ReplayResult` | Replay result: events replayed, gap detected, cursor advanced |
+| `CancellationRequest` | Cancellation: task ID, reason, graceful flag |
+| `CancellationResult` | Result: cancelled, in_progress, already_terminal |
+| `TaskArtifactDescriptor` | Artifact descriptor: task ID, artifact ID, kind, path |
+| `EventReplayInfo` | Replay info: sequence range, event kinds, completeness |
+| `DaemonHealthDetail` | Health: uptime, active sessions, memory, CPU, version |
+
+#### SQLite Repository
+
+Durable persistence for findings and assessments.
+
+| Type | Purpose |
+|------|---------|
+| `SqliteFindingRepository` | SQLite-backed finding repository with query, filter, count |
+| `SqliteAssessmentRepository` | SQLite-backed assessment repository |
+| `SqliteMigration` | Schema migration runner for SQLite databases |
+| `MigrationResult` | Migration result: success, version, applied migrations, errors |
+
+#### Content-Addressed Store
+
+Immutable, deduplicated artifact storage.
+
+| Type | Purpose |
+|------|---------|
+| `ContentAddressedArtifactStore` | CAS store keyed by content hash |
+| `DirectoryArtifactStore` | Directory-backed artifact store |
+| `ArtifactInfo` | Artifact metadata: hash, size, mime type, created at |
+| `ArtifactData` | Artifact content: bytes or path reference |
+| `IntegrityResult` | Integrity check: hash match, corruption detected |
+| `ArtifactQuery` | Query: hash prefix, mime type, size range, date range |
+
+#### Streaming Reporter
+
+Incremental report generation and diffing.
+
+| Type | Purpose |
+|------|---------|
+| `StreamingReportConfig` | Config: format, buffer size, flush interval, output path |
+| `StreamingReporter` | Incremental reporter: `write_finding()`, `finalize()`, `summary()` |
+| `ReportSummary` | Summary: total findings, severity breakdown, elapsed time |
+| `StreamingDiffReporter` | Diff reporter: compare two streaming report runs |
+| `FindingDiffResult` | Diff: added, removed, changed findings |
+| `DiffReportSummary` | Diff summary: net changes, regression count |
+| `ReportManifest` | Manifest: report ID, schema version, finding count, checksum |
+
+### Feature Flags
+
+| Feature | Types Enabled | Notes |
+|---------|---------------|-------|
+| `mobile` | `MobileDeviceDescriptor`, `MobileDeviceCapabilities`, `MobileSessionConfig`, `MobileSessionState`, `MobileSessionStats`, `MobileSession`, `AsyncMobileSession`, `MobileDeviceRegistry` | Requires ADB for dynamic sessions |
+| `headless-browser` | `BrowserCapabilities`, `BrowserSessionState`, `BrowserSessionConfig`, `BrowserSessionStats`, `BrowserNavigationEvent`, `BrowserConsoleEvent`, `BrowserNetworkEvent`, `BrowserDomSnapshot`, `BrowserFormInfo`, `BrowserFormField`, `BrowserLinkInfo`, `BrowserStorageInfo`, `BrowserCookieInfo`, `BrowserSession`, `AsyncBrowserSession` | Requires headless-chrome |
+| *(always available)* | All session contract, daemon parity, SQLite repository, content-addressed store, and streaming reporter types | No feature flag required |
+
+### Common Patterns
+
+#### Creating a Session with Context Manager
+
+```python
+from eggsec import MobileSession, MobileSessionConfig
+
+config = MobileSessionConfig(
+    device_id="emulator-5554",
+    timeout_secs=300,
+    output_dir="/tmp/artifacts",
+)
+
+# Sync — cleanup on exit
+with MobileSession(config) as session:
+    result = session.analyze_apk("/path/to/app.apk")
+    print(f"Session stats: {session.stats}")
+    for event in session.events():
+        print(f"Event: {event}")
+
+# Async variant
+from eggsec import AsyncMobileSession
+
+async with AsyncMobileSession(config) as session:
+    result = await session.analyze_apk("/path/to/app.apk")
+    async for event in session.events():
+        print(f"Event: {event}")
+```
+
+#### Using SQLite Repository
+
+```python
+from eggsec import SqliteFindingRepository, SqliteAssessmentRepository, VersionedFinding
+
+# Open (creates if missing)
+repo = SqliteFindingRepository("/data/eggsec-findings.db")
+
+# Save findings
+repo.save(finding)
+
+# Query
+results = repo.query(severity="HIGH", finding_type="vulnerability")
+print(f"Found {repo.count()} total, {len(results)} matching")
+
+# Assessment persistence
+assess_repo = SqliteAssessmentRepository("/data/eggsec-findings.db")
+assess_repo.save(assessment)
+
+# Schema migration
+from eggsec import SqliteMigration
+
+migration = SqliteMigration("/data/eggsec-findings.db")
+result = migration.run()
+print(f"Migrated to version {result.version}, applied {len(result.applied)} migrations")
+```
+
+#### Content-Addressed Artifact Storage
+
+```python
+from eggsec import ContentAddressedArtifactStore, ArtifactData
+
+store = ContentAddressedArtifactStore("/data/artifacts")
+
+# Store content — key is the SHA-256 hash
+artifact_id = store.store(ArtifactData(content=b"..."), mime_type="application/octet-stream")
+print(f"Stored as: {artifact_id}")
+
+# Retrieve
+info = store.get(artifact_id)
+print(f"Size: {info.size_bytes}, hash: {info.hash}")
+
+# Integrity check
+result = store.verify_integrity(artifact_id)
+print(f"Intact: {result.hash_match}")
+
+# Query by prefix or mime type
+matches = store.query(mime_type="application/json")
+```
+
+#### Streaming Reporting
+
+```python
+from eggsec import StreamingReporter, StreamingReportConfig
+
+config = StreamingReportConfig(
+    format="json",
+    buffer_size=100,
+    flush_interval_secs=10,
+    output_path="/reports/scan.json",
+)
+
+reporter = StreamingReporter(config)
+
+# Write findings incrementally as they arrive
+for finding in scan_results:
+    reporter.write_finding(finding)
+
+# Finalize and get summary
+summary = reporter.finalize()
+print(f"Total: {summary.total_findings}")
+print(f"Critical: {summary.critical}, High: {summary.high}")
+
+# Diff two reports
+from eggsec import StreamingDiffReporter
+
+diff_reporter = StreamingDiffReporter()
+diff = diff_reporter.compare(baseline_report, current_report)
+print(f"Added: {len(diff.added)}, Removed: {len(diff.removed)}")
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/session.rs` | `SessionState`, `SessionIdentity`, `SessionStats`, `SessionEvent`, `SessionEventStream`, `SessionCapabilities` |
+| `src/mobile_session.rs` | `MobileSession`, `AsyncMobileSession`, `MobileDeviceDescriptor`, `MobileDeviceCapabilities`, `MobileSessionConfig`, `MobileSessionState`, `MobileSessionStats`, `MobileDeviceRegistry` (feature: `mobile`) |
+| `src/browser_session.rs` | `BrowserSession`, `AsyncBrowserSession`, `BrowserCapabilities`, `BrowserSessionState`, `BrowserSessionConfig`, `BrowserSessionStats`, browser event/snapshot types (feature: `headless-browser`) |
+| `src/daemon_parity.rs` | `DaemonProtocolVersion`, `IdempotencyKey`, `DaemonSubmissionResult`, `ReconnectOptions`, `ReplayCursor`, `ReplayResult`, `CancellationRequest`, `CancellationResult`, `TaskArtifactDescriptor`, `EventReplayInfo`, `DaemonHealthDetail` |
+| `src/sqlite_repository.rs` | `SqliteFindingRepository`, `SqliteAssessmentRepository`, `SqliteMigration`, `MigrationResult` |
+| `src/content_addressed_store.rs` | `ContentAddressedArtifactStore`, `DirectoryArtifactStore`, `ArtifactInfo`, `ArtifactData`, `IntegrityResult`, `ArtifactQuery` |
+| `src/streaming_reporter.rs` | `StreamingReportConfig`, `StreamingReporter`, `ReportSummary`, `StreamingDiffReporter`, `FindingDiffResult`, `DiffReportSummary`, `ReportManifest` |

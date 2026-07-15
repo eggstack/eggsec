@@ -141,7 +141,7 @@ pub struct MobileScanReportPy {
 }
 
 impl MobileScanReportPy {
-    fn from_engine(engine: eggsec::mobile::MobileScanReport) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::mobile::MobileScanReport) -> Self {
         Self {
             target: engine.target,
             scan_type: engine.scan_type,

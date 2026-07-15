@@ -96,6 +96,27 @@ until they satisfy the graduation checklist:
 | `distributed` | experimental | Cluster architecture |
 | `ai` | experimental | LLM integration |
 
+## Release 4: Common Session Contract (Provisional)
+
+| Symbol | Stability | Notes |
+|--------|-----------|-------|
+| `SessionState` | provisional | Shared session lifecycle state machine |
+| `SessionIdentity` | provisional | Session identification and metadata |
+| `MobileDeviceDescriptor` | provisional | Device enumeration and capabilities |
+| `MobileSession` | provisional | Managed mobile analysis session |
+| `BrowserSession` | provisional | Managed browser session lifecycle |
+| `BrowserSecurityPrimitive` | provisional | Browser security primitives |
+| `SessionRepository` | provisional | Content-addressed session storage |
+| `SQLiteSessionRepository` | provisional | SQLite-backed session repository |
+| `InMemorySessionRepository` | provisional | In-memory session repository |
+| `ArtifactStore` | provisional | Content-addressed artifact storage |
+| `DirectoryArtifactStore` | provisional | Filesystem-backed artifact store |
+| `StreamingReporter` | provisional | Incremental report generation |
+| `ReportDiff` | provisional | Diff comparison between reports |
+
+No operations are promoted in Release 4. All session types are provisional;
+the Releases 1-3 stable-core guarantees remain intact.
+
 ## Release 2: Network Programmability (Provisional)
 
 | Symbol | Stability | Notes |

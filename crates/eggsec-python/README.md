@@ -117,6 +117,41 @@ Release 3 completes programmable Python surfaces for three major subsystems:
 
 See `docs/python/NSE_RUNTIME_ARCHITECTURE.md` and `docs/python/INTERCEPTION_PROXY_ARCHITECTURE.md` for architecture details.
 
+### Release 4 — Common Session Contract and Daemon Parity
+
+Release 4 establishes a common managed-session contract across mobile and
+browser subsystems, closes key daemon parity gaps, and introduces repository
+and artifact storage abstractions.
+
+**Common Session Contract**
+- `SessionState` — shared session lifecycle state machine
+- `SessionIdentity` — session identification and metadata
+- `MobileDeviceDescriptor` — device enumeration and capability reporting
+- `MobileSession` — managed mobile analysis session lifecycle
+- `BrowserSession` — managed browser session lifecycle and security primitives
+
+**Daemon Parity Protocol**
+- Idempotent request submission with deduplication keys
+- Reconnect and replay semantics for interrupted sessions
+- Cancellation propagation across transport boundaries
+
+**Repository Abstraction**
+- `SessionRepository` — content-addressed session storage
+- SQLite-backed and in-memory repository implementations
+
+**Artifact Stores**
+- `ArtifactStore` — content-addressed artifact storage
+- `DirectoryArtifactStore` — filesystem-backed artifact store
+- Content addressing with integrity verification
+
+**Streaming Reporting**
+- `StreamingReporter` — incremental report generation
+- `ReportDiff` — diff comparison between report snapshots
+- Streaming JSON/Markdown report output
+
+All Release 4 types are **provisional** — they do not yet satisfy the
+graduation checklist for stable-core promotion.
+
 ### Additional API Surface (default wheel)
 
 The default wheel also includes the following API surface beyond the core

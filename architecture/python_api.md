@@ -74,6 +74,55 @@ individual symbol state. A Cargo feature only controls compilation. It does
 not promote a domain to stable-core. See
 [`docs/python/domain-maturity.md`](../docs/python/domain-maturity.md).
 
+## Release 4: Common Session Contract and Daemon Parity
+
+Release 4 establishes a common managed-session contract for mobile and browser
+subsystems, advances daemon parity, and introduces repository and artifact
+storage abstractions.
+
+### Common session contract
+
+Mobile and browser subsystems share a unified `SessionState` lifecycle and
+`SessionIdentity` metadata model. `MobileSession` and `BrowserSession` both
+implement the common contract, providing consistent state transitions, event
+delivery, and cleanup semantics.
+
+### Daemon parity protocol
+
+Release 4 closes gaps between local and daemon execution:
+
+- **Idempotent request submission** with deduplication keys for safe retries.
+- **Reconnect and replay** semantics for sessions interrupted by transport
+  failures.
+- **Cancellation propagation** across transport boundaries with structured
+  cancellation events.
+
+### Repository abstraction
+
+`SessionRepository` provides a content-addressed storage interface for session
+state. Implementations include `SQLiteSessionRepository` (persistent) and
+`InMemorySessionRepository` (ephemeral). The repository abstraction decouples
+session lifecycle from transport and storage backends.
+
+### Content-addressed artifact stores
+
+`ArtifactStore` and `DirectoryArtifactStore` provide content-addressed storage
+for scan artifacts. Artifacts are addressed by content hash, enabling
+deduplication and integrity verification.
+
+### Streaming reporting
+
+`StreamingReporter` supports incremental report generation during long-running
+sessions. `ReportDiff` compares report snapshots for delta reporting and
+trend analysis.
+
+### Stability classification
+
+All Release 4 types are **provisional**. They follow engine conventions but
+do not yet satisfy the graduation checklist in
+`docs/python/domain-maturity.md` for stable-core promotion. Releases 1-3
+stable-core guarantees remain intact.
+
 ## Release 2: Network Programmability
 
 Release 2 introduces Python bindings for low-level network primitives. These

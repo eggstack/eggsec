@@ -393,6 +393,26 @@ accessed when the feature is not compiled.
 | `c2` | BeaconProtocol, C2TaskType, C2TaskStatus, OpsecCategory, OpsecSeverity, CampaignPhase, C2Campaign, BeaconResult, C2TaskResult, OpsecFinding, OpsecAssessment, C2Summary, C2Report, C2ScanConfig | c2_scan, async_c2_scan, c2_get_campaign |
 | `ai-integration` | AiProvider, PluginLanguage, AiAnalysisResult, AiPayloadSuggestion, AiWafBypassSuggestion, AiCacheStats, ScriptMetadata, GeneratedScript, AiCache | ai_analyze_finding, async_ai_analyze_finding, ai_generate_payloads, ai_suggest_waf_bypass |
 
+## Provisional — Release 4: Common Session Contract
+
+- `SessionState`
+- `SessionIdentity`
+- `MobileDeviceDescriptor`
+- `MobileSession`
+- `BrowserSession`
+- `BrowserSecurityPrimitive`
+- `SessionRepository`
+- `SQLiteSessionRepository`
+- `InMemorySessionRepository`
+- `ArtifactStore` (provisional variant)
+- `DirectoryArtifactStore`
+- `StreamingReporter`
+- `ReportDiff`
+
+These types are provisional. They follow engine conventions (frozen
+pyclasses, `to_dict`/`to_json`, context managers for sessions) but do not
+yet satisfy the graduation checklist for stable-core promotion.
+
 ## Stable (limited) — output formats
 
 These types have guaranteed correct behavior, but their serialized output
