@@ -869,6 +869,7 @@ class TestDiffReportSummary:
         cfg = StreamingReportConfig("json")
         reporter = StreamingDiffReporter(cfg)
         reporter.start()
+        reporter.write_finding('{"id":"f1","severity":"high","title":"New"}')
         summary = reporter.finish()
         r = repr(summary)
         assert "1" in r
