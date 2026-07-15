@@ -282,6 +282,10 @@ jobs:
             features: "headless-browser"
           - name: daemon-client
             features: "daemon-client"
+          - name: packet-inspection
+            features: "packet-inspection"
+          - name: stress-testing
+            features: "stress-testing"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

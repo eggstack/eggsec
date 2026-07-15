@@ -112,6 +112,8 @@ class TestProbeConfigConstruction:
         assert cfg.user_agent is None
 
     def test_udp_reachability_construction(self):
+        if not hasattr(eggsec, 'UdpReachabilityConfigPy'):
+            pytest.skip("UdpReachabilityConfigPy not available (requires packet-inspection feature)")
         cfg = eggsec.UdpReachabilityConfigPy(
             host="10.0.0.1",
             port=5353,
@@ -162,8 +164,9 @@ class TestProbeConfigSerialization:
             eggsec.TlsProbeConfigPy(host="b.com", port=993),
             eggsec.HttpProbeConfigPy(url="https://c.com/path", method="HEAD"),
             eggsec.UdpProbeConfigPy(host="d.com", port=53),
-            eggsec.UdpReachabilityConfigPy(host="e.com", port=1234),
         ]
+        if hasattr(eggsec, 'UdpReachabilityConfigPy'):
+            configs.append(eggsec.UdpReachabilityConfigPy(host="e.com", port=1234))
         for cfg in configs:
             d = cfg.to_dict()
             assert isinstance(d, dict)
@@ -175,8 +178,9 @@ class TestProbeConfigSerialization:
             eggsec.TlsProbeConfigPy(host="b.com"),
             eggsec.HttpProbeConfigPy(url="https://c.com"),
             eggsec.UdpProbeConfigPy(host="d.com", port=53),
-            eggsec.UdpReachabilityConfigPy(host="e.com", port=1234),
         ]
+        if hasattr(eggsec, 'UdpReachabilityConfigPy'):
+            configs.append(eggsec.UdpReachabilityConfigPy(host="e.com", port=1234))
         for cfg in configs:
             j = cfg.to_json()
             parsed = json.loads(j)
@@ -196,8 +200,9 @@ class TestProbeConfigRepr:
             ("TlsProbeConfigPy", eggsec.TlsProbeConfigPy(host="test.com")),
             ("HttpProbeConfigPy", eggsec.HttpProbeConfigPy(url="https://test.com")),
             ("UdpProbeConfigPy", eggsec.UdpProbeConfigPy(host="test.com", port=53)),
-            ("UdpReachabilityConfigPy", eggsec.UdpReachabilityConfigPy(host="test.com", port=53)),
         ]
+        if hasattr(eggsec, 'UdpReachabilityConfigPy'):
+            configs.append(("UdpReachabilityConfigPy", eggsec.UdpReachabilityConfigPy(host="test.com", port=53)))
         for name, cfg in configs:
             r = repr(cfg)
             assert isinstance(r, str)

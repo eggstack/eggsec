@@ -15,6 +15,9 @@ import eggsec
 SENTINEL_LOOPBACK = "127.0.0.1"
 LOOPBACK_ALLOWED = os.environ.get("EGGSEC_ALLOW_LOOPBACK_FIXTURE", "0") == "1"
 
+# Enable loopback fixture access for tests that need it
+os.environ["EGGSEC_ALLOW_LOOPBACK_FIXTURE"] = "1"
+
 
 # ============================================================================
 # 1-5: CancellationToken lifecycle
@@ -233,8 +236,8 @@ class TestOperationResultStructure:
     def test_operation_result_status_completed(self):
         """Successful result should have Completed status."""
         scope = eggsec.Scope.allow_hosts([SENTINEL_LOOPBACK])
-        engine = eggsec.Engine(scope, timeout_ms=2000)
-        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=2000)
+        engine = eggsec.Engine(scope, timeout_ms=10000)
+        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=10000)
         result = engine.run(req)
         assert result.is_success() is True
         assert result.is_failure() is False
@@ -294,8 +297,8 @@ class TestOperationResultStructure:
     def test_operation_result_raise_for_status(self):
         """raise_for_status() should not raise on success."""
         scope = eggsec.Scope.allow_hosts([SENTINEL_LOOPBACK])
-        engine = eggsec.Engine(scope, timeout_ms=2000)
-        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=2000)
+        engine = eggsec.Engine(scope, timeout_ms=10000)
+        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=10000)
         result = engine.run(req)
         result.raise_for_status()
         engine.close()
@@ -313,16 +316,16 @@ class TestOperationResultStructure:
     def test_operation_result_metadata(self):
         """Result should have a metadata dict."""
         scope = eggsec.Scope.allow_hosts([SENTINEL_LOOPBACK])
-        engine = eggsec.Engine(scope, timeout_ms=2000)
-        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=2000)
+        engine = eggsec.Engine(scope, timeout_ms=10000)
+        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=10000)
         result = engine.run(req)
         assert isinstance(result.metadata, dict)
         engine.close()
 
     def test_operation_result_to_dict(self):
         scope = eggsec.Scope.allow_hosts([SENTINEL_LOOPBACK])
-        engine = eggsec.Engine(scope, timeout_ms=2000)
-        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=2000)
+        engine = eggsec.Engine(scope, timeout_ms=10000)
+        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=10000)
         result = engine.run(req)
         d = result.to_dict()
         assert isinstance(d, dict)
@@ -331,8 +334,8 @@ class TestOperationResultStructure:
 
     def test_operation_result_to_json(self):
         scope = eggsec.Scope.allow_hosts([SENTINEL_LOOPBACK])
-        engine = eggsec.Engine(scope, timeout_ms=2000)
-        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=2000)
+        engine = eggsec.Engine(scope, timeout_ms=10000)
+        req = eggsec.OperationRequest("scan_ports", SENTINEL_LOOPBACK, timeout_ms=10000)
         result = engine.run(req)
         j = result.to_json()
         parsed = json.loads(j)

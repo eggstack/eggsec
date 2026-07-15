@@ -11,9 +11,17 @@ import time
 import eggsec
 import pytest
 
+# Skip entire module if packet-inspection feature is not compiled
+_HAS_PACKET_INSPECTION = hasattr(eggsec, 'EthernetFrame') and hasattr(eggsec, 'FlowAggregator')
+_skip_packet = pytest.mark.skipif(
+    not _HAS_PACKET_INSPECTION,
+    reason="Requires packet-inspection feature (not compiled)"
+)
+
 
 # ── WS8: Packet layer DTOs ──────────────────────────────────────────
 
+@_skip_packet
 class TestPacketLayerDTOs:
     """Test structured packet layer types."""
 
@@ -178,6 +186,7 @@ class TestPacketLayerDTOs:
 
 # ── WS8: Flow aggregator ────────────────────────────────────────────
 
+@_skip_packet
 class TestFlowAggregator:
     """Test bounded flow aggregation."""
 
@@ -255,6 +264,7 @@ class TestFlowAggregator:
 
 # ── WS7: Capture session lifecycle ──────────────────────────────────
 
+@_skip_packet
 class TestCaptureSession:
     """Test managed capture lifecycle."""
 
@@ -320,6 +330,7 @@ class TestCaptureSession:
 
 # ── WS9: Active probes ──────────────────────────────────────────────
 
+@_skip_packet
 class TestActiveProbes:
     """Test ICMP echo and TCP SYN probe types."""
 
@@ -488,6 +499,7 @@ class TestNetworkEvents:
 
 # ── WS14: Performance and resource budgets ──────────────────────────
 
+@_skip_packet
 class TestPerformanceBudgets:
     """Test that performance budgets are met."""
 
