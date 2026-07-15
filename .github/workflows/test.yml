@@ -260,3 +260,50 @@ jobs:
           key: feature-profile-${{ matrix.features }}
       - name: cargo check
         run: cargo check -p eggsec --features ${{ matrix.features }}
+
+  python-tests:
+    name: Python Tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default-wheel
+            features: ""
+          - name: nse
+            features: "nse"
+          - name: db-pentest
+            features: "db-pentest"
+          - name: web-proxy
+            features: "web-proxy"
+          - name: mobile
+            features: "mobile"
+          - name: headless-browser
+            features: "headless-browser"
+          - name: daemon-client
+            features: "daemon-client"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: python-${{ matrix.name }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install maturin
+        run: pip install maturin pytest pytest-timeout
+      - name: Build wheel
+        working-directory: crates/eggsec-python
+        run: |
+          if [ -n "${{ matrix.features }}" ]; then
+            maturin develop --features "${{ matrix.features }}"
+          else
+            maturin develop
+          fi
+      - name: Run tests
+        working-directory: crates/eggsec-python
+        run: pytest tests/ -v -q --tb=short --timeout=60
+        env:
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
