@@ -108,3 +108,6 @@ try:
     )
 except (AttributeError, ImportError):
     pass
+
+# Keep export list truthful for feature-gated builds
+__all__ = [name for name in dir() if not name.startswith("_")]

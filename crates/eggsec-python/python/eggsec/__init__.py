@@ -41,6 +41,56 @@ def _deprecated(name: str, replacement: str | None = None) -> None:
     warnings.warn(msg, DeprecationWarning, stacklevel=3)
 
 
+# ---------------------------------------------------------------------------
+# Feature guard: structured errors for unavailable capabilities
+# ---------------------------------------------------------------------------
+
+_UNAVAILABLE_FEATURES: dict[str, dict[str, str]] = {}
+
+
+def _register_unavailable(name: str, feature: str, maturity: str = "experimental",
+                          install_hint: str = "", platform_prereqs: str = "") -> None:
+    """Register that a feature-gated symbol is unavailable."""
+    _UNAVAILABLE_FEATURES[name] = {
+        "feature": feature,
+        "maturity": maturity,
+        "install_hint": install_hint,
+        "platform_prereqs": platform_prereqs,
+    }
+
+
+def _unavailable_error(name: str) -> None:
+    """Raise AttributeError with structured message for unavailable feature.
+
+    Raises AttributeError (not ImportError) so that hasattr() returns False
+    and the structured error message is preserved.
+    """
+    if name in _UNAVAILABLE_FEATURES:
+        info = _UNAVAILABLE_FEATURES[name]
+        parts = [f"'{name}' requires the '{info['feature']}' feature"]
+        parts.append("Current profile: default")
+        if info.get("maturity"):
+            parts.append(f"Maturity: {info['maturity']}")
+        if info.get("install_hint"):
+            parts.append(f"Install: {info['install_hint']}")
+        if info.get("platform_prereqs"):
+            parts.append(f"Platform: {info['platform_prereqs']}")
+        raise AttributeError(". ".join(parts))
+    raise AttributeError(f"'{name}' is not available in the current build configuration.")
+
+
+def list_unavailable_features() -> list[dict[str, str]]:
+    """List features that are not available in the current build.
+
+    Returns:
+        List of dicts with feature info for unavailable capabilities.
+    """
+    return [
+        {"symbol": name, **info}
+        for name, info in _UNAVAILABLE_FEATURES.items()
+    ]
+
+
 # Canonical naming aliases: Py-suffixed names -> clean names.
 # Accessing the old name emits a deprecation warning.
 _DEPRECATED_ALIASES: dict[str, tuple[str, str]] = {
@@ -408,13 +458,15 @@ try:
     scan_git_secrets = _core.scan_git_secrets
     async_scan_git_secrets = _core.async_scan_git_secrets
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("scan_git_secrets", "git-secrets", "stable",
+                          "pip install eggsec[git-secrets]")
 
 try:
     generate_sbom = _core.generate_sbom
     async_generate_sbom = _core.async_generate_sbom
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("generate_sbom", "sbom", "stable",
+                          "pip install eggsec[sbom]")
 
 try:
     db_probe = _core.db_probe
@@ -429,14 +481,16 @@ try:
     db_get_capabilities = _core.db_get_capabilities
     db_run_with_config = _core.db_run_with_config
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("db_probe", "db-pentest", "stable",
+                          "pip install eggsec[db-pentest]")
 
 try:
     create_proxy_manager = _core.create_proxy_manager
     async_add_proxy = _core.async_add_proxy
     async_proxy_health_check = _core.async_proxy_health_check
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("create_proxy_manager", "web-proxy", "experimental",
+                          "pip install eggsec[web-proxy]")
 
 try:
     analyze_apk = _core.analyze_apk
@@ -444,7 +498,8 @@ try:
     analyze_ipa = _core.analyze_ipa
     async_analyze_ipa = _core.async_analyze_ipa
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("analyze_apk", "mobile", "stable",
+                          "pip install eggsec[mobile]")
 
 try:
     scan_docker_image = _core.scan_docker_image
@@ -454,7 +509,8 @@ try:
     detect_escape_risks = _core.detect_escape_risks
     check_cis_docker_benchmark = _core.check_cis_docker_benchmark
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("scan_docker_image", "container", "stable",
+                          "pip install eggsec[container]")
 
 try:
     list_network_interfaces = _core.list_network_interfaces
@@ -467,7 +523,9 @@ try:
     tcp_syn_probe = _core.tcp_syn_probe
     async_tcp_syn_probe = _core.async_tcp_syn_probe
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("parse_pcap", "packet-inspection", "experimental",
+                          "pip install eggsec[packet-inspection]",
+                          "libpcap-dev")
 
 try:
     nse_run = _core.nse_run
@@ -480,7 +538,8 @@ try:
     nse_run_with_config = _core.nse_run_with_config
     nse_validate_script = _core.nse_validate_script
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("nse_run", "nse", "stable",
+                          "pip install eggsec[nse]", "libssl-dev")
 
 # Provisional: network probes (always available in default build)
 try:
@@ -521,7 +580,8 @@ try:
     websocket_assess = _core.websocket_assess
     async_websocket_assess = _core.async_websocket_assess
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("websocket_probe", "websocket", "provisional",
+                          "pip install eggsec[websocket]")
 
 # Provisional: NSE library details (feature-gated)
 try:
@@ -564,35 +624,40 @@ try:
     async_wireless_scan = _core.async_wireless_scan
     wireless_analyze_networks = _core.wireless_analyze_networks
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("wireless_scan", "wireless", "experimental",
+                          "pip install eggsec[wireless]", "Linux; root required")
 
 try:
     evasion_scan = _core.evasion_scan
     async_evasion_scan = _core.async_evasion_scan
     evasion_list_techniques = _core.evasion_list_techniques
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("evasion_scan", "evasion", "experimental",
+                          "pip install eggsec[evasion]")
 
 try:
     postex_scan = _core.postex_scan
     async_postex_scan = _core.async_postex_scan
     postex_list_techniques = _core.postex_list_techniques
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("postex_scan", "postex", "experimental",
+                          "pip install eggsec[postex]")
 
 try:
     c2_scan = _core.c2_scan
     async_c2_scan = _core.async_c2_scan
     c2_get_campaign = _core.c2_get_campaign
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("c2_scan", "c2", "experimental",
+                          "pip install eggsec[c2]")
 
 # Experimental: hunt (feature-gated)
 try:
     hunt_test = _core.hunt_test
     async_hunt_test = _core.async_hunt_test
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("hunt_test", "advanced-hunting", "experimental",
+                          "pip install eggsec[advanced-hunting]")
 
 # Experimental: AI (feature-gated)
 try:
@@ -602,28 +667,32 @@ try:
     ai_suggest_waf_bypass = _core.ai_suggest_waf_bypass
     ai_generate_script = _core.ai_generate_script
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("ai_analyze_finding", "ai-integration", "experimental",
+                          "pip install eggsec[ai-integration]")
 
 # Experimental: stress (feature-gated)
 try:
     stress_test = _core.stress_test
     async_stress_test = _core.async_stress_test
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("stress_test", "stress-testing", "experimental",
+                          "pip install eggsec[stress-testing]")
 
 # Experimental: mobile dynamic (feature-gated)
 try:
     list_mobile_devices = _core.list_mobile_devices
     dynamic_mobile_analysis = _core.dynamic_mobile_analysis
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("list_mobile_devices", "mobile-dynamic", "experimental",
+                          "pip install eggsec[mobile-dynamic]", "ADB and Android device/emulator")
 
 # Experimental: browser test (feature-gated)
 try:
     browser_test = _core.browser_test
     async_browser_test = _core.async_browser_test
 except (AttributeError, ImportError):
-    pass
+    _register_unavailable("browser_test", "headless-browser", "provisional",
+                          "pip install eggsec[headless-browser]")
 
 # Core DTOs - Findings and reporting
 Severity = _core.Severity
@@ -2062,3 +2131,14 @@ for _name in tuple(__all__):
 def __dir__() -> list[str]:
     """Include submodule names in dir() output."""
     return __all__ + ["net", "sessions", "storage", "reporting", "daemon", "experimental"]
+
+
+def __getattr__(name: str):
+    """Provide structured errors for unavailable feature-gated symbols.
+
+    Raises AttributeError with structured guidance for known unavailable features,
+    and AttributeError for truly unknown names. hasattr() returns False for both.
+    """
+    if name in _UNAVAILABLE_FEATURES:
+        _unavailable_error(name)
+    raise AttributeError(f"module 'eggsec' has no attribute {name!r}")

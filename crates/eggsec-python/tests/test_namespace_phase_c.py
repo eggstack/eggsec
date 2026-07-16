@@ -7,6 +7,8 @@ Validates:
 - Experimental namespace does not pollute top-level dir()
 - Feature availability introspection works
 - Deprecation warnings are emitted for Py-suffixed access
+- Feature guard provides structured errors
+- list_unavailable_features works
 """
 
 import warnings
@@ -222,3 +224,65 @@ class TestImportSafety:
         added = after - before
         # No new names should be added to the top-level namespace
         assert len(added) == 0 or added.issubset({"experimental"})
+
+
+# ============================================================================
+# Feature guard: structured errors
+# ============================================================================
+
+
+class TestFeatureGuard:
+    """Verify feature guard provides structured errors."""
+
+    def test_list_unavailable_returns_list(self):
+        """list_unavailable_features returns a list."""
+        result = eggsec.list_unavailable_features()
+        assert isinstance(result, list)
+
+    def test_list_unavailable_items_have_required_fields(self):
+        """Each unavailable feature item has required fields."""
+        result = eggsec.list_unavailable_features()
+        for item in result:
+            assert "symbol" in item
+            assert "feature" in item
+            assert "maturity" in item
+
+    def test_unavailable_error_for_missing_symbol(self):
+        """Accessing unavailable symbol raises AttributeError."""
+        # Create a temporary unavailable entry
+        eggsec._UNAVAILABLE_FEATURES["_test_missing"] = {
+            "feature": "test-feature",
+            "maturity": "experimental",
+            "install_hint": "pip install test",
+        }
+        try:
+            with pytest.raises(AttributeError) as exc_info:
+                eggsec._unavailable_error("_test_missing")
+            assert "test-feature" in str(exc_info.value)
+            assert "pip install test" in str(exc_info.value)
+        finally:
+            del eggsec._UNAVAILABLE_FEATURES["_test_missing"]
+
+    def test_unavailable_error_for_unknown_symbol(self):
+        """Unknown symbol raises generic AttributeError."""
+        with pytest.raises(AttributeError) as exc_info:
+            eggsec._unavailable_error("_unknown_symbol")
+        assert "_unknown_symbol" in str(exc_info.value)
+
+    def test_getattr_raises_for_unavailable(self):
+        """__getattr__ raises AttributeError for unavailable features."""
+        eggsec._UNAVAILABLE_FEATURES["_test_attr"] = {
+            "feature": "test-attr",
+            "maturity": "experimental",
+        }
+        try:
+            with pytest.raises(AttributeError) as exc_info:
+                _ = eggsec._test_attr
+            assert "test-attr" in str(exc_info.value)
+        finally:
+            del eggsec._UNAVAILABLE_FEATURES["_test_attr"]
+
+    def test_getattr_raises_attribute_error_for_unknown(self):
+        """__getattr__ raises AttributeError for truly unknown names."""
+        with pytest.raises(AttributeError):
+            _ = eggsec._truly_nonexistent_symbol_xyz
