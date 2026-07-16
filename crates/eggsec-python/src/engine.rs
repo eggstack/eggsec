@@ -16,9 +16,7 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::requests::*;
 use crate::runtime_sync;
 use crate::scope::Scope;
-use crate::status::{
-    ExecutionStats, ExecutionStatus, OperationError, OperationPayload, OperationResult,
-};
+use crate::status::{ExecutionStats, OperationPayload, OperationResult};
 use crate::waf::WafDetectionResultPy;
 
 /// Internal state for daemon-backed engine execution.
@@ -50,253 +48,20 @@ pub struct Engine {
     daemon_backend: Option<DaemonBackend>,
 }
 
-/// Extract hostname from a URL for scope enforcement.
-fn extract_host_from_url(url: &str) -> PyResult<String> {
-    let parsed = url::Url::parse(url)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid URL: {}", e)))?;
-    parsed
-        .host_str()
-        .map(|h| h.to_string())
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
-}
-
-/// Parse a comma-separated ports string into a Vec<u16>.
-/// Supports plain ports ("80,443") and ranges ("1-1024").
-fn parse_ports_string(ports: &str) -> PyResult<Vec<u16>> {
-    let mut result = Vec::new();
-    for part in ports.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        if let Some((start_str, end_str)) = part.split_once('-') {
-            let start: u16 = start_str.trim().parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range start: {}",
-                    start_str
-                ))
-            })?;
-            let end: u16 = end_str.trim().parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range end: {}",
-                    end_str
-                ))
-            })?;
-            if start > end {
-                return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range: {}-{}",
-                    start, end
-                )));
-            }
-            for port in start..=end {
-                result.push(port);
-            }
-        } else {
-            let port: u16 = part.parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!("Invalid port: {}", part))
-            })?;
-            result.push(port);
-        }
-    }
-    if result.is_empty() {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "ports list must not be empty",
-        ));
-    }
-    Ok(result)
-}
-
-/// Build an OperationResult from a successful engine call.
-fn operation_ok(
-    stats: ExecutionStats,
-    metadata: Option<std::collections::HashMap<String, String>>,
-    payload: Option<super::status::OperationPayload>,
-) -> OperationResult {
-    let payload_type = payload.as_ref().map(|p| p.type_name().to_string());
-    let mut metadata = metadata.unwrap_or_default();
-    metadata.insert("policy_decision".to_string(), "allow".to_string());
-    metadata.insert("policy_schema_version".to_string(), "1.0".to_string());
-    OperationResult {
-        status: ExecutionStatus::Completed(),
-        stats: Some(stats),
-        artifacts: Vec::new(),
-        error: None,
-        metadata,
-        payload,
-        payload_type,
-        schema_version: "1.0".to_string(),
-    }
-}
-
-/// Build an OperationResult from an error.
-fn operation_err(error: String) -> OperationResult {
-    operation_err_for(None, error)
-}
-
-fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult {
-    let structured = OperationError::from_message(operation, &error);
-    OperationResult {
-        status: ExecutionStatus::Failed {
-            error: error.clone(),
-        },
-        stats: None,
-        artifacts: Vec::new(),
-        error: Some(structured),
-        metadata: std::collections::HashMap::new(),
-        payload: None,
-        payload_type: None,
-        schema_version: "1.0".to_string(),
-    }
-}
+#[cfg(feature = "daemon-client")]
+use crate::dispatch_helpers::daemon_response_to_operation_result;
+use crate::dispatch_helpers::{
+    emit_finding_event, extract_host_from_url, operation_err, operation_ok, parse_ports_string,
+    pydict_to_string_metadata,
+};
 
 /// Convert an OperationRequest to a TaskKind JSON string for daemon submission.
 ///
-/// Maps the operation ID to the corresponding `eggsec_runtime::TaskKind` variant
-/// and fills in the target and timeout from the request.
+/// Delegates to the registry-driven `operation_request_to_daemon_task` which
+/// uses `OperationExecutorDescriptor.daemon_task_kind` instead of a hardcoded match.
 #[cfg(feature = "daemon-client")]
 pub(crate) fn operation_request_to_task_kind_json(request: &OperationRequest) -> PyResult<String> {
-    let task_kind = match request.operation.as_str() {
-        "scan_ports" | "scan-ports" => serde_json::json!({
-            "kind": "PortScan",
-            "params": { "target": request.target, "timeout_ms": request.timeout_ms }
-        }),
-        "scan_endpoints" | "scan-endpoints" => serde_json::json!({
-            "kind": "EndpointScan",
-            "params": { "target": request.target }
-        }),
-        "fingerprint_services" | "fingerprint" => serde_json::json!({
-            "kind": "Fingerprint",
-            "params": { "target": request.target }
-        }),
-        "recon_dns" | "recon" => serde_json::json!({
-            "kind": "Recon",
-            "params": { "target": request.target, "modules": ["dns"] }
-        }),
-        "detect_waf" | "waf-detect" => serde_json::json!({
-            "kind": "Waf",
-            "params": { "target": request.target }
-        }),
-        "detect_technology" => serde_json::json!({
-            "kind": "Recon",
-            "params": { "target": request.target, "modules": ["tech"] }
-        }),
-        "inspect_tls" => serde_json::json!({
-            "kind": "Recon",
-            "params": { "target": request.target, "modules": ["tls"] }
-        }),
-        "fuzz_http" | "fuzz" => serde_json::json!({
-            "kind": "Fuzz",
-            "params": { "target": request.target }
-        }),
-        "load_test" | "load-test" => serde_json::json!({
-            "kind": "LoadTest",
-            "params": { "target": request.target, "method": "GET" }
-        }),
-        "nse_run" | "nse" => serde_json::json!({
-            "kind": "Nse",
-            "params": { "target": request.target, "script": "default" }
-        }),
-        "graphql_test" | "graphql" => serde_json::json!({
-            "kind": "GraphQl",
-            "params": { "target": request.target }
-        }),
-        "oauth_test" | "oauth" => serde_json::json!({
-            "kind": "OAuth",
-            "params": { "target": request.target }
-        }),
-        "auth_test" | "auth-test" => serde_json::json!({
-            "kind": "AuthTest",
-            "params": { "target": request.target }
-        }),
-        "scan_git_secrets" | "git-secrets" => serde_json::json!({
-            "kind": "Storage",
-            "params": { "storage_type": "git-secrets", "path": request.target }
-        }),
-        "generate_sbom" | "sbom" => serde_json::json!({
-            "kind": "Storage",
-            "params": { "storage_type": "sbom", "path": request.target }
-        }),
-        "run_consolidated_recon" => serde_json::json!({
-            "kind": "Recon",
-            "params": { "target": request.target, "modules": ["dns","ssl","tech"] }
-        }),
-        "scan_docker_image" | "scan_kubernetes" | "container" => serde_json::json!({
-            "kind": "Storage",
-            "params": { "storage_type": "container", "path": request.target }
-        }),
-        "analyze_apk" | "analyze_ipa" | "mobile" => serde_json::json!({
-            "kind": "Storage",
-            "params": { "storage_type": "mobile", "path": request.target }
-        }),
-        other => {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Cannot convert operation '{}' to TaskKind for daemon dispatch",
-                other
-            )));
-        }
-    };
-
-    serde_json::to_string(&task_kind)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-}
-
-/// Convert a daemon `DaemonResponsePy` to an `OperationResult`.
-#[cfg(feature = "daemon-client")]
-fn daemon_response_to_operation_result(
-    response: &crate::daemon::DaemonResponsePy,
-    operation: &str,
-) -> OperationResult {
-    if response.ok {
-        let mut metadata = std::collections::HashMap::new();
-        metadata.insert("daemon_message".to_string(), response.message.clone());
-        metadata.insert("daemon_request_id".to_string(), response.request_id.clone());
-        metadata.insert("policy_decision".to_string(), "allow".to_string());
-        OperationResult {
-            status: ExecutionStatus::Completed(),
-            stats: Some(ExecutionStats::new(0, 0, 0, 0)),
-            artifacts: Vec::new(),
-            error: None,
-            metadata,
-            payload: None,
-            payload_type: None,
-            schema_version: "1.0".to_string(),
-        }
-    } else {
-        let error_msg = response
-            .error_code
-            .as_deref()
-            .map(|code| format!("{}: {}", code, response.message))
-            .unwrap_or_else(|| response.message.clone());
-        operation_err_for(Some(operation), error_msg)
-    }
-}
-
-/// Convert a Python dict to `HashMap<String, String>` for OperationRequest metadata.
-///
-/// Each value is converted to its string representation. Complex types (lists,
-/// nested dicts) are serialized via Python's `json.dumps`.
-fn pydict_to_string_metadata(dict: &Bound<'_, PyDict>) -> PyResult<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    let json_mod = dict.py().import_bound("json")?;
-    for (key, value) in dict.iter() {
-        if let Ok(key_str) = key.extract::<String>() {
-            let val_str: String = if let Ok(s) = value.extract::<String>() {
-                s
-            } else if let Ok(b) = value.extract::<bool>() {
-                b.to_string()
-            } else if let Ok(i) = value.extract::<i64>() {
-                i.to_string()
-            } else if let Ok(f) = value.extract::<f64>() {
-                f.to_string()
-            } else {
-                // Fallback: use json.dumps for complex types (lists, dicts, None)
-                let json_str_obj = json_mod.call_method1("dumps", (&value,))?;
-                json_str_obj.extract()?
-            };
-            map.insert(key_str, val_str);
-        }
-    }
-    Ok(map)
+    crate::dispatch_helpers::operation_request_to_daemon_task(request)
 }
 
 #[pymethods]
@@ -468,141 +233,245 @@ impl Engine {
         self.run(py, request)
     }
 
-    /// Run a port scan.
+    /// Invoke a tool using a typed ToolRequest object.
+    ///
+    /// Accepts a ToolRequest and delegates through the engine's enforcement
+    /// pipeline, preserving scope, policy, audit, timeout, cancellation,
+    /// and rate-limit behavior.
+    ///
+    /// Args:
+    ///     request: A ToolRequest object with tool ID, target, params, and options.
+    ///
+    /// Returns:
+    ///     OperationResult: The common result envelope.
     #[pyo3(signature = (request,))]
-    fn run_port_scan(&self, py: Python<'_>, request: PortScanRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("scan_ports", &request.target)
-        {
-            return operation_err_for(Some("scan_ports"), e.to_string());
-        }
-        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        let ports_str = request
-            .ports
-            .clone()
-            .unwrap_or_else(|| "1-1024".to_string());
-        let ports = match parse_ports_string(&ports_str) {
-            Ok(p) => p,
-            Err(e) => return operation_err(e.to_string()),
+    fn invoke_tool_request(
+        &self,
+        py: Python<'_>,
+        request: crate::tool_core::ToolRequestPy,
+    ) -> PyResult<OperationResult> {
+        let inner = request.into_inner();
+        let metadata: HashMap<String, String> = if let Some(obj) = inner.params.as_object() {
+            obj.iter()
+                .map(|(k, v)| {
+                    let val = match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    (k.clone(), val)
+                })
+                .collect()
+        } else {
+            HashMap::new()
         };
-        let effective_concurrency = self.state.concurrency;
-        self.run_port_scan_inner(
-            py,
-            &request,
-            ports,
-            effective_concurrency,
-            effective_timeout,
-        )
+        let op_request = OperationRequest::new(
+            inner.tool,
+            inner.target.value,
+            inner.options.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
+    }
+
+    /// Run a port scan.
+    ///
+    /// Thin delegate: validates scope (raising EnforcementError for denial),
+    /// then routes through the canonical engine dispatch path.
+    #[pyo3(signature = (request,))]
+    fn run_port_scan(&self, py: Python<'_>, request: PortScanRequest) -> PyResult<OperationResult> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref ports) = request.ports {
+            metadata.insert("ports".to_string(), ports.clone());
+        }
+        if let Some(ref mode) = request.mode {
+            metadata.insert("mode".to_string(), mode.clone());
+        }
+        if let Some(ref timing) = request.timing {
+            metadata.insert("timing".to_string(), timing.clone());
+        }
+        let op_request = OperationRequest::new(
+            "scan_ports".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run an endpoint scan.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_endpoint_scan(&self, py: Python<'_>, request: EndpointScanRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("scan_endpoints", &request.target)
-        {
-            return operation_err_for(Some("scan_endpoints"), e.to_string());
+    fn run_endpoint_scan(
+        &self,
+        py: Python<'_>,
+        request: EndpointScanRequest,
+    ) -> PyResult<OperationResult> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref paths) = request.paths {
+            metadata.insert("endpoints".to_string(), paths.join(","));
         }
-        self.run_endpoint_scan_inner(py, &request)
+        let op_request = OperationRequest::new(
+            "scan_endpoints".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run service fingerprinting.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_fingerprint(&self, py: Python<'_>, request: FingerprintRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("fingerprint_services", &request.target)
-        {
-            return operation_err_for(Some("fingerprint_services"), e.to_string());
+    fn run_fingerprint(
+        &self,
+        py: Python<'_>,
+        request: FingerprintRequest,
+    ) -> PyResult<OperationResult> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref ports) = request.ports {
+            let ports_str: Vec<String> = ports.iter().map(|p| p.to_string()).collect();
+            metadata.insert("ports".to_string(), ports_str.join(","));
         }
-        let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
-        self.run_fingerprint_inner(py, &request, ports)
+        let op_request = OperationRequest::new(
+            "fingerprint_services".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run DNS reconnaissance.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_recon_dns(&self, py: Python<'_>, request: ReconDnsRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("recon_dns", &request.target)
-        {
-            return operation_err_for(Some("recon_dns"), e.to_string());
-        }
-        self.run_recon_dns_inner(py, &request)
+    fn run_recon_dns(&self, py: Python<'_>, request: ReconDnsRequest) -> PyResult<OperationResult> {
+        let op_request = OperationRequest::new(
+            "recon_dns".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run TLS inspection.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_tls_inspect(&self, py: Python<'_>, request: TlsInspectRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("inspect_tls", &request.target)
-        {
-            return operation_err_for(Some("inspect_tls"), e.to_string());
-        }
-        self.run_tls_inspect_inner(py, &request)
+    fn run_tls_inspect(
+        &self,
+        py: Python<'_>,
+        request: TlsInspectRequest,
+    ) -> PyResult<OperationResult> {
+        let op_request = OperationRequest::new(
+            "inspect_tls".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run technology detection.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_tech_detect(&self, py: Python<'_>, request: TechDetectRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("detect_technology", &request.target)
-        {
-            return operation_err_for(Some("detect_technology"), e.to_string());
-        }
-        self.run_tech_detect_inner(py, &request)
+    fn run_tech_detect(
+        &self,
+        py: Python<'_>,
+        request: TechDetectRequest,
+    ) -> PyResult<OperationResult> {
+        let op_request = OperationRequest::new(
+            "detect_technology".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run WAF detection.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_waf_detect(&self, py: Python<'_>, request: WafDetectRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("detect_waf", &request.target)
-        {
-            return operation_err_for(Some("detect_waf"), e.to_string());
-        }
-        self.run_waf_detect_inner(py, &request)
+    fn run_waf_detect(
+        &self,
+        py: Python<'_>,
+        request: WafDetectRequest,
+    ) -> PyResult<OperationResult> {
+        let op_request = OperationRequest::new(
+            "detect_waf".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run an HTTP load test.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_load_test(&self, py: Python<'_>, request: LoadTestRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("load_test", &request.target)
-        {
-            return operation_err_for(Some("load_test"), e.to_string());
+    fn run_load_test(&self, py: Python<'_>, request: LoadTestRequest) -> PyResult<OperationResult> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(reqs) = request.requests {
+            metadata.insert("requests".to_string(), reqs.to_string());
         }
-        self.run_load_test_inner(py, &request)
+        if let Some(conc) = request.concurrency {
+            metadata.insert("concurrency".to_string(), conc.to_string());
+        }
+        if let Some(ref method) = request.method {
+            metadata.insert("method".to_string(), method.clone());
+        }
+        let op_request = OperationRequest::new(
+            "load_test".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run WAF validation.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_waf_validate(&self, py: Python<'_>, request: WafValidateRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("validate_waf", &request.target)
-        {
-            return operation_err_for(Some("validate_waf"), e.to_string());
-        }
-        self.run_waf_validate_inner(py, &request)
+    fn run_waf_validate(
+        &self,
+        py: Python<'_>,
+        request: WafValidateRequest,
+    ) -> PyResult<OperationResult> {
+        let op_request = OperationRequest::new(
+            "validate_waf".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run HTTP fuzzing.
+    ///
+    /// Thin delegate: validates scope, then routes through canonical dispatch.
     #[pyo3(signature = (request,))]
-    fn run_fuzz(&self, py: Python<'_>, request: FuzzRequest) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("fuzz_http", &request.target)
-        {
-            return operation_err_for(Some("fuzz_http"), e.to_string());
+    fn run_fuzz(&self, py: Python<'_>, request: FuzzRequest) -> PyResult<OperationResult> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref pt) = request.payload_type {
+            metadata.insert("payload_type".to_string(), pt.clone());
         }
-        self.run_fuzz_inner(py, &request)
+        if let Some(threads) = request.threads {
+            metadata.insert("threads".to_string(), threads.to_string());
+        }
+        let op_request = OperationRequest::new(
+            "fuzz_http".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Create a scan plan suggesting what operations to run against a target.
@@ -734,104 +603,48 @@ impl Engine {
         request: OperationRequest,
         cancel_token: Option<CancellationToken>,
     ) -> OperationResult {
-        use crate::event_protocol::{
-            ArtifactEvent, CancellationEvent, EventEnvelope, FindingEvent, PlanningEvent,
-            PreflightEvent,
-        };
         use crate::operation_registry::StableOperation;
         let op = request.operation.clone();
         let target = request.target.clone();
 
-        // Emit: operation.planning
-        let planning_event = EventEnvelope::create(
-            "operation.planning".to_string(),
-            PlanningEvent::new(op.clone(), target.clone(), String::new()).into_py(py),
-            None,
-            None,
-            Some(target.clone()),
-            None,
-        );
-        self.state.emit_event(planning_event);
+        // Phase 1: Common lifecycle (planning, validation, preflight, cancel, deadline)
+        let _deadline = match crate::dispatch_helpers::pre_dispatch_lifecycle(
+            py,
+            &op,
+            &target,
+            request.timeout_ms,
+            self.state.timeout_ms,
+            &self.state,
+            &cancel_token,
+        ) {
+            Ok(dl) => dl,
+            Err(result) => return result,
+        };
 
-        // Pre-dispatch validation: scope, feature gates, audit logging.
-        if let Err(e) = self.state.pre_dispatch_validate(&op, &target) {
-            return operation_err(e.to_string());
-        }
-
-        // Emit: operation.preflight
-        let preflight_event = EventEnvelope::create(
-            "operation.preflight".to_string(),
-            PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new()).into_py(py),
-            None,
-            None,
-            Some(target.clone()),
-            None,
-        );
-        self.state.emit_event(preflight_event);
-
-        // Compute deadline from request or engine timeout
-        let deadline = request
-            .timeout_ms
-            .or(Some(self.state.timeout_ms))
-            .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
-
+        // Phase 2: Operation-specific dispatch
         let operation = match StableOperation::parse(&op) {
-            Some(operation) => operation,
+            Some(op) => op,
             None => return operation_err(format!("Unknown operation: {}", op)),
         };
 
+        let result = self.execute_operation(py, operation, &request);
+
+        // Phase 3: Post-dispatch hooks (finding events)
+        self.post_dispatch_hooks(py, operation, &target, &result);
+
+        result
+    }
+
+    /// Operation-specific dispatch: extract typed params and call the inner method.
+    fn execute_operation(
+        &self,
+        py: Python<'_>,
+        operation: crate::operation_registry::StableOperation,
+        request: &OperationRequest,
+    ) -> OperationResult {
+        use crate::operation_registry::StableOperation;
         match operation {
             StableOperation::ScanPorts => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_ports"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                // Deadline check
-                if let Some(ref dl) = deadline {
-                    if std::time::Instant::now() >= *dl {
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation timed out before execution".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_ports"),
-                                "Operation timed out before execution",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                let target = request.target.clone();
                 let ports_str = request
                     .metadata
                     .get("ports")
@@ -842,184 +655,39 @@ impl Engine {
                 match parse_ports_string(&ports_str) {
                     Ok(ports) => {
                         let req = PortScanRequest::new(
-                            target.clone(),
+                            request.target.clone(),
                             Some(ports_str),
                             None,
                             None,
                             Some(effective_timeout),
                         );
-                        let result = self.run_port_scan_inner(
+                        self.run_port_scan_inner(
                             py,
                             &req,
                             ports,
                             effective_concurrency,
                             effective_timeout,
-                        );
-                        // Emit finding event if there are open ports
-                        if let Some(OperationPayload::PortScan(ref ps)) = result.payload {
-                            if !ps.open_ports.is_empty() {
-                                let finding = FindingEvent::new(
-                                    format!("port-scan-{}", target),
-                                    "info".to_string(),
-                                    format!(
-                                        "{} open port(s) found on {}",
-                                        ps.open_ports.len(),
-                                        target
-                                    ),
-                                    true,
-                                );
-                                self.state.emit_event(EventEnvelope::create(
-                                    "operation.finding".to_string(),
-                                    finding.into_py(py),
-                                    None,
-                                    None,
-                                    Some(target),
-                                    None,
-                                ));
-                            }
-                        }
-                        result
+                        )
                     }
                     Err(e) => operation_err(e.to_string()),
                 }
             }
             StableOperation::ScanEndpoints => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_endpoints"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                // Deadline check
-                if let Some(ref dl) = deadline {
-                    if std::time::Instant::now() >= *dl {
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation timed out before execution".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_endpoints"),
-                                "Operation timed out before execution",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                let target = request.target.clone();
-                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let endpoints: Vec<String> = request
                     .metadata
                     .get("endpoints")
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
                     .unwrap_or_default();
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let req = EndpointScanRequest::new(
-                    target.clone(),
+                    request.target.clone(),
                     Some(endpoints),
                     None,
                     Some(effective_timeout),
                 );
-                let result = self.run_endpoint_scan_inner(py, &req);
-                // Emit finding event if endpoints were discovered
-                if let Some(OperationPayload::EndpointScan(ref es)) = result.payload {
-                    if es.endpoints_found > 0 {
-                        let finding = FindingEvent::new(
-                            format!("endpoint-scan-{}", target),
-                            "info".to_string(),
-                            format!("{} endpoint(s) found on {}", es.endpoints_found, target),
-                            true,
-                        );
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.finding".to_string(),
-                            finding.into_py(py),
-                            None,
-                            None,
-                            Some(target),
-                            None,
-                        ));
-                    }
-                }
-                result
+                self.run_endpoint_scan_inner(py, &req)
             }
             StableOperation::FingerprintServices => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("fingerprint_services"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                // Deadline check
-                if let Some(ref dl) = deadline {
-                    if std::time::Instant::now() >= *dl {
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation timed out before execution".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("fingerprint_services"),
-                                "Operation timed out before execution",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                let target = request.target.clone();
-                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
                     vec![80, 443]
@@ -1029,222 +697,31 @@ impl Engine {
                         Err(e) => return operation_err(e.to_string()),
                     }
                 };
+                let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let req = FingerprintRequest::new(
-                    target.clone(),
+                    request.target.clone(),
                     Some(ports.clone()),
                     Some(effective_timeout),
                 );
-                let result = self.run_fingerprint_inner(py, &req, ports);
-                // Emit finding event if services were identified
-                if let Some(OperationPayload::Fingerprint(ref fp)) = result.payload {
-                    if fp.services_identified > 0 {
-                        let finding = FindingEvent::new(
-                            format!("fingerprint-{}", target),
-                            "info".to_string(),
-                            format!(
-                                "{} service(s) identified on {}",
-                                fp.services_identified, target
-                            ),
-                            true,
-                        );
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.finding".to_string(),
-                            finding.into_py(py),
-                            None,
-                            None,
-                            Some(target),
-                            None,
-                        ));
-                    }
-                }
-                result
+                self.run_fingerprint_inner(py, &req, ports)
             }
             StableOperation::ReconDns => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("recon_dns"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let req = ReconDnsRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_recon_dns_inner(py, &req)
             }
             StableOperation::InspectTls => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("inspect_tls"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let req = TlsInspectRequest::new(request.target.clone(), request.timeout_ms);
-                let result = self.run_tls_inspect_inner(py, &req);
-                // Emit finding for TLS issues
-                if let Some(OperationPayload::TlsInspection(ref tls)) = result.payload {
-                    if !tls.issues.is_empty() {
-                        let finding = FindingEvent::new(
-                            format!("tls-inspect-{}", request.target),
-                            "warning".to_string(),
-                            format!(
-                                "{} TLS issue(s) found on {}",
-                                tls.issues.len(),
-                                request.target
-                            ),
-                            true,
-                        );
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.finding".to_string(),
-                            finding.into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                    }
-                }
-                result
+                self.run_tls_inspect_inner(py, &req)
             }
             StableOperation::DetectTechnology => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("detect_technology"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let req = TechDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_tech_detect_inner(py, &req)
             }
             StableOperation::DetectWaf => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("detect_waf"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let req = WafDetectRequest::new(request.target.clone(), request.timeout_ms);
                 self.run_waf_detect_inner(py, &req)
             }
             StableOperation::LoadTest => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("load_test"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -1270,68 +747,10 @@ impl Engine {
                 self.run_load_test_inner(py, &req)
             }
             StableOperation::ValidateWaf => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("validate_waf"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let req = WafValidateRequest::new(request.target.clone(), None, request.timeout_ms);
                 self.run_waf_validate_inner(py, &req)
             }
             StableOperation::FuzzHttp => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("fuzz_http"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: Option<u32> =
                     request.metadata.get("threads").and_then(|s| s.parse().ok());
@@ -1341,60 +760,10 @@ impl Engine {
                     threads,
                     request.timeout_ms,
                 );
-                let result = self.run_fuzz_inner(py, &req);
-                // Emit finding for fuzz issues
-                if let Some(OperationPayload::HttpFuzz(ref fuzz)) = result.payload {
-                    let issues = fuzz.waf_bypasses + fuzz.potential_leaks + fuzz.redos_suspected;
-                    if issues > 0 {
-                        let finding = FindingEvent::new(
-                            format!("fuzz-{}", request.target),
-                            "high".to_string(),
-                            format!("{} fuzzing issue(s) found on {}", issues, request.target),
-                            false,
-                        );
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.finding".to_string(),
-                            finding.into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                    }
-                }
-                result
+                self.run_fuzz_inner(py, &req)
             }
             #[cfg(feature = "git-secrets")]
             StableOperation::ScanGitSecrets => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_git_secrets"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let repo_path = request
                     .metadata
                     .get("repo_path")
@@ -1405,59 +774,10 @@ impl Engine {
                     .get("max_commits")
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(1000);
-                let result = self.run_git_secrets_inner(py, &repo_path, max_commits);
-                // Emit finding if secrets were found
-                if let Some(OperationPayload::GitSecrets(ref gs)) = result.payload {
-                    if !gs.findings.is_empty() {
-                        let finding = FindingEvent::new(
-                            format!("git-secrets-{}", repo_path),
-                            "critical".to_string(),
-                            format!("{} secret(s) found in {}", gs.findings.len(), repo_path),
-                            false,
-                        );
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.finding".to_string(),
-                            finding.into_py(py),
-                            None,
-                            None,
-                            Some(repo_path),
-                            None,
-                        ));
-                    }
-                }
-                result
+                self.run_git_secrets_inner(py, &repo_path, max_commits)
             }
             #[cfg(feature = "sbom")]
             StableOperation::GenerateSbom => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("generate_sbom"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let project_path = request
                     .metadata
                     .get("project_path")
@@ -1473,56 +793,9 @@ impl Engine {
                     .get("format")
                     .cloned()
                     .unwrap_or_else(|| "cyclonedx".to_string());
-                let result = self.run_sbom_inner(py, &project_path, &ecosystem, &format);
-                // Emit artifact event for SBOM output
-                if result.is_success() {
-                    let artifact = ArtifactEvent::new(
-                        format!("sbom-{}", project_path),
-                        "sbom".to_string(),
-                        "application/json".to_string(),
-                        0,
-                    );
-                    self.state.emit_event(EventEnvelope::create(
-                        "operation.artifact".to_string(),
-                        artifact.into_py(py),
-                        None,
-                        None,
-                        Some(project_path),
-                        None,
-                    ));
-                }
-                result
+                self.run_sbom_inner(py, &project_path, &ecosystem, &format)
             }
             StableOperation::RunConsolidatedRecon => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("run_consolidated_recon"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let config = crate::consolidated_recon::ConsolidatedReconConfigPy {
                     run_dns: request
                         .metadata
@@ -1585,56 +858,9 @@ impl Engine {
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(10),
                 };
-                let result = self.run_consolidated_recon_inner(py, &request.target, config);
-                // Emit artifact event for consolidated recon output
-                if result.is_success() {
-                    let artifact = ArtifactEvent::new(
-                        format!("recon-{}", request.target),
-                        "consolidated_recon".to_string(),
-                        "application/json".to_string(),
-                        0,
-                    );
-                    self.state.emit_event(EventEnvelope::create(
-                        "operation.artifact".to_string(),
-                        artifact.into_py(py),
-                        None,
-                        None,
-                        Some(request.target.clone()),
-                        None,
-                    ));
-                }
-                result
+                self.run_consolidated_recon_inner(py, &request.target, config)
             }
             StableOperation::GraphqlTest => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("graphql_test"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let config = crate::graphql::GraphQLTestConfigPy {
                     endpoint: request.target.clone(),
                     enable_introspection: request
@@ -1661,35 +887,6 @@ impl Engine {
                 self.run_graphql_inner(py, config)
             }
             StableOperation::OauthTest => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("oauth_test"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let config = crate::oauth::OAuthTestConfigPy {
                     client_id: request
                         .metadata
@@ -1736,69 +933,9 @@ impl Engine {
                     .unwrap_or_else(|| request.target.clone());
                 self.run_oauth_inner(py, config, &auth_endpoint)
             }
-            StableOperation::AuthTest => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("auth_test"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
-                self.run_auth_test_inner(py, &request.target)
-            }
+            StableOperation::AuthTest => self.run_auth_test_inner(py, &request.target),
             #[cfg(feature = "db-pentest")]
             StableOperation::DbProbe => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("db_probe"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let db_type = request
                     .metadata
                     .get("db_type")
@@ -1820,35 +957,6 @@ impl Engine {
             }
             #[cfg(feature = "nse")]
             StableOperation::NseRun => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("nse_run"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let scripts: Vec<String> = request
                     .metadata
                     .get("scripts")
@@ -1868,35 +976,6 @@ impl Engine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanDockerImage => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_docker_image"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let image = request
                     .metadata
                     .get("image")
@@ -1906,35 +985,6 @@ impl Engine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanKubernetes => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("scan_kubernetes"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let api_server = request
                     .metadata
                     .get("api_server")
@@ -1950,35 +1000,6 @@ impl Engine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeApk => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("analyze_apk"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let apk_path = request
                     .metadata
                     .get("apk_path")
@@ -1988,35 +1009,6 @@ impl Engine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeIpa => {
-                // Cancellation check
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        self.state.emit_event(EventEnvelope::create(
-                            "operation.cancelled".to_string(),
-                            CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                            None,
-                            None,
-                            Some(request.target.clone()),
-                            None,
-                        ));
-                        return OperationResult {
-                            status: ExecutionStatus::Failed {
-                                error: "Operation cancelled".to_string(),
-                            },
-                            stats: None,
-                            artifacts: Vec::new(),
-                            error: Some(OperationError::from_message(
-                                Some("analyze_ipa"),
-                                "Operation cancelled",
-                            )),
-                            metadata: std::collections::HashMap::new(),
-                            payload: None,
-                            payload_type: None,
-                            schema_version: "1.0".to_string(),
-                        };
-                    }
-                }
                 let ipa_path = request
                     .metadata
                     .get("ipa_path")
@@ -2026,8 +1018,152 @@ impl Engine {
             }
             _ => operation_err(format!(
                 "Operation '{}' is not available in this build configuration",
-                op
+                request.operation
             )),
+        }
+    }
+
+    /// Emit finding and artifact events after a successful operation dispatch.
+    fn post_dispatch_hooks(
+        &self,
+        py: Python<'_>,
+        operation: crate::operation_registry::StableOperation,
+        target: &str,
+        result: &OperationResult,
+    ) {
+        if !result.is_success() {
+            return;
+        }
+        use crate::event_protocol::{ArtifactEvent, EventEnvelope};
+        use crate::operation_registry::StableOperation;
+
+        if let Some(ref payload) = result.payload {
+            match operation {
+                StableOperation::ScanPorts => {
+                    if let OperationPayload::PortScan(ref ps) = payload {
+                        if !ps.open_ports.is_empty() {
+                            emit_finding_event(
+                                &self.state,
+                                format!("port-scan-{}", target),
+                                "info".to_string(),
+                                format!("{} open port(s) found on {}", ps.open_ports.len(), target),
+                                true,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                StableOperation::ScanEndpoints => {
+                    if let OperationPayload::EndpointScan(ref es) = payload {
+                        if es.endpoints_found > 0 {
+                            emit_finding_event(
+                                &self.state,
+                                format!("endpoint-scan-{}", target),
+                                "info".to_string(),
+                                format!("{} endpoint(s) found on {}", es.endpoints_found, target),
+                                true,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                StableOperation::FingerprintServices => {
+                    if let OperationPayload::Fingerprint(ref fp) = payload {
+                        if fp.services_identified > 0 {
+                            emit_finding_event(
+                                &self.state,
+                                format!("fingerprint-{}", target),
+                                "info".to_string(),
+                                format!(
+                                    "{} service(s) identified on {}",
+                                    fp.services_identified, target
+                                ),
+                                true,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                StableOperation::InspectTls => {
+                    if let OperationPayload::TlsInspection(ref tls) = payload {
+                        if !tls.issues.is_empty() {
+                            emit_finding_event(
+                                &self.state,
+                                format!("tls-inspect-{}", target),
+                                "warning".to_string(),
+                                format!("{} TLS issue(s) found on {}", tls.issues.len(), target),
+                                true,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                StableOperation::FuzzHttp => {
+                    if let OperationPayload::HttpFuzz(ref fuzz) = payload {
+                        let issues =
+                            fuzz.waf_bypasses + fuzz.potential_leaks + fuzz.redos_suspected;
+                        if issues > 0 {
+                            emit_finding_event(
+                                &self.state,
+                                format!("fuzz-{}", target),
+                                "high".to_string(),
+                                format!("{} fuzzing issue(s) found on {}", issues, target),
+                                false,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                #[cfg(feature = "git-secrets")]
+                StableOperation::ScanGitSecrets => {
+                    if let OperationPayload::GitSecrets(ref gs) = payload {
+                        if !gs.findings.is_empty() {
+                            emit_finding_event(
+                                &self.state,
+                                format!("git-secrets-{}", target),
+                                "critical".to_string(),
+                                format!("{} secret(s) found in {}", gs.findings.len(), target),
+                                false,
+                                target.to_string(),
+                            );
+                        }
+                    }
+                }
+                #[cfg(feature = "sbom")]
+                StableOperation::GenerateSbom => {
+                    let artifact = ArtifactEvent::new(
+                        format!("sbom-{}", target),
+                        "sbom".to_string(),
+                        "application/json".to_string(),
+                        0,
+                    );
+                    self.state.emit_event(EventEnvelope::create(
+                        "operation.artifact".to_string(),
+                        artifact.into_py(py),
+                        None,
+                        None,
+                        Some(target.to_string()),
+                        None,
+                    ));
+                }
+                StableOperation::RunConsolidatedRecon => {
+                    let artifact = ArtifactEvent::new(
+                        format!("recon-{}", target),
+                        "consolidated_recon".to_string(),
+                        "application/json".to_string(),
+                        0,
+                    );
+                    self.state.emit_event(EventEnvelope::create(
+                        "operation.artifact".to_string(),
+                        artifact.into_py(py),
+                        None,
+                        None,
+                        Some(target.to_string()),
+                        None,
+                    ));
+                }
+                _ => {}
+            }
         }
     }
 

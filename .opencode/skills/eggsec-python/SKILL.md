@@ -1701,3 +1701,97 @@ status = ToolRateLimitStatus.new(
     concurrent_in_use=2,
 )
 ```
+
+## Release 5 Phase B: Registry Dispatch Architecture
+
+Release 5 Phase B completes registry and dispatch convergence. A single
+authoritative `OperationExecutorDescriptor` registry replaces duplicated
+sync/async dispatch and parallel metadata inventories.
+
+### Architecture Overview
+
+The generic dispatch lifecycle (`pre_dispatch_lifecycle` → `execute_operation`
+→ `post_dispatch_hooks`) replaces per-operation match arms in both sync and
+async engines.
+
+```
+Engine.run(request) / AsyncEngine.run(request)
+  └─ OperationExecutorRegistry::execute()
+       └─ dispatch()
+            ├─ pre_dispatch_lifecycle()     ← shared with async
+            │    ├─ planning event
+            │    ├─ scope/feature validation
+            │    ├─ preflight event
+            │    ├─ cancel check
+            │    └─ deadline check
+            ├─ execute_operation()          ← per-op match, typed params
+            └─ post_dispatch_hooks()        ← finding/artifact events
+```
+
+### Key Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `OperationExecutorDescriptor` | `src/operation_registry.rs` | Single source of truth for per-operation metadata |
+| `pre_dispatch_lifecycle()` | `src/dispatch_helpers.rs` | Shared planning, validation, cancel/deadline checks |
+| `execute_operation()` | `src/engine.rs` / `src/async_engine.rs` | Per-operation parameter extraction and inner call |
+| `post_dispatch_hooks()` | `src/engine.rs` | Finding/artifact event emission after dispatch |
+| Per-op executors | `src/operation_executors.rs` | Normalization of generic requests into typed parameters |
+
+### Adding a New Operation
+
+To add a new stable operation:
+
+1. **Register in `StableOperation` enum** (`src/operation_registry.rs`):
+   - Add variant to `StableOperation`
+   - Add entry in `StableOperation::ALL`
+   - Add to `from_operation()` match for descriptor metadata
+   - Add to `id()`, `parse()`, `feature_required()`, `aliases()` methods
+
+2. **Add `OperationExecutorDescriptor`** in `from_operation()`:
+   - Set risk classification, feature gate, confirmation behavior
+   - Set schema IDs, daemon task kind, finding/artifact hook flags
+
+3. **Add `execute_operation` arm** in `src/engine.rs`:
+   - Extract typed parameters from `request.metadata`
+   - Delegate to the inner method (e.g., `run_*_inner()`)
+
+4. **Add `execute_operation_async` arm** in `src/async_engine.rs`:
+   - Same parameter extraction as sync
+   - Delegate to the async method (e.g., `run_*_async()`)
+
+5. **Add `post_dispatch_hooks` arm** (if finding/artifact hooks needed):
+   - Emit finding events based on result payload
+
+6. **Add daemon task kind** in `dispatch_helpers::operation_request_to_daemon_task()`:
+   - Add JSON params for the operation
+
+7. **Add tests**:
+   - Add to `tests/test_golden_contract.py` canonical operation list
+   - Add Rust-side tests in `src/operation_registry.rs`
+
+### Architecture Guard Tests
+
+The golden contract test suite (`tests/test_golden_contract.py`) enforces:
+
+- One descriptor per operation (no duplicates)
+- Unique operation IDs across all 22 operations
+- Alias non-collision (no two operations share an alias)
+- Schema identity (ToolRegistry descriptors match OperationExecutorDescriptor)
+- Feature gate metadata consistency
+- Risk classification completeness
+
+Run via: `pytest crates/eggsec-python/tests/test_golden_contract.py`
+
+### Key Invariants
+
+1. **`OperationExecutorDescriptor` is the single source of truth** — no
+   parallel metadata inventories in engine or async engine.
+2. **Generic dispatch lifecycle is shared** — `pre_dispatch_lifecycle()`
+   handles identical pre-dispatch steps for both sync and async.
+3. **Typed methods are thin delegates** — `Engine.run_port_scan()` etc.
+   remain as `#[pymethods]` for backward compatibility but delegate to the
+   same inner methods used by generic dispatch.
+4. **Generated inventories derive from registry** — capability manifests,
+   tool descriptors, feature maps, and daemon parity metadata are all
+   derived from `OperationExecutorDescriptor`, not hand-maintained.

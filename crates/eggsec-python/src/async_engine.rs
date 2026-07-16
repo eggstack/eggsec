@@ -15,9 +15,7 @@ use crate::recon::{DnsRecordSet, TechDetectionResult, TlsInspectionResult};
 use crate::requests::*;
 use crate::runtime_async;
 use crate::scope::Scope;
-use crate::status::{
-    ExecutionStats, ExecutionStatus, OperationError, OperationPayload, OperationResult,
-};
+use crate::status::{ExecutionStats, OperationPayload};
 use crate::waf::WafDetectionResultPy;
 
 /// Internal state for daemon-backed async engine execution.
@@ -30,157 +28,12 @@ struct DaemonBackend {
     socket_path: String,
 }
 
-/// Extract hostname from a URL for scope enforcement.
-fn extract_host_from_url(url: &str) -> PyResult<String> {
-    let parsed = url::Url::parse(url)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid URL: {}", e)))?;
-    parsed
-        .host_str()
-        .map(|h| h.to_string())
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("URL does not contain a valid host"))
-}
-
-/// Parse a comma-separated ports string into a Vec<u16>.
-fn parse_ports_string(ports: &str) -> PyResult<Vec<u16>> {
-    let mut result = Vec::new();
-    for part in ports.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        if let Some((start_str, end_str)) = part.split_once('-') {
-            let start: u16 = start_str.trim().parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range start: {}",
-                    start_str
-                ))
-            })?;
-            let end: u16 = end_str.trim().parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range end: {}",
-                    end_str
-                ))
-            })?;
-            if start > end {
-                return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "Invalid port range: {}-{}",
-                    start, end
-                )));
-            }
-            for port in start..=end {
-                result.push(port);
-            }
-        } else {
-            let port: u16 = part.parse().map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(format!("Invalid port: {}", part))
-            })?;
-            result.push(port);
-        }
-    }
-    Ok(result)
-}
-
-/// Build an OperationResult from a successful engine call.
-fn operation_ok(
-    stats: ExecutionStats,
-    metadata: Option<std::collections::HashMap<String, String>>,
-    payload: Option<super::status::OperationPayload>,
-) -> OperationResult {
-    let payload_type = payload.as_ref().map(|p| p.type_name().to_string());
-    let mut metadata = metadata.unwrap_or_default();
-    metadata.insert("policy_decision".to_string(), "allow".to_string());
-    metadata.insert("policy_schema_version".to_string(), "1.0".to_string());
-    OperationResult {
-        status: ExecutionStatus::Completed(),
-        stats: Some(stats),
-        artifacts: Vec::new(),
-        error: None,
-        metadata,
-        payload,
-        payload_type,
-        schema_version: "1.0".to_string(),
-    }
-}
-
-/// Build an OperationResult from an error.
-fn operation_err(error: String) -> OperationResult {
-    operation_err_for(None, error)
-}
-
-fn operation_err_for(operation: Option<&str>, error: String) -> OperationResult {
-    let structured = OperationError::from_message(operation, &error);
-    OperationResult {
-        status: ExecutionStatus::Failed {
-            error: error.clone(),
-        },
-        stats: None,
-        artifacts: Vec::new(),
-        error: Some(structured),
-        metadata: std::collections::HashMap::new(),
-        payload: None,
-        payload_type: None,
-        schema_version: "1.0".to_string(),
-    }
-}
-
-/// Convert a daemon `DaemonResponsePy` to an `OperationResult`.
 #[cfg(feature = "daemon-client")]
-fn daemon_response_to_operation_result(
-    response: &crate::daemon::DaemonResponsePy,
-    operation: &str,
-) -> OperationResult {
-    if response.ok {
-        let mut metadata = std::collections::HashMap::new();
-        metadata.insert("daemon_message".to_string(), response.message.clone());
-        metadata.insert("daemon_request_id".to_string(), response.request_id.clone());
-        metadata.insert("policy_decision".to_string(), "allow".to_string());
-        OperationResult {
-            status: ExecutionStatus::Completed(),
-            stats: Some(ExecutionStats::new(0, 0, 0, 0)),
-            artifacts: Vec::new(),
-            error: None,
-            metadata,
-            payload: None,
-            payload_type: None,
-            schema_version: "1.0".to_string(),
-        }
-    } else {
-        let error_msg = response
-            .error_code
-            .as_deref()
-            .map(|code| format!("{}: {}", code, response.message))
-            .unwrap_or_else(|| response.message.clone());
-        operation_err_for(Some(operation), error_msg)
-    }
-}
-
-/// Convert a Python dict to `HashMap<String, String>` for OperationRequest metadata.
-///
-/// Each value is converted to its string representation. Complex types (lists,
-/// nested dicts) are serialized via Python's `json.dumps`.
-fn pydict_to_string_metadata(dict: &Bound<'_, PyDict>) -> PyResult<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    let json_mod = dict.py().import_bound("json")?;
-    for (key, value) in dict.iter() {
-        if let Ok(key_str) = key.extract::<String>() {
-            let val_str: String = if let Ok(s) = value.extract::<String>() {
-                s
-            } else if let Ok(b) = value.extract::<bool>() {
-                b.to_string()
-            } else if let Ok(i) = value.extract::<i64>() {
-                i.to_string()
-            } else if let Ok(f) = value.extract::<f64>() {
-                f.to_string()
-            } else {
-                // Fallback: use json.dumps for complex types (lists, dicts, None)
-                let json_str_obj = json_mod.call_method1("dumps", (&value,))?;
-                json_str_obj.extract()?
-            };
-            map.insert(key_str, val_str);
-        }
-    }
-    Ok(map)
-}
+use crate::dispatch_helpers::daemon_response_to_operation_result;
+use crate::dispatch_helpers::{
+    extract_host_from_url, operation_err, operation_ok, parse_ports_string,
+    pydict_to_string_metadata,
+};
 
 /// Async engine for running scoped security operations.
 ///
@@ -341,6 +194,46 @@ impl AsyncEngine {
         self.run(py, request)
     }
 
+    /// Invoke a tool using a typed ToolRequest object (async).
+    ///
+    /// Accepts a ToolRequest and delegates through the engine's enforcement
+    /// pipeline, preserving scope, policy, audit, timeout, cancellation,
+    /// and rate-limit behavior.
+    ///
+    /// Args:
+    ///     request: A ToolRequest object with tool ID, target, params, and options.
+    ///
+    /// Returns:
+    ///     PyFuture: A future that resolves to OperationResult.
+    #[pyo3(signature = (request,))]
+    fn async_invoke_tool_request(
+        &self,
+        py: Python<'_>,
+        request: crate::tool_core::ToolRequestPy,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let inner = request.into_inner();
+        let metadata: HashMap<String, String> = if let Some(obj) = inner.params.as_object() {
+            obj.iter()
+                .map(|(k, v)| {
+                    let val = match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    (k.clone(), val)
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+        let op_request = OperationRequest::new(
+            inner.tool,
+            inner.target.value,
+            inner.options.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
+    }
+
     /// List all registered operation IDs.
     fn list_operations(&self) -> Vec<String> {
         self.state.registry.list()
@@ -357,124 +250,230 @@ impl AsyncEngine {
     }
 
     /// Run a port scan (async).
+    ///
+    /// Thin delegate: constructs an `OperationRequest` and routes through the
+    /// canonical async engine dispatch path (`self.run()`).
     #[pyo3(signature = (request,))]
-    fn run_port_scan(&self, request: PortScanRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_port_scan(
+        &self,
+        py: Python<'_>,
+        request: PortScanRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("scan_ports", &request.target)?;
-        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        let ports_str = request
-            .ports
-            .clone()
-            .unwrap_or_else(|| "1-1024".to_string());
-        let ports = parse_ports_string(&ports_str)?;
-        self.run_port_scan_async(request.target.clone(), ports, effective_timeout, None, None)
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref ports) = request.ports {
+            metadata.insert("ports".to_string(), ports.clone());
+        }
+        let op_request = OperationRequest::new(
+            "scan_ports".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run an endpoint scan (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_endpoint_scan(&self, request: EndpointScanRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_endpoint_scan(
+        &self,
+        py: Python<'_>,
+        request: EndpointScanRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("scan_endpoints", &request.target)?;
-        let endpoints = request.paths.clone().unwrap_or_default();
-        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        self.run_endpoint_scan_async(
-            request.target.clone(),
-            endpoints,
-            effective_timeout,
-            None,
-            None,
-        )
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref paths) = request.paths {
+            metadata.insert("endpoints".to_string(), paths.join(","));
+        }
+        let op_request = OperationRequest::new(
+            "scan_endpoints".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run service fingerprinting (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_fingerprint(&self, request: FingerprintRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_fingerprint(
+        &self,
+        py: Python<'_>,
+        request: FingerprintRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("fingerprint_services", &request.target)?;
-        let ports = request.ports.clone().unwrap_or_else(|| vec![80, 443]);
-        let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
-        self.run_fingerprint_async(request.target.clone(), ports, effective_timeout, None, None)
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref ports) = request.ports {
+            let ports_str: Vec<String> = ports.iter().map(|p| p.to_string()).collect();
+            metadata.insert("ports".to_string(), ports_str.join(","));
+        }
+        let op_request = OperationRequest::new(
+            "fingerprint_services".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run DNS reconnaissance (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_recon_dns(&self, request: ReconDnsRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_recon_dns(
+        &self,
+        py: Python<'_>,
+        request: ReconDnsRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("recon_dns", &request.target)?;
-        self.run_recon_dns_async(request.target.clone(), None, None)
+        let op_request = OperationRequest::new(
+            "recon_dns".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run TLS inspection (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_tls_inspect(&self, request: TlsInspectRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_tls_inspect(
+        &self,
+        py: Python<'_>,
+        request: TlsInspectRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("inspect_tls", &request.target)?;
-        self.run_tls_inspect_async(request.target.clone(), None, None)
+        let op_request = OperationRequest::new(
+            "inspect_tls".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run technology detection (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_tech_detect(&self, request: TechDetectRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_tech_detect(
+        &self,
+        py: Python<'_>,
+        request: TechDetectRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("detect_technology", &request.target)?;
-        self.run_tech_detect_async(request.target.clone(), None, None)
+        let op_request = OperationRequest::new(
+            "detect_technology".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run WAF detection (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_waf_detect(&self, request: WafDetectRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_waf_detect(
+        &self,
+        py: Python<'_>,
+        request: WafDetectRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("detect_waf", &request.target)?;
-        self.run_waf_detect_async(request.target.clone(), None, None)
+        let op_request = OperationRequest::new(
+            "detect_waf".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run an HTTP load test (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_load_test(&self, request: LoadTestRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_load_test(
+        &self,
+        py: Python<'_>,
+        request: LoadTestRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("load_test", &request.target)?;
-        let total_requests = request.requests.unwrap_or(100) as u64;
-        let concurrency = request.concurrency.unwrap_or(self.state.concurrency as u32) as usize;
-        let method = request.method.clone().unwrap_or_else(|| "GET".to_string());
-        let timeout_secs = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
-        self.run_load_test_async(
-            request.target.clone(),
-            total_requests,
-            concurrency,
-            timeout_secs,
-            method,
-            None,
-            None,
-        )
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(reqs) = request.requests {
+            metadata.insert("requests".to_string(), reqs.to_string());
+        }
+        if let Some(conc) = request.concurrency {
+            metadata.insert("concurrency".to_string(), conc.to_string());
+        }
+        if let Some(ref method) = request.method {
+            metadata.insert("method".to_string(), method.clone());
+        }
+        let op_request = OperationRequest::new(
+            "load_test".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Run WAF validation (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_waf_validate(&self, request: WafValidateRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_waf_validate(
+        &self,
+        py: Python<'_>,
+        request: WafValidateRequest,
+    ) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("validate_waf", &request.target)?;
-        self.run_waf_validate_async(request.target.clone(), None, None)
+        let op_request = OperationRequest::new(
+            "validate_waf".to_string(),
+            request.target,
+            request.timeout_ms,
+            None,
+        );
+        self.run(py, op_request)
     }
 
     /// Run HTTP fuzzing (async).
+    ///
+    /// Thin delegate: validates scope, then routes through canonical async dispatch.
     #[pyo3(signature = (request,))]
-    fn run_fuzz(&self, request: FuzzRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run_fuzz(&self, py: Python<'_>, request: FuzzRequest) -> PyResult<runtime_async::PyFuture> {
         self.state
             .pre_dispatch_validate("fuzz_http", &request.target)?;
-        let payload_type = request
-            .payload_type
-            .clone()
-            .unwrap_or_else(|| "all".to_string());
-        let threads = request.threads.unwrap_or(10) as usize;
-        let timeout = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
-        self.run_fuzz_async(
-            request.target.clone(),
-            payload_type,
-            threads,
-            timeout,
-            None,
-            None,
-        )
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(ref pt) = request.payload_type {
+            metadata.insert("payload_type".to_string(), pt.clone());
+        }
+        if let Some(threads) = request.threads {
+            metadata.insert("threads".to_string(), threads.to_string());
+        }
+        let op_request = OperationRequest::new(
+            "fuzz_http".to_string(),
+            request.target,
+            request.timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, op_request)
     }
 
     /// Create a scan plan suggesting what operations to run against a target (async).
@@ -606,83 +605,54 @@ impl AsyncEngine {
         request: OperationRequest,
         cancel_token: Option<CancellationToken>,
     ) -> PyResult<runtime_async::PyFuture> {
-        use crate::event_protocol::{
-            CancellationEvent, EventEnvelope, PlanningEvent, PreflightEvent,
-        };
         use crate::operation_registry::StableOperation;
         let op = request.operation.clone();
         let target = request.target.clone();
 
-        // Emit: operation.planning (need GIL for Python objects)
-        let planning_event = EventEnvelope::create(
-            "operation.planning".to_string(),
-            Python::with_gil(|py| {
-                PlanningEvent::new(op.clone(), target.clone(), String::new()).into_py(py)
-            }),
-            None,
-            None,
-            Some(target.clone()),
-            None,
-        );
-        self.state.emit_event(planning_event);
+        // Phase 1: Common lifecycle (planning, validation, preflight, cancel, deadline)
+        // Need GIL for Python object creation in planning/preflight events
+        let deadline = Python::with_gil(|py| {
+            crate::dispatch_helpers::pre_dispatch_lifecycle(
+                py,
+                &op,
+                &target,
+                request.timeout_ms,
+                self.state.timeout_ms,
+                &self.state,
+                &cancel_token,
+            )
+        })
+        .map_err(|op_result| {
+            let msg = match &op_result.status {
+                crate::status::ExecutionStatus::Failed { error } => error.clone(),
+                crate::status::ExecutionStatus::Cancelled { reason } => reason
+                    .clone()
+                    .unwrap_or_else(|| "Operation cancelled".to_string()),
+                crate::status::ExecutionStatus::Timeout { .. } => "Operation timed out".to_string(),
+                _ => "Operation failed".to_string(),
+            };
+            pyo3::exceptions::PyRuntimeError::new_err(msg)
+        })?;
 
-        // Pre-dispatch validation: scope, feature gates, audit logging.
-        self.state.pre_dispatch_validate(&op, &target)?;
-
-        // Emit: operation.preflight
-        let preflight_event = EventEnvelope::create(
-            "operation.preflight".to_string(),
-            Python::with_gil(|py| {
-                PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new()).into_py(py)
-            }),
-            None,
-            None,
-            Some(target.clone()),
-            None,
-        );
-        self.state.emit_event(preflight_event);
-
-        // Compute deadline from request or engine timeout
-        let deadline = request
-            .timeout_ms
-            .or(Some(self.state.timeout_ms))
-            .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
-
-        // Clone cancel_token for move into async closures
-        let cancel_token_clone = cancel_token.clone();
-
+        // Phase 2: Operation-specific dispatch
         let operation = StableOperation::parse(&op).ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(format!("Unknown operation: {}", op))
         })?;
 
-        // Cancellation check helper macro
-        macro_rules! check_cancel {
-            ($op_id:expr) => {
-                if let Some(ref token) = cancel_token {
-                    if token.is_cancelled() {
-                        let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-                        Python::with_gil(|py| {
-                            self.state.emit_event(EventEnvelope::create(
-                                "operation.cancelled".to_string(),
-                                CancellationEvent::new(reason, "operator".to_string()).into_py(py),
-                                None,
-                                None,
-                                Some($op_id.to_string()),
-                                None,
-                            ));
-                        });
-                        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                            "Operation cancelled",
-                        ));
-                    }
-                }
-            };
-        }
+        self.execute_operation_async(operation, &request, cancel_token, deadline)
+    }
 
+    /// Operation-specific async dispatch: extract typed params and call the inner method.
+    fn execute_operation_async(
+        &self,
+        operation: crate::operation_registry::StableOperation,
+        request: &OperationRequest,
+        cancel_token: Option<CancellationToken>,
+        deadline: Option<std::time::Instant>,
+    ) -> PyResult<runtime_async::PyFuture> {
+        use crate::operation_registry::StableOperation;
         match operation {
             StableOperation::ScanPorts => {
-                check_cancel!("scan_ports");
-                let target = request.target.clone();
                 let ports_str = request
                     .metadata
                     .get("ports")
@@ -691,16 +661,14 @@ impl AsyncEngine {
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 let ports = parse_ports_string(&ports_str)?;
                 self.run_port_scan_async(
-                    target,
+                    request.target.clone(),
                     ports,
                     effective_timeout,
-                    cancel_token_clone,
+                    cancel_token,
                     deadline,
                 )
             }
             StableOperation::ScanEndpoints => {
-                check_cancel!("scan_endpoints");
-                let target = request.target.clone();
                 let endpoints: Vec<String> = request
                     .metadata
                     .get("endpoints")
@@ -708,16 +676,14 @@ impl AsyncEngine {
                     .unwrap_or_default();
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_endpoint_scan_async(
-                    target,
+                    request.target.clone(),
                     endpoints,
                     effective_timeout,
-                    cancel_token_clone,
+                    cancel_token,
                     deadline,
                 )
             }
             StableOperation::FingerprintServices => {
-                check_cancel!("fingerprint_services");
-                let target = request.target.clone();
                 let ports_str = request.metadata.get("ports").cloned().unwrap_or_default();
                 let ports = if ports_str.is_empty() {
                     vec![80, 443]
@@ -726,31 +692,26 @@ impl AsyncEngine {
                 };
                 let effective_timeout = request.timeout_ms.unwrap_or(self.state.timeout_ms);
                 self.run_fingerprint_async(
-                    target,
+                    request.target.clone(),
                     ports,
                     effective_timeout,
-                    cancel_token_clone,
+                    cancel_token,
                     deadline,
                 )
             }
             StableOperation::ReconDns => {
-                check_cancel!("recon_dns");
-                self.run_recon_dns_async(request.target.clone(), cancel_token_clone, deadline)
+                self.run_recon_dns_async(request.target.clone(), cancel_token, deadline)
             }
             StableOperation::InspectTls => {
-                check_cancel!("inspect_tls");
-                self.run_tls_inspect_async(request.target.clone(), cancel_token_clone, deadline)
+                self.run_tls_inspect_async(request.target.clone(), cancel_token, deadline)
             }
             StableOperation::DetectTechnology => {
-                check_cancel!("detect_technology");
-                self.run_tech_detect_async(request.target.clone(), cancel_token_clone, deadline)
+                self.run_tech_detect_async(request.target.clone(), cancel_token, deadline)
             }
             StableOperation::DetectWaf => {
-                check_cancel!("detect_waf");
-                self.run_waf_detect_async(request.target.clone(), cancel_token_clone, deadline)
+                self.run_waf_detect_async(request.target.clone(), cancel_token, deadline)
             }
             StableOperation::LoadTest => {
-                check_cancel!("load_test");
                 let total_requests: u64 = request
                     .metadata
                     .get("requests")
@@ -773,16 +734,14 @@ impl AsyncEngine {
                     concurrency,
                     timeout_secs,
                     method,
-                    cancel_token_clone,
+                    cancel_token,
                     deadline,
                 )
             }
             StableOperation::ValidateWaf => {
-                check_cancel!("validate_waf");
-                self.run_waf_validate_async(request.target.clone(), cancel_token_clone, deadline)
+                self.run_waf_validate_async(request.target.clone(), cancel_token, deadline)
             }
             StableOperation::FuzzHttp => {
-                check_cancel!("fuzz_http");
                 let payload_type = request.metadata.get("payload_type").cloned();
                 let threads: usize = request
                     .metadata
@@ -795,13 +754,12 @@ impl AsyncEngine {
                     payload_type.unwrap_or_else(|| "all".to_string()),
                     threads,
                     timeout,
-                    cancel_token_clone,
+                    cancel_token,
                     deadline,
                 )
             }
             #[cfg(feature = "git-secrets")]
             StableOperation::ScanGitSecrets => {
-                check_cancel!("scan_git_secrets");
                 let repo_path = request
                     .metadata
                     .get("repo_path")
@@ -816,7 +774,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "sbom")]
             StableOperation::GenerateSbom => {
-                check_cancel!("generate_sbom");
                 let project_path = request
                     .metadata
                     .get("project_path")
@@ -835,162 +792,135 @@ impl AsyncEngine {
                 self.run_sbom_async(project_path, ecosystem, format)
             }
             StableOperation::RunConsolidatedRecon => {
-                check_cancel!("run_consolidated_recon");
-                let run_dns = request
-                    .metadata
-                    .get("run_dns")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_ssl = request
-                    .metadata
-                    .get("run_ssl")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_tech_detect = request
-                    .metadata
-                    .get("run_tech_detect")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_subdomain = request
-                    .metadata
-                    .get("run_subdomain")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_whois = request
-                    .metadata
-                    .get("run_whois")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_cors = request
-                    .metadata
-                    .get("run_cors")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_wayback = request
-                    .metadata
-                    .get("run_wayback")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_js_analysis = request
-                    .metadata
-                    .get("run_js_analysis")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_content = request
-                    .metadata
-                    .get("run_content")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let run_email = request
-                    .metadata
-                    .get("run_email")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let timeout_secs = request
-                    .metadata
-                    .get("timeout_secs")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(30);
-                let concurrency = request
-                    .metadata
-                    .get("concurrency")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(10);
                 let config = crate::consolidated_recon::ConsolidatedReconConfigPy {
-                    run_dns,
-                    run_ssl,
-                    run_tech_detect,
-                    run_subdomain,
-                    run_whois,
-                    run_cors,
-                    run_wayback,
-                    run_js_analysis,
-                    run_content,
-                    run_email,
-                    timeout_secs,
-                    concurrency,
+                    run_dns: request
+                        .metadata
+                        .get("run_dns")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_ssl: request
+                        .metadata
+                        .get("run_ssl")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_tech_detect: request
+                        .metadata
+                        .get("run_tech_detect")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_subdomain: request
+                        .metadata
+                        .get("run_subdomain")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_whois: request
+                        .metadata
+                        .get("run_whois")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_cors: request
+                        .metadata
+                        .get("run_cors")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_wayback: request
+                        .metadata
+                        .get("run_wayback")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_js_analysis: request
+                        .metadata
+                        .get("run_js_analysis")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_content: request
+                        .metadata
+                        .get("run_content")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    run_email: request
+                        .metadata
+                        .get("run_email")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    timeout_secs: request
+                        .metadata
+                        .get("timeout_secs")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(30),
+                    concurrency: request
+                        .metadata
+                        .get("concurrency")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(10),
                 };
-                self.run_consolidated_recon_async(request.target, config)
+                self.run_consolidated_recon_async(request.target.clone(), config)
             }
             StableOperation::GraphqlTest => {
-                check_cancel!("graphql_test");
-                let enable_introspection = request
-                    .metadata
-                    .get("enable_introspection")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let enable_depth_bypass = request
-                    .metadata
-                    .get("enable_depth_bypass")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let enable_alias_overload = request
-                    .metadata
-                    .get("enable_alias_overload")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let timeout_secs = request
-                    .metadata
-                    .get("timeout_secs")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(10);
                 let config = crate::graphql::GraphQLTestConfigPy {
                     endpoint: request.target.clone(),
-                    enable_introspection,
-                    enable_depth_bypass,
-                    enable_alias_overload,
-                    timeout_secs,
+                    enable_introspection: request
+                        .metadata
+                        .get("enable_introspection")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    enable_depth_bypass: request
+                        .metadata
+                        .get("enable_depth_bypass")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    enable_alias_overload: request
+                        .metadata
+                        .get("enable_alias_overload")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    timeout_secs: request
+                        .metadata
+                        .get("timeout_secs")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(10),
                 };
                 self.run_graphql_async(config)
             }
             StableOperation::OauthTest => {
-                let client_id = request
-                    .metadata
-                    .get("client_id")
-                    .cloned()
-                    .unwrap_or_default();
-                let redirect_uri = request
-                    .metadata
-                    .get("redirect_uri")
-                    .cloned()
-                    .unwrap_or_default();
-                let client_secret = request.metadata.get("client_secret").cloned();
-                let issuer_url = request.metadata.get("issuer_url").cloned();
-                let enable_redirect_test = request
-                    .metadata
-                    .get("enable_redirect_test")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let enable_scope_test = request
-                    .metadata
-                    .get("enable_scope_test")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let enable_state_test = request
-                    .metadata
-                    .get("enable_state_test")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let enable_grant_test = request
-                    .metadata
-                    .get("enable_grant_test")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true);
-                let timeout_secs = request
-                    .metadata
-                    .get("timeout_secs")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(10);
                 let config = crate::oauth::OAuthTestConfigPy {
-                    client_id,
-                    redirect_uri,
-                    client_secret,
-                    issuer_url,
-                    enable_redirect_test,
-                    enable_scope_test,
-                    enable_state_test,
-                    enable_grant_test,
-                    timeout_secs,
+                    client_id: request
+                        .metadata
+                        .get("client_id")
+                        .cloned()
+                        .unwrap_or_default(),
+                    redirect_uri: request
+                        .metadata
+                        .get("redirect_uri")
+                        .cloned()
+                        .unwrap_or_default(),
+                    client_secret: request.metadata.get("client_secret").cloned(),
+                    issuer_url: request.metadata.get("issuer_url").cloned(),
+                    enable_redirect_test: request
+                        .metadata
+                        .get("enable_redirect_test")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    enable_scope_test: request
+                        .metadata
+                        .get("enable_scope_test")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    enable_state_test: request
+                        .metadata
+                        .get("enable_state_test")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    enable_grant_test: request
+                        .metadata
+                        .get("enable_grant_test")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(true),
+                    timeout_secs: request
+                        .metadata
+                        .get("timeout_secs")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(10),
                 };
                 let auth_endpoint = request
                     .metadata
@@ -999,13 +929,9 @@ impl AsyncEngine {
                     .unwrap_or_else(|| request.target.clone());
                 self.run_oauth_async(config, auth_endpoint)
             }
-            StableOperation::AuthTest => {
-                check_cancel!("auth_test");
-                self.run_auth_test_async(request.target.clone())
-            }
+            StableOperation::AuthTest => self.run_auth_test_async(request.target.clone()),
             #[cfg(feature = "db-pentest")]
             StableOperation::DbProbe => {
-                check_cancel!("db_probe");
                 let db_type = request
                     .metadata
                     .get("db_type")
@@ -1019,7 +945,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "nse")]
             StableOperation::NseRun => {
-                check_cancel!("nse_run");
                 let scripts: Vec<String> = request
                     .metadata
                     .get("scripts")
@@ -1039,7 +964,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanDockerImage => {
-                check_cancel!("scan_docker_image");
                 let image = request
                     .metadata
                     .get("image")
@@ -1049,7 +973,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "container")]
             StableOperation::ScanKubernetes => {
-                check_cancel!("scan_kubernetes");
                 let api_server = request
                     .metadata
                     .get("api_server")
@@ -1065,7 +988,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeApk => {
-                check_cancel!("analyze_apk");
                 let apk_path = request
                     .metadata
                     .get("apk_path")
@@ -1075,7 +997,6 @@ impl AsyncEngine {
             }
             #[cfg(feature = "mobile")]
             StableOperation::AnalyzeIpa => {
-                check_cancel!("analyze_ipa");
                 let ipa_path = request
                     .metadata
                     .get("ipa_path")
@@ -1083,12 +1004,10 @@ impl AsyncEngine {
                     .unwrap_or_else(|| request.target.clone());
                 self.run_ipa_async(ipa_path)
             }
-            _ => {
-                return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "Operation '{}' is not available in this build configuration",
-                    op
-                )));
-            }
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Operation '{}' is not available in this build configuration",
+                request.operation
+            ))),
         }
     }
 

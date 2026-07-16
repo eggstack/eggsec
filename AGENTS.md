@@ -45,7 +45,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A completed) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A+B completed) |
 
 ## Build & Test Commands
 
@@ -223,6 +223,8 @@ Release 2 adds network programmability types: `eggsec.network` (target resolutio
 Release 3 completes programmable Python surfaces for three major subsystems: NSE runtime (library registry, script validation, evidence), interception proxy (session lifecycle, filtering, CA management, HAR export), and database assessment (driver registry, session types, credential providers, query execution, schema/privilege inspection). Architecture docs: `docs/python/NSE_RUNTIME_ARCHITECTURE.md`, `docs/python/INTERCEPTION_PROXY_ARCHITECTURE.md`. Release 3 types are registered in the API surface with provisional stability; the underlying `nse_run` and `db_probe` operations remain stable.
 
 Release 5 Phase A exposes `eggsec-tool-core` types to Python, providing a deterministic tool abstraction for all 22 stable operations. New file: `docs/python/tools.md` (tool abstraction guide), `docs/python/TOOL_CORE_BINDING_MAP.md` (machine-readable binding map). All 22 operations have `ToolDescriptor` entries in `ToolRegistry`, JSON Schema generation via `SchemaGenerator`, and `Engine.invoke_tool()` / `AsyncEngine.async_invoke_tool()` dispatch. New test file: `tests/test_tool_core.py`.
+
+Release 5 Phase B completes registry and dispatch convergence. A single authoritative `OperationExecutorDescriptor` registry replaces duplicated sync/async dispatch and parallel metadata inventories. The generic dispatch lifecycle (`pre_dispatch_lifecycle` → `execute_operation` → `post_dispatch_hooks`) replaces per-operation match arms. Generated inventories (capability manifests, tool descriptors, feature maps, daemon parity) derive from the registry. Architecture guard tests enforce one-descriptor-per-operation, unique IDs, alias non-collision, and schema identity. New files: `dispatch_helpers.rs`, `operation_executors.rs`, `generated_inventories.rs`. Golden contract test suite: 1076 parametrized tests across 72 methods (`tests/test_golden_contract.py`).
 
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|

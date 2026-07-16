@@ -646,6 +646,18 @@ impl ToolRegistryPy {
             .collect()
     }
 
+    /// Generate tool descriptors from the operation registry.
+    ///
+    /// This ensures tool descriptors stay in sync with operation metadata.
+    /// Equivalent to `list()` but named to emphasize registry derivation.
+    #[staticmethod]
+    fn from_registry() -> Vec<ToolDescriptorPy> {
+        StableOperation::ALL
+            .iter()
+            .map(|&op| ToolDescriptorPy::from_stable(op))
+            .collect()
+    }
+
     fn __repr__(&self) -> String {
         "ToolRegistry".to_string()
     }
@@ -1803,4 +1815,229 @@ fn pyobject_to_json(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
     }
     // Fallback: convert to string representation
     Ok(serde_json::Value::String(format!("{}", obj)))
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI derived adapter
+// ---------------------------------------------------------------------------
+
+/// Convert a JSON Schema object to an OpenAPI 3.0 parameter schema.
+fn json_schema_to_openapi_param(schema: &serde_json::Value) -> serde_json::Value {
+    let mut param = serde_json::json!({});
+    if let Some(desc) = schema.get("description") {
+        param["description"] = desc.clone();
+    }
+    if let Some(t) = schema.get("type") {
+        param["schema"] = serde_json::json!({ "type": t.clone() });
+        // Map JSON Schema types to OpenAPI parameter locations
+        match t.as_str() {
+            Some("string") => param["schema"]["type"] = serde_json::json!("string"),
+            Some("integer") => param["schema"]["type"] = serde_json::json!("integer"),
+            Some("number") => param["schema"]["type"] = serde_json::json!("number"),
+            Some("boolean") => param["schema"]["type"] = serde_json::json!("boolean"),
+            Some("array") => {
+                param["schema"]["type"] = serde_json::json!("array");
+                if let Some(items) = schema.get("items") {
+                    param["schema"]["items"] = items.clone();
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(enums) = schema.get("enum") {
+        param["schema"]["enum"] = enums.clone();
+    }
+    if let Some(min) = schema.get("minimum") {
+        param["schema"]["minimum"] = min.clone();
+    }
+    if let Some(max) = schema.get("maximum") {
+        param["schema"]["maximum"] = max.clone();
+    }
+    param
+}
+
+/// Convert a tool descriptor's input schema to an OpenAPI 3.0 operation object.
+///
+/// This is a derived adapter: JSON Schema remains the canonical tool contract.
+/// The OpenAPI output is a convenience for frameworks that require OpenAPI
+/// specifications (e.g., REST API generators, Swagger UI).
+#[pyclass(name = "OpenApiAdapter")]
+pub struct OpenApiAdapterPy;
+
+#[pymethods]
+impl OpenApiAdapterPy {
+    /// Convert a tool descriptor to an OpenAPI 3.0 path item.
+    ///
+    /// Args:
+    ///     tool_id: Tool identifier (e.g. "scan_ports").
+    ///
+    /// Returns:
+    ///     dict | None: OpenAPI 3.0 path item, or None if schema unavailable.
+    #[staticmethod]
+    fn tool_to_openapi(tool_id: &str) -> Option<Py<PyDict>> {
+        let descriptor = ToolRegistryPy::get(tool_id)?;
+        let input_schema_str = descriptor.input_schema.as_deref()?;
+        let input_schema: serde_json::Value = serde_json::from_str(input_schema_str).ok()?;
+
+        Python::with_gil(|py| {
+            let path_item = PyDict::new_bound(py);
+
+            // Build parameters from schema properties
+            let mut parameters = Vec::new();
+            if let Some(props) = input_schema.get("properties") {
+                if let Some(obj) = props.as_object() {
+                    let required_fields: Vec<String> = input_schema
+                        .get("required")
+                        .and_then(|r| r.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    for (name, schema) in obj {
+                        let mut param = json_schema_to_openapi_param(schema);
+                        param["name"] = serde_json::json!(name);
+                        param["in"] = serde_json::json!("query");
+                        param["required"] = serde_json::json!(required_fields.contains(name));
+                        parameters.push(param);
+                    }
+                }
+            }
+
+            // Build the operation object as JSON, then convert to Python
+            let operation_json = serde_json::json!({
+                "operationId": descriptor.tool_id,
+                "summary": descriptor.title,
+                "description": descriptor.description,
+                "tags": [descriptor.category],
+                "parameters": parameters,
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": { "type": "string" },
+                                        "findings": { "type": "array" },
+                                        "metadata": { "type": "object" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-eggsec-risk": descriptor.risk,
+                "x-eggsec-maturity": descriptor.maturity,
+                "x-eggsec-confirmation-required": descriptor.confirmation_required,
+            });
+
+            let json_str = serde_json::to_string(&operation_json).ok()?;
+            let json_mod = py.import_bound("json").ok()?;
+            let op_obj = json_mod.call_method1("loads", (json_str,)).ok()?;
+
+            path_item.set_item("post", op_obj).ok()?;
+            Some(path_item.unbind())
+        })
+    }
+
+    /// Generate a full OpenAPI 3.0 spec for all registered tools.
+    ///
+    /// Returns:
+    ///     dict: OpenAPI 3.0 document with all tool paths.
+    #[staticmethod]
+    fn full_openapi_spec(py: Python<'_>) -> PyResult<PyObject> {
+        let mut paths = serde_json::json!({});
+
+        for desc in ToolRegistryPy::list() {
+            if let Some(openapi_op) = Self::tool_to_openapi_inner(&desc) {
+                paths[format!("/tools/{}", desc.tool_id)] = openapi_op;
+            }
+        }
+
+        let spec = serde_json::json!({
+            "openapi": "3.0.3",
+            "info": {
+                "title": "Eggsec Tool API",
+                "version": env!("CARGO_PKG_VERSION"),
+                "description": "Auto-generated from eggsec tool descriptors"
+            },
+            "paths": paths,
+        });
+
+        // Convert to Python dict
+        let json_str = serde_json::to_string(&spec)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let json_mod = py.import_bound("json")?;
+        let obj = json_mod.call_method1("loads", (json_str,))?;
+        Ok(obj.into())
+    }
+
+    fn __repr__(&self) -> String {
+        "OpenApiAdapter".to_string()
+    }
+}
+
+impl OpenApiAdapterPy {
+    /// Internal: generate OpenAPI path item from descriptor (no Python GIL needed).
+    fn tool_to_openapi_inner(descriptor: &ToolDescriptorPy) -> Option<serde_json::Value> {
+        let input_schema_str = descriptor.input_schema.as_deref()?;
+        let input_schema: serde_json::Value = serde_json::from_str(input_schema_str).ok()?;
+
+        let mut parameters = Vec::new();
+        if let Some(props) = input_schema.get("properties") {
+            if let Some(obj) = props.as_object() {
+                let required_fields: Vec<String> = input_schema
+                    .get("required")
+                    .and_then(|r| r.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                for (name, schema) in obj {
+                    let mut param = json_schema_to_openapi_param(schema);
+                    param["name"] = serde_json::json!(name);
+                    param["in"] = serde_json::json!("query");
+                    param["required"] = serde_json::json!(required_fields.contains(name));
+                    parameters.push(param);
+                }
+            }
+        }
+
+        Some(serde_json::json!({
+            "post": {
+                "operationId": descriptor.tool_id,
+                "summary": descriptor.title,
+                "description": descriptor.description,
+                "tags": [descriptor.category],
+                "parameters": parameters,
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": { "type": "string" },
+                                        "findings": { "type": "array" },
+                                        "metadata": { "type": "object" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-eggsec-risk": descriptor.risk,
+                "x-eggsec-maturity": descriptor.maturity,
+                "x-eggsec-confirmation-required": descriptor.confirmation_required,
+            }
+        }))
+    }
 }

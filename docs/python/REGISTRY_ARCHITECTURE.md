@@ -2,6 +2,14 @@
 
 **Workstream 4 — Registry and Dispatch Architecture Tightening**
 
+> **Status: Phase B Complete** — Release 5 Phase B (2026-07-16) implemented
+> the target architecture described in this document. The 22-arm match in
+> both `Engine::dispatch()` and `AsyncEngine::dispatch_async()` has been
+> replaced by a shared `pre_dispatch_lifecycle()` → `execute_operation()` →
+> `post_dispatch_hooks()` flow. `OperationExecutorDescriptor` is the single
+> source of truth for per-operation metadata. See `src/dispatch_helpers.rs`,
+> `src/operation_executors.rs`, and `src/generated_inventories.rs`.
+
 This document audits the current registry and dispatch architecture in the eggsec
 Python bindings, identifies duplication between sync and async engines, and
 proposes a target architecture to eliminate redundant match arms.

@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 from .scope import Scope
 from .status import ExecutionStats, ExecutionStatus, OperationResult
 from .requests import (
@@ -28,6 +28,7 @@ from .requests import (
 )
 from .cancellation import CancellationToken
 from .planning import ScanPlan
+from .tool_core import ToolRequest
 
 OperationId = Literal[
     "scan_ports", "scan_endpoints", "fingerprint_services", "recon_dns",
@@ -96,6 +97,14 @@ class Engine:
     def run_apk_analysis(self, request: ApkAnalysisRequest) -> OperationResult: ...
     def run_ipa_analysis(self, request: IpaAnalysisRequest) -> OperationResult: ...
     def plan(self, target: str) -> ScanPlan: ...
+    def invoke_tool(
+        self,
+        tool_id: str,
+        target: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout_ms: Optional[int] = None,
+    ) -> OperationResult: ...
+    def invoke_tool_request(self, request: ToolRequest) -> OperationResult: ...
     @property
     def scope(self) -> Scope: ...
     @property

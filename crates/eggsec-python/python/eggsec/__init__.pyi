@@ -774,5 +774,6 @@ from .tool_descriptor import (
     OperationToolView as OperationToolView,
     ValidationReport as ValidationReport,
     SchemaGenerator as SchemaGenerator,
+    OpenApiAdapter as OpenApiAdapter,
     operation_as_tool as operation_as_tool,
 )

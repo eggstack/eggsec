@@ -1104,6 +1104,7 @@ try:
         OperationToolView as OperationToolView,
         ValidationReport as ValidationReport,
         SchemaGenerator as SchemaGenerator,
+        OpenApiAdapter as OpenApiAdapter,
         operation_as_tool as operation_as_tool,
     )
 except (AttributeError, ImportError):
@@ -1779,6 +1780,7 @@ __all__ = [
     "OperationToolView",
     "ValidationReport",
     "SchemaGenerator",
+    "OpenApiAdapter",
     "operation_as_tool",
 ]
 

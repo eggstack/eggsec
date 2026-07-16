@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 from .scope import Scope
 from .runtime import PyFuture
 from .planning import ScanPlan
@@ -28,6 +28,7 @@ from .requests import (
     IpaAnalysisRequest,
 )
 from .cancellation import CancellationToken
+from .tool_core import ToolRequest
 
 OperationId = Literal[
     "scan_ports", "scan_endpoints", "fingerprint_services", "recon_dns",
@@ -96,6 +97,14 @@ class AsyncEngine:
     def run_apk_analysis(self, request: ApkAnalysisRequest) -> PyFuture: ...
     def run_ipa_analysis(self, request: IpaAnalysisRequest) -> PyFuture: ...
     def plan(self, target: str) -> PyFuture: ...
+    def async_invoke_tool(
+        self,
+        tool_id: str,
+        target: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout_ms: Optional[int] = None,
+    ) -> PyFuture: ...
+    def async_invoke_tool_request(self, request: ToolRequest) -> PyFuture: ...
     @property
     def scope(self) -> Scope: ...
     @property

@@ -27,6 +27,7 @@ mod daemon_parity;
 #[cfg(feature = "db-pentest")]
 mod db_pentest;
 mod deprecated;
+mod dispatch_helpers;
 mod domains;
 mod dto;
 mod endpoint;
@@ -44,6 +45,7 @@ mod finding;
 mod finding_schema;
 mod finding_workflow;
 mod fingerprint;
+mod generated_inventories;
 #[cfg(feature = "git-secrets")]
 mod git_secrets;
 mod graphql;
@@ -63,6 +65,7 @@ mod network;
 #[cfg(feature = "nse")]
 mod nse;
 mod oauth;
+mod operation_executors;
 mod operation_metadata;
 pub(crate) mod operation_registry;
 #[cfg(feature = "packet-inspection")]
@@ -224,6 +227,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tool_descriptor::OperationToolViewPy>()?;
     m.add_class::<tool_descriptor::ValidationReportPy>()?;
     m.add_class::<tool_descriptor::SchemaGeneratorPy>()?;
+    m.add_class::<tool_descriptor::OpenApiAdapterPy>()?;
     m.add_function(wrap_pyfunction!(tool_descriptor::operation_as_tool, m)?)?;
     // G1: Domain descriptors
     m.add_class::<domains::DomainDescriptorPy>()?;

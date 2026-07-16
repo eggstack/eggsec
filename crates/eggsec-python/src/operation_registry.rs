@@ -23,6 +23,36 @@ pub struct OperationExecutorDescriptor {
     pub confirmation_message: Option<&'static str>,
     /// Intended use categories for the operation.
     pub intended_uses: Vec<eggsec::config::IntendedUse>,
+
+    // --- NEW metadata fields ---
+    /// Human-readable description of what the operation does.
+    pub description: &'static str,
+    /// Historical aliases accepted for backward compatibility.
+    pub aliases: &'static [&'static str],
+    /// Maturity level (e.g. "stable", "provisional", "experimental").
+    pub maturity: &'static str,
+    /// Whether the operation is available via local (in-process) execution.
+    pub local_available: bool,
+    /// Whether the operation is available via daemon dispatch.
+    pub daemon_available: bool,
+    /// Whether the operation has a synchronous execution path.
+    pub sync_available: bool,
+    /// Whether the operation has an asynchronous execution path.
+    pub async_available: bool,
+    /// Whether the operation supports cancellation via CancellationToken.
+    pub cancellation_supported: bool,
+    /// Whether the operation supports per-operation timeout.
+    pub timeout_supported: bool,
+    /// Whether the operation emits finding events.
+    pub finding_hook: bool,
+    /// Whether the operation emits artifact events.
+    pub artifact_hook: bool,
+    /// Schema identifier for the operation request type.
+    pub request_schema_id: &'static str,
+    /// Schema identifier for the operation result type.
+    pub result_schema_id: &'static str,
+    /// Daemon TaskKind variant name for this operation.
+    pub daemon_task_kind: &'static str,
 }
 
 impl OperationExecutorDescriptor {
@@ -68,6 +98,232 @@ impl OperationExecutorDescriptor {
 
             // Load testing — load test tier
             StableOperation::LoadTest => eggsec::config::OperationRisk::LoadTest,
+        }
+    }
+
+    /// Construct a full descriptor for a given operation.
+    ///
+    /// This is the single source of truth for per-operation metadata.
+    pub fn from_operation(operation: StableOperation) -> Self {
+        let confirmation_required = matches!(
+            operation,
+            StableOperation::NseRun
+                | StableOperation::DbProbe
+                | StableOperation::FuzzHttp
+                | StableOperation::LoadTest
+        );
+
+        let confirmation_message = if confirmation_required {
+            Some("This operation may interact with external systems. Confirm to proceed.")
+        } else {
+            None
+        };
+
+        // Feature-gated operations are not available locally when feature is off.
+        // For the descriptor we always say local_available = true; the feature gate
+        // check happens at dispatch time.
+        let no_aliases: &[&str] = &[];
+        let (description, aliases, maturity, daemon_task_kind) = match operation {
+            StableOperation::ScanPorts => (
+                "TCP port scanner — discovers open ports on a target host.",
+                no_aliases,
+                "stable",
+                "PortScan",
+            ),
+            StableOperation::ScanEndpoints => (
+                "HTTP endpoint scanner — discovers web paths and status codes.",
+                no_aliases,
+                "stable",
+                "EndpointScan",
+            ),
+            StableOperation::FingerprintServices => (
+                "Service fingerprinter — identifies services running on open ports.",
+                &["fingerprint"] as &[&str],
+                "stable",
+                "Fingerprint",
+            ),
+            StableOperation::ReconDns => (
+                "DNS reconnoiter — enumerates DNS records for a domain.",
+                &["recon"] as &[&str],
+                "stable",
+                "Recon",
+            ),
+            StableOperation::InspectTls => (
+                "TLS inspector — analyzes certificate chains and TLS configuration.",
+                &["tls_inspect"] as &[&str],
+                "stable",
+                "Recon",
+            ),
+            StableOperation::DetectTechnology => (
+                "Technology detector — identifies web technologies and frameworks.",
+                &["tech_detect"] as &[&str],
+                "stable",
+                "Recon",
+            ),
+            StableOperation::DetectWaf => (
+                "WAF detector — identifies web application firewalls in front of a target.",
+                &["waf_detect"] as &[&str],
+                "stable",
+                "Waf",
+            ),
+            StableOperation::ValidateWaf => (
+                "WAF validator — tests WAF rules by sending crafted payloads.",
+                &["waf_validate"] as &[&str],
+                "stable",
+                "Recon",
+            ),
+            StableOperation::FuzzHttp => (
+                "HTTP fuzzer — sends mutated payloads to discover vulnerabilities.",
+                &["http_fuzz"] as &[&str],
+                "stable",
+                "Fuzz",
+            ),
+            StableOperation::LoadTest => (
+                "HTTP load tester — generates concurrent traffic for performance testing.",
+                &["load_test_http"] as &[&str],
+                "stable",
+                "LoadTest",
+            ),
+            StableOperation::ScanGitSecrets => (
+                "Git secrets scanner — detects committed secrets and credentials.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::GenerateSbom => (
+                "SBOM generator — produces a software bill of materials for a project.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::RunConsolidatedRecon => (
+                "Consolidated recon — runs multiple recon modules (DNS, SSL, tech) in one pass.",
+                &["consolidated_recon"] as &[&str],
+                "stable",
+                "Recon",
+            ),
+            StableOperation::GraphqlTest => (
+                "GraphQL security tester — probes GraphQL endpoints for introspection and injection flaws.",
+                no_aliases,
+                "stable",
+                "GraphQl",
+            ),
+            StableOperation::OauthTest => (
+                "OAuth security tester — validates OAuth/OIDC flows for common misconfigurations.",
+                no_aliases,
+                "stable",
+                "OAuth",
+            ),
+            StableOperation::AuthTest => (
+                "Authentication assessor — tests authentication mechanisms for weaknesses.",
+                no_aliases,
+                "stable",
+                "AuthTest",
+            ),
+            StableOperation::DbProbe => (
+                "Database prober — fingerprints and enumerates database services.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::NseRun => (
+                "NSE script executor — runs Nmap Scripting Engine scripts against a target.",
+                no_aliases,
+                "stable",
+                "Nse",
+            ),
+            StableOperation::ScanDockerImage => (
+                "Docker image scanner — analyzes container images for misconfigurations.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::ScanKubernetes => (
+                "Kubernetes scanner — inspects cluster configuration for security issues.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::AnalyzeApk => (
+                "APK analyzer — performs static analysis on Android application packages.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+            StableOperation::AnalyzeIpa => (
+                "IPA analyzer — performs static analysis on iOS application packages.",
+                no_aliases,
+                "stable",
+                "Storage",
+            ),
+        };
+
+        // All 22 operations support local, daemon, sync, async, cancellation, and timeout.
+        let (request_schema_id, result_schema_id) = match operation {
+            StableOperation::ScanPorts => ("port_scan_request", "port_scan_result"),
+            StableOperation::ScanEndpoints => ("endpoint_scan_request", "endpoint_scan_result"),
+            StableOperation::FingerprintServices => ("fingerprint_request", "fingerprint_result"),
+            StableOperation::ReconDns => ("recon_dns_request", "dns_record_set"),
+            StableOperation::InspectTls => ("tls_inspect_request", "tls_inspection_result"),
+            StableOperation::DetectTechnology => ("tech_detect_request", "tech_detection_result"),
+            StableOperation::DetectWaf => ("waf_detect_request", "waf_detection_result"),
+            StableOperation::ValidateWaf => ("waf_validate_request", "waf_scan_result"),
+            StableOperation::FuzzHttp => ("fuzz_request", "fuzz_result"),
+            StableOperation::LoadTest => ("load_test_request", "load_test_result"),
+            StableOperation::ScanGitSecrets => ("git_secrets_request", "git_secrets_report"),
+            StableOperation::GenerateSbom => ("sbom_request", "sbom_report"),
+            StableOperation::RunConsolidatedRecon => {
+                ("consolidated_recon_request", "consolidated_recon_report")
+            }
+            StableOperation::GraphqlTest => ("graphql_test_request", "graphql_test_result"),
+            StableOperation::OauthTest => ("oauth_test_request", "oauth_test_result"),
+            StableOperation::AuthTest => ("auth_test_request", "auth_test_report"),
+            StableOperation::DbProbe => ("db_probe_request", "db_probe_report"),
+            StableOperation::NseRun => ("nse_run_request", "nse_run_report"),
+            StableOperation::ScanDockerImage => ("docker_scan_request", "docker_scan_result"),
+            StableOperation::ScanKubernetes => ("k8s_scan_request", "k8s_scan_result"),
+            StableOperation::AnalyzeApk => ("apk_analysis_request", "apk_analysis_report"),
+            StableOperation::AnalyzeIpa => ("ipa_analysis_request", "ipa_analysis_report"),
+        };
+
+        // Finding hooks: operations that emit finding events in the engine dispatch.
+        let finding_hook = matches!(
+            operation,
+            StableOperation::ScanPorts
+                | StableOperation::ScanEndpoints
+                | StableOperation::FingerprintServices
+                | StableOperation::InspectTls
+                | StableOperation::FuzzHttp
+                | StableOperation::ScanGitSecrets
+        );
+
+        // Artifact hooks: operations that emit artifact events in the engine dispatch.
+        let artifact_hook = matches!(
+            operation,
+            StableOperation::GenerateSbom | StableOperation::RunConsolidatedRecon
+        );
+
+        OperationExecutorDescriptor {
+            operation,
+            risk: Self::classify_risk(operation),
+            feature_required: operation.feature_required(),
+            confirmation_required,
+            confirmation_message,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            description,
+            aliases,
+            maturity,
+            local_available: true,
+            daemon_available: true,
+            sync_available: true,
+            async_available: true,
+            cancellation_supported: true,
+            timeout_supported: true,
+            finding_hook,
+            artifact_hook,
+            request_schema_id,
+            result_schema_id,
+            daemon_task_kind,
         }
     }
 }
@@ -377,28 +633,91 @@ impl OperationExecutorRegistry {
     /// The descriptor bundles risk classification, feature requirements,
     /// and confirmation behavior from a single authoritative source.
     pub fn descriptor_for(&self, operation: StableOperation) -> OperationExecutorDescriptor {
-        let confirmation_required = matches!(
-            operation,
-            StableOperation::NseRun
-                | StableOperation::DbProbe
-                | StableOperation::FuzzHttp
-                | StableOperation::LoadTest
-        );
+        OperationExecutorDescriptor::from_operation(operation)
+    }
 
-        let confirmation_message = if confirmation_required {
-            Some("This operation may interact with external systems. Confirm to proceed.")
-        } else {
-            None
-        };
+    /// Return executor descriptors for all 22 stable operations.
+    pub fn all_descriptors(&self) -> Vec<OperationExecutorDescriptor> {
+        StableOperation::ALL
+            .iter()
+            .map(|&op| OperationExecutorDescriptor::from_operation(op))
+            .collect()
+    }
 
-        OperationExecutorDescriptor {
-            operation,
-            risk: OperationExecutorDescriptor::classify_risk(operation),
-            feature_required: operation.feature_required(),
-            confirmation_required,
-            confirmation_message,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-        }
+    /// Return a serializable list of descriptor metadata for CI validation.
+    ///
+    /// Each entry is a JSON-compatible map of the descriptor fields. This is
+    /// consumed by validation scripts to verify metadata consistency.
+    pub fn descriptor_metadata_list(&self) -> Vec<std::collections::HashMap<String, String>> {
+        self.all_descriptors()
+            .iter()
+            .map(|desc| {
+                let mut map = std::collections::HashMap::new();
+                map.insert("operation".to_string(), desc.operation.id().to_string());
+                map.insert("name".to_string(), desc.operation.name().to_string());
+                map.insert("description".to_string(), desc.description.to_string());
+                map.insert("risk".to_string(), format!("{:?}", desc.risk));
+                map.insert("maturity".to_string(), desc.maturity.to_string());
+                map.insert(
+                    "feature_required".to_string(),
+                    desc.feature_required
+                        .map(|s| s.to_string())
+                        .unwrap_or_default(),
+                );
+                map.insert(
+                    "confirmation_required".to_string(),
+                    desc.confirmation_required.to_string(),
+                );
+                map.insert(
+                    "local_available".to_string(),
+                    desc.local_available.to_string(),
+                );
+                map.insert(
+                    "daemon_available".to_string(),
+                    desc.daemon_available.to_string(),
+                );
+                map.insert(
+                    "sync_available".to_string(),
+                    desc.sync_available.to_string(),
+                );
+                map.insert(
+                    "async_available".to_string(),
+                    desc.async_available.to_string(),
+                );
+                map.insert(
+                    "cancellation_supported".to_string(),
+                    desc.cancellation_supported.to_string(),
+                );
+                map.insert(
+                    "timeout_supported".to_string(),
+                    desc.timeout_supported.to_string(),
+                );
+                map.insert("finding_hook".to_string(), desc.finding_hook.to_string());
+                map.insert("artifact_hook".to_string(), desc.artifact_hook.to_string());
+                map.insert(
+                    "request_schema_id".to_string(),
+                    desc.request_schema_id.to_string(),
+                );
+                map.insert(
+                    "result_schema_id".to_string(),
+                    desc.result_schema_id.to_string(),
+                );
+                map.insert(
+                    "daemon_task_kind".to_string(),
+                    desc.daemon_task_kind.to_string(),
+                );
+                map.insert("aliases".to_string(), desc.aliases.join(","));
+                map.insert(
+                    "intended_uses".to_string(),
+                    desc.intended_uses
+                        .iter()
+                        .map(|u| format!("{:?}", u))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                );
+                map
+            })
+            .collect()
     }
 }
 
@@ -463,7 +782,7 @@ fn unknown_operation(unknown: &str) -> OperationResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::status::{ExecutionStatus, OperationError};
+    use crate::status::ExecutionStatus;
 
     // -----------------------------------------------------------------------
     // Registry contract tests
@@ -756,6 +1075,147 @@ mod tests {
                 "alias '{}' should parse to {:?}",
                 alias,
                 expected
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // B9: Architecture guard tests — registry consistency invariants
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn every_stable_operation_has_exactly_one_executor() {
+        let registry = OperationExecutorRegistry::default_stable();
+        let mut seen = std::collections::HashSet::new();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                seen.insert(desc.operation),
+                "Duplicate executor for {:?}",
+                op
+            );
+        }
+        assert_eq!(seen.len(), 22);
+    }
+
+    #[test]
+    fn every_executor_id_is_unique() {
+        let registry = OperationExecutorRegistry::default_stable();
+        let mut ids = std::collections::HashSet::new();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                ids.insert(desc.operation.id().to_string()),
+                "Duplicate ID: {}",
+                desc.operation.id()
+            );
+        }
+    }
+
+    #[test]
+    fn aliases_do_not_collide() {
+        let registry = OperationExecutorRegistry::default_stable();
+        let mut all_ids = std::collections::HashSet::new();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            // Canonical ID
+            assert!(
+                all_ids.insert(desc.operation.id().to_string()),
+                "Alias collision: {}",
+                desc.operation.id()
+            );
+            // Legacy aliases
+            for alias in desc.aliases {
+                assert!(
+                    all_ids.insert(alias.to_string()),
+                    "Alias '{}' collides for {:?}",
+                    alias,
+                    op
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_executor_has_schema_identities() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                !desc.request_schema_id.is_empty(),
+                "{:?}: missing request_schema_id",
+                op
+            );
+            assert!(
+                !desc.result_schema_id.is_empty(),
+                "{:?}: missing result_schema_id",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn feature_gated_executors_agree_with_cargo_features() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            let feature = op.feature_required();
+            assert_eq!(
+                desc.feature_required, feature,
+                "{:?}: descriptor feature mismatch",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn sync_and_async_callbacks_both_present() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(desc.sync_available, "{:?}: sync not available", op);
+            assert!(desc.async_available, "{:?}: async not available", op);
+        }
+    }
+
+    #[test]
+    fn all_stable_operations_have_tool_descriptors() {
+        use crate::tool_descriptor::ToolDescriptorPy;
+        let descriptors: Vec<_> = StableOperation::ALL
+            .iter()
+            .map(|&op| ToolDescriptorPy::from_stable(op))
+            .collect();
+        assert_eq!(descriptors.len(), 22);
+    }
+
+    #[test]
+    fn generated_metadata_is_current() {
+        let issues = crate::generated_inventories::validate_metadata_consistency();
+        assert!(issues.is_empty(), "Metadata inconsistencies: {:?}", issues);
+    }
+
+    #[test]
+    fn daemon_task_kinds_are_non_empty() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                !desc.daemon_task_kind.is_empty(),
+                "{:?}: empty daemon_task_kind",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn every_descriptor_has_intended_uses() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            assert!(
+                !desc.intended_uses.is_empty(),
+                "{:?}: empty intended_uses",
+                op
             );
         }
     }

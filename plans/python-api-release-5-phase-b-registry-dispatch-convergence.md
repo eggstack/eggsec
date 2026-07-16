@@ -1,5 +1,7 @@
 # Python API Release 5 Phase B — Registry and Dispatch Convergence
 
+> **Status: Executed** — Phase B completed 2026-07-16
+
 ## Objective
 
 Replace the duplicated sync/async dispatch architecture and parallel metadata inventories with one authoritative operation-executor registry. Preserve every public behavior while making future operations declarative, auditable, and mechanically reflected into Python exports, capability metadata, schemas, tests, and documentation.
@@ -189,3 +191,29 @@ Phase B is complete when:
 - local/daemon mappings are complete and versioned;
 - dispatch performance and resource use remain within budget;
 - adding a new stable operation requires one registration plus domain implementation, not edits across parallel inventories.
+
+## Implementation Summary (2026-07-16)
+
+### Workstreams Completed
+
+- **B1**: Golden contract test suite (`tests/test_golden_contract.py`) — 1076 parametrized tests across 72 test methods
+- **B2**: Shared dispatch helpers (`dispatch_helpers.rs`) — 7 extracted + 5 new helpers, eliminating ~420 lines of duplication
+- **B3**: Expanded OperationExecutorDescriptor — 14 new metadata fields, `from_operation()` constructor, `all_descriptors()` and `descriptor_metadata_list()` methods
+- **B4**: Operation executors module (`operation_executors.rs`) — NormalizedRequest, parameter extraction helpers, per-operation normalizers
+- **B5**: Generic dispatch lifecycle — `pre_dispatch_lifecycle()` handles planning/validation/preflight/cancel/deadline; `execute_operation()` and `post_dispatch_hooks()` separate concerns
+- **B6**: Generated inventories (`generated_inventories.rs`) — 7 derivation functions, metadata manifest, consistency validation
+- **B7**: Direct-function convergence — 10 typed methods refactored to thin delegates via OperationRequest
+- **B8**: Daemon mapping convergence — Registry-driven `operation_request_to_daemon_task()` replaces hardcoded match
+- **B9**: Architecture guards — 10 guard tests, 2 new CI checks in `check-architecture-guards.sh`
+
+### New Files
+- `crates/eggsec-python/src/dispatch_helpers.rs`
+- `crates/eggsec-python/src/operation_executors.rs`
+- `crates/eggsec-python/src/generated_inventories.rs`
+- `crates/eggsec-python/tests/test_golden_contract.py`
+
+### Key Design Decisions
+- Kept exhaustive 22-arm match in `execute_operation()` for compile-time exhaustiveness checking and feature-gate annotations
+- Registry is the single source of truth for metadata; derived inventories are generated, not maintained separately
+- Typed methods are thin delegates that construct OperationRequest and call the canonical dispatch path
+- Daemon task kind mapping driven by descriptor metadata, not hardcoded strings

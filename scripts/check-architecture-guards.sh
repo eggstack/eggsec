@@ -1431,6 +1431,48 @@ else
   echo "SKIP: executor.rs not found."
 fi
 
+# 64. Python operation registry has exactly 22 stable operations
+echo ""
+echo "--- Check 64: Python operation registry has exactly 22 operations ---"
+if [[ -f "crates/eggsec-python/src/operation_registry.rs" ]]; then
+  # Count enum variants in StableOperation
+  VARIANT_COUNT=$(rg -c '^\s+\w+,$' crates/eggsec-python/src/operation_registry.rs 2>/dev/null || echo 0)
+  # Count entries in ALL array
+  ALL_COUNT=$(rg -c 'Self::' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | head -1 || echo 0)
+  # More precise: count Self:: entries inside the ALL const array
+  ALL_ENTRIES=$(awk '/pub const ALL/,/^\s*\];/' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | rg -c 'Self::' || echo 0)
+  if [[ "$ALL_ENTRIES" -ne 22 ]]; then
+    echo "FAIL: operation_registry.rs has $ALL_ENTRIES entries in ALL (expected 22)"
+    FAIL=$((FAIL + 1))
+  else
+    echo "PASS: operation_registry.rs has exactly 22 entries in ALL."
+  fi
+else
+  echo "SKIP: operation_registry.rs not found."
+fi
+
+# 65. Python daemon mapping uses registry descriptor
+echo ""
+echo "--- Check 65: Python daemon mapping uses registry descriptor ---"
+if [[ -f "crates/eggsec-python/src/engine.rs" ]]; then
+  # The old hardcoded match should be replaced with a delegation call
+  OLD_MATCH=$(rg -c '"scan_ports" \|"scan-ports"' crates/eggsec-python/src/engine.rs 2>/dev/null || echo 0)
+  if [[ "$OLD_MATCH" -gt 0 ]]; then
+    echo "FAIL: engine.rs still contains hardcoded daemon task kind matching."
+    echo "      operation_request_to_task_kind_json should delegate to dispatch_helpers::operation_request_to_daemon_task."
+    FAIL=$((FAIL + 1))
+  else
+    # Verify delegation exists
+    if rg -q 'operation_request_to_daemon_task' crates/eggsec-python/src/engine.rs 2>/dev/null; then
+      echo "PASS: engine.rs delegates to registry-based operation_request_to_daemon_task."
+    else
+      echo "WARN: Could not confirm delegation to operation_request_to_daemon_task in engine.rs."
+    fi
+  fi
+else
+  echo "SKIP: engine.rs not found."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

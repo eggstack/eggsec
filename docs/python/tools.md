@@ -5,6 +5,12 @@ deterministic tool abstraction for all 22 stable operations. The tool layer
 gives every operation a unified request/response contract, JSON Schema
 generation, and a registry-driven invocation path.
 
+> **Phase B Note:** The underlying dispatch architecture was refactored in
+> Release 5 Phase B. `ToolRegistry` descriptors are now generated from the
+> authoritative `OperationExecutorDescriptor` registry (not hand-maintained).
+> The `SchemaGenerator` produces JSON Schema from the same registry source.
+> See `docs/python/REGISTRY_ARCHITECTURE.md` for the full dispatch flow.
+
 ## Overview
 
 The tool abstraction layer sits between the Python API surface and the engine
@@ -181,6 +187,31 @@ async def main():
 asyncio.run(main())
 ```
 
+## Async Streaming Example
+
+For operations that support streaming progress events:
+
+```python
+import asyncio
+from eggsec import AsyncEngine, Scope
+
+async def stream_example():
+    scope = Scope.allow_hosts(["127.0.0.1"])
+    engine = AsyncEngine(scope)
+
+    # Run a scan with progress tracking
+    future = engine.async_invoke_tool("scan_ports", "127.0.0.1", timeout_ms=10000)
+    result = await future
+
+    if result.error:
+        print(f"Error: {result.error.kind}: {result.error.message}")
+    else:
+        print(f"Status: {result.status}")
+        print(f"Target: {result.target}")
+
+asyncio.run(stream_example())
+```
+
 ## Framework Adapters
 
 The tool abstraction layer enables framework adapters for MCP, REST, gRPC, and
@@ -193,6 +224,55 @@ agent surfaces. Each adapter:
 
 This eliminates per-surface dispatch logic and ensures all surfaces share the
 same policy gate and audit contract.
+
+### OpenAPI Adapter
+
+Generate OpenAPI 3.0 specifications from tool descriptors:
+
+```python
+from eggsec import OpenApiAdapter, ToolRegistry
+
+# Generate OpenAPI for a single tool
+path_item = OpenApiAdapter.tool_to_openapi("scan_ports")
+print(path_item["post"]["summary"])  # "Port Scan"
+
+# Generate a full OpenAPI spec for all tools
+spec = OpenApiAdapter.full_openapi_spec()
+print(f"OpenAPI version: {spec['openapi']}")
+print(f"Paths: {len(spec['paths'])}")
+
+# Use in a REST framework
+for tool_id, path_item in spec["paths"].items():
+    op = path_item["post"]
+    print(f"{tool_id}: risk={op.get('x-eggsec-risk', 'unknown')}")
+```
+
+### Custom Framework Adapter Pattern
+
+```python
+from eggsec import Engine, Scope, ToolRequest, ToolTarget, ToolRegistry
+
+def mcp_tool_handler(tool_name: str, arguments: dict) -> dict:
+    """Convert an MCP tool invocation to an eggsec tool call."""
+    desc = ToolRegistry.get(tool_name)
+    if desc is None:
+        return {"error": f"Unknown tool: {tool_name}"}
+
+    # Build a ToolRequest from MCP arguments
+    target_value = arguments.pop("target", "")
+    target = ToolTarget.url(target_value) if target_value.startswith("http") else ToolTarget.ip(target_value)
+    request = ToolRequest.new(tool=tool_name, target=target, params=arguments)
+
+    # Invoke through the policy gate
+    engine = Engine(Scope.allow_hosts(["*"]))
+    result = engine.invoke_tool_request(request)
+
+    # Convert result to MCP format
+    return {
+        "content": [{"type": "text", "text": result.status}],
+        "isError": result.error is not None,
+    }
+```
 
 ## Migration: api_surface() to ToolRegistry
 

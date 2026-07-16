@@ -4,7 +4,7 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Scoped pre-1.0 release candidate** — Release 5 Phase A completed
+**Scoped pre-1.0 release candidate** — Release 5 Phase B completed
 2026-07-16. Not yet published to PyPI. The stable-core compatibility boundary
 is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
@@ -192,6 +192,61 @@ operations. See `docs/python/tools.md` for the full guide and
 `docs/python/TOOL_CORE_BINDING_MAP.md` for the binding map.
 
 **New test file**: `tests/test_tool_core.py`
+
+### Release 5 Phase B — Registry Dispatch Architecture
+
+Release 5 Phase B completes registry and dispatch convergence. A single
+authoritative `OperationExecutorDescriptor` registry replaces duplicated
+sync/async dispatch and parallel metadata inventories. The generic dispatch
+lifecycle (`pre_dispatch_lifecycle` → `execute_operation` →
+`post_dispatch_hooks`) replaces per-operation match arms.
+
+**Architecture changes**
+
+- **`OperationExecutorDescriptor`** — single source of truth for per-operation
+  metadata (risk, feature gate, confirmation, intended uses, schema IDs,
+  daemon task kind, finding/artifact hooks, maturity). Defined in
+  `src/operation_registry.rs`.
+- **Generic dispatch lifecycle** — `Engine::dispatch()` and
+  `AsyncEngine::dispatch_async()` share identical three-phase flow via
+  `dispatch_helpers::pre_dispatch_lifecycle()`: planning event →
+  scope/feature-gate validation → preflight event → cancel/deadline check →
+  `execute_operation()` → `post_dispatch_hooks()`.
+- **Generated inventories** — capability manifests, tool descriptors, feature
+  maps, and daemon parity metadata are derived from the registry, not
+  hand-maintained.
+- **Typed methods are thin delegates** — `Engine.run_port_scan()` etc. remain
+  as `#[pymethods]` for backward compatibility but delegate to the same inner
+  methods used by generic dispatch.
+- **Architecture guard tests** — CI enforces one-descriptor-per-operation,
+  unique IDs, alias non-collision, and schema identity via
+  `tests/test_golden_contract.py` (1076 parametrized tests across 72 methods).
+
+**New source files**
+
+- `src/dispatch_helpers.rs` — shared helpers: `pre_dispatch_lifecycle()`,
+  `check_cancel()`, `check_deadline()`, `parse_ports_string()`,
+  `operation_ok()`, `operation_err()`, `emit_finding_event()`
+- `src/operation_executors.rs` — per-operation executor functions (normalization
+  of generic `OperationRequest` into typed parameters)
+- `src/generated_inventories.rs` — registry-derived capability manifests and
+  tool descriptors
+
+**Dispatch flow (post-Phase B)**
+
+```
+Engine.run(request) / AsyncEngine.run(request)
+  └─ OperationExecutorRegistry::execute()
+       └─ dispatch()
+            ├─ pre_dispatch_lifecycle()     ← shared with async
+            │    ├─ planning event
+            │    ├─ scope/feature validation
+            │    ├─ preflight event
+            │    ├─ cancel check
+            │    └─ deadline check
+            ├─ execute_operation()          ← per-op match, typed params
+            └─ post_dispatch_hooks()        ← finding/artifact events
+```
 
 ### Additional API Surface (default wheel)
 
