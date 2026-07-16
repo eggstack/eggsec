@@ -321,5 +321,196 @@ jobs:
       - name: Run validation scripts
         if: matrix.name == 'default-wheel'
         run: |
-          bash scripts/check-architecture-guards.sh || true
-        continue-on-error: true
+          bash scripts/check-architecture-guards.sh
+
+  python-capability-matrix:
+    name: Python capability matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Check capability matrix
+        run: python scripts/check-python-capability-matrix.py
+
+  python-architecture-guards:
+    name: Python architecture guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Check architecture guards
+        run: python scripts/check-python-architecture-guards.py
+
+  python-stub-parity:
+    name: Python stub parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Check stub parity
+        run: python scripts/check_python_stub_parity.py
+
+  python-type-check:
+    name: Python type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Install type checkers
+        run: pip install mypy pyright
+      - name: Run type checks
+        run: bash scripts/check_python_types.sh
+
+  python-maturity-consistency:
+    name: Python maturity consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Check maturity consistency
+        run: python scripts/check-python-capability-matrix.py --check-maturity
+
+  python-feature-metadata:
+    name: Python feature metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Check feature metadata
+        run: python scripts/check-python-architecture-guards.py --check-feature-metadata
+
+  python-release-gate:
+    name: Python release gate
+    if: always()
+    needs: [
+      python-capability-matrix,
+      python-architecture-guards,
+      python-stub-parity,
+      python-type-check,
+      python-maturity-consistency,
+      python-feature-metadata,
+    ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate gate
+        run: |
+          echo "Python release gate evaluation:"
+          echo "  python-capability-matrix: ${{ needs.python-capability-matrix.result }}"
+          echo "  python-architecture-guards: ${{ needs.python-architecture-guards.result }}"
+          echo "  python-stub-parity: ${{ needs.python-stub-parity.result }}"
+          echo "  python-type-check: ${{ needs.python-type-check.result }}"
+          echo "  python-maturity-consistency: ${{ needs.python-maturity-consistency.result }}"
+          echo "  python-feature-metadata: ${{ needs.python-feature-metadata.result }}"
+
+          FAILED=0
+          for result in \
+            "${{ needs.python-capability-matrix.result }}" \
+            "${{ needs.python-architecture-guards.result }}" \
+            "${{ needs.python-stub-parity.result }}" \
+            "${{ needs.python-type-check.result }}" \
+            "${{ needs.python-maturity-consistency.result }}" \
+            "${{ needs.python-feature-metadata.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "FAILED: required job result was '$result' (expected 'success')"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Python release gate failed: one or more required guards did not succeed"
+            exit 1
+          fi
+
+          echo "All required Python guards passed."
+
+  release-gate:
+    name: Release gate
+    if: always()
+    needs: [
+      fmt,
+      clippy,
+      check,
+      test-features,
+      security-audit,
+      architecture-guards,
+      feature-profiles,
+      python-release-gate,
+    ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate release gate
+        run: |
+          echo "Release gate evaluation:"
+          echo "  fmt: ${{ needs.fmt.result }}"
+          echo "  clippy: ${{ needs.clippy.result }}"
+          echo "  check: ${{ needs.check.result }}"
+          echo "  test-features: ${{ needs.test-features.result }}"
+          echo "  security-audit: ${{ needs.security-audit.result }}"
+          echo "  architecture-guards: ${{ needs.architecture-guards.result }}"
+          echo "  feature-profiles: ${{ needs.feature-profiles.result }}"
+          echo "  python-release-gate: ${{ needs.python-release-gate.result }}"
+
+          FAILED=0
+          for result in \
+            "${{ needs.fmt.result }}" \
+            "${{ needs.clippy.result }}" \
+            "${{ needs.check.result }}" \
+            "${{ needs.test-features.result }}" \
+            "${{ needs.security-audit.result }}" \
+            "${{ needs.architecture-guards.result }}" \
+            "${{ needs.feature-profiles.result }}" \
+            "${{ needs.python-release-gate.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "FAILED: required job result was '$result' (expected 'success')"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Release gate failed: one or more required jobs did not succeed"
+            exit 1
+          fi
+
+          echo "All required release gates passed."

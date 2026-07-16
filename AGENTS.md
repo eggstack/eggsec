@@ -115,6 +115,12 @@ pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/
 # Release-candidate validation (local fixtures, wheels, and architecture guards)
 bash scripts/validate_python_release_candidate.sh
 
+# Validation infrastructure
+python scripts/validate_python_profiles.py   # validates profile manifest
+python scripts/run_python_profile.py --profile <name>   # runs a specific profile
+python scripts/build_python_release_evidence.py --commit <sha>   # builds evidence bundle
+python scripts/python_skip_budget.py --profile <name>   # enforces skip budgets
+
 # Rust-side tests
 cargo test -p eggsec-python
 ```

@@ -127,6 +127,20 @@ session. Previously, each `PyFuture` spawned its own per-call runtime that
 shut down on completion, preventing chained operations. All async transport
 lifecycle tests now pass without skip markers.
 
+## Validation Infrastructure
+
+Release 1-4 closure introduced a profile-based validation system. Maturity
+classifications are now derived from structured profile evidence rather than
+hand-maintained checklists. Each of the 20 validation profiles produces
+evidence JSON containing test counts, skip budgets, wheel metadata, and
+platform info. Skip budget enforcement prevents silent test suite erosion by
+requiring minimum test counts and capping allowed skips/xfails.
+
+Profile manifest: `crates/eggsec-python/validation/profiles.json`
+
+See `crates/eggsec-python/README.md` for the full profile inventory and usage
+instructions.
+
 ## Operational Correction Pass Status (Releases 1-4)
 
 | Workstream | Status | Evidence |

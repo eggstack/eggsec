@@ -74,6 +74,27 @@ individual symbol state. A Cargo feature only controls compilation. It does
 not promote a domain to stable-core. See
 [`docs/python/domain-maturity.md`](../docs/python/domain-maturity.md).
 
+## Validation and Evidence Infrastructure
+
+Release 1-4 closure introduced a profile-based validation system that provides
+structured evidence for maturity classifications. The 20 validation profiles
+(each defined in `crates/eggsec-python/validation/profiles.json`) produce
+evidence JSON with test counts, skip budgets, wheel metadata, platform info,
+and toolchain versions.
+
+Maturity classifications are now derived from profile evidence rather than
+hand-maintained checklists. Skip budget enforcement prevents silent test suite
+erosion: each profile declares minimum test counts, maximum allowed
+skips/xfails, and per-reason skip budgets (e.g., `feature_gate`,
+`network_error`).
+
+Key scripts:
+- `scripts/run_python_profile.py` — runs a single profile end-to-end
+- `scripts/build_python_release_evidence.py` — aggregates profile results into
+  a release evidence bundle
+- `scripts/python_skip_budget.py` — standalone skip budget enforcement
+- `scripts/validate_python_profiles.py` — validates the profile manifest
+
 ## Release 4: Common Session Contract and Daemon Parity
 
 Release 4 establishes a common managed-session contract for mobile and browser

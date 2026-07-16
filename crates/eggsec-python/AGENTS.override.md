@@ -101,3 +101,41 @@ pytest crates/eggsec-python/tests/        # Python-side tests
 - Milestone D adds: `nse` script metadata/sandbox, `packet_inspection` filter/flow/traceroute, `proxy` intercept types, `mobile` device/dynamic, `daemon` capabilities/tasks, `db_pentest` drivers/credentials. All feature-gated.
 - Assessment module pattern: `*_test(config)` sync + `async_*_test(config)` async. Config types have `Default` impls. Result types are engine-produced only (no Python constructors).
 - Session-oriented types (PcapWriter, DaemonClient, ProxyManager) implement `__enter__`/`__exit__` context managers with idempotent `close()` and `is_closed` property.
+
+## Validation Infrastructure
+
+### Profile Manifest
+
+`scripts/profiles.json` defines named test profiles (e.g., `smoke`, `full`, `release-candidate`). Each profile specifies which Python test paths to run, feature gates, and skip-budget thresholds. The manifest is the single source of truth for profile-based CI and local validation.
+
+### Profile Runner
+
+```bash
+python scripts/run_python_profile.py --profile <name>
+```
+
+Runs the test suite for a named profile. Invokes `pytest` with the correct paths, features, and environment variables. Used by CI and local validation workflows.
+
+### Evidence Bundle Generation
+
+```bash
+python scripts/build_python_release_evidence.py --commit <sha>
+```
+
+Builds a release evidence bundle for a given commit. Collects test results, coverage data, feature-matrix snapshots, and stub-parity diffs into a structured artifact for audit/review.
+
+### Skip Budget Enforcement
+
+```bash
+python scripts/python_skip_budget.py --profile <name>
+```
+
+Enforces per-profile skip budgets. Validates that the number of `xfail`/`skip` markers in the test suite does not exceed the thresholds defined in `profiles.json`. Fails the build if the budget is exceeded, preventing uncontrolled skip drift.
+
+### Profile Validation
+
+```bash
+python scripts/validate_python_profiles.py
+```
+
+Validates the `profiles.json` manifest: checks required fields, profile name consistency, and cross-references against actual test paths. Run before committing changes to the manifest.

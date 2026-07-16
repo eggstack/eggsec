@@ -721,6 +721,99 @@ result = engine.run(request)
 - `SerializationError` — serialization errors
 - `InternalError` — internal engine errors
 
+## Validation Infrastructure
+
+The Release 1-4 closure pass introduced a profile-based validation system that
+replaces ad-hoc test execution with structured, reproducible evidence
+collection. Maturity classifications are now derived from profile evidence
+rather than hand-maintained checklists.
+
+### Running Profiles
+
+```bash
+# Run a single profile (builds wheel, installs, runs tests, enforces budgets)
+python scripts/run_python_profile.py --profile default-wheel
+
+# List available profiles
+python scripts/run_python_profile.py --profile <name> --dry-run
+
+# Override manifest path
+python scripts/run_python_profile.py --profile nse --manifest path/to/profiles.json
+```
+
+The profile runner performs: prerequisite checking → fixture setup → wheel
+build (maturin) → wheel install → test execution → skip budget enforcement →
+evidence JSON generation. Output goes to `target/python-validation/<profile>/`.
+
+### Evidence Bundle Generation
+
+```bash
+# Generate a full evidence bundle for a commit
+python scripts/build_python_release_evidence.py --commit <sha>
+```
+
+The evidence bundle aggregates results from all profiles into a single
+structured artifact for release gating. Each profile produces an
+`evidence.json` with test counts, skip budgets, wheel metadata, platform
+info, and toolchain versions.
+
+### Skip Budget Enforcement
+
+```bash
+# Standalone budget enforcement
+python scripts/python_skip_budget.py --profile <name> \
+    --manifest crates/eggsec-python/validation/profiles.json \
+    --junit-xml target/report.xml
+```
+
+Skip budgets prevent silent test suite erosion. Each profile declares a
+maximum number of allowed skips and xfails. Budgets enforce:
+
+- Minimum number of tests that must actually run
+- Maximum allowed skips (split by reason: `feature_gate`, `network_error`, etc.)
+- Maximum allowed xfails
+- All-skipped detection (fails if every selected test was skipped)
+- Unexpected skip reason detection (reasons not in the allowed list)
+
+### Profile Inventory (20 profiles)
+
+| Profile | Purpose | Schedule | Prerequisites |
+|---------|---------|----------|---------------|
+| `default-wheel` | Core wheel validation: stable-core ops only | always | none |
+| `full-no-system` | Aggregate: websocket, git-secrets, sbom, container | push | none |
+| `websocket` | WebSocket security testing | push | none |
+| `git-secrets` | Git secret detection | push | git |
+| `sbom` | SBOM generation | push | none |
+| `nse` | NSE runtime (nse-ssh2 support) | push | libssl-dev |
+| `db-postgres` | PostgreSQL database pentest | push | postgresql service |
+| `db-mysql` | MySQL database pentest | push | mysql service |
+| `db-redis` | Redis database pentest | push | redis service |
+| `db-mongodb` | MongoDB database pentest | push | mongod service |
+| `web-proxy` | Web proxy MITM interception | push | none |
+| `container` | Kubernetes and Docker image scanning | push | docker |
+| `mobile-static` | APK/IPA static analysis (no emulator) | push | none |
+| `mobile-emulator` | Android dynamic testing | manual | ADB + emulator |
+| `headless-browser` | DOM XSS, SPA routes, client-side checks | push | none |
+| `daemon-client` | Daemon transport parity | push | daemon service |
+| `packet-parser` | PCAP parsing (deterministic) | push | none |
+| `packet-live` | Live packet capture | manual | root/CAP_NET_RAW |
+| `active-probes` | ICMP/SYN/UDP probes | manual | root/CAP_NET_RAW |
+| `stress-testing` | Stress testing, DoS simulation | manual | root |
+
+Profiles with `schedule: manual` require elevated privileges or special
+hardware and are not run in CI on every push.
+
+### Profile Manifest Validation
+
+```bash
+# Validate the profiles.json manifest for structural correctness
+python scripts/validate_python_profiles.py
+python scripts/validate_python_profiles.py --strict  # warnings are errors
+```
+
+Validates required fields, known cargo features, non-empty test selectors,
+blocking constraints, and privilege/schedule compatibility.
+
 ## Typing
 
 This package ships `py.typed` and `.pyi` type stubs for full IDE support.

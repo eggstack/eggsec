@@ -22,6 +22,5 @@ jobs:
         run: cargo check --workspace --all-features
       - name: Workspace all-features test
         run: cargo test --workspace --all-features
-        continue-on-error: true
       - name: Full feature check
         run: cargo check -p eggsec --features full
