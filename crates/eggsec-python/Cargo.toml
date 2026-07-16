@@ -44,6 +44,7 @@ full-no-system = ["websocket", "git-secrets", "sbom", "container"]
 [dependencies]
 eggsec = { path = "../eggsec", default-features = false }
 eggsec-core = { path = "../eggsec-core" }
+eggsec-tool-core = { path = "../eggsec-tool-core" }
 eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
 eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
 eggsec-mobile-lab = { path = "../eggsec-mobile-lab", optional = true }

@@ -1502,3 +1502,202 @@ print(f"Added: {len(diff.added)}, Removed: {len(diff.removed)}")
 | `src/sqlite_repository.rs` | `SqliteFindingRepository`, `SqliteAssessmentRepository`, `SqliteMigration`, `MigrationResult` |
 | `src/content_addressed_store.rs` | `ContentAddressedArtifactStore`, `DirectoryArtifactStore`, `ArtifactInfo`, `ArtifactData`, `IntegrityResult`, `ArtifactQuery` |
 | `src/streaming_reporter.rs` | `StreamingReportConfig`, `StreamingReporter`, `ReportSummary`, `StreamingDiffReporter`, `FindingDiffResult`, `DiffReportSummary`, `ReportManifest` |
+
+## Release 5 Phase A: Tool-Core and Schema Integration
+
+Release 5 Phase A exposes `eggsec-tool-core` types to Python, providing a
+deterministic tool abstraction for all 22 stable operations. The tool layer
+gives every operation a unified request/response contract, JSON Schema
+generation, and a registry-driven invocation path.
+
+### New Types
+
+| Type | Purpose |
+|------|---------|
+| `ToolTargetType` | Target classification enum (url, domain, ip, cidr, file) |
+| `ToolAuthType` | Authentication type enum (none, basic, bearer, api_key, oauth2) |
+| `ToolResponseType` | Execution status enum (success, partial_success, failed, timeout, scope_violation, cancelled) |
+| `ToolFindingType` | Finding classification enum (vulnerability, information, weakness, etc.) |
+| `ToolSeverity` | Severity level enum (critical, high, medium, low, info, none) |
+| `ToolErrorType` | Error classification enum (validation, authentication, network, etc.) |
+| `ToolPortState` | Port scan state enum (open, closed, filtered) |
+| `ToolStreamEventType` | Stream event type enum (progress, finding, result, error) |
+| `ToolScope` | Execution scope (allowed/excluded patterns, IPs) |
+| `ToolTarget` | Scanning target (type + value + optional scope) |
+| `ToolRequestOptions` | Request options (timeout, concurrency, proxy, stealth, SSL) |
+| `ToolAuthConfig` | Auth configuration (type + credentials, redacted in repr) |
+| `ToolRequest` | Execution request (tool, target, params, options) |
+| `ToolResponseMetadata` | Response metadata (timing, counts, duration) |
+| `ToolFinding` | Security finding (type, severity, title, location, evidence) |
+| `ToolError` | Structured error (code, message, type, recoverable, retry) |
+| `ToolResponse` | Execution response (status, results, metadata, errors, findings) |
+| `ToolProgressUpdate` | Streaming progress (stage, percentage, items found) |
+| `ToolStreamEvent` | Typed stream event (progress, finding, result, error) |
+| `ToolPortData` | Port scan result for a single port |
+| `ToolEndpointData` | Discovered endpoint |
+| `ToolTechnologyData` | Detected technology |
+| `ToolRateLimitConfig` | Rate limit configuration (RPM, concurrency, burst) |
+| `ToolRateLimitStatus` | Current rate limit state |
+| `ToolExecutionEntry` | Execution history record |
+| `ToolDescriptor` | Tool metadata (ID, label, target types, schemas, risk) |
+| `ToolRegistry` | Static registry for tool lookup |
+| `SchemaGenerator` | JSON Schema generation for tool types |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/tool_core.rs` | All tool-core Python bindings (enums, structs, conversion helpers) |
+
+### Common Patterns
+
+#### Tool Registry Discovery
+
+```python
+from eggsec import ToolRegistry
+
+# List all registered tools
+tools = ToolRegistry.all_tools()
+for t in tools:
+    print(f"{t.tool_id}: {t.label} (risk={t.risk})")
+
+# Find by tool ID
+desc = ToolRegistry.find("scan_ports")
+print(desc.description)
+print(desc.target_types)  # [ToolTargetType.ip(), ToolTargetType.domain()]
+
+# Find by operation ID
+desc = ToolRegistry.find_by_operation("scan-ports")
+```
+
+#### Schema Generation
+
+```python
+from eggsec import SchemaGenerator
+
+# Request schema for an operation
+schema = SchemaGenerator.request_schema("scan_ports")
+# Returns JSON Schema dict
+
+# Response schema
+schema = SchemaGenerator.response_schema("scan_ports")
+
+# Full manifest (all 22 operations)
+manifest = SchemaGenerator.full_manifest()
+```
+
+#### Tool Invocation via Engine
+
+```python
+from eggsec import Engine, Scope, ToolRequest, ToolTarget, ToolRequestOptions
+
+scope = Scope.allow_hosts(["127.0.0.1"])
+engine = Engine(scope)
+
+target = ToolTarget.ip("127.0.0.1")
+request = ToolRequest.new(
+    tool="scan_ports",
+    target=target,
+    params={"ports": [22, 80, 443]},
+    options=ToolRequestOptions.new(timeout_ms=5000),
+)
+
+response = engine.invoke_tool(request)
+if response.is_success():
+    for finding in response.findings:
+        print(f"[{finding.severity}] {finding.title}")
+```
+
+#### Async Tool Invocation
+
+```python
+import asyncio
+from eggsec import AsyncEngine, Scope, ToolRequest, ToolTarget
+
+async def main():
+    scope = Scope.allow_hosts(["127.0.0.1"])
+    engine = AsyncEngine(scope)
+
+    target = ToolTarget.ip("127.0.0.1")
+    request = ToolRequest.new(
+        tool="scan_ports",
+        target=target,
+        params={"ports": [22, 80, 443]},
+    )
+
+    response = await engine.async_invoke_tool(request)
+    print(response.status)
+
+asyncio.run(main())
+```
+
+#### Using Tool-Core Types Directly
+
+```python
+from eggsec import (
+    ToolTargetType, ToolAuthType, ToolResponseType, ToolFindingType,
+    ToolSeverity, ToolErrorType, ToolPortState, ToolStreamEventType,
+    ToolScope, ToolTarget, ToolRequestOptions, ToolAuthConfig,
+    ToolRequest, ToolFinding, ToolError, ToolResponse,
+    ToolPortData, ToolEndpointData, ToolTechnologyData,
+    ToolRateLimitConfig, ToolRateLimitStatus, ToolExecutionEntry,
+)
+
+# Build a target
+target = ToolTarget.url("https://example.com")
+
+# Build request options
+options = ToolRequestOptions.new(
+    timeout_ms=10000,
+    concurrency=5,
+    stealth=True,
+    verify_ssl=False,
+)
+
+# Build a request
+request = ToolRequest.new(
+    tool="scan_ports",
+    target=target,
+    params={"ports": [80, 443]},
+    options=options,
+)
+
+# Access request properties
+print(request.id)       # auto-generated UUID
+print(request.tool)     # "scan_ports"
+print(request.target)   # ToolTarget
+print(request.params)   # {"ports": [80, 443]}
+
+# Create findings
+finding = ToolFinding(
+    id="find-001",
+    finding_type=ToolFindingType.vulnerability(),
+    severity=ToolSeverity.high(),
+    title="Open port with default credentials",
+    description="Port 22 accepts root:root",
+    location="127.0.0.1:22",
+    evidence="SSH-2.0-OpenSSH_8.9",
+    cve_ids=["CVE-2023-1234"],
+    remediation="Disable root login",
+)
+
+# Create errors
+error = ToolError(
+    code="E_TIMEOUT",
+    message="Connection timed out",
+    error_type=ToolErrorType.timeout(),
+    recoverable=True,
+    retry_after_ms=5000,
+)
+
+# Rate limiting
+config = ToolRateLimitConfig.strict()
+status = ToolRateLimitStatus.new(
+    tokens_available=45.0,
+    requests_this_minute=15,
+    requests_per_minute=60,
+    concurrent_available=3,
+    concurrent_limit=5,
+    concurrent_in_use=2,
+)
+```

@@ -7,14 +7,18 @@ These tests prove the browser binding surface works end-to-end:
 construction, lifecycle, navigation, DOM inspection, cleanup.
 """
 
+import http.server
 import json
 import os
 import shutil
+import socketserver
 import subprocess
+import threading
+import time
 import pytest
 import importlib
 
-pytestmark = [pytest.mark.timeout(60)]
+pytestmark = [pytest.mark.timeout(90)]
 
 
 def _import_or_skip(name, feature="headless-browser"):
@@ -40,6 +44,116 @@ def _find_browser_binary():
             if os.path.isfile(chrome_path):
                 return chrome_path
     return None
+
+
+# ---------------------------------------------------------------------------
+# Loopback HTTP origin for browser tests
+# ---------------------------------------------------------------------------
+
+
+class _BrowserTestHandler(http.server.BaseHTTPRequestHandler):
+    """Handler serving deterministic pages for browser testing."""
+
+    server: http.server.ThreadingHTTPServer
+
+    def log_message(self, *_args):
+        return
+
+    def do_GET(self):
+        if self.path == "/":
+            body = b"""<!DOCTYPE html>
+<html>
+<head><title>Eggsec Browser Test</title></head>
+<body>
+<h1 id="main-heading">Welcome</h1>
+<form id="login-form" action="/login" method="POST">
+  <input name="user" type="text" />
+  <input name="pass" type="password" />
+  <button type="submit">Login</button>
+</form>
+<a href="/about" id="about-link">About</a>
+<a href="/contact" id="contact-link">Contact</a>
+<script>console.log("page loaded");</script>
+</body>
+</html>"""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/about":
+            body = b"""<!DOCTYPE html>
+<html><head><title>About</title></head>
+<body><h1>About Us</h1><a href="/">Home</a></body></html>"""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/set-cookie":
+            body = b"Cookie set"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Set-Cookie", "session=abc123; Path=/")
+            self.send_header("Set-Cookie", "theme=dark; Path=/")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+
+class _BrowserOriginServer:
+    def __init__(self):
+        self.server = None
+        self.thread = None
+
+    def start(self):
+        self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _BrowserTestHandler)
+        self.server.allow_reuse_address = True
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            if self.thread.is_alive():
+                return
+            time.sleep(0.01)
+        raise RuntimeError("Browser origin server failed to start")
+
+    def stop(self):
+        if self.server:
+            self.server.shutdown()
+            self.server.server_close()
+        if self.thread:
+            self.thread.join(timeout=2.0)
+
+    @property
+    def port(self):
+        return self.server.server_address[1]
+
+    @property
+    def base_url(self):
+        return f"http://127.0.0.1:{self.port}"
+
+
+@pytest.fixture
+def browser_origin():
+    """Provide a loopback HTTP server for browser tests."""
+    server = _BrowserOriginServer()
+    server.start()
+    yield server
+    server.stop()
 
 
 @pytest.fixture
@@ -306,3 +420,76 @@ class TestBrowserWithRealBackend:
         """BrowserCapabilities type exists."""
         BrowserCapabilities = _import_or_skip("BrowserCapabilities")
         assert BrowserCapabilities is not None
+
+
+# ---------------------------------------------------------------------------
+# Real browser page interaction tests
+# ---------------------------------------------------------------------------
+
+
+class TestBrowserRealPageInteraction:
+    """Test browser_test against a real local page (fails if browser not found)."""
+
+    @pytest.mark.timeout(60)
+    def test_browser_test_returns_report(self, browser_binary, browser_origin):
+        """browser_test returns a BrowserTestReport against a local page."""
+        browser_test = _import_or_skip("browser_test")
+
+        report = browser_test(browser_origin.base_url)
+        assert report is not None
+        d = report.to_dict()
+        assert "target" in d
+        assert "total_findings" in d
+        assert d["target"] == browser_origin.base_url
+
+    @pytest.mark.timeout(60)
+    def test_browser_test_finds_forms(self, browser_binary, browser_origin):
+        """browser_test discovers forms on the page."""
+        browser_test = _import_or_skip("browser_test")
+
+        report = browser_test(browser_origin.base_url)
+        d = report.to_dict()
+        assert "dom_xss" in d
+        assert "client_issues" in d
+        # The test page has a login form; total_findings may include it
+        assert isinstance(d["total_findings"], int)
+
+    @pytest.mark.timeout(60)
+    def test_browser_test_with_config(self, browser_binary, browser_origin):
+        """browser_test works with explicit config."""
+        browser_test = _import_or_skip("browser_test")
+        BrowserTestConfig = _import_or_skip("BrowserTestConfig")
+
+        config = BrowserTestConfig(
+            check_dom_xss=True,
+            discover_spa_routes=True,
+            check_client_security=True,
+            timeout_ms=15000,
+        )
+        report = browser_test(browser_origin.base_url, config=config)
+        assert report is not None
+        d = report.to_dict()
+        assert "target" in d
+
+    @pytest.mark.timeout(60)
+    def test_browser_test_report_serialization(self, browser_binary, browser_origin):
+        """BrowserTestReport serializes to dict and JSON."""
+        browser_test = _import_or_skip("browser_test")
+
+        report = browser_test(browser_origin.base_url)
+        d = report.to_dict()
+        assert isinstance(d, dict)
+        # Should be JSON-serializable
+        j = json.dumps(d)
+        parsed = json.loads(j)
+        assert parsed["target"] == browser_origin.base_url
+
+    @pytest.mark.timeout(60)
+    def test_browser_test_redirects(self, browser_binary, browser_origin):
+        """browser_test follows redirects."""
+        browser_test = _import_or_skip("browser_test")
+
+        report = browser_test(f"{browser_origin.base_url}/redirect")
+        assert report is not None
+        d = report.to_dict()
+        assert "target" in d

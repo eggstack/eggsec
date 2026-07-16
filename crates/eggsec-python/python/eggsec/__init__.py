@@ -1068,6 +1068,47 @@ FindingDiffResult = _core.FindingDiffResult
 DiffReportSummary = _core.DiffReportSummary
 ReportManifest = _core.ReportManifest
 
+# Release 5: Tool-core types (eggsec-tool-core bindings)
+try:
+    from ._core import (
+        # Enums (aliased to avoid conflicts with existing types)
+        TargetTypePy as ToolTargetType,
+        AuthTypePy as ToolAuthType,
+        ResponseTypePy as ToolResponseType,
+        ToolFindingType as ToolFindingType,
+        ToolSeverity as ToolSeverity,
+        ToolErrorTypePy as ToolErrorType,
+        PortStatePy as ToolPortState,
+        StreamEventTypePy as ToolStreamEventType,
+        # Structs
+        ScopeToolPy as ToolScope,
+        ToolTarget as ToolTarget,
+        RequestOptionsPy as ToolRequestOptions,
+        AuthConfigPy as ToolAuthConfig,
+        ToolRequestPy as ToolRequest,
+        ResponseMetadataPy as ToolResponseMetadata,
+        ToolFindingPy as ToolFinding,
+        ToolErrorPy as ToolError,
+        ToolResponsePy as ToolResponse,
+        ProgressUpdatePy as ToolProgressUpdate,
+        StreamEventPy as ToolStreamEvent,
+        PortDataPy as ToolPortData,
+        EndpointDataPy as ToolEndpointData,
+        TechnologyDataPy as ToolTechnologyData,
+        RateLimitConfigPy as ToolRateLimitConfig,
+        RateLimitStatusPy as ToolRateLimitStatus,
+        ExecutionEntryPy as ToolExecutionEntry,
+        # Descriptors and registry
+        ToolDescriptor as ToolDescriptor,
+        ToolRegistry as ToolRegistry,
+        OperationToolView as OperationToolView,
+        ValidationReport as ValidationReport,
+        SchemaGenerator as SchemaGenerator,
+        operation_as_tool as operation_as_tool,
+    )
+except (AttributeError, ImportError):
+    pass
+
 # Re-export exceptions
 EggsecError = _core.EggsecError
 ConfigError = _core.ConfigError
@@ -1707,6 +1748,38 @@ __all__ = [
     "FindingDiffResult",
     "DiffReportSummary",
     "ReportManifest",
+    # Release 5: Tool-core types
+    "ToolTargetType",
+    "ToolAuthType",
+    "ToolResponseType",
+    "ToolFindingType",
+    "ToolSeverity",
+    "ToolErrorType",
+    "ToolPortState",
+    "ToolStreamEventType",
+    "ToolScope",
+    "ToolTarget",
+    "ToolRequestOptions",
+    "ToolAuthConfig",
+    "ToolRequest",
+    "ToolResponseMetadata",
+    "ToolFinding",
+    "ToolError",
+    "ToolResponse",
+    "ToolProgressUpdate",
+    "ToolStreamEvent",
+    "ToolPortData",
+    "ToolEndpointData",
+    "ToolTechnologyData",
+    "ToolRateLimitConfig",
+    "ToolRateLimitStatus",
+    "ToolExecutionEntry",
+    "ToolDescriptor",
+    "ToolRegistry",
+    "OperationToolView",
+    "ValidationReport",
+    "SchemaGenerator",
+    "operation_as_tool",
 ]
 
 # Keep the runtime export contract truthful for feature-gated builds. The

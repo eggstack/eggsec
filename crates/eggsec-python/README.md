@@ -4,8 +4,8 @@ Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security
 
 ## Status
 
-**Scoped pre-1.0 release candidate** — Release 4 closure pass completed
-2026-07-15. Not yet published to PyPI. The stable-core compatibility boundary
+**Scoped pre-1.0 release candidate** — Release 5 Phase A completed
+2026-07-16. Not yet published to PyPI. The stable-core compatibility boundary
 is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and
@@ -151,6 +151,47 @@ and artifact storage abstractions.
 
 All Release 4 types are **provisional** — they do not yet satisfy the
 graduation checklist for stable-core promotion.
+
+### Release 5 Phase A — Tool-Core and Schema Integration
+
+Release 5 Phase A exposes `eggsec-tool-core` types to Python, providing a
+deterministic tool abstraction for all 22 stable operations.
+
+**New tool-core types**
+- `ToolTargetType`, `ToolAuthType`, `ToolResponseType`, `ToolFindingType`,
+  `ToolSeverity`, `ToolErrorType`, `ToolPortState`, `ToolStreamEventType` —
+  enum bindings from `eggsec-tool-core`
+- `ToolScope`, `ToolTarget`, `ToolRequestOptions`, `ToolAuthConfig` —
+  configuration types
+- `ToolRequest`, `ToolResponse`, `ToolResponseMetadata` — request/response
+  contract
+- `ToolFinding`, `ToolError` — structured findings and errors
+- `ToolProgressUpdate`, `ToolStreamEvent` — streaming event types
+- `ToolPortData`, `ToolEndpointData`, `ToolTechnologyData` — result data types
+- `ToolRateLimitConfig`, `ToolRateLimitStatus` — rate limiting
+- `ToolExecutionEntry` — execution history
+
+**Tool descriptor and registry**
+- `ToolDescriptor` — deterministic operation metadata (ID, label, target
+  types, parameter/result schema, risk, features, surfaces)
+- `ToolRegistry` — static lookup: `find(tool_id)`,
+  `find_by_operation(operation_id)`, `all_tools()`
+
+**Schema generation**
+- `SchemaGenerator.request_schema(tool_id)` — JSON Schema for request params
+- `SchemaGenerator.response_schema(tool_id)` — JSON Schema for response
+- `SchemaGenerator.full_manifest()` — all 22 operations
+
+**Tool invocation API**
+- `Engine.invoke_tool(request)` — sync dispatch through policy gate
+- `AsyncEngine.async_invoke_tool(request)` — async dispatch through policy gate
+
+All Release 5 Phase A types are **stable** — they are generated from
+`eggsec-tool-core` (no engine dependencies) and describe the 22 stable
+operations. See `docs/python/tools.md` for the full guide and
+`docs/python/TOOL_CORE_BINDING_MAP.md` for the binding map.
+
+**New test file**: `tests/test_tool_core.py`
 
 ### Additional API Surface (default wheel)
 

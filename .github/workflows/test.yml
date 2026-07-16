@@ -421,6 +421,90 @@ jobs:
       - name: Check feature metadata
         run: python scripts/check-python-architecture-guards.py --check-feature-metadata
 
+  python-profile-manifest:
+    name: Python profile manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate profile manifest
+        run: python scripts/validate_python_profiles.py --manifest crates/eggsec-python/validation/profiles.json
+
+  python-evidence-bundle:
+    name: Python evidence bundle
+    runs-on: ubuntu-latest
+    needs: [python-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Generate evidence bundle
+        run: python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
+      - name: Upload evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-evidence-bundle
+          path: target/python-validation/
+          retention-days: 90
+
+  python-maturity-guard:
+    name: Python maturity guard
+    runs-on: ubuntu-latest
+    needs: [python-evidence-bundle]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Generate evidence bundle
+        run: python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
+      - name: Run maturity guard
+        run: python scripts/check_maturity_guard.py
+
+  python-skip-budget:
+    name: Python skip budget
+    runs-on: ubuntu-latest
+    needs: [python-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: pip install maturin && maturin develop
+      - name: Download default-wheel test results
+        uses: actions/download-artifact@v4
+        with:
+          name: python-test-results-default-wheel
+          path: /tmp/test-results/
+      - name: Enforce skip budgets
+        run: |
+          if [ -f /tmp/test-results/test-results-default-wheel.xml ]; then
+            python scripts/python_skip_budget.py \
+              --profile default-wheel \
+              --manifest crates/eggsec-python/validation/profiles.json \
+              --junit-xml /tmp/test-results/test-results-default-wheel.xml
+          else
+            echo "No JUnit XML found, skipping budget enforcement"
+          fi
+
   python-release-gate:
     name: Python release gate
     if: always()
@@ -431,6 +515,10 @@ jobs:
       python-type-check,
       python-maturity-consistency,
       python-feature-metadata,
+      python-profile-manifest,
+      python-evidence-bundle,
+      python-maturity-guard,
+      python-skip-budget,
     ]
     runs-on: ubuntu-latest
     steps:
@@ -443,6 +531,10 @@ jobs:
           echo "  python-type-check: ${{ needs.python-type-check.result }}"
           echo "  python-maturity-consistency: ${{ needs.python-maturity-consistency.result }}"
           echo "  python-feature-metadata: ${{ needs.python-feature-metadata.result }}"
+          echo "  python-profile-manifest: ${{ needs.python-profile-manifest.result }}"
+          echo "  python-evidence-bundle: ${{ needs.python-evidence-bundle.result }}"
+          echo "  python-maturity-guard: ${{ needs.python-maturity-guard.result }}"
+          echo "  python-skip-budget: ${{ needs.python-skip-budget.result }}"
 
           FAILED=0
           for result in \
@@ -451,7 +543,11 @@ jobs:
             "${{ needs.python-stub-parity.result }}" \
             "${{ needs.python-type-check.result }}" \
             "${{ needs.python-maturity-consistency.result }}" \
-            "${{ needs.python-feature-metadata.result }}"; do
+            "${{ needs.python-feature-metadata.result }}" \
+            "${{ needs.python-profile-manifest.result }}" \
+            "${{ needs.python-evidence-bundle.result }}" \
+            "${{ needs.python-maturity-guard.result }}" \
+            "${{ needs.python-skip-budget.result }}"; do
             if [ "$result" != "success" ]; then
               echo "FAILED: required job result was '$result' (expected 'success')"
               FAILED=1

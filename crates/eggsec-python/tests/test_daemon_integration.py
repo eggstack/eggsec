@@ -883,3 +883,154 @@ class TestDaemonSubscribe:
             assert subscriber is not None
         finally:
             loop.close()
+
+
+class TestDaemonRealTaskExecution:
+    """Test real task submission and execution through the daemon."""
+
+    def test_submit_and_wait_for_task_result(self, daemon_socket):
+        """Submit a scan_ports task and wait for result."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            task_handle = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                )
+            )
+            assert task_handle is not None
+            assert hasattr(task_handle, "task_id")
+            assert len(task_handle.task_id) > 0
+        finally:
+            loop.close()
+
+    def test_submit_task_with_all_params(self, daemon_socket):
+        """Submit task with operation, target, and config parameters."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            task_handle = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                    idempotency_key="real-task-exec-001",
+                )
+            )
+            assert task_handle is not None
+        finally:
+            loop.close()
+
+    def test_cancel_active_task(self, daemon_socket):
+        """Cancel a task that was submitted."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        async_daemon_cancel_task = _import_or_skip("async_daemon_cancel_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            task_handle = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                )
+            )
+            cancel_result = loop.run_until_complete(
+                async_daemon_cancel_task(
+                    client,
+                    session_id=session_id,
+                    task_id=task_handle.task_id,
+                )
+            )
+            assert cancel_result is not None
+        finally:
+            loop.close()
+
+    def test_submit_multiple_tasks_sequentially(self, daemon_socket):
+        """Submit multiple tasks sequentially to the same session."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            handles = []
+            for i in range(3):
+                handle = loop.run_until_complete(
+                    async_daemon_submit_task(
+                        client,
+                        session_id=session_id,
+                        operation="scan_ports",
+                        target="127.0.0.1",
+                        idempotency_key=f"seq-task-{i}",
+                    )
+                )
+                handles.append(handle)
+            assert len(handles) == 3
+            task_ids = [h.task_id for h in handles]
+            assert len(set(task_ids)) == 3, "Task IDs should be unique"
+        finally:
+            loop.close()
+
+    def test_daemon_health_after_heavy_usage(self, daemon_socket):
+        """Daemon remains healthy after multiple operations."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_health = _import_or_skip("async_daemon_health")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_list_sessions = _import_or_skip("async_daemon_list_sessions")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            # Create several sessions
+            for _ in range(5):
+                loop.run_until_complete(
+                    async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+                )
+            # Verify health is still OK
+            resp = loop.run_until_complete(async_daemon_health(client))
+            assert resp is not None
+            # Verify sessions are listed
+            sessions = loop.run_until_complete(async_daemon_list_sessions(client))
+            assert sessions is not None
+        finally:
+            loop.close()

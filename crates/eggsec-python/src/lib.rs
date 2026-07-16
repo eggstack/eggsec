@@ -90,6 +90,8 @@ mod status;
 mod streaming_reporter;
 #[cfg(feature = "stress-testing")]
 mod stress;
+mod tool_core;
+mod tool_descriptor;
 mod version;
 mod waf;
 mod waf_validation;
@@ -190,6 +192,39 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<operation_metadata::OperationDescriptorPy>()?;
     m.add_class::<operation_metadata::OperationMetadataViewPy>()?;
     m.add_class::<operation_metadata::OperationRegistry>()?;
+    // Tool-core types (eggsec-tool-core bindings)
+    m.add_class::<tool_core::TargetTypePy>()?;
+    m.add_class::<tool_core::AuthTypePy>()?;
+    m.add_class::<tool_core::ResponseTypePy>()?;
+    m.add_class::<tool_core::FindingTypePy>()?;
+    m.add_class::<tool_core::SeverityPy>()?;
+    m.add_class::<tool_core::ToolErrorTypePy>()?;
+    m.add_class::<tool_core::PortStatePy>()?;
+    m.add_class::<tool_core::StreamEventTypePy>()?;
+    m.add_class::<tool_core::ScopeToolPy>()?;
+    m.add_class::<tool_core::TargetPy>()?;
+    m.add_class::<tool_core::RequestOptionsPy>()?;
+    m.add_class::<tool_core::AuthConfigPy>()?;
+    m.add_class::<tool_core::ToolRequestPy>()?;
+    m.add_class::<tool_core::ResponseMetadataPy>()?;
+    m.add_class::<tool_core::ToolFindingPy>()?;
+    m.add_class::<tool_core::ToolErrorPy>()?;
+    m.add_class::<tool_core::ToolResponsePy>()?;
+    m.add_class::<tool_core::ProgressUpdatePy>()?;
+    m.add_class::<tool_core::StreamEventPy>()?;
+    m.add_class::<tool_core::PortDataPy>()?;
+    m.add_class::<tool_core::EndpointDataPy>()?;
+    m.add_class::<tool_core::TechnologyDataPy>()?;
+    m.add_class::<tool_core::RateLimitConfigPy>()?;
+    m.add_class::<tool_core::RateLimitStatusPy>()?;
+    m.add_class::<tool_core::ExecutionEntryPy>()?;
+    // Tool descriptor, registry, and schema generation
+    m.add_class::<tool_descriptor::ToolDescriptorPy>()?;
+    m.add_class::<tool_descriptor::ToolRegistryPy>()?;
+    m.add_class::<tool_descriptor::OperationToolViewPy>()?;
+    m.add_class::<tool_descriptor::ValidationReportPy>()?;
+    m.add_class::<tool_descriptor::SchemaGeneratorPy>()?;
+    m.add_function(wrap_pyfunction!(tool_descriptor::operation_as_tool, m)?)?;
     // G1: Domain descriptors
     m.add_class::<domains::DomainDescriptorPy>()?;
     m.add_class::<domains::DomainRegistry>()?;

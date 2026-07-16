@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use crate::cancellation::CancellationToken;
 use crate::config_model::PyEggsecConfig;
@@ -152,6 +154,34 @@ fn daemon_response_to_operation_result(
     }
 }
 
+/// Convert a Python dict to `HashMap<String, String>` for OperationRequest metadata.
+///
+/// Each value is converted to its string representation. Complex types (lists,
+/// nested dicts) are serialized via Python's `json.dumps`.
+fn pydict_to_string_metadata(dict: &Bound<'_, PyDict>) -> PyResult<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    let json_mod = dict.py().import_bound("json")?;
+    for (key, value) in dict.iter() {
+        if let Ok(key_str) = key.extract::<String>() {
+            let val_str: String = if let Ok(s) = value.extract::<String>() {
+                s
+            } else if let Ok(b) = value.extract::<bool>() {
+                b.to_string()
+            } else if let Ok(i) = value.extract::<i64>() {
+                i.to_string()
+            } else if let Ok(f) = value.extract::<f64>() {
+                f.to_string()
+            } else {
+                // Fallback: use json.dumps for complex types (lists, dicts, None)
+                let json_str_obj = json_mod.call_method1("dumps", (&value,))?;
+                json_str_obj.extract()?
+            };
+            map.insert(key_str, val_str);
+        }
+    }
+    Ok(map)
+}
+
 /// Async engine for running scoped security operations.
 ///
 /// Provides the same operations as Engine but returns Python awaitables.
@@ -273,6 +303,42 @@ impl AsyncEngine {
         self.state
             .registry
             .execute_async(&request.operation, &request, self)
+    }
+
+    /// Invoke a tool by tool ID with a validated payload dictionary (async).
+    ///
+    /// This delegates through the engine's enforcement pipeline, preserving
+    /// scope, policy, audit, timeout, cancellation, and rate-limit behavior.
+    ///
+    /// Args:
+    ///     tool_id: The tool identifier (e.g. "scan_ports", "fuzz_http").
+    ///     target: Target string (URL, domain, IP, or CIDR).
+    ///     payload: Optional dict of tool-specific parameters.
+    ///     timeout_ms: Optional timeout override in milliseconds.
+    ///
+    /// Returns:
+    ///     PyFuture: A future that resolves to OperationResult.
+    #[pyo3(signature = (tool_id, target, payload=None, timeout_ms=None))]
+    fn async_invoke_tool(
+        &self,
+        py: Python<'_>,
+        tool_id: &str,
+        target: &str,
+        payload: Option<&Bound<'_, PyDict>>,
+        timeout_ms: Option<u64>,
+    ) -> PyResult<runtime_async::PyFuture> {
+        let metadata = if let Some(p) = payload {
+            pydict_to_string_metadata(p)?
+        } else {
+            HashMap::new()
+        };
+        let request = OperationRequest::new(
+            tool_id.to_string(),
+            target.to_string(),
+            timeout_ms,
+            Some(metadata),
+        );
+        self.run(py, request)
     }
 
     /// List all registered operation IDs.

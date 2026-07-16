@@ -76,22 +76,46 @@ class Verdict:
 # ---------------------------------------------------------------------------
 
 def load_profiles(manifest_path: str) -> dict[str, ProfileBudget]:
-    """Load profiles.json and return a dict keyed by profile name."""
+    """Load profiles.json and return a dict keyed by profile name.
+
+    Supports both formats:
+    - ``{"profiles": [{...}, ...]}`` (canonical manifest)
+    - ``{"profile_name": {...}, ...}`` (legacy flat dict)
+    """
     with open(manifest_path, "r", encoding="utf-8") as fh:
         data = json.load(fh)
 
     profiles: dict[str, ProfileBudget] = {}
-    for name, entry in data.items():
-        if not isinstance(entry, dict):
-            continue
-        profiles[name] = ProfileBudget(
-            name=name,
-            skip_budget=entry.get("skip_budget", entry.get("max_skips", 0)),
-            max_xfails=entry.get("max_xfails"),
-            required_min_tests=entry.get("required_min_tests", 1),
-            expected_features=entry.get("expected_features", []),
-            allowed_skip_reasons=entry.get("allowed_skip_reasons", []),
-        )
+
+    # Canonical format: {"profiles": [list of profile objects]}
+    if "profiles" in data and isinstance(data["profiles"], list):
+        for entry in data["profiles"]:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name", "")
+            if not name:
+                continue
+            profiles[name] = ProfileBudget(
+                name=name,
+                skip_budget=entry.get("skip_budget", entry.get("max_skips", 0)),
+                max_xfails=entry.get("max_xfails"),
+                required_min_tests=entry.get("required_min_tests", 1),
+                expected_features=entry.get("expected_features", []),
+                allowed_skip_reasons=entry.get("allowed_skip_reasons", []),
+            )
+    else:
+        # Legacy flat dict format: {"profile_name": {...}}
+        for name, entry in data.items():
+            if not isinstance(entry, dict):
+                continue
+            profiles[name] = ProfileBudget(
+                name=name,
+                skip_budget=entry.get("skip_budget", entry.get("max_skips", 0)),
+                max_xfails=entry.get("max_xfails"),
+                required_min_tests=entry.get("required_min_tests", 1),
+                expected_features=entry.get("expected_features", []),
+                allowed_skip_reasons=entry.get("allowed_skip_reasons", []),
+            )
     return profiles
 
 

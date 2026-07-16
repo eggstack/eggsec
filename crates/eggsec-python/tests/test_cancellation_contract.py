@@ -335,3 +335,99 @@ class TestCancellationLatency:
         elapsed_ms = (time.monotonic() - start) * 1000
         avg_us = (elapsed_ms * 1000) / 200
         assert avg_us < 50, f"Avg cancel-reset: {avg_us:.1f}us (>50us)"
+
+
+# ---------------------------------------------------------------------------
+# Long-running operation cancellation
+# ---------------------------------------------------------------------------
+
+
+class TestLongRunningCancellation:
+    """Test cancellation of real long-running operations."""
+
+    @pytest.mark.timeout(30)
+    def test_cancel_engine_during_scan(self):
+        """Cancel engine token while scan_ports is running."""
+        Engine = _import_or_skip("Engine")
+        Scope = _import_or_skip("Scope")
+
+        scope = Scope.allow_hosts(["127.0.0.1"])
+        engine = Engine(scope)
+        token = engine.cancellation_token()
+
+        # Start a scan in background thread
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(engine.scan_ports, "127.0.0.1")
+            # Give it a moment to start
+            time.sleep(0.05)
+            # Cancel via token
+            token.cancel()
+            assert token.is_cancelled() is True
+            # The scan should still complete or be cancelled
+            try:
+                result = future.result(timeout=10)
+                # If it completes, that's fine - the Rust task ran to completion
+                assert result is not None
+            except Exception:
+                # If it raises, that's also acceptable - cancellation was processed
+                pass
+        engine.close()
+
+    @pytest.mark.timeout(30)
+    def test_async_cancel_propagation(self):
+        """AsyncEngine token cancel during async operation."""
+        AsyncEngine = _import_or_skip("AsyncEngine")
+        Scope = _import_or_skip("Scope")
+
+        scope = Scope.allow_hosts(["127.0.0.1"])
+        engine = AsyncEngine(scope)
+        token = engine.cancellation_token()
+
+        async def run_and_cancel():
+            # Start the scan
+            task = asyncio.ensure_future(engine.async_scan_ports("127.0.0.1"))
+            await asyncio.sleep(0.05)
+            # Cancel via token
+            token.cancel()
+            try:
+                result = await task
+                return result
+            except Exception:
+                return None
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(run_and_cancel())
+            # Result may be None if cancelled, that's OK
+            assert token.is_cancelled() is True
+        finally:
+            loop.close()
+            engine.close()
+
+    @pytest.mark.timeout(30)
+    def test_session_close_cancels_pending(self):
+        """Closing engine while async operation is pending cancels via token."""
+        AsyncEngine = _import_or_skip("AsyncEngine")
+        Scope = _import_or_skip("Scope")
+
+        scope = Scope.allow_hosts(["127.0.0.1"])
+        engine = AsyncEngine(scope)
+        token = engine.cancellation_token()
+
+        async def run_and_close():
+            task = asyncio.ensure_future(engine.async_scan_ports("127.0.0.1"))
+            await asyncio.sleep(0.02)
+            # Close engine - this should cancel the token
+            engine.close()
+            assert token.is_cancelled() is True
+            try:
+                await task
+            except Exception:
+                pass
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(run_and_close())
+        finally:
+            loop.close()

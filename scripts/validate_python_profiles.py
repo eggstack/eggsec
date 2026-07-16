@@ -51,7 +51,13 @@ VALID_CARGO_FEATURES = {
     "full-no-system",
 }
 
-REQUIRED_FIELDS = ["name", "cargo_features", "test_selector", "blocking", "max_skips"]
+REQUIRED_FIELDS = [
+    "name", "cargo_features", "test_selector", "blocking", "max_skips",
+    "description", "system_packages", "binaries", "services",
+    "fixture_setup", "readiness_probe", "required_min_tests", "max_xfails",
+    "schedule", "supported_os", "expected_artifacts",
+    "timeout_seconds", "memory_mb",
+]
 
 VALID_SCHEDULES = {"always", "push", "manual", "weekly", "nightly"}
 

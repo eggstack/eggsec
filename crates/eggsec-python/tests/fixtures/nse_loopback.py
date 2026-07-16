@@ -1,6 +1,6 @@
 """Loopback fixture servers for NSE integration tests.
 
-Provides TCP, HTTP, and TLS servers on high ports for NSE scripts that
+Provides TCP, HTTP, TLS, and DNS servers on high ports for NSE scripts that
 need real services. NSE scripts receive the port via script_args (e.g.,
 ``port=18080``). A startup failure is a test failure, never a skip.
 """
@@ -13,6 +13,7 @@ import os
 import socket
 import socketserver
 import ssl
+import struct
 import threading
 import time
 from pathlib import Path
@@ -118,8 +119,44 @@ class _TlsServer(socketserver.ThreadingTCPServer):
         self.context.load_cert_chain(certfile=str(certfile), keyfile=str(keyfile))
 
 
+class _DnsHandler(socketserver.BaseRequestHandler):
+    """Minimal DNS server that responds to A record queries for eggsec-test.local."""
+
+    def handle(self) -> None:
+        data, sock = self.request
+        try:
+            # Parse DNS query header (first 12 bytes)
+            txn_id = data[:2]
+            # Build a minimal DNS response: copy the query, set response flags
+            # QR=1 (response), OPCODE=0, AA=1, RD=1, RA=1, RCODE=0 (no error)
+            flags = struct.pack("!H", 0x8580)
+            # QDCOUNT=1, ANCOUNT=1, NSCOUNT=0, ARCOUNT=0
+            counts = struct.pack("!HHHH", 1, 1, 0, 0)
+            header = txn_id + flags + counts
+            # Copy the question section
+            question = data[12:]
+            # Build a minimal A record answer
+            # Name: pointer to question (0xC00C)
+            answer_name = b"\xc0\x0c"
+            # Type A (1), Class IN (1), TTL 300, RDLENGTH 4
+            answer_rdata = struct.pack("!HHIH", 1, 1, 300, 4)
+            # IP: 127.0.0.1
+            answer_rdata += socket.inet_aton("127.0.0.1")
+            response = header + question + answer_name + answer_rdata
+            sock.sendto(response, self.client_address)
+        except (OSError, struct.error):
+            pass
+
+
+class _DnsServer(socketserver.ThreadingUDPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+    address_family = socket.AF_INET
+    socket_type = socket.SOCK_DGRAM
+
+
 class NseLoopbackFixtures:
-    """Loopback TCP, HTTP, and TLS fixtures for NSE integration tests.
+    """Loopback TCP, HTTP, TLS, and DNS fixtures for NSE integration tests.
 
     Each service binds to a high port on 127.0.0.1. The NSE scripts
     receive the port via ``script_args="port=<port>"``.
@@ -129,6 +166,7 @@ class NseLoopbackFixtures:
         self.tcp: _ThreadingTcpServer | None = None
         self.http: _HttpServer | None = None
         self.tls: _TlsServer | None = None
+        self.dns: _DnsServer | None = None
         self._threads: list[threading.Thread] = []
         self._previous_fixture_env: str | None = None
 
@@ -150,11 +188,17 @@ class NseLoopbackFixtures:
         self.http = _HttpServer((HOST, 0), _HttpHandler)
         fixture_dir = Path(__file__).parent
         self.tls = _TlsServer((HOST, 0), fixture_dir / "fixture-cert.pem", fixture_dir / "fixture-key.pem")
-        self._threads = [self._serve(self.tcp), self._serve(self.http), self._serve(self.tls)]
+        self.dns = _DnsServer((HOST, 0), _DnsHandler)
+        self._threads = [
+            self._serve(self.tcp),
+            self._serve(self.http),
+            self._serve(self.tls),
+            self._serve(self.dns),
+        ]
         return self
 
     def __exit__(self, *_exc) -> None:
-        for server in (self.tcp, self.http, self.tls):
+        for server in (self.tcp, self.http, self.tls, self.dns):
             if server is not None:
                 server.shutdown()
                 server.server_close()
@@ -164,6 +208,7 @@ class NseLoopbackFixtures:
         self.tcp = None
         self.http = None
         self.tls = None
+        self.dns = None
         if self._previous_fixture_env is None:
             os.environ.pop("EGGSEC_ALLOW_LOOPBACK_FIXTURE", None)
         else:
@@ -185,6 +230,11 @@ class NseLoopbackFixtures:
         return int(self.tls.server_address[1])
 
     @property
+    def dns_port(self) -> int:
+        assert self.dns is not None
+        return int(self.dns.server_address[1])
+
+    @property
     def tcp_args(self) -> str:
         """Script args string for connecting to the TCP fixture."""
         return f"port={self.tcp_port}"
@@ -198,3 +248,8 @@ class NseLoopbackFixtures:
     def tls_args(self) -> str:
         """Script args string for connecting to the TLS fixture."""
         return f"port={self.tls_port}"
+
+    @property
+    def dns_args(self) -> str:
+        """Script args string for connecting to the DNS fixture."""
+        return f"port={self.dns_port}"

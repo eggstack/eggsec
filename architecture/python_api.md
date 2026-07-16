@@ -168,6 +168,62 @@ runtime on a dedicated thread.
 `AsyncEngine`, async proxy and database sessions, and all one-shot async
 functions (recon, scanning, WAF, etc.) returning `PyFuture`.
 
+## Release 5 Phase A: Tool Integration
+
+Release 5 Phase A bridges `eggsec-tool-core` types to Python, establishing a
+deterministic tool abstraction layer for all 22 stable operations.
+
+### eggsec-tool-core exposure
+
+`eggsec-tool-core` is a standalone crate with no engine dependencies. Its
+types are pure data DTOs (request, response, finding, error, rate-limit,
+scope, target). Release 5 Phase A binds all public types to Python via
+`crates/eggsec-python/src/tool_core.rs`.
+
+The binding follows existing conventions: `#[pyclass(frozen)]`, `to_dict()`,
+`to_json()`, `__repr__`, `__str__`, `__hash__`. Credentials in `AuthConfig`
+are redacted in all repr and serialization paths.
+
+### Tool descriptor generation from OperationMetadata
+
+Each of the 22 stable operations has a `ToolDescriptor` generated from
+`OperationMetadata`. The descriptor captures:
+
+- Canonical tool ID and human-readable label
+- Supported target types (IP, domain, URL, CIDR, file)
+- Parameter and result JSON Schema (generated from Rust types)
+- Risk classification (from `OperationMetadata.default_risk`)
+- Required features and supported execution surfaces
+
+`ToolRegistry` provides static lookup: `find(tool_id)`,
+`find_by_operation(operation_id)`, `all_tools()`.
+
+### invoke_tool dispatch flow
+
+```
+Python: Engine.invoke_tool(ToolRequest)
+  → ToolRegistry.find(request.tool)
+  → EnforcementContext.evaluate(descriptor)
+  → ToolRequest → OperationDescriptor conversion
+  → eggsec::dispatch::dispatch_inner()
+  → ToolResponse construction from OperationResult
+```
+
+The `invoke_tool` path is identical for all operations. The tool ID resolves
+to an operation via `ToolRegistry`, and the engine dispatches through the
+standard `EnforcementContext` → `EnforcedDispatcher` path. The response is
+wrapped in `ToolResponse` with status, findings, errors, and metadata.
+
+### Schema generation architecture
+
+`SchemaGenerator` produces JSON Schema from Rust type metadata. Request
+schemas describe the parameter structure; response schemas describe the
+result payload. The full manifest covers all 22 stable operations and is
+useful for API documentation, validation, and code generation tools.
+
+Schema generation uses `schemars` (or equivalent) at compile time or
+runtime to derive schemas from the Rust struct definitions.
+
 ## Release 2: Network Programmability
 
 Release 2 introduces Python bindings for low-level network primitives. These

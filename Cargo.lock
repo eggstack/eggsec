@@ -2022,6 +2022,7 @@ dependencies = [
  "eggsec-mobile-lab",
  "eggsec-nse",
  "eggsec-runtime",
+ "eggsec-tool-core",
  "eggsec-web-proxy",
  "futures",
  "md-5",

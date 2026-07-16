@@ -96,6 +96,74 @@ until they satisfy the graduation checklist:
 | `distributed` | experimental | Cluster architecture |
 | `ai` | experimental | LLM integration |
 
+## Release 5 Phase A: Tool-Core and Schema Integration
+
+Release 5 Phase A exposes `eggsec-tool-core` types to Python, providing a
+deterministic tool abstraction for all 22 stable operations.
+
+### New tool-core binding surface
+
+All types from `eggsec-tool-core` are now bound to Python with direct or
+aliased wrappers. The binding map is documented in
+`docs/python/TOOL_CORE_BINDING_MAP.md`. Key additions:
+
+| Python Type | Rust Source | Description |
+|-------------|-------------|-------------|
+| `ToolTargetType` | `TargetType` | Target classification enum |
+| `ToolAuthType` | `AuthType` | Authentication type enum |
+| `ToolResponseType` | `ResponseStatus` | Execution status enum |
+| `ToolFindingType` | `FindingType` | Finding classification enum |
+| `ToolSeverity` | `ResponseSeverity` | Severity level enum |
+| `ToolErrorType` | `ToolErrorType` | Error classification enum |
+| `ToolPortState` | `PortState` | Port scan state enum |
+| `ToolStreamEventType` | `StreamEventType` | Stream event type enum |
+| `ToolScope` | `Scope` | Execution scope |
+| `ToolTarget` | `Target` | Scanning target |
+| `ToolRequestOptions` | `RequestOptions` | Request options |
+| `ToolAuthConfig` | `AuthConfig` | Auth configuration |
+| `ToolRequest` | `ToolRequest` | Execution request |
+| `ToolResponseMetadata` | `ResponseMetadata` | Response metadata |
+| `ToolFinding` | `Finding` | Security finding |
+| `ToolError` | `ToolError` | Structured error |
+| `ToolResponse` | `ToolResponse` | Execution response |
+| `ToolProgressUpdate` | `ProgressUpdate` | Progress event |
+| `ToolStreamEvent` | `StreamEvent` | Typed stream event |
+| `ToolPortData` | `PortData` | Port result data |
+| `ToolEndpointData` | `EndpointData` | Endpoint data |
+| `ToolTechnologyData` | `TechnologyData` | Technology data |
+| `ToolRateLimitConfig` | `RateLimitConfig` | Rate limit config |
+| `ToolRateLimitStatus` | `RateLimitStatus` | Rate limit status |
+| `ToolExecutionEntry` | `ExecutionEntry` | History entry |
+
+### Deterministic tool descriptors
+
+All 22 stable operations now have deterministic `ToolDescriptor` entries
+accessible via `ToolRegistry`. Each descriptor includes tool ID, label,
+description, supported target types, parameter/result JSON Schema, risk
+classification, required features, and supported surfaces.
+
+### JSON Schema generation
+
+`SchemaGenerator` produces JSON Schema for any operation's request and
+response types. The full manifest covers all 22 stable operations.
+
+### Tool invocation API
+
+`Engine.invoke_tool()` and `AsyncEngine.async_invoke_tool()` execute a
+`ToolRequest` through the mandatory policy gate. The invocation path is
+identical for all operations — the tool ID resolves to the operation via
+`ToolRegistry`, and the engine dispatches through `EnforcementContext`.
+
+### Stability classification
+
+Release 5 Phase A types are **stable**. They are generated from
+`eggsec-tool-core` which has no engine dependencies, and the 22 operations
+they describe are already stable-core. The `ToolRegistry`,
+`ToolDescriptor`, and `SchemaGenerator` additions are also stable.
+
+No operations are promoted in Release 5 Phase A. All 22 operations remain
+stable as in Releases 1-4.
+
 ## Release 4: Common Session Contract (Provisional)
 
 | Symbol | Stability | Notes |
