@@ -292,3 +292,69 @@ print(eggsec.api_surface()["graphql"])  # if exported by this build
 `api_surface()` describes individual exported symbols. `domain_maturity()`
 describes the release state of whole capability areas; a compiled feature can
 therefore be available while still being provisional or experimental.
+
+## Phase C: Namespace Structure
+
+Release 5 Phase C reorganizes the Python package into intentional submodules
+by capability ownership. The top-level `eggsec` package retains stable core
+symbols (engine, 22 operations, config, events, scope) while provisional and
+experimental capabilities move to explicit submodules.
+
+### Submodule Maturity
+
+| Submodule | Maturity | Contents |
+|-----------|----------|----------|
+| `eggsec` | stable | Engine, operations, config, events, core DTOs |
+| `eggsec.net` | provisional | Network types, transport, probes, HTTP client, WebSocket |
+| `eggsec.sessions` | provisional | Browser, mobile, database, proxy session types |
+| `eggsec.storage` | provisional | Finding/assessment repositories, artifact stores |
+| `eggsec.reporting` | provisional | Reporters, streaming output, baselines |
+| `eggsec.daemon` | provisional | Daemon client and parity contracts |
+| `eggsec.experimental` | experimental | Wireless, evasion, postex, C2, hunt, AI, stress |
+
+### Stable Operations (unchanged)
+
+The 22 stable operations remain directly importable from `eggsec`:
+
+```python
+from eggsec import scan_ports, async_scan_ports
+from eggsec import Engine, AsyncEngine, Scope
+```
+
+### Provisional Types
+
+Provisional types are accessible both at the top level (backward compatibility)
+and from their canonical submodule:
+
+```python
+# Canonical (recommended)
+from eggsec.net import Target, TcpSession, HttpClient
+from eggsec.sessions import DatabaseSessionState, BrowserSession
+
+# Backward-compatible (deprecated Py-suffixed names still work)
+from eggsec import TargetPy, TcpSessionPy
+```
+
+### Experimental Types
+
+Experimental types are isolated under `eggsec.experimental`:
+
+```python
+from eggsec.experimental import wireless_scan, evasion_scan, postex_scan
+from eggsec.experimental import WirelessNetwork, EvasionTechnique
+```
+
+### Feature Availability
+
+When a feature is not compiled into the wheel, accessing it raises
+`FeatureUnavailableError` with structured guidance:
+
+```python
+from eggsec._feature_guard import FeatureUnavailableError
+try:
+    from eggsec.experimental import wireless_scan
+except FeatureUnavailableError as e:
+    print(f"Feature: {e.feature}")
+    print(f"Maturity: {e.maturity}")
+    print(f"Install: {e.install_hint}")
+```

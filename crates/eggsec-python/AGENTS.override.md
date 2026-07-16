@@ -102,6 +102,15 @@ pytest crates/eggsec-python/tests/        # Python-side tests
 - Assessment module pattern: `*_test(config)` sync + `async_*_test(config)` async. Config types have `Default` impls. Result types are engine-produced only (no Python constructors).
 - Session-oriented types (PcapWriter, DaemonClient, ProxyManager) implement `__enter__`/`__exit__` context managers with idempotent `close()` and `is_closed` property.
 
+## Phase C: Namespace conventions
+
+- New public symbols must be placed in the appropriate submodule (`net`, `sessions`, `storage`, `reporting`, `daemon`, `experimental`) based on capability ownership
+- The top-level `__init__.py` retains backward-compatible re-exports; new code should import from submodules
+- Py-suffixed names are deprecated; use canonical names (e.g., `Target` not `TargetPy`)
+- Feature-gated imports use `try/except (AttributeError, ImportError): pass` pattern
+- Experimental types go under `eggsec.experimental`, never at top level
+- `FeatureUnavailableError` provides structured guidance when features are missing
+
 ## Validation Infrastructure
 
 ### Profile Manifest

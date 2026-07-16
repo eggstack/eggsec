@@ -71,7 +71,14 @@ crates/eggsec-python/
 │   └── migration.rs         # SchemaVersion, MigrationResult, FindingMigration (Milestone E)
 ├── python/
 │   └── eggsec/
-│       ├── __init__.py      # Re-exports all public API
+│       ├── __init__.py      # Re-exports all public API (stable core only)
+│       ├── _feature_guard.py # Feature availability detection (Phase C)
+│       ├── net/             # Network types: Target, TcpSession, HttpClient, etc. (provisional)
+│       ├── sessions/        # Session types: MobileSession, BrowserSession, etc. (provisional)
+│       ├── storage/         # Repository types: FindingRepository, ArtifactStore, etc. (provisional)
+│       ├── reporting/       # Reporter types: FindingReporter, StreamingReporter, etc. (provisional)
+│       ├── daemon/          # Daemon client and parity types (provisional)
+│       ├── experimental/    # Experimental types: wireless, evasion, postex, C2, hunt, AI, stress
 │       ├── __init__.pyi     # Type stubs
 │       ├── py.typed         # PEP 561 marker
 │       └── *.pyi            # Per-module type stubs
@@ -84,7 +91,8 @@ crates/eggsec-python/
     ├── test_fingerprint.py
     ├── test_async.py
     ├── test_smoke.py
-    └── test_policy_equivalence.py
+    ├── test_policy_equivalence.py
+    └── test_golden_contract.py  # Phase B+C architecture guard tests
 ```
 
 ## Build Commands
@@ -1795,3 +1803,38 @@ Run via: `pytest crates/eggsec-python/tests/test_golden_contract.py`
 4. **Generated inventories derive from registry** — capability manifests,
    tool descriptors, feature maps, and daemon parity metadata are all
    derived from `OperationExecutorDescriptor`, not hand-maintained.
+
+## Release 5 Phase C: Namespace and Maturity Governance
+
+Phase C reorganizes the Python package into intentional submodules by capability ownership.
+
+### Package Structure Changes
+
+- **Stable top-level surface**: Only engine, 22 operations, config, events, and core DTOs remain at `eggsec.__init__`
+- **`eggsec._feature_guard`**: Feature availability detection with structured `FeatureUnavailableError` and install guidance
+- **`eggsec.net`**: Network types (Target, TcpSession, HttpClient, WebSocket) — provisional
+- **`eggsec.sessions`**: Session types (MobileSession, BrowserSession, DatabaseSession, ProxySession) — provisional
+- **`eggsec.storage`**: Repository types (FindingRepository, AssessmentRepository, ArtifactStore) — provisional
+- **`eggsec.reporting`**: Reporter types (FindingReporter, StreamingReporter, BaselineComparator) — provisional
+- **`eggsec.daemon`**: Daemon client and parity contracts — provisional
+- **`eggsec.experimental`**: Wireless, evasion, postex, C2, hunt, AI, stress types
+
+### Key Changes
+
+- **Canonical naming**: Py-suffixed names (e.g., `TargetPy`) are deprecated in favor of clean names (e.g., `Target`)
+- **Backward compatibility**: All existing import paths continue to work; Py-suffixed names emit `DeprecationWarning`
+- **Import safety**: `import eggsec` does not initialize experimental, browser, database, or other heavy dependencies
+- **Namespace governance**: 27 new architecture guard tests enforce submodule boundaries and stability classifications
+
+### Migration
+
+```python
+# Before (flat namespace)
+from eggsec import TargetPy, TcpSessionPy, HttpClientPy
+
+# After (organized submodules, recommended)
+from eggsec.net import Target, TcpSession, HttpClient
+
+# Backward-compatible (deprecated, still works)
+from eggsec import TargetPy
+```

@@ -248,6 +248,47 @@ Engine.run(request) / AsyncEngine.run(request)
             └─ post_dispatch_hooks()        ← finding/artifact events
 ```
 
+### Release 5 Phase C — Namespace and Maturity Governance
+
+Phase C reorganizes the Python package into intentional submodules by capability ownership.
+
+**Package structure**
+
+```text
+eggsec/
+  __init__.py          stable core: engine, operations, scope, config, events
+  _feature_guard.py    feature availability detection and structured errors
+  net/                 targets, transports, probes, HTTP, WebSocket (provisional)
+  sessions/            browser, mobile, database, proxy, capture (provisional)
+  storage/             finding/assessment repositories, artifacts (provisional)
+  reporting/           reporters, streaming, baselines, formats (provisional)
+  daemon/              daemon client and parity contracts (provisional)
+  experimental/        wireless, evasion, postex, C2, hunt, AI, stress, etc.
+```
+
+**Key changes**
+
+- **Stable top-level surface**: Only engine, 22 operations, config, events, and core DTOs remain at top level
+- **Provisional subsystem namespaces**: Network, sessions, storage, reporting, daemon types in explicit submodules
+- **Experimental isolation**: Wireless, evasion, postex, C2, hunt, AI, stress types under `eggsec.experimental`
+- **Canonical naming**: Py-suffixed names (e.g., `TargetPy`) are deprecated in favor of clean names (e.g., `Target`)
+- **Backward compatibility**: All existing import paths continue to work; Py-suffixed names emit `DeprecationWarning`
+- **Feature availability**: Structured `FeatureUnavailableError` with install guidance when features are missing
+- **Import safety**: `import eggsec` does not initialize experimental, browser, database, or other heavy dependencies
+
+**Migration**
+
+```python
+# Before (flat namespace)
+from eggsec import TargetPy, TcpSessionPy, HttpClientPy
+
+# After (organized submodules, recommended)
+from eggsec.net import Target, TcpSession, HttpClient
+
+# Backward-compatible (deprecated, still works)
+from eggsec import TargetPy
+```
+
 ### Additional API Surface (default wheel)
 
 The default wheel also includes the following API surface beyond the core

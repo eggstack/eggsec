@@ -226,6 +226,8 @@ Release 5 Phase A exposes `eggsec-tool-core` types to Python, providing a determ
 
 Release 5 Phase B completes registry and dispatch convergence. A single authoritative `OperationExecutorDescriptor` registry replaces duplicated sync/async dispatch and parallel metadata inventories. The generic dispatch lifecycle (`pre_dispatch_lifecycle` → `execute_operation` → `post_dispatch_hooks`) replaces per-operation match arms. Generated inventories (capability manifests, tool descriptors, feature maps, daemon parity) derive from the registry. Architecture guard tests enforce one-descriptor-per-operation, unique IDs, alias non-collision, and schema identity. New files: `dispatch_helpers.rs`, `operation_executors.rs`, `generated_inventories.rs`. Golden contract test suite: 1076 parametrized tests across 72 methods (`tests/test_golden_contract.py`).
 
+Release 5 Phase C reorganizes the Python package into intentional submodules by capability ownership. The top-level `eggsec` package retains stable core symbols (engine, 22 operations, config, events). Provisional types move to `eggsec.net`, `eggsec.sessions`, `eggsec.storage`, `eggsec.reporting`, `eggsec.daemon`. Experimental types are isolated under `eggsec.experimental`. Py-suffixed names are deprecated but retained for backward compatibility. Feature availability introspection via `eggsec._feature_guard`. Golden contract test suite: 1076+ parametrized tests across 72+ methods plus 27 Phase C namespace governance tests.
+
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|
 | `websocket` | `websocket` | WebSocket security testing |
