@@ -418,7 +418,7 @@
     },
     {
       "name": "packet-parser",
-      "description": "PCAP parsing — deterministic, no privileges required",
+      "description": "PCAP parsing — deterministic, no privileges required. Tests decode Ethernet/IPv4/IPv6/TCP/UDP/ICMP/DNS/TLS from synthetic PCAP files. Portable across all Linux environments.",
       "cargo_features": ["packet-inspection"],
       "system_packages": [],
       "binaries": [],
@@ -444,7 +444,7 @@
     },
     {
       "name": "packet-live",
-      "description": "Live packet capture — requires root/CAP_NET_RAW",
+      "description": "Live packet capture — requires root or CAP_NET_RAW. Tests interface enumeration, BPF filter application, async capture session lifecycle, and PcapWriter. Must run in isolated network namespace or as root.",
       "cargo_features": ["packet-inspection"],
       "system_packages": ["libpcap-dev"],
       "binaries": [],
@@ -470,7 +470,7 @@
     },
     {
       "name": "active-probes",
-      "description": "ICMP/SYN/UDP probes — requires root/CAP_NET_RAW",
+      "description": "ICMP/SYN/UDP probes — requires root or CAP_NET_RAW. Tests ICMP echo, TCP SYN, UDP reachability, and traceroute probes. All targets restricted to loopback or isolated network namespaces.",
       "cargo_features": ["stress-testing", "packet-inspection"],
       "system_packages": ["libpcap-dev"],
       "binaries": [],

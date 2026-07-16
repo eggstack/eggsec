@@ -729,3 +729,157 @@ class TestDaemonSessionLifecycleExtended:
         d = v.to_dict()
         assert d["protocol_version"] == 2
         assert d["feature_profile"] == "minimal"
+
+
+class TestDaemonOperationSubmission:
+    """Test submitting operations through the daemon."""
+
+    def test_submit_task_to_session(self, daemon_socket):
+        """Submit a task to a session and verify task handle."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            task_handle = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                )
+            )
+            assert task_handle is not None
+        finally:
+            loop.close()
+
+    def test_submit_task_idempotency(self, daemon_socket):
+        """Submitting the same task twice with same idempotency key."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            h1 = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                    idempotency_key="test-idem-key-001",
+                )
+            )
+            h2 = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                    idempotency_key="test-idem-key-001",
+                )
+            )
+            assert h1 is not None
+            assert h2 is not None
+        finally:
+            loop.close()
+
+    def test_cancel_task(self, daemon_socket):
+        """Cancel a submitted task."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_submit_task = _import_or_skip("async_daemon_submit_task")
+        async_daemon_cancel_task = _import_or_skip("async_daemon_cancel_task")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            session_id = loop.run_until_complete(
+                async_daemon_create_session(client, surface=RuntimeSurface.Cli)
+            )
+            task_handle = loop.run_until_complete(
+                async_daemon_submit_task(
+                    client,
+                    session_id=session_id,
+                    operation="scan_ports",
+                    target="127.0.0.1",
+                )
+            )
+            result = loop.run_until_complete(
+                async_daemon_cancel_task(
+                    client,
+                    session_id=session_id,
+                    task_id=task_handle.task_id,
+                )
+            )
+            assert result is not None
+        finally:
+            loop.close()
+
+
+class TestDaemonReconnect:
+    """Test client reconnection to daemon."""
+
+    def test_new_client_after_disconnect(self, daemon_socket):
+        """Creating a new client after the old one is dropped works."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_health = _import_or_skip("async_daemon_health")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        RuntimeSurface = _import_or_skip("RuntimeSurface")
+
+        import asyncio
+
+        client1 = daemon_connect(daemon_socket)
+        loop1 = asyncio.new_event_loop()
+        try:
+            loop1.run_until_complete(async_daemon_health(client1))
+        finally:
+            loop1.close()
+            del client1
+
+        client2 = daemon_connect(daemon_socket)
+        loop2 = asyncio.new_event_loop()
+        try:
+            resp = loop2.run_until_complete(async_daemon_health(client2))
+            assert resp is not None
+            session_id = loop2.run_until_complete(
+                async_daemon_create_session(client2, surface=RuntimeSurface.Cli)
+            )
+            assert session_id is not None
+        finally:
+            loop2.close()
+
+
+class TestDaemonSubscribe:
+    """Test event subscription."""
+
+    def test_subscribe_returns_client(self, daemon_socket):
+        """Subscribe creates an event stream client."""
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_subscribe = _import_or_skip("async_daemon_subscribe")
+
+        client = daemon_connect(daemon_socket)
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            subscriber = loop.run_until_complete(
+                async_daemon_subscribe(client)
+            )
+            assert subscriber is not None
+        finally:
+            loop.close()

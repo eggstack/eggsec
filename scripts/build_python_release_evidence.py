@@ -480,6 +480,87 @@ def collect_platform_details(out_dir: Path) -> Path:
     return dest
 
 
+def collect_junit_xml(out_dir: Path) -> Path:
+    """Copy JUnit XML test results if available."""
+    dest = out_dir / "junit-results.xml"
+    if JUNIT_XML.exists():
+        import shutil
+        shutil.copy2(JUNIT_XML, dest)
+    else:
+        dest.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<testsuites _note="JUnit XML not found">\n'
+            '  <testsuite name="eggsec-python" tests="0"/>\n'
+            "</testsuites>\n"
+        )
+    return dest
+
+
+def collect_performance_report(out_dir: Path) -> Path:
+    """Collect performance and leak test results."""
+    dest = out_dir / "performance-report.json"
+    perf_data: dict[str, Any] = {}
+
+    perf_markers = ["test_performance", "test_stress_leak", "test_leak"]
+    test_dir = PYTHON_CRATE / "tests"
+    if test_dir.exists():
+        perf_files = []
+        for f in test_dir.glob("test_*.py"):
+            content = f.read_text()
+            for marker in perf_markers:
+                if marker in content:
+                    perf_files.append(f.name)
+                    break
+        perf_data["performance_test_files"] = perf_files
+
+    perf_data["baseline"] = {
+        "description": "Baseline metrics collected during CI run",
+        "note": "Populated by test_stress_leak.py and test_performance_report.py",
+    }
+
+    dest.write_text(json.dumps(perf_data, indent=2) + "\n")
+    return dest
+
+
+def collect_fixture_versions(out_dir: Path) -> Path:
+    """Collect subsystem fixture versions and dependencies."""
+    dest = out_dir / "fixture-versions.json"
+    fixture_data: dict[str, Any] = {}
+
+    cert_path = PYTHON_CRATE / "tests" / "fixtures" / "fixture-cert.pem"
+    if cert_path.exists():
+        import hashlib
+        h = hashlib.sha256(cert_path.read_bytes()).hexdigest()[:16]
+        fixture_data["tls_fixture_cert"] = {
+            "path": str(cert_path.relative_to(REPO_ROOT)),
+            "sha256_prefix": h,
+            "size_bytes": cert_path.stat().st_size,
+        }
+
+    nse_fixture = PYTHON_CRATE / "tests" / "fixtures" / "nse_loopback.py"
+    if nse_fixture.exists():
+        import hashlib
+        h = hashlib.sha256(nse_fixture.read_bytes()).hexdigest()[:16]
+        fixture_data["nse_loopback_fixture"] = {
+            "path": str(nse_fixture.relative_to(REPO_ROOT)),
+            "sha256_prefix": h,
+            "size_bytes": nse_fixture.stat().st_size,
+        }
+
+    stable_core = PYTHON_CRATE / "tests" / "fixtures" / "stable_core.py"
+    if stable_core.exists():
+        import hashlib
+        h = hashlib.sha256(stable_core.read_bytes()).hexdigest()[:16]
+        fixture_data["stable_core_fixture"] = {
+            "path": str(stable_core.relative_to(REPO_ROOT)),
+            "sha256_prefix": h,
+            "size_bytes": stable_core.stat().st_size,
+        }
+
+    dest.write_text(json.dumps(fixture_data, indent=2) + "\n")
+    return dest
+
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
@@ -552,6 +633,9 @@ def main(argv: list[str] | None = None) -> int:
         ("binary-size-report.json", lambda: collect_binary_size_report(out_dir)),
         ("maturity-decision.json", lambda: collect_maturity_decision(out_dir)),
         ("platform-details.json", lambda: collect_platform_details(out_dir)),
+        ("junit-results.xml", lambda: collect_junit_xml(out_dir)),
+        ("performance-report.json", lambda: collect_performance_report(out_dir)),
+        ("fixture-versions.json", lambda: collect_fixture_versions(out_dir)),
     ]
 
     generated: list[Path] = []

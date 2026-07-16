@@ -2,11 +2,16 @@
 
 Demonstrates that NseRuntime is a reusable managed runtime, not one-shot DTOs.
 Tests prove runtime reuse, limits, cancellation, cleanup, and structured diagnostics.
+
+Workstream 4: Tests use deterministic loopback fixtures instead of skipping on
+network errors. NSE scripts receive fixture ports via script_args.
 """
 
 import json
 import pytest
 import importlib
+
+from fixtures.nse_loopback import NseLoopbackFixtures
 
 
 def _import_or_skip(name, feature="nse"):
@@ -18,29 +23,6 @@ def _import_or_skip(name, feature="nse"):
     return obj
 
 
-def _run_script_safe(runtime, script_name, *args):
-    """Run an NSE script, returning the report or skipping on network errors.
-
-    NSE scripts like 'banner' and 'http-headers' connect to port 80 on the
-    target. When no service is listening, the Lua runtime raises a connection
-    error. This helper catches that and skips the test with a clear reason
-    instead of failing, since the test is about runtime behavior, not network
-    connectivity.
-    """
-    try:
-        if args:
-            return runtime.run_script_with_args(script_name, *args)
-        return runtime.run_script(script_name)
-    except Exception as exc:
-        msg = str(exc)
-        if "Connection refused" in msg or "Network is unreachable" in msg:
-            pytest.skip(
-                f"NSE script '{script_name}' requires a network service on "
-                f"the target (got: {msg.split(':')[-1].strip()})"
-            )
-        raise
-
-
 # Module-level timeout for all tests
 pytestmark = [pytest.mark.timeout(300)]
 
@@ -49,6 +31,19 @@ BUILTIN_SCRIPTS = ["default", "discovery", "banner", "http-headers", "dns-check"
 
 # Known library categories
 LIBRARY_CATEGORIES = ["Core", "Protocol", "Utility", "Exploit", "Auth"]
+
+# Fixture context for integration tests
+_nse_fixtures = NseLoopbackFixtures()
+
+
+# Fixture context for integration tests (created per-test via pytest fixture)
+
+
+@pytest.fixture
+def nse_fixtures():
+    """Provide loopback TCP/HTTP/TLS fixtures for NSE integration tests."""
+    with NseLoopbackFixtures() as fixtures:
+        yield fixtures
 
 
 # ============================================================================
@@ -61,7 +56,7 @@ class TestNseRuntimeReuse:
     produces valid output and verify runtime stats accumulate correctly."""
 
     @pytest.mark.timeout(60)
-    def test_single_runtime_runs_6_scripts(self):
+    def test_single_runtime_runs_6_scripts(self, nse_fixtures):
         """One runtime runs all 6 built-in scripts sequentially."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -70,7 +65,14 @@ class TestNseRuntimeReuse:
         runtime = NseRuntime(cfg)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report is not None, f"Script {script_name} returned None"
             assert report.script_name == script_name
             assert isinstance(report.output, str)
@@ -78,7 +80,7 @@ class TestNseRuntimeReuse:
             assert isinstance(report.fidelity, str)
 
     @pytest.mark.timeout(60)
-    def test_runtime_reuse_repeated_script(self):
+    def test_runtime_reuse_repeated_script(self, nse_fixtures):
         """Run the same script 10 times on one runtime, each succeeds."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -87,12 +89,12 @@ class TestNseRuntimeReuse:
         runtime = NseRuntime(cfg)
 
         for i in range(10):
-            report = _run_script_safe(runtime, "banner")
+            report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
             assert report is not None, f"Run {i} returned None"
             assert report.script_name == "banner"
 
     @pytest.mark.timeout(60)
-    def test_runtime_runs_20_plus_scripts_total(self):
+    def test_runtime_runs_20_plus_scripts_total(self, nse_fixtures):
         """Run 20+ scripts (with repeats) on one runtime, all produce output."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -102,12 +104,19 @@ class TestNseRuntimeReuse:
 
         all_scripts = BUILTIN_SCRIPTS * 4  # 6 * 4 = 24 runs
         for script_name in all_scripts:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report is not None
             assert isinstance(report.output, str)
 
     @pytest.mark.timeout(60)
-    def test_runtime_with_args_reuse(self):
+    def test_runtime_with_args_reuse(self, nse_fixtures):
         """run_script_with_args works repeatedly on one runtime."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -116,12 +125,12 @@ class TestNseRuntimeReuse:
         runtime = NseRuntime(cfg)
 
         for i in range(5):
-            report = _run_script_safe(runtime, "banner", "")
+            report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
             assert report is not None
             assert report.script_name == "banner"
 
     @pytest.mark.timeout(60)
-    def test_runtime_with_automated_limits_reuse(self):
+    def test_runtime_with_automated_limits_reuse(self, nse_fixtures):
         """Runtime with automated_limits runs scripts repeatedly."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -132,11 +141,18 @@ class TestNseRuntimeReuse:
         runtime = NseRuntime(cfg, limits=limits)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report is not None
 
     @pytest.mark.timeout(60)
-    def test_runtime_with_manual_limits_reuse(self):
+    def test_runtime_with_manual_limits_reuse(self, nse_fixtures):
         """Runtime with manual_defaults limits runs scripts repeatedly."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -147,11 +163,18 @@ class TestNseRuntimeReuse:
         runtime = NseRuntime(cfg, limits=limits)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report is not None
 
     @pytest.mark.timeout(60)
-    def test_runtime_switches_profiles_per_script(self):
+    def test_runtime_switches_profiles_per_script(self, nse_fixtures):
         """One runtime can run scripts that use different rule types."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -159,13 +182,13 @@ class TestNseRuntimeReuse:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report_banner = _run_script_safe(runtime, "banner")
-        report_discovery = _run_script_safe(runtime, "discovery")
+        report_banner = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
+        report_discovery = runtime.run_script("discovery")
         assert report_banner is not None
         assert report_discovery is not None
 
     @pytest.mark.timeout(60)
-    def test_runtime_cancellation_token_reusable(self):
+    def test_runtime_cancellation_token_reusable(self, nse_fixtures):
         """Cancellation token from runtime remains valid across runs."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -175,7 +198,14 @@ class TestNseRuntimeReuse:
         token = runtime.cancellation_token()
 
         for script_name in BUILTIN_SCRIPTS[:3]:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report is not None
             assert token.is_cancelled() is False
 
@@ -226,7 +256,7 @@ class TestNseLimitsEnforcement:
         assert d["max_script_bytes"] is None
 
     @pytest.mark.timeout(60)
-    def test_script_runs_under_automated_limits(self):
+    def test_script_runs_under_automated_limits(self, nse_fixtures):
         """Simple script completes within automated_defaults limits."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -236,7 +266,7 @@ class TestNseLimitsEnforcement:
         limits = NseExecutionLimits.automated_defaults()
         runtime = NseRuntime(cfg, limits=limits)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report is not None
         assert report.compatibility_status in (
             "Compatible",
@@ -396,7 +426,7 @@ class TestNseRuntimeCleanup:
     """Run scripts that may produce errors, verify runtime is clean for next script."""
 
     @pytest.mark.timeout(60)
-    def test_runtime_survives_invalid_script(self):
+    def test_runtime_survives_invalid_script(self, nse_fixtures):
         """Runtime remains usable after running an invalid script."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -406,17 +436,17 @@ class TestNseRuntimeCleanup:
 
         # Try running a non-existent script (should fail gracefully)
         try:
-            _run_script_safe(runtime, "nonexistent_script_xyz_12345")
+            runtime.run_script("nonexistent_script_xyz_12345")
         except Exception:
             pass
 
         # Runtime should still work
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report is not None
         assert report.script_name == "banner"
 
     @pytest.mark.timeout(60)
-    def test_runtime_cleanup_between_different_scripts(self):
+    def test_runtime_cleanup_between_different_scripts(self, nse_fixtures):
         """Output from one script doesn't leak into the next."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -424,10 +454,10 @@ class TestNseRuntimeCleanup:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report1 = _run_script_safe(runtime, "banner")
+        report1 = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         output1 = report1.output
 
-        report2 = _run_script_safe(runtime, "discovery")
+        report2 = runtime.run_script("discovery")
         output2 = report2.output
 
         # Scripts should have different names
@@ -437,7 +467,7 @@ class TestNseRuntimeCleanup:
         assert report2.script_name == "discovery"
 
     @pytest.mark.timeout(60)
-    def test_runtime_target_consistent_across_runs(self):
+    def test_runtime_target_consistent_across_runs(self, nse_fixtures):
         """Target remains consistent across multiple runs on same runtime."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -446,11 +476,18 @@ class TestNseRuntimeCleanup:
         runtime = NseRuntime(cfg)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report.target == "127.0.0.1"
 
     @pytest.mark.timeout(60)
-    def test_runtime_report_dict_after_each_run(self):
+    def test_runtime_report_dict_after_each_run(self, nse_fixtures):
         """to_dict() works on every report from repeated runs."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -459,7 +496,14 @@ class TestNseRuntimeCleanup:
         runtime = NseRuntime(cfg)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             d = report.to_dict()
             assert isinstance(d, dict)
             assert "script_name" in d
@@ -999,7 +1043,7 @@ class TestNseStructuredEvidence:
     """Run scripts, check evidence items have required fields."""
 
     @pytest.mark.timeout(60)
-    def test_report_has_evidence_field(self):
+    def test_report_has_evidence_field(self, nse_fixtures):
         """Report has evidence getter returning a list."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1007,12 +1051,12 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         evidence = report.evidence
         assert isinstance(evidence, list)
 
     @pytest.mark.timeout(60)
-    def test_evidence_items_have_kind(self):
+    def test_evidence_items_have_kind(self, nse_fixtures):
         """Each evidence item has a kind field."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1020,13 +1064,13 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         for ev in report.evidence:
             assert hasattr(ev, "kind")
             assert isinstance(ev.kind, str)
 
     @pytest.mark.timeout(60)
-    def test_evidence_items_have_id_and_title(self):
+    def test_evidence_items_have_id_and_title(self, nse_fixtures):
         """Each evidence item has id and title."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1034,7 +1078,7 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         for ev in report.evidence:
             assert hasattr(ev, "id")
             assert hasattr(ev, "title")
@@ -1042,7 +1086,7 @@ class TestNseStructuredEvidence:
             assert isinstance(ev.title, str)
 
     @pytest.mark.timeout(60)
-    def test_evidence_item_to_dict(self):
+    def test_evidence_item_to_dict(self, nse_fixtures):
         """Evidence item to_dict() has required keys."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1050,7 +1094,7 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         for ev in report.evidence:
             d = ev.to_dict()
             assert isinstance(d, dict)
@@ -1059,7 +1103,7 @@ class TestNseStructuredEvidence:
             assert "title" in d
 
     @pytest.mark.timeout(60)
-    def test_evidence_item_to_json(self):
+    def test_evidence_item_to_json(self, nse_fixtures):
         """Evidence item to_json() is valid JSON."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1067,14 +1111,14 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         for ev in report.evidence:
             j = ev.to_json()
             parsed = json.loads(j)
             assert "kind" in parsed
 
     @pytest.mark.timeout(60)
-    def test_evidence_item_repr(self):
+    def test_evidence_item_repr(self, nse_fixtures):
         """Evidence item repr contains kind."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1082,13 +1126,13 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         for ev in report.evidence:
             r = repr(ev)
             assert "NseEvidenceItem" in r
 
     @pytest.mark.timeout(60)
-    def test_report_to_dict_includes_evidence(self):
+    def test_report_to_dict_includes_evidence(self, nse_fixtures):
         """Report to_dict() includes evidence list."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1096,13 +1140,13 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         d = report.to_dict()
         assert "evidence" in d
         assert isinstance(d["evidence"], list)
 
     @pytest.mark.timeout(60)
-    def test_report_to_json_includes_evidence(self):
+    def test_report_to_json_includes_evidence(self, nse_fixtures):
         """Report to_json() includes evidence."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1110,7 +1154,7 @@ class TestNseStructuredEvidence:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         j = report.to_json()
         parsed = json.loads(j)
         assert "evidence" in parsed
@@ -1125,7 +1169,7 @@ class TestNseRuntimeStats:
     """Verify execution_stats fields after multiple runs."""
 
     @pytest.mark.timeout(60)
-    def test_report_has_elapsed_secs(self):
+    def test_report_has_elapsed_secs(self, nse_fixtures):
         """Report has non-negative elapsed_secs."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1133,11 +1177,11 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report.elapsed_secs >= 0
 
     @pytest.mark.timeout(60)
-    def test_report_has_output_lines(self):
+    def test_report_has_output_lines(self, nse_fixtures):
         """Report has output_lines >= 0."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1145,11 +1189,11 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report.output_lines >= 0
 
     @pytest.mark.timeout(60)
-    def test_report_has_has_output(self):
+    def test_report_has_has_output(self, nse_fixtures):
         """Report has has_output as bool."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1157,11 +1201,11 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert isinstance(report.has_output, bool)
 
     @pytest.mark.timeout(60)
-    def test_report_has_library_count(self):
+    def test_report_has_library_count(self, nse_fixtures):
         """Report has library_count >= 0."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1169,11 +1213,11 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report.library_count >= 0
 
     @pytest.mark.timeout(60)
-    def test_report_has_warnings_and_errors(self):
+    def test_report_has_warnings_and_errors(self, nse_fixtures):
         """Report has warnings and errors as lists."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1181,12 +1225,12 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert isinstance(report.warnings, list)
         assert isinstance(report.errors, list)
 
     @pytest.mark.timeout(60)
-    def test_report_to_dict_has_stats_fields(self):
+    def test_report_to_dict_has_stats_fields(self, nse_fixtures):
         """Report to_dict() contains stats-related keys."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1194,7 +1238,7 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         d = report.to_dict()
         assert "elapsed_secs" in d
         assert "output_lines" in d
@@ -1204,7 +1248,7 @@ class TestNseRuntimeStats:
         assert "errors" in d
 
     @pytest.mark.timeout(60)
-    def test_report_to_json_has_stats_fields(self):
+    def test_report_to_json_has_stats_fields(self, nse_fixtures):
         """Report to_json() contains stats fields."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1212,7 +1256,7 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         j = report.to_json()
         parsed = json.loads(j)
         assert "elapsed_secs" in parsed
@@ -1220,7 +1264,7 @@ class TestNseRuntimeStats:
         assert "library_count" in parsed
 
     @pytest.mark.timeout(60)
-    def test_report_stats_positive_across_runs(self):
+    def test_report_stats_positive_across_runs(self, nse_fixtures):
         """elapsed_secs is non-negative for all scripts."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1229,7 +1273,14 @@ class TestNseRuntimeStats:
         runtime = NseRuntime(cfg)
 
         for script_name in BUILTIN_SCRIPTS:
-            report = _run_script_safe(runtime, script_name)
+            if script_name == "banner":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tcp_args)
+            elif script_name == "http-headers":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.http_args)
+            elif script_name == "ssl-cert":
+                report = runtime.run_script_with_args(script_name, nse_fixtures.tls_args)
+            else:
+                report = runtime.run_script(script_name)
             assert report.elapsed_secs >= 0, f"Negative elapsed for {script_name}"
 
     @pytest.mark.timeout(60)
@@ -1252,7 +1303,7 @@ class TestNseRuntimeStats:
         assert hasattr(NseRuntimeStats, "to_dict")
 
     @pytest.mark.timeout(60)
-    def test_report_repr_contains_key_info(self):
+    def test_report_repr_contains_key_info(self, nse_fixtures):
         """Report repr contains script name and target."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1260,13 +1311,13 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         r = repr(report)
         assert "NseReportPy" in r or "NseReport" in r
         assert "banner" in r
 
     @pytest.mark.timeout(60)
-    def test_report_str_contains_info(self):
+    def test_report_str_contains_info(self, nse_fixtures):
         """Report str contains descriptive info."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1274,7 +1325,7 @@ class TestNseRuntimeStats:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         s = str(report)
         assert "banner" in s
         assert "127.0.0.1" in s
@@ -1331,7 +1382,7 @@ class TestNseJsonRoundtrip:
         assert j["service_name"] == "https"
 
     @pytest.mark.timeout(60)
-    def test_report_json_roundtrip(self):
+    def test_report_json_roundtrip(self, nse_fixtures):
         """Report to_json -> parse -> check structure."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1339,7 +1390,7 @@ class TestNseJsonRoundtrip:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         j = report.to_json()
         parsed = json.loads(j)
         assert "script_name" in parsed
@@ -1354,7 +1405,7 @@ class TestNseJsonRoundtrip:
         pass
 
     @pytest.mark.timeout(60)
-    def test_report_to_dict_roundtrip(self):
+    def test_report_to_dict_roundtrip(self, nse_fixtures):
         """Report to_dict -> json.dumps -> json.loads -> check."""
         NseRuntime = _import_or_skip("NseRuntime")
         NseRuntimeConfig = _import_or_skip("NseRuntimeConfig")
@@ -1362,7 +1413,7 @@ class TestNseJsonRoundtrip:
         cfg = NseRuntimeConfig(target="127.0.0.1")
         runtime = NseRuntime(cfg)
 
-        report = _run_script_safe(runtime, "banner")
+        report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         d = report.to_dict()
         j = json.dumps(d)
         parsed = json.loads(j)
