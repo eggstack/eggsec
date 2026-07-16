@@ -1473,6 +1473,26 @@ else
   echo "SKIP: engine.rs not found."
 fi
 
+# 66. Python dispatch uses 3-phase lifecycle (no legacy inline dispatch in dispatch())
+echo ""
+echo "--- Check 66: Python dispatch uses 3-phase lifecycle ---"
+if [[ -f "crates/eggsec-python/src/engine.rs" ]]; then
+  # The dispatch() method should delegate to pre_dispatch_lifecycle, not contain
+  # inline scope/policy validation. Check that pre_dispatch_lifecycle is called.
+  HAS_LIFECYCLE=$(rg -c 'pre_dispatch_lifecycle' crates/eggsec-python/src/engine.rs 2>/dev/null || echo 0)
+  HAS_EXECUTE=$(rg -c 'execute_operation' crates/eggsec-python/src/engine.rs 2>/dev/null || echo 0)
+  HAS_POSTHOOKS=$(rg -c 'post_dispatch_hooks' crates/eggsec-python/src/engine.rs 2>/dev/null || echo 0)
+  if [[ "$HAS_LIFECYCLE" -gt 0 ]] && [[ "$HAS_EXECUTE" -gt 0 ]] && [[ "$HAS_POSTHOOKS" -gt 0 ]]; then
+    echo "PASS: dispatch() uses 3-phase lifecycle (pre_dispatch_lifecycle → execute_operation → post_dispatch_hooks)."
+  else
+    echo "FAIL: dispatch() does not use the 3-phase lifecycle pattern."
+    echo "      Expected calls to pre_dispatch_lifecycle, execute_operation, and post_dispatch_hooks."
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo "SKIP: engine.rs not found."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

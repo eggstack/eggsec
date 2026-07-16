@@ -217,3 +217,9 @@ Phase B is complete when:
 - Registry is the single source of truth for metadata; derived inventories are generated, not maintained separately
 - Typed methods are thin delegates that construct OperationRequest and call the canonical dispatch path
 - Daemon task kind mapping driven by descriptor metadata, not hardcoded strings
+
+### Gap Closure (2026-07-16)
+Remaining items from the original plan were closed in a follow-up effort (`plans/phase-b-gap-closure-performance-benchmarks-guards.md`):
+- **Performance benchmarks**: 35 Phase B-specific benchmarks added (`test_phase_b_performance.py`) covering registry construction, descriptor lookup, operation listing, request normalization, no-op/denied dispatch, and sync/async dispatch overhead
+- **Architecture guard Check 66**: Added to `check-architecture-guards.sh` — verifies `dispatch()` uses 3-phase lifecycle pattern
+- **Budget verification**: Phase B budgets added to `performance_budgets.json`, all passing

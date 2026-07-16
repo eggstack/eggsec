@@ -12,5 +12,12 @@
   "finding_set_iteration_100": 0.1,
   "api_surface": 0.1,
   "feature_matrix": 0.1,
-  "callback_1000_calls": 0.5
+  "callback_1000_calls": 0.5,
+  "phase_b_registry_construction": 0.005,
+  "phase_b_descriptor_lookup": 0.001,
+  "phase_b_operation_listing": 0.005,
+  "phase_b_request_normalization": 0.002,
+  "phase_b_no_op_denied_dispatch": 0.010,
+  "phase_b_dispatch_overhead_sync": 0.015,
+  "phase_b_dispatch_overhead_async": 0.015
 }
