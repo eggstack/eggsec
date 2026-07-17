@@ -444,14 +444,24 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+
+      - name: Build default wheel
+        working-directory: crates/eggsec-python
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+
       - name: Check Python capability matrix
-        run: python scripts/check-python-capability-matrix.py
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py
 
       - name: Check Python architecture guards
-        run: python scripts/check-python-architecture-guards.py
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py
 
       - name: Check Python stub parity
-        run: python scripts/check_python_stub_parity.py
+        run: source $PWD/.venv/bin/activate && python scripts/check_python_stub_parity.py
 
   build-sdist:
     name: Build source distribution
