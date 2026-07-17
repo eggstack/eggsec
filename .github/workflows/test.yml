@@ -339,7 +339,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check capability matrix
         run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py
 
@@ -357,7 +357,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check architecture guards
         run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py
 
@@ -375,7 +375,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check stub parity
         run: source $PWD/.venv/bin/activate && python scripts/check_python_stub_parity.py
 
@@ -393,7 +393,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Install type checkers
         run: source $PWD/.venv/bin/activate && pip install mypy pyright
       - name: Run type checks
@@ -413,7 +413,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check maturity consistency
         run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py --check-maturity
 
@@ -431,7 +431,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check feature metadata
         run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py --check-feature-metadata
 
@@ -461,7 +461,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Upload evidence bundle
@@ -487,7 +487,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Run maturity guard
@@ -508,7 +508,7 @@ jobs:
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
       - name: Download default-wheel test results
         uses: actions/download-artifact@v4
         with:
