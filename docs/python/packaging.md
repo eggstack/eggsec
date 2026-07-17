@@ -34,6 +34,30 @@ Wheels are written to `target/wheels/`. Each wheel is a platform-specific
 Not applicable -- the package contains a compiled Rust extension. There is
 no pure-Python fallback.
 
+## Source distribution (sdist)
+
+The project publishes an sdist alongside wheels. The sdist includes all
+workspace crates required to build the Python extension from source.
+
+**Build**: `maturin sdist --out dist --manifest-path crates/eggsec-python/Cargo.toml`
+
+**Requirements to build from sdist**: Rust toolchain (>= 1.80), Cargo, and a
+C compiler. The sdist build will fail with actionable diagnostics if these
+are missing.
+
+**What's included**: All `crates/` directories in the workspace,
+`pyproject.toml`, `Cargo.toml` (workspace root), and generated files
+(`wheel-profiles.json`, type stubs). The build system (maturin) resolves
+the workspace dependency graph automatically.
+
+**When to use**: The sdist is useful for package managers that build from
+source (e.g., `pip install --no-binary :all:`) or for auditing the full
+source. Most users should prefer pre-built wheels for faster installation.
+
+CI builds and validates the sdist in the `build-sdist` job of
+`python-wheels.yml`. If the sdist build fails due to missing Rust tooling,
+the CI documents the failure without blocking the wheel-based release.
+
 ## Platform support
 
 | OS | Architecture | Triple | Status |

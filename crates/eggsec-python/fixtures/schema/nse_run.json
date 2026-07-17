@@ -1,0 +1,54 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:nse_run:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "NSE script execution request for the nse_run tool",
+    "properties": {
+      "scripts": {
+        "description": "NSE script names to run",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "target": {
+        "description": "Target host or IP",
+        "type": "string"
+      }
+    },
+    "required": [
+      "target",
+      "scripts"
+    ],
+    "title": "NSE script execution request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "intrusive"
+  },
+  "operation_id": "nse_run",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:nse_run:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "NSE run result for the nse_run tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "scripts": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "title": "NSE run result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "intrusive"
+  },
+  "tool_id": "nse_run",
+  "version": "0.1.0"
+}

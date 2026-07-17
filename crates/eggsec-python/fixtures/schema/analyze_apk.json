@@ -1,0 +1,44 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:analyze_apk:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "APK analysis request for the analyze_apk tool",
+    "properties": {
+      "path": {
+        "description": "Path to APK file",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "title": "APK analysis request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "analyze_apk",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:analyze_apk:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "APK analysis result for the analyze_apk tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "platform": {
+        "const": "android",
+        "type": "string"
+      }
+    },
+    "title": "APK analysis result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "analyze_apk",
+  "version": "0.1.0"
+}

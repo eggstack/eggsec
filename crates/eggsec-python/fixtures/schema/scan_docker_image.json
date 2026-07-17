@@ -1,0 +1,46 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:scan_docker_image:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Docker image scan request for the scan_docker_image tool",
+    "properties": {
+      "image": {
+        "description": "Docker image name or ID",
+        "type": "string"
+      }
+    },
+    "required": [
+      "image"
+    ],
+    "title": "Docker image scan request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "scan_docker_image",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:scan_docker_image:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Docker image scan result for the scan_docker_image tool",
+    "properties": {
+      "layers": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "misconfigs": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "title": "Docker image scan result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "scan_docker_image",
+  "version": "0.1.0"
+}

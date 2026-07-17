@@ -1,0 +1,40 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:scan_kubernetes:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Kubernetes scan request for the scan_kubernetes tool",
+    "properties": {
+      "kubeconfig": {
+        "description": "Path to kubeconfig file",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kubeconfig"
+    ],
+    "title": "Kubernetes scan request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "scan_kubernetes",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:scan_kubernetes:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Kubernetes scan result for the scan_kubernetes tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      }
+    },
+    "title": "Kubernetes scan result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "scan_kubernetes",
+  "version": "0.1.0"
+}

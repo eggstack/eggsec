@@ -1,0 +1,68 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:fingerprint_services:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Service fingerprint request for the fingerprint_services tool",
+    "properties": {
+      "ports": {
+        "description": "Ports to fingerprint",
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "target": {
+        "description": "Target host or IP",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "Service fingerprint request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "fingerprint_services",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:fingerprint_services:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Service fingerprint result for the fingerprint_services tool",
+    "properties": {
+      "services": {
+        "items": {
+          "properties": {
+            "confidence": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "service": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "stats": {
+        "type": "object"
+      }
+    },
+    "title": "Service fingerprint result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "fingerprint_services",
+  "version": "0.1.0"
+}

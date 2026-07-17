@@ -1,0 +1,47 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:auth_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Authentication test request for the auth_test tool",
+    "properties": {
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "Authentication test request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "auth_test",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:auth_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Auth test result for the auth_test tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "summary": {
+        "type": "object"
+      }
+    },
+    "title": "Auth test result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "auth_test",
+  "version": "0.1.0"
+}

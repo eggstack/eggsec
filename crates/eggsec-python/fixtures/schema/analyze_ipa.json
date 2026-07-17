@@ -1,0 +1,44 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:analyze_ipa:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "IPA analysis request for the analyze_ipa tool",
+    "properties": {
+      "path": {
+        "description": "Path to IPA file",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "title": "IPA analysis request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "analyze_ipa",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:analyze_ipa:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "IPA analysis result for the analyze_ipa tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "platform": {
+        "const": "ios",
+        "type": "string"
+      }
+    },
+    "title": "IPA analysis result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "analyze_ipa",
+  "version": "0.1.0"
+}

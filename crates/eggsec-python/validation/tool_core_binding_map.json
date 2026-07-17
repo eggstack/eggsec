@@ -1,0 +1,283 @@
+{
+  "version": "1.0.0",
+  "release": "5-phase-a",
+  "generated": "2026-07-15",
+  "crate": "eggsec-python",
+  "source_crate": "eggsec-tool-core",
+  "strategies": {
+    "direct": "Python type wraps the Rust type 1:1 with no data loss",
+    "direct_aliased": "Python type wraps Rust type but is exported under a different name",
+    "direct_renamed": "PyO3 name attribute renames the Python-visible class",
+    "mapped": "Python type maps to an existing engine type (not a new binding)",
+    "omitted": "Not exposed to Python (internal only)"
+  },
+  "enums": [
+    {
+      "rust_type": "TargetType",
+      "python_type": "ToolTargetType",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "variants": ["url", "domain", "ip", "cidr", "file"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "AuthType",
+      "python_type": "ToolAuthType",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "variants": ["none", "basic", "bearer", "api_key", "oauth2"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ResponseStatus",
+      "python_type": "ToolResponseType",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "variants": ["success", "partial_success", "failed", "timeout", "scope_violation", "cancelled"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "FindingType",
+      "python_type": "ToolFindingType",
+      "strategy": "direct_renamed",
+      "pyclass_name": "ToolFindingType",
+      "conversion": "lossless",
+      "variants": ["vulnerability", "information", "weakness", "configuration", "misconfiguration", "sensitive_data", "banner", "technology", "service", "endpoint", "subdomain", "open_port"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ResponseSeverity",
+      "python_type": "ToolSeverity",
+      "strategy": "direct_renamed",
+      "pyclass_name": "ToolSeverity",
+      "conversion": "lossless",
+      "variants": ["critical", "high", "medium", "low", "info", "none"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ToolErrorType",
+      "python_type": "ToolErrorType",
+      "strategy": "direct",
+      "conversion": "lossless",
+      "variants": ["validation", "authentication", "authorization", "rate_limit", "network", "timeout", "scope_violation", "not_found", "configuration", "internal", "tool_not_found"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "PortState",
+      "python_type": "ToolPortState",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "variants": ["open", "closed", "filtered"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "StreamEventType",
+      "python_type": "ToolStreamEventType",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "variants": ["progress", "finding", "result", "error"],
+      "round_trip": true
+    }
+  ],
+  "structs": [
+    {
+      "rust_type": "Scope",
+      "python_type": "ToolScope",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["allow_hosts", "allow_cidrs", "exclude_hosts", "exclude_cidrs", "allow_patterns", "exclude_patterns"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "Target",
+      "python_type": "ToolTarget",
+      "strategy": "direct_renamed",
+      "pyclass_name": "ToolTarget",
+      "conversion": "lossless",
+      "factory_methods": ["url", "domain", "ip", "cidr", "file"],
+      "fields": ["target_type", "value", "scope"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "RequestOptions",
+      "python_type": "ToolRequestOptions",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "factory_methods": ["default"],
+      "fields": ["timeout_ms", "max_retries", "retry_delay_ms", "concurrency", "proxy", "user_agent", "follow_redirects", "verify_ssl", "custom_headers"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "AuthConfig",
+      "python_type": "ToolAuthConfig",
+      "strategy": "direct_aliased",
+      "conversion": "lossless_redacted",
+      "fields": ["auth_type", "credentials"],
+      "redacted_fields": ["credentials"],
+      "round_trip": true,
+      "notes": "Credential values are redacted in to_dict(), to_json(), __repr__, __str__"
+    },
+    {
+      "rust_type": "ToolRequest",
+      "python_type": "ToolRequest",
+      "strategy": "direct",
+      "conversion": "lossless",
+      "factory_methods": ["new"],
+      "fields": ["request_id", "tool_id", "target", "params", "options", "auth", "cancellation_token"],
+      "round_trip": true,
+      "notes": "params is serde_json::Value, converted to/from Python dict/list via json module"
+    },
+    {
+      "rust_type": "ResponseMetadata",
+      "python_type": "ToolResponseMetadata",
+      "strategy": "direct_aliased",
+      "conversion": "lossless_datetime_rfc3339",
+      "fields": ["request_id", "tool_id", "started_at", "completed_at", "duration_ms", "items_processed", "items_total"],
+      "round_trip": true,
+      "notes": "DateTime fields converted to RFC 3339 strings in Python"
+    },
+    {
+      "rust_type": "Finding",
+      "python_type": "ToolFinding",
+      "strategy": "direct",
+      "conversion": "lossless",
+      "fields": ["id", "finding_type", "title", "description", "severity", "confidence", "location", "evidence", "remediation", "references", "cwe", "cvss", "metadata"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ToolError",
+      "python_type": "ToolError",
+      "strategy": "direct",
+      "conversion": "lossless",
+      "fields": ["code", "message", "error_type", "recoverable", "retry_after_ms", "details"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ToolResponse",
+      "python_type": "ToolResponse",
+      "strategy": "direct",
+      "conversion": "lossless",
+      "fields": ["request_id", "tool_id", "status", "results", "metadata", "errors", "findings"],
+      "round_trip": true,
+      "notes": "results is serde_json::Value, converted to/from Python native types"
+    },
+    {
+      "rust_type": "ProgressUpdate",
+      "python_type": "ToolProgressUpdate",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["stage", "percentage", "items_processed", "items_total", "message"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "StreamEvent",
+      "python_type": "ToolStreamEvent",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "factory_methods": ["progress", "finding", "result", "error"],
+      "fields": ["event_type", "timestamp", "data"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "PortData",
+      "python_type": "ToolPortData",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["port", "protocol", "state", "service", "version", "banner", "response_time_ms"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "EndpointData",
+      "python_type": "ToolEndpointData",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["url", "method", "status_code", "content_type", "content_length", "headers"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "TechnologyData",
+      "python_type": "ToolTechnologyData",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["name", "version", "category", "confidence", "website", "cpe"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "RateLimitConfig",
+      "python_type": "ToolRateLimitConfig",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "factory_methods": ["standard", "relaxed", "strict"],
+      "fields": ["requests_per_minute", "concurrent_scans", "burst_size", "enable_ip_based_limiting"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "RateLimitStatus",
+      "python_type": "ToolRateLimitStatus",
+      "strategy": "direct_aliased",
+      "conversion": "lossless",
+      "fields": ["current_requests", "max_requests", "window_start", "retry_after_ms", "limited"],
+      "round_trip": true
+    },
+    {
+      "rust_type": "ExecutionEntry",
+      "python_type": "ToolExecutionEntry",
+      "strategy": "direct_aliased",
+      "conversion": "lossless_datetime_rfc3339",
+      "fields": ["request_id", "tool_id", "target", "target_type", "status", "started_at", "completed_at", "duration_ms", "findings_count", "errors_count", "summary"],
+      "round_trip": true
+    }
+  ],
+  "special_types": [
+    {
+      "rust_type": "CancellationToken",
+      "python_type": "CancellationToken",
+      "strategy": "mapped",
+      "notes": "Maps to existing eggsec.CancellationToken already in the API surface"
+    },
+    {
+      "rust_type": "CancellationTokenHandle",
+      "python_type": null,
+      "strategy": "omitted",
+      "notes": "Internal serialization wrapper; not exposed"
+    },
+    {
+      "rust_type": "ExecutionHistory",
+      "python_type": null,
+      "strategy": "omitted",
+      "notes": "Internal bookkeeping; not exposed"
+    }
+  ],
+  "descriptor_types": [
+    {
+      "rust_type": "ToolDescriptor",
+      "python_type": "ToolDescriptor",
+      "strategy": "direct",
+      "fields": ["tool_id", "operation_id", "title", "description", "version", "category", "risk", "feature_required", "maturity", "confirmation_required", "confirmation_message", "target_policy", "input_schema", "output_schema", "supports_streaming", "supports_cancellation", "supports_timeout", "local_available", "daemon_available", "intended_uses", "supported_surfaces"]
+    },
+    {
+      "rust_type": "ToolRegistry",
+      "python_type": "ToolRegistry",
+      "strategy": "direct",
+      "methods": ["list", "get", "schema", "validate", "count", "operations_for_feature", "operations_for_category"]
+    },
+    {
+      "rust_type": "OperationToolView",
+      "python_type": "OperationToolView",
+      "strategy": "direct",
+      "fields": ["descriptor", "request_type_name", "result_type_name", "example_request", "example_result"]
+    },
+    {
+      "rust_type": "ValidationReport",
+      "python_type": "ValidationReport",
+      "strategy": "direct",
+      "fields": ["valid", "errors", "warnings"]
+    },
+    {
+      "rust_type": "SchemaGenerator",
+      "python_type": "SchemaGenerator",
+      "strategy": "direct",
+      "methods": ["generate_input_schema", "generate_output_schema", "all_schemas"]
+    }
+  ]
+}

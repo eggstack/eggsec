@@ -1,0 +1,50 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:oauth_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "OAuth security test request for the oauth_test tool",
+    "properties": {
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "OAuth security test request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "oauth_test",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:oauth_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "OAuth test result for the oauth_test tool",
+    "properties": {
+      "endpoints": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "vulnerabilities": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "title": "OAuth test result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "oauth_test",
+  "version": "0.1.0"
+}

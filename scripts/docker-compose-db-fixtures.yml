@@ -1,0 +1,63 @@
+version: "3.8"
+
+# Docker Compose for eggsec-python database integration tests.
+# Start with: docker compose -f scripts/docker-compose-db-fixtures.yml up -d
+# Stop with:  docker compose -f scripts/docker-compose-db-fixtures.yml down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eggsec-test-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eggsec_test
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  mysql:
+    image: mysql:8.0
+    container_name: eggsec-test-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: eggsec_test
+    ports:
+      - "13306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: eggsec-test-redis
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:7
+    container_name: eggsec-test-mongodb
+    ports:
+      - "127017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})", "--quiet"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /data/db

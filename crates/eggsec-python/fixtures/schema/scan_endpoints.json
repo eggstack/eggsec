@@ -1,0 +1,62 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:scan_endpoints:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Endpoint scan request for the scan_endpoints tool",
+    "properties": {
+      "paths": {
+        "description": "Paths to probe",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "target": {
+        "description": "Target URL or host",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "Endpoint scan request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "scan_endpoints",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:scan_endpoints:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Endpoint scan result for the scan_endpoints tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "stats": {
+        "properties": {
+          "endpoints_found": {
+            "type": "integer"
+          },
+          "total_probed": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "title": "Endpoint scan result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "scan_endpoints",
+  "version": "0.1.0"
+}

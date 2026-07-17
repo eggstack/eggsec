@@ -1,0 +1,50 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:db_probe:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Database probe request for the db_probe tool",
+    "properties": {
+      "connection": {
+        "description": "Database connection string",
+        "type": "string"
+      },
+      "queries": {
+        "description": "Queries to execute",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "connection"
+    ],
+    "title": "Database probe request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "db_pentest"
+  },
+  "operation_id": "db_probe",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:db_probe:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Database probe result for the db_probe tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "stats": {
+        "type": "object"
+      }
+    },
+    "title": "Database probe result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "db_pentest"
+  },
+  "tool_id": "db_probe",
+  "version": "0.1.0"
+}

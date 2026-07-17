@@ -1,0 +1,81 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:scan_ports:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Port scan request for the scan_ports tool",
+    "properties": {
+      "ports": {
+        "description": "Port ranges to scan (e.g. '1-1024', '80,443')",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "target": {
+        "description": "Target hostname, IP, or CIDR range",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Scan timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "Port scan request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "scan_ports",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:scan_ports:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Port scan result for the scan_ports tool",
+    "properties": {
+      "open_ports": {
+        "items": {
+          "properties": {
+            "port": {
+              "type": "integer"
+            },
+            "service": {
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "open",
+                "closed",
+                "filtered"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "stats": {
+        "properties": {
+          "duration_ms": {
+            "type": "integer"
+          },
+          "open_count": {
+            "type": "integer"
+          },
+          "total_scanned": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "title": "Port scan result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "scan_ports",
+  "version": "0.1.0"
+}

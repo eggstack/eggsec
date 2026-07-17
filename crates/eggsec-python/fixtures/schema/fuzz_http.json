@@ -1,0 +1,68 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:fuzz_http:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "HTTP fuzzing request for the fuzz_http tool",
+    "properties": {
+      "concurrency": {
+        "description": "Concurrent fuzzing workers",
+        "maximum": 100,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "scope": {
+        "description": "Fuzz scope",
+        "enum": [
+          "auto",
+          "paths",
+          "params",
+          "headers",
+          "body"
+        ],
+        "type": "string"
+      },
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "HTTP fuzzing request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "intrusive"
+  },
+  "operation_id": "fuzz_http",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:fuzz_http:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "HTTP fuzzing result for the fuzz_http tool",
+    "properties": {
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": "array"
+      },
+      "stats": {
+        "properties": {
+          "findings_count": {
+            "type": "integer"
+          },
+          "total_payloads": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "title": "HTTP fuzzing result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "intrusive"
+  },
+  "tool_id": "fuzz_http",
+  "version": "0.1.0"
+}

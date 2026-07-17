@@ -1,0 +1,47 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:run_consolidated_recon:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Consolidated recon request for the run_consolidated_recon tool",
+    "properties": {
+      "target": {
+        "description": "Target URL or domain",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "Consolidated recon request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "run_consolidated_recon",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:run_consolidated_recon:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Consolidated recon result for the run_consolidated_recon tool",
+    "properties": {
+      "modules": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "summary": {
+        "type": "object"
+      }
+    },
+    "title": "Consolidated recon result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "run_consolidated_recon",
+  "version": "0.1.0"
+}

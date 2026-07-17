@@ -1,0 +1,448 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run (skip actual publish)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  MATURIN_VERSION: "1.7"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  validate-tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract tag
+        id: extract
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG, version: $VERSION"
+
+      - name: Check clean working tree
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: Working tree is dirty. Refusing release from uncommitted changes."
+            git status --short
+            exit 1
+          fi
+          echo "Working tree is clean."
+
+      - name: Check tag exists on current commit
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          CURRENT=$(git rev-parse HEAD)
+          TAG_COMMIT=$(git rev-list -n1 "$TAG" 2>/dev/null || echo "")
+          if [ "$TAG_COMMIT" != "$CURRENT" ]; then
+            echo "ERROR: Tag $TAG does not point to current commit ($CURRENT)."
+            echo "Tag commit: $TAG_COMMIT"
+            exit 1
+          fi
+          echo "Tag $TAG points to current commit."
+
+      - name: Validate version in Cargo.toml
+        run: |
+          EXPECTED="${{ steps.extract.outputs.version }}"
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Cargo.toml version: $CARGO_VERSION"
+          echo "Expected version:   $EXPECTED"
+          if [ "$CARGO_VERSION" != "$EXPECTED" ]; then
+            echo "ERROR: Cargo.toml version ($CARGO_VERSION) does not match tag ($EXPECTED)."
+            exit 1
+          fi
+
+      - name: Validate version in pyproject.toml
+        run: |
+          EXPECTED="${{ steps.extract.outputs.version }}"
+          PY_VERSION=$(grep '^version' crates/eggsec-python/pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "pyproject.toml version: $PY_VERSION"
+          echo "Expected version:       $EXPECTED"
+          if [ "$PY_VERSION" != "$EXPECTED" ]; then
+            echo "ERROR: pyproject.toml version ($PY_VERSION) does not match tag ($EXPECTED)."
+            exit 1
+          fi
+
+      - name: Validate generated files are current
+        run: |
+          echo "Checking that generated files are up to date..."
+          # Verify wheel-profiles.json exists and is valid JSON
+          python -c "import json; json.load(open('crates/eggsec-python/wheel-profiles.json'))" || {
+            echo "ERROR: wheel-profiles.json is missing or invalid"
+            exit 1
+          }
+          echo "Generated file validation passed."
+
+  build-wheels:
+    name: Build wheels (${{ matrix.target }})
+    needs: validate-tag
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-14
+            manylinux: auto
+          - target: aarch64-apple-darwin
+            os: macos-14
+            manylinux: auto
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            manylinux: auto
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            manylinux: auto
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheel with maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: >-
+            --release
+            --out dist
+            --manifest-path crates/eggsec-python/Cargo.toml
+          manylinux: ${{ matrix.manylinux }}
+          rust-toolchain: "1.80"
+
+      - name: Compute wheel hashes
+        run: |
+          for whl in dist/*.whl; do
+            SHA256=$(sha256sum "$whl" | cut -d' ' -f1)
+            SIZE=$(stat -c%s "$whl" 2>/dev/null || stat -f%z "$whl")
+            echo "$whl: sha256=$SHA256 size=$SIZE"
+          done
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+
+  build-sdist:
+    name: Build source distribution
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path crates/eggsec-python/Cargo.toml
+          rust-toolchain: "1.80"
+
+      - name: Compute sdist hash
+        run: |
+          for tarball in dist/*.tar.gz; do
+            SHA256=$(sha256sum "$tarball" | cut -d' ' -f1)
+            SIZE=$(stat -c%s "$tarball")
+            echo "$tarball: sha256=$SHA256 size=$SIZE"
+          done
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  test-release-wheels:
+    name: Test release wheels
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download x86_64-linux wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-x86_64-unknown-linux-gnu
+          path: dist
+
+      - name: Install wheel in clean venv
+        run: |
+          python -m venv .venv-release-test
+          source .venv-release-test/bin/activate
+          WHEEL=$(ls dist/*.whl)
+          pip install "$WHEEL"
+          pip install pytest pytest-timeout
+
+      - name: Import and feature validation
+        run: |
+          source .venv-release-test/bin/activate
+          python -c "
+          import eggsec
+          info = eggsec.build_info()
+          assert info['version'] == '${{ needs.validate-tag.outputs.version }}', \
+              f'Version mismatch: {info[\"version\"]} != ${{ needs.validate-tag.outputs.version }}'
+          print(f'Version check passed: {info[\"version\"]}')
+          assert len(eggsec.features()) > 0, 'No features compiled'
+          print(f'Features: {len(eggsec.features())}')
+          print(f'Profile: {eggsec.wheel_profile()}')
+          "
+
+      - name: Run pytest suite
+        run: |
+          source .venv-release-test/bin/activate
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/test_import.py crates/eggsec-python/tests/test_smoke.py -v --timeout=30
+
+  generate-evidence:
+    name: Generate release evidence
+    needs: [validate-tag, test-release-wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Compute artifact manifest
+        run: |
+          python -c "
+          import json, hashlib, os, glob
+
+          artifacts = []
+          for whl_path in sorted(glob.glob('dist/**/dist/*.whl', recursive=True) + glob.glob('dist/**/*.whl', recursive=True)):
+              size = os.path.getsize(whl_path)
+              with open(whl_path, 'rb') as f:
+                  sha256 = hashlib.sha256(f.read()).hexdigest()
+              artifacts.append({
+                  'file': os.path.basename(whl_path),
+                  'size_bytes': size,
+                  'sha256': sha256,
+              })
+              print(f'  {os.path.basename(whl_path)}: {size} bytes, sha256={sha256[:16]}...')
+
+          for sdist_path in sorted(glob.glob('dist/**/*.tar.gz', recursive=True)):
+              size = os.path.getsize(sdist_path)
+              with open(sdist_path, 'rb') as f:
+                  sha256 = hashlib.sha256(f.read()).hexdigest()
+              artifacts.append({
+                  'file': os.path.basename(sdist_path),
+                  'size_bytes': size,
+                  'sha256': sha256,
+              })
+              print(f'  {os.path.basename(sdist_path)}: {size} bytes, sha256={sha256[:16]}...')
+
+          manifest = {
+              'version': '${{ needs.validate-tag.outputs.version }}',
+              'tag': '${{ needs.validate-tag.outputs.tag }}',
+              'artifacts': artifacts,
+              'total_artifacts': len(artifacts),
+          }
+          os.makedirs('target/release-evidence', exist_ok=True)
+          with open('target/release-evidence/artifact-manifest.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+          print(f'Manifest: {len(artifacts)} artifacts')
+          "
+
+      - name: Generate release notes
+        run: |
+          python -c "
+          import subprocess, json, os
+
+          tag = '${{ needs.validate-tag.outputs.tag }}'
+          version = '${{ needs.validate-tag.outputs.version }}'
+
+          # Get commits since last tag
+          try:
+              prev_tags = subprocess.run(
+                  ['git', 'tag', '--sort=-version:refname'],
+                  capture_output=True, text=True, check=True
+              ).stdout.strip().split('\n')
+              prev_tag = None
+              for t in prev_tags:
+                  if t != tag and t.startswith('v'):
+                      prev_tag = t
+                      break
+
+              if prev_tag:
+                  log_range = f'{prev_tag}..{tag}'
+                  log_cmd = ['git', 'log', '--oneline', log_range]
+              else:
+                  log_cmd = ['git', 'log', '--oneline', tag]
+
+              result = subprocess.run(log_cmd, capture_output=True, text=True, check=True)
+              commits = result.stdout.strip().split('\n') if result.stdout.strip() else []
+          except Exception:
+              commits = []
+
+          # Categorize commits
+          features = [c for c in commits if any(kw in c.lower() for kw in ['feat', 'add', 'implement', 'new'])]
+          fixes = [c for c in commits if any(kw in c.lower() for kw in ['fix', 'bug', 'patch'])]
+          docs = [c for c in commits if any(kw in c.lower() for kw in ['doc', 'readme', 'comment'])]
+          other = [c for c in commits if c not in features and c not in fixes and c not in docs]
+
+          notes = f'# Release {version}\n\n'
+          notes += f'**Tag**: {tag}\n\n'
+
+          if features:
+              notes += '## Features\n\n'
+              for c in features:
+                  notes += f'- {c}\n'
+              notes += '\n'
+
+          if fixes:
+              notes += '## Bug Fixes\n\n'
+              for c in fixes:
+                  notes += f'- {c}\n'
+              notes += '\n'
+
+          if docs:
+              notes += '## Documentation\n\n'
+              for c in docs:
+                  notes += f'- {c}\n'
+              notes += '\n'
+
+          if other:
+              notes += '## Other Changes\n\n'
+              for c in other:
+                  notes += f'- {c}\n'
+              notes += '\n'
+
+          notes += f'## Artifacts\n\n'
+          notes += f'See `artifact-manifest.json` for SHA-256 hashes of all published artifacts.\n'
+
+          with open('target/release-evidence/release-notes.md', 'w') as f:
+              f.write(notes)
+          print(f'Release notes: {len(commits)} commits')
+          "
+
+      - name: Upload evidence bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ needs.validate-tag.outputs.version }}
+          path: target/release-evidence/
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: [validate-tag, build-wheels, build-sdist, test-release-wheels]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten dist directory
+        run: |
+          mkdir -p publish-dist
+          find dist -name '*.whl' -exec cp {} publish-dist/ \;
+          find dist -name '*.tar.gz' -exec cp {} publish-dist/ \;
+          echo "Artifacts to publish:"
+          ls -la publish-dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: publish-dist/
+
+      - name: Install from TestPyPI and validate
+        run: |
+          python -m venv .venv-testpypi
+          source .venv-testpypi/bin/activate
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ eggsec==${{ needs.validate-tag.outputs.version }}
+          python -c "
+          import eggsec
+          assert eggsec.__version__ == '${{ needs.validate-tag.outputs.version }}'
+          print(f'TestPyPI install OK: eggsec {eggsec.__version__}')
+          assert len(eggsec.features()) > 0
+          print(f'TestPyPI validation passed')
+          "
+
+  publish-pypi:
+    name: Publish to PyPI (manual approval)
+    needs: [validate-tag, publish-testpypi, generate-evidence]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten dist directory
+        run: |
+          mkdir -p publish-dist
+          find dist -name '*.whl' -exec cp {} publish-dist/ \;
+          find dist -name '*.tar.gz' -exec cp {} publish-dist/ \;
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: publish-dist/
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate-tag.outputs.tag }}
+          name: "Release ${{ needs.validate-tag.outputs.version }}"
+          body_path: target/release-evidence/release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            target/release-evidence/artifact-manifest.json
+            target/release-evidence/release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

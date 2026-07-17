@@ -1,0 +1,55 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:validate_waf:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "WAF validation request for the validate_waf tool",
+    "properties": {
+      "scope": {
+        "description": "Validation scope",
+        "enum": [
+          "passive",
+          "active",
+          "bypass"
+        ],
+        "type": "string"
+      },
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "WAF validation request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "validate_waf",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:validate_waf:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "WAF validation result for the validate_waf tool",
+    "properties": {
+      "blocked": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "bypasses": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "title": "WAF validation result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "validate_waf",
+  "version": "0.1.0"
+}

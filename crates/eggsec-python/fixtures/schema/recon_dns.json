@@ -1,0 +1,71 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:recon_dns:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "DNS reconnaissance request for the recon_dns tool",
+    "properties": {
+      "target": {
+        "description": "Target domain",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "DNS reconnaissance request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "recon_dns",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:recon_dns:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "DNS recon result for the recon_dns tool",
+    "properties": {
+      "a": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "aaaa": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "mx": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "ns": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "soa": {
+        "type": "object"
+      },
+      "txt": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "title": "DNS recon result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "recon_dns",
+  "version": "0.1.0"
+}

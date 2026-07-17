@@ -1,0 +1,47 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:detect_waf:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "WAF detection request for the detect_waf tool",
+    "properties": {
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "WAF detection request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "detect_waf",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:detect_waf:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "WAF detection result for the detect_waf tool",
+    "properties": {
+      "confidence": {
+        "type": "string"
+      },
+      "detected": {
+        "type": "boolean"
+      },
+      "vendor": {
+        "type": "string"
+      }
+    },
+    "title": "WAF detection result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "detect_waf",
+  "version": "0.1.0"
+}

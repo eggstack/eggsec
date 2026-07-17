@@ -1,0 +1,47 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:graphql_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "GraphQL security test request for the graphql_test tool",
+    "properties": {
+      "target": {
+        "description": "GraphQL endpoint URL",
+        "type": "string"
+      },
+      "timeout_ms": {
+        "description": "Timeout in milliseconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "title": "GraphQL security test request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "graphql_test",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:graphql_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "GraphQL test result for the graphql_test tool",
+    "properties": {
+      "schema": {
+        "type": "object"
+      },
+      "vulnerabilities": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "title": "GraphQL test result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "graphql_test",
+  "version": "0.1.0"
+}

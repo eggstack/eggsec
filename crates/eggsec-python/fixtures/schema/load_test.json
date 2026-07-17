@@ -1,0 +1,55 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:load_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Load test request for the load_test tool",
+    "properties": {
+      "concurrency": {
+        "description": "Concurrent workers",
+        "minimum": 1,
+        "type": "integer"
+      },
+      "target": {
+        "description": "Target URL",
+        "type": "string"
+      },
+      "total_requests": {
+        "description": "Total number of requests to send",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "target",
+      "total_requests",
+      "concurrency"
+    ],
+    "title": "Load test request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "load_test"
+  },
+  "operation_id": "load_test",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:load_test:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Load test result for the load_test tool",
+    "properties": {
+      "errors": {
+        "type": "integer"
+      },
+      "latency": {
+        "type": "object"
+      },
+      "throughput": {
+        "type": "number"
+      }
+    },
+    "title": "Load test result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "load_test"
+  },
+  "tool_id": "load_test",
+  "version": "0.1.0"
+}

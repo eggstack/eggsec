@@ -1,0 +1,54 @@
+{
+  "input_schema": {
+    "$id": "urn:eggsec:tool:generate_sbom:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "SBOM generation request for the generate_sbom tool",
+    "properties": {
+      "format": {
+        "description": "Output format",
+        "enum": [
+          "spdx",
+          "cyclonedx"
+        ],
+        "type": "string"
+      },
+      "path": {
+        "description": "Project root path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "title": "SBOM generation request",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "operation_id": "generate_sbom",
+  "output_schema": {
+    "$id": "urn:eggsec:tool:generate_sbom:input",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "SBOM generation result for the generate_sbom tool",
+    "properties": {
+      "components": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "vulnerabilities": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "title": "SBOM generation result",
+    "type": "object",
+    "x-eggsec-maturity": "stable",
+    "x-eggsec-risk": "safe_active"
+  },
+  "tool_id": "generate_sbom",
+  "version": "0.1.0"
+}
