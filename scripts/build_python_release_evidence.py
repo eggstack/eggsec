@@ -578,9 +578,12 @@ def build_summary(commit: str, out_dir: Path, file_paths: list[Path]) -> Path:
         else:
             checksums[rel] = {"sha256": None, "size_bytes": 0}
 
-    # Determine if all required files are present with valid checksums
+    # Determine if all required files are present with valid checksums.
+    # evidence-summary.json is the manifest itself — it cannot reference its
+    # own checksum, so exclude it from this check.
     required_present = all(
-        name in checksums and checksums[name]["sha256"] is not None
+        (name in checksums and checksums[name]["sha256"] is not None)
+        or name == "evidence-summary.json"
         for name in REQUIRED_EVIDENCE
     )
 

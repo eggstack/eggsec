@@ -97,6 +97,8 @@ make test-feature-matrix   # feature + metadata validation
 make check-architecture-ci # full architecture guard CI reproduction
 make check-no-default      # no-default-features workspace build
 make build                 # release build
+make test-python-phase-f   # Phase F Python gates (compat + budgets + redaction)
+make build-python-evidence # generate commit-bound evidence bundle
 ```
 
 ### Python bindings
@@ -120,6 +122,12 @@ python scripts/validate_python_profiles.py   # validates profile manifest
 python scripts/run_python_profile.py --profile <name>   # runs a specific profile
 python scripts/build_python_release_evidence.py --commit <sha>   # builds evidence bundle
 python scripts/python_skip_budget.py --profile <name>   # enforces skip budgets
+python scripts/check_python_compatibility.py             # semantic compatibility checker
+python scripts/generate_python_compatibility_baseline.py # regenerate baseline from installed package
+
+# Phase F tests
+pytest crates/eggsec-python/tests/test_resource_budgets.py -v     # resource budgets
+pytest crates/eggsec-python/tests/test_redaction_comprehensive.py -v  # redaction audit
 
 # Rust-side tests
 cargo test -p eggsec-python

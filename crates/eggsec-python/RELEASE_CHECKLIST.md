@@ -32,13 +32,13 @@ read as a claim that every importable domain is stable.
 
 ## Phase F gates
 
-- [ ] Compatibility baseline generated and blocking.
-- [ ] Semantic compatibility checker passes against baseline.
-- [ ] No definitely-breaking changes without allowlist entry.
-- [ ] Resource budgets defined and tested.
-- [ ] Security/redaction suite passes across all boundaries.
-- [ ] Domain graduation review complete with evidence.
-- [ ] Evidence bundle generated for exact commit.
+- [x] Compatibility baseline generated and blocking.
+- [x] Semantic compatibility checker passes against baseline.
+- [x] No definitely-breaking changes without allowlist entry.
+- [x] Resource budgets defined and tested.
+- [x] Security/redaction suite passes across all boundaries.
+- [x] Domain graduation review complete with evidence.
+- [x] Evidence bundle generated for exact commit.
 - [ ] TestPyPI installation rehearsal.
 
 ## Publication gates

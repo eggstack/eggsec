@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-architecture-ci check-feature-profiles clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-architecture-ci check-feature-profiles test-python-phase-f test-python-compatibility test-python-resource-budgets test-python-redaction build-python-evidence clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -85,6 +85,27 @@ check-feature-profiles:
 clean:
 	cargo clean
 
+# ── Phase F: Python release closure targets ──────────────────────────────
+
+# Run semantic compatibility checker against baseline
+test-python-compatibility:
+	python scripts/check_python_compatibility.py
+
+# Run resource budget tests (FD, thread, memory, socket, temp-dir, repo scale)
+test-python-resource-budgets:
+	rtk python -m pytest crates/eggsec-python/tests/test_resource_budgets.py -v --tb=short
+
+# Run comprehensive redaction test suite
+test-python-redaction:
+	rtk python -m pytest crates/eggsec-python/tests/test_redaction_comprehensive.py -v --tb=short
+
+# Run all Phase F Python gates (compatibility + resource budgets + redaction)
+test-python-phase-f: test-python-compatibility test-python-resource-budgets test-python-redaction
+
+# Generate commit-bound evidence bundle for release validation
+build-python-evidence:
+	python scripts/build_python_release_evidence.py --commit $$(git rev-parse HEAD)
+
 # Help
 help:
 	@echo "Test targets:"
@@ -103,4 +124,9 @@ help:
 	@echo "  make check-no-default   - Validate no-default-features build"
 	@echo "  make check-architecture-ci  - Full architecture guard CI reproduction"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
+	@echo "  make test-python-phase-f - All Phase F Python gates (compat + budgets + redaction)"
+	@echo "  make test-python-compatibility - Semantic compatibility checker vs baseline"
+	@echo "  make test-python-resource-budgets - Resource budget tests (FD, thread, memory)"
+	@echo "  make test-python-redaction - Comprehensive redaction test suite"
+	@echo "  make build-python-evidence - Generate commit-bound evidence bundle"
 	@echo "  make clean           - Clean artifacts"
