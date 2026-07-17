@@ -222,6 +222,7 @@ from .functions import (
     has_feature as has_feature,
     feature_matrix as feature_matrix,
     build_info as build_info,
+    wheel_profile as wheel_profile,
     api_surface_version as api_surface_version,
     scan_ports as scan_ports,
     async_scan_ports as async_scan_ports,

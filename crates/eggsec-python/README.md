@@ -1,11 +1,11 @@
 # eggsec
 
-Python bindings for the [Eggsec](https://github.com/sugarwookie/eggsec) security assessment engine.
+Python bindings for the [Eggsec](https://github.com/eggstack/eggsec) security assessment engine.
 
 ## Status
 
-**Scoped pre-1.0 release candidate** — Release 5 Phase B completed
-2026-07-16. Not yet published to PyPI. The stable-core compatibility boundary
+**Scoped pre-1.0 release candidate** — Release 5 Phase E completed
+2026-07-17. Not yet published to PyPI. The stable-core compatibility boundary
 is the twenty-two operations listed in
 [`docs/python/domain-maturity.md`](../../docs/python/domain-maturity.md).
 See `RELEASE_CHECKLIST.md` for publication gates and

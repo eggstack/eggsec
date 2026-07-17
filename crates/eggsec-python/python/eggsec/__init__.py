@@ -404,6 +404,7 @@ features = _core.features
 has_feature = _core.has_feature
 feature_matrix = _core.feature_matrix
 build_info = _core.build_info
+wheel_profile = _core.wheel_profile
 domain_maturity = _core.domain_maturity
 deprecated_warning = _core.deprecated_warning
 

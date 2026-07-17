@@ -1,0 +1,709 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Machine-readable wheel profile manifest for eggsec-python",
+  "source_files": {
+    "cargo_features": "crates/eggsec-python/Cargo.toml [features]",
+    "python_optional_deps": "crates/eggsec-python/pyproject.toml [project.optional-dependencies]"
+  },
+  "profiles": {
+    "core": {
+      "description": "Default wheel — no optional features, pure Rust, no system deps",
+      "cargo_features": [],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 15,
+      "build_command": "maturin build --release",
+      "python_optional_dep": null
+    },
+    "full-no-system": {
+      "description": "All features that can be built without system library dependencies",
+      "cargo_features": [
+        "websocket",
+        "git-secrets",
+        "sbom",
+        "container"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core",
+        "net",
+        "sessions",
+        "storage"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "scan_git_secrets",
+        "generate_sbom",
+        "scan_docker_image",
+        "scan_kubernetes"
+      ],
+      "unavailable_operations": [
+        "db_probe",
+        "nse_run",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 25,
+      "build_command": "maturin build --release --features full-no-system",
+      "python_optional_dep": "full-no-system"
+    },
+    "nse": {
+      "description": "NSE (Nmap Scripting Engine) script execution",
+      "cargo_features": [
+        "nse"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "nse_run"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [
+        "libssl-dev"
+      ],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 20,
+      "build_command": "maturin build --release --features nse",
+      "python_optional_dep": "nse"
+    },
+    "db-pentest": {
+      "description": "Database penetration testing (Postgres, MySQL, MSSQL, MongoDB, Redis)",
+      "cargo_features": [
+        "db-pentest"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "db_probe"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 18,
+      "build_command": "maturin build --release --features db-pentest",
+      "python_optional_dep": "db-pentest"
+    },
+    "web-proxy": {
+      "description": "Web proxy / MITM interception for traffic inspection",
+      "cargo_features": [
+        "web-proxy"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 18,
+      "build_command": "maturin build --release --features web-proxy",
+      "python_optional_dep": "web-proxy"
+    },
+    "mobile": {
+      "description": "Mobile app static analysis (APK/IPA)",
+      "cargo_features": [
+        "mobile"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "stable",
+      "max_wheel_size_mb": 20,
+      "build_command": "maturin build --release --features mobile",
+      "python_optional_dep": "mobile"
+    },
+    "packet-inspection": {
+      "description": "Packet capture and inspection (requires libpcap)",
+      "cargo_features": [
+        "packet-inspection"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "NSE script execution (requires nse)",
+        "Headless browser testing (requires headless-browser)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [
+        "libpcap-dev"
+      ],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "experimental",
+      "max_wheel_size_mb": 18,
+      "build_command": "maturin build --release --features packet-inspection",
+      "python_optional_dep": "packet-inspection"
+    },
+    "headless-browser": {
+      "description": "Headless browser security testing (requires Chromium at runtime)",
+      "cargo_features": [
+        "headless-browser"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test"
+      ],
+      "unavailable_operations": [
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_descriptors": [
+        "WebSocket testing (requires websocket)",
+        "Git secret detection (requires git-secrets)",
+        "SBOM generation (requires sbom)",
+        "Container scanning (requires container)",
+        "Database pentesting (requires db-pentest)",
+        "Web proxy MITM (requires web-proxy)",
+        "Mobile app analysis (requires mobile)",
+        "Packet capture (requires packet-inspection)",
+        "NSE script execution (requires nse)",
+        "Stress testing (requires stress-testing)",
+        "Wireless recon (requires wireless)",
+        "Evasion detection (requires evasion)",
+        "Post-exploitation (requires postex)",
+        "C2 simulation (requires c2)"
+      ],
+      "system_libs": [
+        "chromium"
+      ],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "experimental",
+      "max_wheel_size_mb": 20,
+      "build_command": "maturin build --release --features headless-browser",
+      "python_optional_dep": "headless-browser"
+    },
+    "full": {
+      "description": "All non-default features — not conservative, not all builds cleanly on all platforms",
+      "cargo_features": [
+        "websocket",
+        "git-secrets",
+        "sbom",
+        "container",
+        "db-pentest",
+        "web-proxy",
+        "mobile",
+        "packet-inspection",
+        "nse",
+        "headless-browser",
+        "stress-testing",
+        "wireless",
+        "evasion",
+        "postex",
+        "c2",
+        "ai-integration",
+        "advanced-hunting",
+        "compliance"
+      ],
+      "python_exports": [
+        "engine",
+        "scope",
+        "config",
+        "events",
+        "findings",
+        "reporting",
+        "pipeline",
+        "tool_core",
+        "net",
+        "sessions",
+        "storage"
+      ],
+      "available_operations": [
+        "scan_ports",
+        "scan_endpoints",
+        "fingerprint_services",
+        "recon_dns",
+        "inspect_tls",
+        "detect_technology",
+        "detect_waf",
+        "validate_waf",
+        "fuzz_http",
+        "load_test",
+        "run_consolidated_recon",
+        "graphql_test",
+        "oauth_test",
+        "auth_test",
+        "scan_git_secrets",
+        "generate_sbom",
+        "db_probe",
+        "nse_run",
+        "scan_docker_image",
+        "scan_kubernetes",
+        "analyze_apk",
+        "analyze_ipa"
+      ],
+      "unavailable_operations": [],
+      "unavailable_descriptors": [],
+      "system_libs": [
+        "libssl-dev",
+        "libpcap-dev",
+        "chromium"
+      ],
+      "platforms": {
+        "linux": ["x86_64", "aarch64"],
+        "macos": ["x86_64", "aarch64"]
+      },
+      "maturity": "mixed",
+      "maturity_breakdown": {
+        "stable": [
+          "websocket",
+          "git-secrets",
+          "sbom",
+          "container",
+          "db-pentest",
+          "web-proxy",
+          "mobile",
+          "nse"
+        ],
+        "experimental": [
+          "packet-inspection",
+          "headless-browser",
+          "stress-testing",
+          "wireless",
+          "evasion",
+          "postex",
+          "c2"
+        ],
+        "marker": [
+          "ai-integration",
+          "advanced-hunting",
+          "compliance"
+        ]
+      },
+      "max_wheel_size_mb": 50,
+      "build_command": "maturin build --release --features websocket,git-secrets,sbom,container,db-pentest,web-proxy,mobile,packet-inspection,nse,headless-browser,stress-testing,wireless,evasion,postex,c2,ai-integration,advanced-hunting,compliance",
+      "python_optional_dep": "full-no-system"
+    }
+  },
+  "profile_hierarchy": {
+    "description": "Profiles are additive — each higher profile is a superset of core",
+    "order": [
+      "core",
+      "full-no-system",
+      "nse",
+      "db-pentest",
+      "web-proxy",
+      "mobile",
+      "packet-inspection",
+      "headless-browser",
+      "full"
+    ]
+  },
+  "always_compiled_operations": {
+    "description": "Operations compiled into every wheel regardless of features",
+    "operations": [
+      "scan_ports",
+      "scan_endpoints",
+      "fingerprint_services",
+      "recon_dns",
+      "inspect_tls",
+      "detect_technology",
+      "detect_waf",
+      "validate_waf",
+      "fuzz_http",
+      "load_test",
+      "run_consolidated_recon",
+      "graphql_test",
+      "oauth_test",
+      "auth_test"
+    ]
+  },
+  "feature_to_operations": {
+    "websocket": [],
+    "git-secrets": ["scan_git_secrets"],
+    "sbom": ["generate_sbom"],
+    "container": ["scan_docker_image", "scan_kubernetes"],
+    "db-pentest": ["db_probe"],
+    "web-proxy": [],
+    "mobile": ["analyze_apk", "analyze_ipa"],
+    "packet-inspection": [],
+    "nse": ["nse_run"],
+    "headless-browser": [],
+    "stress-testing": [],
+    "wireless": [],
+    "evasion": [],
+    "postex": [],
+    "c2": [],
+    "ai-integration": [],
+    "advanced-hunting": [],
+    "compliance": []
+  }
+}

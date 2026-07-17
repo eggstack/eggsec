@@ -75,7 +75,9 @@ call:
 
 ## Wheel profiles
 
-Two wheel profiles are available:
+Three canonical wheel profiles are defined. The machine-readable manifest is
+at `crates/eggsec-python/wheel-profiles.json`. Use
+`eggsec.wheel_profile()` to detect the installed profile at runtime.
 
 ### Core/default wheel
 
@@ -109,6 +111,24 @@ done
 Not all features can be combined in a single wheel. Features such as
 `packet-inspection`, `nse`, and `wireless` require system libraries or tools
 that may not be available on all platforms.
+
+### Runtime profile detection
+
+```python
+import eggsec
+
+# Detect the installed wheel profile
+profile = eggsec.wheel_profile()
+print(profile)  # "core", "full-no-system", or "custom"
+
+# Enhanced build info with diagnostics
+info = eggsec.build_info()
+print(info["wheel_profile"])      # compiled profile
+print(info["compiled_features"])  # list of enabled features
+print(info["python_version"])     # Python interpreter version
+print(info["schema_version"])     # schema version
+print(info["abi_version"])        # native ABI version
+```
 
 ## Feature matrix
 

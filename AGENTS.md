@@ -45,7 +45,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A+B completed) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A+B+C+D+E completed) |
 
 ## Build & Test Commands
 
@@ -229,6 +229,8 @@ Release 5 Phase B completes registry and dispatch convergence. A single authorit
 Release 5 Phase C reorganizes the Python package into intentional submodules by capability ownership. The top-level `eggsec` package retains stable core symbols (engine, 22 operations, config, events). Provisional types move to `eggsec.net`, `eggsec.sessions`, `eggsec.storage`, `eggsec.reporting`, `eggsec.daemon`. Experimental types are isolated under `eggsec.experimental`. Py-suffixed names are deprecated but retained for backward compatibility. Feature availability introspection via `eggsec._feature_guard`. Golden contract test suite: 1076+ parametrized tests across 72+ methods plus 27 Phase C namespace governance tests.
 
 - **Release 5 Phase D**: Python ergonomics — context managers on all managed resources, strict `from_str` with `ValueError` on unknown enums, `from_dict`/`from_json` round-trip on DTOs, `__eq__`/`__hash__` on all enums, complete `.pyi` stubs, resource lifecycle tests.
+
+- **Release 5 Phase E**: Packaging, documentation, and executable examples — corrected package metadata (repository URLs, author, classifiers), machine-readable wheel profile manifest (`wheel-profiles.json`), enhanced `build_info()` with wheel profile detection, compiled features, Python version, and ABI/schema/protocol versions; new `eggsec.wheel_profile()` function; workflow-oriented Python docs landing page; 6 deterministic executable examples (port scan loopback, engine capability discovery, policy preflight, cancellation/timeout, finding repository, tool descriptor/schema).
 
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|

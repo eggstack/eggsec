@@ -10,14 +10,15 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Eggsec Contributors"},
+    {name = "David Bowman"},
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
+    "Operating System :: POSIX",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -47,10 +48,10 @@ headless-browser = []  # requires Chromium at runtime
 full-no-system = ["websocket", "git-secrets", "sbom", "container"]
 
 [project.urls]
-Homepage = "https://github.com/sugarwookie/eggsec"
-Documentation = "https://github.com/sugarwookie/eggsec/tree/main/docs/python"
-Repository = "https://github.com/sugarwookie/eggsec"
-Issues = "https://github.com/sugarwookie/eggsec/issues"
+Homepage = "https://github.com/eggstack/eggsec"
+Documentation = "https://github.com/eggstack/eggsec/tree/main/docs/python"
+Repository = "https://github.com/eggstack/eggsec"
+Issues = "https://github.com/eggstack/eggsec/issues"
 
 # Wheel profiles:
 #   core:              maturin build --release (no optional features)

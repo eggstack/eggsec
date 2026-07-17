@@ -99,6 +99,7 @@ pytest crates/eggsec-python/tests/        # Python-side tests
 - New code should use `Engine`/`AsyncEngine` + typed request DTOs. `Client`/`AsyncClient` retained for backward compatibility.
 - Milestone C modules (consolidated_recon, graphql, oauth, auth_assess) are always-available. `browser_assess` and `hunt` are feature-gated.
 - Milestone D adds: `nse` script metadata/sandbox, `packet_inspection` filter/flow/traceroute, `proxy` intercept types, `mobile` device/dynamic, `daemon` capabilities/tasks, `db_pentest` drivers/credentials. All feature-gated.
+- Phase E adds: corrected package metadata, `wheel-profiles.json` manifest, enhanced `build_info()` with `wheel_profile()`, workflow-oriented docs landing page, 6 deterministic executable examples.
 - Assessment module pattern: `*_test(config)` sync + `async_*_test(config)` async. Config types have `Default` impls. Result types are engine-produced only (no Python constructors).
 - Session-oriented types (PcapWriter, DaemonClient, ProxyManager) implement `__enter__`/`__exit__` context managers with idempotent `close()` and `is_closed` property.
 

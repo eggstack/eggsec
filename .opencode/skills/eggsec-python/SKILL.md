@@ -1869,3 +1869,52 @@ restored = OperationError.from_json(j)  # == err in value
 
 ### Testing
 Run Phase D tests: `pytest crates/eggsec-python/tests/test_phase_d_ergonomics.py`
+
+## Phase E: Packaging, Documentation, and Executable Examples
+
+### Package Metadata Corrections
+- Repository URLs aligned to workspace (`eggstack/eggsec`)
+- Author metadata corrected to match workspace
+- Development status updated to `4 - Beta`
+- `Operating System :: POSIX` classifier added
+
+### Wheel Profiles
+Machine-readable manifest at `crates/eggsec-python/wheel-profiles.json`. Nine profiles:
+- **core** — default wheel, no optional features, 14 stable operations
+- **full-no-system** — websocket + git-secrets + sbom + container
+- **nse** — NSE script execution (requires libssl-dev)
+- **db-pentest** — database pentesting
+- **web-proxy** — web proxy MITM
+- **mobile** — mobile app static analysis
+- **packet-inspection** — packet capture (requires libpcap-dev)
+- **headless-browser** — browser security testing (requires Chromium)
+- **full** — all non-default features
+
+### Enhanced Diagnostics
+`build_info()` now returns: `schema_version`, `protocol_version`, `abi_version`, `python_version`, `compiled_features` (list), `wheel_profile`.
+
+New standalone function: `eggsec.wheel_profile()` → `"core"` | `"full-no-system"` | `"custom"`.
+
+### Workflow-Oriented Documentation
+Python docs landing page (`docs/python/index.md`) reorganized into 13 workflow sections:
+1. Installation & Wheel Profiles
+2. Capability & Maturity Discovery
+3. Stable Operations (Engine & AsyncEngine)
+4. Scope, Policy, Confirmation & Audit
+5. Events, Callbacks, Cancellation & Timeouts
+6. Pipelines & Checkpoints
+7. Low-Level Networking & Protocol Probes
+8. Tools & JSON Schemas
+9. Repositories, Artifacts & Reporting
+10. Daemon Execution
+11. Provisional Managed Sessions
+12. Experimental Domains
+13. API Reference & Compatibility
+
+### Executable Examples (6 new, all deterministic/local)
+- `port_scan_loopback.py` — sync+async port scan with in-process TCP server
+- `engine_capability_discovery.py` — feature/version/maturity introspection
+- `policy_preflight.py` — enforcement context and policy gate walkthrough
+- `cancellation_timeout.py` — cancellation token and timeout handling
+- `finding_repository.py` — finding storage, query, and baseline comparison
+- `tool_descriptor_schema.py` — tool registry and JSON Schema generation

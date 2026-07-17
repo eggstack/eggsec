@@ -754,6 +754,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(features::has_feature, m)?)?;
     m.add_function(wrap_pyfunction!(features::feature_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(version::build_info, m)?)?;
+    m.add_function(wrap_pyfunction!(version::wheel_profile, m)?)?;
     m.add_function(wrap_pyfunction!(version::api_surface_version, m)?)?;
     m.add_function(wrap_pyfunction!(deprecated::deprecated_warning, m)?)?;
     m.add_function(wrap_pyfunction!(scanner::scan_ports, m)?)?;
