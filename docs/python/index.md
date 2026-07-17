@@ -207,5 +207,62 @@ Complete class and function reference, semantic versioning policy, and
 migration guidance across releases.
 
 - [API Reference](api-reference.md) -- complete class/function reference
+- [API Reference (generated)](api-reference-generated.md) -- auto-generated from registry and stubs
 - [Versioning](versioning.md) -- semver policy, schema management, stability guarantees
 - [Migration Guide](MIGRATION_GUIDE.md) -- upgrade instructions across releases
+
+### 14. Compatibility Enforcement & Release Hardening (Phase F)
+
+Automated compatibility enforcement, resource budget controls,
+comprehensive redaction coverage, and domain graduation review.
+
+- [Phase F Overview](PHASE_F.md) -- Phase F entry point and summary
+- [Compatibility Policy](COMPATIBILITY_POLICY.md) -- compatibility violation taxonomy and enforcement model
+- [Graduation Review](GRADUATION_AUDIT.md) -- domain graduation checklist and review template
+- [Stability Classifications](STABILITY_CLASSIFICATIONS.md) -- per-symbol stability mapping with maturity-aware severity rules
+
+## Executable Examples
+
+All examples are in [`docs/python/examples/`](examples/) and are tested in CI
+against the installed wheel. Examples that require specific features are
+skipped when those features are unavailable.
+
+| Example | Topic | Features |
+|---|---|---|
+| `port_scan_loopback.py` | Sync + async port scan with loopback server | default |
+| `engine_capability_discovery.py` | `features()`, `build_info()`, `wheel_profile()`, `domain_maturity()` | default |
+| `policy_preflight.py` | Preflight policy gate, `OperationRegistry` | default |
+| `cancellation_timeout.py` | `CancellationToken`, pipeline cancel | default |
+| `finding_repository.py` | `SqliteFindingRepository` in-memory | default |
+| `tool_descriptor_schema.py` | `ToolRegistry`, `ToolDescriptor`, `SchemaGenerator` | default |
+| `dns_tls_http_probes.py` | DNS/TLS/HTTP one-shot probes | default |
+| `custom_protocol_workflow.py` | TCP/UDP managed sessions, banner probe | default |
+| `websocket_session.py` | WebSocket session lifecycle + assessment | `websocket` |
+| `event_streaming_progress.py` | `EventConsumer`, `ProgressSink`, `FindingSink` | default |
+| `feature_unavailable_handling.py` | Feature detection, `FeatureUnavailableError`, experimental namespace | default |
+| `consolidated_recon_pipeline.py` | Multi-module recon pipeline | default |
+| `graphql_assessment.py` | GraphQL security assessment | default |
+| `pipeline_fan_out.py` | Pipeline parallel groups, dependencies, retry | default |
+| `checkpoint_resume.py` | `CheckpointStore`, file-backed resume | default |
+| `sarif_html_report_generation.py` | `StreamingReporter` (SARIF/HTML/JSON) | default |
+| `baseline_comparison.py` | `BaselineComparator`, diff between assessments | default |
+| `content_addressed_artifact_store.py` | `ContentAddressedArtifactStore` put/get/verify | default |
+| `sqlite_finding_repository.py` | SQLite finding + assessment repositories | default |
+| `sbom_generation.py` | SBOM generation (CycloneDX/SPDX) | `sbom` |
+| `git_secret_scan.py` | Git secret detection | `git-secrets` |
+| `database_probe.py` | Database security probe | `db-pentest` |
+| `local_vs_daemon_execution.py` | Engine local vs daemon | `daemon-client` |
+| `daemon_reconnect_replay.py` | Daemon reconnect + replay | `daemon-client` |
+| `daemon_remote_cancellation.py` | Remote cancellation | `daemon-client` |
+| `browser_network_console.py` | Browser session network/console | `headless-browser` |
+| `browser_route_storage_audit.py` | Browser DOM/cookies/storage | `headless-browser` |
+| `mobile_static_to_dynamic.py` | Static → dynamic analysis | `mobile` |
+| `mobile_dynamic_session.py` | Mobile session lifecycle | `mobile-dynamic` |
+
+Run examples:
+```bash
+EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 python3 docs/python/examples/port_scan_loopback.py
+EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 python3 docs/python/examples/custom_protocol_workflow.py
+python3 docs/python/examples/engine_capability_discovery.py
+python3 docs/python/examples/dns_tls_http_probes.py
+```

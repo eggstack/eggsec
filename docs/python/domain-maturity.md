@@ -358,3 +358,81 @@ except FeatureUnavailableError as e:
     print(f"Maturity: {e.maturity}")
     print(f"Install: {e.install_hint}")
 ```
+
+## Release 5 Phase F: Graduation Review
+
+Phase F Workstream F9 performs an evidence-backed graduation review of every
+domain against the five-item checklist: canonical operation ID & DTOs,
+sync/async dispatch through the policy gate, structured error/event/cancellation
+& serialization tests, deterministic fixtures, and documentation/stubs coverage.
+
+Full review: `docs/python/GRADUATION_REVIEW.md`
+
+### Graduation Decisions
+
+| Domain | Decision | Rationale |
+|--------|----------|-----------|
+| `stable-core` | RETAIN STABLE | All 10 operations fully verified: 1977+ tests, sync/async dispatch, scope denial, cancellation, serialization, deterministic fixtures |
+| `git-secrets` | RETAIN STABLE | Full dispatch coverage, deterministic git repo fixture, scope denial, cancellation, serialization |
+| `sbom` | RETAIN STABLE | Full dispatch coverage, workspace fixture, scope denial, cancellation, serialization |
+| `consolidated-recon` | RETAIN STABLE | Engine dispatch verified, async callable, scope denial, cancellation, HTTP fixture |
+| `graphql` | RETAIN STABLE | Engine dispatch verified, async callable, scope denial |
+| `oauth` | RETAIN STABLE | Engine dispatch verified, async callable, scope denial |
+| `authentication` | RETAIN STABLE | Engine dispatch verified, async callable, scope denial |
+| `database` | RETAIN STABLE | Full dispatch coverage, driver registry (5 drivers), dry-run mode, scope denial, cancellation |
+| `nse` | RETAIN STABLE | 1646 lines of tests, full dispatch coverage, runtime/limits/cancellation/library verification |
+| `container` | RETAIN STABLE | Full dispatch coverage for K8s and Docker, K8s manifest fixture, scope denial, cancellation |
+| `mobile-static` | RETAIN STABLE | Full dispatch coverage for APK and IPA, synthetic fixtures, scope denial, cancellation |
+| `browser` | KEEP PROVISIONAL | 1375 lines session type tests; gaps: no canonical op ID, no engine dispatch, no cancellation tests, 123 tests skipped in CI |
+| `hunt` | KEEP PROVISIONAL | Type surface exists; gaps: no canonical op ID, no engine dispatch, no fixtures, no validation profile |
+| `daemon` | KEEP PROVISIONAL | 965-line contract tests, 64+ repository tests; gap: transport parity (reconnect, replay) open |
+| `proxy` | KEEP PROVISIONAL | 1006 lines type coverage; gaps: MITM semantics, empty exchanges limitation, no engine dispatch |
+| `packet-inspection` | KEEP PROVISIONAL | Parser types well-tested; gaps: live capture requires root, no engine dispatch |
+| `mobile-dynamic` | KEEP PROVISIONAL | Session type tests; gap: 104 tests skipped (emulator required), no CI coverage |
+| `wireless` | KEEP EXPERIMENTAL | Type surface only; no operational tests, requires root + wireless hardware |
+| `evasion` | KEEP EXPERIMENTAL | Type surface only, MITRE ATT&CK mapped; no operational tests |
+| `postex` | KEEP EXPERIMENTAL | Type surface only; no operational tests, high-risk domain |
+| `c2` | KEEP EXPERIMENTAL | Type surface only; no operational tests, depends on postex+evasion |
+| `distributed` | KEEP EXPERIMENTAL | Type surface only; no cluster testing infrastructure |
+| `ai` | KEEP EXPERIMENTAL | Type surface only; requires external LLM APIs |
+
+### Graduation Checklist Evidence Summary
+
+The graduation checklist is fully satisfied by the 11 stable domains:
+
+1. **Canonical operation IDs & DTOs**: All 22 operations have canonical
+   snake_case IDs in `ToolRegistry` with deterministic `ToolDescriptor`
+   entries. Verified by `test_golden_contract.py` (1076 parametrized tests).
+
+2. **Sync/async dispatch**: All 22 operations dispatch through
+   `Engine.run()` (sync) and `AsyncEngine.run()` (async) via the common
+   `EnforcementContext` policy gate. Feature-gated operations tested by
+   `test_feature_enabled_profiles.py`; always-available operations tested
+   by `test_stable_core_fixtures.py`.
+
+3. **Structured errors/events/cancellation/serialization**:
+   - Errors: scope denial (`error.kind == "scope_denial"`) verified for all
+     operations; structured `OperationError` DTOs with `to_dict()`/`to_json()`.
+   - Events: pipeline `StageLifecycleEvent` with monotonic sequence IDs
+     (`test_events_cancellation.py`).
+   - Cancellation: `CancellationToken` lifecycle, engine-level cancellation,
+     async detachment, resource leak prevention, latency < 10ms
+     (`test_cancellation_contract.py`).
+   - Serialization: request/result round-trip via `to_dict()`/`to_json()`
+     for all typed DTOs (`test_serialization.py`).
+
+4. **Deterministic fixtures**: `StableCoreFixtures` (loopback TCP/TLS/HTTP),
+   synthetic APK/IPA ZIPs, K8s deployment manifests, git repos with known
+   secrets, workspace Cargo.toml for SBOM. All fixture-based tests are
+   hermetic and CI-repeatable.
+
+5. **Documentation/stubs**: All 22 operations exported at `eggsec` top-level
+   with `__all__`; `.pyi` stubs generated from Rust bindings; wheel-profile
+   validation via `profiles.json` (20 profiles, skip budget enforcement).
+
+### No Domains Promoted or Demoted
+
+No domain was promoted from provisional/experimental to stable, or demoted from
+stable, during this review. The 11 stable domains retain stable status; the
+6 provisional domains and 6 experimental domains retain their current
+classifications with documented rationale for each gap.

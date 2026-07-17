@@ -19,5 +19,13 @@
   "phase_b_request_normalization": 0.002,
   "phase_b_no_op_denied_dispatch": 0.010,
   "phase_b_dispatch_overhead_sync": 0.015,
-  "phase_b_dispatch_overhead_async": 0.015
+  "phase_b_dispatch_overhead_async": 0.015,
+
+  "fd_growth_per_session_cycle": 10,
+  "thread_growth_per_session_cycle": 5,
+  "memory_growth_per_dto_batch": 52428800,
+  "callback_queue_growth": 100,
+  "socket_cleanup_after_close": 0,
+  "subprocess_cleanup_after_close": 0,
+  "temp_dir_cleanup": 0
 }

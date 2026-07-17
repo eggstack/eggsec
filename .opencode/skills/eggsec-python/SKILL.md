@@ -1911,10 +1911,129 @@ Python docs landing page (`docs/python/index.md`) reorganized into 13 workflow s
 12. Experimental Domains
 13. API Reference & Compatibility
 
-### Executable Examples (6 new, all deterministic/local)
+### Executable Examples (29 total, all deterministic/local)
 - `port_scan_loopback.py` — sync+async port scan with in-process TCP server
 - `engine_capability_discovery.py` — feature/version/maturity introspection
 - `policy_preflight.py` — enforcement context and policy gate walkthrough
 - `cancellation_timeout.py` — cancellation token and timeout handling
 - `finding_repository.py` — finding storage, query, and baseline comparison
 - `tool_descriptor_schema.py` — tool registry and JSON Schema generation
+- `dns_tls_http_probes.py` — DNS/TLS/HTTP one-shot probe functions
+- `custom_protocol_workflow.py` — TCP/UDP managed sessions, banner probe
+- `websocket_session.py` — WebSocket session lifecycle and security assessment
+- `event_streaming_progress.py` — EventConsumer, ProgressSink, FindingSink, AuditSink
+- `feature_unavailable_handling.py` — Feature detection, FeatureUnavailableError, experimental namespace
+- `consolidated_recon_pipeline.py` — multi-module recon pipeline
+- `graphql_assessment.py` — GraphQL security assessment
+- `pipeline_fan_out.py` — pipeline parallel groups, dependencies, retry
+- `checkpoint_resume.py` — CheckpointStore, file-backed resume
+- `sarif_html_report_generation.py` — StreamingReporter (SARIF/HTML/JSON)
+- `baseline_comparison.py` — BaselineComparator, diff between assessments
+- `content_addressed_artifact_store.py` — ContentAddressedArtifactStore
+- `sqlite_finding_repository.py` — SQLite finding + assessment repositories
+- `sbom_generation.py` — SBOM generation (feature: `sbom`)
+- `git_secret_scan.py` — Git secret detection (feature: `git-secrets`)
+- `database_probe.py` — Database security probe (feature: `db-pentest`)
+- `local_vs_daemon_execution.py` — Engine local vs daemon (feature: `daemon-client`)
+- `daemon_reconnect_replay.py` — Daemon reconnect + replay (feature: `daemon-client`)
+- `daemon_remote_cancellation.py` — Remote cancellation (feature: `daemon-client`)
+- `browser_network_console.py` — Browser session network/console (feature: `headless-browser`)
+- `browser_route_storage_audit.py` — Browser DOM/cookies/storage (feature: `headless-browser`)
+- `mobile_static_to_dynamic.py` — Static → dynamic analysis (feature: `mobile`)
+- `mobile_dynamic_session.py` — Mobile session lifecycle (feature: `mobile-dynamic`)
+
+### Build Matrix (E3)
+CI tests wheels across Python 3.9–3.13 on Linux x86_64 and macOS x86_64.
+Wheel metadata (SHA-256, size, tags) recorded per target.
+
+### Source Distribution (E4)
+sdist built and validated in CI via `maturin sdist`. Requires Rust toolchain
+to build from source; CI documents failure if toolchain missing.
+
+### Documentation Testing (E7)
+`scripts/test_documentation_examples.py` — pytest harness that discovers and
+executes all examples, validates output, checks for resource leaks, and verifies
+import resolution. Run in CI against installed wheels.
+
+### API Reference (E8)
+`scripts/generate_api_reference.py` — auto-generates API reference from
+OperationRegistry, ToolRegistry, and build_info(). Output:
+`docs/python/api-reference-generated.md`.
+
+### Release Automation (E10)
+`.github/workflows/release.yml` — tag-driven release workflow:
+- Tag/version validation (Cargo.toml, pyproject.toml, git tag alignment)
+- Clean working tree check
+- Wheel builds (4-target matrix)
+- sdist build
+- Release wheel testing
+- Evidence bundle (artifact manifest with SHA-256 hashes)
+- Release notes generation (commit categorization)
+- TestPyPI → PyPI publication
+- GitHub release creation with notes and evidence
+
+## Release 5 Phase F — Compatibility Enforcement and Release Hardening
+
+Phase F strengthens release readiness through automated compatibility
+enforcement, resource budget controls, comprehensive redaction coverage,
+and domain graduation review.
+
+### Compatibility Baseline and Checker
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/build_compatibility_baseline.py` | Generates a compatibility baseline manifest from the current build (API surface, type signatures, schema versions) |
+| `scripts/compatibility_check.py` | Compares current build against a baseline manifest and reports semantic compatibility violations |
+
+Baseline manifests are stored in `validation/compatibility/` and compared
+against each build to detect accidental API breaks. The checker detects:
+removed types, changed function signatures, stability regressions, schema
+version drift, and missing audit coverage.
+
+### Resource Budget Enforcement
+
+**Test file**: `tests/test_resource_budgets.py`
+
+Enforces compile-time and runtime resource budgets:
+- Maximum module count
+- Maximum exported symbol count
+- Maximum dependency tree depth
+- Maximum wheel size
+
+### Comprehensive Redaction Testing
+
+**Test file**: `tests/test_redaction.py`
+
+Verifies that `SensitiveString` values are redacted in all paths:
+`to_dict()`, `to_json()`, `__repr__`, `__str__`, checkpoint persistence,
+event envelopes, and log output.
+
+### Domain Graduation Review
+
+**Document**: `docs/python/GRADUATION_REVIEW.md`
+
+Structured review template for evaluating provisional domains against
+stable-core graduation criteria. Covers: canonical registry entry,
+mandatory policy gate, typed payload, structured error, audit decision,
+sync/async contract, fixture determinism, schema coverage, and transport
+parity.
+
+### Evidence Bundle Enhancements
+
+The release evidence bundle now includes:
+- Compatibility baseline diff (added/removed/changed symbols)
+- Resource budget results (pass/fail per budget)
+- Redaction test results (coverage percentage)
+- Domain graduation status (per-domain checklist progress)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/build_compatibility_baseline.py` | Generate compatibility baseline manifests |
+| `scripts/compatibility_check.py` | Semantic compatibility checker |
+| `tests/test_resource_budgets.py` | Resource budget enforcement tests |
+| `tests/test_redaction.py` | Redaction coverage tests |
+| `docs/python/COMPATIBILITY_POLICY.md` | Compatibility policy and violation taxonomy |
+| `docs/python/GRADUATION_REVIEW.md` | Domain graduation review template |
+| `docs/python/STABILITY_CLASSIFICATIONS.md` | Updated with maturity-aware severity rules |

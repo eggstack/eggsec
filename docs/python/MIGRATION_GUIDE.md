@@ -541,3 +541,272 @@ result = pipeline.run(engine)
 ```
 
 See [PIPELINE_SCHEMA.md](PIPELINE_SCHEMA.md) for the full pipeline reference.
+
+## Phase F: Compatibility Policy, Tool/Schema API, and Maturity Governance
+
+Phase F formalizes the compatibility policy, adds a semantic compatibility
+checker, defines resource budgets, and tightens domain graduation evidence
+requirements. It also completes the tool-core schema integration and
+namespace governance started in earlier phases.
+
+### 1. Tool/schema API (Phase A completion)
+
+Release 5 Phase A exposed `eggsec-tool-core` types to Python. Phase F
+confirms these as the authoritative tool abstraction for all 22 stable
+operations.
+
+```python
+from eggsec import ToolRegistry, ToolRequest, SchemaGenerator
+
+# Look up a tool descriptor
+descriptor = ToolRegistry.find("scan-ports")
+print(descriptor.label)          # "Port Scanner"
+print(descriptor.risk)           # "safe_active"
+
+# Generate JSON Schema for request/response
+request_schema = SchemaGenerator.request_schema("scan-ports")
+response_schema = SchemaGenerator.response_schema("scan-ports")
+
+# Invoke via generic dispatch
+request = ToolRequest(tool_id="scan-ports", target="10.0.0.1")
+result = engine.invoke_tool(request)
+```
+
+### 2. Registry convergence and behavioral invariants (Phase B completion)
+
+Phase B established a single authoritative `OperationExecutorDescriptor`
+registry. Phase F enforces the following behavioral invariants via CI:
+
+- One descriptor per operation ID (no duplicates)
+- Unique IDs across all descriptors (no collisions)
+- Schema identity: `ToolRegistry.find(op_id)` and
+  `OperationRegistry.find(op_id)` return equivalent metadata
+- Generic dispatch (`Engine.run(request)`) and typed dispatch
+  (`Engine.run_port_scan(request)`) produce identical audit decisions
+
+### 3. Canonical namespace structure (Phase C)
+
+Phase C reorganized the Python package into intentional submodules. Phase F
+confirms the canonical import paths and deprecates Py-suffixed names.
+
+```python
+# Canonical (recommended) — provisional types
+from eggsec.net import Target, TcpSession, HttpClient
+from eggsec.sessions import BrowserSession, MobileSession
+from eggsec.storage import FindingRepository, AssessmentRepository
+from eggsec.reporting import StreamingReporter, ReportDiff
+from eggsec.daemon import DaemonClient
+
+# Canonical — experimental types
+from eggsec.experimental import wireless_scan, evasion_scan
+
+# Deprecated — still works, emits DeprecationWarning
+from eggsec import TargetPy, TcpSessionPy, HttpClientPy
+```
+
+### 4. Compatibility aliases and deprecations
+
+Py-suffixed names (`TargetPy`, `TcpSessionPy`, etc.) are deprecated. They
+emit `DeprecationWarning` when accessed and will be removed at the declared
+removal floor. The removal floor is stated in each deprecation warning
+message.
+
+To suppress deprecation warnings during migration:
+
+```python
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="eggsec")
+
+# Now deprecated names work without warnings
+from eggsec import TargetPy
+```
+
+### 5. Wheel profile and installation changes
+
+Phase F introduces machine-readable wheel profiles for release gating.
+Each profile declares:
+
+- Required cargo features
+- Expected test counts and skip budgets
+- Platform constraints
+- Blocking status (whether the profile must pass before release)
+
+```python
+import eggsec
+
+info = eggsec.build_info()
+print(info["wheel_profile"])     # e.g., "default-wheel"
+print(info["compiled_features"]) # list of compiled features
+print(info["python_version"])    # e.g., "3.11"
+```
+
+```bash
+# Validate wheel profile manifest
+python scripts/validate_python_profiles.py
+
+# Run a specific profile
+python scripts/run_python_profile.py --profile default-wheel
+```
+
+### 6. Asyncio cancellation contract
+
+Phase F formalizes the cancellation contract for async operations:
+
+- `CancellationToken.cancel()` sets a cooperative cancellation flag
+- The engine checks the token at scheduling points (between operations in a
+  pipeline, at explicit yield points within long-running operations)
+- When cancellation is detected, the operation returns a partial result with
+  `ExecutionStatus.Cancelled` and any findings discovered before the cancel
+  point are preserved
+- Cancellation is not instantaneous: in-flight network operations will
+  complete their current timeout before checking the token
+
+```python
+from eggsec import CancellationToken, AsyncEngine, Scope, PortScanRequest
+
+token = CancellationToken()
+engine = AsyncEngine(Scope.allow_hosts(["10.0.0.1"]))
+
+# Cancel after 5 seconds
+import asyncio
+async def cancel_after(delay):
+    await asyncio.sleep(delay)
+    token.cancel("Timeout exceeded")
+
+async def scan():
+    asyncio.create_task(cancel_after(5))
+    result = await engine.run_port_scan(
+        PortScanRequest("10.0.0.1", ports="1-65535"),
+        cancel_token=token,
+    )
+    # result.status may be Completed or Cancelled
+    # findings discovered before cancel are preserved
+    return result
+```
+
+### 7. Typing improvements (Phase D)
+
+Phase D completed `.pyi` stub coverage and added `__hash__` to all enums.
+Phase F confirms:
+
+- All public enums support `__hash__` and `__eq__`
+- All frozen pyclasses support `__hash__` and `__eq__`
+- `from_dict()` / `from_json()` round-trip on core DTOs
+- Context managers on all managed resources (sinks, callbacks, sessions)
+- Strict `from_str` with `ValueError` on unknown enum strings
+
+```python
+from eggsec import Severity, Finding, ExecutionStatus
+
+# Enum hashing and equality
+assert Severity.HIGH == Severity.HIGH
+assert hash(Severity.HIGH) == hash(Severity.HIGH)
+assert Severity.HIGH != Severity.CRITICAL
+
+# DTO round-trip
+finding_dict = finding.to_dict()
+finding2 = Finding.from_dict(finding_dict)
+assert finding == finding2
+
+# Context manager for callbacks
+from eggsec import AuditSink
+with AuditSink() as sink:
+    # sink is automatically closed on exit
+    pass
+```
+
+### 8. Maturity changes
+
+Phase F does not promote any new domains to stable. The graduation
+checklist remains the sole mechanism for stability promotion. The
+compatibility checker applies maturity-aware severity rules:
+
+| Maturity | Breaking change without allowlist |
+|----------|----------------------------------|
+| stable | **Blocking** — release cannot proceed |
+| provisional | **Warning** — logged, not blocking |
+| experimental | **Informational** — logged only |
+
+### 9. Known unsupported platforms or subsystem prerequisites
+
+| Platform / Subsystem | Status | Notes |
+|---------------------|--------|-------|
+| Windows x86_64 | Not built | CI evidence pending |
+| macOS x86_64 | Supported | From source only |
+| Linux aarch64 | Supported | From source only |
+| Mobile dynamic analysis | Requires ADB + emulator | Not available in CI |
+| Headless browser | Requires browser backend | Not available in CI |
+| Packet live capture | Requires root / CAP_NET_RAW | Manual profile only |
+| Stress testing | Requires root | Manual profile only |
+| Wireless scanning | Requires root + wireless adapter | Manual profile only |
+| Daemon client | Requires running daemon | Integration profile only |
+
+### 10. Performance and size changes
+
+Phase F introduces resource budgets for release gating:
+
+- **Memory**: stable-core operations must not exceed 512 MiB peak RSS in
+  the test harness
+- **Binary size**: the default wheel must not exceed 15 MiB on x86_64
+  Linux
+- **Test count**: the default wheel must have at least 2800 passing tests
+  (excluding skips/xfails)
+- **Skip budget**: the default wheel must not exceed 120 skips (split by
+  reason category)
+
+### 11. Migration examples
+
+#### From flat imports to organized submodules
+
+```python
+# Before (flat namespace, Phase B era)
+from eggsec import TargetPy, TcpSessionPy, HttpClientPy
+from eggsec import WirelessNetwork, EvasionTechnique
+
+# After (organized submodules, Phase C+)
+from eggsec.net import Target, TcpSession, HttpClient
+from eggsec.experimental import WirelessNetwork, EvasionTechnique
+```
+
+#### From `api_surface()`-based integrations to tool-core
+
+```python
+# Before (introspection-based, Phase G era)
+surface = eggsec.api_surface()
+if "scan_ports" in surface and surface["scan_ports"]["stability"] == "stable":
+    result = eggsec.scan_ports(target, ports, scope)
+
+# After (tool-core registry, Phase A+)
+from eggsec import ToolRegistry, ToolRequest
+descriptor = ToolRegistry.find("scan-ports")
+if descriptor:
+    request = ToolRequest(tool_id="scan-ports", target=target)
+    result = engine.invoke_tool(request)
+
+# Or use the engine typed methods directly
+result = engine.run_port_scan(PortScanRequest(target, ports="22,80,443"))
+```
+
+#### From direct functions to engine dispatch
+
+```python
+# Before
+result = eggsec.scan_ports("10.0.0.1", [22, 80, 443], scope)
+
+# After (full control)
+from eggsec import Engine, Scope, PortScanRequest
+engine = Engine(Scope.allow_hosts(["10.0.0.1"]))
+result = engine.run_port_scan(PortScanRequest("10.0.0.1", ports="22,80,443"))
+```
+
+#### From deprecated warning utilities to stdlib
+
+```python
+# Before
+from eggsec import deprecated_warning, DeprecatedWarning
+deprecated_warning("Use new_api() instead")
+
+# After (stdlib)
+import warnings
+warnings.warn("Use new_api() instead", DeprecationWarning, stacklevel=2)
+```

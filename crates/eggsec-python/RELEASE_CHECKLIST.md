@@ -30,6 +30,17 @@ read as a claim that every importable domain is stable.
 - [x] Stable-core fixture smoke test passes from the installed wheel on Linux x86_64.
 - [ ] Linux, macOS arm64, and the declared experimental Windows profile have current CI evidence.
 
+## Phase F gates
+
+- [ ] Compatibility baseline generated and blocking.
+- [ ] Semantic compatibility checker passes against baseline.
+- [ ] No definitely-breaking changes without allowlist entry.
+- [ ] Resource budgets defined and tested.
+- [ ] Security/redaction suite passes across all boundaries.
+- [ ] Domain graduation review complete with evidence.
+- [ ] Evidence bundle generated for exact commit.
+- [ ] TestPyPI installation rehearsal.
+
 ## Publication gates
 
 - [ ] TestPyPI dry run and clean-environment installation succeed (manual CI gate).

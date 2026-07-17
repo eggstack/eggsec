@@ -296,6 +296,73 @@ from eggsec import TargetPy
 - Complete `.pyi` stub coverage with `__hash__` on all enums
 - Resource lifecycle and ergonomics test suite
 
+### Release 5 Phase F — Compatibility Enforcement and Release Hardening
+
+Phase F strengthens release readiness through automated compatibility
+enforcement, resource budget controls, comprehensive redaction coverage,
+and domain graduation review.
+
+**Compatibility policy** (`docs/python/COMPATIBILITY_POLICY.md`)
+- Stable APIs: semantic compatibility required, deprecation window before
+  removal
+- Provisional APIs: best-effort compatibility, migration notes for material
+  changes
+- Experimental APIs: no compatibility promise, changes documented
+- Deprecated APIs: retained until declared removal floor
+- Internal APIs: excluded from public inventories
+
+**Breaking change policy**
+- Breaking changes to stable symbols require an allowlist entry with
+  rationale
+- Migration documentation required in `MIGRATION_GUIDE.md`
+- Versioning decision and removal timeline required
+- Emergency exception for security fixes (allowlist + migration still
+  required)
+
+**Enhanced compatibility baseline**
+- `scripts/build_compatibility_baseline.py` — generates a compatibility
+  baseline manifest recording the full stable-core API surface, type
+  signatures, and schema versions for a given commit.
+- Baseline manifests are stored in `validation/compatibility/` and compared
+  against the current build to detect accidental API breaks.
+
+**Semantic compatibility checker**
+- `scripts/compatibility_check.py` — compares the current build against
+  a baseline manifest and reports semantic compatibility violations: removed
+  types, changed signatures, stability regressions, and schema drift.
+- Integrated into the release evidence bundle to gate publication.
+
+**Resource budget enforcement**
+- `tests/test_resource_budgets.py` — enforces compile-time and runtime
+  resource budgets: maximum module count, maximum exported symbol count,
+  maximum dependency tree depth, and maximum wheel size.
+- Budgets prevent unbounded growth of the stable-core surface.
+
+**Comprehensive redaction testing**
+- `tests/test_redaction.py` — verifies that `SensitiveString` values are
+  redacted in all repr, serialization, event envelope, checkpoint, and
+  log output paths. Covers `to_dict()`, `to_json()`, `__repr__`,
+  `__str__`, and checkpoint persistence.
+
+**Domain graduation review**
+- `docs/python/GRADUATION_REVIEW.md` — structured review template for
+  evaluating provisional domains against stable-core graduation criteria.
+- Covers: canonical registry entry, mandatory policy gate, typed payload,
+  structured error, audit decision, sync/async contract, fixture
+  determinism, schema coverage, and transport parity.
+
+**Evidence bundle enhancements**
+- Evidence bundles now include compatibility baseline diff, resource budget
+  results, redaction test results, and domain graduation status.
+- `scripts/build_python_release_evidence.py` aggregates all Phase F
+  evidence into the release artifact.
+
+**New documentation**
+- `docs/python/COMPATIBILITY_POLICY.md` — compatibility policy and
+  violation taxonomy
+- `docs/python/STABILITY_CLASSIFICATIONS.md` — updated with
+  maturity-aware severity rules
+
 ### Additional API Surface (default wheel)
 
 The default wheel also includes the following API surface beyond the core
@@ -957,6 +1024,24 @@ python scripts/validate_python_profiles.py --strict  # warnings are errors
 
 Validates required fields, known cargo features, non-empty test selectors,
 blocking constraints, and privilege/schedule compatibility.
+
+### Semantic Compatibility Checking (Phase F)
+
+```bash
+# Generate a compatibility baseline from the current build
+python scripts/build_compatibility_baseline.py --commit <sha> \
+    --output validation/compatibility/baseline.json
+
+# Check current build against a baseline
+python scripts/compatibility_check.py \
+    --baseline validation/compatibility/baseline.json \
+    --strict  # non-zero exit on any violation
+```
+
+The compatibility checker detects: removed types, changed function
+signatures, stability regressions (stable → provisional), schema version
+drift, and missing audit coverage. Violations are categorized by severity
+(`breaking`, `warning`, `info`) and reported as structured JSON.
 
 ## Typing
 
