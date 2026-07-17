@@ -10,6 +10,7 @@ class OAuthVulnerability:
     GrantTypeMixing: str
     PKCEBypass: str
     TokenLeakage: str
+    def __hash__(self) -> int: ...
 
 class OAuthEndpointKind:
     """OAuth endpoint types."""
@@ -20,6 +21,7 @@ class OAuthEndpointKind:
     UserInfo: str
     Jwks: str
     Revoke: str
+    def __hash__(self) -> int: ...
 
 class OAuthEndpoint:
     """An OAuth/OIDC endpoint."""

@@ -2,10 +2,24 @@
 from typing import Any
 
 class DistributedTaskTypePy:
-    pass
+    PortScan: "DistributedTaskTypePy"
+    ServiceFingerprint: "DistributedTaskTypePy"
+    EndpointDiscovery: "DistributedTaskTypePy"
+    Fuzz: "DistributedTaskTypePy"
+    WafTest: "DistributedTaskTypePy"
+    LoadTest: "DistributedTaskTypePy"
+    Recon: "DistributedTaskTypePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class WorkerStatusPy:
-    pass
+    Idle: "WorkerStatusPy"
+    Busy: "WorkerStatusPy"
+    Disconnected: "WorkerStatusPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class WorkerRegistrationPy:
     @property

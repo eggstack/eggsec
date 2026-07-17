@@ -2,22 +2,61 @@
 from typing import Any
 
 class BeaconProtocolPy:
-    pass
+    Http: "BeaconProtocolPy"
+    Https: "BeaconProtocolPy"
+    Dns: "BeaconProtocolPy"
+    Tcp: "BeaconProtocolPy"
+    Custom: "BeaconProtocolPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class TaskTypePy:
-    pass
+    Recon: "TaskTypePy"
+    Execute: "TaskTypePy"
+    Exfil: "TaskTypePy"
+    Persist: "TaskTypePy"
+    Lateral: "TaskTypePy"
+    Evade: "TaskTypePy"
+    SelfDestruct: "TaskTypePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class TaskStatusPy:
-    pass
+    Completed: "TaskStatusPy"
+    Failed: "TaskStatusPy"
+    Simulated: "TaskStatusPy"
+    Denied: "TaskStatusPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class OpsecCategoryPy:
-    pass
+    ParentSpoofing: "OpsecCategoryPy"
+    Timestomping: "OpsecCategoryPy"
+    LogTampering: "OpsecCategoryPy"
+    ProcessMasquerading: "OpsecCategoryPy"
+    BurnMechanism: "OpsecCategoryPy"
+    DecoyActivity: "OpsecCategoryPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class OpsecSeverityPy:
-    pass
+    Info: "OpsecSeverityPy"
+    Low: "OpsecSeverityPy"
+    Medium: "OpsecSeverityPy"
+    High: "OpsecSeverityPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class CampaignPhasePy:
-    pass
+    id: str
+    name: str
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
 
 class C2CampaignPy:
     @property

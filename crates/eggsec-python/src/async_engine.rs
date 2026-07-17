@@ -1889,7 +1889,7 @@ impl AsyncEngine {
         ecosystem: String,
         format: String,
     ) -> PyResult<runtime_async::PyFuture> {
-        let sbom_format = crate::sbom::SbomFormatPy::from_str_py(&format)
+        let sbom_format = crate::sbom::SbomFormatPy::from_str(&format)
             .unwrap_or(crate::sbom::SbomFormatPy::Cyclonedx);
         let engine_format = sbom_format.to_engine();
         runtime_async::spawn_async(async move {

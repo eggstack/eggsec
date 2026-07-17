@@ -228,6 +228,8 @@ Release 5 Phase B completes registry and dispatch convergence. A single authorit
 
 Release 5 Phase C reorganizes the Python package into intentional submodules by capability ownership. The top-level `eggsec` package retains stable core symbols (engine, 22 operations, config, events). Provisional types move to `eggsec.net`, `eggsec.sessions`, `eggsec.storage`, `eggsec.reporting`, `eggsec.daemon`. Experimental types are isolated under `eggsec.experimental`. Py-suffixed names are deprecated but retained for backward compatibility. Feature availability introspection via `eggsec._feature_guard`. Golden contract test suite: 1076+ parametrized tests across 72+ methods plus 27 Phase C namespace governance tests.
 
+- **Release 5 Phase D**: Python ergonomics — context managers on all managed resources, strict `from_str` with `ValueError` on unknown enums, `from_dict`/`from_json` round-trip on DTOs, `__eq__`/`__hash__` on all enums, complete `.pyi` stubs, resource lifecycle tests.
+
 | Python Feature | Engine Feature | Notes |
 |----------------|----------------|-------|
 | `websocket` | `websocket` | WebSocket security testing |
@@ -260,6 +262,9 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **Visual Regression**: `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()`.
 - **AI Cache Keys**: Always use `CacheKeyBuilder` to avoid collisions.
 - **Themes**: 50 packaged via LZMA. Run `python3 scripts/package_themes.py` after modifying `themes/*.toml`.
+- **Enum from_str**: All public enums raise `ValueError` on unknown strings. Never silently default.
+- **Context managers**: All sink/callback classes support `with` statements. Use them for automatic cleanup.
+- **DTO round-trip**: `OperationError`, `ExecutionStats`, `Artifact` support `from_dict()`/`from_json()` for serialization round-trip.
 
 ## Lessons Learned
 

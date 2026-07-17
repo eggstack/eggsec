@@ -12,6 +12,7 @@ class AuthTestType:
     SessionFixation: str
     TimingAttack: str
     PasswordPolicy: str
+    def __hash__(self) -> int: ...
 
 class AuthFinding:
     """A finding from authentication testing."""

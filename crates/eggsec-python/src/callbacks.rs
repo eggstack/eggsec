@@ -68,6 +68,25 @@ impl AuditSink {
     fn __repr__(&self) -> String {
         format!("AuditSink(closed={})", self.closed)
     }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
+    }
 }
 
 /// Finding sink — receives findings as they are discovered.
@@ -126,6 +145,25 @@ impl FindingSink {
 
     fn __repr__(&self) -> String {
         format!("FindingSink(closed={})", self.closed)
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
     }
 }
 
@@ -186,6 +224,25 @@ impl ArtifactSink {
     fn __repr__(&self) -> String {
         format!("ArtifactSink(closed={})", self.closed)
     }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
+    }
 }
 
 /// Progress sink — receives progress updates.
@@ -244,6 +301,25 @@ impl ProgressSink {
 
     fn __repr__(&self) -> String {
         format!("ProgressSink(closed={})", self.closed)
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
     }
 }
 
@@ -304,5 +380,24 @@ impl EventConsumer {
 
     fn __repr__(&self) -> String {
         format!("EventConsumer(closed={})", self.closed)
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
     }
 }

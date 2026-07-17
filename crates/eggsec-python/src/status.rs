@@ -173,6 +173,19 @@ impl OperationError {
     fn __str__(&self) -> String {
         self.message.clone()
     }
+
+    #[staticmethod]
+    fn from_dict(d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let json = crate::ergonomics::pyobj_to_json(d.py(), d)?;
+        serde_json::from_value(json)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn from_json(s: &str) -> PyResult<Self> {
+        serde_json::from_str(s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
 }
 
 /// Tagged payload enum carrying domain-specific results through the engine boundary.
@@ -371,6 +384,37 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Completed())
     }
 
+    fn __str__(&self) -> String {
+        self.name().to_string()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        match s {
+            "Pending" => Ok(Self::Pending()),
+            "Running" => Ok(Self::Running()),
+            "Completed" => Ok(Self::Completed()),
+            "Failed" => Ok(Self::Failed { error: String::new() }),
+            "Cancelled" => Ok(Self::Cancelled { reason: None }),
+            "Timeout" => Ok(Self::Timeout { elapsed_ms: 0 }),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                format!("Unknown execution status: {}", s)
+            )),
+        }
+    }
+
     fn __repr__(&self) -> String {
         match self {
             ExecutionStatus::Pending() => "ExecutionStatus.Pending".to_string(),
@@ -449,6 +493,19 @@ impl ExecutionStats {
             self.duration_ms, self.items_processed, self.items_failed, self.bytes_transferred
         )
     }
+
+    #[staticmethod]
+    fn from_dict(d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let json = crate::ergonomics::pyobj_to_json(d.py(), d)?;
+        serde_json::from_value(json)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn from_json(s: &str) -> PyResult<Self> {
+        serde_json::from_str(s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
 }
 
 /// An artifact produced by an operation.
@@ -511,6 +568,19 @@ impl Artifact {
             Some(p) => format!("{} ({})", self.name, p),
             None => self.name.clone(),
         }
+    }
+
+    #[staticmethod]
+    fn from_dict(d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let json = crate::ergonomics::pyobj_to_json(d.py(), d)?;
+        serde_json::from_value(json)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn from_json(s: &str) -> PyResult<Self> {
+        serde_json::from_str(s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 

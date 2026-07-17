@@ -2520,3 +2520,64 @@ except eggsec.EggsecError as e:
 | `ProbeEvent` | Protocol probe response received |
 | `WebSocketMessageEvent` | WebSocket message sent/received |
 | `CaptureStatsEvent` | Capture statistics update |
+
+---
+
+## Phase D: Python Ergonomics
+
+Release 5 Phase D adds ergonomic improvements across the Python binding surface.
+
+### Context Managers
+
+All callback/sink classes support `with` statements for automatic cleanup:
+
+```python
+from eggsec import AuditSink, FindingSink, ArtifactSink
+
+with AuditSink(lambda e: print(e)) as sink:
+    # sink is active
+    pass
+# sink is automatically closed
+```
+
+Affected classes: `AuditSink`, `FindingSink`, `ArtifactSink`, `ProgressSink`, `EventConsumer`, `AsyncCallback`, `CallbackScheduler`
+
+### Enum Ergonomics
+
+All public enums raise `ValueError` on unknown strings (never silently default):
+
+```python
+from eggsec import Severity
+
+# Valid
+s = Severity.from_str("high")  # Severity.HIGH
+
+# Invalid — raises ValueError
+s = Severity.from_str("invalid")
+# ValueError: unknown severity: 'invalid'
+```
+
+All `eq_int` enums have `__hash__` for use in sets and dicts.
+
+### Serialization Round-Trip
+
+`OperationError`, `ExecutionStats`, and `Artifact` support full `from_dict()`/`from_json()` round-trip:
+
+```python
+from eggsec import OperationError
+
+err = OperationError(kind="network", code="timeout", message="timed out")
+d = err.to_dict()
+restored = OperationError.from_dict(d)
+assert restored == err  # value equality
+
+j = err.to_json()
+restored = OperationError.from_json(j)
+assert restored == err  # value equality
+```
+
+### Testing
+
+```bash
+pytest crates/eggsec-python/tests/test_phase_d_ergonomics.py
+```

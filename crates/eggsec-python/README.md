@@ -289,6 +289,13 @@ from eggsec.net import Target, TcpSession, HttpClient
 from eggsec import TargetPy
 ```
 
+### Release 5 Phase D — Python Ergonomics
+- Context manager support for all managed resources (sinks, callbacks)
+- Strict enum parsing with `ValueError` on unknown strings
+- `from_dict()`/`from_json()` round-trip on core DTOs
+- Complete `.pyi` stub coverage with `__hash__` on all enums
+- Resource lifecycle and ergonomics test suite
+
 ### Additional API Surface (default wheel)
 
 The default wheel also includes the following API surface beyond the core

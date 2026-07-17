@@ -4,27 +4,29 @@ from typing import List, Optional
 
 class XssSource:
     """DOM XSS source types."""
-    URLParameter: str
-    HashFragment: str
-    PostMessage: str
+    LocationHash: str
+    LocationSearch: str
+    DocumentCookie: str
+    DocumentReferrer: str
     LocalStorage: str
     SessionStorage: str
-    Cookie: str
-    DocumentReferrer: str
-    WindowName: str
+    WebSocket: str
+    PostMessage: str
+    def __hash__(self) -> int: ...
 
 class XssSink:
     """DOM XSS sink types."""
-    Eval: str
     InnerHTML: str
+    OuterHTML: str
+    JQueryHtml: str
     DocumentWrite: str
-    Location: str
-    WindowOpen: str
-    setTimeout: str
-    setInterval: str
-    Function: str
-    Attribute: str
-    Style: str
+    Eval: str
+    SetTimeout: str
+    SetInterval: str
+    FunctionConstructor: str
+    ScriptSrc: str
+    OnEventHandler: str
+    def __hash__(self) -> int: ...
 
 class DomXssFinding:
     """A DOM XSS finding."""
@@ -40,10 +42,11 @@ class DomXssFinding:
 
 class DiscoveryMethod:
     """SPA route discovery methods."""
-    HistoryAPI: str
-    Fragment: str
-    AJAXIntercept: str
-    StaticAnalysis: str
+    Crawl: str
+    XhrInterception: str
+    FetchInterception: str
+    RouteParsing: str
+    def __hash__(self) -> int: ...
 
 class SpaRoute:
     """A discovered SPA route."""
@@ -54,12 +57,13 @@ class SpaRoute:
 
 class ClientIssueType:
     """Client-side issue types."""
-    MissingCSP: str
-    InsecureDependency: str
-    SensitiveDataExposure: str
-    MissingSubresourceIntegrity: str
-    InsecureWebStorage: str
-    CORSMisconfiguration: str
+    LocalStorageSensitive: str
+    CorsMisconfiguration: str
+    CSPSourceMap: str
+    DebugMode: str
+    SourceMapsExposed: str
+    CORSWildcard: str
+    def __hash__(self) -> int: ...
 
 class ClientIssue:
     """A client-side security issue."""

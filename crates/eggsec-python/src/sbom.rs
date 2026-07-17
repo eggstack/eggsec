@@ -24,6 +24,18 @@ impl SbomFormatPy {
     fn __str__(&self) -> String {
         self.as_str().to_string()
     }
+
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        match s.to_lowercase().as_str() {
+            "cyclonedx" | "cyclone-dx" | "cyclone_dx" => Ok(SbomFormatPy::CycloneDx),
+            "spdx" => Ok(SbomFormatPy::Spdx),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid SBOM format: '{}'. Must be one of: cyclonedx, spdx",
+                s
+            ))),
+        }
+    }
 }
 
 impl SbomFormatPy {
@@ -48,16 +60,6 @@ impl SbomFormatPy {
         }
     }
 
-    pub fn from_str_py(s: &str) -> PyResult<Self> {
-        match s.to_lowercase().as_str() {
-            "cyclonedx" | "cyclone-dx" | "cyclone_dx" => Ok(SbomFormatPy::CycloneDx),
-            "spdx" => Ok(SbomFormatPy::Spdx),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Invalid SBOM format: '{}'. Must be one of: cyclonedx, spdx",
-                s
-            ))),
-        }
-    }
 }
 
 /// A single component in the SBOM.
@@ -287,7 +289,7 @@ impl SbomReportPy {
 #[pyfunction]
 #[pyo3(signature = (project_path, *, ecosystem="cargo", format="cyclonedx"))]
 pub fn generate_sbom(project_path: &str, ecosystem: &str, format: &str) -> PyResult<SbomReportPy> {
-    let sbom_format = SbomFormatPy::from_str_py(format)?;
+    let sbom_format = SbomFormatPy::from_str(format)?;
     let project_path_owned = project_path.to_string();
     let ecosystem_owned = ecosystem.to_string();
 
@@ -337,7 +339,7 @@ pub fn async_generate_sbom(
     ecosystem: &str,
     format: &str,
 ) -> PyResult<crate::runtime_async::PyFuture> {
-    let sbom_format = SbomFormatPy::from_str_py(format)?;
+    let sbom_format = SbomFormatPy::from_str(format)?;
     let project_path_owned = project_path.to_string();
     let ecosystem_owned = ecosystem.to_string();
 

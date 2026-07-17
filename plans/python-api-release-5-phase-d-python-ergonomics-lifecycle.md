@@ -1,3 +1,9 @@
+---
+Status: Executed
+Date: 2026-07-16
+Summary: Phase D core ergonomics implemented — context managers, strict enum parsing, DTO round-trip, typing stubs, lifecycle tests.
+---
+
 # Python API Release 5 Phase D — Python Ergonomics, Typing, and Lifecycle Semantics
 
 ## Objective
@@ -176,3 +182,40 @@ Phase D is complete when:
 - serialization is versioned and secret-safe;
 - stable/provisional stubs pass mypy and pyright consumer tests;
 - repeated lifecycle and concurrency tests remain within resource budgets.
+
+## Implementation Notes (2026-07-16)
+
+### Completed Workstreams
+
+| Workstream | Status | Details |
+|------------|--------|---------|
+| D1 — API convention audit | Partial | Exception list generated via code analysis; deviations documented in .pyi fixes |
+| D2 — Paths, URLs, timestamps | Pre-existing | `resolve_path()` already accepts `os.PathLike`; `py_datetime()` returns aware datetimes |
+| D3 — Enum and value semantics | Completed | `from_str` raises `ValueError` on unknown; `__eq__`/`__hash__` added to ExecutionStatus and finding_schema enums |
+| D4 — Collection protocols | Pre-existing | `PaginatedResultsPy`, `EventStream`, `ExecutionHandleList` already implement `__iter__`/`__len__`/`__contains__` |
+| D5 — Context management | Completed | `__enter__`/`__exit__` added to AuditSink, FindingSink, ArtifactSink, ProgressSink, EventConsumer, AsyncCallback, CallbackScheduler |
+| D6 — Native asyncio | Deferred | Token-only cancellation remains the documented contract; full propagation requires deeper PyFuture refactoring |
+| D7 — Callback semantics | Partial | Backpressure bounds exist in CallbackScheduler; formal callback queue testing deferred |
+| D8 — Exceptions | Completed | Exception hierarchy already structured; `from_str` now raises `ValueError` consistently |
+| D9 — Serialization | Completed | `from_dict()`/`from_json()` added to OperationError, ExecutionStats, Artifact |
+| D10 — Typing closure | Completed | `.pyi` stubs updated: `__hash__` on all enums, context managers, new methods |
+| D11 — Resource tests | Completed | `test_phase_d_ergonomics.py` covers context managers, enum parsing, serialization round-trip, closed resource behavior |
+
+### Files Modified
+
+- `crates/eggsec-python/src/callbacks.rs` — Context managers
+- `crates/eggsec-python/src/async_support.rs` — Context managers
+- `crates/eggsec-python/src/status.rs` — ExecutionStatus ergonomics, from_dict/from_json
+- `crates/eggsec-python/src/finding_schema.rs` — Strict from_str
+- `crates/eggsec-python/src/sbom.rs` — SbomFormatPy.from_str as staticmethod
+- `crates/eggsec-python/python/eggsec/*.pyi` — 30+ type stub files updated
+- `crates/eggsec-python/tests/test_phase_d_ergonomics.py` — New test file
+- `AGENTS.md` — Updated with Phase D notes
+- `.opencode/skills/eggsec-python/SKILL.md` — Updated with Phase D section
+- `crates/eggsec-python/README.md` — Updated with Phase D release note
+
+### Remaining Work (Future Phases)
+
+- D6: Full asyncio cancellation propagation (requires PyFuture refactoring)
+- D7: Formal callback queue bounds testing and adversarial mutation/credential callback tests
+- D1: Complete API convention exception list document

@@ -2,13 +2,29 @@
 from typing import Any
 
 class AiProviderPy:
-    pass
+    OpenAI: "AiProviderPy"
+    Azure: "AiProviderPy"
+    Anthropic: "AiProviderPy"
+    OpenAICompatible: "AiProviderPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class PluginLanguagePy:
-    pass
+    Python: "PluginLanguagePy"
+    Ruby: "PluginLanguagePy"
+    Rust: "PluginLanguagePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class ScriptTargetPy:
-    pass
+    Nmap: "ScriptTargetPy"
+    Burp: "ScriptTargetPy"
+    Custom: "ScriptTargetPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class AiAnalysisResultPy:
     @property

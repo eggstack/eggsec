@@ -12,6 +12,7 @@ class GraphQLVulnerability:
     DirectiveInjection: str
     FieldSuggestion: str
     AliasOverload: str
+    def __hash__(self) -> int: ...
 
 class GraphQLTestResult:
     """Result from a GraphQL security test."""

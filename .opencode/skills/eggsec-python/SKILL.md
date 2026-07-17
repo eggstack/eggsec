@@ -1838,3 +1838,34 @@ from eggsec.net import Target, TcpSession, HttpClient
 # Backward-compatible (deprecated, still works)
 from eggsec import TargetPy
 ```
+
+## Phase D: Python Ergonomics
+
+### Context Managers
+All callback/sink classes support `with` statements for automatic cleanup:
+```python
+with AuditSink(lambda e: print(e)) as sink:
+    # use sink
+    pass
+# sink is automatically closed
+```
+
+Affected classes: `AuditSink`, `FindingSink`, `ArtifactSink`, `ProgressSink`, `EventConsumer`, `AsyncCallback`, `CallbackScheduler`
+
+### Enum Ergonomics
+- All enums support `from_str()` which raises `ValueError` for unknown values
+- `ExecutionStatus` has full `__eq__`, `__hash__`, `__str__`, `from_str` support
+- All `eq_int` enums have `__hash__` for use in sets/dicts
+
+### Serialization Round-Trip
+`OperationError`, `ExecutionStats`, and `Artifact` support full round-trip:
+```python
+err = OperationError(kind="network", code="timeout", message="timed out")
+d = err.to_dict()
+restored = OperationError.from_dict(d)  # == err in value
+j = err.to_json()
+restored = OperationError.from_json(j)  # == err in value
+```
+
+### Testing
+Run Phase D tests: `pytest crates/eggsec-python/tests/test_phase_d_ergonomics.py`

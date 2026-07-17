@@ -4,12 +4,13 @@ from typing import List, Optional
 
 class ChainType:
     """Attack chain types."""
-    AuthToRCE: str
     PrivilegeEscalation: str
     DataExfiltration: str
-    SessionHijack: str
-    InjectionChain: str
-    FileUpload: str
+    RemoteCodeExecution: str
+    LateralMovement: str
+    Persistence: str
+    DenialOfService: str
+    def __hash__(self) -> int: ...
 
 class ChainStep:
     """A step in an attack chain."""
@@ -31,16 +32,17 @@ class AttackChain:
 
 class FlawType:
     """Business logic flaw types."""
-    BrokenAccessControl: str
-    MassAssignment: str
-    IntegerOverflow: str
-    RaceCondition: str
-    BusinessRuleBypass: str
     PriceManipulation: str
-    QuantityBypass: str
-    CouponAbuse: str
+    PrivilegeEscalation: str
+    RateLimitBypass: str
+    CartManipulation: str
+    CreditOverflow: str
     WorkflowBypass: str
-    InputValidation: str
+    InsufficientValidation: str
+    TrustBoundaryViolation: str
+    TimeTravel: str
+    IntegerOverflow: str
+    def __hash__(self) -> int: ...
 
 class BusinessLogicFlaw:
     """A business logic flaw."""
@@ -58,11 +60,12 @@ class RaceType:
     TimeOfCheckTimeOfUse: str
     ConcurrentFundsTransfer: str
     InventoryOverSale: str
-    DoubleSpend: str
-    LoyaltyPointsAbuse: str
+    SessionRace: str
     CouponReuse: str
-    VoteDuplication: str
-    BookingOverlap: str
+    CommentRace: str
+    ResponseInconsistency: str
+    TimingAnomaly: str
+    def __hash__(self) -> int: ...
 
 class RaceCondition:
     """A race condition finding."""
@@ -81,9 +84,10 @@ class BypassType:
     MissingAuthorization: str
     PrivilegeEscalation: str
     ForceBrowsing: str
-    APIKeyLeak: str
+    ApiKeyLeak: str
     JWTBypass: str
     RoleManipulation: str
+    def __hash__(self) -> int: ...
 
 class AuthzBypass:
     """An authorization bypass finding."""
@@ -98,15 +102,16 @@ class AuthzBypass:
 
 class SessionIssueType:
     """Session issue types."""
+    SessionFixation: str
+    SessionTimeout: str
+    TokenPrediction: str
+    InsufficientEntropy: str
     MissingHttpOnly: str
     MissingSecure: str
     MissingSameSite: str
-    MissingXFrameOptions: str
-    MissingCSP: str
-    WeakToken: str
-    SessionFixation: str
-    ConcurrentSession: str
-    NoSessionTimeout: str
+    Csrf: str
+    ConcurrentSessions: str
+    def __hash__(self) -> int: ...
 
 class SessionIssue:
     """A session security issue."""

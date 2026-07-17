@@ -2333,7 +2333,7 @@ impl Engine {
             return operation_err(e.to_string());
         }
 
-        let sbom_format = crate::sbom::SbomFormatPy::from_str_py(format)
+        let sbom_format = crate::sbom::SbomFormatPy::from_str(format)
             .unwrap_or(crate::sbom::SbomFormatPy::Cyclonedx);
         let project_path_owned = project_path.to_string();
         let ecosystem_owned = ecosystem.to_string();

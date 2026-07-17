@@ -2,7 +2,13 @@
 from typing import Any
 
 class WebhookEventPy:
-    pass
+    ScanStarted: "WebhookEventPy"
+    ScanComplete: "WebhookEventPy"
+    Findings: "WebhookEventPy"
+    Error: "WebhookEventPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class FindingSummaryPy:
     @property

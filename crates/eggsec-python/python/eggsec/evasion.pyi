@@ -2,13 +2,34 @@
 from typing import Any
 
 class EvasionTargetTypePy:
-    pass
+    Process: "EvasionTargetTypePy"
+    File: "EvasionTargetTypePy"
+    Network: "EvasionTargetTypePy"
+    Registry: "EvasionTargetTypePy"
+    Memory: "EvasionTargetTypePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class EvasionCategoryPy:
-    pass
+    Syscall: "EvasionCategoryPy"
+    HookBypass: "EvasionCategoryPy"
+    Obfuscation: "EvasionCategoryPy"
+    Injection: "EvasionCategoryPy"
+    AntiAnalysis: "EvasionCategoryPy"
+    TrafficObfuscation: "EvasionCategoryPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class EvasionRiskPy:
-    pass
+    Low: "EvasionRiskPy"
+    Medium: "EvasionRiskPy"
+    High: "EvasionRiskPy"
+    Critical: "EvasionRiskPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class EvasionTechniquePy:
     @property

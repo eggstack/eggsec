@@ -2,7 +2,16 @@
 from typing import Any
 
 class SecurityTypePy:
-    pass
+    Open: "SecurityTypePy"
+    WEP: "SecurityTypePy"
+    WPA: "SecurityTypePy"
+    WPA2: "SecurityTypePy"
+    WPA3: "SecurityTypePy"
+    Enterprise: "SecurityTypePy"
+    Unknown: "SecurityTypePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class WirelessNetworkPy:
     @property

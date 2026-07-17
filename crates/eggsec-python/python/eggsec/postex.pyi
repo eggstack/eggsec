@@ -2,13 +2,30 @@
 from typing import Any
 
 class PostexCategoryPy:
-    pass
+    Lotl: "PostexCategoryPy"
+    Persistence: "PostexCategoryPy"
+    LateralMovement: "PostexCategoryPy"
+    CredentialAccess: "PostexCategoryPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class PostexRiskPy:
-    pass
+    Low: "PostexRiskPy"
+    Medium: "PostexRiskPy"
+    High: "PostexRiskPy"
+    Critical: "PostexRiskPy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class PostexProfilePy:
-    pass
+    Minimal: "PostexProfilePy"
+    Standard: "PostexProfilePy"
+    Aggressive: "PostexProfilePy"
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+    def __hash__(self) -> int: ...
 
 class PostexTechniquePy:
     @property

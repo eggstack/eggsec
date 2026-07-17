@@ -65,6 +65,25 @@ impl AsyncCallback {
     fn __repr__(&self) -> String {
         format!("AsyncCallback(closed={})", self.closed)
     }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
+    }
 }
 
 /// Callback scheduler — queues callbacks for execution with backpressure.
@@ -147,5 +166,24 @@ impl CallbackScheduler {
             "CallbackScheduler(pending={}, capacity={}, closed={})",
             pending, self.capacity, self.closed,
         )
+    }
+
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        slf: Py<Self>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        Python::with_gil(|py| -> PyResult<()> {
+            slf.borrow_mut(py).close();
+            Ok(())
+        })
+        .ok();
+        false
     }
 }

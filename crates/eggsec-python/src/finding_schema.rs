@@ -19,14 +19,16 @@ pub enum ConfidencePy {
 #[pymethods]
 impl ConfidencePy {
     #[staticmethod]
-    fn from_str(s: &str) -> Self {
+    fn from_str(s: &str) -> PyResult<Self> {
         match s.to_lowercase().as_str() {
-            "confirmed" => Self::Confirmed,
-            "high" => Self::High,
-            "medium" => Self::Medium,
-            "low" => Self::Low,
-            "informational" | "info" => Self::Informational,
-            _ => Self::Medium,
+            "confirmed" => Ok(Self::Confirmed),
+            "high" => Ok(Self::High),
+            "medium" => Ok(Self::Medium),
+            "low" => Ok(Self::Low),
+            "informational" | "info" => Ok(Self::Informational),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                format!("Unknown confidence: {}", s)
+            )),
         }
     }
 
@@ -77,18 +79,20 @@ pub enum FindingTypePy {
 #[pymethods]
 impl FindingTypePy {
     #[staticmethod]
-    fn from_str(s: &str) -> Self {
+    fn from_str(s: &str) -> PyResult<Self> {
         match s.to_lowercase().as_str() {
-            "vulnerability" => Self::Vulnerability,
-            "misconfiguration" => Self::Misconfiguration,
-            "information_leak" | "informationleak" => Self::InformationLeak,
-            "policy_violation" | "policyviolation" => Self::PolicyViolation,
-            "asset_discovery" | "assetdiscovery" => Self::AssetDiscovery,
-            "service_detection" | "servicedetection" => Self::ServiceDetection,
-            "waf_detection" | "wafdetection" => Self::WafDetection,
-            "fuzz_result" | "fuzzresult" => Self::FuzzResult,
-            "scan_result" | "scanresult" => Self::ScanResult,
-            _ => Self::ScanResult,
+            "vulnerability" => Ok(Self::Vulnerability),
+            "misconfiguration" => Ok(Self::Misconfiguration),
+            "information_leak" | "informationleak" => Ok(Self::InformationLeak),
+            "policy_violation" | "policyviolation" => Ok(Self::PolicyViolation),
+            "asset_discovery" | "assetdiscovery" => Ok(Self::AssetDiscovery),
+            "service_detection" | "servicedetection" => Ok(Self::ServiceDetection),
+            "waf_detection" | "wafdetection" => Ok(Self::WafDetection),
+            "fuzz_result" | "fuzzresult" => Ok(Self::FuzzResult),
+            "scan_result" | "scanresult" => Ok(Self::ScanResult),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                format!("Unknown finding type: {}", s)
+            )),
         }
     }
 
@@ -137,22 +141,24 @@ pub enum EvidenceKindPy {
 #[pymethods]
 impl EvidenceKindPy {
     #[staticmethod]
-    fn from_str(s: &str) -> Self {
+    fn from_str(s: &str) -> PyResult<Self> {
         match s {
-            "HttpRequest" | "http_request" | "httprequest" => Self::HttpRequest,
-            "HttpResponse" | "http_response" | "httpresponse" => Self::HttpResponse,
-            "Header" | "header" => Self::Header,
-            "BodySnippet" | "body_snippet" | "bodysnippet" => Self::BodySnippet,
-            "Timing" | "timing" => Self::Timing,
-            "Diff" | "diff" => Self::Diff,
-            "Banner" | "banner" => Self::Banner,
-            "DnsRecord" | "dns_record" | "dnsrecord" => Self::DnsRecord,
-            "Certificate" | "certificate" => Self::Certificate,
-            "PortState" | "port_state" | "portstate" => Self::PortState,
-            "Screenshot" | "screenshot" => Self::Screenshot,
-            "FilePath" | "file_path" | "filepath" => Self::FilePath,
-            "LogLine" | "log_line" | "logline" => Self::LogLine,
-            _ => Self::BodySnippet,
+            "HttpRequest" | "http_request" | "httprequest" => Ok(Self::HttpRequest),
+            "HttpResponse" | "http_response" | "httpresponse" => Ok(Self::HttpResponse),
+            "Header" | "header" => Ok(Self::Header),
+            "BodySnippet" | "body_snippet" | "bodysnippet" => Ok(Self::BodySnippet),
+            "Timing" | "timing" => Ok(Self::Timing),
+            "Diff" | "diff" => Ok(Self::Diff),
+            "Banner" | "banner" => Ok(Self::Banner),
+            "DnsRecord" | "dns_record" | "dnsrecord" => Ok(Self::DnsRecord),
+            "Certificate" | "certificate" => Ok(Self::Certificate),
+            "PortState" | "port_state" | "portstate" => Ok(Self::PortState),
+            "Screenshot" | "screenshot" => Ok(Self::Screenshot),
+            "FilePath" | "file_path" | "filepath" => Ok(Self::FilePath),
+            "LogLine" | "log_line" | "logline" => Ok(Self::LogLine),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                format!("Unknown evidence kind: {}", s)
+            )),
         }
     }
 
