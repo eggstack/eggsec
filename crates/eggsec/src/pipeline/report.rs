@@ -373,7 +373,7 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
 pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String> {
     let mut md = String::new();
     md.push_str("# Security Assessment Report\n\n");
-    md.push_str(&format!("**Target:** `{}`\n\n", &report.target));
+    md.push_str(&format!("**Target:** `{}`\n\n", report.target));
     md.push_str(&format!("**Duration:** {}ms\n\n", report.total_duration_ms));
 
     md.push_str("## Stages\n\n");
@@ -395,7 +395,7 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
         for port in &report.open_ports {
             md.push_str(&format!(
                 "| {} | {} | {} |\n",
-                port.port, port.status, &port.service
+                port.port, port.status, port.service
             ));
         }
         md.push('\n');
@@ -410,7 +410,7 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
             let version = service.version.as_deref().unwrap_or("-");
             md.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
-                service.port, &service.service, product, version
+                service.port, service.service, product, version
             ));
         }
         md.push('\n');
@@ -426,7 +426,7 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
                 .unwrap_or_else(|| "-".to_string());
             md.push_str(&format!(
                 "- `{}` (status: {}, size: {})\n",
-                &endpoint.path, endpoint.status_code, size
+                endpoint.path, endpoint.status_code, size
             ));
         }
         md.push('\n');

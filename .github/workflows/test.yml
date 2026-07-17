@@ -296,11 +296,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Install maturin
-        run: pip install maturin pytest pytest-timeout
+        run: source $PWD/.venv/bin/activate && pip install maturin pytest pytest-timeout
       - name: Build wheel
         working-directory: crates/eggsec-python
         run: |
+          source $PWD/../../.venv/bin/activate
           if [ -n "${{ matrix.features }}" ]; then
             maturin develop --features "${{ matrix.features }}"
           else
@@ -308,7 +311,7 @@ jobs:
           fi
       - name: Run tests
         working-directory: crates/eggsec-python
-        run: pytest tests/ -v -q --tb=short --timeout=60 --junitxml=test-results-${{ matrix.name }}.xml
+        run: source $PWD/../../.venv/bin/activate && pytest tests/ -v -q --tb=short --timeout=60 --junitxml=test-results-${{ matrix.name }}.xml
         env:
           EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
       - name: Upload test results
@@ -320,8 +323,7 @@ jobs:
           retention-days: 30
       - name: Run validation scripts
         if: matrix.name == 'default-wheel'
-        run: |
-          bash scripts/check-architecture-guards.sh
+        run: source $PWD/.venv/bin/activate && bash scripts/check-architecture-guards.sh
 
   python-capability-matrix:
     name: Python capability matrix
@@ -333,11 +335,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check capability matrix
-        run: python scripts/check-python-capability-matrix.py
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py
 
   python-architecture-guards:
     name: Python architecture guards
@@ -349,11 +353,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check architecture guards
-        run: python scripts/check-python-architecture-guards.py
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py
 
   python-stub-parity:
     name: Python stub parity
@@ -365,11 +371,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check stub parity
-        run: python scripts/check_python_stub_parity.py
+        run: source $PWD/.venv/bin/activate && python scripts/check_python_stub_parity.py
 
   python-type-check:
     name: Python type check
@@ -381,13 +389,15 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Install type checkers
-        run: pip install mypy pyright
+        run: source $PWD/.venv/bin/activate && pip install mypy pyright
       - name: Run type checks
-        run: bash scripts/check_python_types.sh
+        run: source $PWD/.venv/bin/activate && bash scripts/check_python_types.sh
 
   python-maturity-consistency:
     name: Python maturity consistency
@@ -399,11 +409,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check maturity consistency
-        run: python scripts/check-python-capability-matrix.py --check-maturity
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py --check-maturity
 
   python-feature-metadata:
     name: Python feature metadata
@@ -415,11 +427,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Check feature metadata
-        run: python scripts/check-python-architecture-guards.py --check-feature-metadata
+        run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py --check-feature-metadata
 
   python-profile-manifest:
     name: Python profile manifest
@@ -443,11 +457,13 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Generate evidence bundle
-        run: python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
+        run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Upload evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
@@ -467,13 +483,15 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Generate evidence bundle
-        run: python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
+        run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Run maturity guard
-        run: python scripts/check_maturity_guard.py
+        run: source $PWD/.venv/bin/activate && python scripts/check_maturity_guard.py
 
   python-skip-budget:
     name: Python skip budget
@@ -486,9 +504,11 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: pip install maturin && maturin develop
+        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
       - name: Download default-wheel test results
         uses: actions/download-artifact@v4
         with:

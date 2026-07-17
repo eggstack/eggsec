@@ -159,7 +159,7 @@ impl WafEngine {
                     if waf_lower == sig_lower
                         || waf_lower.starts_with(&sig_lower)
                         || waf_lower.ends_with(&sig_lower)
-                        || waf_lower.contains(&format!(" {}", &sig_lower))
+                        || waf_lower.contains(&format!(" {}", sig_lower))
                     {
                         if let Some(profile) = bypass::get_profile_by_detection_sig(sig) {
                             self.selected_profile = Some(profile.name.clone());
