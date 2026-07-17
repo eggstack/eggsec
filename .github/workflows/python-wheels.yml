@@ -452,16 +452,16 @@ jobs:
 
       - name: Build default wheel
         working-directory: crates/eggsec-python
-        run: source $PWD/.venv/bin/activate && pip install maturin && maturin develop
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
 
       - name: Check Python capability matrix
-        run: source $PWD/.venv/bin/activate && python scripts/check-python-capability-matrix.py
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && python scripts/check-python-capability-matrix.py
 
       - name: Check Python architecture guards
-        run: source $PWD/.venv/bin/activate && python scripts/check-python-architecture-guards.py
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && python scripts/check-python-architecture-guards.py
 
       - name: Check Python stub parity
-        run: source $PWD/.venv/bin/activate && python scripts/check_python_stub_parity.py
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && python scripts/check_python_stub_parity.py
 
   build-sdist:
     name: Build source distribution

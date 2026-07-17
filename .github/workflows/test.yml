@@ -303,7 +303,7 @@ jobs:
       - name: Build wheel
         working-directory: crates/eggsec-python
         run: |
-          source $PWD/../../.venv/bin/activate
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           if [ -n "${{ matrix.features }}" ]; then
             maturin develop --features "${{ matrix.features }}"
           else
@@ -311,7 +311,7 @@ jobs:
           fi
       - name: Run tests
         working-directory: crates/eggsec-python
-        run: source $PWD/../../.venv/bin/activate && pytest tests/ -v -q --tb=short --timeout=60 --junitxml=test-results-${{ matrix.name }}.xml
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && pytest tests/ -v -q --tb=short --timeout=60 --junitxml=test-results-${{ matrix.name }}.xml
         env:
           EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
       - name: Upload test results
@@ -323,7 +323,7 @@ jobs:
           retention-days: 30
       - name: Run validation scripts
         if: matrix.name == 'default-wheel'
-        run: source $PWD/.venv/bin/activate && bash scripts/check-architecture-guards.sh
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && bash scripts/check-architecture-guards.sh
 
   python-capability-matrix:
     name: Python capability matrix
