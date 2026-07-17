@@ -142,7 +142,7 @@ class TestSerializationRoundTrip:
     def test_artifact_roundtrip(self):
         from eggsec import Artifact
         art = Artifact(name="report.json", kind="report", mime_type="application/json")
-        d = art.to_dict()
+        d = art.to_dict_raw()
         restored = Artifact.from_dict(d)
         assert restored.name == "report.json"
         assert restored.kind == "report"

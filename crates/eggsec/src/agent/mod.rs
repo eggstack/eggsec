@@ -2103,7 +2103,7 @@ mod tests {
                 metadata: FxHashMap::default(),
             },
             Finding {
-                id: "high-1".to_string(),
+                id: "high-2".to_string(),
                 finding_type: FindingType::Vulnerability,
                 severity: ResponseSeverity::High,
                 title: "High XSS".to_string(),
@@ -2132,8 +2132,9 @@ mod tests {
             .collect();
         assert_eq!(high_alerts.len(), 1);
         let (high_alert, _) = high_alerts[0];
-        assert_eq!(high_alert.finding_ids.len(), 1);
-        assert_eq!(high_alert.finding_ids[0], "high-1");
+        assert_eq!(high_alert.finding_ids.len(), 2);
+        assert!(high_alert.finding_ids.contains(&"high-1".to_string()));
+        assert!(high_alert.finding_ids.contains(&"high-2".to_string()));
     }
 
     #[tokio::test]
@@ -2699,13 +2700,8 @@ mod tests {
             .portfolio
             .add_target("ok.example.com".to_string(), target2);
 
-        // Manually set last_scan so they'll trigger
-        agent.portfolio.update_target("fail.example.com", |t| {
-            t.last_scan = Some(Utc::now() - chrono::Duration::minutes(2));
-        });
-        agent.portfolio.update_target("ok.example.com", |t| {
-            t.last_scan = Some(Utc::now() - chrono::Duration::minutes(2));
-        });
+        // Don't set last_scan so they'll trigger immediately
+        // (cron_should_run_target returns true when last_scan is None)
 
         // Run scheduled scans - dispatcher returns None (failure) for all
         // The key assertion: process_scheduled_scans should NOT return an error

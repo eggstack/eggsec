@@ -801,7 +801,7 @@ impl PreflightResult {
 ///
 /// Returns `true` for features that are always available or not relevant
 /// as compile-time gates, and `false` for features that are behind a
-/// `cfg(feature = "...")` gate that is not currently active.
+/// compile-time gate that is not currently active.
 ///
 /// # Unknown Features
 ///

@@ -656,17 +656,17 @@ class TestArtifactMetadata:
         assert art.path == "/tmp/test.pcap"
 
     def test_artifact_to_dict(self):
-        """Artifact.to_dict() produces correct structure."""
+        """Artifact.to_dict_raw() produces correct structure."""
         art = Artifact(name="art-1", kind="report", path="/tmp/rpt.json")
-        d = art.to_dict()
+        d = art.to_dict_raw()
         assert d["name"] == "art-1"
         assert d["kind"] == "report"
         assert d["path"] == "/tmp/rpt.json"
 
     def test_artifact_to_json(self):
-        """Artifact.to_json() produces valid JSON."""
+        """Artifact.to_json_raw() produces valid JSON."""
         art = Artifact(name="art-json", kind="log", data="aGVsbG8=")
-        j = art.to_json()
+        j = art.to_json_raw()
         parsed = json.loads(j)
         assert parsed["name"] == "art-json"
         assert parsed["kind"] == "log"
@@ -675,7 +675,7 @@ class TestArtifactMetadata:
     def test_artifact_roundtrip(self):
         """Artifact survives JSON round-trip."""
         art = Artifact(name="round", kind="pcap", mime_type="application/pcap", data="dGVzdA==", path="/tmp/r.pcap")
-        j = art.to_json()
+        j = art.to_json_raw()
         parsed = json.loads(j)
         assert parsed["name"] == "round"
         assert parsed["kind"] == "pcap"

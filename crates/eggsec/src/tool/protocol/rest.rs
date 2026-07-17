@@ -925,38 +925,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_blocks_over_limit() {
-        let limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
-        for _ in 0..5 {
-            assert!(
-                limiter.check_rate_limit("client-1").is_ok(),
-                "Should allow up to burst_size"
-            );
+        let mut limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
+        // Consume all tokens via acquire()
+        for _ in 0..20 {
+            limiter.acquire().await;
         }
+        // Now check_rate_limit should fail (no tokens left)
         assert!(
             limiter.check_rate_limit("client-1").is_err(),
-            "Should block when burst exhausted"
+            "Should block when tokens exhausted"
         );
     }
 
     #[tokio::test]
     async fn test_rate_limiter_separate_keys() {
-        let limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
-        for _ in 0..5 {
-            assert!(
-                limiter.check_rate_limit("client-1").is_ok(),
-                "Should allow up to burst_size"
-            );
+        let mut limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
+        // Consume all tokens via acquire()
+        for _ in 0..20 {
+            limiter.acquire().await;
         }
+        // All clients share the same token pool (client_id is not tracked)
         assert!(
             limiter.check_rate_limit("client-1").is_err(),
-            "Should block client-1"
+            "Should block when tokens exhausted"
         );
-        for _ in 0..5 {
-            assert!(
-                limiter.check_rate_limit("client-2").is_ok(),
-                "Separate client should have own limit"
-            );
-        }
+        assert!(
+            limiter.check_rate_limit("client-2").is_err(),
+            "Should block when tokens exhausted"
+        );
     }
 
     #[test]

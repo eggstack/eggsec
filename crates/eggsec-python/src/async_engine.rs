@@ -941,7 +941,14 @@ impl AsyncEngine {
                 let password = request.metadata.get("password").cloned();
                 let database = request.metadata.get("database").cloned();
                 let port: Option<u16> = request.metadata.get("port").and_then(|s| s.parse().ok());
-                self.run_db_probe_async(request.target, db_type, user, password, database, port)
+                self.run_db_probe_async(
+                    request.target.clone(),
+                    db_type,
+                    user,
+                    password,
+                    database,
+                    port,
+                )
             }
             #[cfg(feature = "nse")]
             StableOperation::NseRun => {
@@ -960,7 +967,7 @@ impl AsyncEngine {
                     .cloned()
                     .unwrap_or_else(|| "default".to_string());
                 let script_args = request.metadata.get("script_args").cloned();
-                self.run_nse_async(request.target, script_name, script_args)
+                self.run_nse_async(request.target.clone(), script_name, script_args)
             }
             #[cfg(feature = "container")]
             StableOperation::ScanDockerImage => {

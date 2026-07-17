@@ -35,19 +35,19 @@ HttpClientConfig = eggsec.HttpClientConfigPy
 AsyncHttpClient = eggsec.AsyncHttpClientPy
 
 # Capture types — feature-gated (packet-inspection)
-_CAPTURE_AVAILABLE = hasattr(eggsec, "CaptureConfigPy")
+_CAPTURE_AVAILABLE = hasattr(eggsec, "CaptureConfig")
 if _CAPTURE_AVAILABLE:
-    CaptureConfig = eggsec.CaptureConfigPy
-    AsyncCaptureSession = eggsec.AsyncCaptureSessionPy
+    CaptureConfig = eggsec.CaptureConfig
+    AsyncCaptureSession = eggsec.AsyncCaptureSession
 else:
     CaptureConfig = None
     AsyncCaptureSession = None
 
 # WebSocket types — feature-gated
-_WEBSOCKET_AVAILABLE = hasattr(eggsec, "AsyncWebSocketSessionPy")
+_WEBSOCKET_AVAILABLE = hasattr(eggsec, "AsyncWebSocketSession")
 if _WEBSOCKET_AVAILABLE:
-    WebSocketSessionConfig = eggsec.WebSocketSessionConfigPy
-    AsyncWebSocketSession = eggsec.AsyncWebSocketSessionPy
+    WebSocketSessionConfig = eggsec.WebSocketSessionConfig
+    AsyncWebSocketSession = eggsec.AsyncWebSocketSession
 
 
 # Async transport chaining now works with the shared Tokio runtime.

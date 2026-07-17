@@ -66,7 +66,7 @@ def parse_init_all(init_path: Path) -> list[str]:
 def collect_stub_exports(stub_dir: Path) -> dict[str, set[str]]:
     """Collect all names exported by .pyi files, grouped by file."""
     exports: dict[str, set[str]] = {}
-    for stub_file in stub_dir.glob("*.pyi"):
+    for stub_file in stub_dir.rglob("*.pyi"):
         names: set[str] = set()
         try:
             tree = ast.parse(stub_file.read_text())
@@ -76,14 +76,21 @@ def collect_stub_exports(stub_dir: Path) -> dict[str, set[str]]:
                         name = alias.asname if alias.asname else alias.name
                         if name != "*":
                             names.add(name)
+                            # Also add name without _Py suffix for alias matching
+                            if name.endswith("Py"):
+                                names.add(name[:-2])
                 elif isinstance(node, ast.Assign):
                     for target in node.targets:
                         if isinstance(target, ast.Name):
                             names.add(target.id)
+                            if target.id.endswith("Py"):
+                                names.add(target.id[:-2])
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     names.add(node.name)
                 elif isinstance(node, ast.ClassDef):
                     names.add(node.name)
+                    if node.name.endswith("Py"):
+                        names.add(node.name[:-2])
         except Exception as exc:
             print(f"  Warning: failed to parse {stub_file.name}: {exc}", file=sys.stderr)
         exports[stub_file.name] = names
@@ -203,8 +210,12 @@ def main() -> int:
     in_stubs_not_in_all = sorted(all_stub_names - set(all_names))
 
     if in_all_not_in_stubs:
-        # Filter out private names and known feature-gated names
-        public_missing = [n for n in in_all_not_in_stubs if not n.startswith("_")]
+        # Filter out private names, submodule names (directories), and known feature-gated names
+        submodules = {
+            d.name for d in EGGSEC_DIR.iterdir()
+            if d.is_dir() and (d / "__init__.py").exists()
+        }
+        public_missing = [n for n in in_all_not_in_stubs if not n.startswith("_") and n not in submodules]
         if public_missing:
             print(f"  WARN: {len(public_missing)} __all__ names not in any .pyi stub:")
             for name in public_missing[:20]:

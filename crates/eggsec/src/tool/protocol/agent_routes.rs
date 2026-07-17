@@ -1533,7 +1533,8 @@ mod tests {
     #[test]
     fn test_validate_payload_size_at_boundary() {
         // Exactly at limit should pass
-        let payload = serde_json::json!({"key": "a".repeat(1020)});
+        // JSON overhead: {"key":"..."} = 1+6+1+len+1+1 = len+10 bytes
+        let payload = serde_json::json!({"key": "a".repeat(1014)});
         assert!(validate_payload_size(&payload, 1024).is_ok());
     }
 

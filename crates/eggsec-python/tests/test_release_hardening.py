@@ -661,9 +661,9 @@ class TestSerializationCompatibility:
         assert len(parsed["findings"]) == 1
 
     def test_json_roundtrip_preserves_data(self):
-        """to_json() -> json.loads() should preserve key fields."""
+        """to_json_raw() -> json.loads() should preserve key fields."""
         f = eggsec.Finding("f1", "Title", eggsec.Severity.Medium, "t", "c", "d")
-        parsed = json.loads(f.to_json())
+        parsed = json.loads(f.to_json_raw())
         assert parsed["id"] == "f1"
         assert parsed["title"] == "Title"
         assert parsed["severity"] == "Medium"

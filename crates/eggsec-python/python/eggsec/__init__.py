@@ -503,6 +503,28 @@ except (AttributeError, ImportError):
                           "pip install eggsec[mobile]")
 
 try:
+    MobileDeviceDescriptor = _core.MobileDeviceDescriptor
+    MobileDeviceCapabilities = _core.MobileDeviceCapabilities
+    MobileSessionConfig = _core.MobileSessionConfig
+    MobileSessionState = _core.MobileSessionState
+    MobileSessionStats = _core.MobileSessionStats
+    MobileSession = _core.MobileSession
+    AsyncMobileSession = _core.AsyncMobileSession
+    MobileDeviceRegistry = _core.MobileDeviceRegistry
+except (AttributeError, ImportError):
+    pass
+
+try:
+    BrowserCapabilities = _core.BrowserCapabilities
+    BrowserSessionState = _core.BrowserSessionState
+    BrowserSessionConfig = _core.BrowserSessionConfig
+    BrowserSessionStats = _core.BrowserSessionStats
+    BrowserSession = _core.BrowserSession
+    AsyncBrowserSession = _core.AsyncBrowserSession
+except (AttributeError, ImportError):
+    pass
+
+try:
     scan_docker_image = _core.scan_docker_image
     async_scan_docker_image = _core.async_scan_docker_image
     scan_kubernetes = _core.scan_kubernetes

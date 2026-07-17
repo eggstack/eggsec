@@ -199,7 +199,7 @@ def test_finding_and_report_roundtrip():
     report.add_finding(finding)
     assert len(report) == 1
 
-    report_j = report.to_json()
+    report_j = report.to_json_raw()
     report_parsed = json.loads(report_j)
     assert len(report_parsed["findings"]) == 1
     assert report_parsed["findings"][0]["id"] == "smoke-1"

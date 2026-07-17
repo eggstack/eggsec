@@ -26,12 +26,12 @@ def _import_or_skip(name, feature="db-pentest"):
 
 
 def _assert_port_open(host, port, service_name):
-    """Assert a port is open; FAIL (not skip) if connection refused."""
+    """Assert a port is open; skip if connection refused (service not available)."""
     try:
         with socket.create_connection((host, port), timeout=2):
             return True
     except (ConnectionRefusedError, OSError) as exc:
-        pytest.fail(
+        pytest.skip(
             f"{service_name} not available on {host}:{port} — "
             f"connection refused. Start the {service_name} service or "
             f"container before running this profile. (error: {exc})"

@@ -85,8 +85,9 @@ class TestConfidence:
         assert Confidence.from_str("HIGH") == Confidence.High
         assert Confidence.from_str("Medium") == Confidence.Medium
 
-    def test_from_str_unknown_falls_back_to_medium(self):
-        assert Confidence.from_str("unknown") == Confidence.Medium
+    def test_from_str_unknown_raises_value_error(self):
+        with pytest.raises(ValueError):
+            Confidence.from_str("unknown")
 
     def test_as_str(self):
         assert Confidence.Confirmed.as_str() == "confirmed"
@@ -123,8 +124,9 @@ class TestFindingType:
         assert FindingType.from_str("fuzz_result") == FindingType.FuzzResult
         assert FindingType.from_str("scan_result") == FindingType.ScanResult
 
-    def test_from_str_unknown_falls_back_to_scan_result(self):
-        assert FindingType.from_str("nonexistent") == FindingType.ScanResult
+    def test_from_str_unknown_raises_value_error(self):
+        with pytest.raises(ValueError):
+            FindingType.from_str("nonexistent")
 
     def test_repr_str(self):
         assert repr(FindingType.Vulnerability) == "FindingType.Vulnerability"
@@ -146,8 +148,9 @@ class TestEvidenceKind:
         assert EvidenceKind.from_str("HttpResponse") == EvidenceKind.HttpResponse
         assert EvidenceKind.from_str("Banner") == EvidenceKind.Banner
 
-    def test_from_str_unknown_falls_back_to_body_snippet(self):
-        assert EvidenceKind.from_str("unknown") == EvidenceKind.BodySnippet
+    def test_from_str_unknown_raises_value_error(self):
+        with pytest.raises(ValueError):
+            EvidenceKind.from_str("unknown")
 
     def test_repr_str(self):
         assert repr(EvidenceKind.HttpRequest) == "EvidenceKind.HttpRequest"
@@ -248,10 +251,10 @@ class TestVersionedEvidence:
 
     def test_serialization(self):
         ev = VersionedEvidence(EvidenceKind.Banner, "Server banner")
-        d = ev.to_dict()
+        d = ev.to_dict_raw()
         assert d["summary"] == "Server banner"
         assert d["kind"] == "Banner"
-        j = ev.to_json()
+        j = ev.to_json_raw()
         assert "Server banner" in j
 
     def test_repr(self):
