@@ -59,7 +59,6 @@ impl SbomFormatPy {
             SbomFormatPy::Spdx => eggsec::supply_chain::sbom::SbomFormat::Spdx,
         }
     }
-
 }
 
 /// A single component in the SBOM.

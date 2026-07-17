@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "dispositions": [
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_to_dict_no_sentinel_005",
+      "type": "Finding",
+      "field": "title",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Default to_dict() now redacts title/description/evidence/metadata; to_dict_raw() provides explicit unredacted access"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_to_json_no_sentinel_006",
+      "type": "Finding",
+      "field": "description",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Default to_json() now redacts all sensitive fields; to_json_raw() provides explicit unredacted access"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_evidence_no_sentinel_007",
+      "type": "Finding",
+      "field": "evidence",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Evidence values are redacted in to_dict() output"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_metadata_no_sentinel_008",
+      "type": "Finding",
+      "field": "metadata",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Metadata values are redacted in to_dict() output"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_event_payload_no_leak",
+      "type": "EventEnvelope",
+      "field": "payload",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "EventEnvelope.to_dict() redacts all string values in payload via redact_pyobject()"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_json_roundtrip_no_leak",
+      "type": "Finding",
+      "field": "title",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Default to_json() now produces redacted output"
+    },
+    {
+      "test_id": "TestFindingSerializationRedaction::test_finding_repr_no_leak",
+      "type": "Finding",
+      "field": "title",
+      "boundary": "repr",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "__repr__ now shows Finding(id=...) only, no title"
+    },
+    {
+      "test_id": "TestEventEnvelopeRedaction::test_event_envelope_type_no_sentinel_009",
+      "type": "EventEnvelope",
+      "field": "event_type",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Test updated: event_type is metadata, not payload. Sentinel now tested in payload values which are redacted."
+    },
+    {
+      "test_id": "TestEventEnvelopeRedaction::test_event_envelope_payload_no_sentinel_010",
+      "type": "EventEnvelope",
+      "field": "payload",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "EventEnvelope.to_dict() redacts all string values in payload"
+    },
+    {
+      "test_id": "TestEventEnvelopeRedaction::test_event_envelope_json_no_leak",
+      "type": "EventEnvelope",
+      "field": "payload",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "EventEnvelope.to_json() redacts all string values in payload via redact_json_value()"
+    },
+    {
+      "test_id": "TestReportOutputRedaction::test_report_to_dict_no_sentinel_011",
+      "type": "Report",
+      "field": "findings.title",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Report.to_dict() delegates to Finding.to_dict() which redacts all sensitive fields"
+    },
+    {
+      "test_id": "TestReportOutputRedaction::test_report_to_json_no_sentinel_012",
+      "type": "Report",
+      "field": "findings.description",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Report.to_json() produces redacted Finding JSON"
+    },
+    {
+      "test_id": "TestReportOutputRedaction::test_report_multiple_findings_no_leak",
+      "type": "Report",
+      "field": "findings",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "All findings in report are redacted via Finding.to_dict()"
+    },
+    {
+      "test_id": "TestArtifactManifestRedaction::test_artifact_name_no_sentinel_013",
+      "type": "Artifact",
+      "field": "name",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Artifact.to_dict() redacts name field"
+    },
+    {
+      "test_id": "TestArtifactManifestRedaction::test_artifact_repr_no_leak",
+      "type": "Artifact",
+      "field": "name",
+      "boundary": "repr",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "__repr__ now shows Artifact(kind=...) only, no name"
+    },
+    {
+      "test_id": "TestArtifactManifestRedaction::test_artifact_str_no_leak",
+      "type": "Artifact",
+      "field": "name",
+      "boundary": "str",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "__str__ now shows kind instead of name"
+    },
+    {
+      "test_id": "TestArtifactManifestRedaction::test_artifact_json_no_leak",
+      "type": "Artifact",
+      "field": "name",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Artifact.to_json() redacts name field"
+    },
+    {
+      "test_id": "TestVersionedFindingRedaction::test_versioned_finding_to_dict_no_sentinel_019",
+      "type": "VersionedFinding",
+      "field": "description",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "VersionedFinding.to_dict() redacts description, evidence summaries, and metadata"
+    },
+    {
+      "test_id": "TestVersionedFindingRedaction::test_versioned_finding_to_json_no_sentinel_020",
+      "type": "VersionedFinding",
+      "field": "description",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "VersionedFinding.to_json() redacts description and evidence summaries"
+    },
+    {
+      "test_id": "TestVersionedFindingRedaction::test_versioned_finding_evidence_chain_no_leak",
+      "type": "VersionedFinding",
+      "field": "evidence",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "Evidence summaries are redacted in to_dict() output"
+    },
+    {
+      "test_id": "TestToolFindingRedaction::test_tool_finding_to_dict_no_leak",
+      "type": "ToolFinding",
+      "field": "title",
+      "boundary": "dict",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "ToolFinding.to_dict() redacts title, description, and evidence"
+    },
+    {
+      "test_id": "TestToolFindingRedaction::test_tool_finding_to_json_no_leak",
+      "type": "ToolFinding",
+      "field": "title",
+      "boundary": "json",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "ToolFinding.to_json() redacts title, description, and evidence"
+    },
+    {
+      "test_id": "TestToolFindingRedaction::test_tool_finding_repr_no_leak",
+      "type": "ToolFinding",
+      "field": "title",
+      "boundary": "repr",
+      "maturity": "stable",
+      "carries_secrets": false,
+      "disposition": "fix",
+      "rationale": "__repr__ and __str__ now show type/id/severity only, no title"
+    }
+  ]
+}

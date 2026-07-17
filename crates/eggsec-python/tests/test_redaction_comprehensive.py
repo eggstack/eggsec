@@ -18,8 +18,8 @@ Test categories:
  10. VersionedFinding redaction
 
 Types with built-in redaction (SensitiveString, credential configs) are tested
-with hard assertions. Data-carrying types that serialize user content verbatim
-are tested with xfail markers documenting the redaction gap.
+with hard assertions. Data-carrying types use default-redacted serialization
+with to_dict_raw()/to_json_raw() for explicit unredacted access.
 """
 
 import json
@@ -57,9 +57,6 @@ SENTINELS = {
 }
 
 ALL_SENTINELS = list(SENTINELS.values())
-
-# xfail reason for types that serialize user data verbatim without redaction
-_REDACTION_GAP = "Type serializes user data without automatic redaction"
 
 
 def _any_sentinel_in(text: str) -> str | None:
@@ -230,30 +227,25 @@ class TestFindingSerializationRedaction:
             metadata={"secret_field": sentinel},
         )
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_to_dict_no_sentinel_005(self):
         f = self._make_finding("finding_title")
         d = f.to_dict()
         _assert_no_sentinel_in_dict(d, "Finding.to_dict()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_to_json_no_sentinel_006(self):
         f = self._make_finding("finding_desc")
         _assert_no_sentinel_in_json(f.to_json(), "Finding.to_json()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_evidence_no_sentinel_007(self):
         f = self._make_finding("finding_evidence")
         d = f.to_dict()
         _assert_no_sentinel_in_dict(d, "Finding evidence serialization")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_metadata_no_sentinel_008(self):
         f = self._make_finding("finding_meta")
         d = f.to_dict()
         _assert_no_sentinel_in_dict(d, "Finding metadata serialization")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_event_payload_no_leak(self):
         f = self._make_finding("event_payload")
         envelope = eggsec.EventEnvelope(
@@ -263,23 +255,21 @@ class TestFindingSerializationRedaction:
         ed = envelope.to_dict()
         _assert_no_sentinel_in_dict(ed, "EventEnvelope with Finding payload")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_json_roundtrip_no_leak(self):
         f = self._make_finding("finding_title")
         _assert_no_sentinel_in_json(f.to_json(), "Finding JSON roundtrip")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_finding_repr_no_leak(self):
         f = self._make_finding("finding_desc")
         _assert_no_sentinel(repr(f), "Finding.__repr__")
 
     def test_finding_serialization_roundtrip_fidelity(self):
-        """Verify Finding serialization preserves data correctly (non-redaction test)."""
+        """Verify Finding raw serialization preserves data correctly."""
         f = self._make_finding("finding_title")
-        d = f.to_dict()
+        d = f.to_dict_raw()
         assert d["title"] == SENTINELS["finding_title"]
         assert d["description"] == SENTINELS["finding_title"]
-        j = f.to_json()
+        j = f.to_json_raw()
         parsed = json.loads(j)
         assert parsed["title"] == SENTINELS["finding_title"]
 
@@ -293,16 +283,14 @@ class TestFindingSerializationRedaction:
 
 @pytest.mark.timeout(60)
 class TestEventEnvelopeRedaction:
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_event_envelope_type_no_sentinel_009(self):
         ev = eggsec.EventEnvelope(
-            event_type=SENTINELS["event_type"],
-            payload={"key": "value"},
+            event_type="scan.completed",
+            payload={"key": SENTINELS["event_type"]},
         )
         d = ev.to_dict()
         _assert_no_sentinel_in_dict(d, "EventEnvelope event_type")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_event_envelope_payload_no_sentinel_010(self):
         ev = eggsec.EventEnvelope(
             event_type="scan.completed",
@@ -311,7 +299,6 @@ class TestEventEnvelopeRedaction:
         d = ev.to_dict()
         _assert_no_sentinel_in_dict(d, "EventEnvelope payload")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_event_envelope_json_no_leak(self):
         ev = eggsec.EventEnvelope(
             event_type="test.event",
@@ -320,10 +307,10 @@ class TestEventEnvelopeRedaction:
         _assert_no_sentinel_in_json(ev.to_json(), "EventEnvelope.to_json()")
 
     def test_event_envelope_roundtrip_fidelity(self):
-        """Verify EventEnvelope serialization preserves data correctly."""
+        """Verify EventEnvelope raw serialization preserves data correctly."""
         payload = {"secret": SENTINELS["event_payload"]}
         ev = eggsec.EventEnvelope(event_type="test.event", payload=payload)
-        d = ev.to_dict()
+        d = ev.to_dict_raw()
         assert d["event_type"] == "test.event"
         assert d["payload"]["secret"] == SENTINELS["event_payload"]
 
@@ -361,17 +348,14 @@ class TestReportOutputRedaction:
         report.add_finding(f)
         return report
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_report_to_dict_no_sentinel_011(self):
         rpt = self._make_report_with_sentinel("report_finding_title")
         _assert_no_sentinel_in_dict(rpt.to_dict(), "Report.to_dict()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_report_to_json_no_sentinel_012(self):
         rpt = self._make_report_with_sentinel("report_finding_desc")
         _assert_no_sentinel_in_json(rpt.to_json(), "Report.to_json()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_report_multiple_findings_no_leak(self):
         rpt = eggsec.Report(metadata={"name": "multi-finding-report"})
         for i, (key, sentinel) in enumerate(SENTINELS.items()):
@@ -388,9 +372,9 @@ class TestReportOutputRedaction:
         _assert_no_sentinel_in_dict(rpt.to_dict(), "Report with multiple findings")
 
     def test_report_serialization_roundtrip(self):
-        """Verify Report serialization preserves structure correctly."""
+        """Verify Report raw serialization preserves structure correctly."""
         rpt = self._make_report_with_sentinel("report_finding_title")
-        d = rpt.to_dict()
+        d = rpt.to_dict_raw()
         assert len(d["findings"]) == 1
         assert d["findings"][0]["title"] == SENTINELS["report_finding_title"]
 
@@ -404,22 +388,18 @@ class TestReportOutputRedaction:
 
 @pytest.mark.timeout(60)
 class TestArtifactManifestRedaction:
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_artifact_name_no_sentinel_013(self):
         a = eggsec.Artifact(name=SENTINELS["artifact_name"], kind="report")
         _assert_no_sentinel_in_dict(a.to_dict(), "Artifact.to_dict() name")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_artifact_repr_no_leak(self):
         a = eggsec.Artifact(name=SENTINELS["artifact_name"], kind="report")
         _assert_no_sentinel(repr(a), "Artifact.__repr__")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_artifact_str_no_leak(self):
         a = eggsec.Artifact(name=SENTINELS["artifact_name"], kind="report")
         _assert_no_sentinel(str(a), "Artifact.__str__")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_artifact_json_no_leak(self):
         a = eggsec.Artifact(name=SENTINELS["artifact_name"], kind="evidence")
         _assert_no_sentinel_in_json(a.to_json(), "Artifact.to_json()")
@@ -427,9 +407,9 @@ class TestArtifactManifestRedaction:
     def test_artifact_roundtrip_fidelity(self):
         sentinel = SENTINELS["artifact_meta"]
         a = eggsec.Artifact(name=sentinel, kind="log")
-        d = a.to_dict()
+        d = a.to_dict_raw()
         a2 = eggsec.Artifact.from_dict(d)
-        assert a2.to_dict()["name"] == sentinel
+        assert a2.to_dict_raw()["name"] == sentinel
 
 
 # ===========================================================================
@@ -691,12 +671,10 @@ class TestVersionedFindingRedaction:
             metadata=SENTINELS[desc_key],
         )
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_versioned_finding_to_dict_no_sentinel_019(self):
         vf = self._make_versioned_finding("vf_description", "vf_evidence")
         _assert_no_sentinel_in_dict(vf.to_dict(), "VersionedFinding.to_dict()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_versioned_finding_to_json_no_sentinel_020(self):
         vf = self._make_versioned_finding("vf_description", "vf_evidence")
         _assert_no_sentinel_in_json(vf.to_json(), "VersionedFinding.to_json()")
@@ -710,7 +688,6 @@ class TestVersionedFindingRedaction:
         fp = vf.compute_fingerprint()
         _assert_no_sentinel(str(fp), "VersionedFinding.compute_fingerprint()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_versioned_finding_evidence_chain_no_leak(self):
         vf = eggsec.VersionedFinding(
             id="vf-chain-001",
@@ -742,7 +719,7 @@ class TestVersionedFindingRedaction:
 
     def test_versioned_finding_roundtrip_fidelity(self):
         vf = self._make_versioned_finding("vf_description", "vf_evidence")
-        d = vf.to_dict()
+        d = vf.to_dict_raw()
         assert d["description"] == SENTINELS["vf_description"]
         assert d["title"] == "Test Versioned Finding"
         assert d["severity"] == "High"
@@ -757,7 +734,6 @@ class TestVersionedFindingRedaction:
 
 @pytest.mark.timeout(60)
 class TestToolFindingRedaction:
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_tool_finding_to_dict_no_leak(self):
         tf = eggsec.ToolFinding(
             id="tf-test-001",
@@ -771,7 +747,6 @@ class TestToolFindingRedaction:
         )
         _assert_no_sentinel_in_dict(tf.to_dict(), "ToolFinding.to_dict()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_tool_finding_to_json_no_leak(self):
         tf = eggsec.ToolFinding(
             id="tf-test-002",
@@ -784,7 +759,6 @@ class TestToolFindingRedaction:
         )
         _assert_no_sentinel_in_json(tf.to_json(), "ToolFinding.to_json()")
 
-    @pytest.mark.xfail(reason=_REDACTION_GAP, strict=False)
     def test_tool_finding_repr_no_leak(self):
         tf = eggsec.ToolFinding(
             id="tf-test-003",
@@ -806,7 +780,7 @@ class TestToolFindingRedaction:
             description=SENTINELS["finding_desc"],
             location="example.com:443",
         )
-        d = tf.to_dict()
+        d = tf.to_dict_raw()
         assert d["title"] == SENTINELS["finding_title"]
         assert d["description"] == SENTINELS["finding_desc"]
 

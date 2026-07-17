@@ -112,8 +112,16 @@ impl EventEnvelope {
         self.to_dict_impl(py)
     }
 
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        self.to_dict_raw_impl(py)
+    }
+
     fn to_json(&self, py: Python) -> PyResult<String> {
         self.to_json_impl(py)
+    }
+
+    fn to_json_raw(&self, py: Python) -> PyResult<String> {
+        self.to_json_raw_impl(py)
     }
 
     fn __repr__(&self) -> String {
@@ -182,17 +190,68 @@ impl EventEnvelope {
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
         dict.set_item("correlation_id", &self.correlation_id)?;
         dict.set_item("event_type", &self.event_type)?;
+        dict.set_item("payload", redact_pyobject(py, &self.payload)?)?;
+        Ok(dict.into())
+    }
+
+    pub(crate) fn to_dict_raw_impl(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("schema_version", &self.schema_version)?;
+        dict.set_item("event_id", &self.event_id)?;
+        dict.set_item("sequence", self.sequence)?;
+        dict.set_item("timestamp_ms", self.timestamp_ms)?;
+        dict.set_item("correlation_id", &self.correlation_id)?;
+        dict.set_item("event_type", &self.event_type)?;
         dict.set_item("payload", &self.payload)?;
         Ok(dict.into())
     }
 
     pub(crate) fn to_json_impl(&self, py: Python) -> PyResult<String> {
-        let val = self.to_json_value(py)?;
+        let val = self.to_json_value_impl(py)?;
         serde_json::to_string(&val)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
-    fn to_json_value(&self, py: Python) -> PyResult<serde_json::Value> {
+    pub(crate) fn to_json_raw_impl(&self, py: Python) -> PyResult<String> {
+        let val = self.to_json_value_raw(py)?;
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_value_impl(&self, py: Python) -> PyResult<serde_json::Value> {
+        let mut map = serde_json::Map::new();
+        map.insert(
+            "schema_version".into(),
+            serde_json::Value::String(self.schema_version.clone()),
+        );
+        map.insert(
+            "event_id".into(),
+            serde_json::Value::String(self.event_id.clone()),
+        );
+        map.insert(
+            "sequence".into(),
+            serde_json::Value::Number(self.sequence.into()),
+        );
+        map.insert(
+            "timestamp_ms".into(),
+            serde_json::Value::Number(self.timestamp_ms.into()),
+        );
+        map.insert(
+            "correlation_id".into(),
+            match &self.correlation_id {
+                Some(s) => serde_json::Value::String(s.clone()),
+                None => serde_json::Value::Null,
+            },
+        );
+        map.insert(
+            "event_type".into(),
+            serde_json::Value::String(self.event_type.clone()),
+        );
+        map.insert("payload".into(), redact_json_value(py, &self.payload)?);
+        Ok(serde_json::Value::Object(map))
+    }
+
+    fn to_json_value_raw(&self, py: Python) -> PyResult<serde_json::Value> {
         let mut map = serde_json::Map::new();
         map.insert(
             "schema_version".into(),
@@ -265,6 +324,86 @@ fn pyobject_to_json(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Valu
         return Ok(serde_json::Value::Array(arr));
     }
     Ok(serde_json::Value::String(format!("{:?}", any)))
+}
+
+/// Redact all string values in a Python object, replacing them with "[REDACTED]".
+fn redact_pyobject(py: Python<'_>, obj: &PyObject) -> PyResult<PyObject> {
+    let any = obj.bind(py);
+    if any.is_none() {
+        return Ok(obj.clone_ref(py));
+    }
+    if let Ok(_v) = any.extract::<bool>() {
+        return Ok(obj.clone_ref(py));
+    }
+    if let Ok(_v) = any.extract::<i64>() {
+        return Ok(obj.clone_ref(py));
+    }
+    if let Ok(_v) = any.extract::<u64>() {
+        return Ok(obj.clone_ref(py));
+    }
+    if let Ok(_v) = any.extract::<f64>() {
+        return Ok(obj.clone_ref(py));
+    }
+    if any.extract::<String>().is_ok() {
+        return Ok("REDACTED".into_py(py));
+    }
+    if let Ok(d) = any.downcast::<PyDict>() {
+        let redacted = PyDict::new_bound(py);
+        for (key, value) in d.iter() {
+            redacted.set_item(&key, redact_pyobject(py, &value.into())?)?;
+        }
+        return Ok(redacted.into());
+    }
+    if let Ok(list) = any.downcast::<PyList>() {
+        let redacted = PyList::empty_bound(py);
+        for item in list.iter() {
+            redacted.append(redact_pyobject(py, &item.into())?)?;
+        }
+        return Ok(redacted.into());
+    }
+    Ok(obj.clone_ref(py))
+}
+
+/// Redact all string values in a serde_json::Value, replacing them with "[REDACTED]".
+fn redact_json_value(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Value> {
+    let any = obj.bind(py);
+    if any.is_none() {
+        return Ok(serde_json::Value::Null);
+    }
+    if let Ok(v) = any.extract::<bool>() {
+        return Ok(serde_json::Value::Bool(v));
+    }
+    if let Ok(v) = any.extract::<i64>() {
+        return Ok(serde_json::Value::Number(v.into()));
+    }
+    if let Ok(v) = any.extract::<u64>() {
+        return Ok(serde_json::Value::Number(v.into()));
+    }
+    if let Ok(v) = any.extract::<f64>() {
+        if let Some(n) = serde_json::Number::from_f64(v) {
+            return Ok(serde_json::Value::Number(n));
+        }
+    }
+    if any.extract::<String>().is_ok() {
+        return Ok(serde_json::Value::String("[REDACTED]".to_string()));
+    }
+    if let Ok(d) = any.downcast::<PyDict>() {
+        let mut map = serde_json::Map::new();
+        for (key, value) in d.iter() {
+            if let Ok(key_str) = key.extract::<String>() {
+                map.insert(key_str, redact_json_value(py, &value.into())?);
+            }
+        }
+        return Ok(serde_json::Value::Object(map));
+    }
+    if let Ok(list) = any.downcast::<PyList>() {
+        let mut arr = Vec::new();
+        for item in list.iter() {
+            arr.push(redact_json_value(py, &item.into())?);
+        }
+        return Ok(serde_json::Value::Array(arr));
+    }
+    Ok(serde_json::Value::String("[REDACTED]".to_string()))
 }
 
 /// Typed event: operation planning initiated.

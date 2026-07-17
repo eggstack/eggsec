@@ -53,7 +53,7 @@ def main() -> None:
         else:
             pass_("Schema version is 2.")
     else:
-        print("SKIP: _capabilities.json not found.")
+        fail("_capabilities.json not found — cannot validate architecture guards")
 
     # 2. Per-operation field completeness
     print()
@@ -239,9 +239,9 @@ def main() -> None:
         else:
             pass_("Sync and Async engine list_operations() return same 22 operations.")
     except FileNotFoundError:
-        print("SKIP: Python not available for runtime check.")
+        fail("Python not available for runtime check")
     except subprocess.TimeoutExpired:
-        print("SKIP: Runtime check timed out.")
+        fail("Runtime check timed out")
 
     # 7. Registry descriptor completeness
     print()

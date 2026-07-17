@@ -1780,6 +1780,23 @@ impl ToolFindingPy {
         dict.set_item("id", &self.inner.id)?;
         dict.set_item("finding_type", self.inner.finding_type.to_string())?;
         dict.set_item("severity", self.inner.severity.as_str())?;
+        dict.set_item("title", "[REDACTED]")?;
+        dict.set_item("description", "[REDACTED]")?;
+        dict.set_item("location", &self.inner.location)?;
+        dict.set_item(
+            "evidence",
+            self.inner.evidence.as_ref().map(|_| "[REDACTED]"),
+        )?;
+        dict.set_item("cve_ids", &self.inner.cve_ids)?;
+        dict.set_item("remediation", &self.inner.remediation)?;
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("id", &self.inner.id)?;
+        dict.set_item("finding_type", self.inner.finding_type.to_string())?;
+        dict.set_item("severity", self.inner.severity.as_str())?;
         dict.set_item("title", &self.inner.title)?;
         dict.set_item("description", &self.inner.description)?;
         dict.set_item("location", &self.inner.location)?;
@@ -1790,21 +1807,43 @@ impl ToolFindingPy {
     }
 
     fn to_json(&self) -> PyResult<String> {
+        let redacted = eggsec_tool_core::Finding {
+            id: self.inner.id.clone(),
+            finding_type: self.inner.finding_type,
+            severity: self.inner.severity,
+            title: "[REDACTED]".to_string(),
+            description: "[REDACTED]".to_string(),
+            location: self.inner.location.clone(),
+            evidence: self
+                .inner
+                .evidence
+                .as_ref()
+                .map(|_| "[REDACTED]".to_string()),
+            cve_ids: self.inner.cve_ids.clone(),
+            remediation: self.inner.remediation.clone(),
+            references: self.inner.references.clone(),
+            metadata: self.inner.metadata.clone(),
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(&self.inner)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "ToolFindingPy(id={}, finding_type={}, severity={}, title={})",
-            self.inner.id, self.inner.finding_type, self.inner.severity, self.inner.title
+            "ToolFindingPy(id={}, finding_type={}, severity={})",
+            self.inner.id, self.inner.finding_type, self.inner.severity
         )
     }
 
     fn __str__(&self) -> String {
         format!(
-            "[{}] {} at {}",
-            self.inner.severity, self.inner.title, self.inner.location
+            "[{}] finding at {}",
+            self.inner.severity, self.inner.location
         )
     }
 }

@@ -320,26 +320,26 @@ and domain graduation review.
   required)
 
 **Enhanced compatibility baseline**
-- `scripts/build_compatibility_baseline.py` — generates a compatibility
+- `scripts/generate_python_compatibility_baseline.py` — generates a compatibility
   baseline manifest recording the full stable-core API surface, type
   signatures, and schema versions for a given commit.
 - Baseline manifests are stored in `validation/compatibility/` and compared
   against the current build to detect accidental API breaks.
 
 **Semantic compatibility checker**
-- `scripts/compatibility_check.py` — compares the current build against
+- `scripts/check_python_compatibility.py` — compares the current build against
   a baseline manifest and reports semantic compatibility violations: removed
   types, changed signatures, stability regressions, and schema drift.
 - Integrated into the release evidence bundle to gate publication.
 
 **Resource budget enforcement**
-- `tests/test_resource_budgets.py` — enforces compile-time and runtime
+- `crates/eggsec-python/tests/test_resource_budgets.py` — enforces compile-time and runtime
   resource budgets: maximum module count, maximum exported symbol count,
   maximum dependency tree depth, and maximum wheel size.
 - Budgets prevent unbounded growth of the stable-core surface.
 
 **Comprehensive redaction testing**
-- `tests/test_redaction.py` — verifies that `SensitiveString` values are
+- `crates/eggsec-python/tests/test_redaction_comprehensive.py` — verifies that `SensitiveString` values are
   redacted in all repr, serialization, event envelope, checkpoint, and
   log output paths. Covers `to_dict()`, `to_json()`, `__repr__`,
   `__str__`, and checkpoint persistence.
@@ -1029,11 +1029,11 @@ blocking constraints, and privilege/schedule compatibility.
 
 ```bash
 # Generate a compatibility baseline from the current build
-python scripts/build_compatibility_baseline.py --commit <sha> \
+python scripts/generate_python_compatibility_baseline.py --commit <sha> \
     --output validation/compatibility/baseline.json
 
 # Check current build against a baseline
-python scripts/compatibility_check.py \
+python scripts/check_python_compatibility.py \
     --baseline validation/compatibility/baseline.json \
     --strict  # non-zero exit on any violation
 ```

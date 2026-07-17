@@ -84,8 +84,8 @@ def collect_stub_exports(stub_dir: Path) -> dict[str, set[str]]:
                     names.add(node.name)
                 elif isinstance(node, ast.ClassDef):
                     names.add(node.name)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"  Warning: failed to parse {stub_file.name}: {exc}", file=sys.stderr)
         exports[stub_file.name] = names
     return exports
 
@@ -244,7 +244,8 @@ def main() -> int:
         if not in_surface_not_in_all and not in_all_not_in_surface:
             print("  OK: api_surface() and __all__ are in sync")
     except ImportError:
-        print("  SKIP: eggsec not importable")
+        print("  FAIL: eggsec not importable — stub parity check requires installed package")
+        failures += 1
     except Exception as e:
         print(f"  WARN: api_surface() check failed: {e}")
     print()

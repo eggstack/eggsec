@@ -51,13 +51,13 @@
 |--------|---------------|-----------------|--------|
 | Core (22 operations) | stable | default-wheel | PENDING |
 | WebSocket | provisional | websocket | PENDING |
-| Git Secrets | provisional | git-secrets | PENDING |
-| SBOM | provisional | sbom | PENDING |
-| NSE Runtime | provisional | nse | PENDING |
-| Database Pentest | provisional | db-postgres/db-mysql | PENDING |
+| Git Secrets | stable | git-secrets | PENDING |
+| SBOM | stable | sbom | PENDING |
+| NSE Runtime | stable | nse | PENDING |
+| Database Pentest | stable | db-postgres/db-mysql | PENDING |
 | Web Proxy | provisional | web-proxy | PENDING |
-| Container | provisional | container | PENDING |
-| Mobile Static | provisional | mobile-static | PENDING |
+| Container | stable | container | PENDING |
+| Mobile Static | stable | mobile-static | PENDING |
 | Mobile Dynamic | experimental | mobile-emulator | PENDING |
 | Headless Browser | provisional | headless-browser | PENDING |
 | Daemon Client | provisional | daemon-client | PENDING |

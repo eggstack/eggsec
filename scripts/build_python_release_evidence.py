@@ -85,10 +85,9 @@ def collect_profile_manifest(out_dir: Path) -> Path:
     dest = out_dir / "profile-manifest.json"
     if PROFILES_JSON.exists():
         import shutil
-
         shutil.copy2(PROFILES_JSON, dest)
     else:
-        dest.write_text(json.dumps({"profiles": [], "_note": "profiles.json not found"}, indent=2))
+        raise FileNotFoundError(f"Required profiles.json not found at {PROFILES_JSON}")
     return dest
 
 
@@ -158,7 +157,7 @@ def collect_wheel_info(out_dir: Path) -> Path:
     dest = out_dir / "wheel-info.json"
     wheels = sorted(WHEEL_DIR.glob("*.whl")) if WHEEL_DIR.exists() else []
     if not wheels:
-        data = {"wheel_exists": False, "wheels": []}
+        raise FileNotFoundError(f"No wheel files found in {WHEEL_DIR}")
     else:
         wheel_entries = []
         for w in wheels:
@@ -182,7 +181,7 @@ def collect_wheel_info(out_dir: Path) -> Path:
 def _parse_junit(path: Path) -> dict[str, Any]:
     """Parse JUnit XML for pass/fail/skip/xfail counts and detailed records."""
     if not path.exists():
-        return {"exists": False}
+        raise FileNotFoundError(f"Required JUnit XML not found: {path}")
 
     import xml.etree.ElementTree as ET
 
@@ -321,8 +320,7 @@ def _run_guard(script: Path) -> dict[str, Any]:
         "output_preview": "",
     }
     if not script.exists():
-        result["output_preview"] = "script not found"
-        return result
+        raise FileNotFoundError(f"Required guard script not found: {script}")
     try:
         proc = subprocess.run(
             [sys.executable, str(script)] if script.suffix == ".py" else ["bash", str(script)],
@@ -438,7 +436,7 @@ def collect_binary_size_report(out_dir: Path) -> Path:
 def _parse_domain_maturity() -> dict[str, str]:
     """Extract domain -> maturity from domains.rs."""
     if not DOMAINS_RS.exists():
-        return {}
+        raise FileNotFoundError(f"Required domains.rs not found at {DOMAINS_RS}")
     content = DOMAINS_RS.read_text()
     pattern = re.compile(
         r'\(\s*\n?\s*"([^"]+)"\s*,\s*\n?\s*"([^"]+)"\s*,\s*\n?\s*"([^"]*)"\s*,?\s*\n?\s*\)',
@@ -487,12 +485,7 @@ def collect_junit_xml(out_dir: Path) -> Path:
         import shutil
         shutil.copy2(JUNIT_XML, dest)
     else:
-        dest.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<testsuites _note="JUnit XML not found">\n'
-            '  <testsuite name="eggsec-python" tests="0"/>\n'
-            "</testsuites>\n"
-        )
+        raise FileNotFoundError(f"Required JUnit XML not found at {JUNIT_XML}")
     return dest
 
 
@@ -642,6 +635,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     generated: list[Path] = []
+    collector_failures = []
     for name, collector in collectors:
         try:
             path = collector()
@@ -649,10 +643,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [ok] {name}")
         except Exception as exc:
             print(f"  [FAIL] {name}: {exc}", file=sys.stderr)
+            collector_failures.append(name)
             # Create a stub so the summary can reference it
             stub = out_dir / name
             stub.write_text(json.dumps({"error": str(exc)}, indent=2) + "\n")
             generated.append(stub)
+
+    if collector_failures:
+        print(f"\nFATAL: {len(collector_failures)} collector(s) failed: {', '.join(collector_failures)}", file=sys.stderr)
+        sys.exit(1)
 
     summary_path = build_summary(commit, out_dir, generated)
     print(f"  [ok] evidence-summary.json")

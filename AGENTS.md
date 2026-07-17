@@ -140,6 +140,8 @@ GitHub Actions (`.github/workflows/`):
 - `deep-checks.yml` — weekly all-features workspace build/test
 - `security-scan.yml` — daily scan pipeline
 
+- TestPyPI rehearsal (manual trigger): `.github/workflows/testpypi-rehearsal.yml`
+
 GitLab CI (`.gitlab-ci.yml`) — pre-built binary scan jobs (not build-from-source).
 
 ## Architecture
@@ -312,6 +314,7 @@ Key checks:
 - `NseRunReport.libraries` is per-run require activity, not registry dump
 - HTTP library routes through `check_network_tcp()` before reqwest
 - Runtime has no persistence dependencies (rusqlite/sqlx)
+- Documentation reference consistency checked by `scripts/check_doc_references.py`
 
 See `docs/CI_ARCHITECTURE_GUARDS.md` for the full inventory.
 

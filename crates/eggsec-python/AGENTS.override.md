@@ -116,7 +116,7 @@ pytest crates/eggsec-python/tests/        # Python-side tests
 
 ### Profile Manifest
 
-`scripts/profiles.json` defines named test profiles (e.g., `smoke`, `full`, `release-candidate`). Each profile specifies which Python test paths to run, feature gates, and skip-budget thresholds. The manifest is the single source of truth for profile-based CI and local validation.
+`crates/eggsec-python/validation/profiles.json` defines named test profiles (e.g., `smoke`, `full`, `release-candidate`). Each profile specifies which Python test paths to run, feature gates, and skip-budget thresholds. The manifest is the single source of truth for profile-based CI and local validation.
 
 ### Profile Runner
 

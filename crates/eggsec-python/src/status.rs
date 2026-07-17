@@ -183,8 +183,7 @@ impl OperationError {
 
     #[staticmethod]
     fn from_json(s: &str) -> PyResult<Self> {
-        serde_json::from_str(s)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+        serde_json::from_str(s).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 
@@ -406,12 +405,15 @@ impl ExecutionStatus {
             "Pending" => Ok(Self::Pending()),
             "Running" => Ok(Self::Running()),
             "Completed" => Ok(Self::Completed()),
-            "Failed" => Ok(Self::Failed { error: String::new() }),
+            "Failed" => Ok(Self::Failed {
+                error: String::new(),
+            }),
             "Cancelled" => Ok(Self::Cancelled { reason: None }),
             "Timeout" => Ok(Self::Timeout { elapsed_ms: 0 }),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Unknown execution status: {}", s)
-            )),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown execution status: {}",
+                s
+            ))),
         }
     }
 
@@ -503,8 +505,7 @@ impl ExecutionStats {
 
     #[staticmethod]
     fn from_json(s: &str) -> PyResult<Self> {
-        serde_json::from_str(s)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+        serde_json::from_str(s).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 
@@ -546,6 +547,16 @@ impl Artifact {
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
+        dict.set_item("name", "[REDACTED]")?;
+        dict.set_item("kind", &self.kind)?;
+        dict.set_item("mime_type", &self.mime_type)?;
+        dict.set_item("data", &self.data)?;
+        dict.set_item("path", &self.path)?;
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -555,18 +566,37 @@ impl Artifact {
     }
 
     fn to_json(&self) -> PyResult<String> {
-        serde_json::to_string(self)
+        let val = serde_json::json!({
+            "name": "[REDACTED]",
+            "kind": self.kind,
+            "mime_type": self.mime_type,
+            "data": self.data,
+            "path": self.path,
+        });
+        serde_json::to_string(&val)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
+        let val = serde_json::json!({
+            "name": self.name,
+            "kind": self.kind,
+            "mime_type": self.mime_type,
+            "data": self.data,
+            "path": self.path,
+        });
+        serde_json::to_string(&val)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     fn __repr__(&self) -> String {
-        format!("Artifact(name={}, kind={})", self.name, self.kind)
+        format!("Artifact(kind={})", self.kind)
     }
 
     fn __str__(&self) -> String {
         match &self.path {
-            Some(p) => format!("{} ({})", self.name, p),
-            None => self.name.clone(),
+            Some(p) => format!("{} ({})", self.kind, p),
+            None => self.kind.clone(),
         }
     }
 
@@ -579,8 +609,7 @@ impl Artifact {
 
     #[staticmethod]
     fn from_json(s: &str) -> PyResult<Self> {
-        serde_json::from_str(s)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+        serde_json::from_str(s).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 

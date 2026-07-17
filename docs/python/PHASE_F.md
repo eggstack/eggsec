@@ -45,33 +45,33 @@ the evidence bundle but do not block.
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/build_compatibility_baseline.py` | Generate compatibility baseline manifests |
-| `scripts/compatibility_check.py` | Semantic compatibility checker |
+| `scripts/generate_python_compatibility_baseline.py` | Generate compatibility baseline manifests |
+| `scripts/check_python_compatibility.py` | Semantic compatibility checker |
 | `scripts/build_python_release_evidence.py` | Aggregate all evidence into release bundle |
 
 ## Key Test Files
 
 | Test File | Purpose |
 |-----------|---------|
-| `tests/test_resource_budgets.py` | Resource budget enforcement |
-| `tests/test_redaction.py` | Redaction coverage verification |
+| `crates/eggsec-python/tests/test_resource_budgets.py` | Resource budget enforcement |
+| `crates/eggsec-python/tests/test_redaction_comprehensive.py` | Redaction coverage verification |
 
 ## Running Phase F Checks
 
 ```bash
 # Generate compatibility baseline
-python scripts/build_compatibility_baseline.py --commit <sha> \
+python scripts/generate_python_compatibility_baseline.py --commit <sha> \
     --output validation/compatibility/baseline.json
 
 # Check compatibility
-python scripts/compatibility_check.py \
+python scripts/check_python_compatibility.py \
     --baseline validation/compatibility/baseline.json
 
 # Run resource budget tests
 pytest crates/eggsec-python/tests/test_resource_budgets.py
 
 # Run redaction tests
-pytest crates/eggsec-python/tests/test_redaction.py
+pytest crates/eggsec-python/tests/test_redaction_comprehensive.py
 
 # Full evidence bundle (includes Phase F artifacts)
 python scripts/build_python_release_evidence.py --commit <sha>

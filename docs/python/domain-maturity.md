@@ -75,20 +75,21 @@ until they satisfy the graduation checklist:
 | `container` | `scan_docker_image`, `scan_kubernetes` | Canonical operation IDs, policy gate, typed results |
 | `mobile-static` | `analyze_apk`, `analyze_ipa` | Canonical operation IDs, policy gate, typed results |
 
-### Experimental Domains (conditional graduation candidates)
+### Provisional Domains
 
-| Domain | Notes |
-|--------|-------|
-| `browser` | Conditional candidate, not yet graduated |
-| `hunt` | Conditional candidate, not yet graduated |
+| Domain | Operation ID(s) | Notes |
+|--------|-----------------|-------|
+| `browser` | -- | Conditional candidate, not yet graduated; session types well-tested (1375 lines) |
+| `hunt` | -- | Conditional candidate, not yet graduated; type surface exists |
+| `daemon` | -- | Transport parity pending |
+| `proxy` | -- | MITM interception semantics remain hazardous |
+| `packet-inspection` | -- | Platform/system dependency and lifecycle coverage pending |
+| `mobile-dynamic` | -- | Session type tests; requires Android emulator |
 
-### Provisional / Experimental (unchanged)
+### Experimental Domains
 
 | Domain | Status | Notes |
 |--------|--------|-------|
-| `daemon` | provisional | Transport parity pending |
-| `proxy` | experimental | MITM interception semantics remain hazardous |
-| `packet-inspection` | experimental | Platform/system dependency and lifecycle coverage pending |
 | `wireless` | experimental | Platform-sensitive, root required |
 | `evasion` | experimental | MITRE ATT&CK mapped |
 | `postex` | experimental | Post-exploitation simulation |

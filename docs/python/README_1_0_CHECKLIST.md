@@ -421,7 +421,7 @@ core, scanner, async-api, endpoint-discovery, service-fingerprinting, waf-detect
 **Feature-gated (22):**
 websocket, git-secrets, sbom, db-pentest, db-pentest-mongodb, db-pentest-redis, web-proxy, mobile, mobile-dynamic, packet-inspection, stress-testing, nse, container, daemon-client, headless-browser, advanced-hunting, compliance, wireless, evasion, postex, c2, ai-integration
 
-**Note:** The `features()` function returns only 24 features (10 always + 14 feature-gated), while `feature_matrix()` returns all 32. The difference is that `feature_matrix()` includes headless-browser, advanced-hunting, compliance, wireless, evasion, postex, c2, and ai-integration which are defined only in `feature_matrix()`, not in `features()`.
+**Note:** The `features()` function returns only 24 features (10 always + 14 feature-gated), while `feature_matrix()` returns all 32. The difference is that `feature_matrix()` includes headless-browser, advanced-hunting, compliance, wireless, evasion, postex, c2, and ai-integration which are defined only in `feature_matrix()`, not in `features()`. This is a known divergence tracked for 1.0 closure (see WORKSTREAM G12). The two functions serve different purposes: `features()` reports compiled-in feature flags, while `feature_matrix()` reports the full inventory of feature-gated capability areas including those that exist only as metadata without separate feature gates.
 
 ### has_feature() coverage
 

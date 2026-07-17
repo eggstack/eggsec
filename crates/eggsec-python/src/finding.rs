@@ -120,6 +120,20 @@ impl Evidence {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("kind", &self.kind)?;
+        dict.set_item("value", "[REDACTED]")?;
+        dict.set_item("source", &self.source)?;
+        dict.set_item("confidence", self.confidence)?;
+        let meta_dict = PyDict::new_bound(py);
+        for (k, v) in &self.metadata {
+            meta_dict.set_item(k, v)?;
+        }
+        dict.set_item("metadata", meta_dict)?;
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("kind", &self.kind)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("source", &self.source)?;
         dict.set_item("confidence", self.confidence)?;
@@ -132,6 +146,18 @@ impl Evidence {
     }
 
     fn to_json(&self) -> PyResult<String> {
+        let redacted = Evidence {
+            kind: self.kind.clone(),
+            value: "[REDACTED]".to_string(),
+            source: self.source.clone(),
+            confidence: self.confidence,
+            metadata: self.metadata.clone(),
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
@@ -205,8 +231,44 @@ impl Finding {
         Ok(dict.into())
     }
 
-    /// Convert to a Python dictionary.
+    /// Convert to a Python dictionary (redacted by default).
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("id", &self.id)?;
+        dict.set_item("title", "[REDACTED]")?;
+        dict.set_item("severity", self.severity.as_str())?;
+        dict.set_item("target", &self.target)?;
+        dict.set_item("category", &self.category)?;
+        dict.set_item("description", "[REDACTED]")?;
+        dict.set_item("recommendation", &self.recommendation)?;
+
+        let evidence_list = PyList::empty_bound(py);
+        for e in &self.evidence_items {
+            let ev_dict = PyDict::new_bound(py);
+            ev_dict.set_item("kind", &e.kind)?;
+            ev_dict.set_item("value", "[REDACTED]")?;
+            ev_dict.set_item("source", &e.source)?;
+            ev_dict.set_item("confidence", e.confidence)?;
+            let meta_dict = PyDict::new_bound(py);
+            for (k, v) in &e.metadata {
+                meta_dict.set_item(k, v)?;
+            }
+            ev_dict.set_item("metadata", meta_dict)?;
+            evidence_list.append(ev_dict)?;
+        }
+        dict.set_item("evidence", evidence_list)?;
+
+        let meta_dict = PyDict::new_bound(py);
+        for (k, _v) in &self.metadata {
+            meta_dict.set_item(k, "[REDACTED]")?;
+        }
+        dict.set_item("metadata", meta_dict)?;
+
+        Ok(dict.into())
+    }
+
+    /// Convert to a Python dictionary with raw (unredacted) values.
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("title", &self.title)?;
@@ -218,7 +280,7 @@ impl Finding {
 
         let evidence_list = PyList::empty_bound(py);
         for e in &self.evidence_items {
-            evidence_list.append(e.to_dict(py)?)?;
+            evidence_list.append(e.to_dict_raw(py)?)?;
         }
         dict.set_item("evidence", evidence_list)?;
 
@@ -231,8 +293,41 @@ impl Finding {
         Ok(dict.into())
     }
 
-    /// Convert to a JSON string.
+    /// Convert to a JSON string (redacted by default).
     fn to_json(&self) -> PyResult<String> {
+        let redacted_evidence: Vec<Evidence> = self
+            .evidence_items
+            .iter()
+            .map(|e| Evidence {
+                kind: e.kind.clone(),
+                value: "[REDACTED]".to_string(),
+                source: e.source.clone(),
+                confidence: e.confidence,
+                metadata: e.metadata.clone(),
+            })
+            .collect();
+        let redacted_metadata: std::collections::HashMap<String, String> = self
+            .metadata
+            .keys()
+            .map(|k| (k.clone(), "[REDACTED]".to_string()))
+            .collect();
+        let redacted = Finding {
+            id: self.id.clone(),
+            title: "[REDACTED]".to_string(),
+            severity: self.severity,
+            target: self.target.clone(),
+            category: self.category.clone(),
+            description: "[REDACTED]".to_string(),
+            recommendation: self.recommendation.clone(),
+            evidence_items: redacted_evidence,
+            metadata: redacted_metadata,
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Convert to a JSON string with raw (unredacted) values.
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
@@ -250,12 +345,7 @@ impl Finding {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "Finding(id={}, severity={}, title={})",
-            self.id,
-            self.severity.as_str(),
-            self.title
-        )
+        format!("Finding(id={})", self.id)
     }
 
     fn __hash__(&self) -> u64 {
@@ -561,12 +651,28 @@ impl Report {
         Ok(dict.into())
     }
 
-    /// Convert to a Python dictionary.
+    /// Convert to a Python dictionary (redacted by default).
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         let findings_list = PyList::empty_bound(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
+        }
+        dict.set_item("findings", findings_list)?;
+        let meta_dict = PyDict::new_bound(py);
+        for (k, _v) in &self.metadata {
+            meta_dict.set_item(k, "[REDACTED]")?;
+        }
+        dict.set_item("metadata", meta_dict)?;
+        Ok(dict.into())
+    }
+
+    /// Convert to a Python dictionary with raw (unredacted) values.
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        let findings_list = PyList::empty_bound(py);
+        for f in &self.findings {
+            findings_list.append(f.to_dict_raw(py)?)?;
         }
         dict.set_item("findings", findings_list)?;
         let meta_dict = PyDict::new_bound(py);
@@ -577,8 +683,56 @@ impl Report {
         Ok(dict.into())
     }
 
-    /// Convert to a JSON string.
+    /// Convert to a JSON string (redacted by default).
     fn to_json(&self) -> PyResult<String> {
+        let redacted_findings: Vec<Finding> = self
+            .findings
+            .iter()
+            .map(|f| {
+                let redacted_evidence: Vec<Evidence> = f
+                    .evidence_items
+                    .iter()
+                    .map(|e| Evidence {
+                        kind: e.kind.clone(),
+                        value: "[REDACTED]".to_string(),
+                        source: e.source.clone(),
+                        confidence: e.confidence,
+                        metadata: e.metadata.clone(),
+                    })
+                    .collect();
+                let redacted_metadata: std::collections::HashMap<String, String> = f
+                    .metadata
+                    .keys()
+                    .map(|k| (k.clone(), "[REDACTED]".to_string()))
+                    .collect();
+                Finding {
+                    id: f.id.clone(),
+                    title: "[REDACTED]".to_string(),
+                    severity: f.severity,
+                    target: f.target.clone(),
+                    category: f.category.clone(),
+                    description: "[REDACTED]".to_string(),
+                    recommendation: f.recommendation.clone(),
+                    evidence_items: redacted_evidence,
+                    metadata: redacted_metadata,
+                }
+            })
+            .collect();
+        let redacted_metadata: std::collections::HashMap<String, String> = self
+            .metadata
+            .keys()
+            .map(|k| (k.clone(), "[REDACTED]".to_string()))
+            .collect();
+        let redacted = Report {
+            findings: redacted_findings,
+            metadata: redacted_metadata,
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Convert to a JSON string with raw (unredacted) values.
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }

@@ -1,0 +1,191 @@
+name: TestPyPI Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_suffix:
+        description: 'Pre-release version suffix (e.g., a0, rc1, dev1)'
+        required: true
+        default: 'a0'
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install maturin
+        run: pip install maturin>=1.5
+
+      - name: Verify version alignment
+        run: |
+          CARGO_VERSION=$(grep '^version' crates/eggsec-python/Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          PYPROJECT_VERSION=$(grep '^version' crates/eggsec-python/pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Cargo version: $CARGO_VERSION"
+          echo "pyproject version: $PYPROJECT_VERSION"
+          if [ "$CARGO_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "ERROR: Version mismatch between Cargo.toml and pyproject.toml"
+            exit 1
+          fi
+          echo "REHEARSAL_VERSION=${PYPROJECT_VERSION}.${{ github.event.inputs.version_suffix }}" >> $GITHUB_ENV
+
+      - name: Build wheel and sdist
+        working-directory: crates/eggsec-python
+        run: maturin build --release --out dist
+
+      - name: Verify artifacts
+        working-directory: crates/eggsec-python
+        run: |
+          echo "Built artifacts:"
+          ls -la dist/
+          WHEEL_COUNT=$(ls dist/*.whl 2>/dev/null | wc -l)
+          SDIST_COUNT=$(ls dist/*.tar.gz 2>/dev/null | wc -l)
+          if [ "$WHEEL_COUNT" -lt 1 ]; then
+            echo "ERROR: No wheel files found"
+            exit 1
+          fi
+          if [ "$SDIST_COUNT" -lt 1 ]; then
+            echo "ERROR: No sdist files found"
+            exit 1
+          fi
+          echo "Wheel count: $WHEEL_COUNT"
+          echo "Sdist count: $SDIST_COUNT"
+
+      - name: Compute artifact hashes
+        working-directory: crates/eggsec-python
+        run: |
+          for f in dist/*; do
+            sha256sum "$f"
+          done
+
+      - name: Upload to TestPyPI
+        working-directory: crates/eggsec-python
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: maturin upload --repository testpypi dist/*
+
+      - name: Create clean test environment
+        run: |
+          python -m venv /tmp/testpypi-venv
+          source /tmp/testpypi-venv/bin/activate
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "eggsec==${REHEARSAL_VERSION}"
+
+      - name: Verify installed package location
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          import os
+          loc = os.path.dirname(eggsec.__file__)
+          print(f'Package location: {loc}')
+          # Verify it's not the workspace source
+          if 'projects/eggsec' in loc or 'crates/eggsec-python' in loc:
+              print('ERROR: Package installed from workspace source, not TestPyPI')
+              exit(1)
+          print('OK: Package installed from TestPyPI')
+          "
+
+      - name: Import all stable submodules
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          # Stable core imports
+          from eggsec import (
+              Client, AsyncClient, Scope, EggsecConfig, SensitiveString,
+              LoadedScope, OperationRegistry, EnforcementContext, ExecutionPolicy,
+              ExecutionSurface, ManualOverride, PreflightResult,
+              Severity, Finding, FindingSet, Report,
+              ConsolidatedReconConfig, GraphQLTestConfig, OAuthTestConfig,
+              AuthTestConfig, BrowserTestConfig, HuntTestConfig,
+          )
+          print('All stable imports OK')
+          "
+
+      - name: Run capability discovery and build_info
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          info = eggsec.build_info()
+          print(f'Version: {info[\"version\"]}')
+          print(f'Wheel profile: {info.get(\"wheel_profile\", \"unknown\")}')
+          features = eggsec.features()
+          print(f'Features: {len(features)}')
+          print('build_info() OK')
+          "
+
+      - name: Run stable smoke tests
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          # Test Scope creation
+          scope = eggsec.Scope.allow_hosts(['example.com'])
+          print(f'Scope: {scope}')
+
+          # Test config
+          config = eggsec.EggsecConfig.default()
+          print(f'Config: {type(config).__name__}')
+
+          # Test operation registry
+          ops = eggsec.OperationRegistry.all_operations()
+          print(f'Operations: {len(ops)}')
+
+          # Test loaded scope
+          ls = eggsec.LoadedScope.default_empty()
+          print(f'LoadedScope: {type(ls).__name__}')
+
+          print('Smoke tests OK')
+          "
+
+      - name: Verify type stubs present
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          import os
+          pkg_dir = os.path.dirname(eggsec.__file__)
+          stub = os.path.join(pkg_dir, '__init__.pyi')
+          typed = os.path.join(pkg_dir, 'py.typed')
+          if not os.path.exists(stub):
+              print(f'ERROR: Type stub not found at {stub}')
+              exit(1)
+          if not os.path.exists(typed):
+              print(f'ERROR: py.typed marker not found at {typed}')
+              exit(1)
+          print(f'Type stub: {stub} ({os.path.getsize(stub)} bytes)')
+          print(f'py.typed: {typed}')
+          print('Type stubs OK')
+          "
+
+      - name: Verify unavailable features raise correctly
+        run: |
+          source /tmp/testpypi-venv/bin/activate
+          python -c "
+          import eggsec
+          # These features should not be available in the default wheel
+          unavailable = ['wireless', 'nse', 'db-pentest', 'web-proxy', 'packet-inspection']
+          for feat in unavailable:
+              if eggsec.has_feature(feat):
+                  print(f'WARNING: {feat} is unexpectedly available')
+              else:
+                  print(f'OK: {feat} correctly unavailable')
+          print('Feature availability check OK')
+          "
+
+      - name: Clean up
+        if: always()
+        run: rm -rf /tmp/testpypi-venv

@@ -173,6 +173,19 @@ installed-wheel smoke test. The normal resolver and policy gate remain
 unchanged for callers. The first-release contract is local `Engine` and
 `AsyncEngine`; daemon-client execution is provisional.
 
+## Release Evidence Pipeline
+
+The release evidence pipeline validates that all release gates are met:
+
+- `scripts/build_python_release_evidence.py` — builds evidence bundle (fail-closed: missing artifacts cause hard failure)
+- `scripts/python_skip_budget.py` — enforces skip budgets (fail-closed: missing JUnit causes hard failure)
+- `scripts/validate_python_profiles.py` — validates profile manifest
+- `scripts/check_python_compatibility.py` — semantic compatibility checker
+- `scripts/generate_python_compatibility_baseline.py` — regenerates compatibility baseline
+- `scripts/check_doc_references.py` — documentation reference consistency checker
+
+Negative tests: `tests/test_evidence_failclosed.py`
+
 ## API Surface
 
 ### Classes
@@ -1239,7 +1252,10 @@ Release 2 types follow existing eggsec-python conventions:
   that method.
 - **Redaction**: `HttpClientPy` and `AsyncHttpClientPy` automatically redact
   sensitive headers (`Authorization`, `Cookie`, etc.) from transcripts and
-  evidence.
+  evidence. Redaction is fail-closed by default: `to_dict()`, `to_json()`,
+  `__repr__`, `__str__`, and checkpoint persistence always redact
+  `SensitiveString` values. Use `to_dict_raw()` / `to_json_raw()` for
+  explicit unredacted access when needed.
 
 ### How to Add New Network Types
 
@@ -1982,8 +1998,8 @@ and domain graduation review.
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/build_compatibility_baseline.py` | Generates a compatibility baseline manifest from the current build (API surface, type signatures, schema versions) |
-| `scripts/compatibility_check.py` | Compares current build against a baseline manifest and reports semantic compatibility violations |
+| `scripts/generate_python_compatibility_baseline.py` | Generates a compatibility baseline manifest from the current build (API surface, type signatures, schema versions) |
+| `scripts/check_python_compatibility.py` | Compares current build against a baseline manifest and reports semantic compatibility violations |
 
 Baseline manifests are stored in `validation/compatibility/` and compared
 against each build to detect accidental API breaks. The checker detects:
@@ -1992,7 +2008,7 @@ version drift, and missing audit coverage.
 
 ### Resource Budget Enforcement
 
-**Test file**: `tests/test_resource_budgets.py`
+**Test file**: `crates/eggsec-python/tests/test_resource_budgets.py`
 
 Enforces compile-time and runtime resource budgets:
 - Maximum module count
@@ -2002,7 +2018,7 @@ Enforces compile-time and runtime resource budgets:
 
 ### Comprehensive Redaction Testing
 
-**Test file**: `tests/test_redaction.py`
+**Test file**: `crates/eggsec-python/tests/test_redaction_comprehensive.py`
 
 Verifies that `SensitiveString` values are redacted in all paths:
 `to_dict()`, `to_json()`, `__repr__`, `__str__`, checkpoint persistence,
@@ -2030,10 +2046,10 @@ The release evidence bundle now includes:
 
 | File | Purpose |
 |------|---------|
-| `scripts/build_compatibility_baseline.py` | Generate compatibility baseline manifests |
-| `scripts/compatibility_check.py` | Semantic compatibility checker |
-| `tests/test_resource_budgets.py` | Resource budget enforcement tests |
-| `tests/test_redaction.py` | Redaction coverage tests |
+| `scripts/generate_python_compatibility_baseline.py` | Generate compatibility baseline manifests |
+| `scripts/check_python_compatibility.py` | Semantic compatibility checker |
+| `crates/eggsec-python/tests/test_resource_budgets.py` | Resource budget enforcement tests |
+| `crates/eggsec-python/tests/test_redaction_comprehensive.py` | Redaction coverage tests |
 | `docs/python/COMPATIBILITY_POLICY.md` | Compatibility policy and violation taxonomy |
 | `docs/python/GRADUATION_REVIEW.md` | Domain graduation review template |
 | `docs/python/STABILITY_CLASSIFICATIONS.md` | Updated with maturity-aware severity rules |

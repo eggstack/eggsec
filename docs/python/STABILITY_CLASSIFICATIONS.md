@@ -16,6 +16,7 @@ level. This document is the canonical mapping from symbol to classification.
 |-------|-----------|
 | **stable** | Will not change without a major version bump. Deprecation window before removal. |
 | **stable (limited)** | Correct behavior guaranteed; output format or container may expand with new optional fields. |
+| **provisional** | APIs that are functional and tested but not yet guaranteed stable across versions. May change without major-version bump. |
 | **experimental** | May change or be removed without notice. Lives in `eggsec.experimental` namespace. |
 | **deprecated** | Will be removed. Replacement documented. |
 
@@ -342,7 +343,7 @@ version.
 - `AuthTestConfig`
 - `AuthTestReport`
 
-## Stable — Milestone F: Distributed
+## Provisional — Milestone F: Distributed
 
 - `DistributedTaskType` (enum)
 - `WorkerStatus`
@@ -353,7 +354,7 @@ version.
 - `distributed_task_types` (function)
 - `distributed_generate_psk` (function)
 
-## Stable — Milestone F: Notifications
+## Provisional — Milestone F: Notifications
 
 - `WebhookEvent`
 - `FindingSummary`

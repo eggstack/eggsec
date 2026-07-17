@@ -172,6 +172,21 @@ impl ArtifactPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("id", &self.id)?;
+        dict.set_item("name", "[REDACTED]")?;
+        dict.set_item("mime_type", &self.mime_type)?;
+        dict.set_item("size_bytes", self.size_bytes)?;
+        dict.set_item("content_hash", &self.content_hash)?;
+        dict.set_item("provenance", &self.provenance)?;
+        dict.set_item("redacted", self.redacted)?;
+        dict.set_item("retention_policy", &self.retention_policy)?;
+        dict.set_item("external_uri", &self.external_uri)?;
+        dict.set_item("has_content", self.content.is_some())?;
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("mime_type", &self.mime_type)?;
         dict.set_item("size_bytes", self.size_bytes)?;
@@ -185,15 +200,31 @@ impl ArtifactPy {
     }
 
     fn to_json(&self) -> PyResult<String> {
+        let redacted = ArtifactPy {
+            id: self.id.clone(),
+            name: "[REDACTED]".to_string(),
+            mime_type: self.mime_type.clone(),
+            size_bytes: self.size_bytes,
+            content_hash: self.content_hash.clone(),
+            provenance: self.provenance.clone(),
+            redacted: self.redacted,
+            retention_policy: self.retention_policy.clone(),
+            external_uri: self.external_uri.clone(),
+            content: None,
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "Artifact(id={}, name={}, mime_type={}, has_content={})",
+            "Artifact(id={}, mime_type={}, has_content={})",
             self.id,
-            self.name,
             self.mime_type,
             self.content.is_some()
         )

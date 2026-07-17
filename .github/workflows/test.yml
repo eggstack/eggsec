@@ -502,7 +502,8 @@ jobs:
               --manifest crates/eggsec-python/validation/profiles.json \
               --junit-xml /tmp/test-results/test-results-default-wheel.xml
           else
-            echo "No JUnit XML found, skipping budget enforcement"
+            echo "ERROR: No JUnit XML found — budget enforcement requires test results"
+            exit 1
           fi
 
   python-release-gate:

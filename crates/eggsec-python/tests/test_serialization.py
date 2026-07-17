@@ -194,7 +194,7 @@ class TestResultRoundTrip:
             data="base64data",
             path="/tmp/sentinel.pcap",
         )
-        j = art.to_json()
+        j = art.to_json_raw()
         parsed = json.loads(j)
         assert parsed["name"] == "sentinel-artifact"
         assert parsed["kind"] == "pcap"

@@ -26,9 +26,10 @@ impl ConfidencePy {
             "medium" => Ok(Self::Medium),
             "low" => Ok(Self::Low),
             "informational" | "info" => Ok(Self::Informational),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Unknown confidence: {}", s)
-            )),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown confidence: {}",
+                s
+            ))),
         }
     }
 
@@ -90,9 +91,10 @@ impl FindingTypePy {
             "waf_detection" | "wafdetection" => Ok(Self::WafDetection),
             "fuzz_result" | "fuzzresult" => Ok(Self::FuzzResult),
             "scan_result" | "scanresult" => Ok(Self::ScanResult),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Unknown finding type: {}", s)
-            )),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown finding type: {}",
+                s
+            ))),
         }
     }
 
@@ -156,9 +158,10 @@ impl EvidenceKindPy {
             "Screenshot" | "screenshot" => Ok(Self::Screenshot),
             "FilePath" | "file_path" | "filepath" => Ok(Self::FilePath),
             "LogLine" | "log_line" | "logline" => Ok(Self::LogLine),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Unknown evidence kind: {}", s)
-            )),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown evidence kind: {}",
+                s
+            ))),
         }
     }
 
@@ -361,6 +364,15 @@ impl VersionedEvidencePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("kind", self.kind.as_str())?;
+        dict.set_item("summary", "[REDACTED]")?;
+        dict.set_item("data", &self.data)?;
+        dict.set_item("redacted", self.redacted)?;
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("kind", self.kind.as_str())?;
         dict.set_item("summary", &self.summary)?;
         dict.set_item("data", &self.data)?;
         dict.set_item("redacted", self.redacted)?;
@@ -368,6 +380,17 @@ impl VersionedEvidencePy {
     }
 
     fn to_json(&self) -> PyResult<String> {
+        let redacted = VersionedEvidencePy {
+            kind: self.kind.clone(),
+            redacted: self.redacted,
+            summary: "[REDACTED]".to_string(),
+            data: self.data.clone(),
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
@@ -503,6 +526,43 @@ impl VersionedFindingPy {
         dict.set_item("id", &self.id)?;
         dict.set_item("fingerprint", &self.fingerprint)?;
         dict.set_item("title", &self.title)?;
+        dict.set_item("description", "[REDACTED]")?;
+        dict.set_item("severity", &self.severity)?;
+        dict.set_item("confidence", self.confidence.as_str())?;
+        dict.set_item("finding_type", self.finding_type.as_str())?;
+        dict.set_item("cwe", &self.cwe)?;
+        dict.set_item("owasp", &self.owasp)?;
+        dict.set_item("cve", &self.cve)?;
+        dict.set_item("affected_asset", self.affected_asset.to_dict(py)?)?;
+        dict.set_item("location", self.location.to_dict(py)?)?;
+
+        let evidence_list = PyList::empty_bound(py);
+        for e in &self.evidence {
+            let ev_dict = PyDict::new_bound(py);
+            ev_dict.set_item("kind", e.kind.as_str())?;
+            ev_dict.set_item("summary", "[REDACTED]")?;
+            ev_dict.set_item("data", &e.data)?;
+            ev_dict.set_item("redacted", e.redacted)?;
+            evidence_list.append(ev_dict)?;
+        }
+        dict.set_item("evidence", evidence_list)?;
+
+        dict.set_item("remediation", &self.remediation)?;
+        dict.set_item("tags", &self.tags)?;
+        dict.set_item("discovered_at", &self.discovered_at)?;
+        dict.set_item("source_tool", &self.source_tool)?;
+        dict.set_item("source_module", &self.source_module)?;
+        dict.set_item("metadata", "[REDACTED]")?;
+
+        Ok(dict.into())
+    }
+
+    fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("schema_version", &self.schema_version)?;
+        dict.set_item("id", &self.id)?;
+        dict.set_item("fingerprint", &self.fingerprint)?;
+        dict.set_item("title", &self.title)?;
         dict.set_item("description", &self.description)?;
         dict.set_item("severity", &self.severity)?;
         dict.set_item("confidence", self.confidence.as_str())?;
@@ -515,7 +575,7 @@ impl VersionedFindingPy {
 
         let evidence_list = PyList::empty_bound(py);
         for e in &self.evidence {
-            evidence_list.append(e.to_dict(py)?)?;
+            evidence_list.append(e.to_dict_raw(py)?)?;
         }
         dict.set_item("evidence", evidence_list)?;
 
@@ -530,6 +590,43 @@ impl VersionedFindingPy {
     }
 
     fn to_json(&self) -> PyResult<String> {
+        let redacted_evidence: Vec<VersionedEvidencePy> = self
+            .evidence
+            .iter()
+            .map(|e| VersionedEvidencePy {
+                kind: e.kind.clone(),
+                redacted: e.redacted,
+                summary: "[REDACTED]".to_string(),
+                data: e.data.clone(),
+            })
+            .collect();
+        let redacted = VersionedFindingPy {
+            schema_version: self.schema_version.clone(),
+            id: self.id.clone(),
+            fingerprint: self.fingerprint.clone(),
+            title: self.title.clone(),
+            description: "[REDACTED]".to_string(),
+            severity: self.severity.clone(),
+            confidence: self.confidence.clone(),
+            finding_type: self.finding_type.clone(),
+            cwe: self.cwe.clone(),
+            owasp: self.owasp.clone(),
+            cve: self.cve.clone(),
+            affected_asset: self.affected_asset.clone(),
+            location: self.location.clone(),
+            evidence: redacted_evidence,
+            remediation: self.remediation.clone(),
+            tags: self.tags.clone(),
+            discovered_at: self.discovered_at.clone(),
+            source_tool: self.source_tool.clone(),
+            source_module: self.source_module.clone(),
+            metadata: "[REDACTED]".to_string(),
+        };
+        serde_json::to_string(&redacted)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    fn to_json_raw(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
