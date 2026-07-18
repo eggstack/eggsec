@@ -141,10 +141,10 @@ class TestHeadlessBrowserProfile:
         reason="headless-browser feature not enabled",
     )
     def test_browser_types_importable(self):
-        assert hasattr(eggsec, "BrowserTestConfig")
-        assert hasattr(eggsec, "BrowserTestReport")
-        assert hasattr(eggsec, "DomXssFinding")
-        assert hasattr(eggsec, "SpaRoute")
+        assert hasattr(eggsec, "BrowserTestConfigPy")
+        assert hasattr(eggsec, "BrowserTestReportPy")
+        assert hasattr(eggsec, "DomXssFindingPy")
+        assert hasattr(eggsec, "SpaRoutePy")
 
     @pytest.mark.skipif(
         not eggsec.has_feature("headless-browser"),

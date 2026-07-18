@@ -511,6 +511,9 @@ try:
     MobileSession = _core.MobileSession
     AsyncMobileSession = _core.AsyncMobileSession
     MobileDeviceRegistry = _core.MobileDeviceRegistry
+    MobileDevicePy = _core.MobileDevicePy
+    DynamicMobileConfigPy = _core.DynamicMobileConfigPy
+    DynamicMobileReportPy = _core.DynamicMobileReportPy
 except (AttributeError, ImportError):
     pass
 
@@ -521,6 +524,19 @@ try:
     BrowserSessionStats = _core.BrowserSessionStats
     BrowserSession = _core.BrowserSession
     AsyncBrowserSession = _core.AsyncBrowserSession
+    BrowserNavigationEvent = _core.BrowserNavigationEvent
+    BrowserConsoleEvent = _core.BrowserConsoleEvent
+    BrowserNetworkEvent = _core.BrowserNetworkEvent
+    BrowserDomSnapshot = _core.BrowserDomSnapshot
+    BrowserFormInfo = _core.BrowserFormInfo
+    BrowserFormField = _core.BrowserFormField
+    BrowserLinkInfo = _core.BrowserLinkInfo
+    BrowserStorageInfo = _core.BrowserStorageInfo
+    BrowserCookieInfo = _core.BrowserCookieInfo
+    BrowserTestConfigPy = _core.BrowserTestConfigPy
+    BrowserTestReportPy = _core.BrowserTestReportPy
+    DomXssFindingPy = _core.DomXssFindingPy
+    SpaRoutePy = _core.SpaRoutePy
 except (AttributeError, ImportError):
     pass
 
@@ -1205,6 +1221,69 @@ try:
     DbPentestReport = _core.DbPentestReportPy
     DbFinding = _core.DbFindingPy
     DbPentestConfig = _core.DbPentestConfig
+    DbCapabilityPy = _core.DbcapabilityPy
+    DbDriverInfoPy = _core.DbDriverInfoPy
+    DbCredentialProviderPy = _core.DbCredentialProviderPy
+    DbSessionConfigPy = _core.DbSessionConfigPy
+    DbDriverRegistryPy = _core.DbDriverRegistryPy
+    DbTargetPy = _core.DbTargetPy
+    DatabaseSessionStatePy = _core.DatabaseSessionStatePy
+    DatabaseConnectionMetadataPy = _core.DatabaseConnectionMetadataPy
+    DatabaseSessionStatsPy = _core.DatabaseSessionStatsPy
+    DatabaseCredentialRequestPy = _core.DatabaseCredentialRequestPy
+    DatabaseCredentialResultPy = _core.DatabaseCredentialResultPy
+    DatabaseQueryPy = _core.DatabaseQueryPy
+    DatabaseQueryResultPy = _core.DatabaseQueryResultPy
+    DatabaseColumnPy = _core.DatabaseColumnPy
+    DatabaseTableInfoPy = _core.DatabaseTableInfoPy
+    DatabaseSchemaInfoPy = _core.DatabaseSchemaInfoPy
+    DatabasePrivilegeInfoPy = _core.DatabasePrivilegeInfoPy
+    StaticCredentialProviderPy = _core.StaticCredentialProviderPy
+    EnvironmentCredentialProviderPy = _core.EnvironmentCredentialProviderPy
+    CallbackCredentialProviderPy = _core.CallbackCredentialProviderPy
+    DatabaseRowStreamPy = _core.DatabaseRowStreamPy
+    DatabaseQueryPlanPy = _core.DatabaseQueryPlanPy
+    DatabaseIndexInfoPy = _core.DatabaseIndexInfoPy
+    DatabaseExtensionInfoPy = _core.DatabaseExtensionInfoPy
+    SeverityChangePy = _core.SeverityChangePy
+    ComplianceHitPy = _core.ComplianceHitPy
+    ComplianceSummaryPy = _core.ComplianceSummaryPy
+    DbCorrelatedFindingPy = _core.DbCorrelatedFindingPy
+    DbCorrelationResultPy = _core.DbCorrelationResultPy
+    DbCorrelationSummaryPy = _core.DbCorrelationSummaryPy
+    DbCorrelationTypePy = _core.DbCorrelationTypePy
+    DbRegressionResultPy = _core.DbRegressionResultPy
+except (AttributeError, ImportError):
+    pass
+
+try:
+    ProxyTypePy = _core.ProxyTypePy
+    RotationStrategyPy = _core.RotationStrategyPy
+    ProxyConfigPy = _core.ProxyConfigPy
+    ProxyEntryPy = _core.ProxyEntryPy
+    ProxyManagerPy = _core.ProxyManagerPy
+    HealthCheckResultPy = _core.HealthCheckResultPy
+    ProxyHealthPy = _core.ProxyHealthPy
+    InterceptConfigPy = _core.InterceptConfigPy
+    CapturedExchangePy = _core.CapturedExchangePy
+    InterceptSessionResultPy = _core.InterceptSessionResultPy
+    InterceptSessionStatePy = _core.InterceptSessionStatePy
+    InterceptStatsPy = _core.InterceptStatsPy
+    InterceptFilterPy = _core.InterceptFilterPy
+    InterceptRulePy = _core.InterceptRulePy
+    CertificateAuthorityConfigPy = _core.CertificateAuthorityConfigPy
+    IssuedCertificatePy = _core.IssuedCertificatePy
+    HarEntryPy = _core.HarEntryPy
+    HarDocumentPy = _core.HarDocumentPy
+    MutationDecisionPy = _core.MutationDecisionPy
+    MutationErrorPy = _core.MutationErrorPy
+    CertificateAuthorityPy = _core.CertificateAuthorityPy
+    CertificateStorePy = _core.CertificateStorePy
+    ReplayRequestPy = _core.ReplayRequestPy
+    ResponseComparisonPy = _core.ResponseComparisonPy
+    ComparisonRulePy = _core.ComparisonRulePy
+    RequestModificationPy = _core.RequestModificationPy
+    ResponseModificationPy = _core.ResponseModificationPy
 except (AttributeError, ImportError):
     pass
 
@@ -1274,6 +1353,7 @@ try:
     StressConfig = _core.StressConfigPy
     StressStats = _core.StressStatsPy
     StressResult = _core.StressResultPy
+    StressConfigSummaryPy = _core.StressConfigSummaryPy
 except (AttributeError, ImportError):
     pass
 

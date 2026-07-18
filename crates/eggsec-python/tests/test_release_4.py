@@ -63,6 +63,10 @@ class TestImports:
             BrowserCookieInfo,
             BrowserSession,
             AsyncBrowserSession,
+            BrowserTestConfigPy,
+            BrowserTestReportPy,
+            DomXssFindingPy,
+            SpaRoutePy,
         )
 
     def test_daemon_parity_imports(self):

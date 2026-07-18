@@ -611,7 +611,7 @@ impl AsyncEngine {
 
         // Phase 1: Common lifecycle (planning, validation, preflight, cancel, deadline)
         // Need GIL for Python object creation in planning/preflight events
-        let deadline = Python::with_gil(|py| {
+        let deadline = match Python::with_gil(|py| {
             crate::dispatch_helpers::pre_dispatch_lifecycle(
                 py,
                 &op,
@@ -621,18 +621,13 @@ impl AsyncEngine {
                 &self.state,
                 &cancel_token,
             )
-        })
-        .map_err(|op_result| {
-            let msg = match &op_result.status {
-                crate::status::ExecutionStatus::Failed { error } => error.clone(),
-                crate::status::ExecutionStatus::Cancelled { reason } => reason
-                    .clone()
-                    .unwrap_or_else(|| "Operation cancelled".to_string()),
-                crate::status::ExecutionStatus::Timeout { .. } => "Operation timed out".to_string(),
-                _ => "Operation failed".to_string(),
-            };
-            pyo3::exceptions::PyRuntimeError::new_err(msg)
-        })?;
+        }) {
+            Ok(dl) => dl,
+            Err(op_result) => {
+                // Return a resolved future with the failure, matching sync engine behavior
+                return runtime_async::spawn_async(async move { Ok(op_result) });
+            }
+        };
 
         // Phase 2: Operation-specific dispatch
         let operation = StableOperation::parse(&op).ok_or_else(|| {
@@ -2137,7 +2132,15 @@ impl AsyncEngine {
             let result = eggsec::mobile::analyze_apk(path_ref).await.map_err(|e| {
                 pyo3::exceptions::PyValueError::new_err(format!("APK analysis failed: {}", e))
             })?;
-            Ok(crate::mobile::MobileScanReportPy::from_engine(result))
+            let py_result = crate::mobile::MobileScanReportPy::from_engine(result);
+            let mut metadata = std::collections::HashMap::new();
+            metadata.insert("target".to_string(), apk_path);
+            let stats = crate::status::ExecutionStats::new(0, 0, 0, 0);
+            Ok(crate::dispatch_helpers::operation_ok(
+                stats,
+                Some(metadata),
+                Some(crate::status::OperationPayload::Apk(py_result)),
+            ))
         })
     }
 
@@ -2148,7 +2151,15 @@ impl AsyncEngine {
             let result = eggsec::mobile::analyze_ipa(path_ref).await.map_err(|e| {
                 pyo3::exceptions::PyValueError::new_err(format!("IPA analysis failed: {}", e))
             })?;
-            Ok(crate::mobile::MobileScanReportPy::from_engine(result))
+            let py_result = crate::mobile::MobileScanReportPy::from_engine(result);
+            let mut metadata = std::collections::HashMap::new();
+            metadata.insert("target".to_string(), ipa_path);
+            let stats = crate::status::ExecutionStats::new(0, 0, 0, 0);
+            Ok(crate::dispatch_helpers::operation_ok(
+                stats,
+                Some(metadata),
+                Some(crate::status::OperationPayload::Ipa(py_result)),
+            ))
         })
     }
 }

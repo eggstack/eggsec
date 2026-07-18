@@ -52,11 +52,11 @@ class TestMobileSessionLifecycle:
         MobileSessionConfig = _import_or_skip("MobileSessionConfig")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
+            device_serial="emulator-5554",
+            package_id="com.example.app",
         )
-        assert config.package_name == "com.example.app"
-        assert config.activity_name == ".MainActivity"
+        assert config.device_serial == "emulator-5554"
+        assert config.package_id == "com.example.app"
 
     @pytest.mark.timeout(30)
     def test_mobile_session_config_with_options(self):
@@ -64,16 +64,15 @@ class TestMobileSessionLifecycle:
         MobileSessionConfig = _import_or_skip("MobileSessionConfig")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
             device_serial="emulator-5554",
-            timeout_ms=30000,
-            install_timeout_ms=60000,
-            grant_permissions=True,
-            debuggable=True,
+            package_id="com.example.app",
+            install_app=True,
+            uninstall_after=True,
+            capture_logs=True,
+            timeout_secs=30,
         )
         assert config.device_serial == "emulator-5554"
-        assert config.grant_permissions is True
+        assert config.install_app is True
 
     @pytest.mark.timeout(30)
     def test_mobile_session_created_state(self):
@@ -83,27 +82,26 @@ class TestMobileSessionLifecycle:
         MobileSessionState = _import_or_skip("MobileSessionState")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
+            device_serial="emulator-5554",
+            package_id="com.example.app",
         )
-        session = MobileSession(config)
-        assert session.state == MobileSessionState.Created
+        session = MobileSession("sess-1", "emulator-5554", config)
+        assert str(session.state) == "Created"
 
     @pytest.mark.timeout(30)
     def test_mobile_session_stop_idempotent(self):
         """MobileSession.stop() is idempotent."""
         MobileSession = _import_or_skip("MobileSession")
         MobileSessionConfig = _import_or_skip("MobileSessionConfig")
-        MobileSessionState = _import_or_skip("MobileSessionState")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
+            device_serial="emulator-5554",
+            package_id="com.example.app",
         )
-        session = MobileSession(config)
+        session = MobileSession("sess-1", "emulator-5554", config)
         session.stop()
         session.stop()
-        assert session.state == MobileSessionState.Stopped
+        assert str(session.state) == "Stopped"
 
     @pytest.mark.timeout(30)
     def test_mobile_session_config_serialization(self):
@@ -111,16 +109,16 @@ class TestMobileSessionLifecycle:
         MobileSessionConfig = _import_or_skip("MobileSessionConfig")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
+            device_serial="emulator-5554",
+            package_id="com.example.app",
         )
         d = config.to_dict()
         assert isinstance(d, dict)
-        assert d["package_name"] == "com.example.app"
+        assert d["device_serial"] == "emulator-5554"
 
         j = config.to_json()
         parsed = json.loads(j)
-        assert parsed["package_name"] == "com.example.app"
+        assert parsed["device_serial"] == "emulator-5554"
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +143,7 @@ class TestMobileDeviceRegistry:
         MobileDeviceRegistry = _import_or_skip("MobileDeviceRegistry")
 
         registry = MobileDeviceRegistry()
-        devices = registry.list_devices()
+        devices = registry.devices
         assert isinstance(devices, list)
 
     @pytest.mark.timeout(30)
@@ -215,13 +213,12 @@ class TestDynamicMobileConfig:
         DynamicMobileConfig = _import_or_skip("DynamicMobileConfig")
 
         config = DynamicMobileConfig(
-            device_serial="emulator-5554",
-            install_apk=True,
-            grant_permissions=True,
-            enable_network=True,
+            install=True,
+            launch=True,
+            capture_logs=True,
         )
-        assert config.device_serial == "emulator-5554"
-        assert config.install_apk is True
+        assert config.install is True
+        assert config.launch is True
 
     @pytest.mark.timeout(30)
     def test_config_to_dict(self):
@@ -229,14 +226,13 @@ class TestDynamicMobileConfig:
         DynamicMobileConfig = _import_or_skip("DynamicMobileConfig")
 
         config = DynamicMobileConfig(
-            device_serial="emulator-5554",
-            install_apk=True,
-            grant_permissions=True,
-            enable_network=True,
+            install=True,
+            launch=True,
+            capture_logs=True,
         )
         d = config.to_dict()
         assert isinstance(d, dict)
-        assert d["device_serial"] == "emulator-5554"
+        assert d["install"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +250,7 @@ class TestMobileWithAdb:
         MobileDeviceRegistry = _import_or_skip("MobileDeviceRegistry")
 
         registry = MobileDeviceRegistry()
-        devices = registry.list_devices()
+        devices = registry.devices
         # If ADB is available, there should be at least one device
         # (but this might be 0 if no emulator is running)
         assert isinstance(devices, list)
@@ -266,9 +262,8 @@ class TestMobileWithAdb:
         MobileSessionConfig = _import_or_skip("MobileSessionConfig")
 
         config = MobileSessionConfig(
-            package_name="com.example.app",
-            activity_name=".MainActivity",
             device_serial="emulator-5554",
+            package_id="com.example.app",
         )
         d = config.to_dict()
         assert d["device_serial"] == "emulator-5554"
