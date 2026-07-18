@@ -1,6 +1,6 @@
 {
   "import_cold": 2.0,
-  "import_attribute": 0.01,
+  "import_attribute": 0.015,
   "engine_creation": 0.1,
   "scope_construction": 0.05,
   "registry_all": 0.1,

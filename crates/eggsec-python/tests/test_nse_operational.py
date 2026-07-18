@@ -268,7 +268,8 @@ class TestNseLimitsEnforcement:
 
         report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report is not None
-        assert report.compatibility_status.lower() in (
+        normalized = report.compatibility_status.lower().replace("-", "")
+        assert normalized in (
             "compatible",
             "compatiblewithwarnings",
             "failed",
