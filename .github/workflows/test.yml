@@ -261,6 +261,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: feature-profile-${{ matrix.features }}
+      - name: Install protobuf-compiler
+        if: contains(matrix.features, 'grpc-api')
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: cargo check
         run: cargo check -p eggsec --features ${{ matrix.features }}
 
