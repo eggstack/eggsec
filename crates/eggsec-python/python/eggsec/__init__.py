@@ -1221,7 +1221,7 @@ try:
     DbPentestReport = _core.DbPentestReportPy
     DbFinding = _core.DbFindingPy
     DbPentestConfig = _core.DbPentestConfig
-    DbCapabilityPy = _core.DbcapabilityPy
+    DbCapabilityPy = _core.DbCapabilityPy
     DbDriverInfoPy = _core.DbDriverInfoPy
     DbCredentialProviderPy = _core.DbCredentialProviderPy
     DbSessionConfigPy = _core.DbSessionConfigPy

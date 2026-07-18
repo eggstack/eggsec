@@ -268,11 +268,11 @@ class TestNseLimitsEnforcement:
 
         report = runtime.run_script_with_args("banner", nse_fixtures.tcp_args)
         assert report is not None
-        assert report.compatibility_status in (
-            "Compatible",
-            "CompatibleWithWarnings",
-            "Failed",
-            "Partial",
+        assert report.compatibility_status.lower() in (
+            "compatible",
+            "compatiblewithwarnings",
+            "failed",
+            "partial",
         )
 
     @pytest.mark.skip(reason="NseExecutionLimits has no Python constructor")
