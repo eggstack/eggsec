@@ -295,10 +295,6 @@ enum CronFieldMatcher {
 }
 
 impl CronFieldMatcher {
-    fn exact(value: u8) -> Self {
-        Self::Exact(value)
-    }
-
     fn matches(&self, value: u8) -> bool {
         match self {
             Self::Any => true,
