@@ -279,7 +279,7 @@ impl RemoteResult {
 pub fn generate_psk() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..32).map(|_| rng.r#gen()).collect();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
     hex::encode(bytes)
 }
 

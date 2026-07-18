@@ -25,13 +25,11 @@ pub struct PipelineSession {
 pub async fn save(path: &str, session: &PipelineSession) -> Result<()> {
     use tokio::io::AsyncWriteExt;
     let json = serde_json::to_string_pretty(session)?;
-    let mut file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .mode(0o600)
-        .open(path)
-        .await?;
+    let mut options = tokio::fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(path).await?;
     file.write_all(json.as_bytes()).await?;
     Ok(())
 }
