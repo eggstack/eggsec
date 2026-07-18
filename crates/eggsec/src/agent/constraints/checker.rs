@@ -204,15 +204,15 @@ impl ConstraintChecker {
     ) -> Result<ScanDepth, ConstraintViolation> {
         let off_peak = &self.constraints.off_peak_config;
 
+        if off_peak.allowed_scan_depths.is_empty() {
+            return Ok(requested);
+        }
+
         if off_peak.allowed_scan_depths.contains(&requested) {
             return Ok(requested);
         }
 
-        let allowed = if off_peak.allowed_scan_depths.is_empty() {
-            ScanDepth::Shallow
-        } else {
-            off_peak.allowed_scan_depths[0]
-        };
+        let allowed = off_peak.allowed_scan_depths[0];
 
         Err(ConstraintViolation::ScanDepthNotAllowed { requested, allowed })
     }

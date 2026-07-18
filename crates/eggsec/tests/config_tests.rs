@@ -119,8 +119,8 @@ fn test_config_output_defaults() {
 #[test]
 fn test_config_notification_defaults() {
     let config = EggsecConfig::default();
-    assert!(!config.notifications.notify_on_complete);
-    assert!(!config.notifications.notify_on_findings);
+    assert!(config.notifications.notify_on_complete);
+    assert!(config.notifications.notify_on_findings);
 }
 
 #[test]

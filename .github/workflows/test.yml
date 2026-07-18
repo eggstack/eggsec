@@ -66,6 +66,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: check-${{ matrix.name }}
+      - name: Install protobuf-compiler
+        if: matrix.name == 'grpc-api'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: cargo check
         run: cargo check ${{ matrix.args }}
 
@@ -323,7 +326,9 @@ jobs:
           retention-days: 30
       - name: Run validation scripts
         if: matrix.name == 'default-wheel'
-        run: source $GITHUB_WORKSPACE/.venv/bin/activate && bash scripts/check-architecture-guards.sh
+        run: |
+          sudo apt-get update && sudo apt-get install -y ripgrep
+          source $GITHUB_WORKSPACE/.venv/bin/activate && bash scripts/check-architecture-guards.sh
 
   python-capability-matrix:
     name: Python capability matrix

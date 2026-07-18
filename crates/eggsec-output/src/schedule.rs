@@ -244,7 +244,7 @@ impl CronExpression {
             minute_idx = 1;
         } else {
             second = 0;
-            second_matcher = CronFieldMatcher::exact(0);
+            second_matcher = CronFieldMatcher::Any;
             minute_idx = 0;
         };
 

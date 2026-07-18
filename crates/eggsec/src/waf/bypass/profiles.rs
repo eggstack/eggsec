@@ -453,7 +453,10 @@ fn get_generated_profiles(existing_profiles: &[WafProfile]) -> Vec<WafProfile> {
     let mut generated = Vec::new();
     for signature in get_waf_signatures().values() {
         let waf_name = signature.name.trim();
-        if waf_name.is_empty() || existing_names.contains(&waf_name.to_lowercase()) {
+        if waf_name.is_empty()
+            || existing_names.contains(&waf_name.to_lowercase())
+            || signature.headers.is_empty()
+        {
             continue;
         }
         generated.push(build_generic_profile_for_waf(waf_name, &signature.headers));
