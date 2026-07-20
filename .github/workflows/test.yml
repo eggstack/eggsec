@@ -185,6 +185,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -197,6 +198,7 @@ jobs:
 
   secret-scan:
     name: Secret Scanning
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -465,11 +467,23 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Create virtualenv
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
         run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
+      - name: Build wheel file
+        working-directory: crates/eggsec-python
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin build --out $GITHUB_WORKSPACE/target/python-wheels
+      - name: Download default-wheel test results
+        uses: actions/download-artifact@v4
+        with:
+          name: python-test-results-default-wheel
+          path: crates/eggsec-python/python/
+      - name: Rename test results
+        run: mv crates/eggsec-python/python/python-test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml || true
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Upload evidence bundle
@@ -491,11 +505,23 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Create virtualenv
         run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
       - name: Build default wheel
         working-directory: crates/eggsec-python
         run: source $GITHUB_WORKSPACE/.venv/bin/activate && pip install maturin && maturin develop
+      - name: Build wheel file
+        working-directory: crates/eggsec-python
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin build --out $GITHUB_WORKSPACE/target/python-wheels
+      - name: Download default-wheel test results
+        uses: actions/download-artifact@v4
+        with:
+          name: python-test-results-default-wheel
+          path: crates/eggsec-python/python/
+      - name: Rename test results
+        run: mv crates/eggsec-python/python/python-test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml || true
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Run maturity guard

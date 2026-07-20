@@ -75,6 +75,26 @@ class Verdict:
 # Manifest parsing
 # ---------------------------------------------------------------------------
 
+def _resolve_skip_budget(entry: dict) -> int:
+    """Extract skip budget from a profile entry.
+
+    Handles both flat int (``max_skips`` / ``skip_budget``) and the nested
+    dict format ``{"network_error": 0, "import_error": 0, "feature_gate": 10}``.
+    When a nested dict is found the total budget is the sum of all values.
+    The nested dict takes precedence over a flat ``max_skips`` of 0, since
+    profiles.json uses ``max_skips: 0`` as a placeholder default.
+    """
+    skip_budget = entry.get("skip_budget")
+    if isinstance(skip_budget, dict):
+        return sum(int(v) for v in skip_budget.values())
+    if skip_budget is not None:
+        return int(skip_budget)
+    max_skips = entry.get("max_skips")
+    if max_skips is not None:
+        return int(max_skips)
+    return 0
+
+
 def load_profiles(manifest_path: str) -> dict[str, ProfileBudget]:
     """Load profiles.json and return a dict keyed by profile name.
 
@@ -97,7 +117,7 @@ def load_profiles(manifest_path: str) -> dict[str, ProfileBudget]:
                 continue
             profiles[name] = ProfileBudget(
                 name=name,
-                skip_budget=entry.get("skip_budget", entry.get("max_skips", 0)),
+                skip_budget=_resolve_skip_budget(entry),
                 max_xfails=entry.get("max_xfails"),
                 required_min_tests=entry.get("required_min_tests", 1),
                 expected_features=entry.get("expected_features", []),
@@ -110,7 +130,7 @@ def load_profiles(manifest_path: str) -> dict[str, ProfileBudget]:
                 continue
             profiles[name] = ProfileBudget(
                 name=name,
-                skip_budget=entry.get("skip_budget", entry.get("max_skips", 0)),
+                skip_budget=_resolve_skip_budget(entry),
                 max_xfails=entry.get("max_xfails"),
                 required_min_tests=entry.get("required_min_tests", 1),
                 expected_features=entry.get("expected_features", []),

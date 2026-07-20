@@ -60,7 +60,7 @@ proptest! {
     #[test]
     fn test_scope_rule_exact_match(domain in "[a-z]{1,20}\\.(com|org|net)") {
         let rule = ScopeRule::new(domain.clone());
-        let target = eggsec::config::TargetScope::parse(&domain);
+        let target = eggsec::config::TargetScope::parse_hostname_only(&domain);
         if let Ok(target) = target {
             prop_assert!(rule.matches(&target));
         }
@@ -75,7 +75,7 @@ proptest! {
         let pattern = format!("*.{}.{}", domain, tld);
         let rule = ScopeRule::new(pattern);
         let full_domain = format!("{}.{}.{}", subdomain, domain, tld);
-        let target = eggsec::config::TargetScope::parse(&full_domain);
+        let target = eggsec::config::TargetScope::parse_hostname_only(&full_domain);
         if let Ok(target) = target {
             prop_assert!(rule.matches(&target));
         }
