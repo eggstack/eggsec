@@ -117,7 +117,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Run coverage
-        run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean
+        run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean --timeout 0
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -481,9 +481,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-test-results-default-wheel
-          path: crates/eggsec-python/python/
-      - name: Rename test results
-        run: mv crates/eggsec-python/python/python-test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml || true
+          path: /tmp/test-results/
+      - name: Prepare test results
+        run: |
+          mkdir -p crates/eggsec-python/python
+          cp /tmp/test-results/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
+          cp /tmp/test-results/crates/eggsec-python/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
+          find /tmp/test-results/ -name '*.xml' -exec cp {} crates/eggsec-python/python/test-results.xml \; 2>/dev/null || \
+          echo "No test results XML found, evidence collectors will report missing"
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Upload evidence bundle
@@ -519,9 +524,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-test-results-default-wheel
-          path: crates/eggsec-python/python/
-      - name: Rename test results
-        run: mv crates/eggsec-python/python/python-test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml || true
+          path: /tmp/test-results/
+      - name: Prepare test results
+        run: |
+          mkdir -p crates/eggsec-python/python
+          cp /tmp/test-results/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
+          cp /tmp/test-results/crates/eggsec-python/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
+          find /tmp/test-results/ -name '*.xml' -exec cp {} crates/eggsec-python/python/test-results.xml \; 2>/dev/null || \
+          echo "No test results XML found, evidence collectors will report missing"
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Run maturity guard

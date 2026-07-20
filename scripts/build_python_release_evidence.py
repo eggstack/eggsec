@@ -382,22 +382,25 @@ def collect_type_check_results(out_dir: Path) -> Path:
         results["mypy"] = {"available": False, "reason": "mypy not installed"}
 
     # pyright
-    pyright_result = subprocess.run(
-        ["pyright", "--version"],
-        capture_output=True, text=True, timeout=10,
-    )
-    if pyright_result.returncode == 0:
-        proc = subprocess.run(
-            ["pyright", str(PYTHON_CRATE / "python" / "eggsec")],
-            capture_output=True, text=True, timeout=120, cwd=REPO_ROOT,
+    try:
+        pyright_result = subprocess.run(
+            ["pyright", "--version"],
+            capture_output=True, text=True, timeout=10,
         )
-        results["pyright"] = {
-            "available": True,
-            "passed": proc.returncode == 0,
-            "return_code": proc.returncode,
-            "output": proc.stdout.strip()[-2000:] if proc.stdout else "",
-        }
-    else:
+        if pyright_result.returncode == 0:
+            proc = subprocess.run(
+                ["pyright", str(PYTHON_CRATE / "python" / "eggsec")],
+                capture_output=True, text=True, timeout=120, cwd=REPO_ROOT,
+            )
+            results["pyright"] = {
+                "available": True,
+                "passed": proc.returncode == 0,
+                "return_code": proc.returncode,
+                "output": proc.stdout.strip()[-2000:] if proc.stdout else "",
+            }
+        else:
+            results["pyright"] = {"available": False, "reason": "pyright not installed"}
+    except FileNotFoundError:
         results["pyright"] = {"available": False, "reason": "pyright not installed"}
 
     results["overall_passed"] = all(

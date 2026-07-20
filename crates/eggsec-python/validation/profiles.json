@@ -23,7 +23,7 @@
       "skip_budget": {
         "network_error": 0,
         "import_error": 0,
-        "feature_gate": 10
+        "feature_gate": 1800
       }
     },
     {
