@@ -79,19 +79,21 @@ jobs:
             --json recon-results.json
 
       - name: Upload SARIF results
+        if: steps.download.outputs.available == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scan-results.sarif
           category: eggsec-scan
 
       - name: Upload Fuzz SARIF
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
+        if: steps.download.outputs.available == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: fuzz-results.sarif
           category: eggsec-fuzz
 
       - name: Upload Security Report
+        if: steps.download.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: security-report
