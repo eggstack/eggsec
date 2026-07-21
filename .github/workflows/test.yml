@@ -118,6 +118,8 @@ jobs:
       
       - name: Run coverage
         run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean --engine llvm
+        env:
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -485,10 +487,15 @@ jobs:
       - name: Prepare test results
         run: |
           mkdir -p crates/eggsec-python/python
-          cp /tmp/test-results/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
-          cp /tmp/test-results/crates/eggsec-python/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
-          find /tmp/test-results/ -name '*.xml' -exec cp {} crates/eggsec-python/python/test-results.xml \; 2>/dev/null || \
-          echo "No test results XML found, evidence collectors will report missing"
+          echo "Contents of /tmp/test-results/:"
+          find /tmp/test-results/ -type f 2>/dev/null || echo "  (empty or missing)"
+          FOUND_XML=$(find /tmp/test-results/ -type f -name '*.xml' 2>/dev/null | head -1)
+          if [ -n "$FOUND_XML" ]; then
+            echo "Copying $FOUND_XML -> crates/eggsec-python/python/test-results.xml"
+            cp "$FOUND_XML" crates/eggsec-python/python/test-results.xml
+          else
+            echo "WARNING: No JUnit XML found in /tmp/test-results/"
+          fi
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Upload evidence bundle
@@ -528,10 +535,15 @@ jobs:
       - name: Prepare test results
         run: |
           mkdir -p crates/eggsec-python/python
-          cp /tmp/test-results/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
-          cp /tmp/test-results/crates/eggsec-python/test-results-default-wheel.xml crates/eggsec-python/python/test-results.xml 2>/dev/null || \
-          find /tmp/test-results/ -name '*.xml' -exec cp {} crates/eggsec-python/python/test-results.xml \; 2>/dev/null || \
-          echo "No test results XML found, evidence collectors will report missing"
+          echo "Contents of /tmp/test-results/:"
+          find /tmp/test-results/ -type f 2>/dev/null || echo "  (empty or missing)"
+          FOUND_XML=$(find /tmp/test-results/ -type f -name '*.xml' 2>/dev/null | head -1)
+          if [ -n "$FOUND_XML" ]; then
+            echo "Copying $FOUND_XML -> crates/eggsec-python/python/test-results.xml"
+            cp "$FOUND_XML" crates/eggsec-python/python/test-results.xml
+          else
+            echo "WARNING: No JUnit XML found in /tmp/test-results/"
+          fi
       - name: Generate evidence bundle
         run: source $PWD/.venv/bin/activate && python scripts/build_python_release_evidence.py --commit "${{ github.sha }}"
       - name: Run maturity guard
@@ -560,13 +572,15 @@ jobs:
           path: /tmp/test-results/
       - name: Enforce skip budgets
         run: |
-          if [ -f /tmp/test-results/test-results-default-wheel.xml ]; then
+          JUNIT_XML=$(find /tmp/test-results/ -name 'test-results-default-wheel.xml' | head -1)
+          if [ -n "$JUNIT_XML" ] && [ -f "$JUNIT_XML" ]; then
             python scripts/python_skip_budget.py \
               --profile default-wheel \
               --manifest crates/eggsec-python/validation/profiles.json \
-              --junit-xml /tmp/test-results/test-results-default-wheel.xml
+              --junit-xml "$JUNIT_XML"
           else
             echo "ERROR: No JUnit XML found — budget enforcement requires test results"
+            find /tmp/test-results/ -type f || echo "Directory empty or missing"
             exit 1
           fi
 

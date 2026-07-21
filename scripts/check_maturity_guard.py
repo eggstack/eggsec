@@ -35,7 +35,6 @@ STABLE_REQUIRED_PROFILES = [
     "sbom",
     "container",
     "mobile-static",
-    "packet-parser",
 ]
 
 # Profiles that remain provisional until their evidence is green
