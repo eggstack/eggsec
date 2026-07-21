@@ -63,7 +63,7 @@ jobs:
             --out dist
             --manifest-path crates/eggsec-python/Cargo.toml
           manylinux: ${{ matrix.manylinux }}
-          rust-toolchain: "1.80"
+          rust-toolchain: "stable"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -225,7 +225,7 @@ jobs:
             --out dist
             --manifest-path crates/eggsec-python/Cargo.toml
           manylinux: auto
-          rust-toolchain: "1.80"
+          rust-toolchain: "stable"
 
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -479,7 +479,7 @@ jobs:
         with:
           command: sdist
           args: --out dist --manifest-path crates/eggsec-python/Cargo.toml
-          rust-toolchain: "1.80"
+          rust-toolchain: "stable"
 
       - name: Validate sdist contents
         run: |

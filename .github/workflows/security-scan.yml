@@ -39,19 +39,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Eggsec
+        id: download
         run: |
-          curl -sL "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
-          chmod +x eggsec
+          curl -sL -o eggsec "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64"
+          if file eggsec | grep -q "ELF"; then
+            chmod +x eggsec
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Binary not available for version ${EGGSEC_VERSION}. Skipping scan."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run Quick Scan
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'quick')
+        if: steps.download.outputs.available == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'quick'))
         run: |
           ./eggsec scan ${{ github.event.inputs.target || 'example.com' }} --profile quick \
             --json scan-results.json \
             --sarif scan-results.sarif
 
       - name: Run Full Scan
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'full'
+        if: steps.download.outputs.available == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'full'
         run: |
           ./eggsec scan ${{ github.event.inputs.target }} --profile full \
             --json scan-results.json \
@@ -59,14 +66,14 @@ jobs:
             --html report.html
 
       - name: Run Fuzzing
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
+        if: steps.download.outputs.available == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
         run: |
           ./eggsec fuzz ${{ github.event.inputs.target }} -t all \
             --json fuzz-results.json \
             --sarif fuzz-results.sarif
 
       - name: Run Reconnaissance
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'recon'
+        if: steps.download.outputs.available == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'recon'
         run: |
           ./eggsec recon ${{ github.event.inputs.target }} \
             --json recon-results.json
@@ -116,7 +123,11 @@ jobs:
 
       - name: Download Eggsec
         run: |
-          curl -sL "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
+          curl -sL -o eggsec "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64"
+          if ! file eggsec | grep -q "ELF"; then
+            echo "::error::Binary not available for version ${EGGSEC_VERSION}. Cannot run scheduled scan."
+            exit 1
+          fi
           chmod +x eggsec
 
       - name: Load targets from file
