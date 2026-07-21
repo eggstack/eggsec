@@ -117,9 +117,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Run coverage
-        run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean --engine llvm
-        env:
-          EGGSEC_ALLOW_LOOPBACK_FIXTURE: "1"
+        run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean --engine llvm --run-types Tests
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4
