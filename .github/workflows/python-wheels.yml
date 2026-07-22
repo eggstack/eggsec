@@ -579,7 +579,7 @@ jobs:
 
           # Verify feature introspection
           f = eggsec.features()
-          assert isinstance(f, list)
+          assert isinstance(f, dict)
           assert len(f) > 0
 
           info = eggsec.build_info()
