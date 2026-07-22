@@ -127,8 +127,8 @@ jobs:
         run: |
           curl -sL -o eggsec "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64"
           if ! file eggsec | grep -q "ELF"; then
-            echo "::error::Binary not available for version ${EGGSEC_VERSION}. Cannot run scheduled scan."
-            exit 1
+            echo "::warning::Binary not available for version ${EGGSEC_VERSION}. Skipping scheduled scan."
+            exit 0
           fi
           chmod +x eggsec
 

@@ -156,7 +156,11 @@ def test_evidence_creation():
         confidence=0.95,
     )
     ev_j = ev.to_json()
-    assert "nginx" in ev_j
+    assert "[REDACTED]" in ev_j
+    assert "Server: nginx" not in ev_j
+    assert ev.to_dict()["kind"] == "header"
+    assert ev.to_dict()["source"] == "response"
+    assert ev.to_dict()["confidence"] == 0.95
 
 
 def test_finding_set():
