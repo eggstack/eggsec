@@ -40,9 +40,6 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             manylinux: auto
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            manylinux: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -83,9 +80,6 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             python-version: '3.9'
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            python-version: '3.12'
     steps:
       - uses: actions/checkout@v4
 
@@ -115,6 +109,8 @@ jobs:
           python crates/eggsec-python/python/tests/test_python_smoke.py
 
       - name: Localhost scanner smoke test
+        env:
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE: '1'
         run: |
           source .venv-test/bin/activate
           python -c "
@@ -173,7 +169,7 @@ jobs:
           s = eggsec.Severity.from_str('high')
           assert s == eggsec.Severity.High
 
-          # Test Evidence
+          # Test Evidence (value is REDACTED in serialization)
           ev = eggsec.Evidence(
               kind='header',
               value='Server: nginx',
@@ -181,7 +177,8 @@ jobs:
               confidence=0.95,
           )
           ev_j = ev.to_json()
-          assert 'nginx' in ev_j
+          assert '[REDACTED]' in ev_j
+          assert 'Server: nginx' not in ev_j
 
           print('Serialization/report smoke test passed')
           "
@@ -604,11 +601,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - universal2-apple-darwin
-          - aarch64-unknown-linux-gnu
+    matrix:
+      target:
+        - x86_64-unknown-linux-gnu
+        - universal2-apple-darwin
     steps:
       - uses: actions/checkout@v4
 

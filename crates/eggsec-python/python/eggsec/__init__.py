@@ -33,7 +33,7 @@ EVENT_SCHEMA_VERSION = _core.EVENT_SCHEMA_VERSION
 # Deprecation helpers
 # ---------------------------------------------------------------------------
 
-def _deprecated(name: str, replacement: str | None = None) -> None:
+def _deprecated(name: str, replacement=None) -> None:
     """Emit a DeprecationWarning for a deprecated API."""
     msg = f"{name} is deprecated"
     if replacement:
