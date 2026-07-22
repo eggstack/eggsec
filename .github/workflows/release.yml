@@ -129,6 +129,7 @@ jobs:
           args: >-
             --release
             --out dist
+            -i python${{ env.PYTHON_VERSION }}
             --manifest-path crates/eggsec-python/Cargo.toml
           manylinux: ${{ matrix.manylinux }}
           rust-toolchain: "1.80"

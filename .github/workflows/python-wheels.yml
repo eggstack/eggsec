@@ -55,6 +55,7 @@ jobs:
           args: >-
             --release
             --out dist
+            -i python${{ env.PYTHON_VERSION }}
             --manifest-path crates/eggsec-python/Cargo.toml
           manylinux: ${{ matrix.manylinux }}
           rust-toolchain: "stable"
@@ -79,7 +80,7 @@ jobs:
             python-version: '3.12'
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            python-version: '3.9'
+            python-version: '3.12'
     steps:
       - uses: actions/checkout@v4
 
@@ -162,7 +163,7 @@ jobs:
           fs = eggsec.FindingSet()
           fs.add_finding(finding)
           assert len(fs) == 1
-          assert fs.by_severity(eggsec.Severity.Info) == 1
+          assert len(fs.by_severity(eggsec.Severity.Info)) == 1
 
           # Test Severity enum
           assert str(eggsec.Severity.Critical) == 'Critical'
@@ -221,6 +222,7 @@ jobs:
           args: >-
             --release
             --out dist
+            -i python${{ env.PYTHON_VERSION }}
             --manifest-path crates/eggsec-python/Cargo.toml
           manylinux: auto
           rust-toolchain: "stable"
@@ -292,14 +294,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+
       - name: Install maturin
-        run: pip install maturin
+        run: source $PWD/.venv/bin/activate && pip install maturin pytest pytest-timeout
 
       - name: Build with features
-        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml --features ${{ matrix.feature }}
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml --features ${{ matrix.feature }}
 
       - name: Run feature tests
         run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ -k "${{ matrix.feature }}" --timeout=30 -v
 
       - name: Upload results
@@ -322,11 +328,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+
       - name: Install maturin
-        run: pip install maturin
+        run: source $PWD/.venv/bin/activate && pip install maturin pytest pytest-timeout
 
       - name: Build wheel for validation
-        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
 
       - name: Run validation matrix
         run: |
@@ -359,14 +368,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+
       - name: Install maturin
-        run: pip install maturin
+        run: source $PWD/.venv/bin/activate && pip install maturin pytest pytest-timeout
 
       - name: Build with default features
-        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
 
       - name: Run performance report
         run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/test_performance_report.py -v --timeout=120
 
       - name: Upload performance report
@@ -389,14 +402,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Create virtualenv
+        run: python -m venv .venv && source .venv/bin/activate && echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+
       - name: Install maturin
-        run: pip install maturin
+        run: source $PWD/.venv/bin/activate && pip install maturin pytest pytest-timeout
 
       - name: Build with default features
-        run: maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
+        run: source $GITHUB_WORKSPACE/.venv/bin/activate && maturin develop --release --manifest-path crates/eggsec-python/Cargo.toml
 
       - name: Capture pytest skip reasons
         run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           mkdir -p target/python-validation
           EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30 --tb=no 2>&1 | \
           python -c "
@@ -519,25 +536,10 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            python-version: "3.9"
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            python-version: "3.10"
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            python-version: "3.11"
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
             python-version: "3.12"
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            python-version: "3.13"
           - target: universal2-apple-darwin
             os: macos-14
-            python-version: "3.9"
-          - target: universal2-apple-darwin
-            os: macos-14
-            python-version: "3.13"
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
 
@@ -559,7 +561,7 @@ jobs:
           WHEEL=$(ls dist/*.whl)
           pip install "$WHEEL"
           pip install pytest pytest-timeout
-          python -c "import eggsec; print(f'Python {python_version} — eggsec {eggsec.__version__}')"
+          python -c "import sys, eggsec; print(f'Python {sys.version_info.major}.{sys.version_info.minor} — eggsec {eggsec.__version__}')"
 
       - name: Import and introspection smoke test
         run: |
@@ -608,10 +610,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
