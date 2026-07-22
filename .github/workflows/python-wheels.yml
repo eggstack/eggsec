@@ -74,6 +74,7 @@ jobs:
   test:
     name: Test wheel (${{ matrix.target }})
     needs: build
+    if: ${{ !cancelled() }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
