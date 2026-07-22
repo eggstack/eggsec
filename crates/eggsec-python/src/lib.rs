@@ -665,6 +665,8 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<websocket::WebSocketFramePy>()?;
         m.add_class::<websocket::WebSocketCloseInfoPy>()?;
         m.add_class::<websocket::WebSocketHandshakePy>()?;
+        m.add_class::<websocket::WebSocketFindingPy>()?;
+        m.add_class::<websocket::WebSocketReportPy>()?;
         m.add_class::<websocket::WebSocketSessionPy>()?;
         m.add_class::<websocket::AsyncWebSocketSessionPy>()?;
         m.add_class::<websocket::WebSocketAssessmentConfigPy>()?;
@@ -1363,10 +1365,23 @@ fn api_surface() -> PyObject {
         add_entry!("WebSocketFrame", "provisional");
         add_entry!("WebSocketCloseInfo", "provisional");
         add_entry!("WebSocketHandshake", "provisional");
+        add_entry!("WebSocketFinding", "provisional");
+        add_entry!("WebSocketReport", "provisional");
         add_entry!("WebSocketSession", "provisional");
         add_entry!("AsyncWebSocketSession", "provisional");
         add_entry!("WebSocketAssessmentConfig", "provisional");
         add_entry!("WebSocketAssessmentResult", "provisional");
+        add_entry!("WebSocketSessionConfigPy", "provisional");
+        add_entry!("WebSocketMessagePy", "provisional");
+        add_entry!("WebSocketFramePy", "provisional");
+        add_entry!("WebSocketCloseInfoPy", "provisional");
+        add_entry!("WebSocketHandshakePy", "provisional");
+        add_entry!("WebSocketFindingPy", "provisional");
+        add_entry!("WebSocketReportPy", "provisional");
+        add_entry!("WebSocketSessionPy", "provisional");
+        add_entry!("AsyncWebSocketSessionPy", "provisional");
+        add_entry!("WebSocketAssessmentConfigPy", "provisional");
+        add_entry!("WebSocketAssessmentResultPy", "provisional");
         add_entry!("websocket_assess", "provisional");
         add_entry!("async_websocket_assess", "provisional");
 

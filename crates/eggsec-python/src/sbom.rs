@@ -26,7 +26,7 @@ impl SbomFormatPy {
     }
 
     #[staticmethod]
-    fn from_str(s: &str) -> PyResult<Self> {
+    pub fn from_str(s: &str) -> PyResult<Self> {
         match s.to_lowercase().as_str() {
             "cyclonedx" | "cyclone-dx" | "cyclone_dx" => Ok(SbomFormatPy::CycloneDx),
             "spdx" => Ok(SbomFormatPy::Spdx),
@@ -202,8 +202,8 @@ pub struct SbomReportPy {
     pub version: String,
     #[pyo3(get)]
     pub generated_at: String,
-    components: Vec<SbomComponentPy>,
-    vulnerabilities: Vec<SbomVulnerabilityPy>,
+    pub(crate) components: Vec<SbomComponentPy>,
+    pub(crate) vulnerabilities: Vec<SbomVulnerabilityPy>,
 }
 
 #[pymethods]

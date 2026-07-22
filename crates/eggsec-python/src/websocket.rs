@@ -268,6 +268,24 @@ pub struct WebSocketFindingPy {
 
 #[pymethods]
 impl WebSocketFindingPy {
+    #[new]
+    #[pyo3(signature = (category, severity, title, description, recommendation))]
+    fn new(
+        category: &str,
+        severity: Severity,
+        title: &str,
+        description: &str,
+        recommendation: &str,
+    ) -> Self {
+        Self {
+            category: category.to_string(),
+            severity,
+            title: title.to_string(),
+            description: description.to_string(),
+            recommendation: recommendation.to_string(),
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("category", &self.category)?;
@@ -807,8 +825,7 @@ impl WebSocketSessionConfigPy {
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebSocketMessagePy {
-    #[pyo3(get)]
-    pub data: Vec<u8>,
+    data: Vec<u8>,
     #[pyo3(get)]
     pub is_text: bool,
     #[pyo3(get)]
@@ -821,29 +838,213 @@ pub struct WebSocketMessagePy {
     pub text_content: Option<String>,
     #[pyo3(get)]
     pub size: usize,
+    #[pyo3(get)]
+    pub direction: String,
+    #[pyo3(get)]
+    pub opcode: String,
+    payload: Vec<u8>,
+}
+
+impl WebSocketMessagePy {
+    /// Construct a message from a wire opcode and payload, defaulting direction
+    /// to "server_to_client" (the common case for recv paths).
+    pub fn from_wire(opcode: &str, payload: &[u8]) -> Self {
+        let (is_text, is_binary, is_ping, is_pong) = match opcode {
+            "text" => (true, false, false, false),
+            "binary" => (false, true, false, false),
+            "ping" => (false, false, true, false),
+            "pong" => (false, false, false, true),
+            _ => (false, false, false, false),
+        };
+        let text_content = if is_text {
+            String::from_utf8(payload.to_vec()).ok()
+        } else {
+            None
+        };
+        Self {
+            data: payload.to_vec(),
+            is_text,
+            is_binary,
+            is_ping,
+            is_pong,
+            text_content,
+            size: payload.len(),
+            direction: "server_to_client".to_string(),
+            opcode: opcode.to_string(),
+            payload: payload.to_vec(),
+        }
+    }
 }
 
 #[pymethods]
 impl WebSocketMessagePy {
+    #[new]
+    #[pyo3(signature = (**kwargs))]
+    fn new(py: Python, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        // Two calling conventions:
+        // 1. New: WebSocketMessagePy(direction="client_to_server", opcode="text", payload=b"hello")
+        // 2. Old: WebSocketMessagePy(data=b"hello", is_text=True, is_binary=False,
+        //                            text_content="...", size=11)
+        let kw_dict = kwargs
+            .map(|d| d.extract::<std::collections::HashMap<String, PyObject>>())
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
+            .unwrap_or_default();
+
+        let get_kw = |name: &str| -> Option<PyObject> {
+            kw_dict.get(name).map(|v| v.clone_ref(py))
+        };
+
+        let extract_str = |name: &str| -> PyResult<Option<String>> {
+            if let Some(o) = get_kw(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                let v = o.extract::<String>(py)?;
+                return Ok(Some(v));
+            }
+            Ok(None)
+        };
+
+        let extract_bool = |name: &str, default: Option<bool>| -> PyResult<Option<bool>> {
+            if let Some(o) = get_kw(name) {
+                let v = o.extract::<bool>(py)?;
+                return Ok(Some(v));
+            }
+            Ok(default)
+        };
+
+        let extract_bytes = |name: &str| -> PyResult<Option<Vec<u8>>> {
+            if let Some(o) = get_kw(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                let v: Vec<u8> = o.extract::<Vec<u8>>(py)?;
+                return Ok(Some(v));
+            }
+            Ok(None)
+        };
+
+        let extract_usize = |name: &str| -> PyResult<Option<usize>> {
+            if let Some(o) = get_kw(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                let v = o.extract::<usize>(py)?;
+                return Ok(Some(v));
+            }
+            Ok(None)
+        };
+
+        // Detect style by which kwargs are present
+        let direction = extract_str("direction")?;
+        let opcode = extract_str("opcode")?;
+        let payload = extract_bytes("payload")?;
+        let data = extract_bytes("data")?;
+        let is_text = extract_bool("is_text", None)?;
+        let is_binary = extract_bool("is_binary", None)?;
+        let is_ping = extract_bool("is_ping", Some(false))?.unwrap_or(false);
+        let is_pong = extract_bool("is_pong", Some(false))?.unwrap_or(false);
+        let text_content = extract_str("text_content")?;
+        let size = extract_usize("size")?;
+
+        let new_style = direction.is_some() || opcode.is_some() || payload.is_some();
+
+        if new_style {
+            // New style: derive everything from direction/opcode/payload
+            let d = direction.unwrap_or_else(|| "server_to_client".to_string());
+            let o = opcode.unwrap_or_else(|| "unknown".to_string());
+            let p = payload.unwrap_or_default();
+            let is_t = o == "text";
+            let is_b = o == "binary";
+            let text = if is_t {
+                text_content.or_else(|| String::from_utf8(p.clone()).ok())
+            } else {
+                text_content
+            };
+            Ok(Self {
+                data: p.clone(),
+                is_text: is_t,
+                is_binary: is_b,
+                is_ping: o == "ping",
+                is_pong: o == "pong",
+                text_content: text,
+                size: size.unwrap_or(p.len()),
+                direction: d,
+                opcode: o,
+                payload: p,
+            })
+        } else {
+            // Old style: prefer is_text/is_binary; data is the payload
+            let p = data.clone().unwrap_or_default();
+            let is_t = is_text.unwrap_or(false);
+            let is_b = is_binary.unwrap_or(is_t);
+            let text = if is_t {
+                text_content.or_else(|| String::from_utf8(p.clone()).ok())
+            } else {
+                text_content
+            };
+            let opcode_str = if is_t {
+                "text"
+            } else if is_b {
+                "binary"
+            } else if is_ping {
+                "ping"
+            } else if is_pong {
+                "pong"
+            } else {
+                "unknown"
+            };
+            let direction_str = if is_t { "text" } else { "unknown" };
+            Ok(Self {
+                data: p.clone(),
+                is_text: is_t,
+                is_binary: is_b,
+                is_ping,
+                is_pong,
+                text_content: text,
+                size: size.unwrap_or(p.len()),
+                direction: direction_str.to_string(),
+                opcode: opcode_str.to_string(),
+                payload: p,
+            })
+        }
+    }
+
+    #[getter]
+    fn data<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new_bound(py, &self.data)
+    }
+
+    #[getter]
+    fn payload<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new_bound(py, &self.payload)
+    }
+
     /// Decode the message data as UTF-8 text.
     fn to_text(&self) -> Option<String> {
         String::from_utf8(self.data.clone()).ok()
     }
 
     /// Return the raw message bytes.
-    fn to_bytes(&self) -> Vec<u8> {
-        self.data.clone()
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new_bound(py, &self.data)
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
-        dict.set_item("data", &self.data)?;
+        let bytes_data = pyo3::types::PyBytes::new_bound(py, &self.data);
+        let bytes_payload = pyo3::types::PyBytes::new_bound(py, &self.payload);
+        dict.set_item("data", bytes_data)?;
         dict.set_item("is_text", self.is_text)?;
         dict.set_item("is_binary", self.is_binary)?;
         dict.set_item("is_ping", self.is_ping)?;
         dict.set_item("is_pong", self.is_pong)?;
         dict.set_item("text_content", &self.text_content)?;
         dict.set_item("size", self.size)?;
+        dict.set_item("direction", &self.direction)?;
+        dict.set_item("opcode", &self.opcode)?;
+        dict.set_item("payload", bytes_payload)?;
         Ok(dict.into())
     }
 
@@ -894,16 +1095,119 @@ pub struct WebSocketFramePy {
     pub opcode: u8,
     #[pyo3(get)]
     pub opcode_name: String,
-    #[pyo3(get)]
-    pub payload: Vec<u8>,
+    payload: Vec<u8>,
     #[pyo3(get)]
     pub fin: bool,
     #[pyo3(get)]
     pub masked: bool,
+    #[pyo3(get)]
+    pub payload_len: usize,
 }
 
 #[pymethods]
 impl WebSocketFramePy {
+    #[new]
+    #[pyo3(signature = (**kwargs))]
+    fn new(py: Python, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        // Two calling conventions:
+        // 1. WebSocketFramePy(fin, opcode, masked, payload_len=0) - positional
+        // 2. WebSocketFramePy(opcode, opcode_name, payload, fin, masked) - kwargs
+        // Accept any subset and merge.
+        let kw_dict = kwargs
+            .map(|d| d.extract::<std::collections::HashMap<String, PyObject>>())
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
+            .unwrap_or_default();
+
+        let get = |name: &str| -> Option<PyObject> {
+            kw_dict.get(name).map(|v| v.clone_ref(py))
+        };
+
+        let extract_u8 = |name: &str, default: Option<u8>| -> PyResult<u8> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(default.unwrap_or(0));
+                }
+                return o.extract::<u8>(py);
+            }
+            Ok(default.unwrap_or(0))
+        };
+
+        let extract_bool = |name: &str, default: bool| -> PyResult<bool> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(default);
+                }
+                return o.extract::<bool>(py);
+            }
+            Ok(default)
+        };
+
+        let extract_bytes = |name: &str| -> PyResult<Vec<u8>> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(Vec::new());
+                }
+                return o.extract::<Vec<u8>>(py);
+            }
+            Ok(Vec::new())
+        };
+
+        let extract_str = |name: &str| -> PyResult<Option<String>> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                return Ok(Some(o.extract::<String>(py)?));
+            }
+            Ok(None)
+        };
+
+        let opcode = extract_u8("opcode", None)?;
+        let opcode_name_in = extract_str("opcode_name")?;
+        let fin = extract_bool("fin", false)?;
+        let masked = extract_bool("masked", false)?;
+        let payload = extract_bytes("payload")?;
+        let payload_len_in = if let Some(o) = get("payload_len") {
+            if o.is_none(py) {
+                None
+            } else {
+                Some(o.extract::<usize>(py)?)
+            }
+        } else {
+            None
+        };
+
+        let opcode_name = opcode_name_in.unwrap_or_else(|| {
+            match opcode {
+                0x0 => "continuation",
+                0x1 => "text",
+                0x2 => "binary",
+                0x8 => "close",
+                0x9 => "ping",
+                0xa => "pong",
+                _ => "unknown",
+            }
+            .to_string()
+        });
+
+        let payload_len = payload_len_in.unwrap_or(payload.len());
+
+        Ok(Self {
+            opcode,
+            opcode_name,
+            payload,
+            fin,
+            masked,
+            payload_len,
+        })
+    }
+
+    #[getter]
+    fn payload<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new_bound(py, &self.payload)
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("opcode", self.opcode)?;
@@ -911,6 +1215,7 @@ impl WebSocketFramePy {
         dict.set_item("payload", &self.payload)?;
         dict.set_item("fin", self.fin)?;
         dict.set_item("masked", self.masked)?;
+        dict.set_item("payload_len", self.payload_len)?;
         Ok(dict.into())
     }
 
@@ -923,8 +1228,8 @@ impl WebSocketFramePy {
         format!(
             "WebSocketFrame(opcode={}, fin={}, masked={}, payload_len={})",
             self.opcode_name,
-            self.fin,
-            self.masked,
+            if self.fin { "True" } else { "False" },
+            if self.masked { "True" } else { "False" },
             self.payload.len()
         )
     }
@@ -957,6 +1262,16 @@ pub struct WebSocketCloseInfoPy {
 
 #[pymethods]
 impl WebSocketCloseInfoPy {
+    #[new]
+    #[pyo3(signature = (code, reason=None, was_clean=true))]
+    fn new(code: u16, reason: Option<&str>, was_clean: bool) -> Self {
+        Self {
+            code,
+            reason: reason.unwrap_or("").to_string(),
+            was_clean,
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new_bound(py);
         dict.set_item("code", self.code)?;
@@ -973,7 +1288,8 @@ impl WebSocketCloseInfoPy {
     fn __repr__(&self) -> String {
         format!(
             "WebSocketCloseInfo(code={}, was_clean={})",
-            self.code, self.was_clean
+            self.code,
+            if self.was_clean { "True" } else { "False" }
         )
     }
 
@@ -1013,14 +1329,121 @@ pub struct WebSocketHandshakePy {
 
 #[pymethods]
 impl WebSocketHandshakePy {
+    #[new]
+    #[pyo3(signature = (**kwargs))]
+    fn new(py: Python, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        // Accept any of: request_url, url, status_code, response_headers/headers,
+        // selected_subprotocol, selected_extensions, duration_ms
+        let kw_dict = kwargs
+            .map(|d| d.extract::<std::collections::HashMap<String, PyObject>>())
+            .transpose()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
+            .unwrap_or_default();
+
+        let get = |name: &str| -> Option<PyObject> {
+            kw_dict.get(name).map(|v| v.clone_ref(py))
+        };
+
+        let extract_str = |name: &str| -> PyResult<Option<String>> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                return Ok(Some(o.extract::<String>(py)?));
+            }
+            Ok(None)
+        };
+
+        let extract_u16 = |name: &str| -> PyResult<u16> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(0);
+                }
+                return o.extract::<u16>(py);
+            }
+            Ok(0)
+        };
+
+        let extract_f64 = |name: &str| -> PyResult<f64> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(0.0);
+                }
+                return o.extract::<f64>(py);
+            }
+            Ok(0.0)
+        };
+
+        let extract_headers = |names: &[&str]| -> PyResult<Vec<(String, String)>> {
+            for n in names {
+                if let Some(o) = get(n) {
+                    if o.is_none(py) {
+                        continue;
+                    }
+                    let list: Vec<(String, String)> = o.extract(py)?;
+                    return Ok(list);
+                }
+            }
+            Ok(Vec::new())
+        };
+
+        let extract_str_vec = |name: &str| -> PyResult<Vec<String>> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(Vec::new());
+                }
+                return o.extract::<Vec<String>>(py);
+            }
+            Ok(Vec::new())
+        };
+
+        let extract_opt_str = |name: &str| -> PyResult<Option<String>> {
+            if let Some(o) = get(name) {
+                if o.is_none(py) {
+                    return Ok(None);
+                }
+                return Ok(Some(o.extract::<String>(py)?));
+            }
+            Ok(None)
+        };
+
+        let url = extract_str("request_url")?
+            .or(extract_str("url")?)
+            .unwrap_or_default();
+        let status_code = extract_u16("status_code")?;
+        let headers = extract_headers(&["response_headers", "headers"])?;
+        let selected_subprotocol = extract_opt_str("selected_subprotocol")?;
+        let selected_extensions = extract_str_vec("selected_extensions")?;
+        let duration_ms = extract_f64("duration_ms")?;
+
+        Ok(Self {
+            url,
+            status_code,
+            headers,
+            selected_subprotocol,
+            selected_extensions,
+            duration_ms,
+        })
+    }
+
     #[getter]
-    fn headers(&self, py: Python) -> PyResult<PyObject> {
+    fn request_url(&self) -> &str {
+        &self.url
+    }
+
+    #[getter]
+    fn response_headers(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty_bound(py);
         for (k, v) in &self.headers {
             let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
             list.append(tuple)?;
         }
         Ok(list.into())
+    }
+
+    #[getter]
+    fn headers(&self, py: Python) -> PyResult<PyObject> {
+        self.response_headers(py)
     }
 
     #[getter]
@@ -1339,64 +1762,31 @@ impl WebSocketSessionPy {
                 let mut s = state.lock().unwrap();
                 s.bytes_received += size as u64;
                 s.message_count += 1;
-                WebSocketMessagePy {
-                    data,
-                    is_text: true,
-                    is_binary: false,
-                    is_ping: false,
-                    is_pong: false,
-                    text_content: Some(text_str),
-                    size,
-                }
+                let mut msg = WebSocketMessagePy::from_wire("text", &data);
+                msg.text_content = Some(text_str);
+                msg
             }
             TungsteniteMessage::Binary(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let text_content = String::from_utf8(bytes.clone()).ok();
                 let mut s = state.lock().unwrap();
                 s.bytes_received += size as u64;
                 s.message_count += 1;
-                WebSocketMessagePy {
-                    data: bytes,
-                    is_text: false,
-                    is_binary: true,
-                    is_ping: false,
-                    is_pong: false,
-                    text_content,
-                    size,
-                }
+                WebSocketMessagePy::from_wire("binary", &bytes)
             }
             TungsteniteMessage::Ping(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let text_content = String::from_utf8(bytes.clone()).ok();
                 let mut s = state.lock().unwrap();
                 s.bytes_received += size as u64;
-                WebSocketMessagePy {
-                    data: bytes,
-                    is_text: false,
-                    is_binary: false,
-                    is_ping: true,
-                    is_pong: false,
-                    text_content,
-                    size,
-                }
+                WebSocketMessagePy::from_wire("ping", &bytes)
             }
             TungsteniteMessage::Pong(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let text_content = String::from_utf8(bytes.clone()).ok();
                 let mut s = state.lock().unwrap();
                 s.bytes_received += size as u64;
-                WebSocketMessagePy {
-                    data: bytes,
-                    is_text: false,
-                    is_binary: false,
-                    is_ping: false,
-                    is_pong: true,
-                    text_content,
-                    size,
-                }
+                WebSocketMessagePy::from_wire("pong", &bytes)
             }
             TungsteniteMessage::Close(frame) => {
                 let close_info = frame.map(|f| WebSocketCloseInfoPy {
@@ -1461,11 +1851,20 @@ impl WebSocketSessionPy {
         let close_reason = reason.unwrap_or("client close").to_string();
 
         {
-            let s = state.lock().unwrap();
+            let mut s = state.lock().unwrap();
             if s.is_closed {
                 return Ok(WebSocketCloseInfoPy {
                     code: 1000,
                     reason: "already closed".to_string(),
+                    was_clean: true,
+                });
+            }
+            // No stream and not closed yet: treat as no-op idempotent close.
+            if s.ws_stream.is_none() {
+                s.is_closed = true;
+                return Ok(WebSocketCloseInfoPy {
+                    code: close_code,
+                    reason: close_reason,
                     was_clean: true,
                 });
             }
@@ -1475,10 +1874,7 @@ impl WebSocketSessionPy {
             // Take the stream out of the state so we can operate on it without
             // holding a mutable borrow across the block_on boundary.
             let mut s = state.lock().unwrap();
-            let ws = s
-                .ws_stream
-                .take()
-                .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+            let ws = s.ws_stream.take().unwrap();
 
             let close_frame = CloseFrame {
                 code: CloseCode::from(close_code),
@@ -1594,47 +1990,24 @@ impl WebSocketSessionPy {
                     let mut s = state.lock().unwrap();
                     s.bytes_received += size as u64;
                     s.message_count += 1;
-                    messages.push(WebSocketMessagePy {
-                        data,
-                        is_text: true,
-                        is_binary: false,
-                        is_ping: false,
-                        is_pong: false,
-                        text_content: Some(text_str),
-                        size,
-                    });
+                    let mut msg = WebSocketMessagePy::from_wire("text", &data);
+                    msg.text_content = Some(text_str);
+                    messages.push(msg);
                 }
                 Ok(Some(Ok(TungsteniteMessage::Binary(data)))) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let text_content = String::from_utf8(bytes.clone()).ok();
                     let mut s = state.lock().unwrap();
                     s.bytes_received += size as u64;
                     s.message_count += 1;
-                    messages.push(WebSocketMessagePy {
-                        data: bytes,
-                        is_text: false,
-                        is_binary: true,
-                        is_ping: false,
-                        is_pong: false,
-                        text_content,
-                        size,
-                    });
+                    messages.push(WebSocketMessagePy::from_wire("binary", &bytes));
                 }
                 Ok(Some(Ok(TungsteniteMessage::Pong(data)))) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
                     let mut s = state.lock().unwrap();
                     s.bytes_received += size as u64;
-                    messages.push(WebSocketMessagePy {
-                        data: bytes,
-                        is_text: false,
-                        is_binary: false,
-                        is_ping: false,
-                        is_pong: true,
-                        text_content: None,
-                        size,
-                    });
+                    messages.push(WebSocketMessagePy::from_wire("pong", &bytes));
                 }
                 _ => break,
             }
@@ -1644,6 +2017,7 @@ impl WebSocketSessionPy {
     }
 
     /// Return the transcript of all messages exchanged.
+    #[getter]
     fn transcript(&self) -> NetworkTranscriptPy {
         let s = self.state.lock().unwrap();
         NetworkTranscriptPy {
@@ -1928,73 +2302,40 @@ impl AsyncWebSocketSessionPy {
                         s.bytes_received += size as u64;
                         s.message_count += 1;
                     }
-                    WebSocketMessagePy {
-                        data,
-                        is_text: true,
-                        is_binary: false,
-                        is_ping: false,
-                        is_pong: false,
-                        text_content: Some(text_str),
-                        size,
-                    }
+                    let mut msg = WebSocketMessagePy::from_wire("text", &data);
+                    msg.text_content = Some(text_str);
+                    msg
                 }
                 TungsteniteMessage::Binary(data) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let text_content = String::from_utf8(bytes.clone()).ok();
                     {
                         let mut s = state.lock().unwrap();
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                         s.message_count += 1;
                     }
-                    WebSocketMessagePy {
-                        data: bytes,
-                        is_text: false,
-                        is_binary: true,
-                        is_ping: false,
-                        is_pong: false,
-                        text_content,
-                        size,
-                    }
+                    WebSocketMessagePy::from_wire("binary", &bytes)
                 }
                 TungsteniteMessage::Ping(data) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let text_content = String::from_utf8(bytes.clone()).ok();
                     {
                         let mut s = state.lock().unwrap();
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                     }
-                    WebSocketMessagePy {
-                        data: bytes,
-                        is_text: false,
-                        is_binary: false,
-                        is_ping: true,
-                        is_pong: false,
-                        text_content,
-                        size,
-                    }
+                    WebSocketMessagePy::from_wire("ping", &bytes)
                 }
                 TungsteniteMessage::Pong(data) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let text_content = String::from_utf8(bytes.clone()).ok();
                     {
                         let mut s = state.lock().unwrap();
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                     }
-                    WebSocketMessagePy {
-                        data: bytes,
-                        is_text: false,
-                        is_binary: false,
-                        is_ping: false,
-                        is_pong: true,
-                        text_content,
-                        size,
-                    }
+                    WebSocketMessagePy::from_wire("pong", &bytes)
                 }
                 TungsteniteMessage::Close(frame) => {
                     let mut s = state.lock().unwrap();
@@ -2070,15 +2411,29 @@ impl AsyncWebSocketSessionPy {
         let close_code = code.unwrap_or(1000);
         let close_reason = reason.unwrap_or("client close").to_string();
 
-        {
-            let s = state.lock().unwrap();
-            if s.is_closed {
-                return Err(NetworkError::new_err("Session is closed"));
-            }
-        }
-
         let ws = {
             let mut s = state.lock().unwrap();
+            if s.is_closed {
+                // Idempotent: already closed returns a successful close info.
+                return crate::runtime_async::spawn_async(async move {
+                    Ok::<_, pyo3::PyErr>(WebSocketCloseInfoPy {
+                        code: 1000,
+                        reason: "already closed".to_string(),
+                        was_clean: true,
+                    })
+                });
+            }
+            if s.ws_stream.is_none() {
+                // No connection: mark closed and return idempotent close info.
+                s.is_closed = true;
+                return crate::runtime_async::spawn_async(async move {
+                    Ok::<_, pyo3::PyErr>(WebSocketCloseInfoPy {
+                        code: close_code,
+                        reason: close_reason,
+                        was_clean: true,
+                    })
+                });
+            }
             s.ws_stream.take()
         }
         .ok_or_else(|| NetworkError::new_err("Not connected"))?;
@@ -2266,6 +2621,51 @@ pub struct WebSocketAssessmentResultPy {
 
 #[pymethods]
 impl WebSocketAssessmentResultPy {
+    #[new]
+    #[pyo3(signature = (
+        target,
+        *,
+        handshake=None,
+        origin_test=None,
+        auth_test=None,
+        subprotocol_test=None,
+        message_test=None,
+        close_test=None,
+        findings=None,
+        timing=None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        target: String,
+        handshake: Option<WebSocketHandshakePy>,
+        origin_test: Option<OriginTestResultPy>,
+        auth_test: Option<ConnectionTestResultPy>,
+        subprotocol_test: Option<ConnectionTestResultPy>,
+        message_test: Option<ConnectionTestResultPy>,
+        close_test: Option<WebSocketCloseInfoPy>,
+        findings: Option<Vec<WebSocketFindingPy>>,
+        timing: Option<crate::network::ConnectionTimingPy>,
+    ) -> Self {
+        Self {
+            target,
+            handshake,
+            origin_test,
+            auth_test,
+            subprotocol_test,
+            message_test,
+            close_test,
+            findings: findings.unwrap_or_default(),
+            timing: timing.unwrap_or(crate::network::ConnectionTimingPy {
+                dns_resolution_ms: None,
+                tcp_connect_ms: None,
+                tls_handshake_ms: None,
+                first_byte_ms: None,
+                total_ms: 0.0,
+                connection_reused: false,
+            }),
+        }
+    }
+
     #[getter]
     fn handshake(&self) -> Option<WebSocketHandshakePy> {
         self.handshake.clone()

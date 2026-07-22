@@ -1892,7 +1892,7 @@ impl AsyncEngine {
         format: String,
     ) -> PyResult<runtime_async::PyFuture> {
         let sbom_format = crate::sbom::SbomFormatPy::from_str(&format)
-            .unwrap_or(crate::sbom::SbomFormatPy::Cyclonedx);
+            .unwrap_or(crate::sbom::SbomFormatPy::CycloneDx);
         let engine_format = sbom_format.to_engine();
         runtime_async::spawn_async(async move {
             let gen = eggsec::supply_chain::sbom::SbomGenerator::new();
@@ -1900,9 +1900,16 @@ impl AsyncEngine {
                 "cargo" => gen.generate_from_cargo(&project_path, engine_format),
                 "npm" => gen.generate_from_npm(&project_path, engine_format),
                 "pip" => gen.generate_from_requirements(&project_path, engine_format),
-                other => return Err(anyhow::anyhow!("Unsupported ecosystem: '{}'", other)),
+                other => {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                        "Unsupported ecosystem: '{}'",
+                        other
+                    )));
+                }
             };
-            let result = r.map_err(|e| anyhow::anyhow!("SBOM generation failed: {}", e))?;
+            let result = r.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("SBOM generation failed: {}", e))
+            })?;
             Ok(crate::sbom::SbomReportPy {
                 format: crate::sbom::SbomFormatPy::from_engine(result.format),
                 project_name: result.project_name,

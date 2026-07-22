@@ -70,7 +70,7 @@ impl serde::Serialize for OutputRef {
 // ---------------------------------------------------------------------------
 
 /// Policy controlling retry behaviour for failed steps.
-#[pyclass(frozen)]
+#[pyclass(frozen, name = "PipelineRetryPolicyPy")]
 #[derive(Debug, Clone)]
 pub struct RetryPolicy {
     #[pyo3(get)]
@@ -122,7 +122,7 @@ impl RetryPolicy {
 
     fn __repr__(&self) -> String {
         format!(
-            "RetryPolicy(max_attempts={}, backoff_ms={}, jitter={})",
+            "PipelineRetryPolicyPy(max_attempts={}, backoff_ms={}, jitter={})",
             self.max_attempts, self.backoff_ms, self.jitter
         )
     }

@@ -2334,7 +2334,7 @@ impl Engine {
         }
 
         let sbom_format = crate::sbom::SbomFormatPy::from_str(format)
-            .unwrap_or(crate::sbom::SbomFormatPy::Cyclonedx);
+            .unwrap_or(crate::sbom::SbomFormatPy::CycloneDx);
         let project_path_owned = project_path.to_string();
         let ecosystem_owned = ecosystem.to_string();
         let engine_format = sbom_format.to_engine();

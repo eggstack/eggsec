@@ -19,7 +19,7 @@ import sys
 import eggsec
 from eggsec import (
     Pipeline, Engine, Scope, OperationRequest,
-    RetryPolicy, FailurePolicy,
+    PipelineRetryPolicy, FailurePolicy,
 )
 
 TARGET = sys.argv[1] if len(sys.argv) > 1 else "example.com"
@@ -32,7 +32,7 @@ def main():
     # Create pipeline with parallel execution
     pipeline = Pipeline(
         f"fan-out-{TARGET}",
-        retry_policy=RetryPolicy(
+        retry_policy=PipelineRetryPolicy(
             max_attempts=2,
             retryable_errors=["network", "timeout"],
             backoff_ms=1000,

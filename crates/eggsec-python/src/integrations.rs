@@ -106,7 +106,7 @@ impl PublicationRecordPy {
 }
 
 /// Retry policy for failed publications.
-#[pyclass(frozen, name = "RetryPolicy")]
+#[pyclass(frozen, name = "IntegrationRetryPolicyPy")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicyPy {
     #[pyo3(get)]
@@ -152,7 +152,7 @@ impl RetryPolicyPy {
 
     fn __repr__(&self) -> String {
         format!(
-            "RetryPolicy(max_retries={}, base_delay_ms={})",
+            "IntegrationRetryPolicyPy(max_retries={}, base_delay_ms={})",
             self.max_retries, self.base_delay_ms
         )
     }

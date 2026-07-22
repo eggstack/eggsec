@@ -22,7 +22,7 @@ import tempfile
 import eggsec
 from eggsec import (
     Pipeline, Engine, Scope, OperationRequest,
-    RetryPolicy, FailurePolicy, create_checkpoint_store,
+    PipelineRetryPolicy, FailurePolicy, create_checkpoint_store,
 )
 
 TARGET = sys.argv[1] if len(sys.argv) > 1 else "example.com"
@@ -39,7 +39,7 @@ def main():
     # Build pipeline
     pipeline = Pipeline(
         f"checkpoint-demo-{TARGET}",
-        retry_policy=RetryPolicy(max_attempts=2, backoff_ms=1000),
+        retry_policy=PipelineRetryPolicy(max_attempts=2, backoff_ms=1000),
         failure_policy=FailurePolicy.SkipDependents,
         max_concurrency=2,
     )
@@ -100,7 +100,7 @@ def main():
         # Create a fresh pipeline with the same definition
         resume_pipeline = Pipeline(
             f"checkpoint-demo-{TARGET}",
-            retry_policy=RetryPolicy(max_attempts=2, backoff_ms=1000),
+            retry_policy=PipelineRetryPolicy(max_attempts=2, backoff_ms=1000),
             failure_policy=FailurePolicy.SkipDependents,
             max_concurrency=2,
         )

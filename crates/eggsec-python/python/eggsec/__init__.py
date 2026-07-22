@@ -613,14 +613,34 @@ except (AttributeError, ImportError):
 # Provisional: WebSocket (feature-gated)
 try:
     websocket_probe = _core.websocket_probe
-    async_websocket_probe = _core.async_websocket_probe
-    websocket_fuzz = _core.websocket_fuzz
-    async_websocket_fuzz = _core.async_websocket_fuzz
-    websocket_assess = _core.websocket_assess
-    async_websocket_assess = _core.async_websocket_assess
 except (AttributeError, ImportError):
     _register_unavailable("websocket_probe", "websocket", "provisional",
                           "pip install eggsec[websocket]")
+
+try:
+    async_websocket_probe = _core.async_websocket_probe
+except (AttributeError, ImportError):
+    pass
+
+try:
+    websocket_fuzz = _core.websocket_fuzz
+except (AttributeError, ImportError):
+    pass
+
+try:
+    async_websocket_fuzz = _core.async_websocket_fuzz
+except (AttributeError, ImportError):
+    pass
+
+try:
+    websocket_assess = _core.websocket_assess
+except (AttributeError, ImportError):
+    pass
+
+try:
+    async_websocket_assess = _core.async_websocket_assess
+except (AttributeError, ImportError):
+    pass
 
 # Provisional: NSE library details (feature-gated)
 try:
@@ -942,7 +962,9 @@ ReportEnvelope = _core.ReportEnvelope
 # External integrations
 IntegrationType = _core.IntegrationType
 PublicationRecord = _core.PublicationRecord
-RetryPolicy = _core.RetryPolicy
+RetryPolicy = _core.IntegrationRetryPolicyPy  # External-integration retry policy (max_retries, base_delay_ms)
+IntegrationRetryPolicy = RetryPolicy  # canonical name (matches _core.IntegrationRetryPolicyPy)
+PipelineRetryPolicy = _core.PipelineRetryPolicyPy  # Pipeline retry policy (max_attempts, backoff_ms)
 PublicationPolicy = _core.PublicationPolicy
 ExternalIntegration = _core.ExternalIntegration
 
@@ -1167,6 +1189,8 @@ try:
     WebSocketFramePy = _core.WebSocketFramePy
     WebSocketCloseInfoPy = _core.WebSocketCloseInfoPy
     WebSocketHandshakePy = _core.WebSocketHandshakePy
+    WebSocketFindingPy = _core.WebSocketFindingPy
+    WebSocketReportPy = _core.WebSocketReportPy
     WebSocketSessionPy = _core.WebSocketSessionPy
     AsyncWebSocketSessionPy = _core.AsyncWebSocketSessionPy
     WebSocketAssessmentConfigPy = _core.WebSocketAssessmentConfigPy
@@ -1853,6 +1877,8 @@ __all__ = [
     "IntegrationType",
     "PublicationRecord",
     "RetryPolicy",
+    "PipelineRetryPolicy",
+    "IntegrationRetryPolicy",
     "PublicationPolicy",
     "ExternalIntegration",
     "SchemaVersion",
