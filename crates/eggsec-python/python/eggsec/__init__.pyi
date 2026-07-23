@@ -697,6 +697,8 @@ from .integrations import (
     PublicationPolicy as PublicationPolicy,
     ExternalIntegration as ExternalIntegration,
 )
+# Convenience aliases for integration retry policy
+IntegrationRetryPolicy = RetryPolicy
 # Milestone E: Migration and compatibility
 from .migration import (
     SchemaVersion as SchemaVersion,

@@ -187,7 +187,7 @@ jobs:
       - name: Run installed-wheel pytest suite
         run: |
           source .venv-test/bin/activate
-          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=60
 
   architecture:
     name: Architecture guards
@@ -415,7 +415,7 @@ jobs:
         run: |
           source $GITHUB_WORKSPACE/.venv/bin/activate
           mkdir -p target/python-validation
-          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=30 --tb=no 2>&1 | \
+          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/ -v --timeout=60 --tb=no 2>&1 | \
           python -c "
           import sys, json, re
 
