@@ -941,7 +941,10 @@ pub fn evaluate_operation_policy(
                     decision.allowed = false;
                 }
                 Err(e) => {
-                    decision.warnings.push(format!("scope check error: {}", e));
+                    decision
+                        .denied_reasons
+                        .push(format!("scope check error: {}", e));
+                    decision.allowed = false;
                 }
             }
         } else if descriptor.requires_explicit_scope || descriptor.requires_private_or_local_target

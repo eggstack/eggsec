@@ -306,7 +306,11 @@ jobs:
       - name: Run feature tests
         run: |
           source $GITHUB_WORKSPACE/.venv/bin/activate
-          EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ -k "${{ matrix.feature }}" --timeout=30 -v
+          if [ "${{ matrix.feature }}" = "full-no-system" ]; then
+            EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ --timeout=30 -v
+          else
+            EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest crates/eggsec-python/tests/ -k "${{ matrix.feature }}" --timeout=30 -v
+          fi
 
       - name: Upload results
         if: always()

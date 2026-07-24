@@ -20,7 +20,7 @@ import threading
 import time
 
 from eggsec.net import TcpSession, TcpConfig, UdpSocket, UdpConfig
-from eggsec.transport import tcp_connect_probe, banner_probe
+from eggsec.net import tcp_connect_probe, banner_probe
 
 
 TCP_PORT = 19878

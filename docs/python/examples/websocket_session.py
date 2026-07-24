@@ -6,7 +6,7 @@ library, then uses eggsec's `WebSocketSession` to connect, send/receive
 messages, and run a security assessment probe. All against loopback.
 
 Requirements:
-    - eggsec (default features)
+    - eggsec installed with `websocket` feature
     - EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 environment variable
 
 Usage:
