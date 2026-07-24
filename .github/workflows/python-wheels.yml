@@ -624,9 +624,9 @@ jobs:
       - name: Inspect wheel metadata
         run: |
           python -c "
-          import json, hashlib, zipfile, os, time
+          import json, hashlib, zipfile, os, glob, time
 
-          whl_path = os.path.glob('dist/*.whl')[0]
+          whl_path = glob.glob('dist/*.whl')[0]
           whl_name = os.path.basename(whl_path)
 
           # File size and hash

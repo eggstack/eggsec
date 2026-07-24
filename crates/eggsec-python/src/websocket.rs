@@ -891,9 +891,8 @@ impl WebSocketMessagePy {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
             .unwrap_or_default();
 
-        let get_kw = |name: &str| -> Option<PyObject> {
-            kw_dict.get(name).map(|v| v.clone_ref(py))
-        };
+        let get_kw =
+            |name: &str| -> Option<PyObject> { kw_dict.get(name).map(|v| v.clone_ref(py)) };
 
         let extract_str = |name: &str| -> PyResult<Option<String>> {
             if let Some(o) = get_kw(name) {
@@ -1119,9 +1118,7 @@ impl WebSocketFramePy {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
             .unwrap_or_default();
 
-        let get = |name: &str| -> Option<PyObject> {
-            kw_dict.get(name).map(|v| v.clone_ref(py))
-        };
+        let get = |name: &str| -> Option<PyObject> { kw_dict.get(name).map(|v| v.clone_ref(py)) };
 
         let extract_u8 = |name: &str, default: Option<u8>| -> PyResult<u8> {
             if let Some(o) = get(name) {
@@ -1340,9 +1337,7 @@ impl WebSocketHandshakePy {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid kwargs: {}", e)))?
             .unwrap_or_default();
 
-        let get = |name: &str| -> Option<PyObject> {
-            kw_dict.get(name).map(|v| v.clone_ref(py))
-        };
+        let get = |name: &str| -> Option<PyObject> { kw_dict.get(name).map(|v| v.clone_ref(py)) };
 
         let extract_str = |name: &str| -> PyResult<Option<String>> {
             if let Some(o) = get(name) {
