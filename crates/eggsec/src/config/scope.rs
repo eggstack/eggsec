@@ -208,17 +208,16 @@ impl Scope {
                 );
                 return Ok(false);
             }
-            // Block private IPs even when no scope rules are defined
+            // Block private IPs even when no scope rules are defined.
+            // Loopback addresses are exempt — they are inherently local and
+            // represent no scope violation on any machine.
             if let Some(ref ip) = target_scope.ip {
-                if is_private_ip(ip) {
+                if !ip.is_loopback() && is_private_ip(ip) {
                     tracing::warn!(
                         target = %target,
                         "Private IP address blocked by security policy"
                     );
-                    return Err(ScopeError::DnsResolution(
-                        target.to_string(),
-                        "Private IP address blocked by security policy".to_string(),
-                    ));
+                    return Ok(false);
                 }
             }
             return Ok(true);

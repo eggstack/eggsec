@@ -2714,7 +2714,8 @@ fn dispatch_checked_rejects_target_mismatch() {
 #[test]
 fn approve_manual_permissive_with_override_on_warn_outcome() {
     // Warn is produced for private/local targets with no scope under ManualPermissive
-    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    // Note: 10.0.0.1 (private IP, not loopback) is used to exercise the private-IP blocking path.
+    let desc = descriptor_private_or_local("10.0.0.1", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(
         ExecutionSurface::TuiManual,
         default_policy(),
@@ -2741,7 +2742,8 @@ fn approve_manual_permissive_with_override_on_warn_outcome() {
 #[test]
 fn approve_manual_permissive_without_override_on_warn_outcome() {
     // Warn is produced for private/local targets with no scope under ManualPermissive
-    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    // Note: 10.0.0.1 (private IP, not loopback) is used to exercise the private-IP blocking path.
+    let desc = descriptor_private_or_local("10.0.0.1", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(
         ExecutionSurface::TuiManual,
         default_policy(),
@@ -3353,6 +3355,9 @@ fn default_empty_scope_denies_networked_even_if_nonempty() {
 /// Invariant: An explicit scope (even with empty rules) must NOT be denied
 /// by the explicit-manifest check. The denial here comes from the scope
 /// rule check (target not allowed), NOT from missing provenance.
+///
+/// Uses 10.0.0.1 (private IP, not loopback) so the private-IP blocking
+/// path is exercised even when no scope rules are defined.
 #[test]
 fn explicit_scope_with_empty_rules_does_not_fail_provenance_check() {
     let policy = default_policy();
@@ -3360,7 +3365,7 @@ fn explicit_scope_with_empty_rules_does_not_fail_provenance_check() {
     let scope = LoadedScope::explicit(Scope::default(), ScopeSource::ConfigFile, None);
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, policy, scope);
 
-    let desc = descriptor_requires_scope("127.0.0.1", OperationRisk::SafeActive);
+    let desc = descriptor_requires_scope("10.0.0.1", OperationRisk::SafeActive);
     let outcome = ctx.evaluate(&desc);
 
     // Should be Deny because target is not in scope, NOT because of provenance

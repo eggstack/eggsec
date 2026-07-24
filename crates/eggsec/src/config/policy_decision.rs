@@ -2211,12 +2211,13 @@ mod tests {
             LoadedScope::default_empty(),
         );
         // ScopeMissing case (no scope, requires_explicit_scope, safe risk)
+        // Uses 10.0.0.1 (private IP, not loopback) to trigger the private-IP blocking path.
         let d1 = OperationDescriptor {
             operation: "scan".to_string(),
             mode: OperationMode::StandardAssessment,
             risk: OperationRisk::SafeActive,
             intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
+            target: Some("10.0.0.1".to_string()),
             required_features: Vec::new(),
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
@@ -2983,6 +2984,7 @@ mod tests {
     fn approve_rejects_warn_for_strict_surface() {
         use super::super::scope::LoadedScope;
         // ManualPermissive + empty scope + safe op with target = Warn (scope ambiguous)
+        // Uses 10.0.0.1 (private IP, not loopback) to trigger the private-IP blocking path.
         let ctx = EnforcementContext::manual_permissive(
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
@@ -2992,7 +2994,7 @@ mod tests {
             mode: OperationMode::StandardAssessment,
             risk: OperationRisk::SafeActive,
             intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
+            target: Some("10.0.0.1".to_string()),
             required_features: vec![],
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
@@ -3099,6 +3101,7 @@ mod tests {
     fn approve_manual_accepts_warn_on_permissive_surface() {
         use super::super::scope::LoadedScope;
         // ManualPermissive + empty scope + safe op + target = Warn
+        // Uses 10.0.0.1 (private IP, not loopback) to trigger the private-IP blocking path.
         let ctx = EnforcementContext::manual_permissive(
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
@@ -3108,7 +3111,7 @@ mod tests {
             mode: OperationMode::StandardAssessment,
             risk: OperationRisk::SafeActive,
             intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
+            target: Some("10.0.0.1".to_string()),
             required_features: vec![],
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
@@ -3136,6 +3139,7 @@ mod tests {
     fn approve_manual_rejects_warn_on_automated_surface() {
         use super::super::scope::LoadedScope;
         // ManualPermissive + empty scope + safe op + target = Warn
+        // Uses 10.0.0.1 (private IP, not loopback) to trigger the private-IP blocking path.
         let ctx = EnforcementContext::manual_permissive(
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
@@ -3145,7 +3149,7 @@ mod tests {
             mode: OperationMode::StandardAssessment,
             risk: OperationRisk::SafeActive,
             intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
+            target: Some("10.0.0.1".to_string()),
             required_features: vec![],
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
