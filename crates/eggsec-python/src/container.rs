@@ -268,7 +268,7 @@ pub struct DockerScanResultPy {
 }
 
 impl DockerScanResultPy {
-    fn from_engine(engine: eggsec::container::docker::DockerScanResult) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::container::docker::DockerScanResult) -> Self {
         Self {
             image_name: engine.image_name,
             base_image: engine.base_image,
@@ -482,7 +482,7 @@ pub struct KubernetesScanResultPy {
 }
 
 impl KubernetesScanResultPy {
-    fn from_engine(engine: eggsec::container::kubernetes::KubernetesScanResult) -> Self {
+    pub(crate) fn from_engine(engine: eggsec::container::kubernetes::KubernetesScanResult) -> Self {
         Self {
             cluster_info: engine.cluster_info.map(ClusterInfoPy::from_engine),
             rbac_issues: engine

@@ -415,7 +415,7 @@ pub struct GitSecretsReportPy {
     pub commits_scanned: usize,
     #[pyo3(get)]
     pub files_scanned: usize,
-    findings: Vec<GitSecretFindingPy>,
+    pub(crate) findings: Vec<GitSecretFindingPy>,
     #[pyo3(get)]
     pub summary: GitSecretsSummaryPy,
 }

@@ -1125,8 +1125,10 @@ class TestScopeEnforcement:
             "scan_ports",
             target="evil.example.org",
         )
-        with pytest.raises(eggsec.EnforcementError):
-            sentinel_engine.run(op)
+        result = sentinel_engine.run(op)
+        assert result.is_failure()
+        assert result.error is not None
+        assert result.error.kind == "scope_denial"
 
 
 # ---------------------------------------------------------------------------
@@ -1385,13 +1387,15 @@ class TestEngineDispatch:
         assert isinstance(result, eggsec.OperationResult)
 
     def test_engine_out_of_scope_dispatch(self, sentinel_engine):
-        """Engine dispatch with out-of-scope target raises EnforcementError."""
+        """Engine dispatch with out-of-scope target returns failed result."""
         req = eggsec.OperationRequest(
             "scan_ports",
             target="evil.example.org",
         )
-        with pytest.raises(eggsec.EnforcementError):
-            sentinel_engine.run(req)
+        result = sentinel_engine.run(req)
+        assert result.is_failure()
+        assert result.error is not None
+        assert result.error.kind == "scope_denial"
 
     def test_async_engine_dispatch(self, sentinel_async_engine):
         """AsyncEngine dispatch returns a future-like result."""

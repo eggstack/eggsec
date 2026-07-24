@@ -1869,7 +1869,7 @@ impl AsyncEngine {
     ) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
             let result = eggsec::recon::git_secrets::scan_git_secrets(&repo_path, max_commits)
-                .map_err(|e| anyhow::anyhow!("Git secrets scan failed: {}", e))?;
+                .map_pyerr()?;
             Ok(crate::git_secrets::GitSecretsReportPy {
                 repo_path: result.repo_path,
                 commits_scanned: result.commits_scanned,
@@ -2100,10 +2100,7 @@ impl AsyncEngine {
     fn run_docker_image_async(&self, image_name: String) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
             let scanner = eggsec::container::docker::DockerScanner::new();
-            let result = scanner
-                .scan_image(&image_name)
-                .await
-                .map_err(|e| anyhow::anyhow!("Docker image scan failed: {}", e))?;
+            let result = scanner.scan_image(&image_name).await.map_pyerr()?;
             Ok(crate::container::DockerScanResultPy::from_engine(result))
         })
     }
@@ -2121,11 +2118,8 @@ impl AsyncEngine {
                 token,
                 timeout_secs,
             )
-            .map_err(|e| anyhow::anyhow!("Kubernetes scanner init failed: {}", e))?;
-            let result = scanner
-                .scan()
-                .await
-                .map_err(|e| anyhow::anyhow!("Kubernetes scan failed: {}", e))?;
+            .map_pyerr()?;
+            let result = scanner.scan().await.map_pyerr()?;
             Ok(crate::container::KubernetesScanResultPy::from_engine(
                 result,
             ))

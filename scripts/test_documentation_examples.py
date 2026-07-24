@@ -15,6 +15,7 @@ Usage:
     EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 pytest scripts/test_documentation_examples.py -v
 """
 
+import ast
 import glob
 import os
 import re
@@ -99,8 +100,18 @@ def get_required_features(example_path):
             if not stripped or stripped.startswith('"""') or stripped.startswith("'''"):
                 in_requirements = False
                 continue
-            # Look for "eggsec[feature]" patterns
+            # Look for "eggsec[feature]" patterns (e.g. eggsec[sbom])
             match = re.search(r"eggsec\[([^\]]+)\]", stripped)
+            if match:
+                features.append(match.group(1))
+                continue
+            # Look for "eggsec installed with `feature` feature" patterns
+            match = re.search(r"eggsec\s+installed\s+with\s+`([^`]+)`", stripped)
+            if match:
+                features.append(match.group(1))
+                continue
+            # Look for "eggsec with feature feature" patterns (no backticks)
+            match = re.search(r"eggsec\s+with\s+(\S+)\s+feature", stripped)
             if match:
                 features.append(match.group(1))
     return features
@@ -123,7 +134,9 @@ def check_feature_availability(required_features):
     """Check if required features are available in the current build."""
     try:
         import eggsec
-        available = set(eggsec.features())
+        features_dict = eggsec.features()
+        # Get features that are actually enabled (value is True)
+        available = {k for k, v in features_dict.items() if v}
     except ImportError:
         return False, "eggsec not importable"
 
