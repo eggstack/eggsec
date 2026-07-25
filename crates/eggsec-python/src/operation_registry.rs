@@ -460,6 +460,33 @@ impl StableOperation {
         }
     }
 
+    pub const fn is_network_operation(self) -> bool {
+        match self {
+            Self::ScanPorts
+            | Self::ScanEndpoints
+            | Self::FingerprintServices
+            | Self::ReconDns
+            | Self::InspectTls
+            | Self::DetectTechnology
+            | Self::DetectWaf
+            | Self::ValidateWaf
+            | Self::FuzzHttp
+            | Self::LoadTest
+            | Self::RunConsolidatedRecon
+            | Self::GraphqlTest
+            | Self::OauthTest
+            | Self::AuthTest
+            | Self::DbProbe
+            | Self::NseRun => true,
+            Self::ScanGitSecrets
+            | Self::GenerateSbom
+            | Self::ScanDockerImage
+            | Self::ScanKubernetes
+            | Self::AnalyzeApk
+            | Self::AnalyzeIpa => false,
+        }
+    }
+
     pub const fn feature_required(self) -> Option<&'static str> {
         match self {
             Self::ScanPorts

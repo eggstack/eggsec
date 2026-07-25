@@ -333,12 +333,17 @@ class TestAsyncScopeEnforcement:
         engine.close()
 
     def test_out_of_scope_target_raises_on_run(self):
-        """AsyncEngine should reject out-of-scope target."""
+        """AsyncEngine should reject out-of-scope target.
+
+        Uses a raw IP (8.8.8.8) instead of a hostname to avoid DNS-resolution
+        differences across environments (e.g. GitHub Actions Azure DNS may
+        resolve unresolvable hostnames to addresses within the allowed range).
+        """
         scope = Scope.allow_hosts(["10.0.0.0/8"])
         engine = AsyncEngine(scope)
         request = OperationRequest(
             "scan_ports",
-            "evil.example.com",
+            "8.8.8.8",
             timeout_ms=5000,
             metadata={"ports": "80"},
         )
@@ -350,7 +355,7 @@ class TestAsyncScopeEnforcement:
         """run_port_scan should also enforce scope."""
         scope = Scope.allow_hosts(["10.0.0.0/8"])
         engine = AsyncEngine(scope)
-        req = PortScanRequest("evil.example.com", ports="80", timeout_ms=5000)
+        req = PortScanRequest("8.8.8.8", ports="80", timeout_ms=5000)
         with pytest.raises(eggsec.EnforcementError):
             engine.run_port_scan(req)
         engine.close()

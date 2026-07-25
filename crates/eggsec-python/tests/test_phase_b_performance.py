@@ -299,8 +299,8 @@ class TestAsyncDispatchOverhead:
             req = OperationRequest(op_id, "127.0.0.1")
             try:
                 await async_engine.run(req)
-            except RuntimeError:
-                pass  # EnforcementError on scope denial
+            except Exception:
+                pass  # scope enforcement raises synchronously
 
         async def _bench_async():
             for _ in range(5):

@@ -609,6 +609,22 @@ impl AsyncEngine {
         let op = request.operation.clone();
         let target = request.target.clone();
 
+        // Synchronous scope enforcement for network operations.
+        // This ensures DNS resolution failures and out-of-scope targets raise
+        // EnforcementError immediately, not embedded inside a PyFuture. Non-network
+        // operations (git_secrets, sbom, apk, ipa, docker, k8s) use the target as a
+        // file path and are exempt from this check.
+        // URL targets (e.g. https://example.com/graphql) have the host extracted
+        // before scope checking, matching the pattern used by individual operation
+        // methods (e.g. run_fuzz_async, run_waf_validate_async).
+        if let Some(operation) = StableOperation::parse(&op) {
+            if operation.is_network_operation() {
+                let scope_target = crate::dispatch_helpers::extract_host_from_url(&target)
+                    .unwrap_or(target.clone());
+                self.state.scope.enforce_target(&scope_target)?;
+            }
+        }
+
         // Phase 1: Common lifecycle (planning, validation, preflight, cancel, deadline)
         // Need GIL for Python object creation in planning/preflight events
         let deadline = match Python::with_gil(|py| {
