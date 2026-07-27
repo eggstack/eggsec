@@ -15,20 +15,17 @@ Usage:
 
 import sys
 
-import eggsec
-from eggsec import Engine, Scope, ConsolidatedReconConfig
+from eggsec import (
+    ConsolidatedReconConfig,
+    run_consolidated_recon,
+)
 
 
 def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "example.com"
 
-    # Create engine
-    scope = Scope.allow_hosts([target])
-    engine = Engine(scope)
-
     # Configure which recon modules to run
     config = ConsolidatedReconConfig(
-        target=target,
         run_dns=True,
         run_ssl=True,
         run_tech_detect=True,
@@ -39,55 +36,25 @@ def main():
         run_js_analysis=False,
         run_content=False,
         run_email=False,
-        timeout_ms=60000,
+        timeout_secs=60,
     )
 
     print(f"Running consolidated recon against {target}...")
     print(f"Modules: DNS, SSL, Tech Detect, CORS")
 
-    result = engine.run_consolidated_recon(config)
-
-    if result.status.name() == "Completed":
-        report = result.payload
-        print(f"\nRecon complete for {target}")
-
-        # DNS results
-        if report.dns:
-            print(f"\nDNS Records:")
-            for record in report.dns.records:
-                print(f"  {record.record_type}: {record.value}")
-
-        # SSL/TLS results
-        if report.ssl:
-            print(f"\nTLS Certificate:")
-            cert = report.ssl.certificate
-            print(f"  Subject: {cert.subject}")
-            print(f"  Issuer: {cert.issuer}")
-            print(f"  Expires: {cert.not_after}")
-
-        # Technology detection
-        if report.tech_detect:
-            print(f"\nTechnologies detected:")
-            for tech in report.tech_detect.technologies:
-                print(f"  {tech.name} ({tech.category})")
-
-        # CORS
-        if report.cors:
-            print(f"\nCORS Configuration:")
-            print(f"  Allow Origin: {report.cors.allow_origin}")
-            print(f"  Allow Credentials: {report.cors.allow_credentials}")
-
-        # Summary
-        print(f"\nModules executed: {report.modules_executed}")
-        print(f"Total findings: {report.total_findings}")
-
-    elif result.status.name() == "Failed":
-        error = result.error
-        print(f"Recon failed ({error.kind}): {error.message}")
+    try:
+        report = run_consolidated_recon(target, config)
+    except Exception as e:
+        print(f"Recon failed: {e}")
         sys.exit(1)
-    else:
-        print(f"Unexpected status: {result.status.name()}")
-        sys.exit(1)
+
+    print(f"\nRecon complete for {target}")
+
+    modules_executed = [m for m in report.modules if m.success]
+    print(f"\nModules executed: {len(modules_executed)}")
+    for module in report.modules:
+        status = "OK" if module.success else f"FAIL: {module.error}"
+        print(f"  {module.module}: {status}")
 
 
 if __name__ == "__main__":

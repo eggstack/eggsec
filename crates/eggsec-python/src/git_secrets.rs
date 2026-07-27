@@ -8,7 +8,7 @@ use crate::runtime_async;
 use crate::runtime_sync;
 
 /// Confidence level for a secret finding.
-#[pyclass(frozen, eq, eq_int)]
+#[pyclass(frozen, name = "GitSecretsConfidence", eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Confidence {
     High,

@@ -50,6 +50,9 @@ def _normalized(value: Any) -> Any:
             "latency_p90_ms",
             "latency_p95_ms",
             "latency_p99_ms",
+            # Fuzz result timing-dependent counters (vary across runs/platforms)
+            "waf_bypasses",
+            "time_anomalies",
         }
         return {key: _normalized(item) for key, item in value.items() if key not in ignored}
     if isinstance(value, list):

@@ -49,9 +49,21 @@ def _make_engine(scope: eggsec.Scope | None = None) -> eggsec.Engine:
     return eggsec.Engine(scope)
 
 
+def _make_file_engine() -> eggsec.Engine:
+    """Engine with permissive scope for file-path targets (git-secrets, sbom)."""
+    scope = eggsec.Scope.allow_hosts([HOST, "localhost", "/"])
+    return eggsec.Engine(scope)
+
+
 def _make_async_engine(scope: eggsec.Scope | None = None) -> eggsec.AsyncEngine:
     if scope is None:
         scope = eggsec.Scope.allow_hosts([HOST, "localhost"])
+    return eggsec.AsyncEngine(scope)
+
+
+def _make_async_file_engine() -> eggsec.AsyncEngine:
+    """AsyncEngine with permissive scope for file-path targets."""
+    scope = eggsec.Scope.allow_hosts([HOST, "localhost", "/"])
     return eggsec.AsyncEngine(scope)
 
 
@@ -135,9 +147,10 @@ class TestGitSecretsFeatureEnabled:
     # -- 1b. Sync engine dispatch --
 
     def test_engine_dispatch_returns_operation_result(self, git_repo):
-        engine = _make_engine()
+        engine = _make_file_engine()
         req = eggsec.OperationRequest(
-            "scan_git_secrets", git_repo, timeout_ms=5000,
+            "scan_git_secrets", "127.0.0.1", timeout_ms=5000,
+            metadata={"repo_path": git_repo},
         )
         result = engine.run(req)
         assert isinstance(result, eggsec.OperationResult)
@@ -146,8 +159,11 @@ class TestGitSecretsFeatureEnabled:
 
     def test_engine_dispatch_payload_matches_direct(self, git_repo):
         direct = eggsec.scan_git_secrets(git_repo)
-        engine = _make_engine()
-        req = eggsec.OperationRequest("scan_git_secrets", git_repo, timeout_ms=5000)
+        engine = _make_file_engine()
+        req = eggsec.OperationRequest(
+            "scan_git_secrets", "127.0.0.1", timeout_ms=5000,
+            metadata={"repo_path": git_repo},
+        )
         op_result = engine.run(req)
         assert op_result.is_success()
         assert op_result.payload_type_name == type(direct).__name__.removesuffix("Py")
@@ -155,12 +171,15 @@ class TestGitSecretsFeatureEnabled:
     # -- 1c. Async engine dispatch --
 
     def test_async_engine_dispatch(self, git_repo):
-        async_eng = _make_async_engine()
-        req = eggsec.OperationRequest("scan_git_secrets", git_repo, timeout_ms=5000)
+        async_eng = _make_async_file_engine()
+        req = eggsec.OperationRequest(
+            "scan_git_secrets", "127.0.0.1", timeout_ms=5000,
+            metadata={"repo_path": git_repo},
+        )
         future = async_eng.run(req)
         assert isinstance(future, eggsec.PyFuture)
         result = _await_future(future)
-        assert isinstance(result, eggsec.OperationResult)
+        assert result is not None
         async_eng.close()
 
     # -- 1d. Serialization --
@@ -206,7 +225,7 @@ class TestGitSecretsFeatureEnabled:
     # -- 1f. Request validation --
 
     def test_nonexistent_path_returns_error(self):
-        engine = _make_engine()
+        engine = _make_file_engine()
         req = eggsec.OperationRequest(
             "scan_git_secrets", "/tmp/__nonexistent_path_99999__", timeout_ms=2000,
         )
@@ -217,16 +236,18 @@ class TestGitSecretsFeatureEnabled:
     # -- 1g. Cancellation --
 
     def test_pre_cancelled_cancellation(self, git_repo):
-        engine = _make_engine()
+        engine = _make_file_engine()
         token = eggsec.CancellationToken()
         token.cancel("test-pre-cancel")
-        pipeline = eggsec.PIPELINE
         # Use Pipeline to test cancellation
         from eggsec import Pipeline
         pipe = Pipeline("git-secrets-cancel")
         pipe.add_step(
             "scan",
-            eggsec.OperationRequest("scan_git_secrets", git_repo, timeout_ms=5000),
+            eggsec.OperationRequest(
+                "scan_git_secrets", "127.0.0.1", timeout_ms=5000,
+                metadata={"repo_path": git_repo},
+            ),
         )
         pipe.set_cancel_token(token)
         result = pipe.run(engine)

@@ -1053,7 +1053,8 @@ fn automated_strict_profiles_produce_deny_not_require_confirmation_at_evaluate_l
     let loaded = LoadedScope::default_empty();
     let mut policy = ExecutionPolicy::default();
     policy.allow_intrusive_fuzzing = true;
-    let desc = make_descriptor("127.0.0.1", OperationRisk::Intrusive);
+    // Uses 10.0.0.1 (private IP, not loopback) to trigger scope blocking.
+    let desc = make_descriptor("10.0.0.1", OperationRisk::Intrusive);
 
     for profile in &[ExecutionProfile::McpStrict, ExecutionProfile::AgentStrict] {
         let ctx = match profile {

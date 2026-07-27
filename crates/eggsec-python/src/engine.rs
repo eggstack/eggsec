@@ -2280,13 +2280,6 @@ impl Engine {
         repo_path: &str,
         max_commits: usize,
     ) -> OperationResult {
-        if let Err(e) = self
-            .state
-            .pre_dispatch_validate("scan_git_secrets", repo_path)
-        {
-            return operation_err(e.to_string());
-        }
-
         let repo_path_owned = repo_path.to_string();
         let result = runtime_sync::block_on(py, async move {
             eggsec::recon::git_secrets::scan_git_secrets(&repo_path_owned, max_commits).map_pyerr()

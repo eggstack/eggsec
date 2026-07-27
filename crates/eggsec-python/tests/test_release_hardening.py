@@ -194,6 +194,15 @@ class TestRuntimeStubParity:
             "StreamEventTypePy",
             "TargetTypePy",
             "TechnologyDataPy",
+            # Feature-gated container/git-secrets types (registered in _core, re-exported in .pyi stubs)
+            "CisCheckPy",
+            "ClusterInfoPy",
+            "DockerMisconfigPy",
+            "EscapeRiskPy",
+            "ImageLayerPy",
+            "K8sFindingPy",
+            "SecretType",
+            "GitSecretsConfidence",
             # Constants mapped to dunder names
             "ABI_VERSION",
             "SCHEMA_VERSION",

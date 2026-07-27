@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub const FINDING_SCHEMA_VERSION: &str = "1.0";
 
 /// Confidence level for a finding.
-#[pyclass(frozen, name = "Confidence")]
+#[pyclass(frozen, name = "Confidence", eq, eq_int)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConfidencePy {
     Confirmed,

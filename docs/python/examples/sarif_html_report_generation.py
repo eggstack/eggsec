@@ -39,33 +39,33 @@ def main():
     # SARIF report
     sarif_path = os.path.join(tempfile.gettempdir(), "report.sarif")
     sarif_config = StreamingReportConfig(format="sarif", output_path=sarif_path)
-    with StreamingReporter(sarif_config) as reporter:
-        reporter.start()
-        for f in findings:
-            reporter.write_finding(f)
-        summary = reporter.finish()
+    reporter = StreamingReporter(sarif_config)
+    reporter.start()
+    for f in findings:
+        reporter.write_finding(f)
+    summary = reporter.finish()
     print(f"SARIF: {summary.total_findings} findings, {summary.output_size_bytes} bytes")
     print(f"  Written to: {sarif_path}")
 
     # HTML report
     html_path = os.path.join(tempfile.gettempdir(), "report.html")
     html_config = StreamingReportConfig(format="html", output_path=html_path)
-    with StreamingReporter(html_config) as reporter:
-        reporter.start()
-        for f in findings:
-            reporter.write_finding(f)
-        summary = reporter.finish()
+    reporter = StreamingReporter(html_config)
+    reporter.start()
+    for f in findings:
+        reporter.write_finding(f)
+    summary = reporter.finish()
     print(f"HTML: {summary.output_size_bytes} bytes")
     print(f"  Written to: {html_path}")
 
     # JSON report
     json_path = os.path.join(tempfile.gettempdir(), "report.json")
     json_config = StreamingReportConfig(format="json", output_path=json_path)
-    with StreamingReporter(json_config) as reporter:
-        reporter.start()
-        for f in findings:
-            reporter.write_finding(f)
-        summary = reporter.finish()
+    reporter = StreamingReporter(json_config)
+    reporter.start()
+    for f in findings:
+        reporter.write_finding(f)
+    summary = reporter.finish()
     print(f"JSON: {summary.output_size_bytes} bytes")
 
     # Cleanup

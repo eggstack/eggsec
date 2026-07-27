@@ -44,8 +44,8 @@ def run_sync():
     result = engine.run_port_scan(req)
     print(f"Sync  : status={result.status.name()}")
     if result.payload:
-        for port_info in result.payload.get("open_ports", []):
-            print(f"  port {port_info.get('port')}: open")
+        for port_info in result.payload.open_ports:
+            print(f"  port {port_info.port}: open")
 
 
 async def run_async():
@@ -55,8 +55,8 @@ async def run_async():
     result = await engine.run_port_scan(req)
     print(f"Async : status={result.status.name()}")
     if result.payload:
-        for port_info in result.payload.get("open_ports", []):
-            print(f"  port {port_info.get('port')}: open")
+        for port_info in result.payload.open_ports:
+            print(f"  port {port_info.port}: open")
 
 
 def main():

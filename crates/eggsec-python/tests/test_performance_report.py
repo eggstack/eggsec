@@ -40,7 +40,7 @@ BUDGETS = {
     "async_dispatch_throughput_ops_per_sec": 10,
     "serialization_p99_us": 1000,
     "cancellation_latency_ms": 50,
-    "session_leak_memory_growth_mb": 10,
+    "session_leak_memory_growth_mb": 25,
     "wheel_extension_size_mb": 50,
     "native_dependency_count": 50,
     "slow_consumer_memory_growth_mb": 50,

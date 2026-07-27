@@ -20,6 +20,7 @@ from eggsec import (
     FindingSink,
     AuditSink,
     EventStream,
+    EventEnvelope,
     Engine,
     Scope,
     PortScanRequest,
@@ -110,14 +111,11 @@ def demo_event_stream():
 
     # Push synthetic events
     for i in range(5):
-        stream.push({
-            "schema_version": "1.0",
-            "event_id": f"evt-{i}",
-            "sequence": i,
-            "timestamp": "2026-01-01T00:00:00Z",
-            "event_type": "progress" if i % 2 == 0 else "finding",
-            "payload": {"progress": i * 20, "message": f"step {i}"},
-        })
+        event_type = "progress" if i % 2 == 0 else "finding"
+        stream.push(EventEnvelope(
+            event_type=event_type,
+            payload={"progress": i * 20, "message": f"step {i}"},
+        ))
 
     print(f"After push: len={len(stream)}")
     latest = stream.latest()

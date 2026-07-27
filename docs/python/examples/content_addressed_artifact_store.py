@@ -36,7 +36,7 @@ def main():
 
         retrieved = store.get(info1.content_hash)
         if retrieved:
-            print(f"Retrieved: {bytes(retrieved.data).decode()}")
+            print(f"Retrieved: hash={retrieved.info.content_hash[:16]}... size={retrieved.info.size_bytes}")
 
         integrity = store.verify(info1.content_hash)
         print(f"Integrity: valid={integrity.valid}")

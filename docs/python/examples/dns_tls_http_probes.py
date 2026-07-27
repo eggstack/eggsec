@@ -37,7 +37,7 @@ def run_sync():
     print(f"DNS: response_code={dns.response_code}, authoritative={dns.authoritative}")
     for rec in dns.records:
         print(f"  {rec.record_type} {rec.name} -> {rec.data} (TTL {rec.ttl})")
-    print(f"  resolver={dns.resolver_used}, elapsed={dns.timing.elapsed_ms:.0f}ms")
+    print(f"  resolver={dns.resolver_used}, elapsed={dns.timing.total_ms:.0f}ms")
     if dns.error:
         print(f"  error: {dns.error}")
 
@@ -67,7 +67,7 @@ def run_sync():
     if content_type:
         print(f"  content_type={content_type}")
     print(f"  body_bytes={http.body_bytes.__len__() if http.body_bytes else 0}")
-    print(f"  elapsed={http.timing.elapsed_ms:.0f}ms")
+    print(f"  elapsed={http.timing.total_ms:.0f}ms")
     if http.error:
         print(f"  error: {http.error}")
 

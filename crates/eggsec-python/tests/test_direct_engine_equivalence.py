@@ -680,6 +680,10 @@ class TestEngineEmitsAuditEvents:
         assert count_after_second > count_after_first
         assert count_after_second >= 2
 
+    @pytest.mark.skipif(
+        eggsec.has_feature("git-secrets"),
+        reason="git-secrets is compiled; feature_unavailable path not exercised",
+    )
     def test_feature_unavailable_emits_audit(self):
         engine = _make_engine()
         req = eggsec.OperationRequest(

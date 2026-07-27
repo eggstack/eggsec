@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Workspace all-features check
         run: cargo check --workspace --all-features
       - name: Workspace all-features test

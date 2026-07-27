@@ -74,8 +74,7 @@ def main():
         all_assessments = arepo.list_assessments()
         print(f"Total assessments: {len(all_assessments)}")
 
-    os.unlink(db_path)
-    print("Database cleaned up")
+    print("Done")
 
 
 if __name__ == "__main__":
