@@ -40,14 +40,12 @@ This skill directory contains specialized guides for the Eggsec autonomous agent
 - `websocket_api.md` - WebSocket security
 - `dns_reconnaissance.md` - DNS recon
 - `subdomain_enumeration.md` - Subdomain enumeration
-- `port_scanning.md` - Port scanning
 - `endpoint_discovery.md` - Endpoint discovery
 - `http_load_testing.md` - Load testing
 - `waf_detection_bypass.md` - WAF testing
 - `ssl_tls_audit.md` - SSL/TLS auditing
 - `vulnerability_management.md` - Vulnerability management
 - `security_compliance_checks.md` - Compliance checks
-- `security_assessment_pipeline.md` - Security pipelines
 - `authentication_security_testing.md` - Authentication security testing (brute force, credential stuffing, lockout, MFA)
 
 ### Technical Implementation
@@ -57,13 +55,11 @@ This skill directory contains specialized guides for the Eggsec autonomous agent
 - `websocket_api.md` - WebSocket API
 - `intercepting_proxy.md` - Intercepting proxy
 - `oast_integration.md` - OAST integration
-- `mcp_protocol.md` - MCP protocol
 
 ### Code Quality & Patterns
 - `code_quality_patterns.md` - Code quality guidelines
 - `security_fix_patterns.md` - Security fix patterns
 - `performance_patterns.md` - Performance optimization
-- `rust_dependency_migration.md` - Dependency migration
 
 ### Infrastructure
 - `config_management.md` - Configuration management
@@ -71,13 +67,6 @@ This skill directory contains specialized guides for the Eggsec autonomous agent
 - `wireless_security_testing.md` - Wireless security
 - `web_search_integration.md` - Web search integration
 - `alert_notification.md` - Alert notifications
-
-### TUI Components
-- `tui_improvements.md` - TUI improvement patterns
-- `tui_tab_indexing.md` - Tab indexing system
-- `tui_theme_system.md` - Theme system
-- `tui_session_persistence.md` - Session persistence
-- `tui_clipboard.md` - Clipboard integration
 
 ### Planning
 - `plan_improvement.md` - Plan improvement workflows

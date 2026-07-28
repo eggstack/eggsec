@@ -38,11 +38,8 @@ These skills provide specialized workflows and domain knowledge for the Eggsec a
 | `path_traversal_testing.md` | Path traversal testing |
 | `performance_patterns.md` | Performance testing patterns |
 | `plan_improvement.md` | Plan improvement workflows |
-| `port_scanning.md` | Port scanning patterns |
 | `prototype_pollution.md` | Prototype pollution testing |
 | `race_condition.md` | Race condition testing |
-| `rust_dependency_migration.md` | Rust dependency migration |
-| `security_assessment_pipeline.md` | Security assessment pipeline |
 | `security_compliance_checks.md` | Compliance checking |
 | `security_fix_patterns.md` | Security fix patterns |
 | `eggsec-agent.md` | Agent-specific workflows |
@@ -51,11 +48,6 @@ These skills provide specialized workflows and domain knowledge for the Eggsec a
 | `ssrf_testing.md` | SSRF testing |
 | `subdomain_enumeration.md` | Subdomain enumeration |
 | `template_based_scanning.md` | Template-based scanning |
-| `tui_clipboard.md` | TUI clipboard operations |
-| `tui_improvements.md` | TUI improvement patterns |
-| `tui_session_persistence.md` | TUI session persistence |
-| `tui_tab_indexing.md` | TUI tab indexing |
-| `tui_theme_system.md` | TUI theme system |
 | `vulnerability_management.md` | Vulnerability management |
 | `waf_detection_bypass.md` | WAF detection and bypass |
 | `web_search_integration.md` | Web search integration |

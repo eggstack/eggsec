@@ -272,7 +272,7 @@ Update the "Feature-to-Metadata Cross-Reference" table in
 
 ### Documentation
 
-Update `docs/FEATURES.md` and `docs/FEATURE_MATRIX.md` section 1.1 to include
+Update `docs/FEATURE_MATRIX.md` section 1.1 to include
 the new feature in the main crate feature table with its category, implied
 features, and metadata IDs.
 
@@ -331,7 +331,6 @@ When adding a new feature, verify each item:
 - [ ] `cargo check -p eggsec --features my-new-feature` compiles
 - [ ] Platform-sensitive deps documented in `FEATURE_MATRIX.md` section 3.2
 - [ ] Feature table updated in `FEATURE_MATRIX.md` section 1.1
-- [ ] Feature listed in `docs/FEATURES.md`
 - [ ] If required for PR checks: added to `.github/workflows/test.yml` feature-profiles matrix
 - [ ] If required for PR checks: added to `Makefile` `check-feature-profiles` target
 

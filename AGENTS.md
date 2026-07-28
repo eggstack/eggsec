@@ -219,9 +219,10 @@ Feature-gated modules require explicit build flags:
 | `packet-inspection` | `libpcap-dev` | Packet capture |
 | `nse-ssh2` | `ssh2` | NSE with SSH2/libssh2 support |
 | `nse-sandbox` | (needs nse) | Sandboxed NSE execution |
-| `http-api` | none | Daemon HTTP transport (axum) |
 
-Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`
+Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `ws-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`
+
+Note: `http-api` is a feature on `eggsec-daemon` (not `eggsec`), enabling HTTP/SSE transport.
 
 CLI features: `tui` (default), `daemon-client`, `headless`
 
@@ -342,7 +343,7 @@ Each module has specialized guidance in `AGENTS.override.md`. When working in a 
 Canonical references live in `docs/` and `architecture/` directories. Key entry points:
 
 - `docs/ARCHITECTURE.md` — workspace ownership, enforcement model, execution flows
-- `docs/ARCHITECTURE_INVARIANTS.md` — 30 normative invariants
+- `docs/ARCHITECTURE_INVARIANTS.md` — 41 normative invariants
 - `docs/FEATURE_MATRIX.md` — feature inventory, naming, build profiles
 - `docs/ENFORCEMENT_MODES.md` — dual-mode enforcement contract
 - `docs/COMMAND_REGISTRY.md` — command registry inventory and dispatch
@@ -350,6 +351,13 @@ Canonical references live in `docs/` and `architecture/` directories. Key entry 
 - `docs/EXTENSIBILITY.md` — contributor guide for adding operations, domains, commands
 - `architecture/overview.md` — system-wide architecture, module index
 - `architecture/nse_integration.md` — NSE/Lua integration, milestones, capability wrappers
+- `architecture/daemon.md` — daemon persistence, session lifecycle, transport
+- `architecture/runtime.md` — eggsec-runtime core types and invariants
+- `architecture/runtime_bridge.md` — surface conversion, preflight/approval flow
+- `architecture/config.md` — enforcement model, LoadedScope, policy system
+- `architecture/cli_commands.md` — CLI parsing, command registry, handlers
+- `architecture/tui.md` — TUI tabs, themes, enforcement facade
+- `architecture/python_api.md` — Python bindings contract, stable operations
 
 ## Skills
 

@@ -237,19 +237,15 @@ if env.is_some() {
 
 ## Serialization Roundtrip Testing Pattern
 
-When testing types that implement `Serialize` + `DeserializeOwned` + `Eq`, use the helper from `tests/common/mod.rs`:
+When testing types that implement `Serialize` + `DeserializeOwned` + `Eq`, use a roundtrip helper:
 
 ```rust
-use crate::tests::common::assert_serialize_roundtrip;
 use eggsec::types::Severity;
 
-// Instead of repeating serialization logic:
+// Serialize and deserialize, then verify equality:
 let json = serde_json::to_string(&value).unwrap();
 let decoded: Type = serde_json::from_str(&json).unwrap();
 assert_eq!(value, decoded);
-
-// Use the helper:
-assert_serialize_roundtrip(&value);
 ```
 
 ## Safe Serialization Helpers
@@ -325,10 +321,12 @@ Links to relevant documentation
 ```
 
 See existing ADRs in `docs/adr/` for examples:
-- ADR-001: SensitiveString vs SecretString
-- ADR-002: Feature flag design rationale
-- ADR-003: rustls over native-tls (except nse)
-- ADR-004: Error type separation
+- `ADR-001-sensitive-string.md`: SensitiveString vs SecretString
+- `ADR-002-feature-flags.md`: Feature flag design rationale
+- `ADR-003-rustls-tls.md`: rustls over native-tls (except nse)
+- `ADR-004-error-types.md`: Error type separation
+- `ADR-005-web-proxy-plugin-system.md`: Web proxy plugin system
+- `ADR-006-multi-loadout-correlation-engine.md`: Correlation engine
 
 ## Triggers
 
