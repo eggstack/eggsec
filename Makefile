@@ -77,7 +77,6 @@ check-architecture-ci: check
 check-full: check
 	cargo deny check
 	make check-feature-profiles
-	cargo check -p eggsec --features full-no-system
 	cargo check -p eggsec --features full
 
 # Representative feature profile checks (representative, not exhaustive)
@@ -108,7 +107,7 @@ help:
 	@echo "  make test            - Run unit tests only (default)"
 	@echo "  make check           - Full mandatory Rust CI contract (no nextest required)"
 	@echo "  make check-python    - Python CI check (one build, all checks)"
-	@echo "  make check-full      - Optional broad validation (full-no-system + full features)"
+	@echo "  make check-full      - Optional broad validation (cargo deny + feature profiles + full features)"
 	@echo "  make test-ci         - Full suite, no retries"
 	@echo "  make test-integration - Integration tests"
 	@echo "  make test-nse        - NSE tests (requires nse feature)"

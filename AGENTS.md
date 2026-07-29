@@ -241,7 +241,6 @@ Provisional subsystems (scope-checked, policy-gated, not stable-core): network t
 | `container` | `container` | K8s/Docker scanning |
 | `headless-browser` | `headless-browser` | Browser session types (Release 4) |
 | `daemon-client` | — | Daemon session access |
-| `full-no-system` | — | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` (no system deps) |
 
 Aggregate: `full` — all non-default features. Not conservative/production.
 

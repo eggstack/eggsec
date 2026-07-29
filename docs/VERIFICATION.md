@@ -57,7 +57,6 @@ These checks are valuable but not required for every merge. They run in the opti
 | Full mandatory contract | `make check` (included in `check-full`) | Baseline correctness |
 | Advisory/license/ban policy | `cargo deny check` | Dependency policy enforcement |
 | Representative feature profiles | `make check-feature-profiles` | Feature coherence |
-| Full workspace all-features | `cargo check -p eggsec --features full-no-system` | Aggregate compilation |
 | Full feature profile | `cargo check -p eggsec --features full` | Full feature compilation |
 
 ### Security tool ownership
