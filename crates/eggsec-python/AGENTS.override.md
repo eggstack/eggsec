@@ -126,22 +126,6 @@ python scripts/run_python_profile.py --profile <name>
 
 Runs the test suite for a named profile. Invokes `pytest` with the correct paths, features, and environment variables. Used by CI and local validation workflows.
 
-### Evidence Bundle Generation
-
-```bash
-python scripts/build_python_release_evidence.py --commit <sha>
-```
-
-Builds a release evidence bundle for a given commit. Collects test results, coverage data, feature-matrix snapshots, and stub-parity diffs into a structured artifact for audit/review.
-
-### Skip Budget Enforcement
-
-```bash
-python scripts/python_skip_budget.py --profile <name>
-```
-
-Enforces per-profile skip budgets. Validates that the number of `xfail`/`skip` markers in the test suite does not exceed the thresholds defined in `profiles.json`. Fails the build if the budget is exceeded, preventing uncontrolled skip drift.
-
 ### Profile Validation
 
 ```bash

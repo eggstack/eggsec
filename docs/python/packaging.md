@@ -245,7 +245,7 @@ semantics have their own release gate.
 ### 1. Build and validate locally
 
 ```bash
-bash scripts/validate_python_release_candidate.sh
+make check-python
 ```
 
 The required fixture suite starts only managed loopback services and does not

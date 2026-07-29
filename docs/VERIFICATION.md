@@ -34,22 +34,10 @@ No `cargo-nextest` is required. Any pull request touching Rust source, workspace
 For changes touching `crates/eggsec-python/`, `scripts/`, or `docs/python/`, additionally require:
 
 ```bash
-# Build and install
-cd crates/eggsec-python && maturin develop && cd ../..
-
-# Python checks
-python scripts/check-python-capability-matrix.py
-python scripts/check-python-architecture-guards.py
-python scripts/check_python_stub_parity.py
-bash scripts/check_python_types.sh
-pytest crates/eggsec-python/tests/ -v --timeout=60
+make check-python
 ```
 
-Or via the Makefile (requires `rtk` for some targets):
-
-```bash
-make test-python-phase-f
-```
+This runs `scripts/check-python.sh` which builds the extension once and runs behavioral tests, capability/architecture checks, stub parity, and type checks in a single virtual environment.
 
 ## Platform portability
 
@@ -109,8 +97,6 @@ Before a release tag is created, verify:
 - Deep checks pass
 - Python wheels build on all platforms
 - TestPyPI upload and install succeeds
-- Evidence bundle generated
-- Maturity guard passes
 
 ## Release publication is always manual
 
@@ -135,12 +121,11 @@ The final `publish-pypi` job requires manual approval via GitHub Environments. P
 |--------|---------|---------------|
 | `make test` | Unit tests only | Default local check |
 | `make check` | Full mandatory Rust CI contract (no nextest) | Every PR/push |
+| `make check-python` | Python CI check (one build, all checks) | Python changes |
 | `make check-full` | Optional broad validation (full-no-system + full features) | Pre-release |
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
-| `make test-python-phase-f` | Python compat + budgets + redaction | Python changes |
-| `make build-python-evidence` | Generate evidence bundle | Pre-release |
 | `make build` | Release build of CLI binary | Release only |

@@ -155,15 +155,11 @@ The CI architecture guards enforce these invariants from Phases 1–14 (23 check
 
 ## Python-Specific CI Guards
 
-These checks enforce invariants for the `eggsec-python` bindings and are part of the Python release-candidate pipeline.
+These checks enforce invariants for the `eggsec-python` bindings and run within the unified `python` job in `test.yml`. They are executed once after a single `maturin develop` build.
 
 | Check | Command | Purpose |
 |-------|---------|---------|
-| python-capability-matrix | `python scripts/validate_python_profiles.py` | Validates profile manifest structure and cross-references |
-| python-architecture-guards | `bash scripts/check-architecture-guards.sh --python` | Python-specific architecture drift checks (imports, feature gates) |
-| python-stub-parity | `cargo test -p eggsec-python --test stub_parity` | Type stubs match runtime API surface |
-| python-type-check | `mypy crates/eggsec-python/python/` | Static type checking of Python package |
-| python-maturity-consistency | `cargo test -p eggsec-python --test maturity_consistency` | Feature-gate labels match domain maturity docs |
-| python-feature-metadata | `cargo test -p eggsec-python --test feature_metadata` | Python feature flags align with Rust engine features |
-| python-release-gate | Aggregate of above Python checks | Single gate for Python release readiness |
-| release-gate | Aggregate of all CI checks (Rust + Python) | Top-level gate for full CI readiness |
+| python-capability-matrix | `python scripts/check-python-capability-matrix.py` | Validates operation set, fields, and domain maturity vs Rust source |
+| python-architecture-guards | `python scripts/check-python-architecture-guards.py` | Architecture drift checks (schema version, doc refs, runtime parity) |
+| python-stub-parity | `python scripts/check_python_stub_parity.py` | Type stubs match runtime API surface |
+| python-type-check | `bash scripts/check_python_types.sh` | Importability, __all__ resolution, stub syntax, mypy/pyright |

@@ -90,6 +90,7 @@ cargo check --workspace --no-default-features
 
 ```bash
 make check                  # full mandatory Rust CI contract (no nextest required)
+make check-python           # Python CI check (one build, all checks)
 make check-full             # optional broad validation (full-no-system + full features)
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
@@ -99,8 +100,6 @@ make test-feature-matrix    # feature + metadata validation
 make check-no-default       # no-default-features workspace build
 make check-feature-profiles # representative feature profile checks
 make build                  # release build
-make test-python-phase-f    # Phase F Python gates (compat + budgets + redaction)
-make build-python-evidence  # generate commit-bound evidence bundle
 ```
 
 ### Python bindings
@@ -116,20 +115,13 @@ maturin build --release
 # Tests
 pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/
 
-# Release-candidate validation (local fixtures, wheels, and architecture guards)
-bash scripts/validate_python_release_candidate.sh
+# Unified CI check (one build, all checks)
+make check-python
 
 # Validation infrastructure
 python scripts/validate_python_profiles.py   # validates profile manifest
 python scripts/run_python_profile.py --profile <name>   # runs a specific profile
-python scripts/build_python_release_evidence.py --commit <sha>   # builds evidence bundle
-python scripts/python_skip_budget.py --profile <name>   # enforces skip budgets
 python scripts/check_python_compatibility.py             # semantic compatibility checker
-python scripts/generate_python_compatibility_baseline.py # regenerate baseline from installed package
-
-# Phase F tests
-pytest crates/eggsec-python/tests/test_resource_budgets.py -v     # resource budgets
-pytest crates/eggsec-python/tests/test_redaction_comprehensive.py -v  # redaction audit
 
 # Rust-side tests
 cargo test -p eggsec-python
@@ -139,7 +131,7 @@ cargo test -p eggsec-python
 
 GitHub Actions (`.github/workflows/`):
 - `ci.yml` — mandatory Rust CI contract (`make check`) + macOS/Windows portability checks
-- `test.yml` — Python test matrix, capability checks, type checks, release gates
+- `test.yml` — unified Python CI (one build, behavioral + metadata + stub parity + type checks)
 - `deep-checks.yml` — weekly all-features workspace build/test
 - `security-scan.yml` — daily scan pipeline
 - `python-wheels.yml` — builds Python wheels on push to main

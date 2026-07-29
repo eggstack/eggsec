@@ -45,9 +45,7 @@ the evidence bundle but do not block.
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/generate_python_compatibility_baseline.py` | Generate compatibility baseline manifests |
 | `scripts/check_python_compatibility.py` | Semantic compatibility checker |
-| `scripts/build_python_release_evidence.py` | Aggregate all evidence into release bundle |
 
 ## Key Test Files
 
@@ -59,10 +57,6 @@ the evidence bundle but do not block.
 ## Running Phase F Checks
 
 ```bash
-# Generate compatibility baseline
-python scripts/generate_python_compatibility_baseline.py --commit <sha> \
-    --output validation/compatibility/baseline.json
-
 # Check compatibility
 python scripts/check_python_compatibility.py \
     --baseline validation/compatibility/baseline.json
@@ -72,7 +66,4 @@ pytest crates/eggsec-python/tests/test_resource_budgets.py
 
 # Run redaction tests
 pytest crates/eggsec-python/tests/test_redaction_comprehensive.py
-
-# Full evidence bundle (includes Phase F artifacts)
-python scripts/build_python_release_evidence.py --commit <sha>
 ```

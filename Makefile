@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-full check-feature-profiles test-python-phase-f test-python-compatibility test-python-resource-budgets test-python-redaction build-python-evidence clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -94,32 +94,18 @@ check-feature-profiles:
 clean:
 	cargo clean
 
-# ── Phase F: Python release closure targets ──────────────────────────────
+# ── Python checks ─────────────────────────────────────────────────────────
 
-# Run semantic compatibility checker against baseline
-test-python-compatibility:
-	python scripts/check_python_compatibility.py
-
-# Run resource budget tests (FD, thread, memory, socket, temp-dir, repo scale)
-test-python-resource-budgets:
-	rtk python -m pytest crates/eggsec-python/tests/test_resource_budgets.py -v --tb=short
-
-# Run comprehensive redaction test suite
-test-python-redaction:
-	rtk python -m pytest crates/eggsec-python/tests/test_redaction_comprehensive.py -v --tb=short
-
-# Run all Phase F Python gates (compatibility + resource budgets + redaction)
-test-python-phase-f: test-python-compatibility test-python-resource-budgets test-python-redaction
-
-# Generate commit-bound evidence bundle for release validation
-build-python-evidence:
-	python scripts/build_python_release_evidence.py --commit $$(git rev-parse HEAD)
+# Unified Python CI check (one venv, one maturin develop, all retained checks)
+check-python:
+	bash scripts/check-python.sh
 
 # Help
 help:
 	@echo "Test targets:"
 	@echo "  make test            - Run unit tests only (default)"
 	@echo "  make check           - Full mandatory Rust CI contract (no nextest required)"
+	@echo "  make check-python    - Python CI check (one build, all checks)"
 	@echo "  make check-full      - Optional broad validation (full-no-system + full features)"
 	@echo "  make test-ci         - Full suite, no retries"
 	@echo "  make test-integration - Integration tests"
@@ -133,9 +119,4 @@ help:
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
-	@echo "  make test-python-phase-f - All Phase F Python gates (compat + budgets + redaction)"
-	@echo "  make test-python-compatibility - Semantic compatibility checker vs baseline"
-	@echo "  make test-python-resource-budgets - Resource budget tests (FD, thread, memory)"
-	@echo "  make test-python-redaction - Comprehensive redaction test suite"
-	@echo "  make build-python-evidence - Generate commit-bound evidence bundle"
 	@echo "  make clean           - Clean artifacts"

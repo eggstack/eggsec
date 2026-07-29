@@ -173,18 +173,17 @@ installed-wheel smoke test. The normal resolver and policy gate remain
 unchanged for callers. The first-release contract is local `Engine` and
 `AsyncEngine`; daemon-client execution is provisional.
 
-## Release Evidence Pipeline
+## Unified CI Check
 
-The release evidence pipeline validates that all release gates are met:
+The Python CI uses a single unified check (`make check-python` / `scripts/check-python.sh`) that builds the extension once and runs all retained checks:
 
-- `scripts/build_python_release_evidence.py` — builds evidence bundle (fail-closed: missing artifacts cause hard failure)
-- `scripts/python_skip_budget.py` — enforces skip budgets (fail-closed: missing JUnit causes hard failure)
-- `scripts/validate_python_profiles.py` — validates profile manifest
-- `scripts/check_python_compatibility.py` — semantic compatibility checker
-- `scripts/generate_python_compatibility_baseline.py` — regenerates compatibility baseline
-- `scripts/check_doc_references.py` — documentation reference consistency checker
+- Behavioral test suite
+- Capability and feature metadata checks
+- Architecture guards
+- Stub parity
+- Type checks (mypy/pyright)
 
-Negative tests: `tests/test_evidence_failclosed.py`
+Negative tests: formerly in `tests/test_evidence_failclosed.py` (removed with evidence pipeline).
 
 ## API Surface
 

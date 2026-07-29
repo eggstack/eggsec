@@ -53,9 +53,9 @@ pip install target/wheels/eggsec-*.whl
 
 Prebuilt wheels are **not yet available on PyPI**. Build from source using maturin.
 
-For release validation, run `bash scripts/validate_python_release_candidate.sh`
-from the repository root. It exercises loopback TCP/HTTP/TLS fixtures,
-checkpoint persistence, wheel smoke tests, and architecture guards.
+For release validation, run `make check-python` from the repository root.
+It builds the extension once and runs behavioral tests, capability/architecture
+checks, stub parity, and type checks in a single virtual environment.
 
 ### Included Features (default wheel)
 
@@ -320,17 +320,17 @@ and domain graduation review.
   required)
 
 **Enhanced compatibility baseline**
-- `scripts/generate_python_compatibility_baseline.py` — generates a compatibility
-  baseline manifest recording the full stable-core API surface, type
-  signatures, and schema versions for a given commit.
-- Baseline manifests are stored in `validation/compatibility/` and compared
-  against the current build to detect accidental API breaks.
+- `scripts/check_python_compatibility.py` — compares the current build against
+  a baseline manifest and reports semantic compatibility violations: removed
+  types, changed signatures, stability regressions, and schema drift.
+- Baselines can be regenerated manually via `generate_python_compatibility_baseline.py` (if present)
+  or by running the checker with `--generate-baseline`.
 
 **Semantic compatibility checker**
 - `scripts/check_python_compatibility.py` — compares the current build against
   a baseline manifest and reports semantic compatibility violations: removed
   types, changed signatures, stability regressions, and schema drift.
-- Integrated into the release evidence bundle to gate publication.
+- Available under `make check-full` or manual release validation; not part of mandatory per-commit CI.
 
 **Resource budget enforcement**
 - `crates/eggsec-python/tests/test_resource_budgets.py` — enforces compile-time and runtime
@@ -350,12 +350,6 @@ and domain graduation review.
 - Covers: canonical registry entry, mandatory policy gate, typed payload,
   structured error, audit decision, sync/async contract, fixture
   determinism, schema coverage, and transport parity.
-
-**Evidence bundle enhancements**
-- Evidence bundles now include compatibility baseline diff, resource budget
-  results, redaction test results, and domain graduation status.
-- `scripts/build_python_release_evidence.py` aggregates all Phase F
-  evidence into the release artifact.
 
 **New documentation**
 - `docs/python/COMPATIBILITY_POLICY.md` — compatibility policy and
@@ -956,35 +950,15 @@ The profile runner performs: prerequisite checking → fixture setup → wheel
 build (maturin) → wheel install → test execution → skip budget enforcement →
 evidence JSON generation. Output goes to `target/python-validation/<profile>/`.
 
-### Evidence Bundle Generation
+### Unified CI Check
 
 ```bash
-# Generate a full evidence bundle for a commit
-python scripts/build_python_release_evidence.py --commit <sha>
+make check-python
 ```
 
-The evidence bundle aggregates results from all profiles into a single
-structured artifact for release gating. Each profile produces an
-`evidence.json` with test counts, skip budgets, wheel metadata, platform
-info, and toolchain versions.
-
-### Skip Budget Enforcement
-
-```bash
-# Standalone budget enforcement
-python scripts/python_skip_budget.py --profile <name> \
-    --manifest crates/eggsec-python/validation/profiles.json \
-    --junit-xml target/report.xml
-```
-
-Skip budgets prevent silent test suite erosion. Each profile declares a
-maximum number of allowed skips and xfails. Budgets enforce:
-
-- Minimum number of tests that must actually run
-- Maximum allowed skips (split by reason: `feature_gate`, `network_error`, etc.)
-- Maximum allowed xfails
-- All-skipped detection (fails if every selected test was skipped)
-- Unexpected skip reason detection (reasons not in the allowed list)
+Builds the extension once and runs behavioral tests, capability/architecture
+checks, stub parity, and type checks in a single virtual environment. Used
+both locally and in CI.
 
 ### Profile Inventory (20 profiles)
 
@@ -1028,10 +1002,6 @@ blocking constraints, and privilege/schedule compatibility.
 ### Semantic Compatibility Checking (Phase F)
 
 ```bash
-# Generate a compatibility baseline from the current build
-python scripts/generate_python_compatibility_baseline.py --commit <sha> \
-    --output validation/compatibility/baseline.json
-
 # Check current build against a baseline
 python scripts/check_python_compatibility.py \
     --baseline validation/compatibility/baseline.json \
