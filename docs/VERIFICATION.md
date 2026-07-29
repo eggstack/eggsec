@@ -86,11 +86,11 @@ Changes to `eggsec-tui`, `eggsec-cli`, `eggsec-daemon`, or `eggsec-runtime` alon
 
 Before a release tag is created, verify:
 
-1. All feature-gated crates compile: `cargo check -p eggsec --features <feature>` for each feature in the feature matrix
-2. Representative feature profiles pass: `make check-feature-profiles`
-3. Deep checks pass: `cargo check --workspace --all-features && cargo test --workspace --all-features`
-4. Python wheel builds succeed on all target platforms
-5. TestPyPI rehearsal succeeds
+1. `make release-check` passes (local validation, no publication)
+2. All feature-gated crates compile: `cargo check -p eggsec --features <feature>` for each feature in the feature matrix
+3. Representative feature profiles pass: `make check-feature-profiles`
+4. Deep checks pass: `cargo check --workspace --all-features && cargo test --workspace --all-features`
+5. Python wheel builds succeed on all target platforms
 
 ## Merge readiness vs release readiness
 

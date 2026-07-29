@@ -52,7 +52,7 @@ make check
 
 ## Feature-Profile Compile Guards
 
-Representative feature profiles are checked on every PR to catch compile regressions in optional domains. These are `cargo check` only (no test execution) to keep CI fast.
+Representative feature profiles are checked in the optional `deep-checks.yml` workflow and locally via `make check-full`. These are `cargo check` only (no test execution). They are not required for every PR.
 
 | Profile | Command | Category |
 |---------|---------|----------|

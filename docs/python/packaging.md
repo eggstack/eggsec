@@ -54,8 +54,7 @@ the workspace dependency graph automatically.
 source (e.g., `pip install --no-binary :all:`) or for auditing the full
 source. Most users should prefer pre-built wheels for faster installation.
 
-CI previously built and validated the sdist in the `build-sdist` job of
-`python-wheels.yml` (now deleted). The sdist build can be validated locally
+CI previously built and validated the sdist in a dedicated workflow (now deleted). The sdist build can be validated locally
 via `make release-check`. If the sdist build fails due to missing Rust
 tooling, the local validation documents the failure without blocking
 wheel-based workflows.
@@ -232,8 +231,8 @@ package name (controlled by `module-name = "eggsec._core"` in
 
 1. Update `version` in the workspace `Cargo.toml` (or use `cargo-edit`).
 2. Update `version` in `crates/eggsec-python/pyproject.toml` to match.
-3. Tag the release: `git tag python-v<version>`.
-4. CI builds wheels and publishes to PyPI (see below).
+3. Run `make release-check` to validate alignment.
+4. Build and publish manually (see [Publishing to PyPI](#publishing-to-pypi) below).
 
 ## TestPyPI workflow
 
