@@ -2,6 +2,8 @@
 
 CI architecture guards preserve the enforcement, registry, metadata, feature, and documentation invariants established across Phases 1–14 of the architecture extensibility work. They stop regressions at pull-request time without making the workflow brittle, slow, or dependent on platform-specific optional features.
 
+For the full verification contract (merge readiness vs release readiness, which checks are mandatory vs optional), see [`VERIFICATION.md`](VERIFICATION.md).
+
 ## Required Fast PR Checks
 
 These checks run on every pull request and push to `main`. They cover core architecture invariants and should complete quickly.

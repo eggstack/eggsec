@@ -176,6 +176,7 @@ See [docker-compose.yml](docker-compose.yml) for configuration.
 | [Daemon Persistence](docs/DAEMON.md) | Session persistence, transport, CLI commands |
 | [Command Registry](docs/COMMAND_REGISTRY.md) | Command registry and dispatch |
 | [Architecture](docs/ARCHITECTURE.md) | Workspace overview, enforcement model |
+| [Verification Contract](docs/VERIFICATION.md) | Mandatory vs optional CI checks, merge vs release readiness |
 | [Extending Eggsec](docs/EXTENSIBILITY.md) | Adding operations, domains, commands, tools |
 
 Additional docs: [Web Proxy](docs/WEB_PROXY.md), [Database Pentesting](docs/DATABASE_PENTEST.md), [Wireless Testing](docs/WIRELESS.md), [Mobile Analysis](docs/MOBILE.md), [Auth Testing](docs/AUTH_LAB.md), [Agent](docs/AGENT.md), [Usage Guide](docs/USAGE.md), [Findings Schema](docs/FINDINGS_SCHEMA.md).
@@ -190,4 +191,4 @@ Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For adding new operations, domains, commands, tools, TUI actions, report outputs, or features, start with the [Extensibility Guide](docs/EXTENSIBILITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For the full verification contract (mandatory vs optional CI checks, merge vs release readiness), see [docs/VERIFICATION.md](docs/VERIFICATION.md). For adding new operations, domains, commands, tools, TUI actions, report outputs, or features, start with the [Extensibility Guide](docs/EXTENSIBILITY.md).

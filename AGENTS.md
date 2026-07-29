@@ -25,6 +25,8 @@ Prerequisites: `cargo-nextest` (`cargo install cargo-nextest`) for Makefile targ
 
 Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
 
+For the full verification contract (mandatory vs optional checks, merge readiness vs release readiness, platform portability), see [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+
 ## Project Overview
 
 Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15 crates:
