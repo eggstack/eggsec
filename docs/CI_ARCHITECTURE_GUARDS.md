@@ -47,7 +47,7 @@ bash scripts/check-architecture-guards.sh
 Alternatively, run the full architecture guard CI reproduction with a single Make target:
 
 ```bash
-make check-architecture-ci
+make check
 ```
 
 ## Feature-Profile Compile Guards

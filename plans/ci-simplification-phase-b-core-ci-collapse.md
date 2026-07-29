@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. This phase implements the compact mandatory Rust CI contract defined in Phase A. It must preserve critical correctness and enforcement coverage while removing duplicated job orchestration.
+Executed. Phase B implements the compact mandatory Rust CI contract defined in Phase A. The mandatory Rust verification now runs in a single `ci.yml` workflow with a `rust` job (Linux) and a `portability` job (macOS/Windows). `make check` reproduces the full contract locally without `cargo-nextest`.
 
 ## Objective
 

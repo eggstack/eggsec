@@ -181,8 +181,8 @@ CI runs two tiers of feature checks:
 
 ### Required PR checks (feature-profiles matrix)
 
-These run on every pull request in `.github/workflows/test.yml` under the
-`feature-profiles` job. They must pass before merge.
+These run on every pull request in `.github/workflows/ci.yml` under the
+`rust` job. They must pass before merge.
 
 **Include your feature in the PR matrix if:**
 
@@ -191,11 +191,11 @@ These run on every pull request in `.github/workflows/test.yml` under the
 - It is a backend driver that changes the compilation graph.
 - It is an advanced extension of an existing domain.
 
-**How to add:** Add a `cargo check` entry to the `feature-profiles` matrix in
-`.github/workflows/test.yml` and to `check-feature-profiles` in the `Makefile`:
+**How to add:** Add a `cargo check` entry to the `check-feature-profiles` target in
+the `Makefile` and optionally to the optional feature-profile checks workflow:
 
 ```yaml
-# .github/workflows/test.yml
+# .github/workflows/ci.yml (optional, for required PR checks)
 feature-profiles:
   matrix:
     features:
@@ -300,7 +300,7 @@ cargo test --lib -p eggsec --features my-new-feature
 The full architecture guard CI reproduction can be run locally:
 
 ```bash
-make check-architecture-ci
+make check
 ```
 
 ### What the Tests Validate
@@ -331,7 +331,6 @@ When adding a new feature, verify each item:
 - [ ] `cargo check -p eggsec --features my-new-feature` compiles
 - [ ] Platform-sensitive deps documented in `FEATURE_MATRIX.md` section 3.2
 - [ ] Feature table updated in `FEATURE_MATRIX.md` section 1.1
-- [ ] If required for PR checks: added to `.github/workflows/test.yml` feature-profiles matrix
 - [ ] If required for PR checks: added to `Makefile` `check-feature-profiles` target
 
 ## Warnings

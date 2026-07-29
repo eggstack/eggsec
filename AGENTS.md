@@ -17,11 +17,11 @@ cargo test -p eggsec --test enforcement_matrix
 bash scripts/check-architecture-guards.sh    # requires ripgrep (rg)
 ```
 
-Or use the Makefile (requires `cargo-nextest`): `make check-architecture-ci`
+Or use the Makefile: `make check`
 
-**Note:** `make check-architecture-ci` runs additional checks beyond the above subset (metadata consistency, command registry, tool registration, enforced dispatch regression, report envelope). Use it for full CI parity.
+**Note:** `make check` runs the full mandatory Rust CI contract including metadata consistency, command registry, tool registration, enforced dispatch regression, and report envelope. Use it for full CI parity.
 
-Prerequisites: `cargo-nextest` (`cargo install cargo-nextest`) for Makefile targets; `ripgrep` (`rg`) for architecture guards.
+Prerequisites: `ripgrep` (`rg`) for architecture guards. No `cargo-nextest` required.
 
 Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
 
@@ -54,7 +54,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 ### Full architecture CI reproduction
 
 ```bash
-make check-architecture-ci    # or the individual commands in scripts/check-architecture-guards.sh
+make check    # or the individual commands in scripts/check-architecture-guards.sh
 ```
 
 ### Feature-specific checks
@@ -88,19 +88,19 @@ cargo check --workspace --no-default-features
 
 ### Makefile targets
 
-Requires `cargo-nextest` (`cargo install cargo-nextest`):
-
 ```bash
-make test                  # unit tests only (default)
-make test-ci               # full suite, no retries
-make clippy                # lint (-D warnings)
-make fmt                   # format check
-make test-feature-matrix   # feature + metadata validation
-make check-architecture-ci # full architecture guard CI reproduction
-make check-no-default      # no-default-features workspace build
-make build                 # release build
-make test-python-phase-f   # Phase F Python gates (compat + budgets + redaction)
-make build-python-evidence # generate commit-bound evidence bundle
+make check                  # full mandatory Rust CI contract (no nextest required)
+make check-full             # optional broad validation (full-no-system + full features)
+make test                   # unit tests only (default)
+make test-ci                # full suite, no retries
+make clippy                 # lint (-D warnings)
+make fmt                    # format check
+make test-feature-matrix    # feature + metadata validation
+make check-no-default       # no-default-features workspace build
+make check-feature-profiles # representative feature profile checks
+make build                  # release build
+make test-python-phase-f    # Phase F Python gates (compat + budgets + redaction)
+make build-python-evidence  # generate commit-bound evidence bundle
 ```
 
 ### Python bindings
@@ -138,7 +138,8 @@ cargo test -p eggsec-python
 ### CI workflows
 
 GitHub Actions (`.github/workflows/`):
-- `test.yml` — fmt, clippy, feature checks, lib tests, coverage, security audit, architecture guards, feature profiles
+- `ci.yml` — mandatory Rust CI contract (`make check`) + macOS/Windows portability checks
+- `test.yml` — Python test matrix, capability checks, type checks, release gates
 - `deep-checks.yml` — weekly all-features workspace build/test
 - `security-scan.yml` — daily scan pipeline
 - `python-wheels.yml` — builds Python wheels on push to main

@@ -1,30 +1,30 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-architecture-ci check-feature-profiles test-python-phase-f test-python-compatibility test-python-resource-budgets test-python-redaction build-python-evidence clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-full check-feature-profiles test-python-phase-f test-python-compatibility test-python-resource-budgets test-python-redaction build-python-evidence clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
 
 # Run only unit tests (lib tests, no network, no wiremock)
 test-unit:
-	cargo nextest run -p eggsec --lib
+	cargo test --lib -p eggsec
 
 # Run full test suite with no retries (CI-style)
 test-ci:
-	cargo nextest run -p eggsec --retries 0 --no-fail-fast
+	cargo test -p eggsec --retries 0 --no-fail-fast
 
 # Run integration tests (uses wiremock, may need network)
 test-integration:
-	cargo nextest run -p eggsec --test '*.rs'
+	cargo test -p eggsec --test '*.rs'
 
 # Run NSE tests (requires nse feature)
 test-nse:
-	cargo nextest run -p eggsec --features nse --test nse_tests --test nse_integration_tests
+	cargo test -p eggsec --features nse --test nse_tests --test nse_integration_tests
 
 # Run slow/explicitly-ignored tests
 test-slow:
-	cargo nextest run -p eggsec --run-ignored ignored-only
+	cargo test -p eggsec --run-ignored ignored-only
 
 # Run clippy
 clippy:
@@ -55,11 +55,12 @@ test-architecture-guards:
 check-no-default:
 	cargo check --workspace --no-default-features
 
-# Full architecture guard CI reproduction (single target for contributors)
-check-architecture-ci:
+# Full mandatory Rust CI contract (no cargo-nextest required)
+check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
-	cargo test -p eggsec --lib
+	cargo clippy --lib -p eggsec -- -D warnings
+	cargo test --lib -p eggsec
 	cargo test -p eggsec --test metadata_consistency
 	cargo test -p eggsec --test command_registry
 	cargo test -p eggsec --test tool_registration --features rest-api
@@ -68,6 +69,14 @@ check-architecture-ci:
 	cargo test -p eggsec --test enforced_dispatch_regression
 	cargo test -p eggsec-output --test report_envelope
 	bash scripts/check-architecture-guards.sh
+
+# Alias for backward compatibility (deprecated, use `make check`)
+check-architecture-ci: check
+
+# Optional broad validation (pre-release, not required for merge)
+check-full: check
+	cargo check -p eggsec --features full-no-system
+	cargo check -p eggsec --features full
 
 # Representative feature profile checks (representative, not exhaustive)
 check-feature-profiles:
@@ -110,7 +119,8 @@ build-python-evidence:
 help:
 	@echo "Test targets:"
 	@echo "  make test            - Run unit tests only (default)"
-	@echo "  make test-fast       - Same as test"
+	@echo "  make check           - Full mandatory Rust CI contract (no nextest required)"
+	@echo "  make check-full      - Optional broad validation (full-no-system + full features)"
 	@echo "  make test-ci         - Full suite, no retries"
 	@echo "  make test-integration - Integration tests"
 	@echo "  make test-nse        - NSE tests (requires nse feature)"
@@ -122,7 +132,6 @@ help:
 	@echo "  make test-feature-matrix - Feature metadata validation tests"
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
-	@echo "  make check-architecture-ci  - Full architecture guard CI reproduction"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
 	@echo "  make test-python-phase-f - All Phase F Python gates (compat + budgets + redaction)"
 	@echo "  make test-python-compatibility - Semantic compatibility checker vs baseline"

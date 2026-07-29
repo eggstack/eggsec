@@ -1228,7 +1228,7 @@ cargo check -p eggsec-nse --features nse          # primary NSE build
 cargo test -p eggsec-nse --features nse           # all NSE unit + integration tests
 cargo test -p eggsec-nse --features nse,sandbox   # sandbox profile enforcement tests
 cargo check -p eggsec --features nse              # main crate wired with NSE feature
-make test-nse                                     # eggsec-level NSE tests via nextest
+make test-nse                                     # eggsec-level NSE tests via cargo test
 ```
 
 Latest observed status (Milestone 1 polish-pass re-run):
@@ -1240,7 +1240,7 @@ Latest observed status (Milestone 1 polish-pass re-run):
 | `cargo test -p eggsec-nse --features nse,sandbox` | **183 passed, 1 ignored** | Sandbox feature does not regress the suite |
 | `cargo check -p eggsec --features nse` | PASS (0 errors, 100 warnings — pre-existing) | Main crate wires NSE without errors |
 | `cargo test -p eggsec --features nse --test nse_tests` | **174 passed** | Eggsec-level NSE integration tests |
-| `make test-nse` | N/A locally (no `cargo-nextest` installed) | Documented equivalent: the two `cargo test` commands above |
+| `make test-nse` | N/A locally (no `cargo-nextest` installed) | Documented equivalent: the two `cargo test` commands above. Note: `make test-nse` now uses `cargo test` (no nextest required). |
 
 Commands that fail or diverge in a re-run must be documented with the exact command and a follow-up task.
 

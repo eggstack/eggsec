@@ -61,12 +61,12 @@ Run the authoritative Make target before opening a PR. CI will reject
 changes that fail any of these.
 
 ```bash
-make check-architecture-ci
+make check
 make check-feature-profiles   # if feature-gated code changed
 ```
 
-`make check-architecture-ci` reproduces the full architecture guard CI
-job locally: formatting, no-default build, lib tests, metadata consistency,
+`make check` reproduces the full architecture guard CI
+job locally: formatting, no-default build, clippy, lib tests, metadata consistency,
 command registry, tool registration, feature matrix, enforcement matrix,
 enforced dispatch regression, report envelope, and static drift guards.
 

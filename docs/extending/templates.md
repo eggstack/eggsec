@@ -150,5 +150,5 @@ Steps:
 - [ ] Command registry: `cargo test -p eggsec --test command_registry`
 - [ ] Feature matrix: `cargo test -p eggsec --test feature_matrix`
 - [ ] Architecture guards: `bash scripts/check-architecture-guards.sh`
-- [ ] Full CI reproduction: `make check-architecture-ci`
+- [ ] Full CI reproduction: `make check`
 ```

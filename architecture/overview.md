@@ -473,7 +473,7 @@ Within the `eggsec` crate:
 |------------|---------|
 | Unit tests | `cargo test --lib -p eggsec` |
 | Architecture guards | `bash scripts/check-architecture-guards.sh` |
-| Full CI | `make check-architecture-ci` |
+| Full CI | `make check` |
 
 - ~5098 tests (including `#[test]` + `#[tokio::test]`)
 - Visual regression: `TestBackend` + `Terminal::new()` for TUI

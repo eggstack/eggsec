@@ -46,7 +46,7 @@ bash scripts/check-architecture-guards.sh
 
 make check-feature-profiles
 
-make check-architecture-ci
+make check
 ```
 
 ### What each command verifies
@@ -77,7 +77,7 @@ make check-architecture-ci
 - **`make check-feature-profiles`** -- runs `cargo check` for
   representative feature profiles. Catches missing deps or broken cfg
   paths in common build configurations.
-- **`make check-architecture-ci`** -- reproduces the full architecture
+- **`make check`** -- reproduces the full architecture
   guard CI job locally. This is the final gate.
 
 ## Feature-Profile Checks
@@ -130,7 +130,7 @@ Before opening a pull request, confirm every item.
 - [ ] Extension-specific tests from the table above pass
 - [ ] `bash scripts/check-architecture-guards.sh` passes
 - [ ] `make check-feature-profiles` passes
-- [ ] `make check-architecture-ci` passes
+- [ ] `make check` passes
 - [ ] If the extension adds a feature: representative `cargo check --features <new-feature>` passes
 - [ ] If the extension touches platform-sensitive code: local check on a compatible platform passes
 - [ ] No new clippy warnings introduced (`cargo clippy --lib -p eggsec`)

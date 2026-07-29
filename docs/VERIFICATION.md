@@ -7,7 +7,7 @@ This document defines the mandatory, optional, and release-only verification sur
 The single canonical command for ordinary Rust/Linux changes:
 
 ```bash
-make check-architecture-ci
+make check
 ```
 
 This expands to:
@@ -15,7 +15,8 @@ This expands to:
 ```bash
 cargo fmt --all --check
 cargo check --workspace --no-default-features
-cargo test -p eggsec --lib
+cargo clippy --lib -p eggsec -- -D warnings
+cargo test --lib -p eggsec
 cargo test -p eggsec --test metadata_consistency
 cargo test -p eggsec --test command_registry
 cargo test -p eggsec --test tool_registration --features rest-api
@@ -26,7 +27,7 @@ cargo test -p eggsec-output --test report_envelope
 bash scripts/check-architecture-guards.sh
 ```
 
-Any pull request touching Rust source, workspace configuration, or architecture documentation must pass all of these checks locally before pushing.
+No `cargo-nextest` is required. Any pull request touching Rust source, workspace configuration, or architecture documentation must pass all of these checks locally before pushing.
 
 ## Mandatory Python contributor contract
 
@@ -52,12 +53,12 @@ make test-python-phase-f
 
 ## Platform portability
 
-Rust checks run on Linux in CI. Narrow portability is validated by:
+Rust checks run on Linux in CI (`ci.yml` `rust` job). Narrow portability is validated by:
 
-- `cargo build -p eggsec --release` on ubuntu-latest, macos-latest, windows-latest (in `test.yml` `build` job)
+- `cargo check -p eggsec` on macos-latest and windows-latest (in `ci.yml` `portability` job)
 - Python wheel builds on linux x86_64 and macos universal2 (in `python-wheels.yml`)
 
-macOS and Windows builds are **not** required for every PR. They run on push to `main` and on the `python-wheels.yml` path-filtered workflow. Contributors should test locally on their target platform when making platform-specific changes.
+macOS and Windows builds are **not** required for every PR. Contributors should test locally on their target platform when making platform-specific changes.
 
 ## Optional broad validation
 
@@ -98,7 +99,7 @@ Before a release tag is created, verify:
 ## Merge readiness vs release readiness
 
 **Merge readiness** requires:
-- `make check-architecture-ci` passes
+- `make check` passes (in `ci.yml`)
 - Python checks pass (if Python files changed)
 - No clippy warnings
 - Format check passes
@@ -133,12 +134,13 @@ The final `publish-pypi` job requires manual approval via GitHub Environments. P
 | Target | Purpose | When required |
 |--------|---------|---------------|
 | `make test` | Unit tests only | Default local check |
-| `make check-architecture-ci` | Full architecture guard CI reproduction | Every PR/push |
+| `make check` | Full mandatory Rust CI contract (no nextest) | Every PR/push |
+| `make check-full` | Optional broad validation (full-no-system + full features) | Pre-release |
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
-| `make check-no-default` | No-default-features build | Every PR/push (part of architecture CI) |
+| `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
-| `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of architecture CI) |
+| `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
 | `make test-python-phase-f` | Python compat + budgets + redaction | Python changes |
 | `make build-python-evidence` | Generate evidence bundle | Pre-release |
 | `make build` | Release build of CLI binary | Release only |

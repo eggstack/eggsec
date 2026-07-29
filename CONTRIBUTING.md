@@ -191,7 +191,7 @@ This catches undeclared or miswired features early.
    mod my_module;
    ```
 
-3. Add to CI matrix in `.github/workflows/test.yml`
+3. Add to CI matrix in `.github/workflows/ci.yml` (if it's a Rust feature requiring compile checks) or update `Makefile` `check-feature-profiles` target
 
 4. Update the `full` feature if it should be included
 
@@ -337,7 +337,7 @@ bash scripts/check-architecture-guards.sh
 Alternatively, run the full architecture guard CI reproduction with a single Make target:
 
 ```bash
-make check-architecture-ci
+make check
 ```
 
 These checks guard:
@@ -652,7 +652,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 ### Before Submitting
 
-> **New contributors**: Start with the [Extensibility Guide](docs/EXTENSIBILITY.md) for the metadata-first extension model, required tests, and templates. New extension work should follow the guides in `docs/extending/` and pass `make check-architecture-ci` before handoff.
+> **New contributors**: Start with the [Extensibility Guide](docs/EXTENSIBILITY.md) for the metadata-first extension model, required tests, and templates. New extension work should follow the guides in `docs/extending/` and pass `make check` before handoff.
 
 1. **Update from upstream**
    ```bash
@@ -685,7 +685,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 - [ ] Code compiles without warnings
 - [ ] All tests pass
-- [ ] Architecture guards pass (`bash scripts/check-architecture-guards.sh` or `make check-architecture-ci`)
+- [ ] Architecture guards pass (`bash scripts/check-architecture-guards.sh` or `make check`)
 - [ ] Documentation updated
 - [ ] CHANGELOG.md updated
 - [ ] Commit messages are clear
