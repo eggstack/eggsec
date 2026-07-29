@@ -75,6 +75,7 @@ check-architecture-ci: check
 
 # Optional broad validation (pre-release, not required for merge)
 check-full: check
+	cargo deny check
 	make check-feature-profiles
 	cargo check -p eggsec --features full-no-system
 	cargo check -p eggsec --features full

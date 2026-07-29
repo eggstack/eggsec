@@ -52,13 +52,26 @@ macOS and Windows builds are **not** required for every PR. Contributors should 
 
 These checks are valuable but not required for every merge. They run in the optional `deep-checks.yml` workflow (weekly schedule or manual trigger) or locally via `make check-full`.
 
-| Check | Command |
-|-------|---------|
-| Full mandatory contract | `make check` (included in `check-full`) |
-| Representative feature profiles | `make check-feature-profiles` |
-| Full workspace all-features | `cargo check --workspace --all-features && cargo test --workspace --all-features` |
-| Full feature profile | `cargo check -p eggsec --features full` |
-| Code coverage | `cargo llvm-cov -p eggsec --features rest-api,nse` |
+| Check | Command | Purpose |
+|-------|---------|---------|
+| Full mandatory contract | `make check` (included in `check-full`) | Baseline correctness |
+| Advisory/license/ban policy | `cargo deny check` | Dependency policy enforcement |
+| Representative feature profiles | `make check-feature-profiles` | Feature coherence |
+| Full workspace all-features | `cargo check -p eggsec --features full-no-system` | Aggregate compilation |
+| Full feature profile | `cargo check -p eggsec --features full` | Full feature compilation |
+
+### Security tool ownership
+
+Each defect class has one primary tool and owner:
+
+| Defect class | Tool | Configuration | Cadence |
+|-------------|------|---------------|---------|
+| Known advisories | `cargo deny check advisories` | `deny.toml` (advisory ignore list) | Every `check-full` run |
+| Disallowed licenses | `cargo deny check licenses` | `deny.toml` (allow list) | Every `check-full` run |
+| Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` (warn on multiples) | Every `check-full` run |
+| Secret introduction | GitHub-native secret scanning | Repository settings | Every push (GitHub-managed) |
+
+`cargo audit` is available locally as a secondary advisory check but is not run in CI to avoid tool duplication with `cargo deny`. Both tools share the same advisory ignore list; `deny.toml` is the canonical source.
 
 ## Which changes require Python checks
 
@@ -120,7 +133,7 @@ The final `publish-pypi` job requires manual approval via GitHub Environments. P
 | `make test` | Unit tests only | Default local check |
 | `make check` | Full mandatory Rust CI contract (no nextest) | Every PR/push |
 | `make check-python` | Python CI check (one build, all checks) | Python changes |
-| `make check-full` | Optional broad validation (full-no-system + full features) | Pre-release |
+| `make check-full` | Optional broad validation (advisories + feature profiles + full features) | Pre-release |
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |

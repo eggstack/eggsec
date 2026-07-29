@@ -74,12 +74,19 @@ These checks are not required for PR merge. They run in the optional `deep-check
 
 | Check | Command | Notes |
 |-------|---------|-------|
-| Full workspace build | `cargo check --workspace --all-features` | May require all system deps |
-| Full test suite | `cargo test --workspace --all-features` | Long-running, platform-sensitive |
-| `full` feature profile | `cargo check -p eggsec --features full` | Aggregate of all non-default features |
-| NSE tests | `cargo test -p eggsec --features nse --test nse_tests` | Requires libssl-dev |
-| Stress tests | `cargo test -p eggsec --features stress-testing --test stress_tests` | Requires raw socket privileges |
-| Integration tests | `cargo test -p eggsec --test '*.rs'` | May require network/wiremock |
+| Advisory/license/ban policy | `cargo deny check` | Enforced via `deny.toml` |
+| Representative feature profiles | `make check-feature-profiles` | Coherent profile compilation |
+| Full workspace build | `cargo check -p eggsec --features full-no-system` | Aggregate non-system features |
+| Full feature profile | `cargo check -p eggsec --features full` | All non-default features |
+
+### Security tool ownership
+
+| Defect class | Primary tool | Config |
+|-------------|-------------|--------|
+| Known advisories | `cargo deny check advisories` | `deny.toml` |
+| Disallowed licenses | `cargo deny check licenses` | `deny.toml` |
+| Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` |
+| Secret introduction | GitHub-native secret scanning | Repository settings |
 
 ## Architecture Drift Guards
 

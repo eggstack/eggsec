@@ -213,7 +213,8 @@ check-feature-profiles:
 ### Deep checks (weekly/manual)
 
 These run weekly via `.github/workflows/deep-checks.yml` or locally via
-`make check-full`. They test `--all-features` and `--features full`.
+`make check-full`. They run `cargo deny check` (advisories, licenses, bans),
+representative feature profiles, and full-feature compilation.
 
 **Features that belong only in deep checks:**
 

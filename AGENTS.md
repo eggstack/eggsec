@@ -91,7 +91,7 @@ cargo check --workspace --no-default-features
 ```bash
 make check                  # full mandatory Rust CI contract (no nextest required)
 make check-python           # Python CI check (one build, all checks)
-make check-full             # optional broad validation (full-no-system + full features)
+make check-full             # optional broad validation (advisories + feature profiles + full features)
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
 make clippy                 # lint (-D warnings)
