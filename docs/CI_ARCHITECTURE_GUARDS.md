@@ -76,7 +76,6 @@ These checks are not required for PR merge. They run in the optional `deep-check
 |-------|---------|-------|
 | Advisory/license/ban policy | `cargo deny check` | Enforced via `deny.toml` |
 | Representative feature profiles | `make check-feature-profiles` | Coherent profile compilation |
-| Full feature profile | `cargo check -p eggsec --features full` | All non-default features |
 
 ### Security tool ownership
 

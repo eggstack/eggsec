@@ -57,7 +57,6 @@ These checks are valuable but not required for every merge. They run in the opti
 | Full mandatory contract | `make check` (included in `check-full`) | Baseline correctness |
 | Advisory/license/ban policy | `cargo deny check` | Dependency policy enforcement |
 | Representative feature profiles | `make check-feature-profiles` | Feature coherence |
-| Full feature profile | `cargo check -p eggsec --features full` | Full feature compilation |
 
 ### Security tool ownership
 
@@ -132,7 +131,7 @@ The final `publish-pypi` job requires manual approval via GitHub Environments. P
 | `make test` | Unit tests only | Default local check |
 | `make check` | Full mandatory Rust CI contract (no nextest) | Every PR/push |
 | `make check-python` | Python CI check (one build, all checks) | Python changes |
-| `make check-full` | Optional broad validation (advisories + feature profiles + full features) | Pre-release |
+| `make check-full` | Optional broad validation (advisories + feature profiles) | Pre-release |
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
