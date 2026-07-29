@@ -177,6 +177,7 @@ See [docker-compose.yml](docker-compose.yml) for configuration.
 | [Command Registry](docs/COMMAND_REGISTRY.md) | Command registry and dispatch |
 | [Architecture](docs/ARCHITECTURE.md) | Workspace overview, enforcement model |
 | [Verification Contract](docs/VERIFICATION.md) | Mandatory vs optional CI checks, merge vs release readiness |
+| [Releasing](docs/RELEASING.md) | Manual maintainer-controlled release procedure |
 | [Extending Eggsec](docs/EXTENSIBILITY.md) | Adding operations, domains, commands, tools |
 
 Additional docs: [Web Proxy](docs/WEB_PROXY.md), [Database Pentesting](docs/DATABASE_PENTEST.md), [Wireless Testing](docs/WIRELESS.md), [Mobile Analysis](docs/MOBILE.md), [Auth Testing](docs/AUTH_LAB.md), [Agent](docs/AGENT.md), [Usage Guide](docs/USAGE.md), [Findings Schema](docs/FINDINGS_SCHEMA.md).

@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles release-check clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -90,6 +90,10 @@ check-feature-profiles:
 	cargo check -p eggsec --features web-proxy-mcp,tool-api,rest-api
 	cargo check -p eggsec --features c2-mcp,tool-api,rest-api
 
+# Release validation (local only, no publication)
+release-check:
+	bash scripts/release-check.sh
+
 # Clean build artifacts
 clean:
 	cargo clean
@@ -119,4 +123,5 @@ help:
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
+	@echo "  make release-check  - Release validation (no publication)"
 	@echo "  make clean           - Clean artifacts"

@@ -129,17 +129,15 @@ Created `scripts/check_eggsec_python_exports.py` which verifies:
 
 ## 6. GitHub Actions Workflow
 
-`.github/workflows/python-wheels.yml` exists and is valid:
-- Builds wheels for x86_64/aarch64 on macOS and Linux
-- Test job installs wheel in clean venv, runs smoke tests and pytest
-- Publish job gated by `workflow_dispatch` (manual only)
-- TestPyPI dry run before PyPI publish
+`.github/workflows/test.yml` provides unified Python CI (behavioral tests,
+capability/architecture checks, stub parity, type checks). No workflow
+publishes packages — publication is manual via `make release-check` and
+`maturin publish`. See `docs/RELEASING.md`.
 
 ## 7. Remaining Pre-PyPI Gates
 
-- [ ] TestPyPI dry run (requires manual trigger)
-- [ ] Install from TestPyPI succeeds (requires manual trigger)
-- [ ] Final PyPI publish (requires ALL gates to pass)
+- [ ] `make release-check` passes locally
+- [ ] Final PyPI publish (manual, requires ALL gates to pass)
 
 **Status:** Local validation gates pass. Multi-platform CI evidence and
 TestPyPI/PyPI still require the manual workflow/environment gates.

@@ -54,9 +54,11 @@ the workspace dependency graph automatically.
 source (e.g., `pip install --no-binary :all:`) or for auditing the full
 source. Most users should prefer pre-built wheels for faster installation.
 
-CI builds and validates the sdist in the `build-sdist` job of
-`python-wheels.yml`. If the sdist build fails due to missing Rust tooling,
-the CI documents the failure without blocking the wheel-based release.
+CI previously built and validated the sdist in the `build-sdist` job of
+`python-wheels.yml` (now deleted). The sdist build can be validated locally
+via `make release-check`. If the sdist build fails due to missing Rust
+tooling, the local validation documents the failure without blocking
+wheel-based workflows.
 
 ## Platform support
 
@@ -291,6 +293,7 @@ print('build:', info)
   variable `PYPI_TOKEN`).
 - `twine` installed (`pip install twine`).
 - All wheels built for target platforms.
+- `make release-check` passed locally.
 
 ### Steps
 
@@ -302,45 +305,18 @@ rm -rf target/wheels/
 cd crates/eggsec-python
 maturin build --release --manylinux auto
 
-# Upload
+# Validate
+python -m twine check dist/*
+
+# Upload (manual, irreversible)
 twine upload target/wheels/*.whl
 ```
 
-### CI publishing (GitHub Actions)
+### CI does not publish
 
-The repository workflow builds and tests platform wheels on pushes and pull
-requests. Manual dispatch first publishes to TestPyPI and verifies a clean
-installation. Production publication is a separate `publish_pypi` input and
-protected environment, so a TestPyPI dry run cannot publish to PyPI
-implicitly.
-
-For a separate tag-driven setup:
-
-```yaml
-name: Publish Python package
-on:
-  push:
-    tags: ["python-v*"]
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install maturin
-        run: pip install maturin twine
-      - name: Build wheel
-        run: |
-          cd crates/eggsec-python
-          maturin build --release --manylinux auto
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: crates/eggsec-python/target/wheels/
-```
+No GitHub Actions workflow publishes packages. All publication is manual
+and maintainer-controlled. See [docs/RELEASING.md](../RELEASING.md) for the
+full release procedure.
 
 ## Smoke test commands
 

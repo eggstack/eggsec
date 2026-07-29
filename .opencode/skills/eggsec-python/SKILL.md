@@ -1976,16 +1976,9 @@ OperationRegistry, ToolRegistry, and build_info(). Output:
 `docs/python/api-reference-generated.md`.
 
 ### Release Automation (E10)
-`.github/workflows/release.yml` — tag-driven release workflow:
-- Tag/version validation (Cargo.toml, pyproject.toml, git tag alignment)
-- Clean working tree check
-- Wheel builds (4-target matrix)
-- sdist build
-- Release wheel testing
-- Evidence bundle (artifact manifest with SHA-256 hashes)
-- Release notes generation (commit categorization)
-- TestPyPI → PyPI publication
-- GitHub release creation with notes and evidence
+Release publication is manual and maintainer-controlled. No GitHub Actions
+workflow publishes packages. See `docs/RELEASING.md` for the full procedure
+and `make release-check` for local validation before publication.
 
 ## Release 5 Phase F — Compatibility Enforcement and Release Hardening
 

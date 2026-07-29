@@ -44,7 +44,6 @@ This runs `scripts/check-python.sh` which builds the extension once and runs beh
 Rust checks run on Linux in CI (`ci.yml` `rust` job). Narrow portability is validated by:
 
 - `cargo check -p eggsec` on macos-latest and windows-latest (in `ci.yml` `portability` job)
-- Python wheel builds on linux x86_64 and macos universal2 (in `python-wheels.yml`)
 
 macOS and Windows builds are **not** required for every PR. Contributors should test locally on their target platform when making platform-specific changes.
 
@@ -102,27 +101,24 @@ Before a release tag is created, verify:
 - Format check passes
 
 **Release readiness** additionally requires:
+- `make release-check` passes (local validation, no publication)
 - All optional feature profiles compile
 - Deep checks pass
-- Python wheels build on all platforms
-- TestPyPI upload and install succeeds
 
 ## Release publication is always manual
 
-Release publication is never part of CI. The release workflow (`release.yml`) is triggered by:
-- Pushing a `v*` tag
-- Manual `workflow_dispatch` with a tag input
-
-The final `publish-pypi` job requires manual approval via GitHub Environments. PyPI publication is never automatic.
+Release publication is never part of CI. No workflow triggers on tags or
+publishes packages. The release process is manual and maintainer-controlled.
+See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 
 ## Package registries
 
-| Registry | Package | Publication trigger |
+| Registry | Package | Publication method |
 |----------|---------|-------------------|
-| PyPI | `eggsec` (Python wheel) | Manual approval after TestPyPI validation |
-| TestPyPI | `eggsec` (pre-release) | Manual `workflow_dispatch` or tag-driven release |
-| crates.io | `eggsec`, `eggsec-core`, etc. | Not yet automated (planned) |
-| GitHub Releases | Binary + evidence bundle | Tag-driven release workflow |
+| PyPI | `eggsec` (Python wheel) | Manual: `maturin publish` or `twine upload` |
+| TestPyPI | `eggsec` (pre-release) | Optional manual rehearsal |
+| crates.io | Rust workspace crates | Manual: `cargo publish` in dependency order |
+| GitHub Releases | (optional metadata) | Manual, after registry publication |
 
 ## Make targets reference
 
@@ -136,5 +132,6 @@ The final `publish-pypi` job requires manual approval via GitHub Environments. P
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
+| `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
 | `make build` | Release build of CLI binary | Release only |
