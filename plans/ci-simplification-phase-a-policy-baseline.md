@@ -417,7 +417,7 @@ Both categories are required for merge readiness.
 | Metric | Count | Notes |
 |--------|-------|-------|
 | Workflow files | 7 | test.yml, deep-checks.yml, security-scan.yml, python-wheels.yml, testpypi-rehearsal.yml, release.yml, .gitlab-ci.yml |
-| Total jobs (test.yml) | 26 | Including gate aggregation jobs |
+| Total jobs (test.yml) | 25 | Including gate aggregation jobs |
 | Total jobs (deep-checks.yml) | 1 | Weekly diagnostic |
 | Total jobs (security-scan.yml) | 2 | Both are external-scan advisory |
 | Total jobs (python-wheels.yml) | 16 | Wheel build/test/publish pipeline |

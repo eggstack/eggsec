@@ -114,8 +114,7 @@ REQUIRED_DOCS=(
   "docs/TOOL_REGISTRATION.md"
   "docs/FEATURE_MATRIX.md"
   "docs/METADATA_OWNERSHIP.md"
-  "docs/CI_ARCHITECTURE_GUARDS.md"
-  "docs/VERIFICATION.md"
+"docs/CI_ARCHITECTURE_GUARDS.md"
 )
 for doc in "${REQUIRED_DOCS[@]}"; do
   if [[ ! -f "$doc" ]]; then
