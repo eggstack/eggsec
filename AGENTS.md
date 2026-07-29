@@ -132,13 +132,12 @@ cargo test -p eggsec-python
 GitHub Actions (`.github/workflows/`):
 - `ci.yml` — mandatory Rust CI contract (`make check`) + macOS/Windows portability checks
 - `test.yml` — unified Python CI (one build, behavioral + metadata + stub parity + type checks)
-- `deep-checks.yml` — weekly all-features workspace build/test
-- `security-scan.yml` — daily scan pipeline
+- `deep-checks.yml` — optional diagnostic workflow (weekly schedule or manual)
 - `python-wheels.yml` — builds Python wheels on push to main
 - `release.yml` — tag-driven release workflow
 - `testpypi-rehearsal.yml` — TestPyPI rehearsal (manual trigger)
 
-GitLab CI (`.gitlab-ci.yml`) — pre-built binary scan jobs (not build-from-source).
+Consumer GitLab CI example: `examples/ci/gitlab/eggsec-scan.yml` (not wired to repository triggers).
 
 ## Architecture
 

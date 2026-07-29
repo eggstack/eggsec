@@ -212,8 +212,8 @@ check-feature-profiles:
 
 ### Deep checks (weekly/manual)
 
-These run weekly via `.github/workflows/deep-checks.yml` or manually. They
-test `--all-features` and `--features full`.
+These run weekly via `.github/workflows/deep-checks.yml` or locally via
+`make check-full`. They test `--all-features` and `--features full`.
 
 **Features that belong only in deep checks:**
 

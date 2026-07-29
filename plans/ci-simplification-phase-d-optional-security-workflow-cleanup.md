@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. This phase begins only after the replacement mandatory Rust and Python jobs are present and passing.
+Status: Executed. Completed CI simplification Phase D.
 
 ## Objective
 

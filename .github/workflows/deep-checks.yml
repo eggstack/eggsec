@@ -1,28 +1,25 @@
 name: Deep Checks
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 0 * * 0"
-  workflow_dispatch:
-  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-  deep-checks:
+  deep:
     name: Deep Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install protobuf-compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - name: Workspace all-features check
-        run: cargo check --workspace --all-features
-      - name: Workspace all-features test
-        run: cargo test --workspace --all-features
-      - name: Full feature check
-        run: cargo check -p eggsec --features full
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Optional broad validation
+        run: make check-full
+      - name: Representative feature profiles
+        run: make check-feature-profiles

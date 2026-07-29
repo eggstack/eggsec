@@ -50,17 +50,15 @@ macOS and Windows builds are **not** required for every PR. Contributors should 
 
 ## Optional broad validation
 
-These checks are valuable but not required for every merge:
+These checks are valuable but not required for every merge. They run in the optional `deep-checks.yml` workflow (weekly schedule or manual trigger) or locally via `make check-full`.
 
-| Check | Trigger | Command |
-|-------|---------|---------|
-| Full workspace all-features | Weekly schedule | `cargo check --workspace --all-features && cargo test --workspace --all-features` |
-| Feature profile checks | Push to main | `make check-feature-profiles` |
-| Code coverage | Push to main | `cargo tarpaulin -p eggsec --features rest-api,nse` |
-| Security audit | Every PR | `cargo audit --deny warnings` |
-| Cargo deny | Every PR | `cargo deny check advisories && cargo deny check licenses && cargo deny check bans` |
-| Dependency review | PR only | GitHub dependency-review-action |
-| Secret scanning | PR only | gitleaks |
+| Check | Command |
+|-------|---------|
+| Full mandatory contract | `make check` (included in `check-full`) |
+| Representative feature profiles | `make check-feature-profiles` |
+| Full workspace all-features | `cargo check --workspace --all-features && cargo test --workspace --all-features` |
+| Full feature profile | `cargo check -p eggsec --features full` |
+| Code coverage | `cargo llvm-cov -p eggsec --features rest-api,nse` |
 
 ## Which changes require Python checks
 

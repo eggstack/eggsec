@@ -70,7 +70,7 @@ Representative feature profiles are checked on every PR to catch compile regress
 
 ## Optional/Deep Checks
 
-These checks are not required for PR merge. They may run on schedule, manually, or in a separate workflow.
+These checks are not required for PR merge. They run in the optional `deep-checks.yml` workflow (weekly schedule or manual trigger) or locally via `make check-full`.
 
 | Check | Command | Notes |
 |-------|---------|-------|

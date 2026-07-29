@@ -1,0 +1,70 @@
+# Eggsec GitLab CI — Consumer Integration Example
+#
+# This file demonstrates how to integrate Eggsec into YOUR OWN GitLab pipeline.
+# It is NOT wired to the Eggsec repository's triggers. You must adapt it to
+# your project, targets, and authorization requirements.
+#
+# Prerequisites:
+#   - An Eggsec release binary pinned to an explicit version (not "latest").
+#   - A scope file authorizing the scan targets you own or have written
+#     authorization to test.
+#   - Sufficient Runner privileges (network access; raw sockets for stress/packet).
+#
+# Usage:
+#   1. Copy this file into your repository as `.gitlab-ci.yml` (or include it).
+#   2. Replace VERSION with a pinned Eggsec release tag.
+#   3. Set the EGGSEC_TARGET variable to your authorized target.
+#   4. Ensure a scope file is available in your repo.
+
+.eggsec-base:
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+    # Pin to an explicit version — never use "latest" in CI.
+    - |
+      EGGSEC_VERSION="0.1.0"
+      curl -sL "https://github.com/eggstack/eggsec/releases/download/v${EGGSEC_VERSION}/eggsec-linux-amd64" \
+        -o /usr/local/bin/eggsec
+      chmod +x /usr/local/bin/eggsec
+
+eggsec-quick-scan:
+  extends: .eggsec-base
+  stage: test
+  script:
+    - eggsec scan "$EGGSEC_TARGET" --profile quick --json scan-results.json --sarif scan-results.sarif --scope scope.toml
+  artifacts:
+    when: always
+    paths:
+      - scan-results.json
+      - scan-results.sarif
+    reports:
+      sarif: scan-results.sarif
+  rules:
+    - if: '$EGGSEC_TARGET'
+
+eggsec-full-scan:
+  extends: .eggsec-base
+  stage: security
+  script:
+    - eggsec scan "$EGGSEC_TARGET" --profile full --json scan-results.json --sarif scan-results.sarif --html report.html --scope scope.toml
+  artifacts:
+    when: always
+    paths:
+      - scan-results.json
+      - scan-results.sarif
+      - report.html
+    reports:
+      sarif: scan-results.sarif
+  rules:
+    - if: '$EGGSEC_TARGET && $SCAN_TYPE == "full"'
+
+eggsec-recon:
+  extends: .eggsec-base
+  stage: reconnaissance
+  script:
+    - eggsec recon "$EGGSEC_TARGET" --json recon-results.json --scope scope.toml
+  artifacts:
+    paths:
+      - recon-results.json
+  rules:
+    - if: '$EGGSEC_TARGET && $SCAN_TYPE == "recon"'
