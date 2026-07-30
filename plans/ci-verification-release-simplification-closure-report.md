@@ -2,7 +2,7 @@
 
 ## Status
 
-Complete. All acceptance criteria met.
+Reopened for corrective closure. CI simplification is complete; manual release validation remains incomplete pending Corrective Phase G and H. Phase G has been completed: publishable crates have registry-resolvable internal dependencies, `publish = false` is explicit on private crates, the package-graph helper validates the workspace, and `release-check.sh` has been redesigned around deterministic `cargo package` validation.
 
 ## Implementation Commit Range
 

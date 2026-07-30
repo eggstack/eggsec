@@ -83,6 +83,11 @@ make check                  # full mandatory Rust CI contract (no nextest requir
 make check-python           # Python CI check (one build, all checks)
 make check-full             # optional broad validation (advisories + feature profiles)
 make release-check          # release validation (no publication)
+
+# Release graph validation
+python scripts/release-package-graph.py list      # package set inventory
+python scripts/release-package-graph.py validate   # publishability checks
+python scripts/release-package-graph.py order      # topological publication order
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
 make clippy                 # lint (-D warnings)

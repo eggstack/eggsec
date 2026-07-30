@@ -93,20 +93,20 @@ smallvec = "1"
 ed25519-dalek = "2"
 
 # Workspace crates
-eggsec-core = { path = "../eggsec-core" }
-eggsec-runtime = { path = "../eggsec-runtime" }
-eggsec-output = { path = "../eggsec-output" }
-eggsec-tool-core = { path = "../eggsec-tool-core" }
-eggsec-agent = { path = "../eggsec-agent" }
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
+eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
+eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }
+eggsec-agent = { path = "../eggsec-agent", version = "0.1.0" }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
-eggsec-nse = { path = "../eggsec-nse", optional = true }
+eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }
 # Database pentesting domain crate (extracted from db_pentest module)
-eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
+eggsec-db-lab = { path = "../eggsec-db-lab", version = "0.1.0", optional = true }
 # Web proxy domain crate (extracted from proxy module)
-eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
+eggsec-web-proxy = { path = "../eggsec-web-proxy", version = "0.1.0", optional = true }
 # Mobile lab domain crate (extracted from mobile module)
-eggsec-mobile-lab = { path = "../eggsec-mobile-lab", optional = true }
+eggsec-mobile-lab = { path = "../eggsec-mobile-lab", version = "0.1.0", optional = true }
 ssh2 = { version = "0.9", optional = true }
 
 [dependencies.libc]

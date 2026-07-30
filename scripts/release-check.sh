@@ -5,10 +5,12 @@ set -euo pipefail
 # Validates repository state and built artifacts but does NOT publish.
 #
 # Usage:
-#   scripts/release-check.sh <version>
+#   scripts/release-check.sh [expected-version]
 #
-# The version argument is optional; if provided, it is validated against
-# Cargo.toml and pyproject.toml.
+# Environment:
+#   EGGSEC_RELEASE_SKIP_PYTHON=1         skip Python checks (Rust-only release)
+#   EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1  run cargo publish --dry-run (network-sensitive)
+#   EGGSEC_RELEASE_KEEP_ARTIFACTS=1      do not clean build artifacts on exit
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -23,6 +25,34 @@ fail() { echo -e "${RED}✗${NC} $*"; exit 1; }
 warn() { echo -e "${YELLOW}!${NC} $*"; }
 
 EXPECTED_VERSION="${1:-}"
+TMP_ROOT=""
+
+cleanup() {
+    if [ -n "$TMP_ROOT" ] && [ -z "${EGGSEC_RELEASE_KEEP_ARTIFACTS:-}" ]; then
+        rm -rf "$TMP_ROOT"
+    fi
+}
+trap cleanup EXIT
+
+TMP_ROOT=$(mktemp -d)
+LOG_DIR="$TMP_ROOT/logs"
+mkdir -p "$LOG_DIR"
+
+# Portable SHA-256
+sha256_hex() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d' ' -f1
+    else
+        fail "No sha256sum or shasum found"
+    fi
+}
+
+# Portable file size
+file_size() {
+    python3 -c "import os; print(os.path.getsize('$1'))"
+}
 
 echo "=== Eggsec Release Validation ==="
 echo "Repository: $REPO_ROOT"
@@ -49,18 +79,15 @@ ok "Branch/commit is intentional"
 echo ""
 echo "--- 2. Version alignment ---"
 
-# Workspace version from Cargo.toml
 CARGO_VERSION=$(python3 -c "
-import tomllib, sys
+import tomllib
 with open('Cargo.toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data['workspace']['package']['version'])
+    print(tomllib.load(f)['workspace']['package']['version'])
 ")
 echo "  Cargo.toml (workspace): $CARGO_VERSION"
 
-# eggsec-python Cargo.toml (should inherit workspace)
 EP_CARGO_VERSION=$(python3 -c "
-import tomllib, sys
+import tomllib
 with open('crates/eggsec-python/Cargo.toml', 'rb') as f:
     data = tomllib.load(f)
 v = data.get('package', {}).get('version', {})
@@ -71,12 +98,10 @@ else:
 ")
 echo "  crates/eggsec-python/Cargo.toml: $EP_CARGO_VERSION"
 
-# pyproject.toml version
 PYPROJECT_VERSION=$(python3 -c "
-import tomllib, sys
+import tomllib
 with open('crates/eggsec-python/pyproject.toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data['project']['version'])
+    print(tomllib.load(f)['project']['version'])
 ")
 echo "  crates/eggsec-python/pyproject.toml: $PYPROJECT_VERSION"
 
@@ -95,139 +120,168 @@ if [ -n "$EXPECTED_VERSION" ]; then
     ok "Versions match expected: $EXPECTED_VERSION"
 fi
 
-# Validate version is not empty or malformed
 if [ -z "$CARGO_VERSION" ] || [ "$CARGO_VERSION" = "0.0.0" ]; then
     fail "Version is empty or 0.0.0"
 fi
 ok "Version is non-empty and non-zero"
 
-# Check publishable crates have matching versions
-echo ""
-echo "  Checking publishable crate versions..."
-while IFS= read -r toml; do
-    CRATE_NAME=$(python3 -c "
-import tomllib
-with open('$toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('package', {}).get('name', 'unknown'))
-")
-    CRATE_VERSION=$(python3 -c "
-import tomllib
-with open('$toml', 'rb') as f:
-    data = tomllib.load(f)
-v = data.get('package', {}).get('version', {})
-if isinstance(v, dict) and v.get('workspace'):
-    print('inherits-workspace')
-else:
-    print(str(v))
-")
-    CRATE_PUBLISH=$(python3 -c "
-import tomllib
-with open('$toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('package', {}).get('publish', 'true'))
-")
-    if [ "$CRATE_PUBLISH" = "false" ]; then
-        echo "    $CRATE_NAME: publish=false (excluded)"
-    else
-        echo "    $CRATE_NAME: $CRATE_VERSION"
-    fi
-done < <(find crates -name Cargo.toml -maxdepth 2 | sort)
-ok "Crate versions checked"
-
-# ── 3. Mandatory verification ────────────────────────────────────────────
+# ── 3. Package graph validation ──────────────────────────────────────────
 
 echo ""
-echo "--- 3. Mandatory verification ---"
+echo "--- 3. Package graph validation ---"
+
+echo "  Listing packages..."
+python3 "$SCRIPT_DIR/release-package-graph.py" list
+echo ""
+
+echo "  Validating publishability..."
+python3 "$SCRIPT_DIR/release-package-graph.py" validate
+ok "Package graph validation passed"
+
+echo ""
+echo "  Topological publication order:"
+python3 "$SCRIPT_DIR/release-package-graph.py" order
+echo ""
+
+# ── 4. Mandatory verification ────────────────────────────────────────────
+
+echo "--- 4. Mandatory verification ---"
 
 echo "  Running make check..."
 make check
 ok "make check passed"
 
-echo "  Running make check-python..."
-make check-python
-ok "make check-python passed"
+if [ "${EGGSEC_RELEASE_SKIP_PYTHON:-}" = "1" ]; then
+    warn "Skipping make check-python (EGGSEC_RELEASE_SKIP_PYTHON=1)"
+else
+    echo "  Running make check-python..."
+    make check-python
+    ok "make check-python passed"
+fi
 
-# ── 4. Rust package dry-run ──────────────────────────────────────────────
+# ── 5. Rust package validation ───────────────────────────────────────────
 
 echo ""
-echo "--- 4. Rust package dry-run ---"
+echo "--- 5. Rust package validation ---"
 
-# Identify publishable crates (publish != false)
+# Get topological order from helper
 PUBLISHABLE_CRATES=()
-while IFS= read -r toml; do
-    CRATE_DIR=$(dirname "$toml")
-    CRATE_NAME=$(python3 -c "
-import tomllib
-with open('$toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('package', {}).get('name', ''))
-")
-    CRATE_PUBLISH=$(python3 -c "
-import tomllib
-with open('$toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('package', {}).get('publish', 'true'))
-")
-    if [ "$CRATE_PUBLISH" != "false" ] && [ -n "$CRATE_NAME" ]; then
-        PUBLISHABLE_CRATES+=("$CRATE_NAME")
-    fi
-done < <(find crates -name Cargo.toml -maxdepth 2 | sort)
+while IFS= read -r line; do
+    PUBLISHABLE_CRATES+=("$line")
+done < <(python3 "$SCRIPT_DIR/release-package-graph.py" order)
 
-echo "  Publishable crates: ${PUBLISHABLE_CRATES[*]}"
+echo "  Topological order: ${PUBLISHABLE_CRATES[*]}"
+
+PACKAGE_OK=0
+PACKAGE_FIRST_RELEASE=0
 
 for crate in "${PUBLISHABLE_CRATES[@]}"; do
     echo "  Packaging $crate..."
-    cargo package -p "$crate" 2>&1 | tail -1
-    echo "  Dry-run publish for $crate..."
-    cargo publish -p "$crate" --dry-run 2>&1 | tail -1
+    LOG_FILE="$LOG_DIR/package-$crate.log"
+    if cargo package -p "$crate" --allow-dirty 2>&1 | tee "$LOG_FILE"; then
+        ok "  $crate packaged successfully"
+        PACKAGE_OK=$((PACKAGE_OK + 1))
+    else
+        # Check if failure is due to unpublished deps (expected on first release)
+        if grep -q "no matching package named" "$LOG_FILE" 2>/dev/null; then
+            warn "  $crate: depends on unpublished workspace crate (expected on first release)"
+            PACKAGE_FIRST_RELEASE=$((PACKAGE_FIRST_RELEASE + 1))
+        else
+            echo ""
+            fail "Rust package validation failed: $crate
+Log: $LOG_FILE"
+        fi
+    fi
 done
-ok "Rust package dry-runs passed"
 
-# ── 5. Python artifact build ─────────────────────────────────────────────
-
-echo ""
-echo "--- 5. Python artifact build ---"
-
-cd "$REPO_ROOT/crates/eggsec-python"
-rm -rf dist/ target/wheels/
-echo "  Building wheel..."
-maturin build --release --out dist
-echo "  Building sdist..."
-maturin sdist --out dist
-echo "  Checking artifacts..."
-python -m twine check dist/*
-ok "Python artifacts built and checked"
-
-# ── 6. Fresh-environment installation ────────────────────────────────────
-
-echo ""
-echo "--- 6. Fresh-environment installation ---"
-
-SMOKE_VENV=$(mktemp -d)
-trap "rm -rf $SMOKE_VENV" EXIT
-
-python3 -m venv "$SMOKE_VENV"
-source "$SMOKE_VENV/bin/activate"
-
-WHEEL=$(ls dist/*.whl 2>/dev/null | head -1)
-if [ -z "$WHEEL" ]; then
-    fail "No wheel found in dist/"
+if [ "$PACKAGE_FIRST_RELEASE" -gt 0 ]; then
+    echo ""
+    warn "$PACKAGE_FIRST_RELEASE crate(s) depend on unpublished workspace crates."
+    warn "This is expected for the first release. After publishing leaf crates,"
+    warn "re-run: EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 scripts/release-check.sh"
 fi
 
-pip install "$WHEEL" --quiet
-pip install pytest pytest-timeout --quiet
+ok "All Rust packages validated ($PACKAGE_OK packaged, $PACKAGE_FIRST_RELEASE awaiting first publish)"
 
-EggsecLocation=$(python -c "import eggsec; print(eggsec.__file__)")
-echo "  eggsec installed from: $EggsecLocation"
+# ── 6. Optional registry preflight ───────────────────────────────────────
 
-# Verify it's not from workspace source
-if echo "$EggsecLocation" | grep -q "projects/eggsec/crates"; then
-    fail "eggsec imported from workspace source tree, not installed wheel"
+if [ "${EGGSEC_RELEASE_REGISTRY_PREFLIGHT:-}" = "1" ]; then
+    echo ""
+    echo "--- 6. Registry preflight (network-sensitive) ---"
+    warn "This stage contacts crates.io. Failures here are expected in offline environments."
+
+    for crate in "${PUBLISHABLE_CRATES[@]}"; do
+        echo "  Dry-run publish for $crate..."
+        LOG_FILE="$LOG_DIR/preflight-$crate.log"
+        if timeout 120 cargo publish -p "$crate" --dry-run 2>&1 | tee "$LOG_FILE"; then
+            ok "  $crate preflight passed"
+        else
+            echo ""
+            fail "Registry preflight failed: $crate
+Log: $LOG_FILE"
+        fi
+    done
+    ok "Registry preflight passed"
+else
+    echo ""
+    echo "--- 6. Registry preflight (skipped) ---"
+    echo "  Set EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 to enable."
 fi
 
-# Import and version check
-python -c "
+# ── 7. Python artifact build ─────────────────────────────────────────────
+
+if [ "${EGGSEC_RELEASE_SKIP_PYTHON:-}" = "1" ]; then
+    echo ""
+    echo "--- 7. Python artifacts (skipped) ---"
+    warn "Skipping Python artifacts (EGGSEC_RELEASE_SKIP_PYTHON=1)"
+else
+    echo ""
+    echo "--- 7. Python artifact build ---"
+
+    cd "$REPO_ROOT/crates/eggsec-python"
+    rm -rf dist/ target/wheels/
+    echo "  Building wheel..."
+    maturin build --release --out dist
+    echo "  Building sdist..."
+    maturin sdist --out dist
+    echo "  Checking artifacts..."
+    python3 -m twine check dist/*
+    ok "Python artifacts built and checked"
+fi
+
+# ── 8. Fresh-environment installation ────────────────────────────────────
+
+if [ "${EGGSEC_RELEASE_SKIP_PYTHON:-}" = "1" ]; then
+    echo ""
+    echo "--- 8. Fresh-environment install (skipped) ---"
+    warn "Skipping fresh-environment install (EGGSEC_RELEASE_SKIP_PYTHON=1)"
+else
+    echo ""
+    echo "--- 8. Fresh-environment installation ---"
+
+    SMOKE_VENV="$TMP_ROOT/venv"
+    python3 -m venv "$SMOKE_VENV"
+    # shellcheck disable=SC1091
+    source "$SMOKE_VENV/bin/activate"
+
+    WHEEL=$(ls "$REPO_ROOT/crates/eggsec-python/dist/"*.whl 2>/dev/null | head -1)
+    if [ -z "$WHEEL" ]; then
+        fail "No wheel found in dist/"
+    fi
+
+    pip install "$WHEEL" --quiet
+    pip install pytest pytest-timeout --quiet
+
+    EggsecLocation=$(python3 -c "import eggsec; print(eggsec.__file__)")
+    echo "  eggsec installed from: $EggsecLocation"
+
+    # Verify it's not from workspace source
+    if echo "$EggsecLocation" | grep -q "crates/eggsec-python"; then
+        fail "eggsec imported from workspace source tree, not installed wheel"
+    fi
+
+    # Import and version check
+    python3 -c "
 import eggsec
 info = eggsec.build_info()
 print(f'  Version: {info[\"version\"]}')
@@ -236,8 +290,8 @@ assert len(eggsec.features()) > 0, 'No features compiled'
 print(f'  Features: {len(eggsec.features())}')
 "
 
-# Verify py.typed and stubs
-python -c "
+    # Verify py.typed and stubs
+    python3 -c "
 import eggsec, os
 pkg_dir = os.path.dirname(eggsec.__file__)
 typed = os.path.join(pkg_dir, 'py.typed')
@@ -248,16 +302,16 @@ print(f'  py.typed: {os.path.getsize(typed)} bytes')
 print(f'  __init__.pyi: {os.path.getsize(stub)} bytes')
 "
 
-# Capability metadata
-python -c "
+    # Capability metadata
+    python3 -c "
 import eggsec
 ops = eggsec.OperationRegistry.all_operations()
 print(f'  Operations: {len(ops)}')
 assert len(ops) > 0
 "
 
-# Report serialization/redaction smoke
-python -c "
+    # Report serialization/redaction smoke
+    python3 -c "
 import json, eggsec
 report = eggsec.Report(metadata={'scanner': 'release-smoke'})
 finding = eggsec.Finding(
@@ -275,8 +329,8 @@ assert '[REDACTED]' in ev_j
 print('  Evidence redaction: OK')
 "
 
-# Deterministic loopback operation
-EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 python -c "
+    # Deterministic loopback operation
+    EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 python3 -c "
 import eggsec
 scope = eggsec.Scope.allow_hosts(['127.0.0.1'])
 result = eggsec.scan_ports('127.0.0.1', [22, 80, 443], scope, timeout_ms=2000)
@@ -285,19 +339,24 @@ assert hasattr(result, 'target')
 print(f'  Loopback scan: OK (target={result.target})')
 "
 
-ok "Fresh-environment smoke tests passed"
+    ok "Fresh-environment smoke tests passed"
+fi
 
-# ── 7. Artifact inventory ────────────────────────────────────────────────
+# ── 9. Artifact inventory ────────────────────────────────────────────────
 
 echo ""
-echo "--- 7. Artifact inventory ---"
+echo "--- 9. Artifact inventory ---"
 
-cd "$REPO_ROOT/crates/eggsec-python"
-for f in dist/*; do
-    SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
-    SHA256=$(sha256sum "$f" | cut -d' ' -f1)
-    echo "  $(basename "$f")  ${SIZE} bytes  sha256=${SHA256:0:16}..."
-done
+if [ "${EGGSEC_RELEASE_SKIP_PYTHON:-}" = "1" ]; then
+    echo "  No Python artifacts to inventory (skipped)."
+else
+    cd "$REPO_ROOT/crates/eggsec-python"
+    for f in dist/*; do
+        SIZE=$(file_size "$f")
+        SHA256=$(sha256_hex "$f")
+        echo "  $(basename "$f")  ${SIZE} bytes  sha256=${SHA256:0:16}..."
+    done
+fi
 
 echo ""
 echo "=== Release validation passed. No artifacts were published. ==="

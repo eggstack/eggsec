@@ -14,7 +14,7 @@ keywords = ["reporting", "output", "sarif", "json", "security"]
 categories = ["development-tools"]
 
 [dependencies]
-eggsec-core = { path = "../eggsec-core" }
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

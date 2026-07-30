@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Terminal UI adapter for Eggsec"
+publish = false
 authors.workspace = true
 homepage.workspace = true
 documentation.workspace = true

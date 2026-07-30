@@ -14,9 +14,9 @@ categories = ["command-line-utilities", "development-tools::testing"]
 
 [dependencies]
 # Shared types from core
-eggsec-core = { path = "../eggsec-core" }
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
 # Output bridge (for ScanReportData, FindingData)
-eggsec-output = { path = "../eggsec-output" }
+eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 
 # TLS / certificate generation
 tokio-rustls = "0.26"
