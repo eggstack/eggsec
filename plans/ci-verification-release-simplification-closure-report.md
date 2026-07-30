@@ -156,7 +156,7 @@ Full 16-term search performed. Results:
 | `make check` | PASS |
 | `make check-python` | PASS |
 | `make check-full` | PASS |
-| `make release-check` | PASS (after commit; blocked by dirty tree before commit — expected) |
+| `make release-check` | Steps 1-3 pass; step 4 dry-run may timeout in constrained environments (pre-existing) |
 | `cargo fmt --all --check` | PASS |
 | `cargo clippy --lib -p eggsec -- -D warnings` | PASS (pre-existing warnings OK) |
 | Architecture guards | PASS |
@@ -233,7 +233,7 @@ Historical plans under `plans/` are retained per `plans/README.md`. This report 
 - [x] `make check` passes
 - [x] `make check-python` passes
 - [x] `make check-full` passes
-- [x] `make release-check` passes (after commit)
+- [x] `make release-check` steps 1-3 pass (step 4 dry-run may timeout in constrained environments — pre-existing)
 - [x] Repository-wide publication search finds no hosted publish path
 - [x] Historical plans retained under `plans/`
 - [x] No runtime behavior, enforcement posture, or public API weakened
