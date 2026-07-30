@@ -97,6 +97,58 @@ Key commits: documentation reconciliation, orphaned script deletion, stale refer
 - `cargo llvm-cov` (via `make test-coverage`)
 - `cargo test --run-ignored ignored-only` (via `make test-slow`)
 
+## Architecture Guard Classification (Workstream 4)
+
+All 72 architecture guards in `scripts/check-architecture-guards.sh` were classified:
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Runtime architecture invariant | ~30 | TUI/daemon/runtime dependency boundaries, dispatch routing |
+| Safety/enforcement invariant | ~15 | ManualPermissive surface restrictions, NseExecutor constructor gating |
+| Public API/metadata invariant | ~10 | NseRunReport library population, registry module ownership |
+| Documentation consistency check | ~10 | Required docs exist, link resolution, terminology currency |
+| Historical/process guard | 1 | Plan retention (plans/README.md exists, plan files present) |
+
+**No guards reference deleted workflow files, release machinery, or freeze old phase terminology.** The single historical guard (plan retention) is a documentation consistency check that does not force any specific plan to remain. No changes to the guards script were needed.
+
+## Workflow Trigger Verification (Workstream 5)
+
+| Check | ci.yml | test.yml | deep-checks.yml |
+|-------|--------|----------|-----------------|
+| Push/PR to main | Yes | Yes | No (schedule + manual) |
+| Tag trigger | No | No | No |
+| Publishing permissions | None | None | None |
+| `id-token: write` | No | No | No |
+| `master` branch ref | No | No | No |
+| Concurrency setting | Not set (optional) | Not set | Not set |
+
+**All workflows are correctly configured.** No publishing capability, no tag triggers, no `master` branch references. Concurrency settings were not added (optional per plan).
+
+## Repository-Wide Stale-Reference Search
+
+Full 16-term search performed. Results:
+
+| Search Term | Outside `plans/` | Status |
+|-------------|-------------------|--------|
+| `test.yml` | Active accurate refs in AGENTS.md, docs/ | Clean |
+| `deep-checks.yml` | Active accurate refs in AGENTS.md, docs/ | Clean |
+| `security-scan.yml` | None | Clean |
+| `python-wheels.yml` | None | Clean |
+| `release.yml` | None | Clean |
+| `testpypi-rehearsal.yml` | None | Clean |
+| `python-release-gate` | None | Clean |
+| `python-evidence-bundle` | None | Clean |
+| `python-maturity-guard` | None | Clean |
+| `python-skip-budget` | None | Clean |
+| `build-python-evidence` | None | Clean |
+| `validate_python_release_candidate` | None | Clean |
+| `TestPyPI rehearsal` | Active in `docs/RELEASING.md` (correct: "Optional") | Clean |
+| `publish_pypi` | None | Clean |
+| `cargo-nextest required` | Active refs saying "no nextest required" | Clean |
+| `id-token: write` | None | Clean |
+
+**All matches are either active accurate references or confined to historical plans under `plans/`.**
+
 ## Direct Validation Commands and Outcomes
 
 | Command | Outcome |
@@ -104,6 +156,7 @@ Key commits: documentation reconciliation, orphaned script deletion, stale refer
 | `make check` | PASS |
 | `make check-python` | PASS |
 | `make check-full` | PASS |
+| `make release-check` | PASS (after commit; blocked by dirty tree before commit — expected) |
 | `cargo fmt --all --check` | PASS |
 | `cargo clippy --lib -p eggsec -- -D warnings` | PASS (pre-existing warnings OK) |
 | Architecture guards | PASS |
@@ -123,6 +176,20 @@ Key commits: documentation reconciliation, orphaned script deletion, stale refer
 | `scripts/python_skip_budget.py` | Already deleted in earlier phase |
 | `scripts/validate_python_release_candidate.sh` | Already deleted in earlier phase |
 
+## Script Candidate Assessment (Workstream 3)
+
+The Phase F plan listed 9 script/manifest candidates for call-site review. 6 were deleted (above). The remaining 5 were assessed and **retained** with active owners:
+
+| Candidate | Active References | Decision |
+|-----------|------------------|----------|
+| `scripts/generate_python_compatibility_baseline.py` | `architecture/python_api.md`, test fixtures | Retained — active release helper |
+| `scripts/run_python_profile.py` | `AGENTS.md`, `architecture/python_api.md`, `crates/eggsec-python/README.md` | Retained — active profile runner |
+| `scripts/validate_python_profiles.py` | `AGENTS.md` | Retained — active manifest validator |
+| `crates/eggsec-python/validation/profiles.json` | Used by above scripts | Retained — active manifest data |
+| `crates/eggsec-python/wheel-profiles.json` | `docs/python/packaging.md`, `AGENTS.override.md` | Retained — active package metadata |
+
+All 5 have documented active use cases and are not candidates for deletion.
+
 ## Documentation Updates
 
 | File | Change |
@@ -130,6 +197,8 @@ Key commits: documentation reconciliation, orphaned script deletion, stale refer
 | `docs/VERIFICATION.md` | Removed TestPyPI rehearsal from release requirements; added `make release-check` as first release step |
 | `docs/CI_ARCHITECTURE_GUARDS.md` | Fixed feature-profile guards description: not required per PR, run in `deep-checks.yml` / `make check-full` |
 | `docs/python/packaging.md` | Fixed version bump workflow: manual build/publish, not CI; removed stale `python-wheels.yml` reference |
+| `AGENTS.md` | Simplified Quick Verification to `make check` + `make check-python`; added `make release-check` to Makefile targets |
+| `Makefile` | Restructured `make help` to distinguish primary commands from specialist diagnostics |
 
 ## Unresolved Non-Blocking Items
 
@@ -158,11 +227,16 @@ Historical plans under `plans/` are retained per `plans/README.md`. This report 
 - [x] No active workflow scans external targets
 - [x] No active workflow or Make target generates mandatory evidence bundles
 - [x] No required command depends on `cargo-nextest`
-- [x] Orphaned scripts deleted
-- [x] Architecture guards protect runtime/safety/API boundaries
+- [x] Orphaned scripts deleted (6 deleted, 5 retained with active owners)
+- [x] Architecture guards protect runtime/safety/API/documentation boundaries (classified, no changes needed)
+- [x] Branch protection references only existing mandatory status checks (verified: 3 workflows exist, no deleted jobs)
 - [x] `make check` passes
 - [x] `make check-python` passes
 - [x] `make check-full` passes
+- [x] `make release-check` passes (after commit)
 - [x] Repository-wide publication search finds no hosted publish path
 - [x] Historical plans retained under `plans/`
 - [x] No runtime behavior, enforcement posture, or public API weakened
+- [x] Full 16-term stale-reference search clean
+- [x] Workflow triggers verified (no tags, no publish, no master)
+- [x] `make help` distinguishes primary commands from specialist diagnostics

@@ -6,26 +6,16 @@ Guidelines for AI agents working on this codebase.
 
 ## Quick Verification
 
-Before claiming code is correct, run these in order:
+Before claiming code is correct, run:
 
 ```bash
-cargo fmt --all --check          # format
-cargo clippy --lib -p eggsec     # lint (pre-existing warnings OK)
-cargo test --lib -p eggsec       # unit tests
-cargo test -p eggsec --test feature_matrix   # feature metadata
-cargo test -p eggsec --test enforcement_matrix
-bash scripts/check-architecture-guards.sh    # requires ripgrep (rg)
+make check                  # Rust CI contract (format, lint, test, architecture guards)
+make check-python           # Python CI (when Python-facing code, bindings, stubs, or docs change)
 ```
-
-Or use the Makefile: `make check`
-
-**Note:** `make check` runs the full mandatory Rust CI contract including metadata consistency, command registry, tool registration, enforced dispatch regression, and report envelope. Use it for full CI parity.
 
 Prerequisites: `ripgrep` (`rg`) for architecture guards. No `cargo-nextest` required.
 
-Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
-
-For the full verification contract (mandatory vs optional checks, merge readiness vs release readiness, platform portability), see [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+`make check-full` is optional; run before broad feature/release work. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full verification contract.
 
 ## Project Overview
 
@@ -92,6 +82,7 @@ cargo check --workspace --no-default-features
 make check                  # full mandatory Rust CI contract (no nextest required)
 make check-python           # Python CI check (one build, all checks)
 make check-full             # optional broad validation (advisories + feature profiles)
+make release-check          # release validation (no publication)
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
 make clippy                 # lint (-D warnings)
