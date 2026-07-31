@@ -241,7 +241,15 @@ else
     echo "  Building sdist..."
     maturin sdist --out dist
     echo "  Checking artifacts..."
-    python3 -m twine check dist/*
+    TWINE_PYTHON="python3"
+    if ! "$TWINE_PYTHON" -m twine --version >/dev/null 2>&1; then
+        if [ -x "$REPO_ROOT/.venv-ci/bin/python" ] && "$REPO_ROOT/.venv-ci/bin/python" -m twine --version >/dev/null 2>&1; then
+            TWINE_PYTHON="$REPO_ROOT/.venv-ci/bin/python"
+        else
+            fail "Twine is required for artifact validation; install it for python3 or .venv-ci/bin/python"
+        fi
+    fi
+    "$TWINE_PYTHON" -m twine check dist/*
     ok "Python artifacts built and checked"
 fi
 
