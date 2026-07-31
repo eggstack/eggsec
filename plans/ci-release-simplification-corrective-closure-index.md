@@ -2,106 +2,120 @@
 
 ## Status
 
-Completed 2026-07-31. The original six-phase simplification and corrective phases are closed after local contract validation, release validation, and hosted CI verification.
+Reopened for Corrective Phase I. The original CI reduction and Corrective Phase H workflow/command consolidation remain accepted. Final manual-release closure is pending correction of the package-validation false positive, Python semantic parity regression, lockfile review, version-bump procedure, and hosted evidence record.
 
 ## Purpose
 
-This index isolates the remaining work discovered after implementation. The broad reduction effort should not be reopened. The remaining defects are narrow and fall into two ownership areas:
+This index isolates defects discovered after implementation. The broad reduction effort must not be reopened. The remaining work is narrow and belongs to release-validation integrity rather than CI expansion.
 
-1. the manual Rust release path is not yet demonstrably publishable or reliably validated;
-2. the compact CI and local command contract contains several consistency, duplication, and evidence-reporting defects.
+No new roadmap expansion is authorized. The objective is to close the existing simplification work with direct, reproducible evidence and without restoring deleted automation.
 
-No new roadmap expansion is authorized. The objective is to close the existing simplification work with direct, reproducible evidence.
+## Accepted baseline
 
-## Current accepted baseline
-
-The following outcomes are considered landed and must be preserved:
+The following outcomes are landed and must be preserved:
 
 - automated PyPI, TestPyPI, crates.io, and GitHub Release publication is absent from hosted CI;
 - tag pushes have no release side effects;
 - the external-target self-scan workflow is deleted;
 - the root GitLab consumer pipeline is relocated under `examples/`;
-- routine Rust CI is consolidated under `make check`;
-- routine Python CI builds the extension once;
+- `.github/workflows/ci.yml` is the single mandatory workflow;
+- mandatory Rust CI is consolidated under `make check`;
+- mandatory Python CI invokes `make check-python` and builds the extension once;
+- `.github/workflows/deep-checks.yml` is the only optional diagnostic workflow;
 - evidence-bundle, maturity-gate, skip-budget, and synthetic release-gate orchestration is removed;
-- one optional non-publishing deep-check workflow remains;
+- specialist Make targets use valid Cargo syntax;
 - publication cadence is manual and maintainer-controlled.
 
-Corrective implementation must not restore deleted workflow graphs or publishing automation.
+Corrective implementation must not restore deleted workflow graphs, publishing automation, or evidence bureaucracy.
 
-## Remaining blockers
+## Completed corrective phases
 
-### Manual crates.io release path
-
-The documentation lists a multi-crate crates.io release, but workspace crates currently use local path-only dependencies in their manifests. Publishable crates require registry-resolvable dependency specifications. The documented dependency order is also not derived from the actual workspace graph.
-
-The local `release-check` script has not completed successfully. It duplicates `cargo package` and `cargo publish --dry-run`, discovers crates in filesystem order rather than dependency order, suppresses useful diagnostics, and contains portability assumptions that are not suitable for the primary macOS maintainer environment.
-
-### CI and command contract
-
-Several specialist Make targets were mechanically translated from nextest syntax and are invalid under `cargo test`. The optional deep workflow executes feature-profile checks twice. Python CI duplicates the commands in `scripts/check-python.sh` rather than invoking the canonical local target. The roadmap required one mandatory workflow, while the implementation retains separate Rust and Python workflows without documenting that deviation as an intentional amendment.
-
-Operational documentation still states release-readiness requirements that are not implemented by current commands. The closure report marks unmet criteria as complete and must be corrected after direct validation.
-
-## Corrective sequence
-
-### Corrective Phase G — Publishability and release-check closure
+### Corrective Phase G — Publishability and release-check restructuring
 
 Plan: [`ci-release-simplification-corrective-phase-g-publishability.md`](ci-release-simplification-corrective-phase-g-publishability.md)
 
-Primary outcome:
+Landed outcomes retained by Phase I:
 
-- every crate intentionally published to crates.io has publishable manifest metadata;
-- the publish order is generated or validated from the actual dependency graph;
-- local dry-run packaging succeeds in that order;
-- `make release-check` completes on Linux and macOS without publishing;
-- release documentation matches the validated package set and process.
+- private crates have explicit `publish = false`;
+- publishable internal dependencies have local paths plus registry versions;
+- package ordering is derived from Cargo metadata;
+- the release check separates default validation from optional registry preflight;
+- release publication remains manual.
 
-This phase is a blocker for any release-readiness claim.
+Post-implementation review found that failed `cargo package` commands can still be classified as expected first-release conditions and converted into overall success. Phase I corrects that result-integrity defect without reverting the valid manifest work.
 
-### Corrective Phase H — CI contract, command, and closure consistency
+### Corrective Phase H — CI contract, command, and documentation consolidation
 
 Plan: [`ci-release-simplification-corrective-phase-h-ci-contract-closure.md`](ci-release-simplification-corrective-phase-h-ci-contract-closure.md)
 
-Primary outcome:
+Accepted outcomes:
 
-- all advertised Make targets execute valid Cargo commands;
-- hosted Python CI invokes the same canonical command as local validation;
-- optional diagnostics do not duplicate work;
-- workflow structure and documentation agree;
-- release-readiness requirements are executable rather than aspirational;
-- the closure report records only commands that actually completed.
+- Rust, Python, and portability jobs are consolidated in `ci.yml`;
+- `test.yml` is deleted;
+- hosted Python verification invokes the canonical local command;
+- optional feature profiles have one owner;
+- invalid specialist Make targets are corrected;
+- active documentation reflects the compact workflow shape.
 
-Phase H depends on Phase G's final release-check interface and evidence.
+Phase I must not redesign this accepted workflow contract.
+
+## Remaining blocker
+
+### Corrective Phase I — Release integrity and evidence closure
+
+Plan: [`ci-release-simplification-corrective-phase-i-release-integrity.md`](ci-release-simplification-corrective-phase-i-release-integrity.md)
+
+Primary outcomes required:
+
+- failed Rust package operations remain failures;
+- every intended crates.io archive is created and inspected deterministically before publication;
+- registry-dependent first-release verification is handled through an explicit staged manual process;
+- `is_vulnerable` and other meaningful Python semantic outcomes remain covered by sync/async parity tests;
+- unrelated `Cargo.lock` dependency churn is removed or individually justified;
+- version-bump instructions include all internal dependency requirements;
+- local and hosted closure evidence is recorded only when actually observed.
+
+This phase is the only remaining blocker for the CI/manual-release simplification line.
 
 ## Sequencing rules
 
-1. Implement Phase G first.
-2. Do not amend the closure report to `Complete` until the complete Phase G validation sequence succeeds.
-3. Phase H may correct independent Makefile and workflow issues while Phase G is in progress, but final documentation and closure evidence must be based on the completed Phase G interface.
-4. Keep implementation commits narrowly scoped. Manifest publishability changes should not be mixed with unrelated dependency upgrades.
-5. Do not publish any crate or Python package while executing either corrective plan.
-6. Do not push a release tag as a validation technique.
+1. Reopen the retained closure report before implementation claims begin.
+2. Preserve the current two-workflow inventory and Make command contract.
+3. Correct package-result semantics before collecting new release evidence.
+4. Do not treat `no matching package named`, a timeout, a skipped registry check, or unavailable hosted evidence as pass.
+5. Restore semantic Python parity before rerunning the full Python suite.
+6. Review lockfile changes against pre-Phase-G commit `f26942dc37783ee302ffc5c67e58810cfdcc3578` before accepting the final dependency graph.
+7. Run the complete Phase I validation sequence on the final implementation commit.
+8. Record an actual hosted workflow run URL or ID before claiming remote CI success.
+9. Do not publish any crate, Python package, tag, or GitHub Release while executing the plan.
+10. Mark the closure report complete only after every blocking Phase I criterion returns `PASS`.
 
-## Roadmap-level corrective acceptance criteria
+## Corrective acceptance criteria
 
 The corrective sequence is complete only when all of the following are true:
 
-1. Every crate listed as publishable has a valid crates.io package manifest.
-2. Every internal normal/build dependency of a publishable crate includes a compatible registry version as well as its local path, unless the dependent crate is intentionally excluded from publication.
-3. The documented crate publication order is topologically valid for the actual package graph.
-4. `cargo package` or `cargo publish --dry-run` succeeds for every intended Rust package in validated order.
-5. `make release-check` completes end-to-end without publishing.
-6. `make release-check` works on both Linux and macOS, or the repository explicitly designates and documents one supported release host with a justified reason.
-7. Package-validation output retains enough Cargo diagnostics to identify the failing crate and cause.
-8. `make test-ci`, `make test-integration`, and `make test-slow` use valid `cargo test` syntax and pass or are removed from the advertised interface.
-9. `deep-checks.yml` does not execute representative feature profiles twice.
-10. Python CI invokes `make check-python` or `scripts/check-python.sh` rather than maintaining a divergent duplicate command list.
-11. The workflow inventory either satisfies the original one-mandatory-workflow requirement or explicitly amends that requirement with rationale and matching documentation.
-12. `docs/VERIFICATION.md`, `docs/RELEASING.md`, `AGENTS.md`, the Makefile, workflow YAML, and the closure report describe the same executable contract.
-13. The closure report does not mark partial or timed-out validation as passed.
-14. Hosted CI remains non-publishing and no external-target scan workflow returns.
-15. No runtime behavior, enforcement posture, Python API maturity, or feature semantics are changed to close process defects.
+1. Every intended crates.io package has valid path-plus-version internal dependency metadata.
+2. The package graph validates and produces an acyclic topological order.
+3. Default `make release-check` deterministically creates and inspects an archive for every intended crates.io package.
+4. Failed archive creation or inspection returns non-zero and stops the release check.
+5. `no matching package named` is never classified as successful validation.
+6. Packaged manifests retain no local path keys for normal/build/target runtime dependencies.
+7. Packaged internal dependency versions match the release version policy.
+8. Private crates are absent from published runtime/build dependency graphs.
+9. Registry preflight is clearly separate and is run layer by layer during manual publication.
+10. Skipped registry preflight is recorded as `SKIPPED`, not `PASS`.
+11. `is_vulnerable` is restored to meaningful Python sync/async semantic comparison.
+12. The focused parity test passes repeatedly and `make check-python` passes.
+13. `Cargo.lock` contains no unexplained third-party version/source/checksum changes relative to the pre-Phase-G baseline.
+14. The final lockfile remains compatible with the declared Rust MSRV or any MSRV correction is explicitly approved and documented.
+15. Release version-bump instructions include workspace, Python, and internal dependency versions.
+16. The graph validator identifies stale internal dependency versions with file-level diagnostics.
+17. `make check`, `make check-python`, `make check-full`, and `make release-check` pass on the final implementation commit.
+18. Hosted CI success claims include an actual workflow run URL or ID and per-job conclusions.
+19. Unavailable branch-protection or hosted evidence is labeled `NOT VERIFIED`.
+20. No hosted workflow publishes, triggers on tags, scans external targets, or recreates evidence bundles.
+21. No runtime behavior, enforcement posture, public API, or feature scope is weakened to close process defects.
+22. No package or release is published while executing the corrective plan.
 
 ## Explicit exclusions
 
@@ -110,13 +124,28 @@ This corrective sequence does not include:
 - publishing a release;
 - changing release cadence back to automation;
 - reintroducing wheel matrices on ordinary pushes;
-- fixing unrelated all-feature compilation defects unless they are explicitly retained as release gates;
+- adding a local registry service unless separately authorized after the lightweight archive approach is proven impossible;
 - broad dependency upgrades;
 - reorganizing crate boundaries;
-- adding provenance, attestation, signing, or release-bot infrastructure;
+- adding provenance, attestation, signing, SBOM, or release-bot infrastructure;
 - adding another evidence framework;
-- expanding product functionality.
+- expanding product functionality;
+- redesigning the accepted Phase H CI workflow.
 
 ## Handoff requirement
 
-Implementation agents must treat command execution results as evidence, not documentation assertions. Any unavailable command must be recorded as unavailable or failed. A timeout is not a pass. The final closure update must include the exact package set, dependency order, validation host, commands, and outcomes.
+Implementation agents must treat command results as evidence, not documentation assertions.
+
+Use only:
+
+```text
+PASS
+FAIL
+SKIPPED
+NOT RUN
+NOT VERIFIED
+BLOCKED
+TIMEOUT
+```
+
+A failed, skipped, timed-out, blocked, or unverified operation is never a pass. The final closure update must include the exact package set, dependency order, implementation commit, validation host, local command outcomes, hosted workflow run evidence, and any retained lockfile changes.
