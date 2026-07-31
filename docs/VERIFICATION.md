@@ -41,11 +41,14 @@ This runs `scripts/check-python.sh` which builds the extension once and runs beh
 
 ## Platform portability
 
-Rust checks run on Linux in CI (`ci.yml` `rust` job). Narrow portability is validated by:
+Rust checks run on Linux in CI (`ci.yml` `rust` job). Hosted CI runs narrow
+portability checks on macOS and Windows for every push and pull request to
+`main`:
 
 - `cargo check -p eggsec` on macos-latest and windows-latest (in `ci.yml` `portability` job)
 
-macOS and Windows builds are **not** required for every PR. Contributors should test locally on their target platform when making platform-specific changes.
+Contributors generally need local platform testing only for platform-specific
+changes.
 
 ## Optional broad validation
 
@@ -84,14 +87,21 @@ Changes to `eggsec-tui`, `eggsec-cli`, `eggsec-daemon`, or `eggsec-runtime` alon
 
 ## Which changes require optional feature/system checks before release
 
-Before a release tag is created, verify:
+Before a release tag is created, the Linux release host must pass:
 
-1. `make release-check` passes (local validation, no publication)
-2. `python scripts/release-package-graph.py validate` passes (publishability invariants)
-3. All feature-gated crates compile: `cargo check -p eggsec --features <feature>` for each feature in the feature matrix
-4. Representative feature profiles pass: `make check-feature-profiles`
-5. Deep checks pass: `cargo check --workspace --all-features && cargo test --workspace --all-features`
-6. Python wheel builds succeed on all target platforms
+```bash
+make check
+make check-python
+make check-full
+make release-check
+```
+
+`make check-full` covers the selected representative feature profiles, not
+every possible `--all-features` combination. Unsupported or currently broken
+all-feature combinations are not release gates. Python wheel validation is
+limited to the artifacts built by the manual release process; cross-platform
+wheel production is not claimed unless it is separately performed and recorded
+on each target platform.
 
 ## Merge readiness vs release readiness
 
@@ -102,9 +112,8 @@ Before a release tag is created, verify:
 - Format check passes
 
 **Release readiness** additionally requires:
-- `make release-check` passes (local validation, no publication)
-- All optional feature profiles compile
-- Deep checks pass
+- `make check-full` passes (advisories and representative profiles)
+- `make release-check` passes end-to-end on the supported Linux release host
 
 ## Release publication is always manual
 

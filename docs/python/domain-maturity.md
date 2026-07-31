@@ -224,7 +224,7 @@ instructions.
 | WS8: Repository durability | Closed | 64+ tests; SQLite/JSONL CRUD, concurrency, dedup, pagination, migration, corruption detection |
 | WS9: Streaming reporting | Closed | 71 passed; StreamingReporter bug fix (total_findings counter), config, flush, formats |
 | WS10: Maturity metadata | Closed | domain-maturity.md updated; correction pass status documented |
-| WS11: CI integration | Closed | 7 Python test profiles added to test.yml; maturin wheel build + pytest |
+| WS11: CI integration | Closed | Unified Python checks run through `ci.yml` and `make check-python`; maturin develop + pytest |
 | WS12: Stress hardening | Closed | 38 passed, 1 skipped; 1000-cycle TCP/UDP/repository stress tests, FD leak detection |
 
 WS2 closure evidence: NseRuntime, NseExecutionLimits, NseCancellationToken,
@@ -246,9 +246,10 @@ WS10 closure evidence: domain-maturity.md correction pass status table
 updated with all 12 workstreams marked closed. Feature-gated tests verified
 with `maturin develop --features nse,web-proxy,db-pentest,mobile,headless-browser,daemon-client`.
 
-WS11 closure evidence: 7 Python test profiles added to `.github/workflows/test.yml`:
-default-wheel, nse, db-pentest, web-proxy, mobile, headless-browser, daemon-client.
-Each profile builds maturin wheel with specified features and runs pytest.
+WS11 closure evidence: the retained Python checks run through
+`.github/workflows/ci.yml` via `make check-python`. Feature-specific profiles
+remain available through the documented local profile runners; routine CI uses
+one default `maturin develop` build and the shared behavioral and static checks.
 
 ## Release 2: Network Programmability (Provisional)
 

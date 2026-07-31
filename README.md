@@ -193,3 +193,10 @@ Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For the full verification contract (mandatory vs optional CI checks, merge vs release readiness), see [docs/VERIFICATION.md](docs/VERIFICATION.md). For adding new operations, domains, commands, tools, TUI actions, report outputs, or features, start with the [Extensibility Guide](docs/EXTENSIBILITY.md).
+
+## Verification
+
+Run `make check` before submitting Rust changes. Python-facing changes also
+require `make check-python`; release preparation uses `make check-full` and
+`make release-check`. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for
+the complete contract.

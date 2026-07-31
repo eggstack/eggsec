@@ -1,22 +1,25 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles release-check clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles release-check clippy fmt build clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
+
+# Compatibility alias for the default fast unit-test loop
+test-fast: test-unit
 
 # Run only unit tests (lib tests, no network, no wiremock)
 test-unit:
 	cargo test --lib -p eggsec
 
-# Run full test suite with no retries (CI-style)
+# Run the eggsec package test suite without Cargo fail-fast
 test-ci:
-	cargo test -p eggsec --retries 0 --no-fail-fast
+	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 
 # Run integration tests (uses wiremock, may need network)
 test-integration:
-	cargo test -p eggsec --test '*.rs'
+	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 
 # Run NSE tests (requires nse feature)
 test-nse:
@@ -24,7 +27,7 @@ test-nse:
 
 # Run slow/explicitly-ignored tests
 test-slow:
-	cargo test -p eggsec --run-ignored ignored-only
+	cargo test -p eggsec --features rest-api --tests -- --ignored
 
 # Run clippy
 clippy:
@@ -70,13 +73,10 @@ check:
 	cargo test -p eggsec-output --test report_envelope
 	bash scripts/check-architecture-guards.sh
 
-# Alias for backward compatibility (deprecated, use `make check`)
-check-architecture-ci: check
-
 # Optional broad validation (pre-release, not required for merge)
 check-full: check
 	cargo deny check
-	make check-feature-profiles
+	$(MAKE) check-feature-profiles
 
 # Representative feature profile checks (representative, not exhaustive)
 check-feature-profiles:
@@ -118,7 +118,8 @@ help:
 	@echo "  make clippy          - Lint"
 	@echo "  make fmt             - Format check"
 	@echo "  make build           - Release build"
-	@echo "  make test-ci         - Full suite, no retries"
+	@echo "  make test-ci         - Library/integration tests with rest-api"
+	@echo "  make test-fast       - Fast unit-test alias"
 	@echo "  make test-integration - Integration tests"
 	@echo "  make test-nse        - NSE tests (requires nse feature)"
 	@echo "  make test-slow       - Run ignored tests"

@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. This phase is the release-readiness blocker for the CI and manual-release simplification roadmap.
+Completed. All acceptance criteria met. Linux designated as the supported release host.
 
 ## Objective
 

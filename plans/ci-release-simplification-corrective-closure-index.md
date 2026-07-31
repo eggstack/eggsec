@@ -2,7 +2,7 @@
 
 ## Status
 
-Open. The original six-phase simplification substantially reduced CI and release-process complexity, but the line of work is not closed. The retained closure report records useful structural outcomes, yet its completion claim is superseded by this corrective index until the plans below are implemented and validated.
+Completed 2026-07-31. The original six-phase simplification and corrective phases are closed after local contract validation, release validation, and hosted CI verification.
 
 ## Purpose
 

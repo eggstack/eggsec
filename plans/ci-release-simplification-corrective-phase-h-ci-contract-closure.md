@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. This is the final corrective phase for the CI and manual-release simplification roadmap. It depends on the finalized release-check contract and evidence from Corrective Phase G.
+Executed 2026-07-31. This is the final corrective phase for the CI and manual-release simplification roadmap. It depends on the finalized release-check contract and evidence from Corrective Phase G.
 
 ## Objective
 
@@ -152,7 +152,7 @@ Preferred simple option:
 
 ```make
 test-integration:
-	cargo test -p eggsec --tests --no-fail-fast
+    cargo test -p eggsec --features rest-api --tests --no-fail-fast
 ```
 
 Document that Cargo's `--tests` selects test targets and may include the library test target according to Cargo target selection. If maintainers need integration binaries only, add a small script that enumerates named integration test targets from Cargo metadata; do not pass a quoted wildcard to `--test`.
@@ -165,7 +165,7 @@ Recommended implementation:
 
 ```make
 test-slow:
-	cargo test -p eggsec -- --ignored
+    cargo test -p eggsec --features rest-api -- --ignored
 ```
 
 If ignored tests require feature flags, document or create explicit feature-specific slow targets. Do not hide broad feature activation in the default slow target.

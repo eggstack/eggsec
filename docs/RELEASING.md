@@ -25,6 +25,17 @@ Eggsec. Release cadence and publication are explicit maintainer decisions.
 Note: `eggsec-cli`, `eggsec-tui`, and `eggsec-python` have `publish = false`
 and are not published to crates.io.
 
+## Supported release host
+
+The validated release host is **Linux** (the CI and primary development
+environment). `make release-check` has been verified end-to-end on Linux.
+
+macOS and Windows CI jobs verify that the workspace compiles on those
+platforms, but `release-check.sh` has not been executed end-to-end on
+macOS. The script is designed for portability (POSIX shell, portable
+SHA-256 and file-size helpers), so it should work on macOS, but Linux
+is the tested and supported release host for now.
+
 ## Pre-release validation
 
 Run the local release check script:

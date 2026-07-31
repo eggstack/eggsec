@@ -179,10 +179,11 @@ Rules:
 
 CI runs two tiers of feature checks:
 
-### Required PR checks (feature-profiles matrix)
+### Representative feature checks
 
-These run on every pull request in `.github/workflows/ci.yml` under the
-`rust` job. They must pass before merge.
+These run in the optional weekly/manual `deep-checks.yml` workflow and locally
+through `make check-full`. They are representative compile profiles, not an
+exhaustive all-feature matrix or a per-PR required check.
 
 **Include your feature in the PR matrix if:**
 
@@ -191,17 +192,8 @@ These run on every pull request in `.github/workflows/ci.yml` under the
 - It is a backend driver that changes the compilation graph.
 - It is an advanced extension of an existing domain.
 
-**How to add:** Add a `cargo check` entry to the `check-feature-profiles` target in
-the `Makefile` and optionally to the optional feature-profile checks workflow:
-
-```yaml
-# .github/workflows/ci.yml (optional, for required PR checks)
-feature-profiles:
-  matrix:
-    features:
-      # ... existing profiles ...
-      - "my-new-feature"
-```
+**How to add:** Add a `cargo check` entry to the `check-feature-profiles` target
+in the `Makefile`.
 
 ```makefile
 # Makefile
@@ -213,8 +205,8 @@ check-feature-profiles:
 ### Deep checks (weekly/manual)
 
 These run weekly via `.github/workflows/deep-checks.yml` or locally via
-`make check-full`. They run `cargo deny check` (advisories, licenses, bans),
-representative feature profiles, and full-feature compilation.
+`make check-full`. They run `cargo deny check` (advisories, licenses, bans) and
+representative feature profiles.
 
 **Features that belong only in deep checks:**
 

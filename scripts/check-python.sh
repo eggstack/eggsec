@@ -7,6 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 VENV_DIR="${EGGSEC_PYTHON_VENV:-$ROOT_DIR/.venv-ci}"
 
+for tool in python3 cargo rustc rg; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "error: required tool not found: $tool" >&2
+        exit 1
+    fi
+done
+
 echo "=== eggsec-python unified check ==="
 echo "Venv: $VENV_DIR"
 echo ""
@@ -14,15 +21,22 @@ echo ""
 # ── 1. Create virtualenv ─────────────────────────────────────────────────
 if [ ! -d "$VENV_DIR" ]; then
     echo "--- Creating virtualenv ---"
-    python3 -m venv "$VENV_DIR"
+    if ! python3 -m venv "$VENV_DIR"; then
+        echo "error: unable to create virtualenv at $VENV_DIR" >&2
+        exit 1
+    fi
+fi
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+    echo "error: virtualenv is missing $VENV_DIR/bin/python" >&2
+    exit 1
 fi
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
 # ── 2. Install dependencies ──────────────────────────────────────────────
 echo "--- Installing dependencies ---"
-pip install --upgrade pip --quiet
-pip install maturin pytest pytest-timeout mypy pyright --quiet
+python -m pip install --upgrade pip --quiet
+python -m pip install maturin pytest pytest-timeout mypy pyright --quiet
 
 # ── 3. Build extension (once) ────────────────────────────────────────────
 echo "--- Building extension (maturin develop) ---"

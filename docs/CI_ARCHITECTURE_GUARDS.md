@@ -160,7 +160,9 @@ The CI architecture guards enforce these invariants from Phases 1–14 (23 check
 
 ## Python-Specific CI Guards
 
-These checks enforce invariants for the `eggsec-python` bindings and run within the unified `python` job in `test.yml`. They are executed once after a single `maturin develop` build.
+These checks enforce invariants for the `eggsec-python` bindings and run within
+the unified `python` job in `ci.yml`, which invokes `make check-python`. They are
+executed once after a single `maturin develop` build.
 
 | Check | Command | Purpose |
 |-------|---------|---------|

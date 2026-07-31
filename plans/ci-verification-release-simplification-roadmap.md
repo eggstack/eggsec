@@ -2,7 +2,15 @@
 
 ## Status
 
-Planned. This document is a handoff roadmap only; it does not authorize feature expansion or changes to Eggsec runtime behavior.
+Completed 2026-07-31. This document remains a handoff roadmap record; corrective closure was completed without runtime behavior changes.
+
+### Corrective closure amendment
+
+Corrective Phase G closed the manual package graph and release-check path. Corrective
+Phase H then consolidated mandatory Rust and Python checks in `ci.yml`, removed the
+duplicated Python workflow, corrected specialist Make targets, and reconciled the
+verification documentation. The final evidence is retained in
+[`ci-verification-release-simplification-closure-report.md`](ci-verification-release-simplification-closure-report.md).
 
 ## Purpose
 

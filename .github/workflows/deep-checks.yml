@@ -23,5 +23,3 @@ jobs:
         uses: taiki-e/install-action@cargo-deny
       - name: Optional broad validation
         run: make check-full
-      - name: Representative feature profiles
-        run: make check-feature-profiles

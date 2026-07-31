@@ -1130,7 +1130,8 @@ See `docs/python/` for user-facing guides:
 
 ## CI
 
-Python binding tests run in `test.yml` GitHub Actions workflow alongside Rust tests.
+Python binding tests run in the `ci.yml` GitHub Actions workflow through the
+canonical `make check-python` target alongside Rust tests.
 
 ## Release-readiness contracts
 

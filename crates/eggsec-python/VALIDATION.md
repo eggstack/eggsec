@@ -129,8 +129,9 @@ Created `scripts/check_eggsec_python_exports.py` which verifies:
 
 ## 6. GitHub Actions Workflow
 
-`.github/workflows/test.yml` provides unified Python CI (behavioral tests,
-capability/architecture checks, stub parity, type checks). No workflow
+`.github/workflows/ci.yml` provides unified Python CI (behavioral tests,
+capability/architecture checks, stub parity, type checks) through
+`make check-python`. No workflow
 publishes packages — publication is manual via `make release-check` and
 `maturin publish`. See `docs/RELEASING.md`.
 
