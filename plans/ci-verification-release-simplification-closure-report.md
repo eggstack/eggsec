@@ -2,10 +2,13 @@
 
 ## Status
 
-Complete 2026-07-31. The Phase A–F CI reduction remains valid; Corrective Phases
-G and H completed the publishability, workflow, Make contract, documentation,
-and release-check corrections. The final local and hosted evidence is recorded
-against commit `4c94186` and Linux x86_64.
+Reopened for Corrective Phase I. The CI simplification and Phase H workflow
+contract remain complete. Final manual-release closure is pending correction of
+the package-validation false positive, semantic parity regression, lockfile
+review, version-bump procedure, and hosted evidence record.
+
+The earlier Phase H evidence is retained below as historical context. It is not
+evidence for Phase I.
 
 ## Corrective scope
 
@@ -16,7 +19,8 @@ specialist Make targets, merges Python CI into `ci.yml`, removes duplicate deep
 checks, and makes the verification and release documentation executable.
 
 No runtime behavior, enforcement posture, public API, or feature semantics are
-changed by this closure work.
+changed by this closure work. Phase I adds only release-integrity validation,
+documentation, and evidence corrections.
 
 ## Structural baseline and final state
 

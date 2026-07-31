@@ -46,14 +46,29 @@ make release-check
 scripts/release-check.sh <version>
 ```
 
-This validates without publishing:
+This validates without publishing. The Rust portion has three deliberately
+separate levels:
+
+- **Level A — local archives (default):** `cargo package --no-verify` creates
+  one isolated archive per publishable crate. The package helper inspects the
+  normalized manifest and file list; archive creation or inspection failures
+  are failures, including `no matching package named`.
+- **Level B — registry preflight (optional locally):**
+  `EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 make release-check` runs
+  `cargo publish --dry-run` in dependency order. This is registry-sensitive
+  and is required layer by layer immediately before a staged publication.
+- **Level C — publication (manual):** actual `cargo publish` commands are
+  typed explicitly by a maintainer. `release-check.sh`, tests, and CI never
+  publish packages.
+
+The default check validates without publishing:
 
 1. Clean working tree and explicit current commit
 2. Version alignment across Cargo.toml, pyproject.toml, and optional argument
 3. Package graph validation via `scripts/release-package-graph.py`
 4. `make check` (mandatory Rust CI contract)
 5. `make check-python` (mandatory Python CI contract, skippable with `EGGSEC_RELEASE_SKIP_PYTHON=1`)
-6. `cargo package` for each publishable crate in topological order
+6. `cargo package --no-verify` and deterministic archive inspection for each publishable crate in topological order
 7. Python wheel and sdist build
 8. Fresh-environment wheel installation and smoke test
 9. Artifact inventory (filenames, sizes, SHA-256 hashes)
@@ -103,7 +118,20 @@ Current validated order (dependencies before dependents):
 11. `eggsec` (depends on `eggsec-core`, `eggsec-runtime`, `eggsec-output`, `eggsec-tool-core`, `eggsec-agent`, plus optional domain crates)
 12. `eggsec-daemon` (depends on `eggsec-runtime`, `eggsec`)
 
-Wait for each crate to appear on crates.io before publishing dependents.
+Wait for each crate to appear on crates.io before publishing dependents. The
+staged sequence is:
+
+```text
+validate all local archives
+publish one dependency layer
+wait for registry visibility
+run cargo publish --dry-run for the next layer
+publish the next layer
+repeat
+```
+
+A registry failure, timeout, or unavailable dependency remains a failure or
+unavailable result; it is never converted into a local archive pass.
 
 Private crates (not published to crates.io): `eggsec-cli`, `eggsec-tui`, `eggsec-python`.
 
@@ -188,10 +216,17 @@ of release cadence.
 
 1. Update `version` in workspace `Cargo.toml`.
 2. Update `version` in `crates/eggsec-python/pyproject.toml` to match.
-3. Run `make release-check` to validate alignment.
-4. Publish crates and/or Python package as described above.
-5. Tag the release (optional, after publication): `git tag v<version>`.
-6. Push tag: `git push origin v<version>`.
+3. Update every version-qualified internal path dependency in publishable
+   manifests (the `version = "..."` alongside `path = "..."`), including
+   target-specific and aliased dependencies. Inventory them with:
+   `python3 scripts/release-package-graph.py version-locations`.
+4. Regenerate `Cargo.lock` only when required by the manifest change; review
+   third-party changes and use `--locked` checks.
+5. Run `python3 scripts/release-package-graph.py validate` and
+   `make release-check` to identify stale versions and validate archives.
+6. Publish crates and/or Python package as described above.
+7. Tag the release (optional, after publication): `git tag v<version>`.
+8. Push tag: `git push origin v<version>`.
 
 ## Recovery from failed publication
 

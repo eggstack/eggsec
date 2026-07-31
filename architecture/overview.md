@@ -21,6 +21,16 @@ Eggsec is a Rust-native, scope-enforced security assessment and defense-validati
 
 Eggsec is organized as a Cargo workspace with 15 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
+### Release validation boundary
+
+Release validation is owned by `scripts/release-check.sh` and
+`scripts/release-package-graph.py`. The default path creates isolated
+`cargo package --no-verify` archives and inspects their normalized manifests
+and file lists. Registry-sensitive `cargo publish --dry-run` checks are
+optional locally but must be performed in dependency layers immediately
+before manual publication. Neither validation nor hosted CI publishes a
+package.
+
 | Crate | Role | Dependency-Light | Notes |
 |-------|------|:---:|-------|
 | `eggsec-core` | Shared primitives | Yes | `Severity`, `SensitiveString`, constants. Zero internal deps. |

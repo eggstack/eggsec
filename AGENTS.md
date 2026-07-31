@@ -88,6 +88,8 @@ make release-check          # release validation (no publication)
 python scripts/release-package-graph.py list      # package set inventory
 python scripts/release-package-graph.py validate   # publishability checks
 python scripts/release-package-graph.py order      # topological publication order
+python scripts/release-package-graph.py version-locations # internal version inventory
+python scripts/release-package-graph.py inspect-archive <crate> # archive checks
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
 make clippy                 # lint (-D warnings)

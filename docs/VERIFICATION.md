@@ -114,6 +114,8 @@ on each target platform.
 **Release readiness** additionally requires:
 - `make check-full` passes (advisories and representative profiles)
 - `make release-check` passes end-to-end on the supported Linux release host
+- all intended Rust archives are created and inspected locally; registry
+  preflight is a separate staged-maintainer operation
 
 ## Release publication is always manual
 

@@ -7,7 +7,10 @@ Uses fixture Cargo.toml files in temp directories to test invariants.
 import io
 import importlib.util
 import json
+import os
 import shutil
+import subprocess
+import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -150,6 +153,24 @@ class TestInternalDeps(unittest.TestCase):
         deps = _rpg._internal_deps(cargo)
         self.assertEqual(len(deps), 1)
         self.assertEqual(deps[0]["name"], "bar")
+
+    def test_target_specific_and_alias_resolve_to_package(self):
+        cargo = self.tmpdir / "foo" / "Cargo.toml"
+        (self.tmpdir / "real-bar").mkdir()
+        (self.tmpdir / "real-bar" / "Cargo.toml").write_text(
+            '[package]\nname = "real-bar"\nversion = "0.1.0"\n'
+        )
+        cargo.parent.mkdir(parents=True, exist_ok=True)
+        cargo.write_text(
+            '[package]\nname = "foo"\nversion = "0.1.0"\n\n'
+            '[target."cfg(unix)".dependencies]\n'
+            'bar_alias = { package = "real-bar", path = "../real-bar", version = "0.1.0", optional = true }\n'
+        )
+        deps = _rpg._internal_deps(cargo)
+        self.assertEqual(len(deps), 1)
+        self.assertEqual(deps[0]["name"], "bar_alias")
+        self.assertEqual(deps[0]["package"], "real-bar")
+        self.assertTrue(deps[0]["optional"])
 
 
 class TestValidate(unittest.TestCase):
@@ -353,6 +374,130 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIn("eggsec-core", lines)
         self.assertIn("eggsec", lines)
         self.assertLess(lines.index("eggsec-core"), lines.index("eggsec"))
+
+
+class TestArchiveInspection(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.source = self.tmpdir / "fixture" / "Cargo.toml"
+        self.source.parent.mkdir(parents=True)
+        self.source.write_text(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\n'
+            'rust-version = "1.80"\n'
+        )
+        self.other = self.tmpdir / "other" / "Cargo.toml"
+        self.other.parent.mkdir()
+        self.other.write_text('[package]\nname = "eggsec-other"\nversion = "0.1.0"\n')
+        self.old_metadata = _rpg._cargo_metadata
+        self.old_version = _rpg._workspace_version
+        _rpg._cargo_metadata = lambda: {"packages": [
+            {"name": "fixture", "manifest_path": str(self.source)},
+            {"name": "eggsec-other", "manifest_path": str(self.other)},
+        ]}
+        _rpg._workspace_version = lambda: "0.1.0"
+
+    def tearDown(self):
+        _rpg._cargo_metadata = self.old_metadata
+        _rpg._workspace_version = self.old_version
+        shutil.rmtree(self.tmpdir)
+
+    def _archive(self, manifest_text, members=("README.md", "LICENSE-MIT")):
+        archive = self.tmpdir / "fixture-0.1.0.crate"
+        with tarfile.open(archive, "w:gz") as tar:
+            root = "fixture-0.1.0/"
+            for name, content in (("Cargo.toml", manifest_text), *[(m, "content") for m in members]):
+                info = tarfile.TarInfo(root + name)
+                data = content.encode()
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        return archive
+
+    def test_normalized_registry_dependency_is_accepted(self):
+        archive = self._archive(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\nrust-version = "1.80"\n\n'
+            '[dependencies]\nother = { version = "0.1.0" }\n'
+        )
+        self.assertEqual(_rpg.inspect_archive(archive, "fixture", "0.1.0"), [])
+
+    def test_retained_path_and_version_mismatch_are_rejected(self):
+        archive = self._archive(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\nrust-version = "1.80"\n\n'
+            '[dependencies]\nother = { package = "eggsec-other", path = "../other", version = "0.2.0" }\n'
+        )
+        errors = _rpg.inspect_archive(archive, "fixture", "0.1.0")
+        self.assertTrue(any("retains local path" in error for error in errors))
+        self.assertTrue(any("version '0.2.0'" in error for error in errors))
+
+    def test_prohibited_entries_are_rejected(self):
+        archive = self._archive(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\nrust-version = "1.80"\n',
+            members=("README.md", "target/bad.o"),
+        )
+        errors = _rpg.inspect_archive(archive, "fixture", "0.1.0")
+        self.assertTrue(any("prohibited archive entry" in error for error in errors))
+
+    def test_missing_readme_is_reported(self):
+        archive = self._archive(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\nreadme = "README.md"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\nrust-version = "1.80"\n',
+            members=("LICENSE-MIT",),
+        )
+        errors = _rpg.inspect_archive(archive, "fixture", "0.1.0")
+        self.assertTrue(any("README" in error for error in errors))
+
+
+class TestReleaseContract(unittest.TestCase):
+    def test_script_does_not_classify_registry_failure_as_pass(self):
+        script = (Path(__file__).parent / "release-check.sh").read_text()
+        self.assertIn("create-archive", script)
+        self.assertIn("--list", (Path(__file__).parent / "release-package-graph.py").read_text())
+        self.assertIn("Registry preflight: SKIPPED", script)
+        self.assertNotIn("PACKAGE_FIRST_RELEASE", script)
+        self.assertNotIn('grep -q "no matching package named"', script)
+
+    def test_synthetic_first_release_archive_is_created_without_registry_access(self):
+        root = self.tmpdir = Path(tempfile.mkdtemp())
+        try:
+            (root / "dep").mkdir()
+            (root / "app").mkdir()
+            (root / "Cargo.toml").write_text(
+                '[workspace]\nmembers = ["app", "dep"]\nresolver = "2"\n'
+            )
+            (root / "dep" / "Cargo.toml").write_text(
+                '[package]\nname = "eggsec-fixture-never-published-9f4c"\nversion = "0.1.0"\n'
+            )
+            (root / "app" / "Cargo.toml").write_text(
+                '[package]\nname = "eggsec-fixture-app-9f4c"\nversion = "0.1.0"\n\n'
+                '[dependencies]\nfixture = { package = "eggsec-fixture-never-published-9f4c", path = "../dep", version = "0.1.0" }\n'
+            )
+            (root / "app" / "src").mkdir()
+            (root / "app" / "src" / "lib.rs").write_text("")
+            (root / "dep" / "src").mkdir()
+            (root / "dep" / "src" / "lib.rs").write_text("")
+            target = root / "target"
+            metadata = {"packages": [
+                {"name": "eggsec-fixture-app-9f4c", "version": "0.1.0", "manifest_path": str(root / "app" / "Cargo.toml")},
+                {"name": "eggsec-fixture-never-published-9f4c", "version": "0.1.0", "manifest_path": str(root / "dep" / "Cargo.toml")},
+            ]}
+            old_root, old_cargo, old_metadata = _rpg.WORKSPACE_ROOT, _rpg.CARGO_TOML, _rpg._cargo_metadata
+            try:
+                _rpg.WORKSPACE_ROOT = root
+                _rpg.CARGO_TOML = root / "Cargo.toml"
+                _rpg._cargo_metadata = lambda: metadata
+                output = target / "eggsec-fixture-app-9f4c-0.1.0.crate"
+                old_argv = _rpg.sys.argv
+                _rpg.sys.argv = ["release-package-graph.py", "create-archive", "eggsec-fixture-app-9f4c", str(output)]
+                self.assertEqual(_rpg.cmd_create_archive(), 0)
+                _rpg.sys.argv = old_argv
+            finally:
+                _rpg.WORKSPACE_ROOT, _rpg.CARGO_TOML, _rpg._cargo_metadata = old_root, old_cargo, old_metadata
+            self.assertTrue(output.is_file())
+        finally:
+            shutil.rmtree(root)
 
 
 if __name__ == "__main__":

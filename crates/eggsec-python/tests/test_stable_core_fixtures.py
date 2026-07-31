@@ -53,9 +53,6 @@ def _normalized(value: Any) -> Any:
             # Fuzz result timing-dependent counters (vary across runs/platforms)
             "waf_bypasses",
             "time_anomalies",
-            # Per-result vulnerability is derived from timing anomaly state;
-            # stable parity is covered by the aggregate counters above.
-            "is_vulnerable",
         }
         return {key: _normalized(item) for key, item in value.items() if key not in ignored}
     if isinstance(value, list):

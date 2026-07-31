@@ -36,6 +36,8 @@ trap cleanup EXIT
 
 TMP_ROOT=$(mktemp -d)
 LOG_DIR="$TMP_ROOT/logs"
+RUST_TARGET_DIR="$TMP_ROOT/rust-target"
+PACKAGE_DIR="$RUST_TARGET_DIR/package"
 mkdir -p "$LOG_DIR"
 
 # Portable SHA-256
@@ -159,10 +161,10 @@ else
     ok "make check-python passed"
 fi
 
-# ── 5. Rust package validation ───────────────────────────────────────────
+# ── 5. Rust package archive validation ────────────────────────────────────
 
 echo ""
-echo "--- 5. Rust package validation ---"
+echo "--- 5. Rust package archives (deterministic local validation) ---"
 
 # Get topological order from helper
 PUBLISHABLE_CRATES=()
@@ -173,35 +175,29 @@ done < <(python3 "$SCRIPT_DIR/release-package-graph.py" order)
 echo "  Topological order: ${PUBLISHABLE_CRATES[*]}"
 
 PACKAGE_OK=0
-PACKAGE_FIRST_RELEASE=0
+PACKAGE_TOTAL=${#PUBLISHABLE_CRATES[@]}
 
 for crate in "${PUBLISHABLE_CRATES[@]}"; do
-    echo "  Packaging $crate..."
+    echo "  Packaging $crate with cargo package --list and deterministic helper..."
     LOG_FILE="$LOG_DIR/package-$crate.log"
-    if cargo package -p "$crate" --allow-dirty 2>&1 | tee "$LOG_FILE"; then
-        ok "  $crate packaged successfully"
-        PACKAGE_OK=$((PACKAGE_OK + 1))
-    else
-        # Check if failure is due to unpublished deps (expected on first release)
-        if grep -q "no matching package named" "$LOG_FILE" 2>/dev/null; then
-            warn "  $crate: depends on unpublished workspace crate (expected on first release)"
-            PACKAGE_FIRST_RELEASE=$((PACKAGE_FIRST_RELEASE + 1))
-        else
-            echo ""
-            fail "Rust package validation failed: $crate
-Log: $LOG_FILE"
-        fi
+    mkdir -p "$PACKAGE_DIR"
+    rm -f "$PACKAGE_DIR/${crate}-${CARGO_VERSION}.crate"
+    if ! python3 "$SCRIPT_DIR/release-package-graph.py" create-archive "$crate" "$PACKAGE_DIR/${crate}-${CARGO_VERSION}.crate" 2>&1 | tee "$LOG_FILE"; then
+        fail "Rust archive creation failed: package=$crate command='cargo package --list + create-archive' (log: $LOG_FILE)"
     fi
+    mapfile -t matches < <(find "$PACKAGE_DIR" -maxdepth 1 -type f -name "${crate}-${CARGO_VERSION}.crate" -print | sort)
+    if [ "${#matches[@]}" -ne 1 ]; then
+        fail "Rust archive selection failed: package=$crate expected exactly one archive, found ${#matches[@]} (log: $LOG_FILE)"
+    fi
+    archive="${matches[0]}"
+    if ! python3 "$SCRIPT_DIR/release-package-graph.py" inspect-archive "$archive" "$crate" "$CARGO_VERSION" 2>&1 | tee "$LOG_DIR/inspect-$crate.log"; then
+        fail "Rust archive inspection failed: package=$crate (log: $LOG_DIR/inspect-$crate.log)"
+    fi
+    PACKAGE_OK=$((PACKAGE_OK + 1))
+    ok "  $crate archive created and inspected"
 done
 
-if [ "$PACKAGE_FIRST_RELEASE" -gt 0 ]; then
-    echo ""
-    warn "$PACKAGE_FIRST_RELEASE crate(s) depend on unpublished workspace crates."
-    warn "This is expected for the first release. After publishing leaf crates,"
-    warn "re-run: EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 scripts/release-check.sh"
-fi
-
-ok "All Rust packages validated ($PACKAGE_OK packaged, $PACKAGE_FIRST_RELEASE awaiting first publish)"
+ok "Rust package archives: PASS ($PACKAGE_OK/$PACKAGE_TOTAL created and inspected)"
 
 # ── 6. Optional registry preflight ───────────────────────────────────────
 
@@ -225,7 +221,7 @@ Log: $LOG_FILE"
 else
     echo ""
     echo "--- 6. Registry preflight (skipped) ---"
-    echo "  Set EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 to enable."
+    echo "  Registry preflight: SKIPPED (enable explicitly; required during staged publication)."
 fi
 
 # ── 7. Python artifact build ─────────────────────────────────────────────
@@ -359,4 +355,18 @@ else
 fi
 
 echo ""
-echo "=== Release validation passed. No artifacts were published. ==="
+echo "=== Release validation summary ==="
+echo "Rust package archives: PASS ($PACKAGE_OK/$PACKAGE_TOTAL created and inspected)"
+if [ "${EGGSEC_RELEASE_REGISTRY_PREFLIGHT:-}" = "1" ]; then
+    echo "Registry preflight: PASS"
+else
+    echo "Registry preflight: SKIPPED (required during staged publication)"
+fi
+if [ "${EGGSEC_RELEASE_SKIP_PYTHON:-}" = "1" ]; then
+    echo "Python wheel/sdist: SKIPPED"
+    echo "Fresh-wheel smoke: SKIPPED"
+else
+    echo "Python wheel/sdist: PASS"
+    echo "Fresh-wheel smoke: PASS"
+fi
+echo "No artifacts were published."

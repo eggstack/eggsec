@@ -1979,7 +1979,10 @@ OperationRegistry, ToolRegistry, and build_info(). Output:
 ### Release Automation (E10)
 Release publication is manual and maintainer-controlled. No GitHub Actions
 workflow publishes packages. See `docs/RELEASING.md` for the full procedure
-and `make release-check` for local validation before publication.
+and `make release-check` for local validation before publication. Rust archive
+validation is deterministic and local; registry dry-runs are staged separately
+after each dependency layer is visible. Version bumps also update every
+version-qualified internal path dependency.
 
 ## Release 5 Phase F — Compatibility Enforcement and Release Hardening
 
