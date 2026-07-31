@@ -2,10 +2,9 @@
 
 ## Status
 
-Reopened for Corrective Phase I. The CI simplification and Phase H workflow
-contract remain complete. Final manual-release closure is pending correction of
-the package-validation false positive, semantic parity regression, lockfile
-review, version-bump procedure, and hosted evidence record.
+Complete 2026-07-31 for implementation commit
+`b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`. The CI simplification and Phase H
+workflow contract remain complete. Manual publication was not run.
 
 The earlier Phase H evidence is retained below as historical context. It is not
 evidence for Phase I.
@@ -74,7 +73,36 @@ cross-platform wheel-release hosts.
 
 ## Validation evidence
 
-Evidence is recorded against implementation commit `4c94186` on Linux x86_64.
+### Corrective Phase I
+
+Evidence was collected on Linux x86_64 against implementation commit
+`b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`.
+
+| Command or gate | Status | Host / evidence |
+|---|---|---|
+| `python3 scripts/test_release_package_graph.py` | `PASS` | 28 tests |
+| package graph `validate` and `order` | `PASS` | 12-package acyclic order |
+| `cargo metadata --locked` and workspace locked check | `PASS` | Linux x86_64 |
+| `make check` | `PASS` | Rust format, lint, tests, and architecture guards |
+| `make check-python` | `PASS` | Canonical Python verification |
+| `make check-full` | `PASS` | Advisories, licenses, bans, sources, and feature profiles |
+| `make release-check` | `PASS` | 12 deterministic archives inspected; wheel/sdist and fresh-wheel smoke passed |
+| registry preflight | `SKIPPED` | Separate staged manual process; no registry publication |
+| Rust 1.80 MSRV check | `NOT RUN` | Toolchain unavailable in validation environment |
+| hosted CI [30632663714](https://github.com/eggstack/eggsec/actions/runs/30632663714) | `PASS` | Rust, Python, macOS, and Windows jobs all passed |
+| branch-protection settings | `NOT VERIFIED` | Repository settings unavailable to the implementation environment |
+| package/release publication | `NOT RUN` | Explicitly excluded by Phase I |
+
+The retained lockfile delta is limited to the targeted `event-listener` 5.4.1
+to 5.4.2 security correction after `cargo deny` rejected the older version.
+The package graph now diagnoses stale internal versions at file/dependency-key
+locations, and failed archive operations remain failures.
+
+### Historical Phase H evidence
+
+The earlier evidence below is retained against implementation commit `4c94186`
+on Linux x86_64 for continuity; it is superseded for closure purposes by the
+Phase I table above.
 Each row uses `PASS`, `FAIL`, `NOT RUN`,
 `BLOCKED`, or `TIMEOUT`; only `PASS` closes a blocking criterion.
 
@@ -107,5 +135,6 @@ describing prior states; active instructions and skills do not.
 
 ## Final status rule
 
-The workflow and stale-reference searches passed, and remote mandatory CI jobs
-completed successfully for the pushed commit.
+The workflow and stale-reference searches passed. Corrective Phase I local gates
+and the remote mandatory CI jobs completed with `PASS` for the pushed
+implementation commit above.

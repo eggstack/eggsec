@@ -137,8 +137,9 @@ publishes packages — publication is manual via `make release-check` and
 
 ## 7. Remaining Pre-PyPI Gates
 
-- [ ] Phase I release-integrity validation and hosted evidence (pending final
-  implementation commit)
+- [x] Phase I release-integrity validation and hosted evidence (`PASS` on
+  implementation commit `b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`; hosted run
+  [30632663714](https://github.com/eggstack/eggsec/actions/runs/30632663714))
 - [ ] Final PyPI publish (manual, requires ALL gates to pass)
 
 **Status:** Local validation gates pass. Multi-platform CI evidence and

@@ -2,7 +2,9 @@
 
 ## Status
 
-Reopened for Corrective Phase I. The original CI reduction and Corrective Phase H workflow/command consolidation remain accepted. Final manual-release closure is pending correction of the package-validation false positive, Python semantic parity regression, lockfile review, version-bump procedure, and hosted evidence record.
+Complete 2026-07-31. Corrective Phase I passed its local and hosted acceptance
+criteria for implementation commit `b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`.
+Publication remains manual and was not run.
 
 ## Purpose
 
@@ -75,7 +77,28 @@ Primary outcomes required:
 - version-bump instructions include all internal dependency requirements;
 - local and hosted closure evidence is recorded only when actually observed.
 
-This phase is the only remaining blocker for the CI/manual-release simplification line.
+This phase was the only remaining blocker for the CI/manual-release
+simplification line and is now complete.
+
+### Corrective Phase I completion evidence
+
+- Local Linux x86_64 validation: `make check`, `make check-python`,
+  `make check-full`, and `make release-check` all returned `PASS`.
+- The package helper tests returned `PASS` (28 tests); graph validation and
+  topological ordering returned `PASS`.
+- `make release-check` created and inspected all 12 intended archives in the
+  order emitted by the graph helper, performed the Python wheel/sdist and
+  fresh-wheel checks, and published nothing. Registry preflight was explicitly
+  `SKIPPED`.
+- The lockfile matches the pre-Phase-G baseline except for the targeted
+  `event-listener` 5.4.1 to 5.4.2 security correction required by the current
+  RustSec advisory database.
+- Hosted workflow [30632663714](https://github.com/eggstack/eggsec/actions/runs/30632663714)
+  at the implementation commit returned `PASS` for Rust, Python, macOS, and
+  Windows portability jobs.
+- Rust 1.80 MSRV validation was `NOT RUN` because no 1.80 toolchain is
+  installed in the validation environment. Branch-protection settings were
+  `NOT VERIFIED`.
 
 ## Sequencing rules
 
