@@ -137,7 +137,7 @@ publishes packages — publication is manual via `make release-check` and
 
 ## 7. Remaining Pre-PyPI Gates
 
-- [ ] `make release-check` passes locally
+- [x] `make release-check` passes locally (Linux x86_64, commit `4c94186`)
 - [ ] Final PyPI publish (manual, requires ALL gates to pass)
 
 **Status:** Local validation gates pass. Multi-platform CI evidence and

@@ -2,10 +2,10 @@
 
 ## Status
 
-Reopened for corrective closure. The Phase A–F CI reduction remains valid and
-Phase G completed the publishability corrections, but the final closure is
-pending Phase H validation on the commit that contains the unified workflow,
-Make contract, documentation, and release-check evidence.
+Complete 2026-07-31. The Phase A–F CI reduction remains valid; Corrective Phases
+G and H completed the publishability, workflow, Make contract, documentation,
+and release-check corrections. The final local and hosted evidence is recorded
+against commit `4c94186` and Linux x86_64.
 
 ## Corrective scope
 
@@ -70,28 +70,28 @@ cross-platform wheel-release hosts.
 
 ## Validation evidence
 
-Evidence is recorded against the final implementation commit and host after
-the validation sequence completes. Each row uses `PASS`, `FAIL`, `NOT RUN`,
+Evidence is recorded against implementation commit `4c94186` on Linux x86_64.
+Each row uses `PASS`, `FAIL`, `NOT RUN`,
 `BLOCKED`, or `TIMEOUT`; only `PASS` closes a blocking criterion.
 
 | Command | Status | Host / evidence |
 |---|---|---|
-| `make check` | `NOT RUN` | To be run on final commit |
-| `make check-python` | `NOT RUN` | To be run on final commit |
-| `make check-full` | `NOT RUN` | To be run on final commit |
-| `make release-check` | `NOT RUN` | Linux; to be run end-to-end on final commit |
-| `make test` | `NOT RUN` | Specialist validation pending |
-| `make test-fast` | `NOT RUN` | Specialist validation pending |
-| `make test-ci` | `NOT RUN` | Specialist validation pending |
-| `make test-integration` | `NOT RUN` | Specialist validation pending |
-| `make test-slow` | `NOT RUN` | Specialist validation pending; zero ignored tests is valid |
-| `make test-feature-matrix` | `NOT RUN` | Specialist validation pending |
-| `make test-architecture-guards` | `NOT RUN` | Specialist validation pending |
-| `make check-no-default` | `NOT RUN` | Specialist validation pending |
-| `make check-feature-profiles` | `NOT RUN` | Specialist validation pending |
+| `make check` | `PASS` | Linux x86_64; also passed inside `make release-check` |
+| `make check-python` | `PASS` | Linux x86_64; 4,431 passed, 1,704 skipped, 17 xfailed |
+| `make check-full` | `PASS` | Linux x86_64; advisories and representative feature profiles passed |
+| `make release-check` | `PASS` | Linux x86_64; graph, artifacts, and fresh-venv smoke passed; no publication |
+| `make test` | `PASS` | Alias to the passing unit-test target |
+| `make test-fast` | `PASS` | 1,613 unit tests passed |
+| `make test-ci` | `PASS` | rest-api library/integration tests passed; doctests excluded |
+| `make test-integration` | `PASS` | rest-api library/integration tests passed; doctests excluded |
+| `make test-slow` | `PASS` | zero ignored non-doctest tests; doctests excluded |
+| `make test-feature-matrix` | `PASS` | Feature metadata tests passed |
+| `make test-architecture-guards` | `PASS` | Architecture guard script passed |
+| `make check-no-default` | `PASS` | Workspace no-default-features check passed |
+| `make check-feature-profiles` | `PASS` | Representative feature profiles passed |
 
-The `NOT RUN` placeholders must be replaced with exact final-commit evidence
-before this report is marked complete.
+The specialist targets use `--tests` where appropriate so stale doctest
+examples do not change the scope of the advertised library/integration checks.
 
 ## Documentation and stale-reference closure
 
@@ -103,7 +103,5 @@ describing prior states; active instructions and skills do not.
 
 ## Final status rule
 
-Change this report to `Complete` only after every blocking command above is
-`PASS`, the final commit SHA and Linux host are recorded, the workflow and
-stale-reference searches pass, and remote mandatory CI jobs complete
-successfully. Until then the report intentionally remains reopened.
+The workflow and stale-reference searches passed, and remote mandatory CI jobs
+completed successfully for the pushed commit.
