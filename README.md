@@ -29,8 +29,9 @@ For the full capability matrix with risk tiers, feature gates, surface exposure,
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 41 normative invariants.
 
 Release validation is manual and non-publishing: see
-[`docs/RELEASING.md`](docs/RELEASING.md) for deterministic Rust archive
-inspection, staged registry preflight, and version-bump requirements.
+[`docs/RELEASING.md`](docs/RELEASING.md) for Cargo-native Rust archive
+generation/inspection, staged registry preflight, and version-bump
+requirements.
 
 ## Safety Model
 

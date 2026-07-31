@@ -37,7 +37,6 @@ trap cleanup EXIT
 TMP_ROOT=$(mktemp -d)
 LOG_DIR="$TMP_ROOT/logs"
 RUST_TARGET_DIR="$TMP_ROOT/rust-target"
-PACKAGE_DIR="$RUST_TARGET_DIR/package"
 mkdir -p "$LOG_DIR"
 
 # Portable SHA-256
@@ -164,40 +163,27 @@ fi
 # ── 5. Rust package archive validation ────────────────────────────────────
 
 echo ""
-echo "--- 5. Rust package archives (deterministic local validation) ---"
+echo "--- 5. Rust package archives (Cargo-native local validation) ---"
 
-# Get topological order from helper
+echo "  Packaging all publishable crates with Cargo (workspace-level, --no-verify)..."
+if ! python3 "$SCRIPT_DIR/release-package-graph.py" package-workspace "$RUST_TARGET_DIR" 2>&1 | tee "$LOG_DIR/package-workspace.log"; then
+    fail "Rust Cargo package command failed (log: $LOG_DIR/package-workspace.log)"
+fi
+INVENTORY="$RUST_TARGET_DIR/archive-inventory.jsonl"
+if [ ! -s "$INVENTORY" ]; then
+    fail "Rust Cargo package command produced no archive inventory"
+fi
+if ! python3 "$SCRIPT_DIR/release-package-graph.py" inspect-inventory "$INVENTORY" 2>&1 | tee "$LOG_DIR/inspect-inventory.log"; then
+    fail "Rust Cargo archive inspection failed (log: $LOG_DIR/inspect-inventory.log)"
+fi
+RUST_ARCHIVE_COUNT=$(wc -l < "$INVENTORY" | tr -d ' ')
+
+# Registry preflight uses the metadata-derived publication order, not archive
+# discovery. This remains a separate staged maintainer operation.
 PUBLISHABLE_CRATES=()
 while IFS= read -r line; do
     PUBLISHABLE_CRATES+=("$line")
 done < <(python3 "$SCRIPT_DIR/release-package-graph.py" order)
-
-echo "  Topological order: ${PUBLISHABLE_CRATES[*]}"
-
-PACKAGE_OK=0
-PACKAGE_TOTAL=${#PUBLISHABLE_CRATES[@]}
-
-for crate in "${PUBLISHABLE_CRATES[@]}"; do
-    echo "  Packaging $crate with cargo package --list and deterministic helper..."
-    LOG_FILE="$LOG_DIR/package-$crate.log"
-    mkdir -p "$PACKAGE_DIR"
-    rm -f "$PACKAGE_DIR/${crate}-${CARGO_VERSION}.crate"
-    if ! python3 "$SCRIPT_DIR/release-package-graph.py" create-archive "$crate" "$PACKAGE_DIR/${crate}-${CARGO_VERSION}.crate" 2>&1 | tee "$LOG_FILE"; then
-        fail "Rust archive creation failed: package=$crate command='cargo package --list + create-archive' (log: $LOG_FILE)"
-    fi
-    mapfile -t matches < <(find "$PACKAGE_DIR" -maxdepth 1 -type f -name "${crate}-${CARGO_VERSION}.crate" -print | sort)
-    if [ "${#matches[@]}" -ne 1 ]; then
-        fail "Rust archive selection failed: package=$crate expected exactly one archive, found ${#matches[@]} (log: $LOG_FILE)"
-    fi
-    archive="${matches[0]}"
-    if ! python3 "$SCRIPT_DIR/release-package-graph.py" inspect-archive "$archive" "$crate" "$CARGO_VERSION" 2>&1 | tee "$LOG_DIR/inspect-$crate.log"; then
-        fail "Rust archive inspection failed: package=$crate (log: $LOG_DIR/inspect-$crate.log)"
-    fi
-    PACKAGE_OK=$((PACKAGE_OK + 1))
-    ok "  $crate archive created and inspected"
-done
-
-ok "Rust package archives: PASS ($PACKAGE_OK/$PACKAGE_TOTAL created and inspected)"
 
 # ── 6. Optional registry preflight ───────────────────────────────────────
 
@@ -364,7 +350,7 @@ fi
 
 echo ""
 echo "=== Release validation summary ==="
-echo "Rust package archives: PASS ($PACKAGE_OK/$PACKAGE_TOTAL created and inspected)"
+echo "Rust Cargo archives: PASS ($RUST_ARCHIVE_COUNT Cargo-generated, parsed, and inspected)"
 if [ "${EGGSEC_RELEASE_REGISTRY_PREFLIGHT:-}" = "1" ]; then
     echo "Registry preflight: PASS"
 else

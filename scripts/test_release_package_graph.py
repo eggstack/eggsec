@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -453,50 +454,92 @@ class TestArchiveInspection(unittest.TestCase):
 class TestReleaseContract(unittest.TestCase):
     def test_script_does_not_classify_registry_failure_as_pass(self):
         script = (Path(__file__).parent / "release-check.sh").read_text()
-        self.assertIn("create-archive", script)
-        self.assertIn("--list", (Path(__file__).parent / "release-package-graph.py").read_text())
+        helper = (Path(__file__).parent / "release-package-graph.py").read_text()
+        self.assertIn("package-workspace", script)
+        self.assertIn("inspect-inventory", script)
+        self.assertIn('"cargo", "package", "--workspace", "--no-verify"', helper)
+        self.assertNotIn("cmd_" + "create_archive", helper)
+        self.assertNotIn("tarfile.open(output, \"w:gz\")", helper)
+        self.assertNotIn("map" + "file", script)
         self.assertIn("Registry preflight: SKIPPED", script)
         self.assertNotIn("PACKAGE_FIRST_RELEASE", script)
         self.assertNotIn('grep -q "no matching package named"', script)
 
-    def test_synthetic_first_release_archive_is_created_without_registry_access(self):
+    def test_synthetic_workspace_package_command_normalizes_inheritance(self):
         root = self.tmpdir = Path(tempfile.mkdtemp())
         try:
-            (root / "dep").mkdir()
-            (root / "app").mkdir()
+            for name in ("dep", "app", "private"):
+                (root / name / "src").mkdir(parents=True)
             (root / "Cargo.toml").write_text(
-                '[workspace]\nmembers = ["app", "dep"]\nresolver = "2"\n'
+                '[workspace]\nmembers = ["app", "dep", "private"]\nresolver = "2"\n'
+                '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n'
+                'repository = "https://example.invalid/fixture"\n\n'
+                '[workspace.dependencies]\n'
+                'alias = { package = "eggsec-fixture-dep-9f4c", path = "dep", version = "0.1.0" }\n'
             )
             (root / "dep" / "Cargo.toml").write_text(
-                '[package]\nname = "eggsec-fixture-never-published-9f4c"\nversion = "0.1.0"\n'
+                '[package]\nname = "eggsec-fixture-dep-9f4c"\nversion.workspace = true\n'
+                'edition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\n'
             )
             (root / "app" / "Cargo.toml").write_text(
-                '[package]\nname = "eggsec-fixture-app-9f4c"\nversion = "0.1.0"\n\n'
-                '[dependencies]\nfixture = { package = "eggsec-fixture-never-published-9f4c", path = "../dep", version = "0.1.0" }\n'
+                '[package]\nname = "eggsec-fixture-app-9f4c"\nversion.workspace = true\n'
+                'edition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\n\n'
+                '[dependencies]\nalias = { package = "eggsec-fixture-dep-9f4c", workspace = true, optional = true }\n\n'
+                '[target."cfg(unix)".dependencies]\nalias = { workspace = true }\n\n'
+                '[features]\noptional-dep = ["dep:alias"]\n'
             )
-            (root / "app" / "src").mkdir()
             (root / "app" / "src" / "lib.rs").write_text("")
-            (root / "dep" / "src").mkdir()
             (root / "dep" / "src" / "lib.rs").write_text("")
-            target = root / "target"
+            (root / "private" / "Cargo.toml").write_text(
+                '[package]\nname = "eggsec-fixture-private-9f4c"\nversion.workspace = true\npublish = false\n'
+            )
+            (root / "private" / "src" / "lib.rs").write_text("")
+            target = root / "proof-target"
             metadata = {"packages": [
                 {"name": "eggsec-fixture-app-9f4c", "version": "0.1.0", "manifest_path": str(root / "app" / "Cargo.toml")},
-                {"name": "eggsec-fixture-never-published-9f4c", "version": "0.1.0", "manifest_path": str(root / "dep" / "Cargo.toml")},
+                {"name": "eggsec-fixture-dep-9f4c", "version": "0.1.0", "manifest_path": str(root / "dep" / "Cargo.toml")},
+                {"name": "eggsec-fixture-private-9f4c", "version": "0.1.0", "manifest_path": str(root / "private" / "Cargo.toml")},
             ]}
             old_root, old_cargo, old_metadata = _rpg.WORKSPACE_ROOT, _rpg.CARGO_TOML, _rpg._cargo_metadata
             try:
                 _rpg.WORKSPACE_ROOT = root
                 _rpg.CARGO_TOML = root / "Cargo.toml"
                 _rpg._cargo_metadata = lambda: metadata
-                output = target / "eggsec-fixture-app-9f4c-0.1.0.crate"
                 old_argv = _rpg.sys.argv
-                _rpg.sys.argv = ["release-package-graph.py", "create-archive", "eggsec-fixture-app-9f4c", str(output)]
-                self.assertEqual(_rpg.cmd_create_archive(), 0)
+                _rpg.sys.argv = ["release-package-graph.py", "package-workspace", str(target)]
+                self.assertEqual(_rpg.cmd_package_workspace(), 0)
                 _rpg.sys.argv = old_argv
             finally:
                 _rpg.WORKSPACE_ROOT, _rpg.CARGO_TOML, _rpg._cargo_metadata = old_root, old_cargo, old_metadata
-            self.assertTrue(output.is_file())
+            inventory = target / "archive-inventory.jsonl"
+            records = [json.loads(line) for line in inventory.read_text().splitlines()]
+            self.assertEqual({record["package"] for record in records}, {"eggsec-fixture-app-9f4c", "eggsec-fixture-dep-9f4c"})
+            self.assertNotIn("eggsec-fixture-private-9f4c", {record["package"] for record in records})
+            app_archive = target / "package" / "eggsec-fixture-app-9f4c-0.1.0.crate"
+            errors = _rpg.inspect_archive(app_archive, "eggsec-fixture-app-9f4c", "0.1.0", standalone=True)
+            self.assertEqual(errors, [], errors)
+            with tarfile.open(app_archive, "r:gz") as tar:
+                manifest = tomllib.loads(tar.extractfile("eggsec-fixture-app-9f4c-0.1.0/Cargo.toml").read().decode())
+            self.assertEqual(manifest["package"]["license"], "MIT")
+            self.assertEqual(manifest["dependencies"]["alias"]["package"], "eggsec-fixture-dep-9f4c")
+            self.assertTrue(manifest["dependencies"]["alias"]["optional"])
+            self.assertIn("target", manifest)
         finally:
+            shutil.rmtree(root)
+
+    def test_package_command_returns_cargo_failure_status(self):
+        old_metadata = _rpg._cargo_metadata
+        old_argv = _rpg.sys.argv
+        try:
+            root = Path(tempfile.mkdtemp())
+            (root / "Cargo.toml").write_text('[package]\nname = "fixture"\nversion = "0.1.0"\n')
+            _rpg._cargo_metadata = lambda: {"packages": [{"name": "fixture", "version": "0.1.0", "manifest_path": str(root / "Cargo.toml")}]}
+            _rpg.sys.argv = ["release-package-graph.py", "package-workspace", str(root / "target")]
+            with patch.object(_rpg.subprocess, "run", return_value=type("Result", (), {"returncode": 37})()):
+                self.assertEqual(_rpg.cmd_package_workspace(), 37)
+        finally:
+            _rpg._cargo_metadata = old_metadata
+            _rpg.sys.argv = old_argv
             shutil.rmtree(root)
 
 

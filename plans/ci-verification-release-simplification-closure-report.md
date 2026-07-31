@@ -2,9 +2,9 @@
 
 ## Status
 
-Complete 2026-07-31 for implementation commit
-`b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`. The CI simplification and Phase H
-workflow contract remain complete. Manual publication was not run.
+Corrective Phase J local closure complete 2026-07-31 for implementation commit
+`130c233`. Hosted CI verification is pending this push. The CI simplification
+and Phase H workflow contract remain complete. Manual publication was not run.
 
 The earlier Phase H evidence is retained below as historical context. It is not
 evidence for Phase I.
@@ -18,8 +18,42 @@ specialist Make targets, merges Python CI into `ci.yml`, removes duplicate deep
 checks, and makes the verification and release documentation executable.
 
 No runtime behavior, enforcement posture, public API, or feature semantics are
-changed by this closure work. Phase I adds only release-integrity validation,
-documentation, and evidence corrections.
+changed by this closure work. Phases I and J add only release-integrity
+validation, documentation, and evidence corrections.
+
+## Corrective Phase J — Cargo-native archive evidence
+
+The active Rust release path is owned by `scripts/release-package-graph.py` and
+uses exactly:
+
+```bash
+cargo package --workspace --no-verify --target-dir <isolated-target> \
+  --exclude eggsec-cli --exclude eggsec-tui --exclude eggsec-python
+```
+
+Cargo generated the exact 12-package set:
+`eggsec-core`, `eggsec-agent`, `eggsec-output`, `eggsec-db-lab`,
+`eggsec-mobile-lab`, `eggsec-nse`, `eggsec-runtime`, `eggsec-tool-core`,
+`eggsec-ui-model`, `eggsec-web-proxy`, `eggsec`, and `eggsec-daemon`.
+The helper emitted JSONL records containing package, version, absolute archive
+path, size, and SHA-256; each archive passed content/manifest inspection and
+standalone `cargo metadata --no-deps --offline` outside the source workspace.
+No Python archive writer or shell archive selector remains.
+
+| Gate | Status | Evidence |
+|---|---|---|
+| package helper and Cargo fixture tests | `PASS` | 29 tests; unpublished dependency, workspace inheritance, alias, optional/target dependency, private member, failure status |
+| real workspace graph validation/order | `PASS` | 12-package acyclic graph |
+| Cargo-native archive generation and exact set | `PASS` | `make release-check`, commit `130c233` |
+| standalone Cargo metadata and archive inspection | `PASS` | all 12 archives |
+| Rust archive size/SHA-256 inventory | `PASS` | JSONL inventory under isolated target |
+| `make check` | `PASS` | Linux x86_64 |
+| `make check-python` | `PASS` | Linux x86_64 |
+| `make check-full` | `PASS` | Linux x86_64 |
+| `make release-check` | `PASS` | Rust archives, wheel/sdist, fresh-wheel smoke |
+| registry preflight | `SKIPPED` | separate staged maintainer operation |
+| Cargo 1.80 package proof | `FAIL` | Cargo 1.80.1 cannot complete the workspace package graph for unpublished internal dependencies; no compatibility claim is made |
+| publication | `NOT RUN` | explicitly excluded |
 
 ## Structural baseline and final state
 

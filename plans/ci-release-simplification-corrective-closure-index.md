@@ -2,9 +2,10 @@
 
 ## Status
 
-Reopened for Corrective Phase J.
+Corrective Phase J local implementation complete; hosted verification pending
+for the pushed commit.
 
-Corrective Phase I completed its CI, Python parity, lockfile, versioning, and hosted-evidence corrections. Post-implementation review found that the default Rust archive stage constructs handwritten tar files rather than validating Cargo-generated package archives. Manual Rust release closure is therefore pending Cargo-native archive generation and standalone package validation.
+Corrective Phase I completed its CI, Python parity, lockfile, versioning, and hosted-evidence corrections. Phase J replaced the handwritten Rust archive stage with Cargo-native workspace packaging and standalone package validation. Hosted verification remains the final evidence gate.
 
 Publication remains manual and has not been run.
 
@@ -118,8 +119,8 @@ Lockfile minimization: PASS
 Version-bump procedure: PASS
 Hosted CI run 30632663714: PASS
 Branch protection: NOT VERIFIED
-Cargo-native Rust archives: NOT VERIFIED
-make release-check release-archive criterion: BLOCKED
+Cargo-native Rust archives: PASS (12/12)
+make release-check release-archive criterion: PASS
 Registry preflight: SKIPPED
 Publication: NOT RUN
 ```

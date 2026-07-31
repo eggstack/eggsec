@@ -32,9 +32,8 @@ environment). `make release-check` has been verified end-to-end on Linux.
 
 macOS and Windows CI jobs verify that the workspace compiles on those
 platforms, but `release-check.sh` has not been executed end-to-end on
-macOS. The script is designed for portability (POSIX shell, portable
-SHA-256 and file-size helpers), so it should work on macOS, but Linux
-is the tested and supported release host for now.
+macOS. Linux is the tested and supported release host; macOS release-script
+compatibility is unverified.
 
 ## Pre-release validation
 
@@ -49,10 +48,14 @@ scripts/release-check.sh <version>
 This validates without publishing. The Rust portion has three deliberately
 separate levels:
 
-- **Level A — local archives (default):** `cargo package --no-verify` creates
-  one isolated archive per publishable crate. The package helper inspects the
-  normalized manifest and file list; archive creation or inspection failures
-  are failures, including `no matching package named`.
+- **Level A — local archives (default):** the helper derives the publishable
+  set from Cargo metadata and runs `cargo package --workspace --no-verify
+  --target-dir <isolated-target>`, excluding `eggsec-cli`, `eggsec-tui`, and
+  `eggsec-python`. Cargo creates the `.crate` files; the helper emits an exact
+  JSONL inventory, records each archive's size and SHA-256, inspects the
+  normalized manifest/content, and runs standalone `cargo metadata --no-deps
+  --offline` outside the source workspace. Any Cargo or inspection failure is
+  a failure.
 - **Level B — registry preflight (optional locally):**
   `EGGSEC_RELEASE_REGISTRY_PREFLIGHT=1 make release-check` runs
   `cargo publish --dry-run` in dependency order. This is registry-sensitive
@@ -68,7 +71,7 @@ The default check validates without publishing:
 3. Package graph validation via `scripts/release-package-graph.py`
 4. `make check` (mandatory Rust CI contract)
 5. `make check-python` (mandatory Python CI contract, skippable with `EGGSEC_RELEASE_SKIP_PYTHON=1`)
-6. `cargo package --no-verify` and deterministic archive inspection for each publishable crate in topological order
+6. Cargo-native workspace package generation, exact archive inventory, standalone manifest parsing, and archive inspection
 7. Python wheel and sdist build
 8. Fresh-environment wheel installation and smoke test
 9. Artifact inventory (filenames, sizes, SHA-256 hashes)

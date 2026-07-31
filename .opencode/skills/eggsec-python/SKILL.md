@@ -1980,9 +1980,11 @@ OperationRegistry, ToolRegistry, and build_info(). Output:
 Release publication is manual and maintainer-controlled. No GitHub Actions
 workflow publishes packages. See `docs/RELEASING.md` for the full procedure
 and `make release-check` for local validation before publication. Rust archive
-validation is deterministic and local; registry dry-runs are staged separately
-after each dependency layer is visible. Version bumps also update every
-version-qualified internal path dependency.
+validation uses Cargo's workspace `cargo package --workspace --no-verify`
+command in an isolated target, followed by exact inventory, content checks,
+and standalone offline Cargo metadata parsing. Registry dry-runs are staged
+separately after each dependency layer is visible. Version bumps also update
+every version-qualified internal path dependency.
 
 ## Release 5 Phase F — Compatibility Enforcement and Release Hardening
 

@@ -155,7 +155,7 @@ The report must distinguish:
 
 Document and implement three explicit verification levels.
 
-### Level A: deterministic local archive validation
+### Level A: deterministic local archive validation (superseded by Phase J)
 
 This is part of default `make release-check` and must not require internal crates to already exist on crates.io.
 
@@ -169,22 +169,24 @@ For every crates.io-publishable package in topological order:
 6. inspect the archive file list for excluded build/repository artifacts;
 7. record archive path, size, and SHA-256.
 
-Preferred lightweight Cargo command:
+The Phase I proposal below is historical. Corrective Phase J replaced its
+fallback after review found that handwritten tar files were not Cargo package
+archives. The active command is:
 
 ```bash
-cargo package -p <crate> --no-verify
+cargo package --workspace --no-verify --target-dir <isolated-target> \
+  --exclude eggsec-cli --exclude eggsec-tui --exclude eggsec-python
 ```
 
-Before adopting this command, prove with a focused synthetic two-crate fixture that it creates the dependent archive when the dependency version is not present on crates.io. Record the observed Cargo behavior in tests or a concise code comment.
+Phase J records the workspace inheritance, unpublished dependency, alias,
+optional dependency, target dependency, private member, and standalone Cargo
+metadata proof in `scripts/test_release_package_graph.py`.
 
-If the installed Cargo version still performs registry resolution during `--no-verify`, do not suppress the failure. Use the smallest deterministic alternative that produces Cargo's normalized package archive or package file list without adding a local registry service. Acceptable fallback components include:
-
-- `cargo package --list` for package-content selection;
-- Cargo metadata for dependency graph and versions;
-- inspection of a successfully generated `.crate` archive where Cargo supports it;
-- a temporary package-copy verification step owned by the existing helper.
-
-Do not introduce a private registry daemon, containerized registry, or new release framework merely to close this phase.
+If an installed Cargo version still performs registry resolution during
+`--no-verify`, do not suppress the failure or construct a substitute archive.
+Phase J records that toolchain result accurately. Do not introduce a private
+registry daemon, containerized registry, or new release framework merely to
+close this phase.
 
 ### Level B: registry-sensitive dry-run verification
 

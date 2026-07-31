@@ -24,12 +24,14 @@ Eggsec is organized as a Cargo workspace with 15 crates. The first-level crate b
 ### Release validation boundary
 
 Release validation is owned by `scripts/release-check.sh` and
-`scripts/release-package-graph.py`. The default path creates isolated
-`cargo package --no-verify` archives and inspects their normalized manifests
-and file lists. Registry-sensitive `cargo publish --dry-run` checks are
-optional locally but must be performed in dependency layers immediately
-before manual publication. Neither validation nor hosted CI publishes a
-package.
+`scripts/release-package-graph.py`. The default path runs Cargo's workspace
+packager (`cargo package --workspace --no-verify --target-dir <isolated-target>`)
+with private packages explicitly excluded, then checks an exact JSONL archive
+inventory and parses every extracted manifest with standalone
+`cargo metadata --no-deps --offline`. Registry-sensitive
+`cargo publish --dry-run` checks are optional locally but must be performed in
+dependency layers immediately before manual publication. Neither validation
+nor hosted CI publishes a package.
 
 | Crate | Role | Dependency-Light | Notes |
 |-------|------|:---:|-------|

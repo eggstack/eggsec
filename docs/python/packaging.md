@@ -292,8 +292,10 @@ print('build:', info)
   variable `PYPI_TOKEN`).
 - `twine` installed (`pip install twine`).
 - All wheels built for target platforms.
-- `make release-check` passed locally. This creates and inspects deterministic
-  Rust archives without publishing; crates.io dry-runs are a separate staged
+- `make release-check` passed locally. This asks Cargo to create the Rust
+  archives with `cargo package --workspace --no-verify` in an isolated target,
+  then inspects the exact inventory and parses each extracted manifest with
+  standalone Cargo metadata. Crates.io dry-runs are a separate staged
   maintainer step after dependency layers become visible.
 
 ### Steps

@@ -89,7 +89,9 @@ python scripts/release-package-graph.py list      # package set inventory
 python scripts/release-package-graph.py validate   # publishability checks
 python scripts/release-package-graph.py order      # topological publication order
 python scripts/release-package-graph.py version-locations # internal version inventory
+python scripts/release-package-graph.py package-workspace <target-dir> # Cargo-native archives + JSONL inventory
 python scripts/release-package-graph.py inspect-archive <crate> # archive checks
+python scripts/release-package-graph.py inspect-inventory <inventory> # exact archive/content/standalone checks
 make test                   # unit tests only (default)
 make test-ci                # full suite, no retries
 make clippy                 # lint (-D warnings)
