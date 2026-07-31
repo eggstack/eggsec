@@ -2,10 +2,11 @@
 
 ## Status
 
-Corrective Phase J local implementation complete; hosted verification pending
-for the pushed commit.
+Corrective Phase J implementation and hosted verification complete 2026-07-31.
+The implementation commit is `b91d9f9`; the hosted CI run is
+[`30636819135`](https://github.com/eggstack/eggsec/actions/runs/30636819135).
 
-Corrective Phase I completed its CI, Python parity, lockfile, versioning, and hosted-evidence corrections. Phase J replaced the handwritten Rust archive stage with Cargo-native workspace packaging and standalone package validation. Hosted verification remains the final evidence gate.
+Corrective Phase I completed its CI, Python parity, lockfile, versioning, and hosted-evidence corrections. Phase J replaced the handwritten Rust archive stage with Cargo-native workspace packaging and standalone package validation. Hosted verification is complete.
 
 Publication remains manual and has not been run.
 
@@ -106,18 +107,20 @@ Primary required outcomes:
 - registry preflight remains a separate staged maintainer operation;
 - closure evidence is collected only against the final implementation commit.
 
-This is the only remaining blocker for the CI/manual-release simplification line.
+Phase J is complete. Registry preflight and publication remain intentionally
+manual and were not run.
 
 ## Current evidence classification
 
-Until Phase J completes, use:
+Use the following final evidence classification:
 
 ```text
 CI workflow simplification: PASS
 Python semantic parity: PASS
 Lockfile minimization: PASS
 Version-bump procedure: PASS
-Hosted CI run 30632663714: PASS
+Hosted CI run 30636819135: PASS (Rust, Python, macOS, and Windows)
+CodeQL run 30636818358: PASS
 Branch protection: NOT VERIFIED
 Cargo-native Rust archives: PASS (12/12)
 make release-check release-archive criterion: PASS
@@ -125,7 +128,8 @@ Registry preflight: SKIPPED
 Publication: NOT RUN
 ```
 
-The prior `make release-check` execution remains useful evidence for Rust/Python checks, wheel/sdist construction, and fresh-wheel smoke. It is not sufficient evidence that the 12 handwritten tar files are Cargo publishable archives.
+The prior `make release-check` execution is evidence for Rust/Python checks,
+wheel/sdist construction, fresh-wheel smoke, and the Cargo-native archive stage.
 
 ## Sequencing rules
 

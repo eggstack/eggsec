@@ -2,9 +2,13 @@
 
 ## Status
 
-Corrective Phase J local closure complete 2026-07-31 for implementation commit
-`130c233`. Hosted CI verification is pending this push. The CI simplification
-and Phase H workflow contract remain complete. Manual publication was not run.
+Corrective Phase J local and hosted closure complete 2026-07-31 for implementation
+commit `b91d9f9`. Hosted CI run
+[`30636819135`](https://github.com/eggstack/eggsec/actions/runs/30636819135)
+passed Rust, Python, macOS, and Windows jobs. CodeQL run
+[`30636818358`](https://github.com/eggstack/eggsec/actions/runs/30636818358)
+also passed. The CI simplification and Phase H workflow contract remain
+complete. Manual publication was not run.
 
 The earlier Phase H evidence is retained below as historical context. It is not
 evidence for Phase I.
