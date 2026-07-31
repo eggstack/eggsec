@@ -56,3 +56,4 @@ __pycache__/
 .venv/
 *.egg-info/
 .venv-ci/
+crates/eggsec-python/dist/
