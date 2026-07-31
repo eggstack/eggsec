@@ -2,13 +2,15 @@
 
 ## Status
 
-Complete 2026-07-31. Corrective Phase I passed its local and hosted acceptance
-criteria for implementation commit `b65a68a993de0e9a5d8733f9cbd9bb43af70c0fc`.
-Publication remains manual and was not run.
+Reopened for Corrective Phase J.
+
+Corrective Phase I completed its CI, Python parity, lockfile, versioning, and hosted-evidence corrections. Post-implementation review found that the default Rust archive stage constructs handwritten tar files rather than validating Cargo-generated package archives. Manual Rust release closure is therefore pending Cargo-native archive generation and standalone package validation.
+
+Publication remains manual and has not been run.
 
 ## Purpose
 
-This index isolates defects discovered after implementation. The broad reduction effort must not be reopened. The remaining work is narrow and belongs to release-validation integrity rather than CI expansion.
+This index isolates defects discovered after implementation. The broad CI reduction effort must not be reopened. The only remaining work belongs to Rust release-package integrity.
 
 No new roadmap expansion is authorized. The objective is to close the existing simplification work with direct, reproducible evidence and without restoring deleted automation.
 
@@ -26,9 +28,15 @@ The following outcomes are landed and must be preserved:
 - `.github/workflows/deep-checks.yml` is the only optional diagnostic workflow;
 - evidence-bundle, maturity-gate, skip-budget, and synthetic release-gate orchestration is removed;
 - specialist Make targets use valid Cargo syntax;
+- Python sync/async parity again includes `is_vulnerable` and meaningful semantic outcomes;
+- `Cargo.lock` is minimized relative to the pre-Phase-G baseline except for the justified `event-listener` security patch;
+- internal publishable dependencies use local paths plus registry versions;
+- the package order is derived from Cargo metadata;
+- the version-bump procedure includes internal dependency versions;
+- hosted CI run evidence is recorded with an actual run ID and job conclusions;
 - publication cadence is manual and maintainer-controlled.
 
-Corrective implementation must not restore deleted workflow graphs, publishing automation, or evidence bureaucracy.
+Corrective implementation must not restore deleted workflow graphs, publishing automation, evidence bureaucracy, or runtime scope expansion.
 
 ## Completed corrective phases
 
@@ -36,15 +44,13 @@ Corrective implementation must not restore deleted workflow graphs, publishing a
 
 Plan: [`ci-release-simplification-corrective-phase-g-publishability.md`](ci-release-simplification-corrective-phase-g-publishability.md)
 
-Landed outcomes retained by Phase I:
+Accepted outcomes retained:
 
 - private crates have explicit `publish = false`;
 - publishable internal dependencies have local paths plus registry versions;
 - package ordering is derived from Cargo metadata;
 - the release check separates default validation from optional registry preflight;
 - release publication remains manual.
-
-Post-implementation review found that failed `cargo package` commands can still be classified as expected first-release conditions and converted into overall success. Phase I corrects that result-integrity defect without reverting the valid manifest work.
 
 ### Corrective Phase H — CI contract, command, and documentation consolidation
 
@@ -59,86 +65,124 @@ Accepted outcomes:
 - invalid specialist Make targets are corrected;
 - active documentation reflects the compact workflow shape.
 
-Phase I must not redesign this accepted workflow contract.
+Phase J must not redesign this accepted workflow contract.
 
-## Remaining blocker
-
-### Corrective Phase I — Release integrity and evidence closure
+### Corrective Phase I — Release result integrity, parity, lockfile, and evidence
 
 Plan: [`ci-release-simplification-corrective-phase-i-release-integrity.md`](ci-release-simplification-corrective-phase-i-release-integrity.md)
 
-Primary outcomes required:
+Accepted outcomes:
 
-- failed Rust package operations remain failures;
-- every intended crates.io archive is created and inspected deterministically before publication;
-- registry-dependent first-release verification is handled through an explicit staged manual process;
-- `is_vulnerable` and other meaningful Python semantic outcomes remain covered by sync/async parity tests;
-- unrelated `Cargo.lock` dependency churn is removed or individually justified;
-- version-bump instructions include all internal dependency requirements;
-- local and hosted closure evidence is recorded only when actually observed.
+- the previous `PACKAGE_FIRST_RELEASE` false-success branch is removed;
+- failed package-stage commands are no longer matched by error string and converted into success;
+- registry preflight is reported as `SKIPPED` when not run;
+- `is_vulnerable` is restored to semantic Python parity comparison;
+- the lockfile delta is reduced to the targeted `event-listener` security patch;
+- version-bump guidance includes all version-qualified internal path dependencies;
+- hosted workflow run `30632663714` records successful Rust, Python, macOS, and Windows jobs;
+- branch-protection state remains honestly recorded as `NOT VERIFIED`.
 
-This phase was the only remaining blocker for the CI/manual-release
-simplification line and is now complete.
+Post-implementation review invalidated only the claim that the custom generated tar files are Cargo-valid publishable archives. Phase I's other outcomes remain accepted.
 
-### Corrective Phase I completion evidence
+## Remaining blocker
 
-- Local Linux x86_64 validation: `make check`, `make check-python`,
-  `make check-full`, and `make release-check` all returned `PASS`.
-- The package helper tests returned `PASS` (28 tests); graph validation and
-  topological ordering returned `PASS`.
-- `make release-check` created and inspected all 12 intended archives in the
-  order emitted by the graph helper, performed the Python wheel/sdist and
-  fresh-wheel checks, and published nothing. Registry preflight was explicitly
-  `SKIPPED`.
-- The lockfile matches the pre-Phase-G baseline except for the targeted
-  `event-listener` 5.4.1 to 5.4.2 security correction required by the current
-  RustSec advisory database.
-- Hosted workflow [30632663714](https://github.com/eggstack/eggsec/actions/runs/30632663714)
-  at the implementation commit returned `PASS` for Rust, Python, macOS, and
-  Windows portability jobs.
-- Rust 1.80 MSRV validation was `NOT RUN` because no 1.80 toolchain is
-  installed in the validation environment. Branch-protection settings were
-  `NOT VERIFIED`.
+### Corrective Phase J — Cargo-native package archive closure
+
+Plan: [`ci-release-simplification-corrective-phase-j-cargo-native-packaging.md`](ci-release-simplification-corrective-phase-j-cargo-native-packaging.md)
+
+Primary required outcomes:
+
+- Cargo itself creates every `.crate` archive used for release validation;
+- custom tar creation and regex manifest normalization are removed;
+- workspace-inherited package and dependency metadata is normalized by Cargo;
+- each extracted archive passes standalone `cargo metadata --no-deps --offline` outside the source workspace;
+- the exact expected archive set is enforced;
+- aliases, optional dependencies, target-specific dependencies, feature references, private packages, metadata, README/license files, and prohibited entries are inspected;
+- every Rust archive records path, size, and SHA-256;
+- Cargo packaging failures remain failures;
+- the shell no longer owns archive selection through `mapfile` or stale `find` results;
+- active documentation describes the command that actually runs;
+- registry preflight remains a separate staged maintainer operation;
+- closure evidence is collected only against the final implementation commit.
+
+This is the only remaining blocker for the CI/manual-release simplification line.
+
+## Current evidence classification
+
+Until Phase J completes, use:
+
+```text
+CI workflow simplification: PASS
+Python semantic parity: PASS
+Lockfile minimization: PASS
+Version-bump procedure: PASS
+Hosted CI run 30632663714: PASS
+Branch protection: NOT VERIFIED
+Cargo-native Rust archives: NOT VERIFIED
+make release-check release-archive criterion: BLOCKED
+Registry preflight: SKIPPED
+Publication: NOT RUN
+```
+
+The prior `make release-check` execution remains useful evidence for Rust/Python checks, wheel/sdist construction, and fresh-wheel smoke. It is not sufficient evidence that the 12 handwritten tar files are Cargo publishable archives.
 
 ## Sequencing rules
 
-1. Reopen the retained closure report before implementation claims begin.
-2. Preserve the current two-workflow inventory and Make command contract.
-3. Correct package-result semantics before collecting new release evidence.
-4. Do not treat `no matching package named`, a timeout, a skipped registry check, or unavailable hosted evidence as pass.
-5. Restore semantic Python parity before rerunning the full Python suite.
-6. Review lockfile changes against pre-Phase-G commit `f26942dc37783ee302ffc5c67e58810cfdcc3578` before accepting the final dependency graph.
-7. Run the complete Phase I validation sequence on the final implementation commit.
-8. Record an actual hosted workflow run URL or ID before claiming remote CI success.
-9. Do not publish any crate, Python package, tag, or GitHub Release while executing the plan.
-10. Mark the closure report complete only after every blocking Phase I criterion returns `PASS`.
+1. Implement Phase J only; do not reopen the hosted CI or Make command design.
+2. Begin with a synthetic workspace proof of the exact Cargo package command.
+3. Do not write additional documentation claims until Cargo-native archive creation is demonstrated.
+4. Remove the handwritten archive writer even if the Cargo-native proof exposes a limitation.
+5. If Cargo cannot produce all archives before registry publication, reduce the contract honestly rather than constructing substitutes.
+6. Do not classify a failed, skipped, timed-out, blocked, or unverified operation as `PASS`.
+7. Keep registry preflight separate from default local archive validation.
+8. Review `Cargo.lock` after implementation and reject unrelated dependency changes.
+9. Run the complete Phase J validation sequence on the final implementation commit.
+10. Record an actual hosted workflow run URL or ID before making a new remote CI claim.
+11. Do not publish any crate, Python package, tag, or GitHub Release while executing the plan.
+12. Mark the closure report complete only after every blocking Phase J criterion returns `PASS`.
 
 ## Corrective acceptance criteria
 
 The corrective sequence is complete only when all of the following are true:
 
-1. Every intended crates.io package has valid path-plus-version internal dependency metadata.
-2. The package graph validates and produces an acyclic topological order.
-3. Default `make release-check` deterministically creates and inspects an archive for every intended crates.io package.
-4. Failed archive creation or inspection returns non-zero and stops the release check.
-5. `no matching package named` is never classified as successful validation.
-6. Packaged manifests retain no local path keys for normal/build/target runtime dependencies.
-7. Packaged internal dependency versions match the release version policy.
-8. Private crates are absent from published runtime/build dependency graphs.
-9. Registry preflight is clearly separate and is run layer by layer during manual publication.
-10. Skipped registry preflight is recorded as `SKIPPED`, not `PASS`.
-11. `is_vulnerable` is restored to meaningful Python sync/async semantic comparison.
-12. The focused parity test passes repeatedly and `make check-python` passes.
-13. `Cargo.lock` contains no unexplained third-party version/source/checksum changes relative to the pre-Phase-G baseline.
-14. The final lockfile remains compatible with the declared Rust MSRV or any MSRV correction is explicitly approved and documented.
-15. Release version-bump instructions include workspace, Python, and internal dependency versions.
-16. The graph validator identifies stale internal dependency versions with file-level diagnostics.
-17. `make check`, `make check-python`, `make check-full`, and `make release-check` pass on the final implementation commit.
-18. Hosted CI success claims include an actual workflow run URL or ID and per-job conclusions.
-19. Unavailable branch-protection or hosted evidence is labeled `NOT VERIFIED`.
-20. No hosted workflow publishes, triggers on tags, scans external targets, or recreates evidence bundles.
-21. No runtime behavior, enforcement posture, public API, or feature scope is weakened to close process defects.
-22. No package or release is published while executing the corrective plan.
+1. The closure report is reopened before Phase J implementation evidence is claimed.
+2. Cargo, not Python `tarfile`, creates every `.crate` archive used for validation.
+3. No regex-based publish-manifest normalization remains.
+4. The Cargo-native command is proven with a synthetic workspace containing unpublished internal dependencies.
+5. The fixture includes `[workspace.package]` and `[workspace.dependencies]` inheritance.
+6. The publishable package set is derived from Cargo metadata.
+7. Private packages are excluded explicitly.
+8. Exactly one expected Cargo-generated archive exists per package/version.
+9. Missing, duplicate, or unexpected archives return failure.
+10. Each archive is extracted outside the source workspace.
+11. Each extracted manifest passes standalone `cargo metadata --no-deps --offline`.
+12. No packaged manifest retains `workspace = true`.
+13. No runtime/build/target runtime/build dependency retains a local path.
+14. Internal dependency versions match the release version policy.
+15. Aliased internal dependencies are checked by actual package name.
+16. Optional dependency flags are preserved.
+17. Feature references resolve to valid features or optional dependencies.
+18. Private crates are absent from publish-facing runtime/build dependency graphs.
+19. Package metadata and configured README/license files are validated.
+20. Prohibited archive entries are rejected.
+21. Every Rust archive records path, size, and SHA-256.
+22. Cargo package failure remains non-zero and prevents a PASS summary.
+23. Registry preflight is separate and labeled `SKIPPED` when not run.
+24. `release-check.sh` no longer uses `mapfile` for archive selection.
+25. Active documentation states the exact packaging command actually used.
+26. Unsupported macOS or Rust 1.80 claims are removed or backed by direct evidence.
+27. Package-helper unit and real-Cargo fixture tests pass.
+28. The real workspace package graph validates and orders successfully.
+29. `make check` passes.
+30. `make check-python` passes.
+31. `make check-full` passes.
+32. `make release-check` passes using only Cargo-generated Rust archives.
+33. Hosted CI success includes a real workflow run URL/ID and per-job conclusions.
+34. Branch protection remains honestly labeled if unavailable.
+35. `Cargo.lock` contains no unrelated dependency churn.
+36. No hosted workflow publishes, triggers on tags, scans external targets, or recreates evidence bundles.
+37. No runtime behavior, enforcement posture, public API, feature scope, or crate architecture is changed.
+38. No package or release is published while executing the corrective phase.
 
 ## Explicit exclusions
 
@@ -147,13 +191,15 @@ This corrective sequence does not include:
 - publishing a release;
 - changing release cadence back to automation;
 - reintroducing wheel matrices on ordinary pushes;
-- adding a local registry service unless separately authorized after the lightweight archive approach is proven impossible;
+- adding a local registry service without separate authorization;
+- adding Docker or a registry container;
+- adding provenance, attestation, signing, SBOM, or release bots;
 - broad dependency upgrades;
 - reorganizing crate boundaries;
-- adding provenance, attestation, signing, SBOM, or release-bot infrastructure;
 - adding another evidence framework;
 - expanding product functionality;
-- redesigning the accepted Phase H CI workflow.
+- redesigning the accepted Phase H CI workflow;
+- claiming macOS or Rust 1.80 release support without direct execution evidence.
 
 ## Handoff requirement
 
@@ -171,4 +217,4 @@ BLOCKED
 TIMEOUT
 ```
 
-A failed, skipped, timed-out, blocked, or unverified operation is never a pass. The final closure update must include the exact package set, dependency order, implementation commit, validation host, local command outcomes, hosted workflow run evidence, and any retained lockfile changes.
+A failed, skipped, timed-out, blocked, or unverified operation is never a pass. The final closure update must include the exact Cargo packaging command, package set, dependency order, implementation commit, validation host, archive inventory, local command outcomes, hosted workflow evidence, and any retained lockfile changes.
