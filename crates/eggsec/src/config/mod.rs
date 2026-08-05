@@ -50,9 +50,9 @@ pub use discovery::DiscoveredTargetStatus;
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope, load_scope_with_source};
 pub use policy::{
-    baseline_allowed_capability, Capability, DenialClass, DescriptorError, ExecutionPolicy,
-    ExecutionProfile, ExecutionSurface, IntendedUse, OperationDescriptor, OperationMode,
-    OperationRisk,
+    baseline_allowed_capability, normalize_target, Capability, DenialClass, DescriptorError,
+    ExecutionPolicy, ExecutionProfile, ExecutionSurface, IntendedUse, OperationDescriptor,
+    OperationMode, OperationRisk, OperationTarget, TargetHint,
 };
 pub use policy_decision::{
     classify_denial_reasons, confirmation_class_strings, confirmation_classes_for,
@@ -71,7 +71,8 @@ pub use scan::{
     WebhookEvent,
 };
 pub use scope::{
-    is_private_ip, LoadedScope, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope,
+    classify_address, default_resolver, is_private_ip, AddressClass, HostResolver, LoadedScope,
+    ResolutionResult, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope,
 };
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,

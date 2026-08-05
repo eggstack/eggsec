@@ -452,18 +452,18 @@ impl OperationDescriptorPy {
             };
 
         Ok(Self {
-            inner: eggsec::config::OperationDescriptor {
+            inner: eggsec::config::OperationDescriptor::new(
                 operation,
                 mode,
                 risk,
                 intended_uses,
                 target,
-                required_features: required_features.unwrap_or_default(),
-                required_policy_flags: required_policy_flags.unwrap_or_default(),
+                required_features.unwrap_or_default(),
+                required_policy_flags.unwrap_or_default(),
                 requires_private_or_local_target,
                 requires_explicit_scope,
                 required_capabilities,
-            },
+            ),
         })
     }
 

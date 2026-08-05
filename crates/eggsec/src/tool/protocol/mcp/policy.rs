@@ -501,7 +501,10 @@ pub fn operation_descriptor_for_mcp_call(
     };
 
     let metadata = metadata_for_tool_id(tool_id)?;
-    let mut descriptor = metadata.descriptor_for_target(target);
+    let mut descriptor = match metadata.try_descriptor_for_target(target.as_deref()) {
+        Ok(d) => d,
+        Err(_) => return None,
+    };
     descriptor.intended_uses = intended_uses;
     descriptor.requires_explicit_scope = profile_policy.require_explicit_scope;
     Some(descriptor)

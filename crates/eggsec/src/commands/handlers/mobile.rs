@@ -36,22 +36,22 @@ pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArg
                 } else {
                     false
                 };
-            ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                operation: "mobile-dynamic".to_string(),
-                mode: crate::config::OperationMode::DefenseLab,
-                risk: if is_real_frida {
+            ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                "mobile-dynamic".to_string(),
+                crate::config::OperationMode::DefenseLab,
+                if is_real_frida {
                     crate::config::OperationRisk::Intrusive
                 } else {
                     crate::config::OperationRisk::SafeActive
                 },
-                intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-                target: dynamic_target.clone(),
-                required_features: vec!["mobile-dynamic".to_string()],
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            })?;
+                vec![crate::config::IntendedUse::WebAssessment],
+                dynamic_target.clone(),
+                vec!["mobile-dynamic".to_string()],
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            ))?;
             // Extra runtime gate for non-dry (audited; same pattern as wireless deauth)
             // Note: the actual DynamicMobileArgs is inside the subcommand; re-fetch for the check
             if let Some(crate::cli::MobileSubcommand::Dynamic(dargs)) = &args.command {
@@ -143,18 +143,18 @@ pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArg
     } else {
         // Static path (legacy or 'static' sub)
         let spath = static_path.expect("static path resolved");
-        ctx.evaluate_and_enforce_operation(OperationDescriptor {
-            operation: "mobile-static".to_string(),
-            mode: crate::config::OperationMode::StandardAssessment,
-            risk: crate::config::OperationRisk::SafeActive,
-            intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-            target: Some(spath.clone()),
-            required_features: vec!["mobile".to_string()],
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        })?;
+        ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+            "mobile-static".to_string(),
+            crate::config::OperationMode::StandardAssessment,
+            crate::config::OperationRisk::SafeActive,
+            vec![crate::config::IntendedUse::WebAssessment],
+            Some(spath.clone()),
+            vec!["mobile".to_string()],
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        ))?;
         // Build a legacy-style MobileArgs for the existing run_cli (or map inside run_cli).
         // We reuse the top-level flags; construct a thin static args view.
         let static_args = crate::cli::MobileArgs {

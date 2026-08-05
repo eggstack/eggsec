@@ -315,22 +315,22 @@ impl EngineState {
         // Single source of truth: registry-owned executor descriptor.
         let executor_desc = self.registry.descriptor_for(canonical);
 
-        let descriptor = eggsec::config::OperationDescriptor {
-            operation: canonical.id().replace('_', "-"),
-            mode: eggsec::config::OperationMode::StandardAssessment,
-            risk: executor_desc.risk,
-            intended_uses: executor_desc.intended_uses,
-            target: Some(target.to_string()),
-            required_features: executor_desc
+        let descriptor = eggsec::config::OperationDescriptor::new(
+            canonical.id().replace('_', "-"),
+            eggsec::config::OperationMode::StandardAssessment,
+            executor_desc.risk,
+            executor_desc.intended_uses,
+            Some(target.to_string()),
+            executor_desc
                 .feature_required
                 .into_iter()
                 .map(str::to_string)
                 .collect(),
-            required_policy_flags: vec!["require_explicit_scope".to_string()],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        };
+            vec!["require_explicit_scope".to_string()],
+            false,
+            true,
+            Vec::new(),
+        );
 
         let outcome = self.enforcement.evaluate(&descriptor);
 

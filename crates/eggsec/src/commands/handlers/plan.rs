@@ -273,18 +273,18 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             required_features.push("nse".to_string());
         }
 
-        let descriptor = OperationDescriptor {
-            operation: stage.name.clone(),
+        let descriptor = OperationDescriptor::new(
+            stage.name.clone(),
             mode,
-            risk: stage.risk,
-            intended_uses: intended_uses.clone(),
-            target: args.target.clone(),
+            stage.risk,
+            intended_uses.clone(),
+            args.target.clone(),
             required_features,
-            required_policy_flags: vec![],
-            requires_private_or_local_target: profile.requires_private_scope(),
-            requires_explicit_scope: profile.requires_private_scope(),
-            required_capabilities: Vec::new(),
-        };
+            vec![],
+            profile.requires_private_scope(),
+            profile.requires_private_scope(),
+            Vec::new(),
+        );
 
         let decision =
             evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());

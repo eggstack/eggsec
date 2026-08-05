@@ -3,21 +3,21 @@ use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_hunt(ctx: &CommandContext, mut args: crate::cli::HuntArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "hunt".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "hunt".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(
             crate::utils::extract_target_from_url(&args.target)
                 .unwrap_or_else(|| args.target.clone()),
         ),
-        required_features: vec!["advanced-hunting".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+        vec!["advanced-hunting".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("hunt-{}", chrono::Utc::now().timestamp());

@@ -650,18 +650,18 @@ mod tests {
     #[test]
     fn test_render_policy_confirm_overlay() {
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "port-scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("192.168.1.0/24".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "port-scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+            Some("192.168.1.0/24".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::allowed(
             "port-scan",
             OperationMode::StandardAssessment,

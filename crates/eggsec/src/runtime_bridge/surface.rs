@@ -20,6 +20,13 @@ pub enum RuntimeBridgeError {
     #[error("no operation metadata found for id '{operation_id}'")]
     UnknownOperationId { operation_id: String },
 
+    /// The target failed validation for the given operation.
+    #[error("invalid target for operation '{operation_id}': {reason}")]
+    InvalidTarget {
+        operation_id: String,
+        reason: String,
+    },
+
     /// A manual override was supplied for a strict/automated surface.
     #[error("manual override is not permitted for automated surface {surface}")]
     ManualOverrideRejected { surface: String },

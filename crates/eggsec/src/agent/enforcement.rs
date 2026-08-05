@@ -64,24 +64,30 @@ pub(crate) fn operation_descriptor_for_agent_scan(
 
     // Try to match scan_type to known metadata
     if let Some(metadata) = metadata_for_tool_id(scan_type) {
-        let mut descriptor = metadata.descriptor_for_target(Some(target.to_string()));
+        let mut descriptor = metadata
+            .try_descriptor_for_target(Some(target))
+            .unwrap_or_else(|_| {
+                // Fallback: if target validation fails, construct with no target
+                // This maintains backward compatibility for edge cases
+                metadata.descriptor_for_target(None)
+            });
         descriptor.requires_explicit_scope = true;
         return descriptor;
     }
 
     // Fallback: keyword-based classification for unknown scan types
-    OperationDescriptor {
-        operation: scan_type.to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: risk_for_agent_scan_depth(depth, scan_type),
-        intended_uses: vec![IntendedUse::WebAssessment],
-        target: Some(target.to_string()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: capabilities_for_agent_scan(scan_type, depth),
-    }
+    OperationDescriptor::new(
+        scan_type.to_string(),
+        OperationMode::StandardAssessment,
+        risk_for_agent_scan_depth(depth, scan_type),
+        vec![IntendedUse::WebAssessment],
+        Some(target.to_string()),
+        Vec::new(),
+        Vec::new(),
+        false,
+        true,
+        capabilities_for_agent_scan(scan_type, depth),
+    )
 }
 
 #[cfg(test)]

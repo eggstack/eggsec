@@ -5,18 +5,18 @@ use anyhow::Result;
 pub async fn handle_load(ctx: &CommandContext, mut args: crate::cli::LoadArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "load".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::LoadTest,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(target),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "load".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::LoadTest,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(target),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("load-{}", chrono::Utc::now().timestamp());

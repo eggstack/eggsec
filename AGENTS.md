@@ -257,6 +257,9 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **Descriptor construction**: Use `OperationMetadata::try_descriptor_for_target()` for validated construction. The unchecked `descriptor_for_target()` remains for backward compatibility but should not be used for new strict-surface code.
 - **Approval binding**: `ApprovedOperation` is the only valid dispatch token. Use `EnforcementContext::approve()` or `approve_manual()`. The surface must match the context profile.
 - **Dispatch binding**: Use `validate_request_binding()` to verify request matches approval before dispatch. Fails closed on any mismatch.
+- **Address classification**: Use `classify_address()` from `config::scope` to determine address class (Public, Private, Loopback, etc.). The resolver (`HostResolver` trait) reports facts; policy decides authorization.
+- **DNS resolution**: Use `TargetScope::parse_with_resolver()` with `HostResolver` trait for deterministic testing. `SystemResolver` is the default. Never reject address classes in the resolver — defer to policy.
+- **Scope evaluation**: `TargetScope::evaluate_addresses()` checks all resolved addresses against CIDR rules. For strict surfaces, every address must be authorized. Use `resolved_addresses` field (not just `ip`) for scope decisions.
 
 ## Lessons Learned
 

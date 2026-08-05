@@ -26,18 +26,18 @@ async fn handle_scan(
     interface: String,
     mut scan_args: crate::cli::WirelessScanArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "wireless".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(interface.clone()),
-        required_features: vec!["wireless".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "wireless".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::SafeActive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(interface.clone()),
+        vec!["wireless".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     scan_args.json |= ctx.json;
     let target = interface.clone();
     let scan_id = format!("wireless-{}", chrono::Utc::now().timestamp());
@@ -74,18 +74,18 @@ async fn handle_deauth(
     deauth_args: crate::cli::DeauthArgs,
 ) -> Result<()> {
     // Policy gate: active wireless is high-risk
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "wireless-deauth".to_string(),
-        mode: crate::config::OperationMode::DefenseLab,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(deauth_args.bssid.clone()),
-        required_features: vec!["wireless-advanced".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "wireless-deauth".to_string(),
+        crate::config::OperationMode::DefenseLab,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(deauth_args.bssid.clone()),
+        vec!["wireless-advanced".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     // Additional check: non-dry-run requires explicit --allow-active-wireless
     if !deauth_args.dry_run && !deauth_args.allow_active_wireless {

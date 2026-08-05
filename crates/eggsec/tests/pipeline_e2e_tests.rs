@@ -74,6 +74,7 @@ fn test_scope_rule_basic() {
     assert!(rule.matches(&eggsec::config::TargetScope {
         host: "example.com".to_string(),
         ip: None,
+        resolved_addresses: Vec::new(),
     }));
 }
 
@@ -86,15 +87,18 @@ fn test_scope_rule_wildcard() {
     assert!(rule.matches(&eggsec::config::TargetScope {
         host: "sub.example.com".to_string(),
         ip: None,
+        resolved_addresses: Vec::new(),
     }));
 
     assert!(rule.matches(&eggsec::config::TargetScope {
         host: "example.com".to_string(),
         ip: None,
+        resolved_addresses: Vec::new(),
     }));
 
     assert!(!rule.matches(&eggsec::config::TargetScope {
         host: "other.com".to_string(),
         ip: None,
+        resolved_addresses: Vec::new(),
     }));
 }

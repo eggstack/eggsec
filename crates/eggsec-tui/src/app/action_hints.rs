@@ -388,18 +388,18 @@ mod tests {
         use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk, PolicyDecision};
 
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "fuzz",
             OperationMode::StandardAssessment,

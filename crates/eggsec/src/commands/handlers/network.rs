@@ -14,49 +14,49 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
         // Policy check for subcommands that target external hosts
         match &args.command {
             PacketSubcommand::Send(send_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                    operation: "packet-send".to_string(),
-                    mode: crate::config::OperationMode::StandardAssessment,
-                    risk: crate::config::OperationRisk::RawPacket,
-                    intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    target: Some(send_args.target.clone()),
-                    required_features: vec!["packet-inspection".to_string()],
-                    required_policy_flags: Vec::new(),
-                    requires_private_or_local_target: false,
-                    requires_explicit_scope: false,
-                    required_capabilities: Vec::new(),
-                })?;
+                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                    "packet-send".to_string(),
+                    crate::config::OperationMode::StandardAssessment,
+                    crate::config::OperationRisk::RawPacket,
+                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+                    Some(send_args.target.clone()),
+                    vec!["packet-inspection".to_string()],
+                    Vec::new(),
+                    false,
+                    false,
+                    Vec::new(),
+                ))?;
             }
             PacketSubcommand::Traceroute(trace_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                    operation: "packet-traceroute".to_string(),
-                    mode: crate::config::OperationMode::StandardAssessment,
-                    risk: crate::config::OperationRisk::RawPacket,
-                    intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    target: Some(trace_args.target.clone()),
-                    required_features: vec!["packet-inspection".to_string()],
-                    required_policy_flags: Vec::new(),
-                    requires_private_or_local_target: false,
-                    requires_explicit_scope: false,
-                    required_capabilities: Vec::new(),
-                })?;
+                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                    "packet-traceroute".to_string(),
+                    crate::config::OperationMode::StandardAssessment,
+                    crate::config::OperationRisk::RawPacket,
+                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+                    Some(trace_args.target.clone()),
+                    vec!["packet-inspection".to_string()],
+                    Vec::new(),
+                    false,
+                    false,
+                    Vec::new(),
+                ))?;
             }
             PacketSubcommand::Capture(cap_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                    operation: "packet-capture".to_string(),
-                    mode: crate::config::OperationMode::StandardAssessment,
-                    risk: crate::config::OperationRisk::RawPacket,
-                    intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    target: cap_args
+                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                    "packet-capture".to_string(),
+                    crate::config::OperationMode::StandardAssessment,
+                    crate::config::OperationRisk::RawPacket,
+                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+                    cap_args
                         .interface
                         .clone()
                         .or_else(|| cap_args.filter.clone()),
-                    required_features: vec!["packet-inspection".to_string()],
-                    required_policy_flags: Vec::new(),
-                    requires_private_or_local_target: false,
-                    requires_explicit_scope: false,
-                    required_capabilities: Vec::new(),
-                })?;
+                    vec!["packet-inspection".to_string()],
+                    Vec::new(),
+                    false,
+                    false,
+                    Vec::new(),
+                ))?;
             }
             _ => {}
         }
@@ -94,18 +94,18 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
     use crate::scanner::icmp_probe;
     use std::time::Duration;
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "icmp".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-        target: Some(args.target.clone()),
-        required_features: vec!["stress-testing".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "icmp".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::SafeActive,
+        vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+        Some(args.target.clone()),
+        vec!["stress-testing".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     let timeout = Duration::from_secs(args.timeout);
     let interval = Duration::from_secs_f64(args.interval);
@@ -188,18 +188,18 @@ pub async fn handle_traceroute(
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use std::time::Duration;
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "traceroute".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::RawPacket,
-        intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-        target: Some(args.target.clone()),
-        required_features: vec!["stress-testing".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "traceroute".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::RawPacket,
+        vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+        Some(args.target.clone()),
+        vec!["stress-testing".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     let config = TracerouteConfig {
         target: args.target.clone(),

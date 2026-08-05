@@ -59,18 +59,18 @@ pub fn evaluate_policy_decision(
         required_policy_flags.push("require_explicit_scope".to_string());
     }
 
-    let descriptor = OperationDescriptor {
-        operation: "policy-explain".to_string(),
+    let descriptor = OperationDescriptor::new(
+        "policy-explain".to_string(),
         mode,
         risk,
         intended_uses,
-        target: target.map(|s| s.to_string()),
+        target.map(|s| s.to_string()),
         required_features,
         required_policy_flags,
-        requires_private_or_local_target: profile.requires_private_scope(),
-        requires_explicit_scope: profile.requires_private_scope(),
-        required_capabilities: Vec::new(),
-    };
+        profile.requires_private_scope(),
+        profile.requires_private_scope(),
+        Vec::new(),
+    );
 
     evaluate_operation_policy(&descriptor, policy, scope)
 }

@@ -215,18 +215,18 @@ fn scan_request(target: &str) -> ToolRequest {
 #[cfg(all(feature = "test-helpers", feature = "tool-api"))]
 #[test]
 fn phase_a_target_mismatch_rejected() {
-    let descriptor = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("10.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let descriptor = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("10.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = make_approved(descriptor);
 
     // Different target should fail
@@ -234,32 +234,40 @@ fn phase_a_target_mismatch_rejected() {
     let result = validate_request_binding(&approved, &request);
     assert!(result.is_err());
     match result.unwrap_err() {
-        DispatchBindingError::TargetMismatch {
-            request_target,
-            approved_target,
+        DispatchBindingError::NormalizedTargetMismatch {
+            request_raw,
+            request_normalized,
+            approved_normalized,
         } => {
-            assert_eq!(request_target, "10.0.0.2");
-            assert_eq!(approved_target, "10.0.0.1");
+            assert_eq!(request_raw, "10.0.0.2");
+            assert_eq!(
+                request_normalized,
+                eggsec::config::OperationTarget::Ip("10.0.0.2".parse().unwrap())
+            );
+            assert_eq!(
+                approved_normalized,
+                eggsec::config::OperationTarget::Ip("10.0.0.1".parse().unwrap())
+            );
         }
-        other => panic!("expected TargetMismatch, got {:?}", other),
+        other => panic!("expected NormalizedTargetMismatch, got {:?}", other),
     }
 }
 
 #[cfg(all(feature = "test-helpers", feature = "tool-api"))]
 #[test]
 fn phase_a_target_required_missing_target_rejected() {
-    let descriptor = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("10.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let descriptor = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("10.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = make_approved(descriptor);
 
     // Empty target should fail
@@ -292,18 +300,18 @@ fn phase_a_target_required_missing_target_rejected() {
 #[cfg(all(feature = "test-helpers", feature = "tool-api"))]
 #[test]
 fn phase_a_targetless_rejects_smuggled_target() {
-    let descriptor = OperationDescriptor {
-        operation: "search".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::Passive,
-        intended_uses: vec![],
-        target: None,
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let descriptor = OperationDescriptor::new(
+        "search".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::Passive,
+        vec![],
+        None,
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = make_approved(descriptor);
 
     // Smuggled target should fail
@@ -332,18 +340,18 @@ fn phase_a_targetless_rejects_smuggled_target() {
 #[cfg(all(feature = "test-helpers", feature = "tool-api"))]
 #[test]
 fn phase_a_conflicting_targets_rejected() {
-    let descriptor = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("10.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let descriptor = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("10.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = make_approved(descriptor);
 
     // Conflicting typed and param targets
@@ -372,18 +380,18 @@ fn phase_a_conflicting_targets_rejected() {
 #[test]
 fn phase_a_surface_profile_mismatch_rejects_approval() {
     let ctx = EnforcementContext::mcp_strict(ExecutionPolicy::default(), Default::default());
-    let descriptor = OperationDescriptor {
-        operation: "scan".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let descriptor = OperationDescriptor::new(
+        "scan".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     // McpStrict context with CliManual surface = mismatch
     let result = ctx.approve(eggsec::config::ExecutionSurface::CliManual, descriptor);
     assert!(result.is_err());

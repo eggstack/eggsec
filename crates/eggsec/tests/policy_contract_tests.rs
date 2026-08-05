@@ -151,18 +151,18 @@ fn evaluate_operation_policy_allowed_localhost() {
         allowed_targets: vec![ScopeRule::new("127.0.0.1".to_string())],
         ..Default::default()
     };
-    let descriptor = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![IntendedUse::WebAssessment],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    };
+    let descriptor = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![IntendedUse::WebAssessment],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        Vec::new(),
+    );
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
     assert!(decision.allowed);
@@ -174,18 +174,18 @@ fn evaluate_operation_policy_allowed_localhost() {
 
 #[test]
 fn evaluate_operation_policy_denied_by_risk() {
-    let descriptor = OperationDescriptor {
-        operation: "stress".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::StressTest,
-        intended_uses: vec![IntendedUse::DistributedSystemStress],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    };
+    let descriptor = OperationDescriptor::new(
+        "stress".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::StressTest,
+        vec![IntendedUse::DistributedSystemStress],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        Vec::new(),
+    );
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, None);
     assert!(!decision.allowed);
@@ -197,18 +197,18 @@ fn evaluate_operation_policy_denied_by_risk() {
 
 #[test]
 fn evaluate_operation_policy_denied_missing_scope() {
-    let descriptor = OperationDescriptor {
-        operation: "fuzz".to_string(),
-        mode: OperationMode::DefenseLab,
-        risk: OperationRisk::Intrusive,
-        intended_uses: vec![IntendedUse::WafRegression],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: Vec::new(),
-    };
+    let descriptor = OperationDescriptor::new(
+        "fuzz".to_string(),
+        OperationMode::DefenseLab,
+        OperationRisk::Intrusive,
+        vec![IntendedUse::WafRegression],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        true,
+        Vec::new(),
+    );
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, None);
     assert!(!decision.allowed);

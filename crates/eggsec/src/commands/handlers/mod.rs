@@ -621,18 +621,18 @@ mod tests {
     }
 
     fn descriptor(operation: &str, risk: OperationRisk) -> OperationDescriptor {
-        OperationDescriptor {
-            operation: operation.to_string(),
-            mode: OperationMode::StandardAssessment,
+        OperationDescriptor::new(
+            operation.to_string(),
+            OperationMode::StandardAssessment,
             risk,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        }
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        )
     }
 
     #[test]
@@ -820,18 +820,18 @@ mod tests {
     #[test]
     fn denied_public_target_out_of_scope() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         // ManualPermissive: out-of-scope with positive rules now yields RequireConfirmation
         // (not immediate hard error). The test asserts an error path for the default (no-override) case.
         let err = ctx.evaluate_and_enforce_operation(desc).unwrap_err();
@@ -846,18 +846,18 @@ mod tests {
     #[test]
     fn allowed_target_passes_scope_check() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_ok());
     }
@@ -917,18 +917,18 @@ mod tests {
     fn mcp_strict_denies_requires_explicit_scope_without_scope() {
         let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
             .with_execution_surface(crate::config::ExecutionSurface::McpServer);
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            true,
+            Vec::new(),
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err());
     }
@@ -937,18 +937,18 @@ mod tests {
     fn agent_strict_denies_requires_explicit_scope_without_scope() {
         let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
             .with_execution_surface(crate::config::ExecutionSurface::SecurityAgent);
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            true,
+            Vec::new(),
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err());
     }
@@ -1050,18 +1050,18 @@ mod tests {
                 ..Default::default()
             },
         );
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
@@ -1106,18 +1106,18 @@ mod tests {
                 ..Default::default()
             },
         );
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_ok());
         let mo = &ctx.manual_override;
@@ -1200,18 +1200,18 @@ mod tests {
 
         // Out of scope missing override
         let ctx2 = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        let public_desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let public_desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let err2 = ctx2
             .evaluate_and_enforce_operation(public_desc)
             .unwrap_err();
@@ -1280,18 +1280,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(
             result.is_err(),
@@ -1324,18 +1324,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(
             result.is_err(),
@@ -1353,18 +1353,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(
             result.is_err(),
@@ -1389,18 +1389,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(
             result.is_err(),
@@ -1415,18 +1415,18 @@ mod tests {
                 allow_out_of_scope: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = ctx
             .evaluate_and_enforce_operation(desc)
             .expect("allow-out-of-scope should permit");
@@ -1481,18 +1481,18 @@ mod tests {
     #[test]
     fn manual_permissive_out_of_scope_no_override_error_suggests_allow_flag() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let err = ctx.evaluate_and_enforce_operation(desc).unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -1540,18 +1540,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(
             result.is_err(),
@@ -1572,18 +1572,18 @@ mod tests {
                 assume_yes: true,
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err(), "AgentStrict must deny unconditionally");
         let msg = result.unwrap_err().to_string();
@@ -1602,18 +1602,18 @@ mod tests {
                 reason: Some("authorized pentest".to_string()),
                 ..Default::default()
             });
-        let desc = OperationDescriptor {
-            operation: "scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("93.184.216.34".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("93.184.216.34".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let decision = ctx
             .evaluate_and_enforce_operation(desc)
             .expect("override should permit");

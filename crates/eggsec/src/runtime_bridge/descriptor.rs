@@ -22,7 +22,12 @@ pub fn descriptor_for_run_request(
             operation_id: operation_id.to_string(),
         })?;
 
-    Ok(metadata.descriptor_for_target(target))
+    metadata
+        .try_descriptor_for_target(target.as_deref())
+        .map_err(|e| RuntimeBridgeError::InvalidTarget {
+            operation_id: operation_id.to_string(),
+            reason: e.to_string(),
+        })
 }
 
 /// Resolve the canonical operation ID and optional target from a [`TaskKind`].
@@ -208,9 +213,12 @@ mod tests {
             filter: None,
             duration_secs: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "packet");
-        assert_eq!(desc.target, None);
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -291,9 +299,12 @@ mod tests {
             storage_type: "findings".into(),
             path: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "storage");
-        assert_eq!(desc.target, None);
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -302,8 +313,12 @@ mod tests {
             integration_type: "jira".into(),
             config: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "integrations");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -312,8 +327,12 @@ mod tests {
             workflow_id: None,
             steps: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "workflow");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -332,8 +351,12 @@ mod tests {
             interface: None,
             duration_secs: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "wireless");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -342,8 +365,12 @@ mod tests {
             interface: None,
             target_bssid: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "wireless");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -363,8 +390,12 @@ mod tests {
             listen_port: None,
             target: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "proxy-intercept");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]
@@ -373,8 +404,12 @@ mod tests {
             profile: None,
             target: None,
         }));
-        let desc = descriptor_for_run_request(&req).unwrap();
-        assert_eq!(desc.operation, "c2");
+        let result = descriptor_for_run_request(&req);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuntimeBridgeError::InvalidTarget { .. }
+        ));
     }
 
     #[test]

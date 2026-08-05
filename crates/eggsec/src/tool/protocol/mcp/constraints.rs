@@ -65,6 +65,7 @@ impl McpConstraintContext {
             crate::config::TargetScope {
                 host: target.to_string(),
                 ip: None,
+                resolved_addresses: Vec::new(),
             }
         });
         self.allowed_targets

@@ -424,13 +424,15 @@ fn operation_descriptor_for_grpc_tool(
 ) -> Result<OperationDescriptor, Status> {
     use crate::tool::metadata::metadata_for_tool_id;
 
-    let target_opt = if target.is_empty() {
+    let target_ref = if target.is_empty() {
         None
     } else {
-        Some(target.to_string())
+        Some(target)
     };
     if let Some(metadata) = metadata_for_tool_id(tool_id) {
-        let mut descriptor = metadata.descriptor_for_target(target_opt);
+        let mut descriptor = metadata
+            .try_descriptor_for_target(target_ref)
+            .map_err(|e| Status::invalid_argument(format!("invalid target: {}", e)))?;
         descriptor.requires_explicit_scope = true;
         Ok(descriptor)
     } else {
@@ -679,6 +681,9 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                     decision.to_human_readable()
                 )));
             }
+            Err(EnforcementError::SurfaceProfileMismatch { .. }) => {
+                return Err(Status::permission_denied("gRPC surface profile mismatch"));
+            }
         };
 
         let correlation_id = uuid::Uuid::new_v4().to_string();
@@ -816,6 +821,9 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                     "gRPC strict enforcement denied: {}",
                     decision.to_human_readable()
                 )));
+            }
+            Err(EnforcementError::SurfaceProfileMismatch { .. }) => {
+                return Err(Status::permission_denied("gRPC surface profile mismatch"));
             }
         };
 

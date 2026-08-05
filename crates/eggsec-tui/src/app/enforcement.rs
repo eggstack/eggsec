@@ -269,18 +269,18 @@ mod tests {
     }
 
     fn passive_descriptor(operation: &str, target: Option<&str>) -> OperationDescriptor {
-        OperationDescriptor {
-            operation: operation.to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Passive,
-            intended_uses: vec![],
-            target: target.map(|t| t.to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        }
+        OperationDescriptor::new(
+            operation.to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Passive,
+            vec![],
+            target.map(|t| t.to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        )
     }
 
     #[test]
@@ -432,18 +432,18 @@ mod tests {
     #[test]
     fn preflight_scope_miss_triggers_confirmation_or_deny() {
         let mut state = test_state(ExecutionSurface::TuiManualStrict);
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![],
-            target: Some("10.0.0.1".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![],
+            Some("10.0.0.1".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = state.preflight(&desc);
         assert_eq!(
             result.outcome_kind,
@@ -515,18 +515,18 @@ mod tests {
     #[test]
     fn preflight_positive_scope_miss_returns_require_confirmation() {
         let mut state = test_state_with_positive_scope(ExecutionSurface::TuiManual);
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Passive,
-            intended_uses: vec![],
-            target: Some("10.0.0.1".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Passive,
+            vec![],
+            Some("10.0.0.1".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = state.preflight(&desc);
         assert_eq!(
             result.outcome_kind,
@@ -581,18 +581,18 @@ mod tests {
     fn from_outcome_uses_provided_policy() {
         // Verify that from_outcome with the provided policy produces the same classes
         // as confirmation_classes_for with that policy.
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![],
-            target: Some("10.0.0.1".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![],
+            Some("10.0.0.1".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         // Build a decision that would trigger RequireConfirmation
         let scope = Scope {
             allowed_targets: vec![ScopeRule::new("example.com".to_string())],
@@ -644,18 +644,18 @@ mod tests {
         // Verify that preflight classes match what request_policy_confirmation
         // would compute for the same descriptor/policy.
         let mut state = test_state_with_positive_scope(ExecutionSurface::TuiManual);
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Passive,
-            intended_uses: vec![],
-            target: Some("10.0.0.1".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Passive,
+            vec![],
+            Some("10.0.0.1".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let result = state.preflight(&desc);
         // Compute expected classes using the same function that request_policy_confirmation uses
         let outcome = state.enforcement.evaluate(&desc);

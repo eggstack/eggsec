@@ -242,18 +242,18 @@ mod tests {
     #[test]
     fn test_ctrl_c_bubbles_through_policy_confirm() {
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "fuzz",
             OperationMode::StandardAssessment,
@@ -294,18 +294,18 @@ mod tests {
     #[test]
     fn test_unknown_key_returns_noop_for_policy_confirm() {
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "stress".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::StressTest,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://lab.example".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "stress".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::StressTest,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://lab.example".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "stress",
             OperationMode::StandardAssessment,
@@ -324,18 +324,18 @@ mod tests {
     #[test]
     fn test_policy_confirm_enter_returns_confirm() {
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "fuzz",
             OperationMode::StandardAssessment,
@@ -353,18 +353,18 @@ mod tests {
     #[test]
     fn test_policy_confirm_esc_returns_cancel() {
         let mut app = create_test_app();
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "fuzz",
             OperationMode::StandardAssessment,
@@ -438,18 +438,18 @@ mod tests {
         let mut app = create_test_app();
         // Both active — PolicyConfirm should win (higher precedence)
         app.overlay.show_help = true;
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        );
         let decision = PolicyDecision::denied(
             "fuzz",
             OperationMode::StandardAssessment,

@@ -21,34 +21,32 @@ use eggsec::config::{
 
 /// Minimal descriptor builder for matrix tests.
 fn descriptor(target: &str, risk: OperationRisk) -> OperationDescriptor {
-    OperationDescriptor {
-        operation: "matrix-op".to_string(),
-        mode: OperationMode::StandardAssessment,
+    OperationDescriptor::new(
+        "matrix-op".to_string(),
+        OperationMode::StandardAssessment,
         risk,
-        intended_uses: vec![],
-        target: Some(target.to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    }
+        vec![],
+        Some(target.to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    )
 }
 
 /// Descriptor requiring explicit scope (networked operation).
 fn descriptor_requires_scope(target: &str, risk: OperationRisk) -> OperationDescriptor {
-    OperationDescriptor {
-        requires_explicit_scope: true,
-        ..descriptor(target, risk)
-    }
+    let mut d = descriptor(target, risk);
+    d.requires_explicit_scope = true;
+    d
 }
 
 /// Descriptor with a required capability.
 fn descriptor_with_cap(target: &str, risk: OperationRisk, cap: Capability) -> OperationDescriptor {
-    OperationDescriptor {
-        required_capabilities: vec![cap],
-        ..descriptor(target, risk)
-    }
+    let mut d = descriptor(target, risk);
+    d.required_capabilities = vec![cap];
+    d
 }
 
 /// Descriptor requiring a compile-time feature.
@@ -57,10 +55,9 @@ fn descriptor_with_feature(
     risk: OperationRisk,
     feature: &str,
 ) -> OperationDescriptor {
-    OperationDescriptor {
-        required_features: vec![feature.to_string()],
-        ..descriptor(target, risk)
-    }
+    let mut d = descriptor(target, risk);
+    d.required_features = vec![feature.to_string()];
+    d
 }
 
 /// Scope allowing a single target.
@@ -1791,18 +1788,18 @@ fn strict_profiles_accept_explicit_manifest_for_networked() {
 // ===========================================================================
 
 fn descriptor_private_or_local(target: &str, risk: OperationRisk) -> OperationDescriptor {
-    OperationDescriptor {
-        operation: "matrix-private-op".to_string(),
-        mode: OperationMode::StandardAssessment,
+    OperationDescriptor::new(
+        "matrix-private-op".to_string(),
+        OperationMode::StandardAssessment,
         risk,
-        intended_uses: vec![],
-        target: Some(target.to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: true,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    }
+        vec![],
+        Some(target.to_string()),
+        vec![],
+        vec![],
+        true,
+        true,
+        vec![],
+    )
 }
 
 /// Helper to call evaluate_enforcement directly with optional scope.
@@ -2626,18 +2623,18 @@ fn dispatch_checked_rejects_tool_mismatch() {
 
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = ctx
         .approve(ExecutionSurface::McpServer, desc)
         .expect("approve should succeed");
@@ -2670,18 +2667,18 @@ fn dispatch_checked_rejects_target_mismatch() {
 
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = ctx
         .approve(ExecutionSurface::McpServer, desc)
         .expect("approve should succeed");
@@ -2980,18 +2977,18 @@ fn dispatch_checked_allows_alias_match() {
 
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = ctx
         .approve(ExecutionSurface::McpServer, desc)
         .expect("approve should succeed");
@@ -3027,18 +3024,18 @@ fn dispatch_checked_rejects_unrelated_alias() {
 
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = ctx
         .approve(ExecutionSurface::McpServer, desc)
         .expect("approve should succeed");
@@ -3070,18 +3067,18 @@ fn dispatch_checked_allows_exact_match_after_alias_change() {
 
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("127.0.0.1".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "scan-ports".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("127.0.0.1".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let approved = ctx
         .approve(ExecutionSurface::McpServer, desc)
         .expect("approve should succeed");

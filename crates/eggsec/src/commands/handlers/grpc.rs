@@ -10,18 +10,18 @@ use tracing::info;
 
 #[cfg(feature = "grpc-api")]
 pub async fn handle_grpc_server(ctx: &CommandContext, args: GrpcServerArgs) -> anyhow::Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "grpc-server".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.host.clone()),
-        required_features: vec!["grpc-api".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "grpc-server".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::SafeActive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(args.host.clone()),
+        vec!["grpc-api".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     info!("Starting gRPC server on {}:{}", args.host, args.port);
 
     let registry = ToolRegistry::new();

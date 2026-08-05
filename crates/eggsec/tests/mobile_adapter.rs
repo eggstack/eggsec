@@ -80,18 +80,18 @@ fn metadata_for_dynamic_exists() {
 fn static_descriptor_allowed_in_scope() {
     let scope = loaded_explicit(scope_allow("/tmp/**"));
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("/tmp/test.apk".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("/tmp/test.apk".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     let outcome = ctx.evaluate(&desc);
     assert!(
         outcome.is_allowed(),
@@ -107,18 +107,18 @@ fn static_descriptor_denied_out_of_scope() {
     // Use an IP-based target that can be scope-checked against CIDR rules.
     let scope = loaded_explicit(scope_allow("10.0.0.0/8"));
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("192.168.1.1".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("192.168.1.1".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        true,
+        vec![],
+    );
     let outcome = ctx.evaluate(&desc);
     assert!(
         matches!(outcome, EnforcementOutcome::Deny { .. }),
@@ -131,18 +131,18 @@ fn static_descriptor_denied_out_of_scope() {
 fn deny_prevents_domain_execution() {
     let scope = loaded_explicit(scope_allow("10.0.0.0/8"));
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("192.168.1.1".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("192.168.1.1".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        true,
+        vec![],
+    );
     let result = ctx.approve(ExecutionSurface::McpServer, desc);
     assert!(result.is_err(), "deny should prevent approve");
 }
@@ -182,18 +182,18 @@ fn manual_override_permits_confirmation_on_permissive_surface() {
     over.allow_out_of_scope = true;
     let scope = loaded_explicit(scope_allow("10.0.0.0/8"));
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, default_policy(), scope);
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("192.168.1.1".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("192.168.1.1".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        true,
+        vec![],
+    );
     let result = ctx.approve_manual(ExecutionSurface::CliManual, desc, Some(&over));
     assert!(
         result.is_ok(),
@@ -206,18 +206,18 @@ fn manual_override_ignored_on_strict_surfaces() {
     let mut over = ManualOverride::default();
     over.allow_out_of_scope = true;
     let scope = loaded_explicit(scope_allow("10.0.0.0/8"));
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("192.168.1.1".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("192.168.1.1".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        true,
+        vec![],
+    );
     for surface in &[
         ExecutionSurface::McpServer,
         ExecutionSurface::SecurityAgent,
@@ -239,18 +239,18 @@ fn manual_override_ignored_on_strict_surfaces() {
 #[test]
 fn strict_surfaces_deny_out_of_scope() {
     let scope = loaded_explicit(scope_allow("192.168.1.0/24"));
-    let desc = OperationDescriptor {
-        operation: "mobile-static".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![],
-        target: Some("10.0.0.1".to_string()),
-        required_features: vec!["mobile".to_string()],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "mobile-static".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![],
+        Some("10.0.0.1".to_string()),
+        vec!["mobile".to_string()],
+        vec![],
+        false,
+        true,
+        vec![],
+    );
     for surface in &[
         ExecutionSurface::McpServer,
         ExecutionSurface::SecurityAgent,

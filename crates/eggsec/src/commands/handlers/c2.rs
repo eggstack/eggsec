@@ -11,18 +11,18 @@ pub async fn handle_c2(ctx: &CommandContext, args: crate::cli::C2Args) -> Result
         crate::config::OperationRisk::SafeActive
     };
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "c2".to_string(),
-        mode: crate::config::OperationMode::DefenseLab,
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "c2".to_string(),
+        crate::config::OperationMode::DefenseLab,
         risk,
-        intended_uses: vec![crate::config::IntendedUse::WafRegression],
-        target: args.target.clone(),
-        required_features: vec!["c2".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+        vec![crate::config::IntendedUse::WafRegression],
+        args.target.clone(),
+        vec!["c2".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     // Gate real mode behind --allow-c2 (same pattern as db-pentest / wireless active)
     if is_real && !args.allow_c2 {

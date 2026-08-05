@@ -291,18 +291,18 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
         }
         RemoteCommand::Start(start_args) => {
             let target = format!("localhost:{}", start_args.port);
-            ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                operation: "remote-start".to_string(),
-                mode: crate::config::OperationMode::HazardousLab,
-                risk: crate::config::OperationRisk::RemoteExecution,
-                intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
-                target: Some(target),
-                required_features: Vec::new(),
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            })?;
+            ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                "remote-start".to_string(),
+                crate::config::OperationMode::HazardousLab,
+                crate::config::OperationRisk::RemoteExecution,
+                vec![crate::config::IntendedUse::DistributedSystemStress],
+                Some(target),
+                Vec::new(),
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            ))?;
 
             let psk = start_args
                 .auth
@@ -398,18 +398,18 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
     let mut results: Vec<RemoteResult> = Vec::new();
 
     for target in &targets {
-        ctx.evaluate_and_enforce_operation(OperationDescriptor {
-            operation: "exec".to_string(),
-            mode: crate::config::OperationMode::StandardAssessment,
-            risk: crate::config::OperationRisk::RemoteExecution,
-            intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
-            target: Some(target.clone()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        })?;
+        ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+            "exec".to_string(),
+            crate::config::OperationMode::StandardAssessment,
+            crate::config::OperationRisk::RemoteExecution,
+            vec![crate::config::IntendedUse::DistributedSystemStress],
+            Some(target.clone()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        ))?;
         let (host, port) = crate::utils::parse_host_port(target, ctx.config.remote.default_port);
 
         println!("Executing on {}:{}...", host, port);

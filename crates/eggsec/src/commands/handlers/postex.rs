@@ -3,22 +3,22 @@ use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_postex(ctx: &CommandContext, args: crate::cli::PostexArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "postex".to_string(),
-        mode: crate::config::OperationMode::DefenseLab,
-        risk: if args.dry_run {
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "postex".to_string(),
+        crate::config::OperationMode::DefenseLab,
+        if args.dry_run {
             crate::config::OperationRisk::SafeActive
         } else {
             crate::config::OperationRisk::ExploitAdjacent
         },
-        intended_uses: vec![crate::config::IntendedUse::WafRegression],
-        target: args.target.clone(),
-        required_features: vec!["postex".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+        vec![crate::config::IntendedUse::WafRegression],
+        args.target.clone(),
+        vec!["postex".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     if !args.dry_run && !args.quiet {
         eprintln!("NOTE: Real post-exploitation simulation requires explicit authorization.");

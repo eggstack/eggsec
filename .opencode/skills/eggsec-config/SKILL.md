@@ -26,7 +26,18 @@ Main configuration struct loaded via `config::load_config()`.
 ### Scope (`scope.rs`)
 Target restrictions for security compliance.
 
-**Key security fix**: Direct IP addresses now properly blocked via private IP checks in `TargetScope::parse()` and `parse_hostname_only()`. Previously, passing an IP like `127.0.0.1` bypassed DNS resolution and the private IP block.
+**Phase B changes**: DNS resolution now returns all unique addresses (not just first). The resolver (`HostResolver` trait) reports facts; policy decides authorization. Use `classify_address()` for typed address classification.
+
+**Key types:**
+- `AddressClass` - Enum: Public, Loopback, Private, LinkLocal, IPv4MappedLoopback, Unspecified, Multicast
+- `HostResolver` trait - DNS resolution abstraction; `SystemResolver` is default
+- `ResolutionResult` - Contains `hostname`, `addresses`, `error`
+- `TargetScope` - Extended with `resolved_addresses: Vec<IpAddr>`
+
+**Key methods:**
+- `classify_address(ip)` - Reports facts; does not authorize
+- `TargetScope::parse_with_resolver(target, resolver)` - Full DNS resolution
+- `TargetScope::evaluate_addresses(allowed, excluded)` - All-address scope check
 
 ### Config Loading (`loader.rs`)
 ```rust

@@ -11,18 +11,18 @@ use anyhow::Result;
 pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -> Result<()> {
     use crate::stress::{StressConfig, StressTest, StressType};
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "stress".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::StressTest,
-        intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
-        target: Some(args.target.clone()),
-        required_features: vec!["stress-testing".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "stress".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::StressTest,
+        vec![crate::config::IntendedUse::DistributedSystemStress],
+        Some(args.target.clone()),
+        vec!["stress-testing".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     let stress_type = match args.stress_type {
         crate::cli::StressTypeArg::Syn => StressType::Syn,
@@ -95,18 +95,18 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let count = proxies.len();
 
             for proxy in &proxies {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                    operation: "proxy-add".to_string(),
-                    mode: crate::config::OperationMode::StandardAssessment,
-                    risk: crate::config::OperationRisk::ExploitAdjacent,
-                    intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-                    target: Some(proxy.address.clone()),
-                    required_features: vec!["stress-testing".to_string()],
-                    required_policy_flags: Vec::new(),
-                    requires_private_or_local_target: false,
-                    requires_explicit_scope: false,
-                    required_capabilities: Vec::new(),
-                })?;
+                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                    "proxy-add".to_string(),
+                    crate::config::OperationMode::StandardAssessment,
+                    crate::config::OperationRisk::ExploitAdjacent,
+                    vec![crate::config::IntendedUse::WebAssessment],
+                    Some(proxy.address.clone()),
+                    vec!["stress-testing".to_string()],
+                    Vec::new(),
+                    false,
+                    false,
+                    Vec::new(),
+                ))?;
             }
 
             let mut config = ctx.config.clone();
@@ -182,18 +182,18 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 anyhow::bail!("No proxies to check");
             }
 
-            ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                operation: "proxy-health-check".to_string(),
-                mode: crate::config::OperationMode::StandardAssessment,
-                risk: crate::config::OperationRisk::ExploitAdjacent,
-                intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-                target: Some(health_args.test_url.clone()),
-                required_features: vec!["stress-testing".to_string()],
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            })?;
+            ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                "proxy-health-check".to_string(),
+                crate::config::OperationMode::StandardAssessment,
+                crate::config::OperationRisk::ExploitAdjacent,
+                vec![crate::config::IntendedUse::WebAssessment],
+                Some(health_args.test_url.clone()),
+                vec!["stress-testing".to_string()],
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            ))?;
 
             let proxy_entries: Vec<ProxyEntry> = config
                 .proxies
@@ -242,18 +242,18 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
         ProxyCommand::Test(test_args) => {
             let target = crate::utils::extract_target_from_url(&test_args.test_url)
                 .unwrap_or_else(|| test_args.test_url.clone());
-            ctx.evaluate_and_enforce_operation(OperationDescriptor {
-                operation: "proxy-test".to_string(),
-                mode: crate::config::OperationMode::StandardAssessment,
-                risk: crate::config::OperationRisk::ExploitAdjacent,
-                intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-                target: Some(target),
-                required_features: vec!["stress-testing".to_string()],
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            })?;
+            ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+                "proxy-test".to_string(),
+                crate::config::OperationMode::StandardAssessment,
+                crate::config::OperationRisk::ExploitAdjacent,
+                vec![crate::config::IntendedUse::WebAssessment],
+                Some(target),
+                vec!["stress-testing".to_string()],
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            ))?;
 
             let proxy_entry = crate::commands::proxy::create_proxy_entry(&test_args.proxy)?;
 

@@ -5,18 +5,18 @@ use anyhow::Result;
 pub async fn handle_fuzz(ctx: &CommandContext, mut args: crate::cli::FuzzArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "fuzz".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(target),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "fuzz".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(target),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("fuzz-{}", chrono::Utc::now().timestamp());
@@ -48,18 +48,18 @@ pub async fn handle_waf_stress(
 ) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "waf-stress".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WafRegression],
-        target: Some(target),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "waf-stress".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WafRegression],
+        Some(target),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("waf-stress-{}", chrono::Utc::now().timestamp());
@@ -88,18 +88,18 @@ pub async fn handle_waf_stress(
 pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "waf-detect".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WafRegression],
-        target: Some(target),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "waf-detect".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WafRegression],
+        Some(target),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("waf-{}", chrono::Utc::now().timestamp());
@@ -126,20 +126,18 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
 }
 
 pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "graphql".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(
-            crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone()),
-        ),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "graphql".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone())),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("graphql-{}", chrono::Utc::now().timestamp());
@@ -166,20 +164,18 @@ pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlA
 }
 
 pub async fn handle_oauth(ctx: &CommandContext, mut args: crate::cli::OAuthArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "oauth".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(
-            crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone()),
-        ),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "oauth".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone())),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("oauth-{}", chrono::Utc::now().timestamp());

@@ -38,10 +38,13 @@ The `Scope` struct is critical for security and compliance. It defines which tar
 - `validate_url(url)` - Returns `Result<bool, ScopeError>`, validates URL's host via `is_target_allowed`
 - `is_port_allowed(port)` - Returns `bool`, checks port allowlist/blocklist
 - `validate()` - Validates scope configuration: `allowed_targets` must not be empty when `require_explicit_scope` is true; duplicate ports in `allowed_ports` are rejected; `max_requests_per_second` must be greater than 0 if set
+- `has_ip_based_rules()` - Returns `true` if any rule uses CIDR notation
 
 **ScopeRule Construction:**
 - `ScopeRule::new(pattern)` - Creates a scope rule from a glob/regex pattern string
 - `ScopeRule::with_cidr(cidr)` - Creates a scope rule from CIDR notation (e.g., `10.0.0.0/8`). Parses via `IpNetwork::from_str()` and stores the CIDR for IP-range matching
+- `ScopeRule::matches(target)` - Checks if a TargetScope matches this rule (hostname patterns + CIDR)
+- `ScopeRule::matches_address(addr)` - Checks if a single IP address matches this rule's CIDR
 
 ### `LoadedScope` and `ScopeSource` (`scope.rs`)
 
@@ -75,6 +78,57 @@ pub enum ScopeSource {
 - Included Targets: IP ranges (CIDR), domains, or specific URLs
 - Excluded Targets: Blacklisted IPs or domains that should never be touched
 - Enforcement: Most scanning and fuzzing operations check the `Scope` before initiating a connection
+
+### `AddressClass` and `classify_address()` (`scope.rs`)
+
+Phase B introduced typed address classification:
+
+```rust
+pub enum AddressClass {
+    Public,             // 8.8.8.8, 2001:4860:4860::8888
+    Loopback,           // 127.0.0.0/8, ::1
+    Private,            // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7
+    LinkLocal,          // 169.254.0.0/16, fe80::/10
+    IPv4MappedLoopback, // ::ffff:127.0.0.1
+    Unspecified,        // 0.0.0.0, ::
+    Multicast,          // 224.0.0.0/4, ff00::/8
+}
+```
+
+- `classify_address(ip)` - Reports facts only; does not authorize or reject
+- `AddressClass::as_str()` - Stable kebab-case string for audit/JSON
+
+### `HostResolver` trait and `SystemResolver` (`scope.rs`)
+
+Phase B decoupled DNS resolution from policy evaluation:
+
+```rust
+pub trait HostResolver: Send + Sync {
+    fn resolve_all(&self, host: &str) -> ResolutionResult;
+}
+```
+
+- `SystemResolver` - Default resolver using `std::net::ToSocketAddrs`, returns all unique addresses sorted
+- `ResolutionResult` - Contains `hostname`, `addresses: Vec<IpAddr>`, `error: Option<String>`
+- `default_resolver()` - Factory returning `Arc<dyn HostResolver>`
+- Resolver does NOT reject loopback/private/policy-violating addresses — policy decides
+
+### `TargetScope` (`scope.rs`)
+
+Extended with all-address resolution:
+
+```rust
+pub struct TargetScope {
+    pub host: String,
+    pub ip: Option<IpAddr>,
+    pub resolved_addresses: Vec<IpAddr>,  // NEW: all unique resolved addresses
+}
+```
+
+Key methods:
+- `parse_with_resolver(target, resolver)` - Full DNS resolution using custom resolver
+- `parse_hostname_only_with_resolver(target, resolver)` - Hostname-only matching
+- `evaluate_addresses(allowed, excluded)` - Returns `(all_allowed, any_excluded, classes)`
 
 **Scope loading:**
 - `load_scope_with_source()` loads a scope from a file and tags it with the appropriate `ScopeSource`

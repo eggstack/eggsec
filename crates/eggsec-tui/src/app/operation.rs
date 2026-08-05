@@ -83,22 +83,22 @@ impl App {
                 .feature
                 .map(|f| vec![f.to_string()])
                 .unwrap_or_default();
-            Some(OperationDescriptor {
-                operation: op,
-                mode: OperationMode::StandardAssessment,
+            Some(OperationDescriptor::new(
+                op,
+                OperationMode::StandardAssessment,
                 risk,
-                intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-                target: if target.as_deref().unwrap_or("").is_empty() {
+                vec![eggsec::config::IntendedUse::WebAssessment],
+                if target.as_deref().unwrap_or("").is_empty() {
                     None
                 } else {
                     target
                 },
                 required_features,
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            })
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            ))
         }
     }
 

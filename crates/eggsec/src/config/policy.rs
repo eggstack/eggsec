@@ -271,6 +271,10 @@ impl std::fmt::Display for IntendedUse {
 /// to produce a [`PolicyDecision`]. Command handlers, MCP dispatchers, agent
 /// workflows, and API endpoints all construct an `OperationDescriptor` instead of
 /// reinventing policy checks.
+///
+/// Authorization-relevant fields (`operation`, `target`, `normalized_target`,
+/// `mode`, `risk`) are read-only after construction through the validated
+/// [`OperationMetadata::try_descriptor_for_target`] path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationDescriptor {
     /// Human-readable operation name (e.g. "scan-ports", "fuzz", "stress").
@@ -281,8 +285,11 @@ pub struct OperationDescriptor {
     pub risk: OperationRisk,
     /// Intended use cases for this operation.
     pub intended_uses: Vec<IntendedUse>,
-    /// Original target string (hostname, URL, or IP).
+    /// Original target string (hostname, URL, or IP) for audit display.
     pub target: Option<String>,
+    /// Deterministic normalized target for authorization binding.
+    #[serde(default)]
+    pub normalized_target: OperationTarget,
     /// Feature flags required to execute this operation (e.g. "packet-inspection", "nse").
     #[serde(default)]
     pub required_features: Vec<String>,
@@ -298,6 +305,45 @@ pub struct OperationDescriptor {
     /// Capabilities required by this operation (e.g. "active-probe", "crawl").
     #[serde(default)]
     pub required_capabilities: Vec<Capability>,
+}
+
+impl OperationDescriptor {
+    /// Construct a new `OperationDescriptor` with `normalized_target` auto-populated
+    /// from the `target` field using auto-detection.
+    ///
+    /// Prefer [`OperationMetadata::try_descriptor_for_target`] for strict surfaces,
+    /// which validates target policy before construction.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        operation: String,
+        mode: OperationMode,
+        risk: OperationRisk,
+        intended_uses: Vec<IntendedUse>,
+        target: Option<String>,
+        required_features: Vec<String>,
+        required_policy_flags: Vec<String>,
+        requires_private_or_local_target: bool,
+        requires_explicit_scope: bool,
+        required_capabilities: Vec<Capability>,
+    ) -> Self {
+        let normalized_target = target
+            .as_deref()
+            .map(|t| normalize_target(t, None))
+            .unwrap_or(OperationTarget::None);
+        Self {
+            operation,
+            mode,
+            risk,
+            intended_uses,
+            target,
+            normalized_target,
+            required_features,
+            required_policy_flags,
+            requires_private_or_local_target,
+            requires_explicit_scope,
+            required_capabilities,
+        }
+    }
 }
 
 /// Origin of an execution request.
@@ -951,6 +997,154 @@ mod tests {
 // Operation Metadata — single source of truth for OperationDescriptor generation
 // ---------------------------------------------------------------------------
 
+/// Hint about the semantic kind of a target string, used by
+/// [`OperationMetadata::try_descriptor_for_target`] to improve normalization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetHint {
+    /// Treat as a URL (scheme://host/path).
+    Url,
+    /// Treat as a bare hostname or domain.
+    Host,
+    /// Treat as an IP address (v4 or v6).
+    Ip,
+    /// Treat as a CIDR network.
+    Cidr,
+    /// Treat as a local file or resource path.
+    Resource,
+}
+
+/// Normalized representation of an operation target.
+///
+/// Created by [`OperationMetadata::try_descriptor_for_target`] to provide
+/// a deterministic, comparable form for authorization binding. Two targets
+/// that are semantically identical will produce the same `OperationTarget`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum OperationTarget {
+    /// No target — operation does not operate against an external entity.
+    #[default]
+    None,
+    /// Normalized URL target (lowercase host, default-port stripped, path normalized).
+    Url(String),
+    /// Normalized hostname (lowercase).
+    Host(String),
+    /// Parsed IP address.
+    Ip(std::net::IpAddr),
+    /// Parsed CIDR network.
+    Cidr(ipnetwork::IpNetwork),
+    /// Local file or resource path (normalized to canonical form).
+    Resource(String),
+}
+
+impl std::fmt::Display for OperationTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "(none)"),
+            Self::Url(s) | Self::Host(s) | Self::Resource(s) => write!(f, "{}", s),
+            Self::Ip(addr) => write!(f, "{}", addr),
+            Self::Cidr(net) => write!(f, "{}", net),
+        }
+    }
+}
+
+impl OperationTarget {
+    /// Returns `true` if this is the `None` variant (no target).
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
+    /// Returns `true` if this target carries a meaningful identity (not `None`).
+    pub fn is_present(&self) -> bool {
+        !self.is_none()
+    }
+}
+
+/// Normalize a raw target string into an [`OperationTarget`], optionally guided
+/// by a [`TargetHint`].
+///
+/// When no hint is provided, the function attempts auto-detection: IP addresses
+/// and CIDR networks are tried first, then URLs (if a scheme is present), then
+/// bare hostnames.
+pub fn normalize_target(raw: &str, hint: Option<TargetHint>) -> OperationTarget {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return OperationTarget::None;
+    }
+
+    match hint {
+        Some(TargetHint::Url) => normalize_url(trimmed),
+        Some(TargetHint::Host) => OperationTarget::Host(trimmed.to_lowercase()),
+        Some(TargetHint::Ip) => {
+            if let Ok(addr) = trimmed.parse::<std::net::IpAddr>() {
+                OperationTarget::Ip(addr)
+            } else {
+                OperationTarget::Host(trimmed.to_lowercase())
+            }
+        }
+        Some(TargetHint::Cidr) => {
+            if let Ok(net) = trimmed.parse::<ipnetwork::IpNetwork>() {
+                OperationTarget::Cidr(net)
+            } else if let Ok(addr) = trimmed.parse::<std::net::IpAddr>() {
+                OperationTarget::Ip(addr)
+            } else {
+                OperationTarget::Host(trimmed.to_lowercase())
+            }
+        }
+        Some(TargetHint::Resource) => OperationTarget::Resource(trimmed.to_string()),
+        None => auto_detect_target(trimmed),
+    }
+}
+
+/// Auto-detect target kind and normalize.
+fn auto_detect_target(raw: &str) -> OperationTarget {
+    // Try bare IP first (before CIDR, since "10.0.0.2" parses as /32 CIDR).
+    if let Ok(addr) = raw.parse::<std::net::IpAddr>() {
+        return OperationTarget::Ip(addr);
+    }
+    // Try CIDR (must have explicit /prefix to avoid matching bare IPs).
+    if let Ok(net) = raw.parse::<ipnetwork::IpNetwork>() {
+        return OperationTarget::Cidr(net);
+    }
+    // If it looks like a URL (has a scheme), parse as URL.
+    if raw.contains("://") {
+        return normalize_url(raw);
+    }
+    // Otherwise treat as a hostname.
+    OperationTarget::Host(raw.to_lowercase())
+}
+
+/// Normalize a URL string: lowercase host, strip default port, normalize path.
+fn normalize_url(raw: &str) -> OperationTarget {
+    match url::Url::parse(raw) {
+        Ok(mut parsed) => {
+            // Lowercase the host.
+            if let Some(host) = parsed.host_str() {
+                let lower_host = host.to_lowercase();
+                let _ = parsed.set_host(Some(&lower_host));
+            }
+            // Strip default port.
+            let needs_port_strip = matches!(
+                (parsed.scheme(), parsed.port()),
+                ("http", Some(80)) | ("https", Some(443))
+            );
+            if needs_port_strip {
+                let _ = parsed.set_port(None);
+            }
+            // Normalize path: remove trailing slash unless root.
+            let path = parsed.path().to_string();
+            if path.len() > 1 && path.ends_with('/') {
+                let normalized = path.trim_end_matches('/');
+                parsed.set_path(normalized);
+            }
+            OperationTarget::Url(parsed.to_string())
+        }
+        Err(_) => {
+            // If URL parsing fails, treat as a hostname.
+            OperationTarget::Host(raw.to_lowercase())
+        }
+    }
+}
+
 /// Target policy requirement for operation metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetPolicyKind {
@@ -1023,13 +1217,22 @@ pub struct OperationMetadata {
 
 impl OperationMetadata {
     /// Generate an `OperationDescriptor` from this metadata.
+    ///
+    /// The `normalized_target` is auto-detected from the raw target string.
+    /// Prefer [`try_descriptor_for_target`] for new code, which validates
+    /// target policy before construction.
     pub fn descriptor_for_target(&self, target: Option<String>) -> OperationDescriptor {
+        let normalized = target
+            .as_deref()
+            .map(|t| normalize_target(t, None))
+            .unwrap_or(OperationTarget::None);
         OperationDescriptor {
             operation: self.id.to_string(),
             mode: self.mode,
             risk: self.risk,
             intended_uses: self.intended_uses.to_vec(),
             target,
+            normalized_target: normalized,
             required_features: self
                 .required_features
                 .iter()
@@ -1079,6 +1282,19 @@ impl OperationMetadata {
         &self,
         target: Option<&str>,
     ) -> Result<OperationDescriptor, DescriptorError> {
+        self.try_descriptor_for_target_hint(target, None)
+    }
+
+    /// Fallibly generate an `OperationDescriptor`, validating the target against
+    /// this metadata's target policy, with an optional [`TargetHint`] to improve
+    /// normalization.
+    ///
+    /// When `hint` is `None`, the function auto-detects the target kind.
+    pub fn try_descriptor_for_target_hint(
+        &self,
+        target: Option<&str>,
+        hint: Option<TargetHint>,
+    ) -> Result<OperationDescriptor, DescriptorError> {
         match self.target_policy {
             TargetPolicyKind::NoTarget => {
                 if let Some(t) = target {
@@ -1093,8 +1309,38 @@ impl OperationMetadata {
                 Ok(self.descriptor_for_target(None))
             }
             TargetPolicyKind::OptionalTarget => {
-                let t = target.filter(|s| !s.is_empty()).map(|s| s.to_string());
-                Ok(self.descriptor_for_target(t))
+                let t = target.filter(|s| !s.is_empty());
+                let normalized = t
+                    .map(|t| normalize_target(t, hint))
+                    .unwrap_or(OperationTarget::None);
+                Ok(OperationDescriptor {
+                    operation: self.id.to_string(),
+                    mode: self.mode,
+                    risk: self.risk,
+                    intended_uses: self.intended_uses.to_vec(),
+                    target: t.map(|s| s.to_string()),
+                    normalized_target: normalized,
+                    required_features: self
+                        .required_features
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    required_policy_flags: self
+                        .required_policy_flags
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    requires_private_or_local_target: matches!(
+                        self.target_policy,
+                        TargetPolicyKind::PrivateOrLocalRequired
+                    ),
+                    requires_explicit_scope: matches!(
+                        self.target_policy,
+                        TargetPolicyKind::ExplicitScopeRequired
+                            | TargetPolicyKind::PrivateOrLocalRequired
+                    ),
+                    required_capabilities: self.required_capabilities.to_vec(),
+                })
             }
             TargetPolicyKind::TargetRequired
             | TargetPolicyKind::ExplicitScopeRequired
@@ -1105,7 +1351,35 @@ impl OperationMetadata {
                         target_policy: self.target_policy,
                     }
                 })?;
-                Ok(self.descriptor_for_target(Some(t.to_string())))
+                let normalized = normalize_target(t, hint);
+                Ok(OperationDescriptor {
+                    operation: self.id.to_string(),
+                    mode: self.mode,
+                    risk: self.risk,
+                    intended_uses: self.intended_uses.to_vec(),
+                    target: Some(t.to_string()),
+                    normalized_target: normalized,
+                    required_features: self
+                        .required_features
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    required_policy_flags: self
+                        .required_policy_flags
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    requires_private_or_local_target: matches!(
+                        self.target_policy,
+                        TargetPolicyKind::PrivateOrLocalRequired
+                    ),
+                    requires_explicit_scope: matches!(
+                        self.target_policy,
+                        TargetPolicyKind::ExplicitScopeRequired
+                            | TargetPolicyKind::PrivateOrLocalRequired
+                    ),
+                    required_capabilities: self.required_capabilities.to_vec(),
+                })
             }
         }
     }

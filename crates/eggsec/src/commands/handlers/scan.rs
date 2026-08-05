@@ -103,18 +103,18 @@ pub async fn handle_fingerprint(
 
 #[cfg(feature = "nse")]
 pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "nse".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::Intrusive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.target.clone()),
-        required_features: vec!["nse".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "nse".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::Intrusive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(args.target.clone()),
+        vec!["nse".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
 
     // Select execution profile based on surface (CLI = ManualPermissive)
@@ -155,18 +155,18 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
 }
 
 pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "scan".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.target.clone()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "scan".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::SafeActive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(args.target.clone()),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("scan-{}", chrono::Utc::now().timestamp());
@@ -196,18 +196,18 @@ pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -
     let session = crate::pipeline::session::load(&args.session)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "scan-resume".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(session.target.clone()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "scan-resume".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::SafeActive,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(session.target.clone()),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager

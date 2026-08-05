@@ -36,18 +36,18 @@ pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) 
             .ok()
     });
 
-    let descriptor = OperationDescriptor {
-        operation: "scope-explain".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::Passive,
-        intended_uses: vec![IntendedUse::WebAssessment],
-        target: args.target.clone(),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    };
+    let descriptor = OperationDescriptor::new(
+        "scope-explain".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::Passive,
+        vec![IntendedUse::WebAssessment],
+        args.target.clone(),
+        vec![],
+        vec![],
+        false,
+        false,
+        Vec::new(),
+    );
 
     let decision =
         evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());

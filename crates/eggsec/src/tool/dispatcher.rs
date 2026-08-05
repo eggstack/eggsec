@@ -1,4 +1,4 @@
-use crate::config::ApprovedOperation;
+use crate::config::{normalize_target, ApprovedOperation, OperationTarget};
 use crate::error::EggsecError;
 use crate::tool::response::{ResponseMetadata, ResponseStatus};
 use crate::tool::{ToolRegistry, ToolRequest, ToolResponse};
@@ -29,13 +29,15 @@ pub enum DispatchBindingError {
         expected_target: String,
     },
 
-    /// The request target does not match the approved target.
+    /// The request target does not match the approved target (after normalization).
     #[error(
-        "request target '{request_target}' does not match approved target '{approved_target}'"
+        "request target '{request_raw}' normalizes to '{request_normalized}' which differs \
+         from approved normalized target '{approved_normalized}'"
     )]
-    TargetMismatch {
-        request_target: String,
-        approved_target: String,
+    NormalizedTargetMismatch {
+        request_raw: String,
+        request_normalized: OperationTarget,
+        approved_normalized: OperationTarget,
     },
 
     /// A targetless approval received a request with a target that would alter scope.
@@ -112,28 +114,31 @@ pub fn validate_request_binding(
 
     let effective_target = request_target.or(param_target);
 
-    match &descriptor.target {
-        Some(expected_target) => {
-            // 2. Target-bearing approval requires a target.
-            let actual = effective_target.ok_or_else(|| DispatchBindingError::MissingTarget {
-                approved_operation: descriptor.operation.clone(),
-                expected_target: expected_target.clone(),
-            })?;
-
-            // 3. Target match.
-            if actual != expected_target.as_str() {
-                return Err(DispatchBindingError::TargetMismatch {
-                    request_target: actual.to_string(),
-                    approved_target: expected_target.clone(),
-                });
-            }
-        }
-        None => {
+    match &descriptor.normalized_target {
+        OperationTarget::None => {
             // 4. Targetless approval rejects scope-escaping targets.
             if let Some(actual) = effective_target {
                 return Err(DispatchBindingError::UnexpectedTarget {
                     approved_operation: descriptor.operation.clone(),
                     request_target: actual.to_string(),
+                });
+            }
+        }
+        expected_normalized => {
+            // 2. Target-bearing approval requires a target.
+            let actual_raw =
+                effective_target.ok_or_else(|| DispatchBindingError::MissingTarget {
+                    approved_operation: descriptor.operation.clone(),
+                    expected_target: descriptor.target.clone().unwrap_or_default(),
+                })?;
+
+            // 3. Normalize request target and compare against approved normalized target.
+            let request_normalized = normalize_target(actual_raw, None);
+            if request_normalized != *expected_normalized {
+                return Err(DispatchBindingError::NormalizedTargetMismatch {
+                    request_raw: actual_raw.to_string(),
+                    request_normalized,
+                    approved_normalized: expected_normalized.clone(),
                 });
             }
         }

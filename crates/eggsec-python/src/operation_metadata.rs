@@ -794,7 +794,9 @@ impl OperationMetadataViewPy {
                 self.operation_id
             ))
         })?;
-        let descriptor = meta.descriptor_for_target(target.map(|s| s.to_string()));
+        let descriptor = meta
+            .try_descriptor_for_target(target)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(OperationDescriptorPy { inner: descriptor })
     }
 

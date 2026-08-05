@@ -169,18 +169,18 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
     use eggsec::config::{
         IntendedUse, OperationDescriptor, OperationMode, OperationRisk, PolicyDecision,
     };
-    let desc = OperationDescriptor {
-        operation: "test-op".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: vec![IntendedUse::WebAssessment],
-        target: Some("example.com".to_string()),
-        required_features: vec![],
-        required_policy_flags: vec![],
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: vec![],
-    };
+    let desc = OperationDescriptor::new(
+        "test-op".to_string(),
+        OperationMode::StandardAssessment,
+        OperationRisk::SafeActive,
+        vec![IntendedUse::WebAssessment],
+        Some("example.com".to_string()),
+        vec![],
+        vec![],
+        false,
+        false,
+        vec![],
+    );
     // Use allowed() constructor (no Default); the pending path still renders the popup content via message().
     let decision = PolicyDecision::allowed(
         "test-op",

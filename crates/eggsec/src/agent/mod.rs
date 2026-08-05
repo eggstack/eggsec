@@ -3098,18 +3098,18 @@ mod tests {
             LoadedScope::default_empty(),
         );
 
-        let descriptor = OperationDescriptor {
-            operation: "web_scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        };
+        let descriptor = OperationDescriptor::new(
+            "web_scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            true,
+            Vec::new(),
+        );
 
         // Evaluate with no manual overrides — should deny (no explicit scope)
         let outcome_no_override = enforcement.evaluate(&descriptor);
@@ -3143,18 +3143,18 @@ mod tests {
             LoadedScope::default_empty(),
         );
 
-        let descriptor = OperationDescriptor {
-            operation: "web_scan".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        };
+        let descriptor = OperationDescriptor::new(
+            "web_scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            true,
+            Vec::new(),
+        );
 
         let outcome = enforcement.evaluate(&descriptor);
         // AgentStrict should never produce Allow or RequireConfirmation for this descriptor
@@ -3177,18 +3177,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("10.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("10.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let decision = crate::config::PolicyDecision::denied(
             "scan-ports",
             OperationMode::StandardAssessment,
@@ -3224,18 +3224,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let outcome =
             EnforcementOutcome::RequireConfirmation(crate::config::PolicyDecision::allowed(
                 "fuzz",
@@ -3270,18 +3270,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let outcome = EnforcementOutcome::Allow(crate::config::PolicyDecision::allowed(
             "scan-ports",
             OperationMode::StandardAssessment,
@@ -3312,18 +3312,18 @@ mod tests {
             LoadedScope::default_empty(),
         );
         for i in 0..60 {
-            let desc = OperationDescriptor {
-                operation: format!("op-{}", i),
-                mode: OperationMode::StandardAssessment,
-                risk: OperationRisk::SafeActive,
-                intended_uses: vec![IntendedUse::WebAssessment],
-                target: Some("10.0.0.1".to_string()),
-                required_features: Vec::new(),
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: false,
-                required_capabilities: Vec::new(),
-            };
+            let desc = OperationDescriptor::new(
+                format!("op-{}", i),
+                OperationMode::StandardAssessment,
+                OperationRisk::SafeActive,
+                vec![IntendedUse::WebAssessment],
+                Some("10.0.0.1".to_string()),
+                Vec::new(),
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            );
             let decision = crate::config::PolicyDecision::denied(
                 &format!("op-{}", i),
                 OperationMode::StandardAssessment,
@@ -3358,18 +3358,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("10.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("10.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let decision = crate::config::PolicyDecision::denied(
             "scan-ports",
             OperationMode::StandardAssessment,
@@ -3420,18 +3420,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "fuzz".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Intrusive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("https://example.com".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "fuzz".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+            Some("https://example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let decision = crate::config::PolicyDecision::allowed(
             "fuzz",
             OperationMode::StandardAssessment,
@@ -3475,18 +3475,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("10.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("10.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         // ManualOverrideUnavailable maps to Deny in the handler
         let decision = crate::config::PolicyDecision::denied(
             "scan-ports",
@@ -3527,18 +3527,18 @@ mod tests {
             ExecutionPolicy::default(),
             LoadedScope::default_empty(),
         );
-        let desc = OperationDescriptor {
-            operation: "scan-ports".to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some("127.0.0.1".to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: Vec::new(),
-        };
+        let desc = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
         let outcome = EnforcementOutcome::Allow(crate::config::PolicyDecision::allowed(
             "scan-ports",
             OperationMode::StandardAssessment,

@@ -3,18 +3,18 @@ use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_evasion(ctx: &CommandContext, args: crate::cli::EvasionArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "evasion".to_string(),
-        mode: crate::config::OperationMode::DefenseLab,
-        risk: crate::config::OperationRisk::EvasionTesting,
-        intended_uses: vec![crate::config::IntendedUse::WafRegression],
-        target: args.target.clone(),
-        required_features: vec!["evasion".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "evasion".to_string(),
+        crate::config::OperationMode::DefenseLab,
+        crate::config::OperationRisk::EvasionTesting,
+        vec![crate::config::IntendedUse::WafRegression],
+        args.target.clone(),
+        vec!["evasion".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     if !args.dry_run && !args.quiet {
         eprintln!("NOTE: Real evasion detection requires explicit authorization.");

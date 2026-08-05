@@ -611,13 +611,15 @@ fn operation_descriptor_for_rest_tool(
 ) -> Result<OperationDescriptor, EggsecError> {
     use crate::tool::metadata::metadata_for_tool_id;
 
-    let target_opt = if target.is_empty() {
+    let target_ref = if target.is_empty() {
         None
     } else {
-        Some(target.to_string())
+        Some(target)
     };
     if let Some(metadata) = metadata_for_tool_id(tool_id) {
-        let mut descriptor = metadata.descriptor_for_target(target_opt);
+        let mut descriptor = metadata
+            .try_descriptor_for_target(target_ref)
+            .map_err(|e| EggsecError::Config(format!("invalid target: {}", e)))?;
         descriptor.requires_explicit_scope = true;
         Ok(descriptor)
     } else {

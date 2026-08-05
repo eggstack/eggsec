@@ -10,21 +10,21 @@ pub async fn handle_auth_test(
     ctx: &crate::commands::CommandContext,
     mut args: AuthTestArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "auth-test".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::CredentialTesting,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "auth-test".to_string(),
+        crate::config::OperationMode::StandardAssessment,
+        crate::config::OperationRisk::CredentialTesting,
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(
             crate::utils::extract_target_from_url(&args.target)
                 .unwrap_or_else(|| args.target.clone()),
         ),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 

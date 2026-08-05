@@ -20,18 +20,18 @@ pub async fn handle_proxy_intercept(
         crate::config::OperationRisk::SafeActive
     };
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "proxy-intercept".to_string(),
-        mode: crate::config::OperationMode::DefenseLab,
+    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
+        "proxy-intercept".to_string(),
+        crate::config::OperationMode::DefenseLab,
         risk,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.listen.clone()),
-        required_features: vec!["web-proxy".to_string()],
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+        vec![crate::config::IntendedUse::WebAssessment],
+        Some(args.listen.clone()),
+        vec!["web-proxy".to_string()],
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    ))?;
 
     // Extra runtime safety gate
     if is_real && !args.allow_web_proxy {

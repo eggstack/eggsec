@@ -156,18 +156,18 @@ pub fn preflight_operation(
     target: Option<&str>,
 ) -> PyResult<PreflightResultPy> {
     // Build an OperationDescriptor from the provided parameters
-    let descriptor = eggsec::config::OperationDescriptor {
-        operation: operation_id.to_string(),
-        mode: eggsec::config::OperationMode::StandardAssessment,
-        risk: eggsec::config::OperationRisk::SafeActive,
-        intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-        target: target.map(|t| t.to_string()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    };
+    let descriptor = eggsec::config::OperationDescriptor::new(
+        operation_id.to_string(),
+        eggsec::config::OperationMode::StandardAssessment,
+        eggsec::config::OperationRisk::SafeActive,
+        vec![eggsec::config::IntendedUse::WebAssessment],
+        target.map(|t| t.to_string()),
+        Vec::new(),
+        Vec::new(),
+        false,
+        false,
+        Vec::new(),
+    );
 
     // Build a default enforcement context for preview
     let enforcement = eggsec::config::EnforcementContext::manual_permissive(

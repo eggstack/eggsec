@@ -278,18 +278,18 @@ mod tests {
     }
 
     fn passive_descriptor(operation: &str, target: Option<&str>) -> OperationDescriptor {
-        OperationDescriptor {
-            operation: operation.to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::Passive,
-            intended_uses: vec![],
-            target: target.map(|t| t.to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        }
+        OperationDescriptor::new(
+            operation.to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::Passive,
+            vec![],
+            target.map(|t| t.to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        )
     }
 
     #[test]
@@ -399,18 +399,18 @@ mod tests {
     }
 
     fn safe_active_descriptor(operation: &str, target: Option<&str>) -> OperationDescriptor {
-        OperationDescriptor {
-            operation: operation.to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: OperationRisk::SafeActive,
-            intended_uses: vec![],
-            target: target.map(|t| t.to_string()),
-            required_features: vec![],
-            required_policy_flags: vec![],
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities: vec![],
-        }
+        OperationDescriptor::new(
+            operation.to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![],
+            target.map(|t| t.to_string()),
+            vec![],
+            vec![],
+            false,
+            false,
+            vec![],
+        )
     }
 
     /// Preflight and execution agree: passive op with in-scope target → Allow.
