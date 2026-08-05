@@ -24,6 +24,9 @@ pub struct PolicyDecision {
     pub missing_features: Vec<String>,
     pub required_policy_flags: Vec<String>,
     pub denied_reasons: Vec<String>,
+    /// Typed denial classes populated during evaluation.
+    /// Replaces string inspection in `classify_denial_reasons()`.
+    pub denial_classes: Vec<DenialClass>,
     pub warnings: Vec<String>,
     // Manual override audit (populated only for ManualPermissive when override accepted)
     pub manual_override_used: bool,
@@ -54,6 +57,7 @@ impl PolicyDecision {
             missing_features: Vec::new(),
             required_policy_flags: Vec::new(),
             denied_reasons: Vec::new(),
+            denial_classes: Vec::new(),
             warnings: Vec::new(),
             manual_override_used: false,
             manual_override_reason: None,
@@ -84,6 +88,7 @@ impl PolicyDecision {
             missing_features: Vec::new(),
             required_policy_flags: Vec::new(),
             denied_reasons: vec![reason.to_string()],
+            denial_classes: Vec::new(),
             warnings: Vec::new(),
             manual_override_used: false,
             manual_override_reason: None,
@@ -112,6 +117,13 @@ impl PolicyDecision {
         self
     }
 
+    /// Push a typed denial class. Also appends a human-readable reason to `denied_reasons`
+    /// for backward compatibility.
+    pub fn push_denial_class(&mut self, class: DenialClass, reason: &str) {
+        self.denial_classes.push(class);
+        self.denied_reasons.push(reason.to_string());
+    }
+
     pub fn with_required_feature(mut self, feature: &str) -> Self {
         self.required_features.push(feature.to_string());
         self
@@ -128,6 +140,13 @@ impl PolicyDecision {
     }
 
     pub fn with_denied_reason(mut self, reason: &str) -> Self {
+        self.denied_reasons.push(reason.to_string());
+        self
+    }
+
+    /// Builder method to add a typed denial class with a human-readable reason.
+    pub fn with_denial_class(mut self, class: DenialClass, reason: &str) -> Self {
+        self.denial_classes.push(class);
         self.denied_reasons.push(reason.to_string());
         self
     }
@@ -550,7 +569,8 @@ impl EnforcementContext {
         if self.requires_explicit_manifest_for(descriptor)
             && !self.loaded_scope.is_explicit_manifest()
         {
-            let mut decision = outcome.decision().clone().with_denied_reason(
+            let mut decision = outcome.decision().clone().with_denial_class(
+                DenialClass::ScopeMissing,
                 "explicit scope manifest required for automated networked operation",
             );
             decision.allowed = false;
@@ -975,9 +995,10 @@ pub fn evaluate_operation_policy(
     for feature in &descriptor.required_features {
         if !is_feature_enabled(feature) {
             decision = decision.with_missing_feature(feature);
-            decision
-                .denied_reasons
-                .push(format!("required feature '{}' is not enabled", feature));
+            decision.push_denial_class(
+                DenialClass::FeatureMissing,
+                &format!("required feature '{}' is not enabled", feature),
+            );
             decision.allowed = false;
         }
     }
@@ -1014,47 +1035,53 @@ pub fn evaluate_operation_policy(
                         decision
                             .matched_exclusion_rules
                             .push(format!("excluded: {}", target));
-                        decision
-                            .denied_reasons
-                            .push("target is explicitly excluded from scope".to_string());
+                        decision.push_denial_class(
+                            DenialClass::ExplicitExclusion,
+                            "target is explicitly excluded from scope",
+                        );
                     } else {
-                        decision
-                            .denied_reasons
-                            .push("target not in scope".to_string());
+                        decision.push_denial_class(
+                            DenialClass::TargetOutOfScope,
+                            "target not in scope",
+                        );
                     }
                     decision.allowed = false;
                 }
                 Err(e) => {
-                    decision
-                        .denied_reasons
-                        .push(format!("scope check error: {}", e));
+                    decision.push_denial_class(
+                        DenialClass::InvalidTarget,
+                        &format!("scope check error: {}", e),
+                    );
                     decision.allowed = false;
                 }
             }
         } else if descriptor.requires_explicit_scope || descriptor.requires_private_or_local_target
         {
-            decision
-                .denied_reasons
-                .push("scope file required but not provided".to_string());
-            decision.allowed = false;
-        } else if super::is_private_ip(
-            &target
-                .parse()
-                .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
-        ) {
-            decision.warnings.push(
-                "target is a private IP; scope file recommended for defense-lab profiles"
-                    .to_string(),
+            decision.push_denial_class(
+                DenialClass::ScopeMissing,
+                "scope file required but not provided",
             );
+            decision.allowed = false;
+        } else if let Ok(ip) = target.parse::<std::net::IpAddr>() {
+            let class = super::scope::classify_address(&ip);
+            if class.is_non_public() && class != super::scope::AddressClass::Loopback {
+                decision.warnings.push(format!(
+                    "target is a {} IP; scope file recommended for defense-lab profiles",
+                    class
+                ));
+            }
         }
     }
 
     // Check risk against execution policy
     if !descriptor.risk.is_allowed_by(policy) {
-        decision.denied_reasons.push(format!(
-            "operation risk '{}' is not allowed by current execution policy",
-            descriptor.risk
-        ));
+        decision.push_denial_class(
+            DenialClass::RiskPolicyDenied,
+            &format!(
+                "operation risk '{}' is not allowed by current execution policy",
+                descriptor.risk
+            ),
+        );
         decision.allowed = false;
     }
 
@@ -1063,9 +1090,10 @@ pub fn evaluate_operation_policy(
         match flag.as_str() {
             "require_explicit_scope" => {
                 if !policy.require_explicit_scope {
-                    decision
-                        .denied_reasons
-                        .push("require_explicit_scope is disabled in policy".to_string());
+                    decision.push_denial_class(
+                        DenialClass::ScopeMissing,
+                        "require_explicit_scope is disabled in policy",
+                    );
                     decision.allowed = false;
                 }
                 decision.required_policy_flags.push(flag.clone());
@@ -1084,7 +1112,18 @@ pub fn evaluate_operation_policy(
 /// This enables profile-specific downgrade logic (e.g., ManualPermissive downgrading
 /// safe scope-selection misses to warnings) while keeping feature/risk/capability/exclusion
 /// denials as hard denials.
+///
+/// When `denial_classes` is populated (new code path), returns those directly.
+/// Falls back to string inspection of `denied_reasons` for legacy compatibility.
 pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
+    // Prefer typed denial classes when available (new code path)
+    if !decision.denial_classes.is_empty() {
+        use std::collections::HashSet;
+        let set: HashSet<DenialClass> = decision.denial_classes.iter().copied().collect();
+        return set.into_iter().collect();
+    }
+
+    // Legacy fallback: string inspection of denied_reasons
     use std::collections::HashSet;
     let mut classes: HashSet<DenialClass> = HashSet::new();
     let reasons = &decision.denied_reasons;
@@ -1202,10 +1241,10 @@ pub fn evaluate_enforcement(
         // Denied capabilities always deny, regardless of profile
         for cap in &descriptor.required_capabilities {
             if policy.denied_capabilities.contains(cap) {
-                decision.denied_reasons.push(format!(
-                    "capability '{}' is denied by execution policy",
-                    cap
-                ));
+                decision.push_denial_class(
+                    DenialClass::CapabilityDenied,
+                    &format!("capability '{}' is denied by execution policy", cap),
+                );
                 decision.allowed = false;
                 return EnforcementOutcome::Deny(decision);
             }
@@ -1217,10 +1256,13 @@ pub fn evaluate_enforcement(
                 if !policy.allowed_capabilities.contains(cap)
                     && !super::baseline_allowed_capability(*cap)
                 {
-                    decision.denied_reasons.push(format!(
-                        "capability '{}' requires explicit allow in {} execution policy",
-                        cap, profile
-                    ));
+                    decision.push_denial_class(
+                        DenialClass::CapabilityDenied,
+                        &format!(
+                            "capability '{}' requires explicit allow in {} execution policy",
+                            cap, profile
+                        ),
+                    );
                     decision.allowed = false;
                     return EnforcementOutcome::Deny(decision);
                 }
@@ -3718,5 +3760,85 @@ mod tests {
         let meta = super::super::operation_metadata("mobile-static").unwrap();
         let desc = meta.try_descriptor_for_target(None).unwrap();
         assert_eq!(desc.target, None);
+    }
+
+    // ========== Phase B.1: Typed denial class tests ==========
+
+    #[test]
+    fn typed_denial_class_populated_on_scope_missing() {
+        use super::super::scope::LoadedScope;
+        let ctx =
+            EnforcementContext::ci_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
+        let descriptor = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            true, // requires_explicit_scope
+            Vec::new(),
+        );
+        let outcome = ctx.evaluate(&descriptor);
+        let decision = outcome.decision();
+        // Typed denial classes should be populated
+        assert!(!decision.denial_classes.is_empty());
+        assert!(decision.denial_classes.contains(&DenialClass::ScopeMissing));
+        // classify_denial_reasons should return the typed classes directly
+        let classes = classify_denial_reasons(decision);
+        assert!(classes.contains(&DenialClass::ScopeMissing));
+    }
+
+    #[test]
+    fn typed_denial_class_populated_on_exclusion() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        let scope = super::super::Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("secret.example.com".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::ConfigFile, None);
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), loaded);
+        let descriptor = OperationDescriptor::new(
+            "scan".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            Some("secret.example.com".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
+        let outcome = ctx.evaluate(&descriptor);
+        let decision = outcome.decision();
+        // Typed denial classes should include ExplicitExclusion
+        assert!(decision
+            .denial_classes
+            .contains(&DenialClass::ExplicitExclusion));
+        // String-based classify should also work
+        let classes = classify_denial_reasons(decision);
+        assert!(classes.contains(&DenialClass::ExplicitExclusion));
+    }
+
+    #[test]
+    fn typed_denial_class_builder_method() {
+        let mut decision = PolicyDecision::allowed(
+            "test",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+        );
+        decision.push_denial_class(
+            DenialClass::FeatureMissing,
+            "required feature 'nse' is not enabled",
+        );
+        assert_eq!(decision.denial_classes.len(), 1);
+        assert_eq!(decision.denial_classes[0], DenialClass::FeatureMissing);
+        assert_eq!(decision.denied_reasons.len(), 1);
+        assert!(decision.denied_reasons[0].contains("nse"));
     }
 }

@@ -130,6 +130,39 @@ Key methods:
 - `parse_hostname_only_with_resolver(target, resolver)` - Hostname-only matching
 - `evaluate_addresses(allowed, excluded)` - Returns `(all_allowed, any_excluded, classes)`
 
+### Connection Point Inventory (Workstream 1)
+
+Phase B documented where DNS resolution and connection creation occur:
+
+**DNS Resolution Points:**
+| Location | Mechanism | Notes |
+|----------|-----------|-------|
+| `config/scope.rs` | `SystemResolver` via `HostResolver` trait | Canonical resolver for scope evaluation |
+| `reqwest` (HTTP client) | Internal `ToSocketAddrs` | Resolves on each request unless pinned |
+| `std::net::TcpStream` | `ToSocketAddrs` | Direct TCP connections resolve independently |
+| `tokio::net::TcpStream` | Async DNS via tokio | Async resolution for non-blocking paths |
+| `headless-browser` | Browser DNS | Chromium/Firefox resolve via system DNS |
+
+**Connection Creation Points:**
+| Location | Type | Scope Check |
+|----------|------|-------------|
+| `reqwest::Client` | HTTP/HTTPS | Pre-dispatch via `EnforcementContext` |
+| `scanner/port_scan` | TCP connect | Pre-dispatch via `EnforcementContext` |
+| `tool/protocol/mcp` | HTTP to MCP server | Pre-dispatch via `EnforcementContext` |
+| `proxy/` | MITM proxy connections | Pre-dispatch via `EnforcementContext` |
+| `stress/` | Raw socket creation | Feature-gated, pre-dispatch |
+
+**Redirect Handling:**
+- `reqwest` follows redirects by default (`follow_redirects: true`)
+- Cross-host redirects trigger `CrossHostRedirect` confirmation in ManualPermissive
+- Redirect targets are re-authorized via `Scope::is_target_allowed()` in the redirect hook
+
+**TOCTOU Considerations:**
+- Scope checks occur at dispatch time, not per-connection
+- `reqwest` may re-resolve DNS between scope check and connection
+- Strict automated surfaces should pin connections to approved addresses when possible
+- Manual surfaces accept the residual TOCTOU risk with operator oversight
+
 **Scope loading:**
 - `load_scope_with_source()` loads a scope from a file and tags it with the appropriate `ScopeSource`
 - When `--scope` is provided, the result has `ScopeSource::CliScopeFile`
@@ -148,6 +181,21 @@ Key methods:
 - `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `RequireConfirmation(PolicyDecision)`, `Deny(PolicyDecision)`
 - `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
 - `Capability` - Operation capability declarations for tool metadata
+
+**Typed Denial Classes (Phase B):**
+
+`PolicyDecision` now includes `denial_classes: Vec<DenialClass>` populated during evaluation:
+- `DenialClass::ScopeMissing` - No scope manifest provided
+- `DenialClass::TargetOutOfScope` - Target not in allowed scope
+- `DenialClass::ExplicitExclusion` - Target matches exclusion rule
+- `DenialClass::FeatureMissing` - Required feature not enabled
+- `DenialClass::RiskPolicyDenied` - Operation risk exceeds policy
+- `DenialClass::CapabilityDenied` - Capability denied by policy
+- `DenialClass::InvalidTarget` - Target is invalid/unresolvable
+- `DenialClass::Unknown` - Catch-all for unclassified denials
+
+`classify_denial_reasons()` returns typed classes directly when `denial_classes` is populated; falls back to string inspection of `denied_reasons` for legacy compatibility.
+
 - `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes with variants:
   - `Candidate` - Newly discovered, not yet evaluated
   - `PendingApproval` - Awaiting operator approval

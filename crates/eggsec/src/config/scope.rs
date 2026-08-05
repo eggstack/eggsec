@@ -41,6 +41,15 @@ impl AddressClass {
             Self::Multicast => "multicast",
         }
     }
+
+    /// Returns `true` if this address class is non-public (loopback, private, link-local,
+    /// IPv4-mapped loopback, unspecified, or multicast).
+    ///
+    /// Used by scope authorization to determine if an address requires explicit scope rules.
+    /// Public addresses are allowed by default; non-public addresses require explicit authorization.
+    pub fn is_non_public(&self) -> bool {
+        !matches!(self, Self::Public)
+    }
 }
 
 impl std::fmt::Display for AddressClass {
@@ -75,7 +84,16 @@ pub fn classify_address(ip: &IpAddr) -> AddressClass {
             }
         }
         IpAddr::V6(v6) => {
-            if v6.is_loopback() {
+            // Check for IPv4-mapped addresses first (before loopback check)
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                // IPv4-mapped IPv6: ::ffff:a.b.c.d — classify the embedded v4
+                // but use IPv4MappedLoopback for mapped loopback addresses
+                if v4.is_loopback() {
+                    AddressClass::IPv4MappedLoopback
+                } else {
+                    classify_address(&IpAddr::V4(v4))
+                }
+            } else if v6.is_loopback() {
                 AddressClass::Loopback
             } else if v6.is_unspecified() {
                 AddressClass::Unspecified
@@ -85,9 +103,6 @@ pub fn classify_address(ip: &IpAddr) -> AddressClass {
                 AddressClass::Private
             } else if (v6.segments()[0] & 0xffc0) == 0xfe80 {
                 AddressClass::LinkLocal
-            } else if let Some(v4) = v6.to_ipv4_mapped() {
-                // IPv4-mapped IPv6: ::ffff:a.b.c.d — classify the embedded v4
-                classify_address(&IpAddr::V4(v4))
             } else {
                 AddressClass::Public
             }
@@ -380,14 +395,16 @@ impl Scope {
                 );
                 return Ok(false);
             }
-            // Block private IPs even when no scope rules are defined.
+            // Block non-public addresses even when no scope rules are defined.
             // Loopback addresses are exempt — they are inherently local and
             // represent no scope violation on any machine.
             if let Some(ref ip) = target_scope.ip {
-                if !ip.is_loopback() && is_private_ip(ip) {
+                let class = classify_address(ip);
+                if class != AddressClass::Loopback && class.is_non_public() {
                     tracing::warn!(
                         target = %target,
-                        "Private IP address blocked by security policy"
+                        address_class = %class,
+                        "Non-public IP address blocked by security policy"
                     );
                     return Ok(false);
                 }
@@ -397,7 +414,7 @@ impl Scope {
 
         // Use all-address evaluation when available
         let allowed = if !target_scope.resolved_addresses.is_empty() {
-            let (all_allowed, any_excluded, _classes) =
+            let (all_allowed, any_excluded, classes) =
                 target_scope.evaluate_addresses(&self.allowed_targets, &self.excluded_targets);
             if any_excluded {
                 tracing::warn!(
@@ -405,6 +422,15 @@ impl Scope {
                     "One or more resolved addresses match exclusion rules"
                 );
                 return Ok(false);
+            }
+            if !all_allowed {
+                // Log the address classes for diagnostics
+                let class_summary: Vec<&str> = classes.iter().map(|c| c.as_str()).collect();
+                tracing::warn!(
+                    target = %target,
+                    resolved_classes = ?class_summary,
+                    "Not all resolved addresses are in allowed scope"
+                );
             }
             all_allowed
         } else {
@@ -415,10 +441,12 @@ impl Scope {
 
         if !allowed {
             if let Some(ref ip) = target_scope.ip {
-                if is_private_ip(ip) {
+                let class = classify_address(ip);
+                if class.is_non_public() {
                     tracing::warn!(
                         target = %target,
-                        "Private IP address not in allowed scope"
+                        address_class = %class,
+                        "Non-public IP address not in allowed scope"
                     );
                     return Ok(false);
                 }
@@ -1448,5 +1476,110 @@ require_explicit_scope = false
         };
         assert!(with_addrs.has_addresses());
         assert_eq!(with_addrs.first_address(), Some("1.2.3.4".parse().unwrap()));
+    }
+
+    // ========== Phase B.1: AddressClass-based authorization tests ==========
+
+    #[test]
+    fn test_address_class_is_non_public() {
+        assert!(!AddressClass::Public.is_non_public());
+        assert!(AddressClass::Loopback.is_non_public());
+        assert!(AddressClass::Private.is_non_public());
+        assert!(AddressClass::LinkLocal.is_non_public());
+        assert!(AddressClass::IPv4MappedLoopback.is_non_public());
+        assert!(AddressClass::Unspecified.is_non_public());
+        assert!(AddressClass::Multicast.is_non_public());
+    }
+
+    #[test]
+    fn test_scope_no_rules_allows_public_targets() {
+        let scope = Scope::new();
+        // Public targets are allowed when no rules are defined
+        assert!(scope.is_target_allowed("8.8.8.8").unwrap());
+        assert!(scope.is_target_allowed("example.com").unwrap());
+    }
+
+    #[test]
+    fn test_scope_no_rules_blocks_private_targets() {
+        let scope = Scope::new();
+        // Private targets are blocked when no rules are defined
+        assert!(!scope.is_target_allowed("10.0.0.1").unwrap());
+        assert!(!scope.is_target_allowed("192.168.1.1").unwrap());
+        assert!(!scope.is_target_allowed("172.16.0.1").unwrap());
+    }
+
+    #[test]
+    fn test_scope_no_rules_allows_loopback_targets() {
+        let scope = Scope::new();
+        // Loopback is exempt from private IP blocking
+        assert!(scope.is_target_allowed("127.0.0.1").unwrap());
+        assert!(scope.is_target_allowed("127.0.0.2").unwrap());
+    }
+
+    #[test]
+    fn test_scope_no_rules_blocks_link_local_targets() {
+        let scope = Scope::new();
+        // Link-local addresses are blocked
+        assert!(!scope.is_target_allowed("169.254.1.1").unwrap());
+    }
+
+    #[test]
+    fn test_scope_with_cidr_allows_matching_private_targets() {
+        let mut scope = Scope::new();
+        scope
+            .allowed_targets
+            .push(ScopeRule::new("10.0.0.0/8".to_string()));
+        // Private IP in allowed CIDR is permitted
+        assert!(scope.is_target_allowed("10.0.0.1").unwrap());
+        assert!(scope.is_target_allowed("10.255.255.255").unwrap());
+    }
+
+    #[test]
+    fn test_scope_with_cidr_blocks_non_matching_private_targets() {
+        let mut scope = Scope::new();
+        scope
+            .allowed_targets
+            .push(ScopeRule::new("10.0.0.0/8".to_string()));
+        // Private IP not in allowed CIDR is blocked
+        assert!(!scope.is_target_allowed("192.168.1.1").unwrap());
+        assert!(!scope.is_target_allowed("172.16.0.1").unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_addresses_uses_address_class() {
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            ..Default::default()
+        };
+        // Mixed public and private addresses
+        let ts = TargetScope {
+            host: "mixed.example.com".to_string(),
+            ip: Some("8.8.8.8".parse::<IpAddr>().unwrap()),
+            resolved_addresses: vec![
+                "8.8.8.8".parse::<IpAddr>().unwrap(),
+                "10.0.0.1".parse::<IpAddr>().unwrap(),
+            ],
+        };
+        let (all_allowed, _any_excluded, classes) =
+            ts.evaluate_addresses(&scope.allowed_targets, &scope.excluded_targets);
+        // Wildcard allows all addresses
+        assert!(all_allowed);
+        // Classes correctly identify address types
+        assert!(classes.contains(&AddressClass::Public));
+        assert!(classes.contains(&AddressClass::Private));
+    }
+
+    #[test]
+    fn test_classify_address_ipv4_mapped_loopback() {
+        // ::ffff:127.0.0.1 should be classified as IPv4MappedLoopback
+        let mapped_loopback: IpAddr = "::ffff:127.0.0.1".parse().unwrap();
+        assert_eq!(
+            classify_address(&mapped_loopback),
+            AddressClass::IPv4MappedLoopback
+        );
+
+        // ::ffff:10.0.0.1 should be classified as Private (via embedded v4)
+        let mapped_private: IpAddr = "::ffff:10.0.0.1".parse().unwrap();
+        assert_eq!(classify_address(&mapped_private), AddressClass::Private);
     }
 }
