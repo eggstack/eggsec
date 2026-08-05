@@ -481,6 +481,13 @@ impl App {
                         ));
                         return;
                     }
+                    Err(EnforcementError::SurfaceProfileMismatch { .. }) => {
+                        // Configuration error; show generic error
+                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                            "surface/profile mismatch — this is a configuration error".to_string(),
+                        ));
+                        return;
+                    }
                 }
             }
         }
@@ -581,6 +588,15 @@ impl App {
                 }
                 self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
                     decision.to_human_readable(),
+                ));
+            }
+            Err(EnforcementError::SurfaceProfileMismatch { .. }) => {
+                {
+                    let mut tab = self.current_tab;
+                    tab.as_tab_input(self).stop();
+                }
+                self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                    "surface/profile mismatch — this is a configuration error".to_string(),
                 ));
             }
         }
@@ -887,6 +903,11 @@ impl App {
                 Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
                     self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
                         decision.to_human_readable(),
+                    ));
+                }
+                Err(EnforcementError::SurfaceProfileMismatch { .. }) => {
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        "surface/profile mismatch — this is a configuration error".to_string(),
                     ));
                 }
             }

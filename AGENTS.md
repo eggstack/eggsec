@@ -254,6 +254,9 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **Enum from_str**: All public enums raise `ValueError` on unknown strings. Never silently default.
 - **Context managers**: All sink/callback classes support `with` statements. Use them for automatic cleanup.
 - **DTO round-trip**: `OperationError`, `ExecutionStats`, `Artifact` support `from_dict()`/`from_json()` for serialization round-trip.
+- **Descriptor construction**: Use `OperationMetadata::try_descriptor_for_target()` for validated construction. The unchecked `descriptor_for_target()` remains for backward compatibility but should not be used for new strict-surface code.
+- **Approval binding**: `ApprovedOperation` is the only valid dispatch token. Use `EnforcementContext::approve()` or `approve_manual()`. The surface must match the context profile.
+- **Dispatch binding**: Use `validate_request_binding()` to verify request matches approval before dispatch. Fails closed on any mismatch.
 
 ## Lessons Learned
 

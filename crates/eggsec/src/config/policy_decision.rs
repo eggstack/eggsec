@@ -263,15 +263,34 @@ pub enum EnforcementError {
         surface: ExecutionSurface,
         decision: PolicyDecision,
     },
+
+    /// Caller-provided surface does not match the enforcement context's profile.
+    ///
+    /// This is a configuration/programming error: the surface passed to
+    /// `approve()` or `approve_manual()` must derive the same profile as the
+    /// context was constructed with.
+    #[error(
+        "surface/profile mismatch: surface '{surface}' derives profile '{surface_profile}' \
+         but context has profile '{context_profile}'"
+    )]
+    SurfaceProfileMismatch {
+        surface: ExecutionSurface,
+        surface_profile: ExecutionProfile,
+        context_profile: ExecutionProfile,
+    },
 }
 
 impl EnforcementError {
-    /// Returns a reference to the inner `PolicyDecision`.
-    pub fn decision(&self) -> &PolicyDecision {
+    /// Returns a reference to the inner `PolicyDecision`, if available.
+    ///
+    /// Returns `None` for [`SurfaceProfileMismatch`](Self::SurfaceProfileMismatch)
+    /// which is a configuration error without an associated policy decision.
+    pub fn decision(&self) -> Option<&PolicyDecision> {
         match self {
             Self::Denied { decision }
             | Self::ConfirmationRequired { decision, .. }
-            | Self::ManualOverrideUnavailable { decision, .. } => decision,
+            | Self::ManualOverrideUnavailable { decision, .. } => Some(decision),
+            Self::SurfaceProfileMismatch { .. } => None,
         }
     }
 }
@@ -309,6 +328,22 @@ impl ApprovedOperation {
             profile,
             audit_event_id,
         }
+    }
+
+    /// Construct an approved operation for integration testing.
+    ///
+    /// This is a public convenience wrapper around the private constructor
+    /// intended for integration test files that need to build approval tokens
+    /// without going through the full enforcement path.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn for_test(
+        descriptor: OperationDescriptor,
+        decision: PolicyDecision,
+        surface: ExecutionSurface,
+        profile: ExecutionProfile,
+    ) -> Self {
+        Self::new(descriptor, decision, surface, profile, None)
     }
 
     /// The operation descriptor that was approved.
@@ -525,6 +560,10 @@ impl EnforcementContext {
     /// Only `Allow` outcomes produce an `ApprovedOperation`. `Warn`,
     /// `RequireConfirmation`, and `Deny` all fail with [`EnforcementError`].
     ///
+    /// The caller-provided `surface` must derive the same profile as this
+    /// context was constructed with. Mismatches return
+    /// [`EnforcementError::SurfaceProfileMismatch`].
+    ///
     /// Use this for REST, MCP, Agent, and CI surfaces.
     #[allow(clippy::result_large_err)]
     pub fn approve(
@@ -532,6 +571,15 @@ impl EnforcementContext {
         surface: ExecutionSurface,
         descriptor: OperationDescriptor,
     ) -> Result<ApprovedOperation, EnforcementError> {
+        let surface_profile = surface.profile();
+        if surface_profile != self.execution_profile {
+            return Err(EnforcementError::SurfaceProfileMismatch {
+                surface,
+                surface_profile,
+                context_profile: self.execution_profile,
+            });
+        }
+
         let outcome = self.evaluate(&descriptor);
         match outcome {
             EnforcementOutcome::Allow(decision) => Ok(ApprovedOperation::new(
@@ -561,6 +609,10 @@ impl EnforcementContext {
     /// when a matching manual override is present. For strict or automated surfaces,
     /// manual overrides are rejected.
     ///
+    /// The caller-provided `surface` must derive the same profile as this
+    /// context was constructed with. Mismatches return
+    /// [`EnforcementError::SurfaceProfileMismatch`].
+    ///
     /// Use this for CLI and TUI manual dispatch paths.
     #[allow(clippy::result_large_err)]
     pub fn approve_manual(
@@ -569,6 +621,15 @@ impl EnforcementContext {
         descriptor: OperationDescriptor,
         manual_override: Option<&ManualOverride>,
     ) -> Result<ApprovedOperation, EnforcementError> {
+        let surface_profile = surface.profile();
+        if surface_profile != self.execution_profile {
+            return Err(EnforcementError::SurfaceProfileMismatch {
+                surface,
+                surface_profile,
+                context_profile: self.execution_profile,
+            });
+        }
+
         let outcome = self.evaluate(&descriptor);
         match outcome {
             EnforcementOutcome::Allow(decision) => Ok(ApprovedOperation::new(
@@ -3008,12 +3069,25 @@ mod tests {
             "expected Warn, got {:?}",
             outcome
         );
-        // approve() should reject Warn -> Err(Denied)
-        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        // approve() with matching surface should reject Warn -> Err(Denied)
+        let result = ctx.approve(
+            super::super::ExecutionSurface::CliManual,
+            descriptor.clone(),
+        );
         assert!(result.is_err(), "approve() should reject Warn outcome");
         match result.unwrap_err() {
             EnforcementError::Denied { .. } => {}
             other => panic!("expected Denied, got {:?}", other),
+        }
+        // approve() with mismatched surface should fail with SurfaceProfileMismatch
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(
+            result.is_err(),
+            "approve() should reject mismatched surface"
+        );
+        match result.unwrap_err() {
+            EnforcementError::SurfaceProfileMismatch { .. } => {}
+            other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
         }
     }
 
@@ -3049,8 +3123,11 @@ mod tests {
             "expected RequireConfirmation, got {:?}",
             outcome
         );
-        // approve() should return Err(ConfirmationRequired)
-        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        // approve() with matching surface should return Err(ConfirmationRequired)
+        let result = ctx.approve(
+            super::super::ExecutionSurface::CliManual,
+            descriptor.clone(),
+        );
         assert!(
             result.is_err(),
             "approve() should reject RequireConfirmation"
@@ -3062,6 +3139,16 @@ mod tests {
                 assert!(!required_classes.is_empty(), "should have required classes");
             }
             other => panic!("expected ConfirmationRequired, got {:?}", other),
+        }
+        // approve() with mismatched surface should fail with SurfaceProfileMismatch
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(
+            result.is_err(),
+            "approve() should reject mismatched surface"
+        );
+        match result.unwrap_err() {
+            EnforcementError::SurfaceProfileMismatch { .. } => {}
+            other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
         }
     }
 
@@ -3156,16 +3243,27 @@ mod tests {
             requires_explicit_scope: false,
             required_capabilities: vec![],
         };
-        // approve_manual with McpServer (automated) should reject Warn
+        // approve_manual with matching surface (TuiManual) should accept Warn
+        let result = ctx.approve_manual(
+            super::super::ExecutionSurface::TuiManual,
+            descriptor.clone(),
+            None,
+        );
+        assert!(
+            result.is_ok(),
+            "approve_manual should accept Warn on matching permissive surface, got {:?}",
+            result.err()
+        );
+        // approve_manual with mismatched surface (McpServer) should fail with SurfaceProfileMismatch
         let result =
             ctx.approve_manual(super::super::ExecutionSurface::McpServer, descriptor, None);
         assert!(
             result.is_err(),
-            "approve_manual should reject Warn on automated surface"
+            "approve_manual should reject mismatched surface"
         );
         match result.unwrap_err() {
-            EnforcementError::Denied { .. } => {}
-            other => panic!("expected Denied, got {:?}", other),
+            EnforcementError::SurfaceProfileMismatch { .. } => {}
+            other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
         }
     }
 
@@ -3278,7 +3376,7 @@ mod tests {
         };
         let mut mo = ManualOverride::default();
         mo.allow_out_of_scope = true;
-        // TuiManualStrict (guarded) -> honors_manual_override() is false
+        // TuiManualStrict (guarded) with mismatched context should fail with SurfaceProfileMismatch
         let result = ctx.approve_manual(
             super::super::ExecutionSurface::TuiManualStrict,
             descriptor,
@@ -3286,11 +3384,11 @@ mod tests {
         );
         assert!(
             result.is_err(),
-            "approve_manual should reject override on guarded surface"
+            "approve_manual should reject mismatched surface"
         );
         match result.unwrap_err() {
-            EnforcementError::ConfirmationRequired { .. } => {}
-            other => panic!("expected ConfirmationRequired, got {:?}", other),
+            EnforcementError::SurfaceProfileMismatch { .. } => {}
+            other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
         }
     }
 
@@ -3355,7 +3453,7 @@ mod tests {
         let err_deny = ctx_deny
             .approve(super::super::ExecutionSurface::McpServer, descriptor_deny)
             .unwrap_err();
-        let decision_deny = err_deny.decision();
+        let decision_deny = err_deny.decision().unwrap();
         assert!(!decision_deny.allowed);
 
         // Test ConfirmationRequired variant
@@ -3387,7 +3485,7 @@ mod tests {
                 None,
             )
             .unwrap_err();
-        let decision_confirm = err_confirm.decision();
+        let decision_confirm = err_confirm.decision().unwrap();
         assert!(!decision_confirm.allowed);
 
         // Test ManualOverrideUnavailable variant (constructed directly)
@@ -3402,11 +3500,200 @@ mod tests {
             surface: super::super::ExecutionSurface::McpServer,
             decision: decision_manual,
         };
-        let decision_ref = err_manual.decision();
+        let decision_ref = err_manual.decision().unwrap();
         assert!(!decision_ref.allowed);
         assert!(decision_ref
             .denied_reasons
             .iter()
             .any(|r| r.contains("manual override unavailable")));
+
+        // Test SurfaceProfileMismatch variant (no decision)
+        let err_mismatch = EnforcementError::SurfaceProfileMismatch {
+            surface: super::super::ExecutionSurface::McpServer,
+            surface_profile: ExecutionProfile::McpStrict,
+            context_profile: ExecutionProfile::ManualPermissive,
+        };
+        assert!(err_mismatch.decision().is_none());
+    }
+
+    // ========================================================================
+    // Phase A: Authorization Token and Target-Binding Correction
+    // Additional regression tests (dispatch binding tests are in
+    // enforced_dispatch_regression.rs integration tests).
+    // ========================================================================
+
+    #[test]
+    fn phase_a_target_required_rejects_none() {
+        // Every TargetRequired, ExplicitScopeRequired, and PrivateOrLocalRequired
+        // metadata entry should reject None via try_descriptor_for_target.
+        for meta in super::super::all_operation_metadata() {
+            match meta.target_policy {
+                super::super::TargetPolicyKind::TargetRequired
+                | super::super::TargetPolicyKind::ExplicitScopeRequired
+                | super::super::TargetPolicyKind::PrivateOrLocalRequired => {
+                    let result = meta.try_descriptor_for_target(None);
+                    assert!(
+                        result.is_err(),
+                        "operation '{}' with target_policy {:?} should reject None target",
+                        meta.id,
+                        meta.target_policy
+                    );
+                    match result.unwrap_err() {
+                        super::super::DescriptorError::MissingTarget { .. } => {}
+                        other => {
+                            panic!("expected MissingTarget for '{}', got {:?}", meta.id, other)
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn phase_a_target_required_rejects_empty() {
+        // TargetRequired operations should also reject empty strings.
+        for meta in super::super::all_operation_metadata() {
+            match meta.target_policy {
+                super::super::TargetPolicyKind::TargetRequired
+                | super::super::TargetPolicyKind::ExplicitScopeRequired
+                | super::super::TargetPolicyKind::PrivateOrLocalRequired => {
+                    let result = meta.try_descriptor_for_target(Some(""));
+                    assert!(
+                        result.is_err(),
+                        "operation '{}' with target_policy {:?} should reject empty target",
+                        meta.id,
+                        meta.target_policy
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn phase_a_no_target_rejects_nonempty() {
+        // NoTarget operations should reject non-empty targets.
+        for meta in super::super::all_operation_metadata() {
+            if meta.target_policy == super::super::TargetPolicyKind::NoTarget {
+                let result = meta.try_descriptor_for_target(Some("example.com"));
+                assert!(
+                    result.is_err(),
+                    "operation '{}' with NoTarget policy should reject non-empty target",
+                    meta.id
+                );
+                match result.unwrap_err() {
+                    super::super::DescriptorError::UnexpectedTarget { .. } => {}
+                    other => panic!(
+                        "expected UnexpectedTarget for '{}', got {:?}",
+                        meta.id, other
+                    ),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn phase_a_surface_profile_mismatch_rejects_approval() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // McpStrict context with CliManual surface = mismatch
+        let result = ctx.approve(super::super::ExecutionSurface::CliManual, descriptor);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            EnforcementError::SurfaceProfileMismatch {
+                surface,
+                surface_profile,
+                context_profile,
+            } => {
+                assert_eq!(surface, super::super::ExecutionSurface::CliManual);
+                assert_eq!(surface_profile, ExecutionProfile::ManualPermissive);
+                assert_eq!(context_profile, ExecutionProfile::McpStrict);
+            }
+            other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn phase_a_manual_override_semantics_unchanged() {
+        use super::super::scope::LoadedScope;
+        // ManualPermissive should still approve warnings and confirmations with overrides.
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("10.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // CliManual (permissive) should approve Warn
+        let result =
+            ctx.approve_manual(super::super::ExecutionSurface::CliManual, descriptor, None);
+        assert!(
+            result.is_ok(),
+            "manual permissive should approve warn: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn phase_a_strict_approval_without_explicit_scope_fails() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(result.is_err(), "strict without scope should fail");
+    }
+
+    #[test]
+    fn phase_a_descriptor_try_descriptor_validates_target_policy() {
+        // Verify try_descriptor_for_target produces correct descriptors.
+        let meta = super::super::operation_metadata("scan-ports").unwrap();
+        let desc = meta.try_descriptor_for_target(Some("10.0.0.1")).unwrap();
+        assert_eq!(desc.operation, "scan-ports");
+        assert_eq!(desc.target, Some("10.0.0.1".to_string()));
+        assert!(desc.requires_explicit_scope);
+
+        // OptionalTarget accepts None
+        let meta = super::super::operation_metadata("mobile-static").unwrap();
+        let desc = meta.try_descriptor_for_target(None).unwrap();
+        assert_eq!(desc.target, None);
     }
 }

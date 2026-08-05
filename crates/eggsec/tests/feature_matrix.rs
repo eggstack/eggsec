@@ -55,6 +55,7 @@ static KNOWN_EGGSEC_FEATURES: &[&str] = &[
     "transparent-proxy",
     "dynamic-plugins",
     "daemon-client",
+    "test-helpers",
 ];
 
 // ─── Feature Classification ────────────────────────────────────────────────
@@ -101,7 +102,8 @@ fn classify_feature(feature: &str) -> FeatureCategory {
         | "cloud"
         | "git-secrets"
         | "api-schema"
-        | "daemon-client" => FeatureCategory::MarkerOnly,
+        | "daemon-client"
+        | "test-helpers" => FeatureCategory::MarkerOnly,
         "db-pentest-mssql-tiberius" | "db-pentest-mongodb" | "db-pentest-redis" => {
             FeatureCategory::BackendDriver
         }

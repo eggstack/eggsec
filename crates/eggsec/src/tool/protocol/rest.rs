@@ -766,6 +766,17 @@ async fn execute_tool(
                 decision.to_human_readable()
             )));
         }
+        Err(EnforcementError::SurfaceProfileMismatch {
+            surface,
+            surface_profile,
+            context_profile,
+        }) => {
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST enforcement: surface/profile mismatch — surface '{}' derives profile '{}' but context has '{}'",
+                surface, surface_profile, context_profile
+            )));
+        }
     };
 
     let correlation_id = generate_correlation_id();

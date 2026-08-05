@@ -1079,6 +1079,18 @@ impl Agent {
                             reasons
                         )
                     }
+                    EnforcementError::SurfaceProfileMismatch {
+                        surface,
+                        surface_profile,
+                        context_profile,
+                    } => {
+                        anyhow::anyhow!(
+                            "agent enforcement: surface/profile mismatch — surface '{}' derives profile '{}' but context has '{}'",
+                            surface,
+                            surface_profile,
+                            context_profile
+                        )
+                    }
                 })?;
 
             let audit_event = audit_event_from_enforcement_outcome(

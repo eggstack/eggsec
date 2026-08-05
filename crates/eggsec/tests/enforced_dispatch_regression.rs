@@ -169,3 +169,268 @@ fn check_file(
         }
     }
 }
+
+// ========================================================================
+// Phase A: Authorization Token and Target-Binding Correction
+// Regression tests for dispatch binding.
+// ========================================================================
+
+use eggsec::config::{
+    EnforcementContext, ExecutionPolicy, ExecutionProfile, OperationDescriptor, OperationMode,
+    OperationRisk, PolicyDecision, TargetPolicyKind,
+};
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+use eggsec::tool::dispatcher::{validate_request_binding, DispatchBindingError};
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+use eggsec::tool::{Target, ToolRequest};
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+fn make_approved(descriptor: OperationDescriptor) -> eggsec::config::ApprovedOperation {
+    let decision = PolicyDecision::allowed(
+        &descriptor.operation,
+        descriptor.mode,
+        descriptor.risk,
+        descriptor.intended_uses.clone(),
+    );
+    eggsec::config::ApprovedOperation::for_test(
+        descriptor,
+        decision,
+        eggsec::config::ExecutionSurface::McpServer,
+        ExecutionProfile::McpStrict,
+    )
+}
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+fn scan_request(target: &str) -> ToolRequest {
+    ToolRequest {
+        id: "test".to_string(),
+        tool: "scan-ports".to_string(),
+        target: Target::ip(target),
+        params: serde_json::json!({}),
+        options: Default::default(),
+        cancellation_token: None,
+    }
+}
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+#[test]
+fn phase_a_target_mismatch_rejected() {
+    let descriptor = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("10.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = make_approved(descriptor);
+
+    // Different target should fail
+    let request = scan_request("10.0.0.2");
+    let result = validate_request_binding(&approved, &request);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        DispatchBindingError::TargetMismatch {
+            request_target,
+            approved_target,
+        } => {
+            assert_eq!(request_target, "10.0.0.2");
+            assert_eq!(approved_target, "10.0.0.1");
+        }
+        other => panic!("expected TargetMismatch, got {:?}", other),
+    }
+}
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+#[test]
+fn phase_a_target_required_missing_target_rejected() {
+    let descriptor = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("10.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = make_approved(descriptor);
+
+    // Empty target should fail
+    let request = ToolRequest {
+        id: "test".to_string(),
+        tool: "scan-ports".to_string(),
+        target: Target {
+            target_type: eggsec::tool::TargetType::Ip,
+            value: "".to_string(),
+            scope: None,
+        },
+        params: serde_json::json!({}),
+        options: Default::default(),
+        cancellation_token: None,
+    };
+    let result = validate_request_binding(&approved, &request);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        DispatchBindingError::MissingTarget {
+            approved_operation,
+            expected_target,
+        } => {
+            assert_eq!(approved_operation, "scan-ports");
+            assert_eq!(expected_target, "10.0.0.1");
+        }
+        other => panic!("expected MissingTarget, got {:?}", other),
+    }
+}
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+#[test]
+fn phase_a_targetless_rejects_smuggled_target() {
+    let descriptor = OperationDescriptor {
+        operation: "search".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::Passive,
+        intended_uses: vec![],
+        target: None,
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = make_approved(descriptor);
+
+    // Smuggled target should fail
+    let request = ToolRequest {
+        id: "test".to_string(),
+        tool: "search".to_string(),
+        target: Target::domain("evil.example.com"),
+        params: serde_json::json!({}),
+        options: Default::default(),
+        cancellation_token: None,
+    };
+    let result = validate_request_binding(&approved, &request);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        DispatchBindingError::UnexpectedTarget {
+            approved_operation,
+            request_target,
+        } => {
+            assert_eq!(approved_operation, "search");
+            assert_eq!(request_target, "evil.example.com");
+        }
+        other => panic!("expected UnexpectedTarget, got {:?}", other),
+    }
+}
+
+#[cfg(all(feature = "test-helpers", feature = "tool-api"))]
+#[test]
+fn phase_a_conflicting_targets_rejected() {
+    let descriptor = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("10.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = make_approved(descriptor);
+
+    // Conflicting typed and param targets
+    let request = ToolRequest {
+        id: "test".to_string(),
+        tool: "scan-ports".to_string(),
+        target: Target::ip("10.0.0.1"),
+        params: serde_json::json!({"target": "10.0.0.99"}),
+        options: Default::default(),
+        cancellation_token: None,
+    };
+    let result = validate_request_binding(&approved, &request);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        DispatchBindingError::ConflictingTargets {
+            typed_target,
+            param_target,
+        } => {
+            assert_eq!(typed_target, "10.0.0.1");
+            assert_eq!(param_target, "10.0.0.99");
+        }
+        other => panic!("expected ConflictingTargets, got {:?}", other),
+    }
+}
+
+#[test]
+fn phase_a_surface_profile_mismatch_rejects_approval() {
+    let ctx = EnforcementContext::mcp_strict(ExecutionPolicy::default(), Default::default());
+    let descriptor = OperationDescriptor {
+        operation: "scan".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    // McpStrict context with CliManual surface = mismatch
+    let result = ctx.approve(eggsec::config::ExecutionSurface::CliManual, descriptor);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        eggsec::config::EnforcementError::SurfaceProfileMismatch {
+            surface,
+            surface_profile,
+            context_profile,
+        } => {
+            assert_eq!(surface, eggsec::config::ExecutionSurface::CliManual);
+            assert_eq!(surface_profile, ExecutionProfile::ManualPermissive);
+            assert_eq!(context_profile, ExecutionProfile::McpStrict);
+        }
+        other => panic!("expected SurfaceProfileMismatch, got {:?}", other),
+    }
+}
+
+#[test]
+fn phase_a_target_required_rejects_none_via_try_descriptor() {
+    for meta in eggsec::config::all_operation_metadata() {
+        match meta.target_policy {
+            TargetPolicyKind::TargetRequired
+            | TargetPolicyKind::ExplicitScopeRequired
+            | TargetPolicyKind::PrivateOrLocalRequired => {
+                let result = meta.try_descriptor_for_target(None);
+                assert!(
+                    result.is_err(),
+                    "operation '{}' with {:?} should reject None",
+                    meta.id,
+                    meta.target_policy
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn phase_a_no_target_rejects_nonempty_via_try_descriptor() {
+    for meta in eggsec::config::all_operation_metadata() {
+        if meta.target_policy == TargetPolicyKind::NoTarget {
+            let result = meta.try_descriptor_for_target(Some("example.com"));
+            assert!(
+                result.is_err(),
+                "operation '{}' with NoTarget should reject non-empty target",
+                meta.id
+            );
+        }
+    }
+}

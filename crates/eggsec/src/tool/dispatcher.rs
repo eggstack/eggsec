@@ -5,6 +5,143 @@ use crate::tool::{ToolRegistry, ToolRequest, ToolResponse};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+/// Error returned by [`validate_request_binding`] when the request does not
+/// match the approved operation binding.
+#[derive(Debug, thiserror::Error)]
+pub enum DispatchBindingError {
+    /// The request tool name does not resolve to the approved canonical operation.
+    #[error(
+        "request tool '{request_tool}' does not match approved operation '{approved_operation}' \
+         (alias resolution attempted)"
+    )]
+    OperationMismatch {
+        request_tool: String,
+        approved_operation: String,
+    },
+
+    /// A target-bearing approval was dispatched with no target in the request.
+    #[error(
+        "approved operation '{approved_operation}' requires target '{expected_target}' \
+         but request has no target"
+    )]
+    MissingTarget {
+        approved_operation: String,
+        expected_target: String,
+    },
+
+    /// The request target does not match the approved target.
+    #[error(
+        "request target '{request_target}' does not match approved target '{approved_target}'"
+    )]
+    TargetMismatch {
+        request_target: String,
+        approved_target: String,
+    },
+
+    /// A targetless approval received a request with a target that would alter scope.
+    #[error(
+        "approved operation '{approved_operation}' is targetless but request has target \
+         '{request_target}' — scope-escaping target rejected"
+    )]
+    UnexpectedTarget {
+        approved_operation: String,
+        request_target: String,
+    },
+
+    /// The request contains conflicting typed and parameter targets.
+    #[error(
+        "conflicting targets: request target '{typed_target}' differs from \
+         params['target'] '{param_target}'"
+    )]
+    ConflictingTargets {
+        typed_target: String,
+        param_target: String,
+    },
+
+    /// The approval surface does not match the context profile.
+    #[error("dispatch binding: {reason}")]
+    Other { reason: String },
+}
+
+/// Validate that a [`ToolRequest`] matches the binding in an [`ApprovedOperation`].
+///
+/// This is the single comparison function for dispatch-time binding checks.
+/// It verifies:
+///
+/// 1. The request tool resolves to the approved canonical operation.
+/// 2. A target-bearing approval has a non-empty target in the request.
+/// 3. The request target normalizes to the same identity as the approved target.
+/// 4. A targetless approval does not receive a target that would alter scope.
+/// 5. Typed and parameter targets agree (no conflicting targets).
+///
+/// Returns `Ok(())` if the binding is valid, or [`DispatchBindingError`] on mismatch.
+pub fn validate_request_binding(
+    approval: &ApprovedOperation,
+    request: &ToolRequest,
+) -> Result<(), DispatchBindingError> {
+    let descriptor = approval.descriptor();
+
+    // 1. Operation ID match (with alias resolution).
+    if !crate::config::operation_matches_tool_id(&request.tool, &descriptor.operation) {
+        return Err(DispatchBindingError::OperationMismatch {
+            request_tool: request.tool.clone(),
+            approved_operation: descriptor.operation.clone(),
+        });
+    }
+
+    let request_target = if request.target.value.is_empty() {
+        None
+    } else {
+        Some(request.target.value.as_str())
+    };
+    let param_target = request
+        .params
+        .get("target")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+
+    // 5. Check for conflicting targets (typed vs parameter).
+    if let (Some(typed), Some(param)) = (request_target, param_target) {
+        if typed != param {
+            return Err(DispatchBindingError::ConflictingTargets {
+                typed_target: typed.to_string(),
+                param_target: param.to_string(),
+            });
+        }
+    }
+
+    let effective_target = request_target.or(param_target);
+
+    match &descriptor.target {
+        Some(expected_target) => {
+            // 2. Target-bearing approval requires a target.
+            let actual = effective_target.ok_or_else(|| DispatchBindingError::MissingTarget {
+                approved_operation: descriptor.operation.clone(),
+                expected_target: expected_target.clone(),
+            })?;
+
+            // 3. Target match.
+            if actual != expected_target.as_str() {
+                return Err(DispatchBindingError::TargetMismatch {
+                    request_target: actual.to_string(),
+                    approved_target: expected_target.clone(),
+                });
+            }
+        }
+        None => {
+            // 4. Targetless approval rejects scope-escaping targets.
+            if let Some(actual) = effective_target {
+                return Err(DispatchBindingError::UnexpectedTarget {
+                    approved_operation: descriptor.operation.clone(),
+                    request_target: actual.to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct ToolDispatcher {
     registry: ToolRegistry,
@@ -106,9 +243,11 @@ impl EnforcedDispatcher {
 
     /// Dispatch a tool request, verifying it matches the approved operation.
     ///
-    /// Checks that:
-    /// - The tool name in the request matches the approved descriptor's operation.
-    /// - If the descriptor has a target, it matches the request's target parameter.
+    /// Uses [`validate_request_binding`] to verify:
+    /// - The tool name resolves to the approved canonical operation.
+    /// - Target-bearing approvals have matching targets.
+    /// - Targetless approvals don't receive scope-escaping targets.
+    /// - Typed and parameter targets agree.
     ///
     /// Fails closed on any mismatch.
     pub async fn dispatch_checked(
@@ -116,32 +255,8 @@ impl EnforcedDispatcher {
         approved: &ApprovedOperation,
         request: ToolRequest,
     ) -> Result<ToolResponse, EggsecError> {
-        let descriptor = approved.descriptor();
-
-        if !crate::config::operation_matches_tool_id(&request.tool, &descriptor.operation) {
-            return Err(EggsecError::Config(format!(
-                "dispatch mismatch: request tool '{}' does not match approved operation '{}' \
-                 (alias resolution attempted)",
-                request.tool, descriptor.operation
-            )));
-        }
-
-        if let Some(ref expected_target) = descriptor.target {
-            let expected_str = expected_target.as_str();
-            let matches = request.target.value == expected_str
-                || request
-                    .params
-                    .get("target")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v == expected_str)
-                    .unwrap_or(false);
-            if !matches {
-                return Err(EggsecError::Config(format!(
-                    "dispatch mismatch: request target '{}' does not match approved target '{}'",
-                    request.target.value, expected_target
-                )));
-            }
-        }
+        validate_request_binding(approved, &request)
+            .map_err(|e| EggsecError::Config(format!("dispatch binding failed: {e}")))?;
 
         self.inner.dispatch(request).await
     }

@@ -961,6 +961,42 @@ pub enum TargetPolicyKind {
     PrivateOrLocalRequired,
 }
 
+impl std::fmt::Display for TargetPolicyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoTarget => write!(f, "no-target"),
+            Self::OptionalTarget => write!(f, "optional-target"),
+            Self::TargetRequired => write!(f, "target-required"),
+            Self::ExplicitScopeRequired => write!(f, "explicit-scope-required"),
+            Self::PrivateOrLocalRequired => write!(f, "private-or-local-required"),
+        }
+    }
+}
+
+/// Error returned by [`OperationMetadata::try_descriptor_for_target`] when the
+/// supplied target violates the operation's target policy.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum DescriptorError {
+    /// A target was supplied for an operation with `NoTarget` policy.
+    #[error(
+        "operation '{operation_id}' has target policy '{target_policy}' but received target '{target}'"
+    )]
+    UnexpectedTarget {
+        operation_id: String,
+        target_policy: TargetPolicyKind,
+        target: String,
+    },
+
+    /// A required target is missing (None or empty) for a target-bearing operation.
+    #[error(
+        "operation '{operation_id}' has target policy '{target_policy}' but no target was provided"
+    )]
+    MissingTarget {
+        operation_id: String,
+        target_policy: TargetPolicyKind,
+    },
+}
+
 /// Canonical operation metadata — single source of truth for OperationDescriptor generation.
 ///
 /// Every externally invokable Eggsec operation should have one `OperationMetadata`
@@ -1026,6 +1062,67 @@ impl OperationMetadata {
         let mut descriptor = self.descriptor_for_target(target);
         descriptor.risk = risk;
         descriptor
+    }
+
+    /// Fallibly generate an `OperationDescriptor`, validating the target against
+    /// this metadata's target policy.
+    ///
+    /// Returns [`DescriptorError`] when the supplied target violates the policy:
+    /// - `NoTarget`: rejects non-empty target unless the operation explicitly
+    ///   permits an auxiliary/display-only target (not yet supported; all targets
+    ///   are rejected for `NoTarget`).
+    /// - `TargetRequired`: rejects `None` and empty targets.
+    /// - `ExplicitScopeRequired`: rejects `None` and empty targets.
+    /// - `PrivateOrLocalRequired`: rejects `None` and empty targets.
+    /// - `OptionalTarget`: accepts `None` or any non-empty target.
+    pub fn try_descriptor_for_target(
+        &self,
+        target: Option<&str>,
+    ) -> Result<OperationDescriptor, DescriptorError> {
+        match self.target_policy {
+            TargetPolicyKind::NoTarget => {
+                if let Some(t) = target {
+                    if !t.is_empty() {
+                        return Err(DescriptorError::UnexpectedTarget {
+                            operation_id: self.id.to_string(),
+                            target_policy: self.target_policy,
+                            target: t.to_string(),
+                        });
+                    }
+                }
+                Ok(self.descriptor_for_target(None))
+            }
+            TargetPolicyKind::OptionalTarget => {
+                let t = target.filter(|s| !s.is_empty()).map(|s| s.to_string());
+                Ok(self.descriptor_for_target(t))
+            }
+            TargetPolicyKind::TargetRequired
+            | TargetPolicyKind::ExplicitScopeRequired
+            | TargetPolicyKind::PrivateOrLocalRequired => {
+                let t = target.filter(|s| !s.is_empty()).ok_or_else(|| {
+                    DescriptorError::MissingTarget {
+                        operation_id: self.id.to_string(),
+                        target_policy: self.target_policy,
+                    }
+                })?;
+                Ok(self.descriptor_for_target(Some(t.to_string())))
+            }
+        }
+    }
+
+    /// Generate an `OperationDescriptor` from this metadata, overriding the risk tier,
+    /// and validating the target against this metadata's target policy.
+    ///
+    /// Combines [`try_descriptor_for_target`] with a risk override. Returns
+    /// [`DescriptorError`] on target-policy violation.
+    pub fn try_descriptor_for_target_with_risk(
+        &self,
+        target: Option<&str>,
+        risk: OperationRisk,
+    ) -> Result<OperationDescriptor, DescriptorError> {
+        let mut descriptor = self.try_descriptor_for_target(target)?;
+        descriptor.risk = risk;
+        Ok(descriptor)
     }
 }
 

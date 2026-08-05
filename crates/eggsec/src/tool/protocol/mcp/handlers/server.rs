@@ -567,19 +567,30 @@ impl McpServer {
                 approved
             }
             Err(e) => {
-                let decision = e.decision();
                 // Emit audit event for deny outcome
                 let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
-                let outcome = match &e {
-                    crate::config::EnforcementError::Denied { decision } => {
-                        crate::config::EnforcementOutcome::Deny(decision.clone())
-                    }
-                    crate::config::EnforcementError::ConfirmationRequired { decision, .. } => {
-                        crate::config::EnforcementOutcome::RequireConfirmation(decision.clone())
-                    }
+                let (outcome, decision_ref) = match &e {
+                    crate::config::EnforcementError::Denied { decision } => (
+                        crate::config::EnforcementOutcome::Deny(decision.clone()),
+                        Some(decision),
+                    ),
+                    crate::config::EnforcementError::ConfirmationRequired { decision, .. } => (
+                        crate::config::EnforcementOutcome::RequireConfirmation(decision.clone()),
+                        Some(decision),
+                    ),
                     crate::config::EnforcementError::ManualOverrideUnavailable {
                         decision, ..
-                    } => crate::config::EnforcementOutcome::Deny(decision.clone()),
+                    } => (
+                        crate::config::EnforcementOutcome::Deny(decision.clone()),
+                        Some(decision),
+                    ),
+                    crate::config::EnforcementError::SurfaceProfileMismatch { .. } => {
+                        return req.error_response(McpError {
+                            code: -32025,
+                            message: format!("Enforcement denied: surface/profile mismatch"),
+                            data: None,
+                        });
+                    }
                 };
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::McpServer,
@@ -595,10 +606,13 @@ impl McpServer {
                 );
                 emit_audit_event(&audit_event);
 
+                let denied_msg = decision_ref
+                    .map(|d| d.denied_reasons.join("; "))
+                    .unwrap_or_default();
                 return req.error_response(McpError {
                     code: -32025,
-                    message: format!("Enforcement denied: {}", decision.denied_reasons.join("; ")),
-                    data: Some(serde_json::to_value(decision).unwrap_or_default()),
+                    message: format!("Enforcement denied: {}", denied_msg),
+                    data: decision_ref.and_then(|d| serde_json::to_value(d).ok()),
                 });
             }
         };

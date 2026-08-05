@@ -265,6 +265,9 @@ optional = true
 [features]
 default = []
 
+# Test helpers - exposes internal constructors for integration testing
+test-helpers = []
+
 # Tool abstraction layer (always enabled - no extra deps)
 tool-api = []
 
