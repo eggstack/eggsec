@@ -48,17 +48,30 @@ Domain crate features are forwarded via the main crate feature. For example,
 db-pentest = ["sqlx", "dep:eggsec-db-lab", "eggsec-db-lab/db-drivers"]
 ```
 
-## 2. Classify the Feature
+## 2. Add to the Authoritative Feature Registry
 
-Every feature must be classified by adding a match arm to `classify_feature()`
-in `crates/eggsec/tests/feature_matrix.rs`. The classification determines which
-CI checks apply and how the feature is documented.
+The **single source of truth** for all feature metadata is the `feature_registry!`
+macro in `crates/eggsec/src/config/feature_registry.rs`. Every feature declared
+in `Cargo.toml [features]` (except `default`) must appear here exactly once.
+
+Add a new entry to the `feature_registry!` invocation:
+
+```rust
+feature_registry! {
+    // ... existing entries ...
+    "my-new-feature" => {
+        enabled: cfg!(feature = "my-new-feature"),
+        category: DomainCapability,
+        hint: "enable feature 'my-new-feature' in Cargo.toml: cargo build --features my-new-feature"
+    },
+}
+```
 
 ### Classification Categories
 
 | Category | `FeatureCategory` variant | Meaning | Examples |
 |----------|--------------------------|---------|----------|
-| **Protocol/front-end adapter** | `ProtocolAdapter` | Exposes a serving surface (REST, gRPC, WebSocket) | `tool-api`, `rest-api`, `grpc-api`, `ws-api`, `websocket` |
+| **Protocol adapter** | `ProtocolAdapter` | Exposes a serving surface (REST, gRPC, WebSocket) | `tool-api`, `rest-api`, `grpc-api`, `ws-api`, `websocket` |
 | **Domain capability** | `DomainCapability` | Enables a domain's core functionality | `db-pentest`, `mobile`, `wireless`, `web-proxy`, `evasion`, `postex`, `c2`, `nse` |
 | **Protocol exposure marker** | `ProtocolExposure` | Opt-in MCP/agent exposure for a domain | `db-pentest-mcp`, `web-proxy-mcp`, `c2-mcp` |
 | **Marker-only** | `MarkerOnly` | No dependencies; compile-time gate only | `advanced-hunting`, `compliance`, `cloud`, `git-secrets`, `api-schema` |
@@ -107,49 +120,15 @@ Ask these questions in order:
 11. **Is it a compile-time gate with no dependencies?**
     -> `MarkerOnly`
 
-Add the new match arm to `classify_feature()`:
+The `hint` field should be a user-facing message naming the exact Cargo feature
+flag needed, e.g. `"enable feature 'my-new-feature' in Cargo.toml: cargo build --features my-new-feature"`.
 
-```rust
-fn classify_feature(feature: &str) -> FeatureCategory {
-    match feature {
-        // ... existing arms ...
-        "my-new-feature" => FeatureCategory::DomainCapability,
-        _ => panic!("unclassified feature: '{feature}' -- add to classify_feature()"),
-    }
-}
-```
+**This is required.** The `all_cargo_features_are_in_registry` test in
+`tests/feature_matrix.rs` validates that every feature in `Cargo.toml [features]`
+appears in the registry. If you add a feature to `Cargo.toml` without updating
+the registry, CI will fail.
 
-The panic message in the catch-all arm is intentional. If CI hits it, you forgot
-to classify the new feature.
-
-## 3. Add the Feature to the Static Snapshot
-
-Add the feature name to `KNOWN_EGGSEC_FEATURES` in
-`crates/eggsec/tests/feature_matrix.rs`:
-
-```rust
-static KNOWN_EGGSEC_FEATURES: &[&str] = &[
-    // ... existing features ...
-    "my-new-feature",
-];
-```
-
-**This is required.** The `snapshot_matches_cargo_toml_features` test validates
-that every feature in `Cargo.toml [features]` appears in `KNOWN_EGGSEC_FEATURES`
-and vice versa. If you add a feature to `Cargo.toml` without updating the
-snapshot, CI will fail with:
-
-```
-SNAPSHOT feature 'my-new-feature' not found in Cargo.toml [features]
-```
-
-or:
-
-```
-Cargo.toml feature 'my-new-feature' not in KNOWN_EGGSEC_FEATURES
-```
-
-## 4. Add Dependency Edges
+## 3. Add Dependency Edges
 
 If your feature depends on other features (implied-by relationships), add
 entries to `FEATURE_DEPENDENCIES` in `crates/eggsec/tests/feature_matrix.rs`:
@@ -175,7 +154,7 @@ Rules:
 - If the feature belongs in the `full` aggregate, add a `("full", "my-new-feature")`
   edge.
 
-## 5. Decide: Required PR Feature-Profile Check vs. Deep Check
+## 4. Decide: Required PR Feature-Profile Check vs. Deep Check
 
 CI runs two tiers of feature checks:
 
@@ -219,7 +198,7 @@ representative feature profiles.
 Platform-sensitive profiles like `mobile-dynamic` may fail in CI due to missing
 system dependencies. These are tested in deep checks with `continue-on-error: true`.
 
-## 6. Document Platform-Sensitive Dependencies
+## 5. Document Platform-Sensitive Dependencies
 
 If your feature requires system-level dependencies (libraries, root, capabilities),
 document them in `docs/FEATURE_MATRIX.md` under section 3.2 "System Dependency
@@ -241,7 +220,7 @@ my-new-feature = ["dep:foo"]
 If the feature requires root or special capabilities, note it in the feature
 comment and in `FEATURE_MATRIX.md`.
 
-## 7. Update Metadata (If Applicable)
+## 6. Update Metadata (If Applicable)
 
 Features that enable operations or domain integrations have additional
 metadata to update:
@@ -269,12 +248,12 @@ Update `docs/FEATURE_MATRIX.md` section 1.1 to include
 the new feature in the main crate feature table with its category, implied
 features, and metadata IDs.
 
-## 8. Required Tests
+## 7. Required Tests
 
 After adding your feature, run these tests to verify consistency:
 
 ```bash
-# Feature matrix validation (snapshot, classification, dependencies, naming)
+# Feature matrix validation (registry, classification, dependencies, naming)
 cargo test -p eggsec --test feature_matrix
 
 # Metadata cross-reference validation
@@ -300,23 +279,24 @@ make check
 
 | Test | Validates |
 |------|-----------|
-| `snapshot_matches_cargo_toml_features` | `KNOWN_EGGSEC_FEATURES` matches `Cargo.toml [features]` exactly |
-| `all_known_features_are_classified` | Every feature in the snapshot has a `classify_feature()` arm |
-| `operation_metadata_required_features_are_known` | OperationMetadata `required_features` reference known features |
-| `domain_descriptor_required_features_are_known` | DomainDescriptor `required_feature` references known features |
-| `domain_mcp_features_are_known` | DomainDescriptor `required_mcp_feature` references known features |
+| `all_cargo_features_are_in_registry` | Every `Cargo.toml` feature (except `default`) is in the authoritative registry |
+| `registry_features_exist_in_cargo_toml` | Every registry feature exists in `Cargo.toml [features]` |
+| `operation_metadata_required_features_resolve` | OperationMetadata `required_features` resolve through production lookup |
+| `domain_descriptor_required_features_resolve` | DomainDescriptor `required_feature` resolves through production lookup |
+| `domain_mcp_features_resolve` | DomainDescriptor `required_mcp_feature` resolves through production lookup |
+| `command_registry_features_resolve` | Command registry feature gates resolve through production lookup |
 | `feature_names_follow_naming_conventions` | All names are kebab-case; MCP markers have valid base features |
 | `no_circular_feature_dependencies` | `FEATURE_DEPENDENCIES` graph has no cycles |
 | `aggregate_feature_includes_domain_features` | `full` includes all domain capabilities |
 | `protocol_exposure_markers_require_base_domain` | MCP markers depend on their base domain feature |
+| `unknown_feature_fails_closed` | Unknown feature names return `FeatureState::Unknown` and `false` for `is_feature_enabled` |
 
 ## Checklist
 
 When adding a new feature, verify each item:
 
 - [ ] Feature declared in `crates/eggsec/Cargo.toml` `[features]`
-- [ ] Feature added to `KNOWN_EGGSEC_FEATURES` in `tests/feature_matrix.rs`
-- [ ] Feature classified in `classify_feature()` in `tests/feature_matrix.rs`
+- [ ] Feature added to `feature_registry!` in `crates/eggsec/src/config/feature_registry.rs`
 - [ ] Dependency edges added to `FEATURE_DEPENDENCIES` in `tests/feature_matrix.rs`
 - [ ] If in `full` aggregate: `("full", "my-new-feature")` edge added
 - [ ] `cargo test -p eggsec --test feature_matrix` passes
@@ -328,11 +308,17 @@ When adding a new feature, verify each item:
 
 ## Warnings
 
-**Adding a feature without updating the snapshot should fail CI.** The
-`snapshot_matches_cargo_toml_features` test enforces bidirectional consistency
-between `KNOWN_EGGSEC_FEATURES` and `Cargo.toml [features]`. If you add a
-feature to `Cargo.toml` and forget the snapshot, CI fails. If you add to the
-snapshot and forget `Cargo.toml`, CI fails.
+**Adding a feature without updating the registry should fail CI.** The
+`all_cargo_features_are_in_registry` test enforces bidirectional consistency
+between the feature registry and `Cargo.toml [features]`. If you add a
+feature to `Cargo.toml` and forget the registry, CI fails. If you add to
+the registry and forget `Cargo.toml`, CI fails.
+
+**Unknown features fail closed.** The `feature_state()` function returns
+`FeatureState::Unknown` for unrecognized names, and `is_feature_enabled()`
+returns `false`. This means typos in feature names will deny operations
+rather than silently allowing them. The `unknown_feature_fails_closed` test
+verifies this behavior.
 
 **`full` is an aggregate/deep profile, not a conservative/default profile.** The
 `full` meta-feature enables all non-default features including advanced/lab-only

@@ -2404,6 +2404,7 @@ fn metadata_db_pentest_requires_explicit_scope() {
     }
 }
 
+#[cfg(feature = "db-pentest")]
 #[test]
 fn metadata_db_pentest_with_scope_and_policy_allows() {
     let meta = metadata_for_tool_id("db-pentest").expect("db-pentest metadata should exist");
@@ -2457,6 +2458,7 @@ fn metadata_proxy_intercept_requires_traffic_interception_policy() {
     }
 }
 
+#[cfg(feature = "web-proxy")]
 #[test]
 fn metadata_proxy_intercept_with_policy_allows_under_strict() {
     let meta =

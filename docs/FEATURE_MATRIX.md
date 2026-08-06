@@ -1,12 +1,16 @@
 # Eggsec Feature Matrix
 
 > **Maintenance model**: This matrix is the canonical reference for all feature flags across the
-> eggsec workspace. It is manually maintained to be consistent with `[features]` in
-> `crates/eggsec/Cargo.toml`, `OperationMetadata` in `config/policy.rs`, and `DomainDescriptor`
-> in `domain/mod.rs`. When adding or modifying a feature, update the source tables first, then
-> update this file to match.
+> eggsec workspace. The authoritative runtime registry is `feature_registry!` in
+> `crates/eggsec/src/config/feature_registry.rs` — this document is a human-readable
+> rendering of that registry plus additional metadata (implied features, metadata IDs).
+> When adding or modifying a feature, update the registry first, then update this file
+> to match.
 >
-> **Scope**: Covers the main `eggsec` crate (42 features) and domain crate features. Does not
+> **Fail-closed contract**: Unknown feature names in policy checks return `false`.
+> The `feature_state()` function returns `FeatureState::Unknown` for unrecognized names.
+>
+> **Scope**: Covers the main `eggsec` crate (46 features) and domain crate features. Does not
 > repeat domain crate internals (those are documented in their own Cargo.toml comments).
 
 ---

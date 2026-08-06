@@ -49,8 +49,8 @@ matrix coverage, and visibility defaults:
 ### feature
 
 Optional Cargo feature gate. `None` means always compiled. When `Some`, the
-string must match a feature in `Cargo.toml` (validated by
-`tests/feature_matrix.rs`).
+string must match a feature in `Cargo.toml` (validated by the authoritative
+feature registry in `config/feature_registry.rs`).
 
 ### cli_visible
 
@@ -357,5 +357,5 @@ cargo test -p eggsec --test feature_matrix
 
 4. **Feature strings must match `Cargo.toml`.** The `tests/feature_matrix.rs`
    test validates that feature strings in registry entries and operation metadata
-   match actual Cargo features. Add new feature strings to `KNOWN_EGGSEC_FEATURES`
-   in that test file when introducing new features.
+   match actual Cargo features. Add new feature strings to the authoritative
+   feature registry in `config/feature_registry.rs` when introducing new features.

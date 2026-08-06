@@ -35,6 +35,7 @@
 mod api;
 mod budget;
 mod discovery;
+mod feature_registry;
 mod http;
 mod loader;
 mod policy;
@@ -43,6 +44,13 @@ mod presets;
 mod scan;
 mod scope;
 mod settings;
+
+pub use feature_registry::{
+    classify_feature, feature_missing_hint, feature_state,
+    is_feature_enabled as is_feature_enabled_registry,
+    is_known_feature as is_known_feature_registry, FeatureCategory, FeatureEntry, FeatureState,
+    ALL_FEATURES,
+};
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
 pub use budget::{BudgetError, ExecutionBudget};

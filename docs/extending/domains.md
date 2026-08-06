@@ -175,10 +175,10 @@ fn feature_enabled(feature: &str) -> bool {
 
 When adding a new feature-gated domain, you must:
 
-1. Add the feature string to `feature_enabled()` in `domain/mod.rs`.
-2. Add a matching hint to `feature_missing_hint()` in `domain/mod.rs`.
-3. Add the feature string to `KNOWN_EGGSEC_FEATURES` in
-   `tests/feature_matrix.rs`.
+1. Add the feature string to the authoritative feature registry in
+   `config/feature_registry.rs`.
+2. The registry automatically handles `feature_enabled()` and
+   `feature_missing_hint()` — no manual match statements needed.
 
 ### Operation-level features vs domain-level features
 
@@ -394,7 +394,7 @@ cargo test -p eggsec --test feature_matrix
 Validates:
 
 - Feature strings in metadata match actual Cargo features.
-- `KNOWN_EGGSEC_FEATURES` is in sync.
+- Authoritative feature registry in `config/feature_registry.rs` is in sync with `Cargo.toml`.
 
 ### Tool registration tests
 
@@ -428,8 +428,8 @@ When adding or modifying a domain:
       `config/policy.rs` (see [operations.md](operations.md))
 - [ ] Add feature gate to `feature_enabled()` and
       `feature_missing_hint()` in `domain/mod.rs` if optional
-- [ ] Add feature string to `KNOWN_EGGSEC_FEATURES` in
-      `tests/feature_matrix.rs`
+- [ ] Add feature to authoritative feature registry in
+      `config/feature_registry.rs`
 - [ ] Add `ToolIntegration` only when protocol listing is needed (MCP,
       REST, gRPC, or agent exposure)
 - [ ] Set `mcp_exposed_by_default: false` for hazardous or high-risk

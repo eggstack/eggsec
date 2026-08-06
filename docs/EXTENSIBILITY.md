@@ -53,7 +53,7 @@ Do you need a new manual CLI command?
 | Tool exposure | `crates/eggsec/src/tool/registration.rs` | `ToolRegistration` | `tool_registration`, `enforced_dispatch_regression` |
 | TUI action | `crates/eggsec-tui/src/app/action_spec.rs` | `TuiActionSpec` | `eggsec-tui --lib` |
 | Report output | `crates/eggsec-output/src/envelope.rs` | `ReportEnvelope` | `report_envelope` |
-| Feature | `crates/eggsec/Cargo.toml`, `tests/feature_matrix.rs` | Feature string | `feature_matrix`, `cargo check --features ...` |
+| Feature | `crates/eggsec/Cargo.toml`, `config/feature_registry.rs` | Feature string | `feature_matrix`, `cargo check --features ...` |
 
 ## Required Local Checks
 

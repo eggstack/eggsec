@@ -216,8 +216,8 @@ Rules:
 - The feature must exist in the workspace `Cargo.toml`. The
   `tests/feature_matrix.rs` test validates that feature strings in metadata
   match actual Cargo features.
-- If you add a new feature-gated operation, update `KNOWN_EGGSEC_FEATURES` in
-  the feature matrix test.
+- If you add a new feature-gated operation, add the feature to the authoritative
+  feature registry in `config/feature_registry.rs`.
 
 ## How Metadata Interacts with OperationDescriptor
 
@@ -301,7 +301,7 @@ cargo test -p eggsec --test feature_matrix
 These validate:
 
 - Feature strings in `required_features` match actual Cargo features.
-- `KNOWN_EGGSEC_FEATURES` is kept in sync with new features.
+- Authoritative feature registry in `config/feature_registry.rs` is in sync with `Cargo.toml`.
 
 ### Full validation
 

@@ -333,18 +333,10 @@ pub fn available_domain_descriptors() -> Vec<&'static DomainDescriptor> {
 }
 
 /// Check if a named Cargo feature is currently compiled.
+///
+/// Delegates to the authoritative feature registry in `config::feature_registry`.
 fn feature_enabled(feature: &str) -> bool {
-    match feature {
-        "db-pentest" => cfg!(feature = "db-pentest"),
-        "mobile" => cfg!(feature = "mobile"),
-        "mobile-dynamic" => cfg!(feature = "mobile-dynamic"),
-        "web-proxy" => cfg!(feature = "web-proxy"),
-        "evasion" => cfg!(feature = "evasion"),
-        "postex" => cfg!(feature = "postex"),
-        "c2" => cfg!(feature = "c2"),
-        "wireless" => cfg!(feature = "wireless"),
-        _ => false,
-    }
+    crate::config::is_feature_enabled_registry(feature)
 }
 
 /// Returns a helpful diagnostic hint for a missing domain feature.
@@ -352,18 +344,10 @@ fn feature_enabled(feature: &str) -> bool {
 /// When a feature is not compiled in, callers can use this to produce
 /// an actionable error message that names the exact Cargo feature flag
 /// needed to enable the domain. Returns `None` for unrecognized features.
+///
+/// Delegates to the authoritative feature registry in `config::feature_registry`.
 pub fn feature_missing_hint(feature: &str) -> Option<&'static str> {
-    match feature {
-        "db-pentest" => Some("enable the 'db-pentest' feature in Cargo.toml: cargo build --features db-pentest"),
-        "mobile" => Some("enable the 'mobile' feature in Cargo.toml: cargo build --features mobile"),
-        "mobile-dynamic" => Some("enable the 'mobile-dynamic' feature in Cargo.toml (requires 'mobile' first): cargo build --features mobile-dynamic"),
-        "web-proxy" => Some("enable the 'web-proxy' feature in Cargo.toml: cargo build --features web-proxy"),
-        "evasion" => Some("enable the 'evasion' feature in Cargo.toml: cargo build --features evasion"),
-        "postex" => Some("enable the 'postex' feature in Cargo.toml: cargo build --features postex"),
-        "c2" => Some("enable the 'c2' feature in Cargo.toml (requires 'postex' and 'evasion'): cargo build --features c2"),
-        "wireless" => Some("enable the 'wireless' feature in Cargo.toml: cargo build --features wireless"),
-        _ => None,
-    }
+    crate::config::feature_missing_hint(feature)
 }
 
 /// Generate capability matrix rows from all registered domain descriptors.

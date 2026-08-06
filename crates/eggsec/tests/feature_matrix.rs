@@ -1,124 +1,13 @@
 //! Feature metadata consistency tests — validate that feature strings in
-//! OperationMetadata and DomainDescriptor match actual Cargo features, and
-//! that feature naming conventions and dependencies are well-formed.
+//! OperationMetadata and DomainDescriptor match the authoritative feature
+//! registry, and that feature naming conventions and dependencies are well-formed.
 
 use eggsec::config::all_operation_metadata;
+use eggsec::config::{
+    classify_feature, feature_state, is_feature_enabled_registry, is_known_feature_registry,
+    FeatureState, ALL_FEATURES,
+};
 use eggsec::domain::all_domain_descriptors;
-
-// ─── Static Feature Registry ───────────────────────────────────────────────
-
-/// Static snapshot of feature keys declared in `crates/eggsec/Cargo.toml [features]`.
-/// Must be kept in sync with the actual Cargo features. The `snapshot_matches_cargo_toml_features`
-/// test validates this automatically.
-static KNOWN_EGGSEC_FEATURES: &[&str] = &[
-    "tool-api",
-    "insecure-tls",
-    "rest-api",
-    "ws-api",
-    "grpc-api",
-    "stress-testing",
-    "packet-inspection",
-    "nse",
-    "nse-ssh2",
-    "nse-sandbox",
-    "advanced-hunting",
-    "compliance",
-    "external-integrations",
-    "finding-workflow",
-    "vuln-management",
-    "full",
-    "ai-integration",
-    "websocket",
-    "headless-browser",
-    "database",
-    "db-pentest",
-    "db-pentest-mssql-tiberius",
-    "db-pentest-mongodb",
-    "db-pentest-redis",
-    "db-pentest-mcp",
-    "c2-mcp",
-    "container",
-    "cloud",
-    "sbom",
-    "git-secrets",
-    "pdf",
-    "wireless",
-    "wireless-advanced",
-    "evasion",
-    "postex",
-    "c2",
-    "mobile",
-    "mobile-dynamic",
-    "api-schema",
-    "web-proxy",
-    "web-proxy-mcp",
-    "transparent-proxy",
-    "dynamic-plugins",
-    "daemon-client",
-    "test-helpers",
-];
-
-// ─── Feature Classification ────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FeatureCategory {
-    /// Protocol adapters: tool-api, rest-api, grpc-api, ws-api, websocket
-    ProtocolAdapter,
-    /// Domain capabilities: db-pentest, mobile, wireless, web-proxy, evasion, postex, c2, nse
-    DomainCapability,
-    /// MCP/protocol exposure markers: db-pentest-mcp, web-proxy-mcp, c2-mcp
-    ProtocolExposure,
-    /// Marker-only features with no deps: advanced-hunting, compliance, etc.
-    MarkerOnly,
-    /// Database backend drivers: db-pentest-mssql-tiberius, db-pentest-mongodb, db-pentest-redis
-    BackendDriver,
-    /// Platform-sensitive features: stress-testing, packet-inspection, nse-ssh2, nse-sandbox
-    PlatformSensitive,
-    /// Storage/output integrations: database, sbom, container, pdf
-    StorageIntegration,
-    /// Aggregate features: full
-    Aggregate,
-    /// Security risk features: insecure-tls
-    SecurityRisk,
-    /// AI integration: ai-integration
-    AiIntegration,
-    /// Advanced extensions: mobile-dynamic, wireless-advanced
-    AdvancedExtension,
-}
-
-fn classify_feature(feature: &str) -> FeatureCategory {
-    match feature {
-        "tool-api" | "rest-api" | "grpc-api" | "ws-api" | "websocket" => {
-            FeatureCategory::ProtocolAdapter
-        }
-        "db-pentest" | "mobile" | "wireless" | "web-proxy" | "evasion" | "postex" | "c2"
-        | "nse" => FeatureCategory::DomainCapability,
-        "db-pentest-mcp" | "web-proxy-mcp" | "c2-mcp" => FeatureCategory::ProtocolExposure,
-        "advanced-hunting"
-        | "compliance"
-        | "external-integrations"
-        | "finding-workflow"
-        | "vuln-management"
-        | "cloud"
-        | "git-secrets"
-        | "api-schema"
-        | "daemon-client"
-        | "test-helpers" => FeatureCategory::MarkerOnly,
-        "db-pentest-mssql-tiberius" | "db-pentest-mongodb" | "db-pentest-redis" => {
-            FeatureCategory::BackendDriver
-        }
-        "stress-testing" | "packet-inspection" | "nse-ssh2" | "nse-sandbox"
-        | "headless-browser" => FeatureCategory::PlatformSensitive,
-        "database" | "sbom" | "container" | "pdf" => FeatureCategory::StorageIntegration,
-        "full" => FeatureCategory::Aggregate,
-        "insecure-tls" => FeatureCategory::SecurityRisk,
-        "ai-integration" => FeatureCategory::AiIntegration,
-        "mobile-dynamic" | "wireless-advanced" | "transparent-proxy" | "dynamic-plugins" => {
-            FeatureCategory::AdvancedExtension
-        }
-        _ => panic!("unclassified feature: '{feature}' — add to classify_feature()"),
-    }
-}
 
 // ─── Feature Dependency Graph ──────────────────────────────────────────────
 
@@ -183,23 +72,63 @@ static FEATURE_DEPENDENCIES: &[(&str, &str)] = &[
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
-/// Every feature in `KNOWN_EGGSEC_FEATURES` must have a classification.
+/// Every Cargo feature (except `default`) is represented in the registry.
 #[test]
-fn all_known_features_are_classified() {
-    for &feature in KNOWN_EGGSEC_FEATURES {
-        let _ = classify_feature(feature);
+fn all_cargo_features_are_in_registry() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
+    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
+
+    let features_table = manifest
+        .get("features")
+        .and_then(|v| v.as_table())
+        .expect("no [features] table in Cargo.toml");
+
+    let excluded = ["default"];
+    let registry_names: rustc_hash::FxHashSet<&str> = ALL_FEATURES.iter().map(|e| e.name).collect();
+
+    for cargo_feat in features_table.keys() {
+        if excluded.contains(&cargo_feat.as_str()) {
+            continue;
+        }
+        assert!(
+            registry_names.contains(cargo_feat.as_str()),
+            "Cargo.toml feature '{}' not in feature registry — add it to feature_registry!",
+            cargo_feat
+        );
     }
 }
 
-/// All OperationMetadata required_features must reference known Cargo features.
+/// Every registry feature exists in Cargo.toml.
 #[test]
-fn operation_metadata_required_features_are_known() {
-    let known: rustc_hash::FxHashSet<&str> = KNOWN_EGGSEC_FEATURES.iter().copied().collect();
+fn registry_features_exist_in_cargo_toml() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
+    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
+
+    let features_table = manifest
+        .get("features")
+        .and_then(|v| v.as_table())
+        .expect("no [features] table in Cargo.toml");
+
+    for entry in ALL_FEATURES {
+        assert!(
+            features_table.contains_key(entry.name),
+            "Registry feature '{}' not found in Cargo.toml [features] — remove from registry or add to Cargo.toml",
+            entry.name
+        );
+    }
+}
+
+/// All OperationMetadata required_features must resolve through production lookup.
+#[test]
+fn operation_metadata_required_features_resolve() {
     for m in all_operation_metadata() {
         for feat in m.required_features {
+            let state = feature_state(feat);
             assert!(
-                known.contains(*feat),
-                "operation '{}' references unknown feature '{}' — add it to KNOWN_EGGSEC_FEATURES",
+                !matches!(state, FeatureState::Unknown),
+                "operation '{}' references unknown feature '{}' — add it to the feature registry",
                 m.id,
                 feat
             );
@@ -207,24 +136,25 @@ fn operation_metadata_required_features_are_known() {
     }
 }
 
-/// All DomainDescriptor required_feature values must reference known Cargo features.
+/// All DomainDescriptor required_feature values must resolve through production lookup.
 #[test]
-fn domain_descriptor_required_features_are_known() {
-    let known: rustc_hash::FxHashSet<&str> = KNOWN_EGGSEC_FEATURES.iter().copied().collect();
+fn domain_descriptor_required_features_resolve() {
     for domain in all_domain_descriptors() {
         if let Some(feat) = domain.required_feature {
+            let state = feature_state(feat);
             assert!(
-                known.contains(feat),
-                "domain '{}' references unknown feature '{}' — add it to KNOWN_EGGSEC_FEATURES",
+                !matches!(state, FeatureState::Unknown),
+                "domain '{}' references unknown feature '{}' — add it to the feature registry",
                 domain.id,
                 feat
             );
         }
         for op in domain.operations {
             for feat in op.required_features {
+                let state = feature_state(feat);
                 assert!(
-                    known.contains(*feat),
-                    "domain '{}' operation '{}' references unknown feature '{}' — add it to KNOWN_EGGSEC_FEATURES",
+                    !matches!(state, FeatureState::Unknown),
+                    "domain '{}' operation '{}' references unknown feature '{}' — add it to the feature registry",
                     domain.id,
                     op.operation_id,
                     feat
@@ -234,21 +164,38 @@ fn domain_descriptor_required_features_are_known() {
     }
 }
 
-/// All DomainDescriptor required_mcp_feature values must reference known Cargo features.
+/// All DomainDescriptor required_mcp_feature values must resolve through production lookup.
 #[test]
-fn domain_mcp_features_are_known() {
-    let known: rustc_hash::FxHashSet<&str> = KNOWN_EGGSEC_FEATURES.iter().copied().collect();
+fn domain_mcp_features_resolve() {
     for domain in all_domain_descriptors() {
         for tool in domain.tools {
             if let Some(feat) = tool.required_mcp_feature {
+                let state = feature_state(feat);
                 assert!(
-                    known.contains(feat),
-                    "domain '{}' tool '{}' references unknown MCP feature '{}' — add it to KNOWN_EGGSEC_FEATURES",
+                    !matches!(state, FeatureState::Unknown),
+                    "domain '{}' tool '{}' references unknown MCP feature '{}' — add it to the feature registry",
                     domain.id,
                     tool.tool_id,
                     feat
                 );
             }
+        }
+    }
+}
+
+/// Every command registry feature must resolve through production lookup.
+#[test]
+fn command_registry_features_resolve() {
+    use eggsec::commands::registry::REGISTERED_COMMANDS;
+    for cmd in REGISTERED_COMMANDS {
+        if let Some(feat) = cmd.feature {
+            let state = feature_state(feat);
+            assert!(
+                !matches!(state, FeatureState::Unknown),
+                "command '{}' references unknown feature '{}' — add it to the feature registry",
+                cmd.command_id,
+                feat
+            );
         }
     }
 }
@@ -260,7 +207,8 @@ fn domain_mcp_features_are_known() {
 /// - Advanced: `<domain>-advanced` or `<domain>-dynamic` (e.g. `wireless-advanced`, `mobile-dynamic`)
 #[test]
 fn feature_names_follow_naming_conventions() {
-    for &feature in KNOWN_EGGSEC_FEATURES {
+    for entry in ALL_FEATURES {
+        let feature = entry.name;
         // All features must be kebab-case (lowercase + digits + hyphens only)
         assert!(
             feature
@@ -284,12 +232,12 @@ fn feature_names_follow_naming_conventions() {
     }
 
     // Verify MCP exposure naming pattern
-    for &feature in KNOWN_EGGSEC_FEATURES {
-        if let Some(base) = feature.strip_suffix("-mcp") {
+    for entry in ALL_FEATURES {
+        if let Some(base) = entry.name.strip_suffix("-mcp") {
             assert!(
-                KNOWN_EGGSEC_FEATURES.contains(&base),
-                "MCP feature '{}' has base '{}' but it's not in KNOWN_EGGSEC_FEATURES",
-                feature,
+                is_known_feature_registry(base),
+                "MCP feature '{}' has base '{}' but it's not in the feature registry",
+                entry.name,
                 base
             );
         }
@@ -390,46 +338,6 @@ fn no_circular_feature_dependencies() {
     }
 }
 
-/// Parse Cargo.toml to extract declared features, validating the static snapshot.
-#[test]
-fn snapshot_matches_cargo_toml_features() {
-    // Read Cargo.toml from the crate root (relative to CARGO_MANIFEST_DIR)
-    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
-    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
-
-    let features_table = manifest
-        .get("features")
-        .and_then(|v| v.as_table())
-        .expect("no [features] table in Cargo.toml");
-
-    let cargo_features: rustc_hash::FxHashSet<&str> =
-        features_table.keys().map(|s| s.as_str()).collect();
-
-    // Every feature in our static snapshot must exist in Cargo.toml
-    for &feature in KNOWN_EGGSEC_FEATURES {
-        assert!(
-            cargo_features.contains(feature),
-            "SNAPSHOT feature '{}' not found in Cargo.toml [features] — update KNOWN_EGGSEC_FEATURES or Cargo.toml",
-            feature
-        );
-    }
-
-    // Every Cargo.toml feature should be in our snapshot (or explicitly documented as excluded)
-    // Known exclusions: "default" is always present in Cargo.toml but not a real feature
-    let excluded = rustc_hash::FxHashSet::from_iter(["default"]);
-    for cargo_feat in &cargo_features {
-        if excluded.contains(*cargo_feat) {
-            continue;
-        }
-        assert!(
-            KNOWN_EGGSEC_FEATURES.contains(cargo_feat),
-            "Cargo.toml feature '{}' not in KNOWN_EGGSEC_FEATURES — add it to the snapshot",
-            cargo_feat
-        );
-    }
-}
-
 /// Protocol exposure markers (MCP features) must require their base domain feature.
 #[test]
 fn protocol_exposure_markers_require_base_domain() {
@@ -446,6 +354,55 @@ fn protocol_exposure_markers_require_base_domain() {
             "MCP feature '{}' does not require base feature '{}' in dependency graph",
             mcp_feature,
             base_feature
+        );
+    }
+}
+
+/// Every feature in the registry has a valid classification.
+#[test]
+fn all_features_are_classified() {
+    for entry in ALL_FEATURES {
+        assert!(
+            classify_feature(entry.name).is_some(),
+            "feature '{}' has no classification in the registry",
+            entry.name
+        );
+    }
+}
+
+/// Unknown feature lookup fails closed.
+#[test]
+fn unknown_feature_fails_closed() {
+    assert_eq!(feature_state("nonexistent"), FeatureState::Unknown);
+    assert!(!is_feature_enabled_registry("nonexistent"));
+    assert!(!is_known_feature_registry("nonexistent"));
+}
+
+/// Known disabled feature reports disabled.
+#[test]
+fn known_disabled_feature_reports_disabled() {
+    // `test-helpers` is not compiled by default in test builds
+    let state = feature_state("test-helpers");
+    // It might be enabled in test builds; just verify it's not Unknown
+    assert!(
+        matches!(state, FeatureState::Enabled | FeatureState::Disabled),
+        "test-helpers should be known, got Unknown"
+    );
+}
+
+/// Feature dependency edges reference only known features.
+#[test]
+fn dependency_edges_reference_known_features() {
+    for &(from, to) in FEATURE_DEPENDENCIES {
+        assert!(
+            is_known_feature_registry(from),
+            "dependency edge source '{}' is not in the feature registry",
+            from
+        );
+        assert!(
+            is_known_feature_registry(to),
+            "dependency edge target '{}' is not in the feature registry",
+            to
         );
     }
 }

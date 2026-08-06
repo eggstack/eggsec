@@ -131,10 +131,9 @@ Steps:
 Steps:
 
 1. Add to `crates/eggsec/Cargo.toml` `[features]` section.
-2. Add to `tests/feature_matrix.rs` `classify_feature()`.
+2. Add to authoritative feature registry in `config/feature_registry.rs`.
 3. Add dependency edges to `FEATURE_DEPENDENCIES` if needed.
-4. Update `KNOWN_EGGSEC_FEATURES`.
-5. Run: `cargo test -p eggsec --test feature_matrix`
+4. Run: `cargo test -p eggsec --test feature_matrix`
 
 ---
 

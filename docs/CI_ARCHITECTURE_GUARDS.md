@@ -16,7 +16,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 | Metadata consistency | `cargo test -p eggsec --test metadata_consistency` | DomainDescriptor ↔ OperationMetadata ↔ capability matrix cross-validation |
 | Command registry | `cargo test -p eggsec --test command_registry` | CommandRegistration dispatch-mode and visibility invariants |
 | Tool registration | `cargo test -p eggsec --test tool_registration --features rest-api` | ToolRegistration Model A semantics and MCP exposure |
-| Feature matrix | `cargo test -p eggsec --test feature_matrix` | Feature snapshot vs Cargo.toml keys, naming conventions |
+| Feature matrix | `cargo test -p eggsec --test feature_matrix` | Authoritative registry vs Cargo.toml, naming conventions, fail-closed behavior |
 | Enforcement matrix | `cargo test -p eggsec --test enforcement_matrix` | Cross-surface enforcement invariants (22 sections, ~95 tests) |
 | Enforced dispatch regression | `cargo test -p eggsec --test enforced_dispatch_regression` | Strict surfaces do not call raw dispatch; CI handler has no dispatch path |
 | Runtime bridge | `cargo test -p eggsec --lib runtime_bridge` | RuntimeSurface→ExecutionSurface conversion, TaskKind→OperationDescriptor mapping, preflight/approve flows |

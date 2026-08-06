@@ -63,8 +63,8 @@ make check
   -- validates tool registration metadata for MCP, REST, gRPC, and agent
   surfaces.
 - **`cargo test -p eggsec --test feature_matrix`** -- checks that feature
-  strings in `OperationMetadata` and `DomainDescriptor` match actual Cargo
-  features and that `KNOWN_EGGSEC_FEATURES` is current.
+  strings in `OperationMetadata` and `DomainDescriptor` match the authoritative
+  feature registry in `config/feature_registry.rs`.
 - **`cargo test -p eggsec --test enforcement_matrix`** -- verifies that
   side-effecting commands have correct enforcement expectations.
 - **`cargo test -p eggsec --test enforced_dispatch_regression`** -- ensures
