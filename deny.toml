@@ -7,28 +7,33 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "transitive"
 unsound = "transitive"
 
-# Ignore specific advisories that require upstream fixes
-# Review dates added to ensure periodic re-evaluation
+# Dependency advisory exceptions — reviewed 2026-08-07.
+# All previously stale ignores have been removed (advisory-not-detected).
+# Remaining exceptions are documented in docs/DEPENDENCY_EXCEPTIONS.md.
+#
+# Required fields per exception:
+#   - advisory ID
+#   - dependency path (direct/transitive)
+#   - affected feature/artifact
+#   - API usage assessment
+#   - exploitability for Eggsec
+#   - compensating control
+#   - owner / subsystem
+#   - created / review-by date
+#   - upgrade blocker
 ignore = [
-    { id = "RUSTSEC-2026-0097", reason = "Applies to rand::rng() with custom logger; current code paths use thread_rng/SmallRng." },
-    { id = "RUSTSEC-2025-0057", reason = "fxhash is used indirectly via selectors->scraper. No alternative available. Monitoring for upstream fix." },
-    { id = "RUSTSEC-2024-0384", reason = "Transitive via notify-types/backoff instant; waiting for upstream migration." },
-    { id = "RUSTSEC-2025-0119", reason = "number_prefix is used indirectly via indicatif. Will be fixed when indicatif updates their dependencies." },
-    { id = "RUSTSEC-2026-0204", reason = "crossbeam-epoch 0.9.18 transitive; upgraded to 0.9.20 in lockfile, awaiting cargo-deny DB update." },
-    { id = "RUSTSEC-2024-0421", reason = "idna 0.2.3 transitive via url; requires major version bump in upstream crates." },
-    { id = "RUSTSEC-2026-0141", reason = "lettre 0.11.21 boring-tls; upgraded to 0.11.22 in lockfile, awaiting cargo-deny DB update." },
-    { id = "RUSTSEC-2026-0187", reason = "lopdf 0.31.0 transitive; requires lopdf 0.42.0 which has breaking API changes." },
-    { id = "RUSTSEC-2026-0177", reason = "pyo3 0.22.6 Sync bound; requires pyo3 0.29.0+ which is a major version bump." },
-    { id = "RUSTSEC-2025-0020", reason = "pyo3 0.22.6 buffer overflow; requires pyo3 0.24.1+ which is a major version bump." },
-    { id = "RUSTSEC-2026-0185", reason = "reqwest 0.12.14; requires reqwest 0.12.15+ which is a patch version." },
-    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki 0.103.13; requires 0.103.13+ patch." },
-    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki 0.103.13; requires 0.103.12+ patch." },
-    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.103.13 transitive via sqlx; requires upstream fix." },
-    { id = "RUSTSEC-2024-0363", reason = "paste 0.8.0 transitive; requires paste 0.8.1 patch." },
-    { id = "RUSTSEC-2024-0436", reason = "ttf-parser 0.19.2 transitive; requires ttf-parser 0.20.0+ which is a major version bump." },
-    { id = "RUSTSEC-2026-0192", reason = "anyhow 1.0.101; upgraded to 1.0.103 in lockfile, awaiting cargo-deny DB update." },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.31.0/0.39.4 DoS; requires quick-xml 0.41.0+ which is a major version bump." },
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.31.0/0.39.4 DoS; requires quick-xml 0.41.0+ which is a major version bump." },
+    # --- Transitive: unmaintained crates with no upstream fix ---
+    { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify-types->notify v7. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
+
+    # --- Direct: PyO3 major version upgrade required ---
+    { id = "RUSTSEC-2025-0020", reason = "pyo3 0.22.6 buffer overflow; requires >=0.24.1 (major bump). Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0177", reason = "pyo3 0.22.6 missing Sync bound; requires >=0.29.0 (major bump). Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
+
+    # --- Direct: quick-xml major version + MSRV bump required ---
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.31.0 quadratic DoS; requires >=0.41.0 which raises MSRV to 1.86. Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.31.0 NsReader OOM; requires >=0.41.0 which raises MSRV to 1.86. Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 
 [licenses]

@@ -24,7 +24,7 @@ proposes a target architecture to eliminate redundant match arms.
 |------|-------|---------|
 | `crates/eggsec-python/src/engine.rs` | 3313 | Sync `Engine` with typed methods + generic dispatch |
 | `crates/eggsec-python/src/async_engine.rs` | 1948 | Async `AsyncEngine` with typed methods + generic dispatch |
-| `crates/eggsec-python/src/operation_registry.rs` | 762 | `StableOperation` enum, `OperationExecutorRegistry` facade |
+| `crates/eggsec-python/src/operation_registry.rs` | ~1250 | `StableOperation` enum, `OperationExecutorRegistry` facade, bridge to canonical `OperationMetadata` |
 | `crates/eggsec-python/src/engine_state.rs` | 416 | `EngineState` shared by both engines; pre-dispatch gate |
 
 ### 1.2 The 22-Arm Match in `Engine::dispatch()` (engine.rs:487–1741)

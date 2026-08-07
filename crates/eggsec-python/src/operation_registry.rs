@@ -1,5 +1,7 @@
 use pyo3::prelude::*;
 
+use eggsec::config::{metadata_for_tool_id, OperationMetadata};
+
 use crate::requests::OperationRequest;
 use crate::status::{OperationError, OperationResult};
 
@@ -56,55 +58,37 @@ pub struct OperationExecutorDescriptor {
 }
 
 impl OperationExecutorDescriptor {
-    /// Classify risk level based on operation type.
-    fn classify_risk(operation: StableOperation) -> eggsec::config::OperationRisk {
-        match operation {
-            // Local artifact analysis — safe, no network impact
-            StableOperation::ScanGitSecrets
-            | StableOperation::GenerateSbom
-            | StableOperation::AnalyzeApk
-            | StableOperation::AnalyzeIpa => eggsec::config::OperationRisk::SafeActive,
-
-            // Web assessment — moderate risk
-            StableOperation::ReconDns
-            | StableOperation::InspectTls
-            | StableOperation::DetectTechnology
-            | StableOperation::DetectWaf
-            | StableOperation::ValidateWaf
-            | StableOperation::FingerprintServices
-            | StableOperation::RunConsolidatedRecon
-            | StableOperation::GraphqlTest
-            | StableOperation::OauthTest
-            | StableOperation::AuthTest => eggsec::config::OperationRisk::SafeActive,
-
-            // Network scanning — moderate risk
-            StableOperation::ScanPorts | StableOperation::ScanEndpoints => {
-                eggsec::config::OperationRisk::SafeActive
-            }
-
-            // Container scanning — moderate risk
-            StableOperation::ScanDockerImage | StableOperation::ScanKubernetes => {
-                eggsec::config::OperationRisk::SafeActive
-            }
-
-            // Database probing — intrusive
-            StableOperation::DbProbe => eggsec::config::OperationRisk::DbPentest,
-
-            // NSE scripts — intrusive (scripts can be aggressive)
-            StableOperation::NseRun => eggsec::config::OperationRisk::Intrusive,
-
-            // Fuzzing — intrusive
-            StableOperation::FuzzHttp => eggsec::config::OperationRisk::Intrusive,
-
-            // Load testing — load test tier
-            StableOperation::LoadTest => eggsec::config::OperationRisk::LoadTest,
-        }
-    }
-
     /// Construct a full descriptor for a given operation.
     ///
-    /// This is the single source of truth for per-operation metadata.
+    /// Risk, mode, feature requirements, and intended uses are derived from
+    /// the canonical [`OperationMetadata`] catalog. Python-specific fields
+    /// (maturity, daemon_task_kind, schema IDs, finding/artifact hooks) remain
+    /// local to this binding layer.
     pub fn from_operation(operation: StableOperation) -> Self {
+        let metadata = operation.metadata();
+
+        // Derive risk, mode, features, and capabilities from canonical metadata.
+        let (risk, _mode, feature_required, intended_uses) = match metadata {
+            Some(meta) => (
+                meta.risk,
+                meta.mode,
+                // Map engine required_features to the first feature gate (if any).
+                meta.required_features.first().copied(),
+                meta.intended_uses.to_vec(),
+            ),
+            None => (
+                // Fallback for operations without engine metadata.
+                eggsec::config::OperationRisk::SafeActive,
+                eggsec::config::OperationMode::StandardAssessment,
+                operation.feature_required(),
+                vec![eggsec::config::IntendedUse::WebAssessment],
+            ),
+        };
+
+        // Override feature_required with the Python-side feature gate when the
+        // engine metadata has no feature requirement but Python does.
+        let feature_required = feature_required.or_else(|| operation.feature_required());
+
         let confirmation_required = matches!(
             operation,
             StableOperation::NseRun
@@ -119,9 +103,6 @@ impl OperationExecutorDescriptor {
             None
         };
 
-        // Feature-gated operations are not available locally when feature is off.
-        // For the descriptor we always say local_available = true; the feature gate
-        // check happens at dispatch time.
         let no_aliases: &[&str] = &[];
         let (description, aliases, maturity, daemon_task_kind) = match operation {
             StableOperation::ScanPorts => (
@@ -258,7 +239,6 @@ impl OperationExecutorDescriptor {
             ),
         };
 
-        // All 22 operations support local, daemon, sync, async, cancellation, and timeout.
         let (request_schema_id, result_schema_id) = match operation {
             StableOperation::ScanPorts => ("port_scan_request", "port_scan_result"),
             StableOperation::ScanEndpoints => ("endpoint_scan_request", "endpoint_scan_result"),
@@ -286,7 +266,6 @@ impl OperationExecutorDescriptor {
             StableOperation::AnalyzeIpa => ("ipa_analysis_request", "ipa_analysis_report"),
         };
 
-        // Finding hooks: operations that emit finding events in the engine dispatch.
         let finding_hook = matches!(
             operation,
             StableOperation::ScanPorts
@@ -297,7 +276,6 @@ impl OperationExecutorDescriptor {
                 | StableOperation::ScanGitSecrets
         );
 
-        // Artifact hooks: operations that emit artifact events in the engine dispatch.
         let artifact_hook = matches!(
             operation,
             StableOperation::GenerateSbom | StableOperation::RunConsolidatedRecon
@@ -305,11 +283,11 @@ impl OperationExecutorDescriptor {
 
         OperationExecutorDescriptor {
             operation,
-            risk: Self::classify_risk(operation),
-            feature_required: operation.feature_required(),
+            risk,
+            feature_required,
             confirmation_required,
             confirmation_message,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            intended_uses,
             description,
             aliases,
             maturity,
@@ -381,6 +359,46 @@ pub enum StableOperation {
 }
 
 impl StableOperation {
+    /// Convert this Python operation ID to its canonical engine operation ID.
+    ///
+    /// The engine uses kebab-case IDs (e.g. `"scan-ports"`) while Python uses
+    /// snake_case (e.g. `"scan_ports"`). Some operations have non-trivial
+    /// mappings where the engine uses a shorter or different name.
+    pub const fn to_engine_id(self) -> &'static str {
+        match self {
+            Self::ScanPorts => "scan-ports",
+            Self::ScanEndpoints => "scan-endpoints",
+            Self::FingerprintServices => "fingerprint",
+            Self::ReconDns => "recon",
+            Self::InspectTls => "inspect-tls",
+            Self::DetectTechnology => "detect-technology",
+            Self::DetectWaf => "waf-detect",
+            Self::ValidateWaf => "validate-waf",
+            Self::FuzzHttp => "fuzz",
+            Self::LoadTest => "load-test",
+            Self::ScanGitSecrets => "scan-git-secrets",
+            Self::GenerateSbom => "generate-sbom",
+            Self::RunConsolidatedRecon => "run-consolidated-recon",
+            Self::GraphqlTest => "graphql",
+            Self::OauthTest => "oauth",
+            Self::AuthTest => "auth-test",
+            Self::DbProbe => "db-pentest",
+            Self::NseRun => "nse",
+            Self::ScanDockerImage => "scan-docker-image",
+            Self::ScanKubernetes => "scan-kubernetes",
+            Self::AnalyzeApk => "mobile-static",
+            Self::AnalyzeIpa => "mobile-static",
+        }
+    }
+
+    /// Look up the canonical [`OperationMetadata`] for this operation.
+    ///
+    /// Returns `None` if the engine does not have a metadata entry for this
+    /// operation (should not happen for the stable 22).
+    pub fn metadata(self) -> Option<&'static OperationMetadata> {
+        metadata_for_tool_id(self.to_engine_id())
+    }
+
     pub const ALL: &'static [Self] = &[
         Self::ScanPorts,
         Self::ScanEndpoints,
@@ -1243,6 +1261,95 @@ mod tests {
                 !desc.intended_uses.is_empty(),
                 "{:?}: empty intended_uses",
                 op
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase D: Construction tests — bridge to canonical OperationMetadata
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn every_stable_operation_has_engine_id() {
+        for &op in StableOperation::ALL {
+            let engine_id = op.to_engine_id();
+            assert!(!engine_id.is_empty(), "{:?}: empty engine_id", op);
+        }
+    }
+
+    #[test]
+    fn operations_with_metadata_derive_risk_from_engine() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            if let Some(metadata) = op.metadata() {
+                assert_eq!(
+                    desc.risk, metadata.risk,
+                    "{:?}: descriptor risk {:?} != metadata risk {:?}",
+                    op, desc.risk, metadata.risk
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn operations_with_metadata_derive_features_from_engine() {
+        let registry = OperationExecutorRegistry::default_stable();
+        for &op in StableOperation::ALL {
+            let desc = registry.descriptor_for(op);
+            if let Some(metadata) = op.metadata() {
+                let engine_feature = metadata.required_features.first().copied();
+                let python_feature = op.feature_required();
+                // The descriptor should prefer engine feature, fall back to Python feature.
+                let expected = engine_feature.or(python_feature);
+                assert_eq!(
+                    desc.feature_required, expected,
+                    "{:?}: descriptor feature {:?} != expected {:?} (engine={:?}, python={:?})",
+                    op, desc.feature_required, expected, engine_feature, python_feature
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn engine_ids_are_kebab_case() {
+        for &op in StableOperation::ALL {
+            let engine_id = op.to_engine_id();
+            assert!(
+                engine_id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '-'),
+                "{:?}: engine_id '{}' is not kebab-case",
+                op,
+                engine_id
+            );
+        }
+    }
+
+    #[test]
+    fn python_ids_are_snake_case() {
+        for &op in StableOperation::ALL {
+            let python_id = op.id();
+            assert!(
+                python_id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_'),
+                "{:?}: python_id '{}' is not snake_case",
+                op,
+                python_id
+            );
+        }
+    }
+
+    #[test]
+    fn python_and_engine_ids_differ_by_convention() {
+        for &op in StableOperation::ALL {
+            let python_id = op.id();
+            let engine_id = op.to_engine_id();
+            assert_ne!(
+                python_id, engine_id,
+                "{:?}: python and engine IDs are identical ('{}'), expected different conventions",
+                op, python_id
             );
         }
     }

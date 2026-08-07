@@ -66,12 +66,12 @@ Each defect class has one primary tool and owner:
 
 | Defect class | Tool | Configuration | Cadence |
 |-------------|------|---------------|---------|
-| Known advisories | `cargo deny check advisories` | `deny.toml` (advisory ignore list) | Every `check-full` run |
+| Known advisories | `cargo deny check advisories` | `deny.toml` + `docs/DEPENDENCY_EXCEPTIONS.md` | Every `check-full` run |
 | Disallowed licenses | `cargo deny check licenses` | `deny.toml` (allow list) | Every `check-full` run |
 | Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` (warn on multiples) | Every `check-full` run |
 | Secret introduction | GitHub-native secret scanning | Repository settings | Every push (GitHub-managed) |
 
-`cargo audit` is available locally as a secondary advisory check but is not run in CI to avoid tool duplication with `cargo deny`. Both tools share the same advisory ignore list; `deny.toml` is the canonical source.
+`cargo audit` is available locally as a secondary advisory check but is not run in CI to avoid tool duplication with `cargo deny`. Both tools share the same advisory ignore list; `deny.toml` is the canonical source. Detailed exception documentation lives in `docs/DEPENDENCY_EXCEPTIONS.md`.
 
 ## Which changes require Python checks
 

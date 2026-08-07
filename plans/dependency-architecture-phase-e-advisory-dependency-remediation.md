@@ -2,8 +2,10 @@
 
 ## Status
 
-Ready for implementation after Phase D ownership is stable. Research and
-non-mutating dependency-path analysis may begin earlier.
+Executed 2026-08-07. All 17 stale ignores removed. 7 live exceptions documented
+in `docs/DEPENDENCY_EXCEPTIONS.md` with review-by dates. rand upgraded (patch).
+PyO3 and quick-xml major upgrades deferred to Phase H (MSRV/major-version
+blockers).
 
 ## Objective
 

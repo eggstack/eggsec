@@ -81,7 +81,7 @@ These checks are not required for PR merge. They run in the optional `deep-check
 
 | Defect class | Primary tool | Config |
 |-------------|-------------|--------|
-| Known advisories | `cargo deny check advisories` | `deny.toml` |
+| Known advisories | `cargo deny check advisories` | `deny.toml` + `docs/DEPENDENCY_EXCEPTIONS.md` |
 | Disallowed licenses | `cargo deny check licenses` | `deny.toml` |
 | Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` |
 | Secret introduction | GitHub-native secret scanning | Repository settings |

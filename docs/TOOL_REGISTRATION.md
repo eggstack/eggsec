@@ -141,10 +141,11 @@ respective exposure flags are enforced at execute time via
   - `helper_and_server_commands_do_not_require_descriptors` (helper/server have no descriptor requirement)
 - Added `ops_agent_is_expanded_metadata_exposable_not_conservative_default` to encode Model A explicitly.
 
-**Remaining (deferred):**
+**Resolved (Phase D):**
 
-- [ ] Audit `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap
-- [ ] Consider declarative registration (tool declares its metadata at registration time)
+- `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap: The two registries serve different purposes and are intentionally separate. `ALL_OPERATION_METADATA` is the canonical catalog for the 31 engine operations (kebab-case IDs, used by MCP/REST/gRPC/agent surfaces). `ToolMetadataRegistry` in `tool/metadata.rs` provides policy-level metadata for 7 specialized tools (`plan`, `fuzz`, `stress`, `raw_packet_send`, `credential_test`, `remote_exec`) that are used by the tool abstraction layer for policy checks (`is_allowed_by()`) and MCP profile filtering (`is_available_for_profile()`). These tools use shorthand names that don't map 1:1 to canonical operation IDs. The overlap is documented and the two registries are cross-validated by construction tests in `metadata_consistency.rs`.
+
+- Python operation metadata now bridges to canonical engine IDs via `StableOperation::to_engine_id()` and `StableOperation::metadata()`. Risk, mode, and features are derived from `OperationMetadata` when available.
 
 ### Work Item 6 — Comment Cleanup
 
