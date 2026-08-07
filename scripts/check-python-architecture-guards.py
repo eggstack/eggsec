@@ -258,23 +258,35 @@ def main() -> None:
             body = enum_match.group(1)
             rust_variants = re.findall(r'(\w+)\s*,', body)
 
-        # Extract operations covered by classify_risk
-        classify_match = re.search(
-            r'fn classify_risk\(operation: StableOperation\).*?\{(.*?)\n    \}',
+        # Phase D: classify_risk() was removed; risk is now derived from
+        # OperationMetadata via metadata_for_tool_id().  Verify that every
+        # variant appears in the `id()` match block (which Rust enforces as
+        # exhaustive) or in `from_operation()`.
+        id_match = re.search(
+            r'pub const fn id\(self\).*?\{(.*?)\n    \}',
             content, re.DOTALL,
         )
-        classified_variants = set()
-        if classify_match:
-            classify_body = classify_match.group(1)
-            # Match all StableOperation::VariantName occurrences
-            classified_variants = set(re.findall(r'StableOperation::(\w+)', classify_body))
+        id_variants = set()
+        if id_match:
+            id_body = id_match.group(1)
+            id_variants = set(re.findall(r'Self::(\w+)', id_body))
 
-        missing_variants = [v for v in rust_variants if v not in classified_variants]
+        from_op_match = re.search(
+            r'pub fn from_operation\(operation: StableOperation\).*?\{(.*?)^    \}',
+            content, re.DOTALL | re.MULTILINE,
+        )
+        from_op_variants = set()
+        if from_op_match:
+            from_op_body = from_op_match.group(1)
+            from_op_variants = set(re.findall(r'StableOperation::(\w+)', from_op_body))
+
+        covered = id_variants | from_op_variants
+        missing_variants = [v for v in rust_variants if v not in covered]
         if missing_variants:
             for v in missing_variants:
-                fail(f"StableOperation::{v} missing from classify_risk()")
+                fail(f"StableOperation::{v} not covered by id() or from_operation()")
         else:
-            pass_(f"All {len(rust_variants)} StableOperation variants have risk classification.")
+            pass_(f"All {len(rust_variants)} StableOperation variants have descriptors.")
 
     # 8. Feature metadata JSON/Rust consistency
     print()
