@@ -1398,6 +1398,93 @@ impl OperationMetadata {
         descriptor.risk = risk;
         Ok(descriptor)
     }
+
+    /// Returns the canonical CLI command ID for this operation.
+    ///
+    /// By default this is the operation ID itself. Operations whose CLI command
+    /// uses a different ID should be listed in the alias table with the command
+    /// ID as the alias.
+    pub fn canonical_command_id(&self) -> &'static str {
+        self.id
+    }
+
+    /// Returns `true` if this operation requires a compile-time feature gate.
+    pub fn is_feature_gated(&self) -> bool {
+        !self.required_features.is_empty()
+    }
+
+    /// Returns the first required feature, or `None` if no feature is needed.
+    pub fn primary_feature(&self) -> Option<&'static str> {
+        self.required_features.first().copied()
+    }
+
+    /// Returns `true` if this operation is safe for default MCP tool listing
+    /// (passive or safe-active risk, metadata-exposable, no feature gate).
+    pub fn is_mcp_default_visible(&self) -> bool {
+        matches!(
+            self.risk,
+            OperationRisk::Passive | OperationRisk::SafeActive
+        ) && self.mcp_exposable
+            && self.required_features.is_empty()
+    }
+
+    /// Returns `true` if this operation is hazardous for strict automated surfaces.
+    ///
+    /// Hazardous operations (risk > SafeActive) must not be default-visible
+    /// on MCP/REST/gRPC/agent surfaces.
+    pub fn is_hazardous(&self) -> bool {
+        self.risk > OperationRisk::SafeActive
+    }
+
+    /// Returns `true` if this operation is exposed on any automated surface
+    /// (MCP, REST, gRPC, or agent).
+    pub fn is_exposed_automated(&self) -> bool {
+        self.mcp_exposable || self.rest_exposable || self.grpc_exposable || self.agent_exposable
+    }
+
+    /// Derive the feature gate for a command registration from this metadata.
+    ///
+    /// Returns `None` if no feature is required, or the first required feature.
+    pub fn derive_command_feature(&self) -> Option<&'static str> {
+        self.primary_feature()
+    }
+
+    /// Returns `true` if this operation should be visible in TUI tab listings.
+    pub fn is_tui_visible(&self) -> bool {
+        self.tui_exposable
+    }
+
+    /// Returns `true` if this operation should be visible in programmatic surfaces
+    /// (MCP/REST/gRPC/agent).
+    pub fn is_programmatic_visible(&self) -> bool {
+        self.mcp_exposable || self.rest_exposable || self.grpc_exposable || self.agent_exposable
+    }
+
+    /// Derive an `OperationIntegration` for domain descriptor construction.
+    ///
+    /// Returns a static `OperationIntegration` that mirrors this metadata's
+    /// mode, risk, capabilities, features, and target policy. Domain-specific
+    /// overrides (e.g. `requires_explicit_scope`, `requires_private_or_local_target`)
+    /// can be applied after construction.
+    pub fn derive_operation_integration(&'static self) -> crate::domain::OperationIntegration {
+        crate::domain::OperationIntegration {
+            operation_id: self.id,
+            display_name: self.display_name,
+            mode: self.mode,
+            risk: self.risk,
+            capabilities: self.required_capabilities,
+            intended_uses: self.intended_uses,
+            required_features: self.required_features,
+            requires_explicit_scope: matches!(
+                self.target_policy,
+                TargetPolicyKind::ExplicitScopeRequired | TargetPolicyKind::PrivateOrLocalRequired
+            ),
+            requires_private_or_local_target: matches!(
+                self.target_policy,
+                TargetPolicyKind::PrivateOrLocalRequired
+            ),
+        }
+    }
 }
 
 /// Static registry of all operation metadata. Single source of truth for
@@ -1562,7 +1649,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mode: OperationMode::StandardAssessment,
         risk: OperationRisk::StressTest,
         intended_uses: &[IntendedUse::WebAssessment],
-        required_features: &[],
+        required_features: &["stress-testing"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::WafStressTest],
         target_policy: TargetPolicyKind::ExplicitScopeRequired,
@@ -1579,7 +1666,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mode: OperationMode::StandardAssessment,
         risk: OperationRisk::RawPacket,
         intended_uses: &[IntendedUse::WebAssessment],
-        required_features: &[],
+        required_features: &["packet-inspection"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::RawPacketProbe],
         target_policy: TargetPolicyKind::ExplicitScopeRequired,
@@ -1661,7 +1748,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
     OperationMetadata {
         id: "db-pentest",
         display_name: "Database Pentesting",
-        mode: OperationMode::StandardAssessment,
+        mode: OperationMode::DefenseLab,
         risk: OperationRisk::DbPentest,
         intended_uses: &[IntendedUse::WebAssessment],
         required_features: &["db-pentest"],
@@ -1863,23 +1950,6 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         grpc_exposable: true,
     },
     OperationMetadata {
-        id: "proxy",
-        display_name: "Proxy Management",
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::SafeActive,
-        intended_uses: &[IntendedUse::WebAssessment],
-        required_features: &[],
-        required_policy_flags: &[],
-        required_capabilities: &[],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
-        manual_exposable: true,
-        tui_exposable: true,
-        mcp_exposable: true,
-        rest_exposable: true,
-        agent_exposable: true,
-        grpc_exposable: true,
-    },
-    OperationMetadata {
         id: "remote",
         display_name: "Remote Execution",
         mode: OperationMode::StandardAssessment,
@@ -1985,7 +2055,7 @@ pub static ALL_OPERATION_METADATA_ALIASES: &[(&str, &str)] = &[
     ("mobile-scan", "mobile-static"),
     ("exec", "remote"),
     ("ssh", "remote"),
-    ("tor", "proxy"),
+    ("tor", "proxy-intercept"),
 ];
 
 /// Look up operation metadata by its canonical ID.

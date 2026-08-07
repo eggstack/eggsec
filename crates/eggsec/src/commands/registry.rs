@@ -136,7 +136,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "scan-endpoints",
         operation_id: Some("scan-endpoints"),
-        display_name: "Endpoint Scan",
+        display_name: "Endpoint Discovery",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -149,7 +149,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "fingerprint",
         operation_id: Some("fingerprint"),
-        display_name: "Fingerprint",
+        display_name: "Service Fingerprint",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -162,8 +162,8 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     // ── Legacy commands (not yet migrated) ──
     CommandRegistration {
         command_id: "scan",
-        operation_id: Some("scan"),
-        display_name: "Pipeline Scan",
+        operation_id: Some("scan-ports"),
+        display_name: "Port Scan",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -189,7 +189,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "fuzz",
         operation_id: Some("fuzz"),
-        display_name: "Fuzz",
+        display_name: "Fuzzing",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -201,8 +201,8 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     },
     CommandRegistration {
         command_id: "waf",
-        operation_id: Some("waf"),
-        display_name: "WAF Detect",
+        operation_id: Some("waf-detect"),
+        display_name: "WAF Detection",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -215,7 +215,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "waf-stress",
         operation_id: Some("waf-stress"),
-        display_name: "WAF Stress",
+        display_name: "WAF Stress Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -228,7 +228,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "graphql",
         operation_id: Some("graphql"),
-        display_name: "GraphQL Fuzz",
+        display_name: "GraphQL Fuzzing",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -241,7 +241,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "oauth",
         operation_id: Some("oauth"),
-        display_name: "OAuth Fuzz",
+        display_name: "OAuth Testing",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -254,7 +254,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "auth-test",
         operation_id: Some("auth-test"),
-        display_name: "Auth Test",
+        display_name: "Authentication Testing",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
@@ -266,7 +266,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     },
     CommandRegistration {
         command_id: "load",
-        operation_id: Some("load"),
+        operation_id: Some("load-test"),
         display_name: "Load Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
@@ -279,7 +279,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     },
     CommandRegistration {
         command_id: "stress",
-        operation_id: Some("stress"),
+        operation_id: Some("stress-test"),
         display_name: "Stress Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("stress-testing"),
@@ -293,7 +293,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "packet",
         operation_id: Some("packet"),
-        display_name: "Packet Operations",
+        display_name: "Raw Packet",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("packet-inspection"),
         cli_visible: true,
@@ -345,7 +345,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "hunt",
         operation_id: Some("hunt"),
-        display_name: "Vulnerability Hunt",
+        display_name: "Vulnerability Hunting",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("advanced-hunting"),
         cli_visible: true,
@@ -397,7 +397,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "proxy-intercept",
         operation_id: Some("proxy-intercept"),
-        display_name: "Web Proxy Intercept",
+        display_name: "Traffic Interception",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("web-proxy"),
         cli_visible: true,
@@ -410,7 +410,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "wireless",
         operation_id: Some("wireless"),
-        display_name: "Wireless",
+        display_name: "Wireless Scanning",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("wireless"),
         cli_visible: true,
@@ -435,8 +435,8 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     },
     CommandRegistration {
         command_id: "mobile",
-        operation_id: None,
-        display_name: "Mobile Analysis",
+        operation_id: Some("mobile-static"),
+        display_name: "Mobile Static Analysis",
         category: CommandCategory::LocalFileDomain,
         feature: Some("mobile"),
         cli_visible: true,
@@ -449,7 +449,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
     CommandRegistration {
         command_id: "db",
         operation_id: Some("db-pentest"),
-        display_name: "DB Pentest",
+        display_name: "Database Pentesting",
         category: CommandCategory::LocalFileDomain,
         feature: Some("db-pentest"),
         cli_visible: true,
@@ -632,7 +632,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
-        command_id: "remote",
+        command_id: "remote-serve",
         operation_id: None,
         display_name: "Remote",
         category: CommandCategory::FrontendServer,
@@ -841,6 +841,33 @@ mod tests {
                     reg.command_id,
                     op_id
                 );
+            }
+        }
+    }
+
+    /// Verify that operation-backed commands derive display_name and feature
+    /// from canonical OperationMetadata. This is the construction test that
+    /// replaces snapshot-based consistency checks.
+    #[test]
+    fn operation_backed_commands_match_metadata() {
+        for reg in REGISTERED_COMMANDS {
+            if let Some(op_id) = reg.operation_id {
+                if let Some(meta) = metadata_for_tool_id(op_id) {
+                    assert_eq!(
+                        reg.display_name, meta.display_name,
+                        "Command '{}' display_name '{}' != metadata '{}' for operation '{}'",
+                        reg.command_id, reg.display_name, meta.display_name, op_id
+                    );
+                    assert_eq!(
+                        reg.feature,
+                        meta.derive_command_feature(),
+                        "Command '{}' feature {:?} != metadata {:?} for operation '{}'",
+                        reg.command_id,
+                        reg.feature,
+                        meta.derive_command_feature(),
+                        op_id
+                    );
+                }
             }
         }
     }

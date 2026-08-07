@@ -2,10 +2,12 @@
 
 ## Overview
 
-Eggsec uses two complementary static metadata registries that together form the canonical source of truth for all operations, tools, and domains:
+Eggsec uses a **single canonical source** for all operation metadata, with derived views for commands, domains, tools, and protocols:
 
-1. **`OperationMetadata`** (`config/policy.rs`) — Per-operation metadata: risk, capabilities, feature gates, surface exposure flags.
-2. **`DomainDescriptor`** (`domain/mod.rs`) — Per-domain metadata: category, integration points (CLI/TUI/tool/report), dry-run/evidence/baseline support.
+1. **`OperationMetadata`** (`config/policy.rs`) — **Single source of truth** for operation ID, mode, risk, capabilities, feature gates, target policy, and surface exposure flags.
+2. **`CommandRegistration`** (`commands/registry.rs`) — Derived from `OperationMetadata` for CLI dispatch. Command-specific fields only (command_id, category, dispatch_mode). Display name and feature are derived from metadata.
+3. **`DomainDescriptor`** (`domain/mod.rs`) — Per-domain metadata: category, integration points, dry-run/evidence/baseline support. `OperationIntegration` values must match `OperationMetadata` (verified by construction tests).
+4. **`ToolRegistration`** (`tool/registration.rs`) — Derived from `OperationMetadata` + `DomainDescriptor::ToolIntegration` for MCP/REST/gRPC/agent tool listings.
 
 These registries are **static**, **const-constructible**, and **authorization-neutral**. They describe what operations exist and how they integrate with the system — they never decide whether an operation is authorized.
 
@@ -23,11 +25,12 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 ### Adding a New Operation
 
-1. Add an `OperationMetadata` entry to `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs`.
-2. If the operation is domain-scoped, add an `OperationIntegration` to the relevant `DomainDescriptor`.
-3. Add any needed aliases to `ALL_OPERATION_METADATA_ALIASES`.
-4. Update `docs/CAPABILITY_MATRIX.md` with the new row.
-5. Run `cargo test -p eggsec --test metadata_consistency` to verify consistency.
+1. Add an `OperationMetadata` entry to `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs`. This is the **only** place where mode, risk, capabilities, features, and target policy are declared.
+2. Add a `CommandRegistration` entry in `crates/eggsec/src/commands/registry.rs`. The `display_name` and `feature` fields are **derived from metadata** — the construction test `operation_backed_commands_match_metadata` enforces this.
+3. If the operation is domain-scoped, add an `OperationIntegration` to the relevant `DomainDescriptor` in `crates/eggsec/src/domain/mod.rs`. Values **must match** `OperationMetadata` — the construction test `domain_operation_matches_metadata` enforces this.
+4. Add any needed aliases to `ALL_OPERATION_METADATA_ALIASES`.
+5. Add a `TaskKind` variant and mapping in `runtime_bridge/descriptor.rs` if the operation is runtime-dispatchable.
+6. Run `cargo test -p eggsec --test metadata_consistency` and `cargo test -p eggsec --lib -- "match_metadata"` to verify consistency.
 
 ### Adding a New Domain
 
@@ -40,10 +43,10 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 ### Modifying Existing Metadata
 
-1. Edit the relevant registry (`ALL_OPERATION_METADATA` or `DomainDescriptor`).
-2. Update `docs/CAPABILITY_MATRIX.md` to match.
-3. Run the full metadata consistency test suite.
-4. If removing or renaming an operation, update all aliases and integration points.
+1. Edit `ALL_OPERATION_METADATA` in `config/policy.rs`. This is the **only** place to change mode, risk, capabilities, features, or target policy.
+2. Update any `CommandRegistration` entries whose `display_name` or `feature` should change (the construction test will catch drift).
+3. Update any `DomainDescriptor::OperationIntegration` entries that duplicate the changed values (the construction test will catch drift).
+4. Run the full metadata consistency test suite and the construction tests.
 
 ## Programmatic Exposure Semantics
 
@@ -106,8 +109,16 @@ Registration does **not** grant authorization. The `EnforcementContext::evaluate
 
 The following tests validate metadata consistency:
 
+### Construction Tests (verify derived views match canonical metadata)
+
 | Test | What It Checks |
 |------|---------------|
+| `operation_backed_commands_match_metadata` | Command display_name and feature are derived from OperationMetadata |
+| `domain_operation_matches_metadata` | Domain OperationIntegration mode, risk, capabilities, features match OperationMetadata |
+
+### Snapshot and Invariant Tests
+
+| Test | What It Checks |
 | `all_domain_operations_have_matching_metadata` | Every domain operation ID resolves to an `OperationMetadata` entry |
 | `domain_risk_matches_operation_metadata_risk` | Domain and metadata risk tiers agree |
 | `domain_capabilities_match_metadata` | Domain and metadata capabilities agree |
@@ -148,6 +159,7 @@ The following tests validate metadata consistency:
 - **Phase 4**: Added `CapabilityMatrixRow`, `generate_capability_matrix()`, `BaselineSupport`, `docs_url`, `strict_surface_support`, metadata consistency tests, and `docs/CAPABILITY_MATRIX.md`.
 - **Phase 7**: Added `ToolRegistration` as derived metadata source bridging `OperationMetadata` and `DomainDescriptor::ToolIntegration`.
 - **Phase 9**: Added `normalized_report_supported` to `ReportIntegration` in `DomainDescriptor`. Introduced normalized report/evidence envelope model (`ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `BaselineSummary`) in `eggsec-output::envelope`. Added `RedactionPolicy` to `EvidenceManifest` for manifest-level redaction semantics. Pilot domain bridges (db-pentest, mobile-static) emit normalized envelopes. `docs/CAPABILITY_MATRIX.md` tracks normalized report support per domain.
+- **Phase D (Metadata Consolidation)**: `OperationMetadata` is now the **single source of truth** for operation mode, risk, capabilities, features, and target policy. `CommandRegistration` display_name and feature are derived from metadata (construction test enforced). `DomainDescriptor::OperationIntegration` values must match metadata (construction test enforced). Removed orphaned standalone `proxy` OperationMetadata. Renamed `remote` command to `remote-serve` to disambiguate from the `remote` operation. Added derive helpers: `canonical_command_id()`, `is_feature_gated()`, `primary_feature()`, `is_mcp_default_visible()`, `is_hazardous()`, `is_exposed_automated()`, `derive_command_feature()`, `is_tui_visible()`, `is_programmatic_visible()`, `derive_operation_integration()`.
 
 ## Exposure Model Decision
 

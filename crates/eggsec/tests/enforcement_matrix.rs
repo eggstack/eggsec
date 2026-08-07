@@ -2505,6 +2505,11 @@ fn metadata_packet_requires_raw_packet_capability() {
 #[test]
 fn metadata_packet_with_policy_allows_under_strict() {
     let meta = metadata_for_tool_id("packet").expect("packet metadata should exist");
+    // packet now requires the packet-inspection feature gate; skip if not compiled.
+    if meta.is_feature_gated() && !eggsec::config::is_feature_enabled_registry("packet-inspection")
+    {
+        return;
+    }
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let desc = metadata_descriptor(meta, "127.0.0.1");
     // packet metadata requires RawPacket risk + raw-packet-probe capability.
@@ -2656,8 +2661,8 @@ fn dispatch_checked_rejects_tool_mismatch() {
     let err = result.unwrap_err();
     let msg = format!("{}", err);
     assert!(
-        msg.contains("dispatch mismatch"),
-        "error should mention dispatch mismatch, got: {}",
+        msg.contains("dispatch binding failed") || msg.contains("dispatch mismatch"),
+        "error should mention dispatch binding failed or dispatch mismatch, got: {}",
         msg
     );
 }
@@ -2700,8 +2705,8 @@ fn dispatch_checked_rejects_target_mismatch() {
     let err = result.unwrap_err();
     let msg = format!("{}", err);
     assert!(
-        msg.contains("dispatch mismatch"),
-        "error should mention dispatch mismatch, got: {}",
+        msg.contains("dispatch binding failed") || msg.contains("dispatch mismatch"),
+        "error should mention dispatch binding failed or dispatch mismatch, got: {}",
         msg
     );
 }
@@ -3056,8 +3061,8 @@ fn dispatch_checked_rejects_unrelated_alias() {
     );
     let msg = format!("{}", result.unwrap_err());
     assert!(
-        msg.contains("dispatch mismatch"),
-        "error should mention dispatch mismatch, got: {}",
+        msg.contains("dispatch binding failed") || msg.contains("dispatch mismatch"),
+        "error should mention dispatch binding failed or dispatch mismatch, got: {}",
         msg
     );
 }

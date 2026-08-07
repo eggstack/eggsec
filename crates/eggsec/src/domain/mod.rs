@@ -452,6 +452,8 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
 // (in the registry and tests). Allow dead_code for no-default-features builds.
 #[allow(dead_code)]
 /// Static operation integration for the `db-pentest` operation.
+/// Values must match canonical `OperationMetadata` — verified by
+/// `domain_operation_matches_metadata` test.
 const DB_PENTEST_OPERATION: OperationIntegration = OperationIntegration {
     operation_id: "db-pentest",
     display_name: "Database Pentesting",
@@ -857,6 +859,49 @@ mod tests {
                     "domain '{}' operation '{}' has no matching OperationMetadata",
                     domain.id,
                     op.operation_id
+                );
+            }
+        }
+    }
+
+    /// Verify that every domain OperationIntegration matches the canonical
+    /// OperationMetadata for mode, risk, capabilities, and features.
+    /// This is the construction test that replaces cross-table snapshot tests.
+    #[test]
+    fn domain_operation_matches_metadata() {
+        use crate::config::metadata_for_tool_id;
+        for domain in all_domain_descriptors() {
+            for op in domain.operations {
+                let meta = metadata_for_tool_id(op.operation_id).unwrap_or_else(|| {
+                    panic!(
+                        "domain '{}' operation '{}' has no metadata",
+                        domain.id, op.operation_id
+                    )
+                });
+                assert_eq!(
+                    op.mode, meta.mode,
+                    "domain '{}' operation '{}': mode {:?} != metadata {:?}",
+                    domain.id, op.operation_id, op.mode, meta.mode
+                );
+                assert_eq!(
+                    op.risk, meta.risk,
+                    "domain '{}' operation '{}': risk {:?} != metadata {:?}",
+                    domain.id, op.operation_id, op.risk, meta.risk
+                );
+                assert_eq!(
+                    op.capabilities, meta.required_capabilities,
+                    "domain '{}' operation '{}': capabilities {:?} != metadata {:?}",
+                    domain.id, op.operation_id, op.capabilities, meta.required_capabilities
+                );
+                assert_eq!(
+                    op.intended_uses, meta.intended_uses,
+                    "domain '{}' operation '{}': intended_uses {:?} != metadata {:?}",
+                    domain.id, op.operation_id, op.intended_uses, meta.intended_uses
+                );
+                assert_eq!(
+                    op.required_features, meta.required_features,
+                    "domain '{}' operation '{}': required_features {:?} != metadata {:?}",
+                    domain.id, op.operation_id, op.required_features, meta.required_features
                 );
             }
         }

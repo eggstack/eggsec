@@ -1,6 +1,6 @@
 # Command Registry
 
-Metadata-aware command registration layer for CLI/TUI dispatch. Phase 6 of the architecture extensibility effort.
+Metadata-aware command registration layer for CLI/TUI dispatch.
 
 ## Purpose
 
@@ -16,9 +16,8 @@ The command registry maps command IDs to dispatch metadata, enabling:
 Command Registration (static, inspectable)
     │
     ├─ operation_id → OperationMetadata (canonical policy metadata)
-    ├─ feature gate → compile-time / runtime feature check
-    ├─ category → CommandCategory enum
-    ├─ dispatch_mode → CommandDispatchMode (RegistryBacked, LegacyWrapped, etc.)
+    │   └─ display_name, feature derived from metadata (construction test enforced)
+    ├─ command-specific fields (category, dispatch_mode, cli_interactive_only)
     └─ descriptor builder → OperationDescriptor from metadata
     
 Dispatch Bridge (handle_command)

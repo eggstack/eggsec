@@ -406,3 +406,161 @@ fn dependency_edges_reference_known_features() {
         );
     }
 }
+
+// ─── Frontend forwarding validation (Workstream 5) ─────────────────────────
+
+/// Parse a Cargo.toml file and extract feature definitions.
+/// Returns a map of feature name -> list of raw dependency/feature strings.
+fn parse_features_raw(
+    manifest_path: &std::path::Path,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let manifest_str = std::fs::read_to_string(manifest_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {}", manifest_path.display(), e));
+    let manifest: toml::Value = manifest_str
+        .parse()
+        .unwrap_or_else(|e| panic!("failed to parse {}: {}", manifest_path.display(), e));
+
+    let features_table = manifest
+        .get("features")
+        .and_then(|v| v.as_table())
+        .unwrap_or_else(|| panic!("no [features] table in {}", manifest_path.display()));
+
+    let mut result: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for (feat_name, feat_value) in features_table {
+        if feat_name == "default" {
+            continue;
+        }
+        let mut deps = Vec::new();
+        if let Some(arr) = feat_value.as_array() {
+            for dep in arr {
+                if let Some(dep_str) = dep.as_str() {
+                    deps.push(dep_str.to_string());
+                }
+            }
+        }
+        result.insert(feat_name.clone(), deps);
+    }
+    result
+}
+
+/// Extract engine feature names from a list of raw dependency strings.
+/// Filters `eggsec/<feature>` and `eggsec-tui?/<feature>` patterns.
+fn extract_engine_features(deps: &[String]) -> Vec<String> {
+    deps.iter()
+        .filter_map(|dep| {
+            dep.strip_prefix("eggsec/")
+                .or_else(|| dep.strip_prefix("eggsec-tui?/"))
+                .map(|f| f.to_string())
+        })
+        .collect()
+}
+
+/// CLI feature forwarding: every `eggsec/<feature>` reference must exist in the engine registry.
+#[test]
+fn cli_forwarded_features_exist_in_registry() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-cli/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+
+    for (feat_name, deps) in &features {
+        for engine_feat in extract_engine_features(deps) {
+            assert!(
+                is_known_feature_registry(&engine_feat),
+                "CLI feature '{}' forwards to unknown engine feature '{}' — add to feature registry or remove forwarding",
+                feat_name,
+                engine_feat
+            );
+        }
+    }
+}
+
+/// TUI feature forwarding: every `eggsec/<feature>` reference must exist in the engine registry.
+#[test]
+fn tui_forwarded_features_exist_in_registry() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-tui/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+
+    for (feat_name, deps) in &features {
+        for engine_feat in extract_engine_features(deps) {
+            assert!(
+                is_known_feature_registry(&engine_feat),
+                "TUI feature '{}' forwards to unknown engine feature '{}' — add to feature registry or remove forwarding",
+                feat_name,
+                engine_feat
+            );
+        }
+    }
+}
+
+/// CLI aggregate `full` must activate all documented CLI capabilities.
+#[test]
+fn cli_full_aggregate_forwards_all_documented_capabilities() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-cli/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+
+    let cli_full_deps = features
+        .get("full")
+        .expect("CLI must have a 'full' aggregate feature");
+
+    // These are all features that CLI's `full` includes (local feature names).
+    let required_features = &[
+        "tui",
+        "mobile",
+        "mobile-dynamic",
+        "wireless-advanced",
+        "db-pentest",
+        "web-proxy",
+    ];
+    for &req in required_features {
+        assert!(
+            cli_full_deps.iter().any(|f| f == req),
+            "CLI 'full' aggregate does not include feature '{}'",
+            req
+        );
+    }
+}
+
+/// TUI aggregate `full` must activate all TUI-level capabilities.
+#[test]
+fn tui_full_aggregate_forwards_all_tui_capabilities() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-tui/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+
+    let tui_full_deps = features
+        .get("full")
+        .expect("TUI must have a 'full' aggregate feature");
+
+    // These are features that TUI's `full` includes.
+    let required_features = &[
+        "nse",
+        "headless-browser",
+        "compliance",
+        "database",
+        "external-integrations",
+        "finding-workflow",
+        "vuln-management",
+        "wireless",
+        "wireless-advanced",
+        "mobile",
+        "stress-testing",
+        "packet-inspection",
+        "advanced-hunting",
+        "tool-api",
+        "rest-api",
+        "db-pentest",
+        "web-proxy",
+        "c2",
+    ];
+    for &req in required_features {
+        assert!(
+            tui_full_deps.iter().any(|f| f == req),
+            "TUI 'full' aggregate does not include feature '{}'",
+            req
+        );
+    }
+}
