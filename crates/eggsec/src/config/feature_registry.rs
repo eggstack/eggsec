@@ -417,6 +417,23 @@ feature_registry! {
         hint: "enable feature 'dynamic-plugins' in Cargo.toml: cargo build --features dynamic-plugins"
     },
 
+    // ── Process-host adapter features ───────────────────────────────────────
+    "email-notifications" => {
+        enabled: cfg!(feature = "email-notifications"),
+        category: ProtocolAdapter,
+        hint: "enable feature 'email-notifications' in Cargo.toml: cargo build --features email-notifications"
+    },
+    "logging-subscriber" => {
+        enabled: cfg!(feature = "logging-subscriber"),
+        category: ProtocolAdapter,
+        hint: "enable feature 'logging-subscriber' in Cargo.toml: cargo build --features logging-subscriber"
+    },
+    "config-watch" => {
+        enabled: cfg!(feature = "config-watch"),
+        category: ProtocolAdapter,
+        hint: "enable feature 'config-watch' in Cargo.toml: cargo build --features config-watch"
+    },
+
     // ── Aggregate features ──────────────────────────────────────────────────
     "full" => {
         enabled: cfg!(feature = "full"),

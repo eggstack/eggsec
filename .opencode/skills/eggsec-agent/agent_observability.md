@@ -11,7 +11,7 @@ These skills cover the agent observability system and configuration hot-reloadin
 
 ## Skills
 
-### 1. Agent Observability (`logging/init.rs`)
+### 1. Agent Observability (`crates/eggsec-cli/src/logging.rs`)
 
 **Purpose**: Non-blocking, rotating JSON logs for security compliance and debugging.
 
@@ -117,8 +117,8 @@ let results = fuzzer.run_chain(chain).await?;
 
 ## Related Files
 
-- `crates/eggsec/src/logging/init.rs` - Centralized logging initialization with composed layers
-- `crates/eggsec/src/agent/config_watcher.rs` - ConfigWatcher implementation
+- `crates/eggsec-cli/src/logging.rs` - CLI-side logging initialization with composed layers
+- `crates/eggsec/src/agent/config_watcher.rs` - ConfigWatcher implementation (behind `config-watch` feature)
 - `crates/eggsec/src/fuzzer/engine/chained.rs` - StatefulFuzzer implementation
 - `crates/eggsec/src/agent/mod.rs` - Module exports
 

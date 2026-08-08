@@ -76,6 +76,9 @@ Categories:
 | `web-proxy-mcp` | Domain protocol exposure marker | `web-proxy`, `eggsec-web-proxy/web-proxy-mcp` | eggsec | No | Yes (MCP surface) | `proxy-intercept` | — |
 | `transparent-proxy` | Domain capability | `web-proxy`, `eggsec-web-proxy/transparent-proxy` | eggsec | No | No | — | — |
 | `dynamic-plugins` | Domain capability | `web-proxy`, `eggsec-web-proxy/dynamic-plugins` | eggsec | No | No | — | — |
+| `email-notifications` | Process-host adapter | `lettre` | eggsec | No | No | — | — |
+| `logging-subscriber` | Process-host adapter | `tracing-subscriber`, `tracing-appender` | eggsec | No | No | — | — |
+| `config-watch` | Process-host adapter | `notify`, `notify-debouncer-mini` | eggsec | No | No | — | — |
 | `full` | Meta/aggregate (developer/lab) | see `Cargo.toml` | eggsec | No | No | — | — |
 
 ### 1.1a Daemon Crate Features

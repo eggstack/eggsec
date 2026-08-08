@@ -209,8 +209,11 @@ Feature-gated modules require explicit build flags:
 | `packet-inspection` | `libpcap-dev` | Packet capture |
 | `nse-ssh2` | `ssh2` | NSE with SSH2/libssh2 support |
 | `nse-sandbox` | (needs nse) | Sandboxed NSE execution |
+| `email-notifications` | (none) | SMTP email via lettre; enables `rest-api` email transport |
+| `logging-subscriber` | (none) | tracing subscriber/appender setup for process-host crates |
+| `config-watch` | (none) | File watching (notify + debouncer) for config hot-reload |
 
-Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `ws-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`
+Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `ws-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `email-notifications`, `logging-subscriber`, `config-watch`
 
 Note: `http-api` is a feature on `eggsec-daemon` (not `eggsec`), enabling HTTP/SSE transport.
 

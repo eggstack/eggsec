@@ -1800,7 +1800,6 @@ dependencies = [
  "serde_json",
  "serde_yaml_neo",
  "sha2",
- "shellexpand",
  "smallvec",
  "socket2 0.5.10",
  "spdx 0.10.9",
@@ -1870,6 +1869,8 @@ dependencies = [
  "shellexpand",
  "tokio",
  "tokio-util",
+ "tracing-appender",
+ "tracing-subscriber",
  "uuid",
 ]
 

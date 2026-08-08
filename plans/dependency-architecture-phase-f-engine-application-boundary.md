@@ -2,7 +2,11 @@
 
 ## Status
 
-Ready for implementation after Phases D and E.
+Executed (partial). Phase F workstream 4 (logging subscriber), workstream 5
+(notifications/integrations), and workstream 6 (config watching) completed.
+Workstream 2 (CLI definitions) and workstream 3 (command orchestration) require
+a larger refactor to decouple Clap-derived types from engine internals —
+deferred to a follow-up phase. Workstream 1 baselines recorded.
 
 ## Objective
 

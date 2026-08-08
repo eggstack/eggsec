@@ -61,10 +61,10 @@ regex.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
 base64.workspace = true
 tracing.workspace = true
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-appender = "0.2"
-notify = { version = "7", features = ["serde"] }
-notify-debouncer-mini = "0.5"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+tracing-appender = { version = "0.2", optional = true }
+notify = { version = "7", features = ["serde"], optional = true }
+notify-debouncer-mini = { version = "0.5", optional = true }
 directories = "5"
 quick-xml = { version = "0.31", features = ["serialize"] }
 ipnetwork = "0.20"
@@ -76,7 +76,7 @@ hmac = "0.12"
 hex.workspace = true
 rustc-hash = { workspace = true }
 subtle = "2"
-lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls", "smtp-transport", "tracing", "rustls-no-provider", "webpki-roots", "builder"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls", "smtp-transport", "tracing", "rustls-no-provider", "webpki-roots", "builder"], optional = true }
 crossbeam = "0.8"
 dashmap.workspace = true
 scraper.workspace = true
@@ -84,7 +84,7 @@ lru = "0.18"
 semver = { version = "1", optional = true }
 rustls-pki-types = "1"
 maxminddb = "0.27"
-shellexpand = "3"
+
 rcgen = { version = "0.14", features = ["pem"] }
 async-trait.workspace = true
 zeroize = { version = "1", features = ["derive"] }
@@ -276,7 +276,10 @@ tool-api = []
 insecure-tls = []
 
 # REST API server with MCP (Model Context Protocol) for AI agent integration
-rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream"]
+rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream", "email-notifications", "config-watch"]
+
+# Config file watching (notify + debouncer). Enables hot-reload for TUI/daemon.
+config-watch = ["dep:notify", "dep:notify-debouncer-mini"]
 
 # WebSocket API server support
 ws-api = ["axum/ws"]
@@ -308,6 +311,13 @@ compliance = []
 # External integrations (Jira, GitHub, GitLab, etc.)
 external-integrations = []
 
+# Email notifications via lettre (SMTP). When disabled, email transport is not linked.
+email-notifications = ["dep:lettre"]
+
+# Tracing subscriber/appender setup for process-host crates (CLI, daemon).
+# Engine code uses the tracing facade only; subscriber configuration lives in frontends.
+logging-subscriber = ["dep:tracing-subscriber", "dep:tracing-appender"]
+
 # Finding workflow management
 finding-workflow = []
 
@@ -315,7 +325,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex", "c2"]
+  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex", "c2", "email-notifications", "logging-subscriber", "config-watch"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]

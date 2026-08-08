@@ -126,7 +126,10 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows bui
 | `pdf` | printpdf | PDF report generation |
 | `wireless` | *(marker)* | WiFi scanning (passive recon + basic security analysis + rogue heuristic). Passive Phase 0 (2026-06-11); active in `plans/wireless-active-attacks-loadout-design-plan.md` (gated `wireless-advanced`). |
 | `api-schema` | *(marker)* | OpenAPI schema-based fuzzing |
-| `full` | 16 sub-features | All features combined (excludes grpc-api, ws-api, pdf) |
+| `email-notifications` | lettre | SMTP email notifications (process-host adapter) |
+| `logging-subscriber` | tracing-subscriber, tracing-appender | Tracing subscriber/appender setup (process-host adapter) |
+| `config-watch` | notify, notify-debouncer-mini | Config file watching/hot-reload (process-host adapter) |
+| `full` | 16+ sub-features | All features combined (excludes grpc-api, ws-api, pdf) |
 
 #### Feature Propagation
 

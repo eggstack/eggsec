@@ -2,14 +2,17 @@
 
 ## Overview
 
-Logging configuration and initialization for Eggsec. Defined in `crates/eggsec/src/logging/`.
+Logging configuration and initialization for Eggsec. The subscriber setup (`init_logging`)
+lives in the CLI crate (`crates/eggsec-cli/src/logging.rs`) as a process-host concern.
+The engine crate exposes the `tracing` facade only; subscriber/appender configuration
+is owned by the frontend that starts the process.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `mod.rs` | Re-exports `init_logging`, `LogFormat` |
-| `init.rs` | Logging initialization implementation |
+| `crates/eggsec-cli/src/logging.rs` | CLI-side logging initialization (subscriber, formatters, file appenders) |
+| `crates/eggsec/src/logging/` | Conditionally compiled re-export behind `logging-subscriber` feature (optional) |
 
 ## Key Types
 
@@ -22,6 +25,12 @@ Logging configuration and initialization for Eggsec. Defined in `crates/eggsec/s
 ## Usage
 
 Called once during application startup in `main.rs`. The format is driven by the `--json` CLI flag. When the `agent` subcommand is used, the log directory is resolved from the agent's `memory_dir` and passed to enable file-based logging.
+
+## Dependency Boundary
+
+`tracing-subscriber` and `tracing-appender` are optional engine dependencies behind the
+`logging-subscriber` feature. Python and headless consumers do not link these crates by
+default. The CLI crate owns these dependencies unconditionally since it is the process host.
 
 ## Related
 

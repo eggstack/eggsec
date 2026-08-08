@@ -5,7 +5,8 @@ use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 
 use eggsec::cli::Cli;
-use eggsec::logging::{init_logging, LogFormat};
+mod logging;
+use logging::{init_logging, LogFormat};
 
 #[cfg(feature = "daemon-client")]
 mod daemon_cli;

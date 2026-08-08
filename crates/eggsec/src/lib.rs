@@ -116,6 +116,7 @@ pub mod integrations;
 #[allow(dead_code)]
 mod integrations;
 pub mod loadtest;
+#[cfg(feature = "logging-subscriber")]
 pub mod logging;
 pub mod notify;
 pub mod output;
