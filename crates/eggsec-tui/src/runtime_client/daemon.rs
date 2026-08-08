@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::{oneshot, Mutex};
 
-use eggsec_daemon::protocol::{ClientCommand, ServerMessage};
+use eggsec_daemon_protocol::protocol::{ClientCommand, ServerMessage};
 
 use super::{RuntimeClientFuture, RuntimeEventReceiverHandle, TuiRuntimeClient};
 
@@ -151,7 +151,7 @@ impl DaemonRuntimeClient {
         // Declare client kind to the daemon (best effort)
         let _ = client
             .declare_client(
-                eggsec_daemon::client_registry::ClientKind::Tui,
+                eggsec_daemon_protocol::client_registry::ClientKind::Tui,
                 Some("eggsec-tui".into()),
             )
             .await;
@@ -162,7 +162,7 @@ impl DaemonRuntimeClient {
     /// Declare this client's kind to the daemon.
     pub async fn declare_client(
         &self,
-        kind: eggsec_daemon::client_registry::ClientKind,
+        kind: eggsec_daemon_protocol::client_registry::ClientKind,
         label: Option<String>,
     ) -> Result<ServerMessage, DaemonClientError> {
         let cmd = ClientCommand::DeclareClient {

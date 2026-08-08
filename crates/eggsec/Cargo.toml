@@ -30,8 +30,8 @@ exclude = [
 [dependencies]
 tokio = { workspace = true }
 tokio-util = "0.7"
-tokio-rustls = "0.26"
-rustls = { version = "0.23", features = ["ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "0.26"
 pem = "3"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }

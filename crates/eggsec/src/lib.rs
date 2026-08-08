@@ -209,3 +209,15 @@ pub use audit::{
 pub use config::{load_config, load_scope, EggsecConfig, Scope};
 pub use error::{EggsecError, Result};
 pub use types::Severity;
+
+/// Install the ring crypto provider for rustls.
+///
+/// Must be called once before any TLS connections are made.
+/// Safe to call multiple times (subsequent calls are no-ops).
+pub fn install_tls_provider() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}

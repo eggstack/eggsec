@@ -18,7 +18,7 @@ categories = ["command-line-utilities"]
 eggsec-core = { path = "../eggsec-core" }
 eggsec = { path = "../eggsec", features = ["cli"] }
 eggsec-runtime = { path = "../eggsec-runtime" }
-eggsec-daemon = { path = "../eggsec-daemon" }
+eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol" }
 eggsec-ui-model = { path = "../eggsec-ui-model" }
 
 ratatui = "0.30"

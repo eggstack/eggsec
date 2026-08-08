@@ -13,6 +13,7 @@ members = [
     "crates/eggsec-mobile-lab",
     "crates/eggsec-runtime",
     "crates/eggsec-daemon",
+    "crates/eggsec-daemon-protocol",
     "crates/eggsec-ui-model",
     "crates/eggsec-python",
 ]
@@ -56,6 +57,7 @@ chrono-tz = "0.10"
 unicode-normalization = "0.1"
 lru = "0.18"
 uuid = { version = "1", features = ["v4", "serde"] }
+eggsec-daemon-protocol = { path = "crates/eggsec-daemon-protocol", version = "0.1.0" }
 
 [profile.release]
 lto = true

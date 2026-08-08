@@ -182,6 +182,7 @@ crates/
   eggsec-agent/     # agent coordination
   eggsec-runtime/   # frontend-neutral runtime
   eggsec-daemon/    # persistent session host
+  eggsec-daemon-protocol/ # daemon IPC protocol types and client registry
   eggsec-ui-model/  # frontend view DTOs
   eggsec-db-lab/    # database pentest domain
   eggsec-web-proxy/ # web proxy domain
@@ -264,6 +265,7 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **Address classification**: Use `classify_address()` from `config::scope` to determine address class (Public, Private, Loopback, etc.). The resolver (`HostResolver` trait) reports facts; policy decides authorization.
 - **DNS resolution**: Use `TargetScope::parse_with_resolver()` with `HostResolver` trait for deterministic testing. `SystemResolver` is the default. Never reject address classes in the resolver — defer to policy.
 - **Scope evaluation**: `TargetScope::evaluate_addresses()` checks all resolved addresses against CIDR rules. For strict surfaces, every address must be authorized. Use `resolved_addresses` field (not just `ip`) for scope decisions.
+- **TLS provider**: All crates use ring-only (no aws-lc-rs). When declaring `rustls` or `tokio-rustls`, use `default-features = false` and explicitly enable `features = ["ring", "std", "tls12"]`. When declaring `reqwest`, use `features = ["rustls-no-provider"]` instead of `features = ["rustls"]` to avoid pulling in aws-lc-rs.
 
 ## Lessons Learned
 

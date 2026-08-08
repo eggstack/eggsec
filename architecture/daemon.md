@@ -310,3 +310,29 @@ The daemon handles `SIGINT` and `SIGTERM` for graceful shutdown (`main.rs` insta
 - `SIGINT` (Ctrl+C) and `SIGTERM` both trigger `CancellationToken::cancel()`.
 - The server loop exits cleanly and `run_server` removes the socket file before returning.
 - Both signals are tested by the local smoke script (`scripts/smoke-daemon-local.sh`).
+
+## Daemon Protocol Crate (`eggsec-daemon-protocol`)
+
+The `eggsec-daemon-protocol` crate contains the wire-format types shared between daemon clients and the server:
+
+| Module | Contents |
+|--------|----------|
+| `protocol` | `ClientCommand`, `ServerMessage`, `ErrorCode`, `DaemonCapabilities`, `TransportKind`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` |
+| `client_registry` | `ClientKind`, `ClientRole`, `CommandPermission`, `ClientInfo`, `ClientRegistry`, `check_permission()` |
+
+### Purpose
+
+- **Dependency isolation**: TUI and CLI daemon clients depend on `eggsec-daemon-protocol` for protocol types without pulling in `rusqlite`, `axum`, or server persistence code.
+- **Backward compatibility**: `eggsec-daemon` re-exports both modules (`pub use eggsec_daemon_protocol::{protocol, client_registry};`), so existing code using `eggsec_daemon::protocol::*` continues to work.
+- **Lightweight client graph**: The standard TUI/CLI artifact graph no longer includes SQLite or server internals solely for daemon client connectivity.
+
+### Dependency Graph
+
+```
+eggsec-daemon-protocol (protocol types, client registry)
+  ↑
+  ├── eggsec-daemon (re-exports; adds server, persistence, client)
+  ├── eggsec-tui (daemon mode client)
+  ├── eggsec-cli (daemon-client feature)
+  └── eggsec-python (daemon-client feature)
+```

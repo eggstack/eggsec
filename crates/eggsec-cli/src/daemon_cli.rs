@@ -6,7 +6,7 @@
 use anyhow::{bail, Result};
 use eggsec::cli::{Cli, Commands};
 use eggsec_daemon::client::DaemonClient;
-use eggsec_daemon::protocol::ServerMessage;
+use eggsec_daemon_protocol::protocol::ServerMessage;
 use eggsec_runtime::RuntimeSurface;
 use eggsec_ui_model::{EventView, SessionSummaryView, SessionView};
 
@@ -80,7 +80,7 @@ async fn handle_daemon(
             // Declare client kind
             let _ = client
                 .declare_client(
-                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("eggsec-cli".into()),
                 )
                 .await;
@@ -110,7 +110,7 @@ async fn handle_daemon(
                 Ok(mut client) => {
                     let _ = client
                         .declare_client(
-                            eggsec_daemon::client_registry::ClientKind::Cli,
+                            eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                             Some("eggsec-cli".into()),
                         )
                         .await;
@@ -139,7 +139,7 @@ async fn handle_daemon(
             let mut client = connect(path).await?;
             let _ = client
                 .declare_client(
-                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("cli-history".into()),
                 )
                 .await;
@@ -181,7 +181,7 @@ async fn handle_daemon(
             let mut client = connect(path).await?;
             let _ = client
                 .declare_client(
-                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("cli-show".into()),
                 )
                 .await;
@@ -239,7 +239,7 @@ async fn handle_session(
     // Declare client kind
     let _ = client
         .declare_client(
-            eggsec_daemon::client_registry::ClientKind::Cli,
+            eggsec_daemon_protocol::client_registry::ClientKind::Cli,
             Some("eggsec-cli".into()),
         )
         .await;
@@ -337,7 +337,7 @@ async fn handle_task(args: &eggsec::cli::TaskArgs, socket_path: &str, json: bool
     // Declare client kind
     let _ = client
         .declare_client(
-            eggsec_daemon::client_registry::ClientKind::Cli,
+            eggsec_daemon_protocol::client_registry::ClientKind::Cli,
             Some("eggsec-cli".into()),
         )
         .await;
@@ -528,6 +528,7 @@ impl eggsec_runtime::RuntimeTaskExecutor for NoopExecutor {
         &self,
         _task_id: eggsec_runtime::TaskId,
         _request: eggsec_runtime::RunRequest,
+        _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: eggsec_runtime::RuntimeEventSink,
         _cancel: tokio_util::sync::CancellationToken,
     ) -> std::pin::Pin<

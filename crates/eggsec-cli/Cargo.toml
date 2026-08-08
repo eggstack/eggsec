@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 eggsec = { path = "../eggsec", features = ["cli"] }
 eggsec-daemon = { path = "../eggsec-daemon", optional = true }
+eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol", optional = true }
 eggsec-tui = { path = "../eggsec-tui", optional = true }
 eggsec-runtime = { path = "../eggsec-runtime" }
 eggsec-ui-model = { path = "../eggsec-ui-model" }
@@ -34,7 +35,7 @@ tracing-appender = "0.2"
 [features]
 default = ["tui"]
 tui = ["dep:eggsec-tui"]
-daemon-client = ["dep:eggsec-daemon", "dep:tokio-util", "eggsec/daemon-client"]
+daemon-client = ["dep:eggsec-daemon", "dep:eggsec-daemon-protocol", "dep:tokio-util", "eggsec/daemon-client"]
 headless = []
 nse = ["eggsec/nse", "eggsec-tui?/nse"]
 headless-browser = ["eggsec/headless-browser", "eggsec-tui?/headless-browser"]

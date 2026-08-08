@@ -62,6 +62,7 @@ fn resolve_execution_surface(cli: &Cli) -> eggsec::config::ExecutionSurface {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    eggsec::install_tls_provider();
     let cli = Cli::parse();
 
     if cli.generate_config {
