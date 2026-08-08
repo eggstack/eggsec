@@ -113,6 +113,51 @@ pub enum OutputFormat {
     Markdown,
 }
 
+/// Scan profile controlling pipeline stage selection and risk budget.
+///
+/// Used by both CLI argument parsing and pipeline/engine configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+pub enum ScanProfile {
+    Quick,
+    Endpoint,
+    Web,
+    Waf,
+    Full,
+    Api,
+    Recon,
+    Stealth,
+    Deep,
+    Vuln,
+    Auth,
+    DefenseLab,
+    SynvoidLocal,
+    WafRegression,
+    ProtocolEdge,
+    NseSafe,
+    DbRegression,
+    WebProxy,
+}
+
+/// Common HTTP client configuration shared across scan operations.
+///
+/// Used by both CLI argument parsing and engine HTTP client construction.
+#[derive(Debug, Clone, Default)]
+pub struct CommonHttpArgs {
+    pub insecure: bool,
+    pub proxy: Option<String>,
+    pub proxy_auth: Option<String>,
+    pub auth: Option<String>,
+    pub bearer: Option<String>,
+    pub cookie: Option<String>,
+    pub api_key: Option<String>,
+    pub user_agent: Option<String>,
+    pub stealth: bool,
+    pub rate_limit: Option<u32>,
+    pub jitter: Option<String>,
+    pub auth_context: Option<String>,
+    pub auth_role: Option<String>,
+}
+
 impl OutputFormat {
     /// Parse an output format from a string, defaulting to `Pretty` for unknown values.
     ///
@@ -153,6 +198,186 @@ impl std::str::FromStr for OutputFormat {
             "markdown" => Ok(OutputFormat::Markdown),
             _ => Err(format!("unknown output format: {}", s)),
         }
+    }
+}
+
+impl std::fmt::Display for ScanProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScanProfile::Quick => write!(f, "quick"),
+            ScanProfile::Endpoint => write!(f, "endpoint"),
+            ScanProfile::Web => write!(f, "web"),
+            ScanProfile::Waf => write!(f, "waf"),
+            ScanProfile::Full => write!(f, "full"),
+            ScanProfile::Api => write!(f, "api"),
+            ScanProfile::Recon => write!(f, "recon"),
+            ScanProfile::Stealth => write!(f, "stealth"),
+            ScanProfile::Deep => write!(f, "deep"),
+            ScanProfile::Vuln => write!(f, "vuln"),
+            ScanProfile::Auth => write!(f, "auth"),
+            ScanProfile::DefenseLab => write!(f, "defense-lab"),
+            ScanProfile::SynvoidLocal => write!(f, "synvoid-local"),
+            ScanProfile::WafRegression => write!(f, "waf-regression"),
+            ScanProfile::ProtocolEdge => write!(f, "protocol-edge"),
+            ScanProfile::NseSafe => write!(f, "nse-safe"),
+            ScanProfile::DbRegression => write!(f, "db-regression"),
+            ScanProfile::WebProxy => write!(f, "web-proxy"),
+        }
+    }
+}
+
+impl std::str::FromStr for ScanProfile {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "quick" => Ok(ScanProfile::Quick),
+            "endpoint" => Ok(ScanProfile::Endpoint),
+            "web" => Ok(ScanProfile::Web),
+            "waf" => Ok(ScanProfile::Waf),
+            "full" => Ok(ScanProfile::Full),
+            "api" => Ok(ScanProfile::Api),
+            "recon" => Ok(ScanProfile::Recon),
+            "stealth" => Ok(ScanProfile::Stealth),
+            "deep" => Ok(ScanProfile::Deep),
+            "vuln" => Ok(ScanProfile::Vuln),
+            "auth" => Ok(ScanProfile::Auth),
+            "defense-lab" => Ok(ScanProfile::DefenseLab),
+            "synvoid-local" => Ok(ScanProfile::SynvoidLocal),
+            "waf-regression" => Ok(ScanProfile::WafRegression),
+            "protocol-edge" => Ok(ScanProfile::ProtocolEdge),
+            "nse-safe" => Ok(ScanProfile::NseSafe),
+            "db-regression" | "db_regression" | "dbregression" => Ok(ScanProfile::DbRegression),
+            "web-proxy" | "webproxy" | "proxy" => Ok(ScanProfile::WebProxy),
+            _ => Err(format!("Unknown scan profile: {}", s)),
+        }
+    }
+}
+
+impl ScanProfile {
+    /// Returns `true` if this profile is a defense-lab variant that requires
+    /// local/private-scope targets only.
+    pub fn requires_private_scope(&self) -> bool {
+        matches!(
+            self,
+            ScanProfile::DefenseLab
+                | ScanProfile::SynvoidLocal
+                | ScanProfile::DbRegression
+                | ScanProfile::WafRegression
+                | ScanProfile::ProtocolEdge
+                | ScanProfile::NseSafe
+                | ScanProfile::WebProxy
+        )
+    }
+
+    /// Returns `true` if this profile requires the `packet-inspection` feature.
+    pub fn requires_packet_inspection(&self) -> bool {
+        matches!(self, ScanProfile::ProtocolEdge)
+    }
+
+    /// Returns `true` if this profile requires the `nse` feature.
+    pub fn requires_nse(&self) -> bool {
+        matches!(self, ScanProfile::NseSafe)
+    }
+
+    /// Returns the maximum `ProbeRisk` level allowed for this profile.
+    pub fn max_risk_budget(&self) -> crate::probe::ProbeRisk {
+        match self {
+            ScanProfile::Quick | ScanProfile::ProtocolEdge | ScanProfile::NseSafe => {
+                crate::probe::ProbeRisk::SafeActive
+            }
+            ScanProfile::Stealth => crate::probe::ProbeRisk::Passive,
+            ScanProfile::DefenseLab
+            | ScanProfile::SynvoidLocal
+            | ScanProfile::WafRegression
+            | ScanProfile::DbRegression
+            | ScanProfile::WebProxy => crate::probe::ProbeRisk::Intrusive,
+            ScanProfile::Endpoint
+            | ScanProfile::Web
+            | ScanProfile::Waf
+            | ScanProfile::Recon
+            | ScanProfile::Vuln
+            | ScanProfile::Auth => crate::probe::ProbeRisk::Intrusive,
+            ScanProfile::Full | ScanProfile::Api | ScanProfile::Deep => {
+                crate::probe::ProbeRisk::Stress
+            }
+        }
+    }
+
+    /// Returns the operating mode for this profile.
+    pub fn operation_mode(&self) -> crate::config::OperationMode {
+        match self {
+            ScanProfile::Quick
+            | ScanProfile::Endpoint
+            | ScanProfile::Web
+            | ScanProfile::Waf
+            | ScanProfile::Full
+            | ScanProfile::Api
+            | ScanProfile::Recon
+            | ScanProfile::Stealth
+            | ScanProfile::Deep
+            | ScanProfile::Vuln
+            | ScanProfile::Auth => crate::config::OperationMode::StandardAssessment,
+            ScanProfile::DefenseLab
+            | ScanProfile::SynvoidLocal
+            | ScanProfile::WafRegression
+            | ScanProfile::ProtocolEdge
+            | ScanProfile::NseSafe
+            | ScanProfile::DbRegression
+            | ScanProfile::WebProxy => crate::config::OperationMode::DefenseLab,
+        }
+    }
+
+    /// Returns the intended use cases for this profile.
+    pub fn intended_uses(&self) -> Vec<crate::config::IntendedUse> {
+        match self {
+            ScanProfile::Quick | ScanProfile::Endpoint | ScanProfile::Web => {
+                vec![crate::config::IntendedUse::WebAssessment]
+            }
+            ScanProfile::Api => vec![crate::config::IntendedUse::ApiAssessment],
+            ScanProfile::Waf | ScanProfile::WafRegression => {
+                vec![crate::config::IntendedUse::WafRegression]
+            }
+            ScanProfile::Full | ScanProfile::Deep => vec![
+                crate::config::IntendedUse::WebAssessment,
+                crate::config::IntendedUse::ApiAssessment,
+            ],
+            ScanProfile::Recon => vec![crate::config::IntendedUse::WebAssessment],
+            ScanProfile::Stealth => vec![crate::config::IntendedUse::WebAssessment],
+            ScanProfile::Vuln | ScanProfile::Auth => {
+                vec![crate::config::IntendedUse::WebAssessment]
+            }
+            ScanProfile::DefenseLab => vec![
+                crate::config::IntendedUse::WafRegression,
+                crate::config::IntendedUse::SynvoidRegression,
+            ],
+            ScanProfile::SynvoidLocal => {
+                vec![crate::config::IntendedUse::SynvoidRegression]
+            }
+            ScanProfile::ProtocolEdge => {
+                vec![crate::config::IntendedUse::ProtocolEdgeValidation]
+            }
+            ScanProfile::NseSafe => vec![crate::config::IntendedUse::CodingAgentVerification],
+            ScanProfile::DbRegression => vec![
+                crate::config::IntendedUse::WafRegression,
+                crate::config::IntendedUse::SynvoidRegression,
+            ],
+            ScanProfile::WebProxy => vec![
+                crate::config::IntendedUse::WafRegression,
+                crate::config::IntendedUse::SynvoidRegression,
+            ],
+        }
+    }
+
+    /// Returns a human-readable description of this profile's mode and risk.
+    pub fn mode_description(&self) -> String {
+        let mode = self.operation_mode();
+        let risk = self.max_risk_budget();
+        format!(
+            "{} mode (max risk: {})",
+            mode.label(),
+            format!("{:?}", risk).to_lowercase()
+        )
     }
 }
 

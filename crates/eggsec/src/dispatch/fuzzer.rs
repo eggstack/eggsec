@@ -20,7 +20,7 @@ pub async fn run_fuzz(
     oauth_grant_test: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
+    use crate::cli::{CommonHttpArgsCli, FuzzArgs, FuzzMode};
     use crate::fuzzer::engine::FuzzEngine;
 
     let mode_lower = mode.to_lowercase();
@@ -82,7 +82,7 @@ pub async fn run_fuzz(
         fl: None,
         ft: None,
         fr: None,
-        common: CommonHttpArgs::default(),
+        common: CommonHttpArgsCli::default(),
     };
 
     let mut engine = FuzzEngine::new_with_tui_mode(args, true)?;
@@ -148,7 +148,7 @@ pub async fn run_waf(
             verbose: false,
             quiet: false,
             output: None,
-            common: crate::cli::CommonHttpArgs::default(),
+            common: crate::cli::CommonHttpArgsCli::default(),
         };
 
         let bypass_engine = BypassEngine::new(&args, Some(get_auto_profile()), TestType::All)?;

@@ -1,6 +1,6 @@
-use crate::cli::ScanProfile;
 use crate::config::EggsecConfig;
 use crate::error::Result;
+use crate::types::ScanProfile;
 use serde::{Deserialize, Serialize};
 
 use super::context::PipelineContext;

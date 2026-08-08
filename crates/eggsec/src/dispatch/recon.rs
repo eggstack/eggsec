@@ -1,5 +1,5 @@
-use crate::cli::ScanProfile;
 use crate::dispatch::types::{send_progress, ReconOptions, TaskResult};
+use crate::types::ScanProfile;
 
 pub async fn run_pipeline(
     target: String,
@@ -8,7 +8,7 @@ pub async fn run_pipeline(
     output_format: String,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::{CommonHttpArgs, ScanArgs};
+    use crate::cli::{CommonHttpArgsCli, ScanArgs};
     use crate::pipeline::Pipeline;
 
     let args = ScanArgs {
@@ -25,7 +25,7 @@ pub async fn run_pipeline(
         },
         format: output_format.parse::<crate::cli::OutputFormat>().ok(),
         web_types: None,
-        common: CommonHttpArgs::default(),
+        common: CommonHttpArgsCli::default(),
         source_ip: None,
         spoof_range: None,
         decoy: None,

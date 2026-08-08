@@ -169,14 +169,14 @@ impl FuzzEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgs, FuzzArgs};
+    use crate::cli::{CommonHttpArgsCli, FuzzArgs};
     use crate::error::EggsecError;
 
     fn make_engine_with_payload_type(payload_type: &str) -> FuzzEngine {
         let args = FuzzArgs {
             url: "http://example.com".to_string(),
             payload_type: payload_type.to_string(),
-            common: CommonHttpArgs::default(),
+            common: CommonHttpArgsCli::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,

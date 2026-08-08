@@ -69,7 +69,7 @@ impl SecurityTool for LoadTestTool {
             verbose: false,
             quiet: false,
             output: None,
-            common: crate::cli::CommonHttpArgs::default(),
+            common: crate::cli::CommonHttpArgsCli::default(),
         };
 
         let config = crate::config::load_config(None::<&str>)

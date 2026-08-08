@@ -1,5 +1,5 @@
 use super::timeout::*;
-use super::{CommonHttpArgs, FuzzMode, OutputFormat};
+use super::{CommonHttpArgsCli, FuzzMode, OutputFormat};
 
 pub(crate) const FUZZ_ABOUT: &str = "Fuzz target to validate input handling with security payloads
 
@@ -248,7 +248,7 @@ pub struct FuzzArgs {
     )]
     pub fr: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }
 
 #[derive(clap::Args, Clone)]
@@ -268,7 +268,7 @@ pub struct WafStressArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }
 
 impl From<WafStressArgs> for FuzzArgs {
@@ -366,5 +366,5 @@ pub struct WafArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }

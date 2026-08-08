@@ -16,8 +16,8 @@ fn test_pipeline_context_new() {
 
 #[test]
 fn test_stage_from_profile() {
-    use eggsec::cli::ScanProfile;
     use eggsec::pipeline::Stage;
+    use eggsec::types::ScanProfile;
 
     let quick = Stage::from_profile(ScanProfile::Quick);
     assert_eq!(quick.len(), 2);

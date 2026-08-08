@@ -1,5 +1,5 @@
 use super::timeout::*;
-use super::CommonHttpArgs;
+use super::CommonHttpArgsCli;
 
 pub(crate) const LOAD_ABOUT: &str = "Run HTTP load test against target URL
 
@@ -95,7 +95,7 @@ pub struct LoadArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }
 
 #[derive(clap::Args)]
@@ -171,7 +171,7 @@ pub struct GraphQlArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }
 
 #[derive(clap::Args, Clone)]
@@ -203,5 +203,5 @@ pub struct OAuthArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }

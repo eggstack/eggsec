@@ -575,7 +575,7 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         fl: None,
         ft: None,
         fr: None,
-        common: crate::cli::CommonHttpArgs {
+        common: crate::cli::CommonHttpArgsCli {
             auth_context: auth_context_path,
             auth_role,
             ..Default::default()
@@ -639,7 +639,7 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
         verbose: false,
         quiet: false,
         output: None,
-        common: crate::cli::CommonHttpArgs {
+        common: crate::cli::CommonHttpArgsCli {
             auth_context: auth_context_path,
             auth_role,
             ..Default::default()
@@ -695,7 +695,7 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
         verbose: false,
         quiet: false,
         output: None,
-        common: crate::cli::CommonHttpArgs {
+        common: crate::cli::CommonHttpArgsCli {
             auth_context: auth_context_path,
             auth_role,
             ..Default::default()

@@ -51,9 +51,12 @@ pub mod stage;
 use crate::error::{EggsecError, Result};
 use crate::output::extensions::{JUnitBuilderExt, SarifBuilderExt};
 
+#[cfg(feature = "cli")]
 use crate::cli::ResumeArgs;
+#[cfg(feature = "cli")]
 use crate::cli::ScanArgs;
 use crate::config::EggsecConfig;
+use crate::types::OutputFormat;
 use crate::utils::sanitize_for_logging;
 
 pub use context::PipelineContext;
@@ -64,40 +67,40 @@ pub use stage::{parse_stages, Stage};
 async fn write_output(
     report: &PipelineReport,
     output_path: &str,
-    format: Option<crate::cli::OutputFormat>,
+    format: Option<OutputFormat>,
 ) -> Result<()> {
     match format {
-        Some(crate::cli::OutputFormat::Html) | None => {
+        Some(OutputFormat::Html) | None => {
             let html = report::generate_html(report)?;
             tokio::fs::write(output_path, html).await?;
         }
-        Some(crate::cli::OutputFormat::Pretty) => {
+        Some(OutputFormat::Pretty) => {
             let json = serde_json::to_string_pretty(report)?;
             tokio::fs::write(output_path, json).await?;
         }
-        Some(crate::cli::OutputFormat::Compact) => {
+        Some(OutputFormat::Compact) => {
             let json = serde_json::to_string(report)?;
             tokio::fs::write(output_path, json).await?;
         }
-        Some(crate::cli::OutputFormat::Markdown) => {
+        Some(OutputFormat::Markdown) => {
             let md = report::generate_markdown(report)?;
             tokio::fs::write(output_path, md).await?;
         }
-        Some(crate::cli::OutputFormat::Json) => {
+        Some(OutputFormat::Json) => {
             let json = serde_json::to_string_pretty(report)?;
             tokio::fs::write(output_path, json).await?;
         }
-        Some(crate::cli::OutputFormat::Csv) => {
+        Some(OutputFormat::Csv) => {
             let csv = report::generate_csv(report)?;
             tokio::fs::write(output_path, csv).await?;
         }
-        Some(crate::cli::OutputFormat::Sarif) => {
+        Some(OutputFormat::Sarif) => {
             let sarif = crate::output::SarifBuilder::new()
                 .with_report(report)
                 .build();
             tokio::fs::write(output_path, serde_json::to_string_pretty(&sarif)?).await?;
         }
-        Some(crate::cli::OutputFormat::Junit) => {
+        Some(OutputFormat::Junit) => {
             let junit = crate::output::JUnitBuilder::new("eggsec")
                 .with_report(report)
                 .build();

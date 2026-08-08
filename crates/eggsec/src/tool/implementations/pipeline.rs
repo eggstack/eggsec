@@ -73,7 +73,7 @@ impl SecurityTool for PipelineTool {
             output: None,
             format: None,
             web_types: None,
-            common: crate::cli::CommonHttpArgs::default(),
+            common: crate::cli::CommonHttpArgsCli::default(),
             source_ip: None,
             spoof_range: None,
             decoy: None,

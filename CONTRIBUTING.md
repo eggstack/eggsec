@@ -128,6 +128,7 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows bui
 | `api-schema` | *(marker)* | OpenAPI schema-based fuzzing |
 | `email-notifications` | lettre | SMTP email notifications (process-host adapter) |
 | `logging-subscriber` | tracing-subscriber, tracing-appender | Tracing subscriber/appender setup (process-host adapter) |
+| `cli` | clap, clap_complete | CLI types, command dispatch, and argument parsing |
 | `config-watch` | notify, notify-debouncer-mini | Config file watching/hot-reload (process-host adapter) |
 | `full` | 16+ sub-features | All features combined (excludes grpc-api, ws-api, pdf) |
 

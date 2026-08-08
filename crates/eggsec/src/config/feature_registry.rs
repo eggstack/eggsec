@@ -418,6 +418,11 @@ feature_registry! {
     },
 
     // ── Process-host adapter features ───────────────────────────────────────
+    "cli" => {
+        enabled: cfg!(feature = "cli"),
+        category: ProtocolAdapter,
+        hint: "enable feature 'cli' in Cargo.toml: cargo build --features cli"
+    },
     "email-notifications" => {
         enabled: cfg!(feature = "email-notifications"),
         category: ProtocolAdapter,

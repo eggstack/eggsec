@@ -16,7 +16,7 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core" }
-eggsec = { path = "../eggsec" }
+eggsec = { path = "../eggsec", features = ["cli"] }
 eggsec-runtime = { path = "../eggsec-runtime" }
 eggsec-daemon = { path = "../eggsec-daemon" }
 eggsec-ui-model = { path = "../eggsec-ui-model" }

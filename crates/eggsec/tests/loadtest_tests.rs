@@ -136,7 +136,7 @@ async fn test_load_test_with_basic_auth() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         auth: Some("user:pass".to_string()),
         bearer: None,
         cookie: None,
@@ -176,7 +176,7 @@ async fn test_load_test_with_bearer_token() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         auth: None,
         bearer: Some("test-token-123".to_string()),
         cookie: None,
@@ -306,7 +306,7 @@ async fn test_load_test_with_rate_limit() {
     let mut runner =
         eggsec::loadtest::LoadTestRunner::new(server.uri(), 20, 5, Duration::from_secs(10))
             .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         auth: None,
         bearer: None,
         cookie: None,
@@ -356,7 +356,7 @@ async fn test_load_test_from_args_with_config() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::cli::CommonHttpArgs::default(),
+        common: eggsec::types::CommonHttpArgs::default(),
     };
 
     let config = eggsec::config::EggsecConfig::default();
@@ -383,7 +383,7 @@ async fn test_load_test_from_args_with_tui_mode() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::cli::CommonHttpArgs::default(),
+        common: eggsec::types::CommonHttpArgs::default(),
     };
 
     let runner = eggsec::loadtest::LoadTestRunner::from_args_with_tui_mode(args, true).unwrap();
@@ -515,9 +515,9 @@ async fn test_load_test_with_api_key() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         api_key: Some("my-secret-key".to_string()),
-        ..eggsec::cli::CommonHttpArgs::default()
+        ..eggsec::types::CommonHttpArgs::default()
     });
 
     let results = runner.run().await.unwrap();
@@ -544,9 +544,9 @@ async fn test_load_test_with_api_key_header_format() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         api_key: Some("X-Api-Token:token-value".to_string()),
-        ..eggsec::cli::CommonHttpArgs::default()
+        ..eggsec::types::CommonHttpArgs::default()
     });
 
     let results = runner.run().await.unwrap();
@@ -573,9 +573,9 @@ async fn test_load_test_with_cookie() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         cookie: Some("session=abc123".to_string()),
-        ..eggsec::cli::CommonHttpArgs::default()
+        ..eggsec::types::CommonHttpArgs::default()
     });
 
     let results = runner.run().await.unwrap();
@@ -589,9 +589,9 @@ async fn test_load_test_rate_limit_zero_ignored() {
 
     let mut runner =
         eggsec::loadtest::LoadTestRunner::new(server.uri(), 5, 2, Duration::from_secs(5)).unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         rate_limit: Some(0),
-        ..eggsec::cli::CommonHttpArgs::default()
+        ..eggsec::types::CommonHttpArgs::default()
     });
 
     let results = runner.run().await.unwrap();
@@ -633,9 +633,9 @@ fn test_load_test_malformed_auth_format() {
         Duration::from_secs(5),
     )
     .unwrap();
-    runner.set_common(eggsec::cli::CommonHttpArgs {
+    runner.set_common(eggsec::types::CommonHttpArgs {
         auth: Some("no-colon-separator".to_string()),
-        ..eggsec::cli::CommonHttpArgs::default()
+        ..eggsec::types::CommonHttpArgs::default()
     });
     // Should not panic; malformed auth is logged and ignored
 }
@@ -665,7 +665,7 @@ fn test_load_test_from_args_with_config_uses_config_timeout() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::cli::CommonHttpArgs::default(),
+        common: eggsec::types::CommonHttpArgs::default(),
     };
 
     let mut config = eggsec::config::EggsecConfig::default();
@@ -690,7 +690,7 @@ fn test_load_test_from_args_with_config_explicit_timeout() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::cli::CommonHttpArgs::default(),
+        common: eggsec::types::CommonHttpArgs::default(),
     };
 
     let mut config = eggsec::config::EggsecConfig::default();

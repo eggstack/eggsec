@@ -1,5 +1,5 @@
-use eggsec::cli::ScanProfile;
 use eggsec::pipeline::stage::{parse_stages, Stage};
+use eggsec::types::ScanProfile;
 
 #[test]
 fn test_stage_display() {

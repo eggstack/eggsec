@@ -6,8 +6,8 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
-use eggsec::cli::ScanProfile;
 use eggsec::pipeline::{PipelineReport, Stage};
+use eggsec::types::ScanProfile;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,

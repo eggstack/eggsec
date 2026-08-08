@@ -205,7 +205,7 @@ impl SecurityTool for ScannerTool {
                     verbose: false,
                     quiet: false,
                     output: None,
-                    common: crate::cli::CommonHttpArgs::default(),
+                    common: crate::cli::CommonHttpArgsCli::default(),
                 };
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");

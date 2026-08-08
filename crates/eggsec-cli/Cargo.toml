@@ -13,7 +13,7 @@ name = "eggsec"
 path = "src/main.rs"
 
 [dependencies]
-eggsec = { path = "../eggsec" }
+eggsec = { path = "../eggsec", features = ["cli"] }
 eggsec-daemon = { path = "../eggsec-daemon", optional = true }
 eggsec-tui = { path = "../eggsec-tui", optional = true }
 eggsec-runtime = { path = "../eggsec-runtime" }

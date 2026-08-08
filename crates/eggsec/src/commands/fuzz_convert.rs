@@ -64,7 +64,7 @@ impl BaseFuzzConfig {
             fl: None,
             ft: None,
             fr: None,
-            common: self.common,
+            common: self.common.into(),
         }
     }
 }
@@ -79,7 +79,7 @@ impl From<GraphQlArgs> for FuzzArgs {
             output: args.output,
             verbose: args.verbose,
             quiet: args.quiet,
-            common: args.common,
+            common: args.common.into(),
         }
         .into_fuzz_args("graphql".to_string(), "POST".to_string())
     }
@@ -95,7 +95,7 @@ impl From<OAuthArgs> for FuzzArgs {
             output: args.output,
             verbose: args.verbose,
             quiet: args.quiet,
-            common: args.common,
+            common: args.common.into(),
         }
         .into_fuzz_args("oauth".to_string(), "GET".to_string())
     }

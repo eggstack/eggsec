@@ -165,7 +165,7 @@ impl SecurityTool for FuzzerTool {
             fl: None,
             ft: None,
             fr: None,
-            common: crate::cli::CommonHttpArgs::default(),
+            common: crate::cli::CommonHttpArgsCli::default(),
         };
 
         let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =

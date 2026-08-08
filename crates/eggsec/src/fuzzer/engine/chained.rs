@@ -204,13 +204,13 @@ impl FuzzArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgs, FuzzMode};
+    use crate::cli::{CommonHttpArgsCli, FuzzMode};
 
     fn make_test_args(url: &str) -> FuzzArgs {
         FuzzArgs {
             url: url.to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgs::default(),
+            common: CommonHttpArgsCli::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,

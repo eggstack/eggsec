@@ -1,5 +1,5 @@
 use super::timeout::HUNT_TIMEOUT;
-use super::CommonHttpArgs;
+use super::CommonHttpArgsCli;
 
 pub(crate) const HUNT_ABOUT: &str = "Run advanced vulnerability hunting against a target. \
     Performs attack chain analysis, business logic flaw detection, race condition testing, \
@@ -38,7 +38,7 @@ pub struct HuntArgs {
     pub output: Option<String>,
 
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 
     #[arg(long, help = "Output in JSON format")]
     pub json: bool,

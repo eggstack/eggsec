@@ -102,7 +102,7 @@ impl LoadTestRunner {
             runner.add_header(key, value);
         }
 
-        runner.set_common(args.common);
+        runner.set_common(args.common.into());
 
         Ok(runner)
     }
@@ -124,7 +124,7 @@ impl LoadTestRunner {
             runner.add_header(key, value);
         }
 
-        runner.set_common_with_config(args.common, config);
+        runner.set_common_with_config(args.common.into(), config);
 
         Ok(runner)
     }

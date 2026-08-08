@@ -85,7 +85,9 @@ pub mod auth;
 pub mod auth_context;
 #[cfg(feature = "headless-browser")]
 pub mod browser;
+#[cfg(feature = "cli")]
 pub mod cli;
+#[cfg(feature = "cli")]
 pub mod commands;
 #[cfg(feature = "compliance")]
 pub mod compliance;
@@ -99,11 +101,13 @@ pub mod container;
 #[cfg(not(feature = "container"))]
 #[allow(dead_code)]
 mod container;
+#[cfg(feature = "cli")]
 pub mod dispatch;
 pub mod distributed;
 pub mod domain;
 pub mod error;
 pub mod findings;
+#[cfg(feature = "cli")]
 pub mod fuzzer;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
@@ -115,6 +119,7 @@ pub mod integrations;
 #[cfg(not(feature = "external-integrations"))]
 #[allow(dead_code)]
 mod integrations;
+#[cfg(feature = "cli")]
 pub mod loadtest;
 #[cfg(feature = "logging-subscriber")]
 pub mod logging;

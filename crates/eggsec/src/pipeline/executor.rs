@@ -10,11 +10,15 @@ use super::context::PipelineContext;
 use super::report::PipelineReport;
 use super::session::{save, PipelineSession};
 use super::stage::{parse_stages, Stage, EXTENDED_SCAN_PORTS};
-use crate::cli::{CommonHttpArgs, ScanArgs, ScanProfile};
+#[cfg(feature = "cli")]
+use crate::cli::{ScanArgs, ScanProfile};
 use crate::config::EggsecConfig;
 use crate::probe::ProbeRisk;
 use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
+use crate::types::CommonHttpArgs;
+#[cfg(not(feature = "cli"))]
+use crate::types::ScanProfile;
 
 /// A simple finding type for pipeline proxy stage results.
 #[cfg(feature = "web-proxy")]
@@ -126,7 +130,7 @@ impl Pipeline {
             risk_budget: args.profile.max_risk_budget(),
             concurrency,
             concurrent_stages: args.concurrent_stages,
-            common: args.common,
+            common: args.common.into(),
             spoof_config,
             context: Arc::new(Mutex::new(PipelineContext::new(&args.target))),
             session_path,
@@ -1069,9 +1073,9 @@ impl Pipeline {
             fl: None,
             ft: None,
             fr: None,
-            common: crate::cli::CommonHttpArgs {
+            common: crate::cli::CommonHttpArgsCli {
                 stealth,
-                ..self.common.clone()
+                ..crate::cli::CommonHttpArgsCli::from(self.common.clone())
             },
         };
 
@@ -1106,7 +1110,7 @@ impl Pipeline {
             verbose: false,
             quiet: false,
             output: None,
-            common: self.common.clone(),
+            common: self.common.clone().into(),
         };
 
         let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
@@ -1144,7 +1148,7 @@ impl Pipeline {
             verbose: false,
             quiet: false,
             output: None,
-            common: self.common.clone(),
+            common: self.common.clone().into(),
         };
 
         crate::waf::run_cli(args).await?;
@@ -1285,25 +1289,4 @@ fn get_default_endpoints() -> Vec<String> {
         "/phpinfo.php".to_string(),
         "/server-status".to_string(),
     ]
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for CommonHttpArgs {
-    fn default() -> Self {
-        Self {
-            insecure: false,
-            proxy: None,
-            proxy_auth: None,
-            auth: None,
-            bearer: None,
-            cookie: None,
-            api_key: None,
-            user_agent: None,
-            stealth: false,
-            rate_limit: None,
-            jitter: None,
-            auth_context: None,
-            auth_role: None,
-        }
-    }
 }

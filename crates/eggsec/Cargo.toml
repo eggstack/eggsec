@@ -35,8 +35,8 @@ rustls = { version = "0.23", features = ["ring"] }
 webpki-roots = "0.26"
 pem = "3"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }
-clap = { version = "4", features = ["derive", "env"] }
-clap_complete = "4"
+clap = { version = "4", features = ["derive", "env"], optional = true }
+clap_complete = { version = "4", optional = true }
 serde = { workspace = true }
 serde_json.workspace = true
 serde_yaml_neo = "0.11"
@@ -263,10 +263,13 @@ version = "0.14"
 optional = true
 
 [features]
-default = []
+default = ["cli"]
 
 # Test helpers - exposes internal constructors for integration testing
 test-helpers = []
+
+# CLI types and command dispatch (clap-based). Enable only in process-host crates.
+cli = ["dep:clap", "dep:clap_complete"]
 
 # Tool abstraction layer (always enabled - no extra deps)
 tool-api = []
@@ -325,7 +328,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex", "c2", "email-notifications", "logging-subscriber", "config-watch"]
+  full = ["cli", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex", "c2", "email-notifications", "logging-subscriber", "config-watch"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]

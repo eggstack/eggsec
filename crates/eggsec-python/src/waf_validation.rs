@@ -543,7 +543,7 @@ pub fn validate_waf(
                     verbose: false,
                     quiet: true,
                     output: None,
-                    common: eggsec::cli::CommonHttpArgs::default(),
+                    common: eggsec::cli::CommonHttpArgsCli::default(),
                 };
                 let bypass_engine =
                     eggsec::waf::BypassEngine::new(&waf_args, Some(profile), tt).map_pyerr()?;
@@ -625,7 +625,7 @@ pub fn async_validate_waf(
                 verbose: false,
                 quiet: true,
                 output: None,
-                common: eggsec::cli::CommonHttpArgs::default(),
+                common: eggsec::cli::CommonHttpArgsCli::default(),
             };
             let bypass_engine =
                 eggsec::waf::BypassEngine::new(&waf_args, Some(profile), tt).map_pyerr()?;
@@ -757,7 +757,7 @@ pub fn fuzz_http(
                 fl: None,
                 ft: None,
                 fr: None,
-                common: eggsec::cli::CommonHttpArgs::default(),
+                common: eggsec::cli::CommonHttpArgsCli::default(),
             };
 
             let mut engine = eggsec::fuzzer::FuzzEngine::new(fuzz_args).map_pyerr()?;
@@ -852,7 +852,7 @@ pub fn async_fuzz_http(
             fl: None,
             ft: None,
             fr: None,
-            common: eggsec::cli::CommonHttpArgs::default(),
+            common: eggsec::cli::CommonHttpArgsCli::default(),
         };
 
         let mut engine = eggsec::fuzzer::FuzzEngine::new(fuzz_args).map_pyerr()?;

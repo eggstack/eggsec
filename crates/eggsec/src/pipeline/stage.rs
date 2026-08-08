@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::cli::ScanProfile;
 use crate::probe::{ProbeIntent, ProbeRisk};
+use crate::types::ScanProfile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Stage {

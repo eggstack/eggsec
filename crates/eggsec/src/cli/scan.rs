@@ -1,5 +1,5 @@
 use super::timeout::*;
-use super::CommonHttpArgs;
+use super::CommonHttpArgsCli;
 
 pub(crate) const SCAN_PORTS_ABOUT: &str = "Scan ports on target host
 
@@ -234,7 +234,7 @@ pub struct EndpointScanArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
 }
 
 #[derive(clap::Args)]
@@ -356,7 +356,7 @@ pub struct ScanArgs {
     #[arg(long, help = "Web payload types for web scan (comma-separated)")]
     pub web_types: Option<String>,
     #[command(flatten)]
-    pub common: CommonHttpArgs,
+    pub common: CommonHttpArgsCli,
     #[arg(
         short = 'S',
         long = "source-ip",

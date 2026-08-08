@@ -4,9 +4,15 @@
 
 Executed (partial). Phase F workstream 4 (logging subscriber), workstream 5
 (notifications/integrations), and workstream 6 (config watching) completed.
-Workstream 2 (CLI definitions) and workstream 3 (command orchestration) require
-a larger refactor to decouple Clap-derived types from engine internals —
-deferred to a follow-up phase. Workstream 1 baselines recorded.
+Workstream 2 (CLI definitions) partially completed: `clap` and `clap_complete`
+are now optional behind a `cli` feature; `Cli` and `Commands` remain in the engine
+but are feature-gated; `CommonHttpArgs` extracted to `types.rs` as a plain struct;
+CLI-specific `CommonHttpArgsCli` wraps it with clap derives. Workstream 3
+(command orchestration) partially completed: dispatch, fuzzer, and loadtest
+modules are gated behind `cli` feature. Workstream 7-10 deferred to follow-up
+phase. Acceptance criteria 1 (clap optional), 4 (indicatif conditional), 7
+(config watching optional) met. Criteria 2-3 (CLI types in eggsec-cli, typed
+non-Clap APIs) require larger follow-up refactor.
 
 ## Objective
 

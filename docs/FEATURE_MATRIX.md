@@ -78,6 +78,7 @@ Categories:
 | `dynamic-plugins` | Domain capability | `web-proxy`, `eggsec-web-proxy/dynamic-plugins` | eggsec | No | No | — | — |
 | `email-notifications` | Process-host adapter | `lettre` | eggsec | No | No | — | — |
 | `logging-subscriber` | Process-host adapter | `tracing-subscriber`, `tracing-appender` | eggsec | No | No | — | — |
+| `cli` | Process-host adapter | `clap`, `clap_complete` | eggsec | Yes | No | — | — |
 | `config-watch` | Process-host adapter | `notify`, `notify-debouncer-mini` | eggsec | No | No | — | — |
 | `full` | Meta/aggregate (developer/lab) | see `Cargo.toml` | eggsec | No | No | — | — |
 

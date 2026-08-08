@@ -43,7 +43,7 @@ fn payload_type_for_target_category(category: &str) -> PayloadType {
 /// let args = FuzzArgs {
 ///     url: "http://example.com".to_string(),
 ///     payload_type: "sqli".to_string(),
-///     common: CommonHttpArgs::default(),
+///     common: CommonHttpArgsCli::default(),
 ///     method: "GET".to_string(),
 ///     param: None,
 ///     concurrency: 10,
@@ -480,13 +480,13 @@ impl FuzzEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgs, FuzzMode};
+    use crate::cli::{CommonHttpArgsCli, FuzzMode};
 
     fn make_fuzz_args(url: &str) -> FuzzArgs {
         FuzzArgs {
             url: url.to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgs::default(),
+            common: CommonHttpArgsCli::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,
@@ -633,7 +633,7 @@ mod tests {
             verbose: false,
             quiet: false,
             output: None,
-            common: CommonHttpArgs::default(),
+            common: CommonHttpArgsCli::default(),
         };
         let engine = FuzzEngine::new_from_waf_args(waf_args);
         assert!(engine.is_ok());
