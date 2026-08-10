@@ -2,12 +2,20 @@
 
 ## Status
 
-**Executed.** Completed as part of dependency architecture modernization. Key changes:
-- MSRV verified at 1.80 with CI enforcement job
+**Executed (Phase H supplement).** Dependency upgrades completed:
+- MSRV raised from 1.80 to 1.85 (required for kube 4.x edition 2024)
 - `native-tls` made optional behind `nse` feature in eggsec-nse
 - gRPC proto generation: checked-in generated Rust file, protoc only for reflection descriptor
-- Dependency ownership table added to AGENTS.md
+- kube upgraded from 0.92 to 4.2, k8s-openapi from 0.22 to 0.28
+- MongoDB/BSON upgraded from 2.x to 3.x (run_command API change, bson re-export via mongodb)
+- Redis upgraded from 0.25 to 1.x
+- Dependency ownership table updated in AGENTS.md
 - System dependency docs updated (BUILD.md, AGENTS.md, VERIFICATION.md)
+- Native dependency inventory documented in BUILD.md
+
+Deferred:
+- PyO3 upgrade from 0.22 to 0.29 (substantial API migration across 40+ files)
+- rusqlite upgrade from 0.31 to 0.40 (blocked: libsqlite3-sys linking conflict with sqlx 0.8; requires sqlx 0.9 which needs MSRV 1.94)
 
 ## Objective
 

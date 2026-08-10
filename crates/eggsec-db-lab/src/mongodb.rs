@@ -13,7 +13,7 @@ use anyhow::Result;
 use eggsec_core::types::Severity;
 
 #[cfg(feature = "mongodb")]
-use bson::doc;
+use mongodb::bson::doc;
 #[cfg(feature = "mongodb")]
 use mongodb::{
     options::{ClientOptions, ServerApi, ServerApiVersion},
@@ -73,7 +73,7 @@ async fn run_mongodb_real(
         let admin_db = client.database("admin");
 
         let status_cmd = doc! { "serverStatus": 1 };
-        match admin_db.run_command(status_cmd, None).await {
+        match admin_db.run_command(status_cmd).await {
             Ok(status) => {
                 report.queries_executed += 1;
                 report
@@ -136,10 +136,7 @@ async fn run_mongodb_real(
         let admin_db = client.database("admin");
 
         // Check whoami (current user info)
-        match admin_db
-            .run_command(doc! { "connectionStatus": 1 }, None)
-            .await
-        {
+        match admin_db.run_command(doc! { "connectionStatus": 1 }).await {
             Ok(conn_status) => {
                 report.queries_executed += 1;
                 report
@@ -220,7 +217,7 @@ async fn run_mongodb_real(
         let admin_db = client.database("admin");
 
         // serverStatus again for net and security sections (reuse cached if possible, but safe to call again)
-        if let Ok(status) = admin_db.run_command(doc! { "serverStatus": 1 }, None).await {
+        if let Ok(status) = admin_db.run_command(doc! { "serverStatus": 1 }).await {
             report.queries_executed += 1;
 
             // Check for JavaScript enabled (security.javascriptEnabled or security.javascriptCompatibilityEnabled)
@@ -339,7 +336,7 @@ async fn run_mongodb_real(
         // List roles on admin database (bounded)
         if report.queries_executed < max_queries {
             match admin_db
-                .run_command(doc! { "rolesInfo": 1, "showBuiltinRoles": true }, None)
+                .run_command(doc! { "rolesInfo": 1, "showBuiltinRoles": true })
                 .await
             {
                 Ok(roles_info) => {
@@ -403,7 +400,7 @@ async fn run_mongodb_real(
 
         // List users on admin database (bounded)
         if report.queries_executed < max_queries {
-            match admin_db.run_command(doc! { "usersInfo": 1 }, None).await {
+            match admin_db.run_command(doc! { "usersInfo": 1 }).await {
                 Ok(users_info) => {
                     report.queries_executed += 1;
 
@@ -440,7 +437,7 @@ async fn run_mongodb_real(
     {
         match client
             .database("admin")
-            .run_command(doc! { "listDatabases": 1 }, None)
+            .run_command(doc! { "listDatabases": 1 })
             .await
         {
             Ok(db_list) => {
@@ -488,13 +485,10 @@ async fn run_mongodb_real(
                             }
                             let db = client.database(db_name);
                             match db
-                                .run_command(
-                                    doc! {
-                                        "listCollections": 1,
-                                        "nameOnly": true
-                                    },
-                                    None,
-                                )
+                                .run_command(doc! {
+                                    "listCollections": 1,
+                                    "nameOnly": true
+                                })
                                 .await
                             {
                                 Ok(cols) => {

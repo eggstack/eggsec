@@ -1,5 +1,39 @@
 # Build Features and System Dependencies
 
+## Native Dependency Inventory
+
+Each native or external runtime requirement is documented with its owning
+feature/artifact, platform scope, build vs runtime requirement, fallback
+behavior, and reason for retention.
+
+| Dependency | Owning Feature/Artifact | Platforms | Build-time | Runtime | Fallback | Reason for Retention |
+|-----------|------------------------|-----------|------------|---------|----------|---------------------|
+| `libpcap` | `packet-inspection` | Linux, macOS | Yes (`libpcap-dev`) | Yes | Compilation fails without dev package | Live packet capture requires pcap bindings |
+| `wireless-tools` | `wireless` | Linux | No | Yes (`iwlist`) | WiFi scan commands fail | WiFi scanning needs `iwlist` scanner |
+| `libssl-dev` | `nse` | All | Yes | No | NSE TLS scripts fail at runtime | OpenSSL needed for NSE TLS protocol scripts |
+| `libssh2-dev` | `nse-ssh2` | All | Yes | No | NSE SSH scripts fail at compile time | libssh2 needed for NSE SSH2 support |
+| `protobuf-compiler` | `grpc-api` | All | Yes (descriptor only) | No | tonic-reflection descriptor not generated | protoc generates reflection descriptor set; Rust code is checked-in |
+| `ring` | `rustls` (via tokio-rustls) | All | Yes (Rust) | No | TLS compilation fails | Rust TLS library; pure Rust with assembly |
+| `aws-lc-rs` | (not used) | — | — | — | — | Explicitly excluded; ring-only TLS policy |
+
+### Build System Notes
+
+- **libpcap**: `pnet` and `pnet_packet` require `libpcap-dev` at build time. Feature-gated behind `packet-inspection`.
+- **OpenSSL**: `native-tls` with OpenSSL backend required for NSE TLS scripts. Optional behind `nse` feature. The `openssl` crate with `vendored` feature is used, which bundles OpenSSL source — but still requires a C compiler and Perl at build time.
+- **libssh2**: Required for `ssh2` crate. Optional behind `nse-ssh2` feature. System library required.
+- **protoc**: Only needed when `grpc-api` feature is enabled, and only for generating the tonic-reflection descriptor set (`tool_descriptor.bin`). The Rust proto code is checked in at `crates/eggsec/src/generated/eggsec.tool.v1.rs` and compiled via `include!()` — no protoc needed for ordinary builds.
+
+### Retained protoc requirement justification (acceptance criterion 12)
+
+The `grpc-api` feature retains a `protoc` build dependency because tonic-reflection
+requires a binary file descriptor set (`tool_descriptor.bin`) that cannot be
+checked in as Rust source. The descriptor is a protobuf-encoded binary that
+tonic-reflection loads at runtime to serve gRPC server reflection. Generating
+it from `.proto` source is the only supported path. This is a build-time-only
+requirement — it does not affect CI compilation of unchecked-in code, and the
+Rust proto code is checked in separately. The descriptor is regenerated only
+when the proto schema changes (a maintainer task).
+
 ## System Dependencies
 
 | Feature | Required Packages | Install (Ubuntu/Debian) |

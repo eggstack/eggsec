@@ -228,7 +228,7 @@ impl InterAgentChannel {
         let messages = self.messages.read().await;
         messages
             .iter()
-            .filter(|m| m.recipient_id.map_or(true, |r| &r == agent_id) || m.recipient_id.is_none())
+            .filter(|m| m.recipient_id.is_none_or(|r| &r == agent_id) || m.recipient_id.is_none())
             .cloned()
             .collect()
     }

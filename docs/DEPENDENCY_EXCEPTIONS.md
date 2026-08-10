@@ -110,7 +110,7 @@ Every retained advisory ignore must include:
 | Owner | eggsec-output / eggsec-mobile-lab |
 | Created | 2026-07-01 |
 | Review-by | 2026-11-07 |
-| Blocker | Requires quick-xml >=0.41.0 which raises MSRV from 1.80 to 1.86. Deferred to Phase H. |
+| Blocker | Requires quick-xml >=0.41.0 which raises MSRV to 1.86 (current MSRV is 1.85). Deferred. |
 
 ### RUSTSEC-2026-0195 — quick-xml NsReader OOM
 
@@ -125,7 +125,7 @@ Every retained advisory ignore must include:
 | Owner | eggsec-output / eggsec-mobile-lab |
 | Created | 2026-07-01 |
 | Review-by | 2026-11-07 |
-| Blocker | Requires quick-xml >=0.41.0 which raises MSRV from 1.80 to 1.86. Deferred to Phase H. |
+| Blocker | Requires quick-xml >=0.41.0 which raises MSRV to 1.86 (current MSRV is 1.85). Deferred. |
 
 ## Resolved in Phase E
 

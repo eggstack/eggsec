@@ -2,7 +2,7 @@
 
 Guidelines for AI agents working on this codebase.
 
-**Minimum Rust version: 1.80** (workspace `rust-version` in `Cargo.toml`). CI tests the exact MSRV via the `msrv` job in `.github/workflows/ci.yml`. Verify locally with `make check-msrv` (requires `rustup toolchain install 1.80`).
+**Minimum Rust version: 1.85** (workspace `rust-version` in `Cargo.toml`). CI tests the exact MSRV via the `msrv` job in `.github/workflows/ci.yml`. Verify locally with `make check-msrv` (requires `rustup toolchain install 1.85`).
 
 ## Quick Verification
 
@@ -99,7 +99,7 @@ make clippy                 # lint (-D warnings)
 make fmt                    # format check
 make test-feature-matrix    # feature + metadata validation
 make check-no-default       # no-default-features workspace build
-make check-msrv             # MSRV compile check (requires rustup toolchain install 1.80)
+make check-msrv             # MSRV compile check (requires rustup toolchain install 1.85)
 make check-feature-profiles # representative feature profile checks
 make build                  # release build
 ```
@@ -348,15 +348,15 @@ Major direct dependency families, owning crate/domain, and suggested review cade
 
 | Dependency Family | Owning Crate/Domain | Review Cadence | Notes |
 |-------------------|---------------------|----------------|-------|
-| PyO3/maturin | `eggsec-python` | Each PyO3 release cycle | Python bindings; 0.22 currently used |
+| PyO3/maturin | `eggsec-python` | Each PyO3 release cycle | Python bindings; 0.22 currently used (upgrade to 0.29 deferred) |
 | TLS (rustls, tokio-rustls) | `eggsec`, `eggsec-web-proxy` | Monthly or advisory-driven | Security-critical transport |
 | reqwest | `eggsec`, `eggsec-agent` | Monthly or advisory-driven | HTTP client; security-critical |
-| SQLx | `eggsec-db-lab` | Quarterly or compatibility-driven | Postgres/MySQL drivers |
-| Tiberius | `eggsec-db-lab` | Quarterly or compatibility-driven | MSSQL driver |
-| MongoDB/BSON | `eggsec-db-lab` | Quarterly or compatibility-driven | MongoDB driver |
-| Redis | `eggsec-db-lab` | Quarterly or compatibility-driven | Redis driver |
-| kube/k8s-openapi | `eggsec` (container) | Quarterly or compatibility-driven | Kubernetes client |
-| Rusqlite | `eggsec-daemon` | Quarterly or advisory-driven | SQLite; daemon-only |
+| SQLx | `eggsec-db-lab` | Quarterly or compatibility-driven | Postgres/MySQL drivers; 0.8 blocks rusqlite 0.40 upgrade (libsqlite3-sys conflict) |
+| Tiberius | `eggsec-db-lab` | Quarterly or compatibility-driven | MSSQL driver; 0.12 (current minor) |
+| MongoDB/BSON | `eggsec-db-lab` | Quarterly or compatibility-driven | MongoDB driver; upgraded to 3.x |
+| Redis | `eggsec-db-lab` | Quarterly or compatibility-driven | Redis driver; upgraded to 1.x |
+| kube/k8s-openapi | `eggsec` (container) | Quarterly or compatibility-driven | Kubernetes client; upgraded to kube 4.2/k8s-openapi 0.28 |
+| Rusqlite | `eggsec-daemon` | Quarterly or advisory-driven | SQLite; daemon-only; 0.31 (blocked by sqlx 0.8 libsqlite3-sys conflict) |
 | mlua | `eggsec-nse` | Quarterly | Lua VM for NSE |
 | native-tls/openssl | `eggsec-nse` | Monthly or advisory-driven | NSE TLS; optional, behind `nse` feature |
 | ssh2/libssh2 | `eggsec-nse` | Quarterly or advisory-driven | NSE SSH; optional, behind `nse-ssh2` |

@@ -21,7 +21,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- Rust 1.80 or later
+- Rust 1.85 or later
 - Git
 - A GitHub account
 

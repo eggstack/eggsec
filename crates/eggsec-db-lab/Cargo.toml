@@ -41,9 +41,8 @@ tracing.workspace = true
 # Database drivers (optional, behind feature flags)
 sqlx = { version = "0.8", optional = true, features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"] }
 tiberius = { version = "0.12", optional = true, default-features = false, features = ["tokio", "rustls"] }
-mongodb = { version = "2.8", optional = true, default-features = false, features = ["tokio-runtime"] }
-bson = { version = "2.9", optional = true }
-redis = { version = "0.25", optional = true, features = ["tokio-comp", "connection-manager"] }
+mongodb = { version = "3.1", optional = true }
+redis = { version = "1", optional = true, features = ["tokio-comp", "connection-manager"] }
 
 # Async utilities for tiberius
 tokio-util = { version = "0.7", optional = true }
@@ -59,7 +58,7 @@ db-drivers = ["dep:sqlx"]
 mssql = ["dep:tiberius", "dep:tokio-util", "dep:futures"]
 
 # Enable MongoDB driver
-mongodb = ["dep:mongodb", "dep:bson"]
+mongodb = ["dep:mongodb"]
 
 # Enable Redis driver
 redis = ["dep:redis"]

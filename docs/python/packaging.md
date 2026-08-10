@@ -41,7 +41,7 @@ workspace crates required to build the Python extension from source.
 
 **Build**: `maturin sdist --out dist --manifest-path crates/eggsec-python/Cargo.toml`
 
-**Requirements to build from sdist**: Rust toolchain (>= 1.80), Cargo, and a
+**Requirements to build from sdist**: Rust toolchain (>= 1.85), Cargo, and a
 C compiler. The sdist build will fail with actionable diagnostics if these
 are missing.
 
