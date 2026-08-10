@@ -52,6 +52,7 @@ sha1 = "0.10"
 dashmap = "6"
 rustc-hash = "2"
 scraper = "0.21"
+ipnetwork = { version = "0.21", features = ["serde"] }
 hickory-resolver = "0.26"
 chrono-tz = "0.10"
 unicode-normalization = "0.1"
