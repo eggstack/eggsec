@@ -41,9 +41,10 @@ This runs `scripts/check-python.sh` which builds the extension once and runs beh
 
 ## Platform portability
 
-Rust checks run on Linux in CI (`ci.yml` `rust` job). Hosted CI runs narrow
-portability checks on macOS and Windows for every push and pull request to
-`main`:
+Rust checks run on Linux in CI (`ci.yml` `rust` job). The `msrv` job in `ci.yml`
+verifies the declared MSRV (1.80) compiles the workspace with `--no-default-features`.
+Hosted CI runs narrow portability checks on macOS and Windows for every push and pull
+request to `main`:
 
 - `cargo check -p eggsec` on macos-latest and windows-latest (in `ci.yml` `portability` job)
 
@@ -144,6 +145,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
+| `make check-msrv` | MSRV compile check | Every PR/push (requires `rustup toolchain install 1.80`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |

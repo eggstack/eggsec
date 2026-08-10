@@ -7,13 +7,15 @@
 | `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` |
 | `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) |
 | `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` |
+| `nse-ssh2` | `libssh2-dev` | `sudo apt-get install libssh2-dev` |
+| `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) |
 
 ```bash
 # Ubuntu/Debian (all features)
-sudo apt-get install libpcap-dev libssl-dev wireless-tools
+sudo apt-get install libpcap-dev libssl-dev wireless-tools libssh2-dev protobuf-compiler
 
 # Fedora/RHEL
-sudo dnf install libpcap-devel openssl-devel wireless-tools
+sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protobuf-compiler
 ```
 
 ## Build Features

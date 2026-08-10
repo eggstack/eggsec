@@ -2,7 +2,7 @@
 
 Guidelines for AI agents working on this codebase.
 
-**Minimum Rust version: 1.80** (workspace `rust-version` in `Cargo.toml`).
+**Minimum Rust version: 1.80** (workspace `rust-version` in `Cargo.toml`). CI tests the exact MSRV via the `msrv` job in `.github/workflows/ci.yml`. Verify locally with `make check-msrv` (requires `rustup toolchain install 1.80`).
 
 ## Quick Verification
 
@@ -60,6 +60,7 @@ cargo check -p eggsec --features evasion
 cargo check -p eggsec --features postex
 cargo check -p eggsec --features c2
 cargo check -p eggsec --features rest-api
+cargo check -p eggsec --features grpc-api
 
 # Domain crates (standalone)
 cargo check -p eggsec-db-lab
@@ -98,6 +99,7 @@ make clippy                 # lint (-D warnings)
 make fmt                    # format check
 make test-feature-matrix    # feature + metadata validation
 make check-no-default       # no-default-features workspace build
+make check-msrv             # MSRV compile check (requires rustup toolchain install 1.80)
 make check-feature-profiles # representative feature profile checks
 make build                  # release build
 ```
@@ -202,13 +204,14 @@ Feature-gated modules require explicit build flags:
 | `mobile-dynamic` | ADB + device | Android runtime testing |
 | `db-pentest` | none (drivers) | Postgres/MySQL/MSSQL/MongoDB/Redis |
 | `web-proxy` | none | MITM proxy |
-| `nse` | `libssl-dev` | Nmap NSE scripts |
+| `nse` | `libssl-dev` | Nmap NSE scripts; `native-tls` and `openssl` behind this feature |
 | `evasion` | none | Evasion detection |
 | `postex` | none | Post-exploitation simulation |
 | `c2` | none | C2 simulation (depends on postex+evasion) |
 | `stress-testing` | none | Raw sockets, IP spoofing |
 | `packet-inspection` | `libpcap-dev` | Packet capture |
-| `nse-ssh2` | `ssh2` | NSE with SSH2/libssh2 support |
+| `grpc-api` | `protobuf-compiler` | gRPC protobuf reflection descriptor (protoc only for descriptor set; Rust code is checked-in) |
+| `nse-ssh2` | `libssh2-dev` | NSE with SSH2/libssh2 support |
 | `nse-sandbox` | (needs nse) | Sandboxed NSE execution |
 | `email-notifications` | (none) | SMTP email via lettre; enables `rest-api` email transport |
 | `logging-subscriber` | (none) | tracing subscriber/appender setup for process-host crates |
@@ -338,6 +341,31 @@ Each module has specialized guidance in `AGENTS.override.md`. When working in a 
 | `c2/` | `crates/eggsec/src/c2/AGENTS.override.md` |
 | `postex/` | `crates/eggsec/src/postex/AGENTS.override.md` |
 | `eggsec-python/` | `crates/eggsec-python/AGENTS.override.md` |
+
+## Dependency Ownership
+
+Major direct dependency families, owning crate/domain, and suggested review cadence:
+
+| Dependency Family | Owning Crate/Domain | Review Cadence | Notes |
+|-------------------|---------------------|----------------|-------|
+| PyO3/maturin | `eggsec-python` | Each PyO3 release cycle | Python bindings; 0.22 currently used |
+| TLS (rustls, tokio-rustls) | `eggsec`, `eggsec-web-proxy` | Monthly or advisory-driven | Security-critical transport |
+| reqwest | `eggsec`, `eggsec-agent` | Monthly or advisory-driven | HTTP client; security-critical |
+| SQLx | `eggsec-db-lab` | Quarterly or compatibility-driven | Postgres/MySQL drivers |
+| Tiberius | `eggsec-db-lab` | Quarterly or compatibility-driven | MSSQL driver |
+| MongoDB/BSON | `eggsec-db-lab` | Quarterly or compatibility-driven | MongoDB driver |
+| Redis | `eggsec-db-lab` | Quarterly or compatibility-driven | Redis driver |
+| kube/k8s-openapi | `eggsec` (container) | Quarterly or compatibility-driven | Kubernetes client |
+| Rusqlite | `eggsec-daemon` | Quarterly or advisory-driven | SQLite; daemon-only |
+| mlua | `eggsec-nse` | Quarterly | Lua VM for NSE |
+| native-tls/openssl | `eggsec-nse` | Monthly or advisory-driven | NSE TLS; optional, behind `nse` feature |
+| ssh2/libssh2 | `eggsec-nse` | Quarterly or advisory-driven | NSE SSH; optional, behind `nse-ssh2` |
+| prost/tonic | `eggsec` (grpc-api) | Quarterly | gRPC; generated code checked-in |
+| ratatui/crossterm | `eggsec-tui` | Advisory/feature-driven | TUI libraries |
+| pnet/nix/libc | `eggsec` (stress/packet) | Advisory | Raw networking; feature-platform-gated |
+| printpdf | `eggsec` (pdf) | Advisory/feature-driven | PDF output; optional |
+
+Manual grouped updates are acceptable for this repository's size. Dependabot/Renovate automation is not required.
 
 ## Architecture Docs
 

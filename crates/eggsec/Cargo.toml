@@ -288,7 +288,7 @@ config-watch = ["dep:notify", "dep:notify-debouncer-mini"]
 ws-api = ["axum/ws"]
 
 # gRPC API server for external tool integration
-grpc-api = ["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build", "async-stream", "tokio-stream"]
+  grpc-api = ["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost", "tonic-reflection", "dep:prost-build", "async-stream", "tokio-stream"]
 
 # Low-level network stress testing
 stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping", "eggsec-nse?/stress-testing"]
@@ -424,10 +424,6 @@ wiremock = "0.6"
 tempfile = "3"
 criterion = "0.5"
 proptest = "1"
-
-[build-dependencies.tonic-prost-build]
-version = "0.14"
-optional = true
 
 [[bench]]
 name = "proxy_benchmarks"

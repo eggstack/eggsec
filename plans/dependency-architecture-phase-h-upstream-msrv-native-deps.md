@@ -2,8 +2,12 @@
 
 ## Status
 
-Ready for implementation after Phase G. Individual upstream research and
-compatibility probes may begin earlier.
+**Executed.** Completed as part of dependency architecture modernization. Key changes:
+- MSRV verified at 1.80 with CI enforcement job
+- `native-tls` made optional behind `nse` feature in eggsec-nse
+- gRPC proto generation: checked-in generated Rust file, protoc only for reflection descriptor
+- Dependency ownership table added to AGENTS.md
+- System dependency docs updated (BUILD.md, AGENTS.md, VERIFICATION.md)
 
 ## Objective
 
