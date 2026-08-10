@@ -356,7 +356,7 @@ async fn test_load_test_from_args_with_config() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::types::CommonHttpArgs::default(),
+        common: eggsec::cli::CommonHttpArgsCli::default(),
     };
 
     let config = eggsec::config::EggsecConfig::default();
@@ -383,7 +383,7 @@ async fn test_load_test_from_args_with_tui_mode() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::types::CommonHttpArgs::default(),
+        common: eggsec::cli::CommonHttpArgsCli::default(),
     };
 
     let runner = eggsec::loadtest::LoadTestRunner::from_args_with_tui_mode(args, true).unwrap();
@@ -665,7 +665,7 @@ fn test_load_test_from_args_with_config_uses_config_timeout() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::types::CommonHttpArgs::default(),
+        common: eggsec::cli::CommonHttpArgsCli::default(),
     };
 
     let mut config = eggsec::config::EggsecConfig::default();
@@ -690,7 +690,7 @@ fn test_load_test_from_args_with_config_explicit_timeout() {
         verbose: false,
         quiet: false,
         output: None,
-        common: eggsec::types::CommonHttpArgs::default(),
+        common: eggsec::cli::CommonHttpArgsCli::default(),
     };
 
     let mut config = eggsec::config::EggsecConfig::default();

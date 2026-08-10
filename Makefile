@@ -17,9 +17,8 @@ test-unit:
 test-ci:
 	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 
-# Run integration tests (uses wiremock, may need network)
-test-integration:
-	cargo test -p eggsec --features rest-api --tests --no-fail-fast
+# Run integration tests (alias for test-ci; uses wiremock, may need network)
+test-integration: test-ci
 
 # Run NSE tests (requires nse feature)
 test-nse:
@@ -68,14 +67,8 @@ check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
 	cargo clippy --lib -p eggsec -- -D warnings
-	cargo test --lib -p eggsec
-	cargo test -p eggsec --test metadata_consistency
-	cargo test -p eggsec --test command_registry
-	cargo test -p eggsec --test tool_registration --features rest-api
-	cargo test -p eggsec --test feature_matrix
-	cargo test -p eggsec --test enforcement_matrix
-	cargo test -p eggsec --test enforced_dispatch_regression
-	cargo test -p eggsec-output --test report_envelope
+	cargo test -p eggsec --features rest-api --tests --no-fail-fast
+	cargo test -p eggsec-output --tests
 	bash scripts/check-architecture-guards.sh
 
 # Optional broad validation (pre-release, not required for merge)
@@ -123,9 +116,9 @@ help:
 	@echo "  make clippy          - Lint"
 	@echo "  make fmt             - Format check"
 	@echo "  make build           - Release build"
-	@echo "  make test-ci         - Library/integration tests with rest-api"
+	@echo "  make test-ci         - Full package tests with rest-api"
 	@echo "  make test-fast       - Fast unit-test alias"
-	@echo "  make test-integration - Integration tests"
+	@echo "  make test-integration - Integration tests (alias for test-ci)"
 	@echo "  make test-nse        - NSE tests (requires nse feature)"
 	@echo "  make test-slow       - Run ignored tests"
 	@echo "  make test-coverage   - Code coverage"

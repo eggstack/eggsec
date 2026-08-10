@@ -12,15 +12,9 @@ These checks run on every pull request and push to `main`. They cover core archi
 |-------|---------|---------|
 | Formatting | `cargo fmt --all --check` | Code style consistency |
 | No-default build | `cargo check --workspace --no-default-features` | Workspace compiles without optional features |
-| Core lib tests | `cargo test -p eggsec --lib` | Unit test baseline |
-| Metadata consistency | `cargo test -p eggsec --test metadata_consistency` | DomainDescriptor ↔ OperationMetadata ↔ capability matrix cross-validation |
-| Command registry | `cargo test -p eggsec --test command_registry` | CommandRegistration dispatch-mode and visibility invariants |
-| Tool registration | `cargo test -p eggsec --test tool_registration --features rest-api` | ToolRegistration Model A semantics and MCP exposure |
-| Feature matrix | `cargo test -p eggsec --test feature_matrix` | Authoritative registry vs Cargo.toml, naming conventions, fail-closed behavior |
-| Enforcement matrix | `cargo test -p eggsec --test enforcement_matrix` | Cross-surface enforcement invariants (22 sections, ~95 tests) |
-| Enforced dispatch regression | `cargo test -p eggsec --test enforced_dispatch_regression` | Strict surfaces do not call raw dispatch; CI handler has no dispatch path |
-| Runtime bridge | `cargo test -p eggsec --lib runtime_bridge` | RuntimeSurface→ExecutionSurface conversion, TaskKind→OperationDescriptor mapping, preflight/approve flows |
-| Report envelope | `cargo test -p eggsec-output --test report_envelope` | Normalized report/evidence envelope roundtrip |
+| Clippy | `cargo clippy --lib -p eggsec -- -D warnings` | Code quality on primary engine |
+| Package tests | `cargo test -p eggsec --features rest-api --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
+| Report envelope | `cargo test -p eggsec-output --tests` | Output crate report/evidence envelope roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
 ### Local Reproduction
@@ -28,27 +22,21 @@ These checks run on every pull request and push to `main`. They cover core archi
 Run these before pushing to match CI:
 
 ```bash
+make check
+```
+
+Alternatively, run the individual commands:
+
+```bash
 cargo fmt --all --check
 cargo check --workspace --no-default-features
-cargo test -p eggsec --lib
-cargo test -p eggsec --test metadata_consistency
-cargo test -p eggsec --test command_registry
-cargo test -p eggsec --test tool_registration --features rest-api
-cargo test -p eggsec --test feature_matrix
-cargo test -p eggsec --test enforcement_matrix
-cargo test -p eggsec --test enforced_dispatch_regression
-cargo test -p eggsec --lib runtime_bridge
-cargo test -p eggsec-output --test report_envelope
+cargo clippy --lib -p eggsec -- -D warnings
+cargo test -p eggsec --features rest-api --tests --no-fail-fast
+cargo test -p eggsec-output --tests
 bash scripts/check-architecture-guards.sh
 ```
 
 > **Note**: The static guard script requires [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Install it locally before running: `cargo install ripgrep` or use your system package manager.
-
-Alternatively, run the full architecture guard CI reproduction with a single Make target:
-
-```bash
-make check
-```
 
 ## Feature-Profile Compile Guards
 
@@ -111,6 +99,35 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Verify `EXTENSIBILITY.md` Detailed Guides table links resolve to existing files.
 - Fail on stale field names or contradictions in current docs.
 
+### Crate Boundary Invariants
+- `eggsec-runtime` has no TUI, transport, persistence, engine, or domain crate dependencies.
+- `eggsec-output` has no reverse dependencies on engine or runtime.
+- `eggsec-daemon` has no TUI dependencies; engine dependency is optional/feature-gated.
+- `eggsec-daemon` transport crates are feature-gated optional dependencies.
+- Engine crate has no TUI or daemon dependencies.
+- CLI TUI dependency is feature-gated.
+- TUI has no canonical `TaskConfig`/`TaskResult` enums or `match task_kind` execution dispatchers.
+
+### NSE Subsystem Invariants
+- NSE script/module loading flows through `ScriptResolver`.
+- `NseRunReport.libraries` is per-run require activity, not registry dump.
+- `ManualPermissive` stays in manual CLI/TUI surfaces only.
+- NSE automated surfaces use `with_profile()` not `with_policy()`.
+- `NseLibraryDescriptor` instantiation is registry-owned.
+- NSE registry entries have corresponding Rust modules.
+
+### Python-Specific Guards
+These checks enforce invariants for the `eggsec-python` bindings and run within
+the unified `python` job in `ci.yml`, which invokes `make check-python`. They are
+executed once after a single `maturin develop` build.
+
+| Check | Command | Purpose |
+|-------|---------|---------|
+| python-capability-matrix | `python scripts/check-python-capability-matrix.py` | Validates operation set, fields, and domain maturity vs Rust source |
+| python-architecture-guards | `python scripts/check-python-architecture-guards.py` | Architecture drift checks (schema version, doc refs, runtime parity) |
+| python-stub-parity | `python scripts/check_python_stub_parity.py` | Type stubs match runtime API surface |
+| python-type-check | `bash scripts/check_python_types.sh` | Importability, __all__ resolution, stub syntax, mypy/pyright |
+
 ## Platform-Sensitive Checks
 
 These checks require specific system dependencies or privileges and are never part of required PR CI:
@@ -123,50 +140,3 @@ These checks require specific system dependencies or privileges and are never pa
 | Mobile dynamic | ADB + emulator | Frida, device interaction |
 | Wireless | `wireless-tools` (iwlist) | WiFi scanning |
 | Web proxy interception | Network stack | MITM proxy |
-
-## Key Invariants Guarded
-
-The CI architecture guards enforce these invariants from Phases 1–14 (23 checks):
-
-1. **OperationMetadata** is the canonical operation policy metadata layer.
-2. **DomainDescriptor** is the canonical domain/integration grouping layer.
-3. **ToolRegistration** distinguishes `mcp_metadata_exposable` from `mcp_default_visible`.
-4. MCP OpsAgent uses Model A: profile-expanded metadata-exposable listing.
-5. `mcp_tool_registrations_default_visible()` is the conservative default subset.
-6. **CommandRegistration** separates visibility flags and dispatch modes.
-7. **CommandDispatchMode** distinguishes RegistryBacked, LegacyWrapped, CatalogOnly, ServerLifecycle, HelperOnly.
-8. TUI action specs point back to canonical metadata.
-9. `eggsec-output` has a normalized report/evidence envelope.
-10. Feature metadata snapshot is validated against `crates/eggsec/Cargo.toml`.
-11. `eggsec-tui/src/workers/` directory is absent (removed in TUI Runtime Phase 3).
-12. `eggsec-runtime` has no TUI dependencies (`ratatui`, `crossterm`, `eggsec-tui`).
-13. `eggsec-runtime` has no transport dependencies (`axum`, `tonic`, `tokio-tungstenite`, `tower-http`).
-14. `eggsec-runtime` capabilities do not list unimplemented transports (`stdio`, `unix-socket`, `websocket`).
-15. `eggsec-tui` does not define canonical `TaskConfig` or `TaskResult` enums (owned by `eggsec-runtime` and `eggsec` respectively).
-16. `eggsec-tui` has no `match task_kind` execution dispatchers — all `match task_kind` in TUI must be inside `#[cfg(test)]` modules (test assertions). Dispatch routing lives exclusively in `eggsec::dispatch::dispatch_inner()`.
-17. `eggsec-daemon` has no TUI dependencies (`ratatui`, `crossterm`, `eggsec-tui`). Engine dependency (`eggsec`) is optional, gated behind `full-executor` feature.
-18. `eggsec-daemon` permission checks (`check_permission`) are called for every mutating daemon command (SubmitTask, CancelTask, CancelActive, CloseSession).
-19. `eggsec-daemon` transport crates (e.g., `axum` for HTTP) are feature-gated optional dependencies, not in the default build.
-20. HTTP transport requires explicit `http-api` feature flag on `eggsec-daemon`.
-21. Public network bind (`0.0.0.0`, `::`) requires explicit configuration and emits a warning; default bind is loopback-only.
-22. Runtime is isolated from engine and domain crates (no `eggsec`, `eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy` dependencies).
-23. Output crate has no reverse dependencies (no `eggsec`, `eggsec-tui`, `eggsec-cli`, `eggsec-daemon` dependencies).
-24. `EggsecRuntimeExecutor` does not hardcode `RuntimeSurface::CliManual` — it derives surface from `RuntimeExecutionContext`.
-25. `EggsecRuntimeExecutor` does not hardcode `LoadedScope::default_empty()` — it resolves scope from `RuntimeExecutionContext` (permissive manual surfaces excepted).
-26. Session snapshots include `owner_client_id` for persisted access control.
-27. CloseSession persists final snapshot (with cancelled tasks and closed flag).
-28. CloseSession does not call `delete_session()` — history is preserved for later inspection.
-29. No hardcoded `RuntimeSurface::CliManual` in `EggsecRuntimeExecutor` outside `#[cfg(test)]` modules — surface is derived from `RuntimeExecutionContext`.
-
-## Python-Specific CI Guards
-
-These checks enforce invariants for the `eggsec-python` bindings and run within
-the unified `python` job in `ci.yml`, which invokes `make check-python`. They are
-executed once after a single `maturin develop` build.
-
-| Check | Command | Purpose |
-|-------|---------|---------|
-| python-capability-matrix | `python scripts/check-python-capability-matrix.py` | Validates operation set, fields, and domain maturity vs Rust source |
-| python-architecture-guards | `python scripts/check-python-architecture-guards.py` | Architecture drift checks (schema version, doc refs, runtime parity) |
-| python-stub-parity | `python scripts/check_python_stub_parity.py` | Type stubs match runtime API surface |
-| python-type-check | `bash scripts/check_python_types.sh` | Importability, __all__ resolution, stub syntax, mypy/pyright |

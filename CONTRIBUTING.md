@@ -165,19 +165,14 @@ cargo build -p eggsec --features full
 
 #### CI Matrix
 
-The CI runs checks and tests across multiple feature combinations:
+The CI runs these jobs on every push/PR:
 
-- **Default**: Workspace check with no optional features
-- **Minimal CLI**: Core CLI without API servers
-- **rest-api**: REST API + MCP server
-- **grpc-api**: gRPC API server
-- **packet-inspection**: Packet capture and traceroute
-- **stress-testing**: Raw sockets and stress testing
-- **nse**: Nmap NSE script support
-- **nse-sandbox**: NSE with sandbox mode
-- **api-schema**: OpenAPI schema support
-- **sbom**: SBOM generation
-- **full**: All features combined
+- **Rust**: `make check` (format, no-default build, clippy, all integration tests, architecture guards)
+- **MSRV**: Compile check with Rust 1.85
+- **Portability**: `cargo check -p eggsec` on macOS and Windows
+- **Python**: `make check-python` (one maturin build, all checks)
+
+Optional deep checks run weekly or on manual trigger (`deep-checks.yml`): `cargo deny check`, representative feature profiles.
 
 This catches undeclared or miswired features early.
 
@@ -324,25 +319,12 @@ proptest! {
 CI enforces architecture invariants via required checks. Run these locally before pushing:
 
 ```bash
-cargo fmt --all --check
-cargo check --workspace --no-default-features
-cargo test -p eggsec --test metadata_consistency
-cargo test -p eggsec --test command_registry
-cargo test -p eggsec --test tool_registration --features rest-api
-cargo test -p eggsec --test feature_matrix
-cargo test -p eggsec --test enforcement_matrix
-cargo test -p eggsec --test enforced_dispatch_regression
-cargo test -p eggsec-output --test report_envelope
-bash scripts/check-architecture-guards.sh
-```
-
-> **Note**: The static guard script requires [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Install it before running: `cargo install ripgrep` or use your system package manager.
-
-Alternatively, run the full architecture guard CI reproduction with a single Make target:
-
-```bash
 make check
 ```
+
+This runs format check, no-default build, clippy, all integration tests, output envelope tests, and architecture drift guards in one command.
+
+> **Note**: The static guard script requires [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Install it before running: `cargo install ripgrep` or use your system package manager.
 
 These checks guard:
 - **OperationMetadata** is the canonical operation policy metadata layer
@@ -666,18 +648,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 2. **Run all checks**
    ```bash
-   cargo fmt --all --check
-   cargo clippy --lib -p eggsec -- -D warnings
-   cargo check --workspace --no-default-features
-   cargo test -p eggsec --lib
-   cargo test -p eggsec --test metadata_consistency
-   cargo test -p eggsec --test command_registry
-   cargo test -p eggsec --test tool_registration --features rest-api
-   cargo test -p eggsec --test feature_matrix
-   cargo test -p eggsec --test enforcement_matrix
-   cargo test -p eggsec --test enforced_dispatch_regression
-   cargo test -p eggsec-output --test report_envelope
-   bash scripts/check-architecture-guards.sh
+   make check
    ```
 
 3. **Update documentation**

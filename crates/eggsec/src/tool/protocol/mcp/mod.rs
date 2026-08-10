@@ -790,7 +790,7 @@ mod tests {
     use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
     use crate::tool::protocol::mcp::profile::McpProfile;
     use crate::tool::traits::{SecurityTool, ToolCategory};
-    use crate::tool::{ToolRequest, ToolResponse, ToolResult};
+    use crate::tool::{ToolRegistry, ToolRequest, ToolResponse, ToolResult};
     use async_trait::async_trait;
 
     struct DispatchRecordingTool {
@@ -800,9 +800,10 @@ mod tests {
     #[async_trait]
     impl SecurityTool for DispatchRecordingTool {
         fn id(&self) -> &'static str {
-            // Use a metadata-backed tool ID that is NOT in create_default_registry(),
-            // so registration succeeds and operation_descriptor_for_mcp_call resolves metadata.
-            "stress-test"
+            // Both test functions register this tool in an empty registry,
+            // so this ID is the only registered tool. "recon" has metadata
+            // with no required_features and only baseline capabilities.
+            "recon"
         }
         fn name(&self) -> &'static str {
             "Dispatch Recording Tool"
@@ -830,7 +831,7 @@ mod tests {
         use std::sync::Arc;
 
         let flag = Arc::new(AtomicBool::new(false));
-        let mut registry = create_default_registry();
+        let mut registry = ToolRegistry::new();
         registry
             .register(DispatchRecordingTool {
                 called: flag.clone(),
@@ -853,7 +854,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "stress-test",
+                "name": "recon",
                 "arguments": {"target": "https://example.com"}
             })),
         };
@@ -879,7 +880,7 @@ mod tests {
         use std::sync::Arc;
 
         let flag = Arc::new(AtomicBool::new(false));
-        let mut registry = create_default_registry();
+        let mut registry = ToolRegistry::new();
         registry
             .register(DispatchRecordingTool {
                 called: flag.clone(),
@@ -892,12 +893,7 @@ mod tests {
             .push(ScopeRule::new("example.com".to_string()));
         let loaded = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
 
-        // Use a policy that allows stress testing and the WafStressTest capability
-        let policy = ExecutionPolicy {
-            allow_stress_testing: true,
-            allowed_capabilities: vec![crate::config::Capability::WafStressTest],
-            ..ExecutionPolicy::default()
-        };
+        let policy = ExecutionPolicy::default();
 
         let server = McpServer::with_enforcement(
             registry,
@@ -912,7 +908,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "stress-test",
+                "name": "recon",
                 "arguments": {"target": "https://example.com"}
             })),
         };

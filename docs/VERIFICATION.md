@@ -16,18 +16,23 @@ This expands to:
 cargo fmt --all --check
 cargo check --workspace --no-default-features
 cargo clippy --lib -p eggsec -- -D warnings
-cargo test --lib -p eggsec
-cargo test -p eggsec --test metadata_consistency
-cargo test -p eggsec --test command_registry
-cargo test -p eggsec --test tool_registration --features rest-api
-cargo test -p eggsec --test feature_matrix
-cargo test -p eggsec --test enforcement_matrix
-cargo test -p eggsec --test enforced_dispatch_regression
-cargo test -p eggsec-output --test report_envelope
+cargo test -p eggsec --features rest-api --tests --no-fail-fast
+cargo test -p eggsec-output --tests
 bash scripts/check-architecture-guards.sh
 ```
 
-No `cargo-nextest` is required. Any pull request touching Rust source, workspace configuration, or architecture documentation must pass all of these checks locally before pushing.
+The package-level test commands automatically include all integration tests. Newly added tests run without Makefile maintenance. No `cargo-nextest` is required. Any pull request touching Rust source, workspace configuration, or architecture documentation must pass all of these checks locally before pushing.
+
+### Defect classes covered
+
+| Command | Defect class | Why merge-time |
+|---------|-------------|----------------|
+| `cargo fmt --all --check` | Style inconsistency | Mechanical; blocks clean diffs |
+| `cargo check --workspace --no-default-features` | Missing feature gates, broken no-default build | Catches regressions in optional-feature boundaries |
+| `cargo clippy --lib -p eggsec -- -D warnings` | Code quality, API misuse, common bugs | Low-cost static analysis on primary engine |
+| `cargo test -p eggsec --features rest-api --tests` | Behavioral regressions across all integration tests | Exercises MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more |
+| `cargo test -p eggsec-output --tests` | Report envelope roundtrip | Output crate is leaf; distinct defect class |
+| `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
 
 ## Mandatory Python contributor contract
 

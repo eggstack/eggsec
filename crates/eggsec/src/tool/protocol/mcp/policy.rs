@@ -1312,7 +1312,7 @@ mod tests {
     fn test_classify_tool_risk_proxy() {
         assert_eq!(
             classify_tool_risk("proxy"),
-            crate::config::OperationRisk::SafeActive
+            crate::config::OperationRisk::TrafficInterception
         );
     }
 
@@ -1424,13 +1424,17 @@ mod tests {
 
     #[test]
     fn test_policy_decision_for_mcp_call_allowed_tool() {
-        use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
-        let profile_policy = McpProfilePolicy::coding_agent();
-        let enforcement = EnforcementContext::mcp_strict(
-            ExecutionPolicy::default(),
-            LoadedScope::default_empty(),
-        );
-        let args = serde_json::json!({});
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, LoadedScope, Scope, ScopeRule, ScopeSource,
+        };
+        let profile_policy = McpProfilePolicy::for_profile(McpProfile::OpsAgent);
+        let mut scope = Scope::default();
+        scope
+            .allowed_targets
+            .push(ScopeRule::new("example.com".to_string()));
+        let loaded = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let enforcement = EnforcementContext::mcp_strict(ExecutionPolicy::default(), loaded);
+        let args = serde_json::json!({"target": "https://example.com"});
         let decision = policy_decision_for_mcp_call_with_enforcement(
             &profile_policy,
             "scan",

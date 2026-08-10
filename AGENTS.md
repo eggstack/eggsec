@@ -94,7 +94,7 @@ python scripts/release-package-graph.py package-workspace <target-dir> # Cargo-n
 python scripts/release-package-graph.py inspect-archive <crate> # archive checks
 python scripts/release-package-graph.py inspect-inventory <inventory> # exact archive/content/standalone checks
 make test                   # unit tests only (default)
-make test-ci                # full suite, no retries
+make test-ci                # full package tests with rest-api
 make clippy                 # lint (-D warnings)
 make fmt                    # format check
 make test-feature-matrix    # feature + metadata validation
