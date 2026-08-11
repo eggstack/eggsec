@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready for implementation after Phases A–I.
+Executed. Changes landed in main.
 
 ## Objective
 

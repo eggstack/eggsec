@@ -218,13 +218,13 @@ cargo test -p eggsec --features rest-api --test enforcement_matrix
 
 Phase 2 verified and hardened the enforcement invariants established in earlier phases:
 
-### Transitional API Cleanup
+### API Cleanup
 
 | API | Status | Disposition |
 |-----|--------|-------------|
 | `CommandContext::with_execution_profile()` | **Removed** | Replaced by `with_execution_surface()` and direct `EnforcementContext` construction. |
 | `CommandContext::ensure_scope()` / `ensure_scope_url()` | **Removed** | Scope checks are centralized in `EnforcementContext::evaluate()`. |
-| `ToolDispatcher::dispatch()` (raw) | `#[doc(hidden)]`, `pub(crate)` | Regression test guard (`enforced_dispatch_regression.rs`) enforces no raw dispatch in strict surfaces. |
+| `ToolDispatcher::dispatch()` (raw) | `#[doc(hidden)]`, `pub(crate)` | Internal implementation detail used by `EnforcedDispatcher` and pipeline orchestrator. Regression test guard (`enforced_dispatch_regression.rs`) enforces no raw dispatch in strict surfaces. |
 
 ### Regression Tests Added
 

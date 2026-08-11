@@ -9,7 +9,7 @@ Eggsec is a Rust-native, scope-enforced security assessment and defense-validati
 - **Manual operator workflows** (CLI, TUI) where humans decide which tests to run
 - **Automated workflows** (REST, MCP, gRPC, Agent, CI) where policy must be enforced without operator discretion
 
-The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. Strict programmatic surfaces (REST, MCP, gRPC, Agent) always use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. The orchestrator currently retains raw `ToolDispatcher::dispatch()` as a transitional exception; it must only be invoked after caller-level enforcement.
+The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. Strict programmatic surfaces (REST, MCP, gRPC, Agent) always use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. Internal helpers (e.g., the pipeline orchestrator) may use raw `ToolDispatcher::dispatch()` but only after caller-level enforcement has already been satisfied.
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -328,7 +328,7 @@ DaemonClient → Runtime::submit(RunRequest)
 | MCP | `mcp/handlers/server.rs::handle_tools_call()` | `EnforcedDispatcher::dispatch_checked()` | McpStrict | No |
 | Agent | `agent/mod.rs::execute_scan()` | `EnforcedDispatcher::dispatch_checked()` | AgentStrict | No |
 | TUI | `app/mod.rs::evaluate_policy_and_dispatch()` | `EnforcedDispatcher::dispatch_checked()` | ManualPermissive/Guarded | Yes |
-| Orchestrator | `tool/orchestrator/mod.rs::execute_stage()` | `ToolDispatcher::dispatch()` (raw) | Caller must enforce | N/A |
+| Orchestrator | `tool/orchestrator/mod.rs::execute_stage()` | `ToolDispatcher::dispatch()` (internal) | Caller must enforce before construction | N/A |
 
 ### 5.3 Passive/Analytical Commands (No Dispatch)
 
@@ -338,20 +338,15 @@ DaemonClient → Runtime::submit(RunRequest)
 | Vuln management | `vuln.rs` | CVSS scoring, triage, remediation. Pure computation. |
 | Proxy list/health | `stress.rs` | Read-only queries. |
 
-## 6. Transitional APIs and Risk Register
+## 6. Internal Dispatch and Remaining Work
 
-| Item | Location | Status | Recommended Disposition |
-|------|----------|--------|------------------------|
-| `CommandContext::ensure_scope()` / `ensure_scope_url()` | — | **Removed** (Phase 2). Scope checks are centralized in `EnforcementContext::evaluate()`. | No action needed. |
-| `CommandContext::with_execution_profile()` | — | **Removed** (Phase 2). Replaced by `with_execution_surface()` and direct `EnforcementContext` construction. | No action needed. |
-| `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs:36` | `pub(crate)`, `#[doc(hidden)]`. Used by Orchestrator. | **Restrict visibility**. Keep for Orchestrator with regression test guard. |
-| Orchestrator raw dispatch | `tool/orchestrator/mod.rs:194,210` | Raw dispatch without enforcement. Regression test allows it. | **Keep with invariant**. Callers must enforce before constructing Orchestrator. |
-| `utils::check_scope()` / `check_scope_from_url()` | `utils/scope.rs` | Legacy standalone helpers. No handler callers. | **Deprecate**. Superseded by `EnforcementContext` scope evaluation. |
-| Feature metadata duplication | Cargo.toml, README, policy metadata, tool docs | Feature descriptions exist in multiple places. | **Migrate**. Consolidate to `OperationMetadata` as single source of truth. |
-| Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | **Keep for now**. Monitor; refactor in Phase 2 if needed. |
-| Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | **Keep for now**. Domain extraction is a Phase 2+ concern. |
-| CI handler dispatch invariant | `commands/handlers/ci.rs:5` | **Tested (Phase 2)**. Regression test `ci_handler_has_no_dispatch_path`. | **Test**. Add regression test verifying no `ToolDispatcher` import in CI handler. |
-| Command registry (Phase 6) | `commands/registry.rs` | **Active (Phase 6)**. Static metadata for CLI/TUI dispatch. Pilot: 4 commands use registry-based descriptors. | **Keep**. Incremental migration; legacy fallback for non-pilot commands. |
+| Item | Location | Status | Notes |
+|------|----------|--------|-------|
+| `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs` | `pub(crate)`, `#[doc(hidden)]`. Internal implementation detail. | Used by `EnforcedDispatcher` and pipeline orchestrator. Regression test guard prevents use in strict surfaces. |
+| `utils::check_scope()` / `check_scope_from_url()` | `utils/scope.rs` | Legacy standalone helpers. No callers outside tests. | Superseded by `EnforcementContext` scope evaluation. Pending removal. |
+| Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | Monitor; refactor if needed. |
+| Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | Domain extraction is a future concern. |
+| Command registry | `commands/registry.rs` | Active. Static metadata for CLI/TUI dispatch. | Incremental migration; legacy fallback for non-pilot commands. |
 
 ## 7. Architecture Invariants
 
