@@ -233,7 +233,7 @@ impl FullReconResult {
     }
 }
 
-#[cfg(feature = "tool-api")]
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: ReconArgs,
     config: &EggsecConfig,
@@ -338,7 +338,9 @@ pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()> {
     write_recon_output(&recon, &args, spinner.has_spinner).await
 }
 
-pub use runner::{print_recon_results_string, run_full_recon};
+pub use runner::print_recon_results_string;
+#[cfg(feature = "cli")]
+pub use runner::run_full_recon;
 
 pub const FULL_RECON_PIPELINE_MODULES: &[&str] = &[
     "reverse_dns",

@@ -169,6 +169,7 @@ pub struct WafStressConfig {
     pub common: CommonHttpArgs,
 }
 
+#[cfg(feature = "cli")]
 impl From<super::super::cli::FuzzArgs> for FuzzConfig {
     fn from(args: super::super::cli::FuzzArgs) -> Self {
         Self {
@@ -230,6 +231,7 @@ impl From<super::super::cli::FuzzArgs> for FuzzConfig {
     }
 }
 
+#[cfg(feature = "cli")]
 impl From<super::super::cli::WafStressArgs> for WafStressConfig {
     fn from(args: super::super::cli::WafStressArgs) -> Self {
         Self {

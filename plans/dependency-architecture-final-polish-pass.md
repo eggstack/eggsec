@@ -640,9 +640,9 @@ implementation SHA: <pending final commit>
 closure-record-only SHA (if any): <pending>
 Python failing-test disposition: fixed - all 4443 tests pass (was 4442/4443 with one failure)
 make check-python: PASS
-eggsec-python cli feature: retained - blocked by ungated crate::cli references in scanner, waf, distributed, runtime_bridge modules
-clap reachable from Python: yes (via cli feature dependency)
-clap_complete reachable from Python: yes (via cli feature dependency)
+eggsec-python cli feature: removed - clap/clap_complete no longer reachable from Python
+clap reachable from Python: no
+clap_complete reachable from Python: no
 indicatif disposition: retained - legitimately used in engine code for progress reporting in scanners, fuzzer, loadtest, pipeline
 legacy utils scope module: removed - no production consumers, tests were legacy shim
 routine CI: Rust make check + Python make check-python

@@ -84,6 +84,7 @@ impl LoadTestRunner {
         })
     }
 
+    #[cfg(feature = "cli")]
     pub fn from_args_with_tui_mode(args: crate::cli::LoadArgs, tui_mode: bool) -> Result<Self> {
         let timeout =
             Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
@@ -107,6 +108,7 @@ impl LoadTestRunner {
         Ok(runner)
     }
 
+    #[cfg(feature = "cli")]
     pub fn from_args_with_config(
         args: crate::cli::LoadArgs,
         config: &EggsecConfig,

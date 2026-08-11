@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing;
 
+#[cfg(feature = "cli")]
 use crate::cli::EndpointScanArgs;
 use crate::config::EggsecConfig;
 
@@ -539,7 +540,7 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
     false
 }
 
-#[cfg(feature = "tool-api")]
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: EndpointScanArgs,
     config: &EggsecConfig,
@@ -636,6 +637,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: EndpointScanArgs, config: &EggsecConfig) -> Result<()> {
     if args.verbose {
         eprintln!(

@@ -90,7 +90,7 @@ CI simplification, and documentation reconciliation.
 
 - CLI parsing feature-gated behind `cli` feature
 - Logging subscriber, notifications, config watching moved to adapter crates
-- `eggsec-python` and headless consumers no longer link CLI-only dependencies by default
+- `eggsec-python` no longer enables the `cli` feature; `clap`/`clap_complete` absent from Python/headless graphs
 
 ### Phase G — Binary topology
 
@@ -149,7 +149,7 @@ Measured at commit `7b878d79` on Ubuntu 24.04 x86_64, rustc 1.97.1.
 
 ### Key dependency boundaries confirmed
 
-- CLI-only deps (clap) absent from engine/Python graphs by default
+- CLI-only deps (`clap`, `clap_complete`) absent from `eggsec-python` and headless graphs
 - `indicatif` retained in engine graph for progress reporting in scanners, fuzzer, loadtest, and pipeline modules
 - Server SQLite (rusqlite) absent from client/TUI graphs
 - One Rustls provider (ring) per artifact; no aws-lc-rs

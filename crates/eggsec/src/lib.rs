@@ -127,6 +127,7 @@ pub mod pipeline;
 pub mod probe;
 pub mod proxy;
 pub mod recon;
+#[cfg(feature = "cli")]
 pub mod runtime_bridge;
 pub mod scanner;
 #[cfg(feature = "database")]

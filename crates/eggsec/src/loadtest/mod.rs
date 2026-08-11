@@ -59,6 +59,7 @@ pub use runner::LoadTestRunner;
 /// - HTTP client construction fails
 /// - Network connectivity issues occur
 /// - Output file cannot be written
+#[cfg(feature = "cli")]
 pub async fn run_cli(
     args: crate::cli::LoadArgs,
     config: &crate::config::EggsecConfig,

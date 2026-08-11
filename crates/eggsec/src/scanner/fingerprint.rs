@@ -15,6 +15,7 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 use super::udp_fingerprint::{fingerprint_udp_services, get_default_udp_ports};
+#[cfg(feature = "cli")]
 use crate::cli::FingerprintArgs;
 use crate::config::EggsecConfig;
 
@@ -133,6 +134,7 @@ impl std::fmt::Display for FingerprintResults {
     }
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: FingerprintArgs, config: &EggsecConfig) -> Result<()> {
     let timeout_secs = if args.timeout == 5 {
         config.scan.port_timeout_secs
@@ -178,7 +180,7 @@ pub async fn run_cli(args: FingerprintArgs, config: &EggsecConfig) -> Result<()>
     Ok(())
 }
 
-#[cfg(feature = "tool-api")]
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: FingerprintArgs,
     config: &EggsecConfig,

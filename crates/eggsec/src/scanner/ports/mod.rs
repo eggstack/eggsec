@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "cli")]
 use crate::cli::PortScanArgs;
 use crate::config::EggsecConfig;
 use crate::utils::service_detection::get_service_name as get_service_name_from_utils;
@@ -105,6 +106,7 @@ impl std::fmt::Display for PortScanResults {
     }
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
     if args.verbose {
         eprintln!(
@@ -270,10 +272,10 @@ pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "tool-api")]
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub type PortFindingCallback = Box<dyn FnMut(crate::tool::response::Finding) + Send + 'static>;
 
-#[cfg(feature = "tool-api")]
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: PortScanArgs,
     config: &EggsecConfig,

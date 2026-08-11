@@ -230,28 +230,28 @@ pub const DEFAULT_SCAN_PORTS: &str = "80,443";
 
 pub const EXTENDED_SCAN_PORTS: &str = "21,22,23,25,53,80,110,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,27017,9092,9200,5672,2181,2375,2376,6443,10250,3000,5000,8000,9000,4200,5601,9090";
 
-pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
+pub fn profile_from_str(s: &str) -> Option<crate::types::ScanProfile> {
     match s.to_lowercase().as_str() {
-        "quick" => Some(crate::cli::ScanProfile::Quick),
-        "endpoint" => Some(crate::cli::ScanProfile::Endpoint),
-        "web" => Some(crate::cli::ScanProfile::Web),
-        "waf" => Some(crate::cli::ScanProfile::Waf),
-        "full" => Some(crate::cli::ScanProfile::Full),
-        "api" => Some(crate::cli::ScanProfile::Api),
-        "recon" => Some(crate::cli::ScanProfile::Recon),
-        "stealth" => Some(crate::cli::ScanProfile::Stealth),
-        "deep" => Some(crate::cli::ScanProfile::Deep),
-        "vuln" => Some(crate::cli::ScanProfile::Vuln),
-        "auth" => Some(crate::cli::ScanProfile::Auth),
-        "defense-lab" => Some(crate::cli::ScanProfile::DefenseLab),
-        "synvoid-local" => Some(crate::cli::ScanProfile::SynvoidLocal),
-        "waf-regression" => Some(crate::cli::ScanProfile::WafRegression),
-        "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
-        "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
+        "quick" => Some(crate::types::ScanProfile::Quick),
+        "endpoint" => Some(crate::types::ScanProfile::Endpoint),
+        "web" => Some(crate::types::ScanProfile::Web),
+        "waf" => Some(crate::types::ScanProfile::Waf),
+        "full" => Some(crate::types::ScanProfile::Full),
+        "api" => Some(crate::types::ScanProfile::Api),
+        "recon" => Some(crate::types::ScanProfile::Recon),
+        "stealth" => Some(crate::types::ScanProfile::Stealth),
+        "deep" => Some(crate::types::ScanProfile::Deep),
+        "vuln" => Some(crate::types::ScanProfile::Vuln),
+        "auth" => Some(crate::types::ScanProfile::Auth),
+        "defense-lab" => Some(crate::types::ScanProfile::DefenseLab),
+        "synvoid-local" => Some(crate::types::ScanProfile::SynvoidLocal),
+        "waf-regression" => Some(crate::types::ScanProfile::WafRegression),
+        "protocol-edge" => Some(crate::types::ScanProfile::ProtocolEdge),
+        "nse-safe" => Some(crate::types::ScanProfile::NseSafe),
         "db-regression" | "db_regression" | "dbregression" => {
-            Some(crate::cli::ScanProfile::DbRegression)
+            Some(crate::types::ScanProfile::DbRegression)
         }
-        "web-proxy" | "webproxy" | "proxy" => Some(crate::cli::ScanProfile::WebProxy),
+        "web-proxy" | "webproxy" | "proxy" => Some(crate::types::ScanProfile::WebProxy),
         _ => None,
     }
 }

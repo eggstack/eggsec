@@ -8,6 +8,7 @@
 use std::fs;
 use std::path::Path;
 
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -99,7 +100,8 @@ pub fn check_config_file_permissions(_path: &Path) {}
 /// Canonical output format for reports and CLI output.
 ///
 /// Used by both CLI argument parsing and configuration deserialization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
@@ -116,7 +118,8 @@ pub enum OutputFormat {
 /// Scan profile controlling pipeline stage selection and risk budget.
 ///
 /// Used by both CLI argument parsing and pipeline/engine configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum ScanProfile {
     Quick,
     Endpoint,

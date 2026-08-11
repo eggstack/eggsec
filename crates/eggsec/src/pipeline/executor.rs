@@ -74,14 +74,17 @@ impl Pipeline {
         }
     }
 
+    #[cfg(feature = "cli")]
     pub fn from_args(args: ScanArgs) -> Self {
         Self::from_args_with_tui_mode(args, None, false)
     }
 
+    #[cfg(feature = "cli")]
     pub fn from_args_with_config(args: ScanArgs, config: &EggsecConfig) -> Self {
         Self::from_args_with_tui_mode(args, Some(config), false)
     }
 
+    #[cfg(feature = "cli")]
     pub fn from_args_with_tui_mode(
         args: ScanArgs,
         config: Option<&EggsecConfig>,
@@ -557,15 +560,26 @@ impl Pipeline {
             Stage::PortScan => self.run_port_scan().await,
             Stage::Fingerprint => self.run_fingerprint().await,
             Stage::EndpointScan => self.run_endpoint_scan().await,
+            #[cfg(feature = "cli")]
             Stage::Fuzz => self.run_fuzz().await,
+            #[cfg(feature = "cli")]
             Stage::LoadTest => self.run_load_test().await,
+            #[cfg(feature = "cli")]
             Stage::Waf => self.run_waf().await,
+            #[cfg(feature = "cli")]
             Stage::Recon => self.run_recon().await,
             Stage::Vuln => self.run_vuln().await,
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => self.run_db_pentest_stage().await,
             #[cfg(feature = "web-proxy")]
             Stage::WebProxy => self.run_web_proxy_stage().await,
+            #[cfg(not(feature = "cli"))]
+            Stage::Fuzz | Stage::LoadTest | Stage::Waf | Stage::Recon => {
+                Err(crate::error::EggsecError::Config(format!(
+                    "stage {:?} requires the `cli` feature",
+                    stage
+                )))
+            }
         }
     }
 
@@ -1001,6 +1015,7 @@ impl Pipeline {
         Ok(())
     }
 
+    #[cfg(feature = "cli")]
     async fn run_fuzz(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1086,6 +1101,7 @@ impl Pipeline {
         Ok(())
     }
 
+    #[cfg(feature = "cli")]
     async fn run_load_test(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1123,6 +1139,7 @@ impl Pipeline {
         Ok(())
     }
 
+    #[cfg(feature = "cli")]
     async fn run_waf(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1157,6 +1174,7 @@ impl Pipeline {
         Ok(())
     }
 
+    #[cfg(feature = "cli")]
     async fn run_recon(&self) -> Result<()> {
         let args = crate::cli::ReconArgs {
             target: self.target.clone(),
