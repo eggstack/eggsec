@@ -32,15 +32,23 @@ Ordered implementation plans:
 9. [`dependency-architecture-phase-i-ci-verification-simplification.md`](dependency-architecture-phase-i-ci-verification-simplification.md)
 10. [`dependency-architecture-phase-j-measurement-and-closure.md`](dependency-architecture-phase-j-measurement-and-closure.md)
 
-The A–J implementation substantially landed, but final review found a small set
-of security-dependency, CI-contract, measurement, and closure-record issues that
-must be corrected before this line is treated as fully closed.
+The A–J roadmap is implemented. The first corrective closure pass is also
+implemented and resolved the active PyO3/quick-xml advisories, simplified routine
+CI, and replaced estimated artifact measurements with observed values:
 
-Active corrective handoff:
 [`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
 
-The corrective pass is intentionally narrow. It resolves active PyO3/quick-xml
-advisory disposition, moves compatibility/MSRV verification out of the routine
-iteration loop, replaces estimated artifact sizes with measured values, and
-reconciles accepted architecture residuals with the closure record. Package
-publication remains manual and is outside all implementation plans.
+Final review found a small set of remaining closure/polish defects: the canonical
+Python check was recorded as PASS despite one failing test, the Python binding
+still enables the engine `cli` feature, progress/UI dependency ownership needs
+one final graph-level disposition, and several active docs/scope-helper remnants
+still describe the pre-corrective state.
+
+Active final handoff:
+[`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
+
+This final pass is intentionally bounded to genuine Python CI success, Python/CLI
+dependency separation, small dependency/documentation cleanup, and exact-final-SHA
+validation. It does not reopen authorization, scope/DNS semantics, metadata,
+daemon topology, dependency modernization, or CI architecture. Package
+publication and release cadence remain manual maintainer actions.
