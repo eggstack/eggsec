@@ -115,7 +115,7 @@ impl AiAnalysisResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("reassessed_severity", &self.reassessed_severity)?;
         dict.set_item("exploitability", &self.exploitability)?;
         dict.set_item("impact", &self.impact)?;
@@ -146,7 +146,7 @@ pub struct AiPayloadSuggestionPy {
 #[pymethods]
 impl AiPayloadSuggestionPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("payload", &self.payload)?;
         dict.set_item("description", &self.description)?;
         dict.set_item("expected_result", &self.expected_result)?;
@@ -172,7 +172,7 @@ pub struct AiWafBypassSuggestionPy {
 #[pymethods]
 impl AiWafBypassSuggestionPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("technique", &self.technique)?;
         dict.set_item("payload", &self.payload)?;
         dict.set_item("explanation", &self.explanation)?;
@@ -242,7 +242,7 @@ impl ScriptMetadataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("description", &self.description)?;
         dict.set_item("author", &self.author)?;
         dict.set_item("version", &self.version)?;
@@ -280,7 +280,7 @@ impl GeneratedScriptPy {
 #[pymethods]
 impl GeneratedScriptPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("code", &self.code)?;
         dict.set_item("language", self.language.as_str())?;
         dict.set_item("metadata", self.metadata.to_dict(py)?)?;
@@ -387,7 +387,7 @@ pub fn ai_analyze_finding(
     provider: String,
     model: Option<String>,
 ) -> PyResult<AiAnalysisResultPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             let provider_enum = eggsec::ai::Provider::from_str(&provider);
             let resolved_model = model.unwrap_or_else(|| provider_enum.default_model().to_string());
@@ -488,7 +488,7 @@ pub fn ai_generate_payloads(
     api_key: String,
     provider: String,
 ) -> PyResult<Vec<AiPayloadSuggestionPy>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             let provider_enum = eggsec::ai::Provider::from_str(&provider);
             let resolved_model = provider_enum.default_model().to_string();
@@ -538,7 +538,7 @@ pub fn ai_suggest_waf_bypass(
     api_key: String,
     provider: String,
 ) -> PyResult<Vec<AiWafBypassSuggestionPy>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             let provider_enum = eggsec::ai::Provider::from_str(&provider);
             let resolved_model = provider_enum.default_model().to_string();

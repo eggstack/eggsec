@@ -25,6 +25,6 @@ where
     E: std::fmt::Display + Send + 'static,
 {
     let runtime = get_runtime();
-    py.allow_threads(move || runtime.block_on(future))
+    py.detach(move || runtime.block_on(future))
         .map_err(|e| ScanError::new_err(format!("Operation failed: {}", e)))
 }

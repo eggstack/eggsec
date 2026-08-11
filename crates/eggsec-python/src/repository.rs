@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -367,10 +368,10 @@ impl FindingRepositoryPy {
     /// Serialize the repository to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let findings = self.findings.read().map(|f| f.to_vec()).unwrap_or_default();
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for f in &findings {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", &f.id)?;
             item_dict.set_item("title", &f.title)?;
             item_dict.set_item("severity", &f.severity)?;
@@ -439,7 +440,7 @@ impl AssessmentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("target", &self.target)?;
@@ -520,10 +521,10 @@ impl AssessmentRepositoryPy {
             .read()
             .map(|a| a.values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for a in &assessments {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", &a.id)?;
             item_dict.set_item("name", &a.name)?;
             item_dict.set_item("target", &a.target)?;

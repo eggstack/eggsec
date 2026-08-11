@@ -889,7 +889,7 @@ class TestSqliteMigration:
 
     def test_migration_result_no_constructor(self):
         SMR = _import_or_skip("SqliteMigrationResult")
-        with pytest.raises(TypeError, match="No constructor defined"):
+        with pytest.raises(TypeError, match="cannot create|No constructor defined"):
             SMR(applied=True, from_version=0, to_version=1, migrations_applied=[])
 
 

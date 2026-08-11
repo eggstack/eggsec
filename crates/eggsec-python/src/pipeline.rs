@@ -1,3 +1,5 @@
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -39,7 +41,7 @@ impl OutputRef {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("step_id", &self.step_id)?;
         dict.set_item("path", &self.path)?;
         Ok(dict.into())
@@ -106,7 +108,7 @@ impl RetryPolicy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("max_attempts", self.max_attempts)?;
         dict.set_item("retryable_errors", &self.retryable_errors)?;
         dict.set_item("backoff_ms", self.backoff_ms)?;
@@ -198,7 +200,7 @@ impl FailurePolicy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("type", self.name())?;
         dict.set_item("value", *self as i32)?;
         Ok(dict.into())
@@ -274,7 +276,7 @@ impl PipelineStep {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("request", self.request.to_dict(py)?)?;
         dict.set_item("condition", &self.condition)?;
@@ -366,10 +368,10 @@ impl StepResult {
     }
 
     pub(crate) fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("step_name", &self.step_name)?;
 
-        let status_dict = PyDict::new_bound(py);
+        let status_dict = PyDict::new(py);
         status_dict.set_item("type", self.status.name())?;
         match &self.status {
             ExecutionStatus::Failed { error } => {
@@ -564,10 +566,10 @@ impl PipelineResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
 
-        let status_dict = PyDict::new_bound(py);
+        let status_dict = PyDict::new(py);
         status_dict.set_item("type", self.status.name())?;
         match &self.status {
             ExecutionStatus::Failed { error } => {
@@ -583,16 +585,16 @@ impl PipelineResult {
         }
         dict.set_item("status", status_dict)?;
 
-        let steps_list = PyList::empty_bound(py);
+        let steps_list = PyList::empty(py);
         for sr in &self.step_results {
             steps_list.append(sr.to_dict(py)?)?;
         }
         dict.set_item("step_results", steps_list)?;
         dict.set_item("total_duration_ms", self.total_duration_ms)?;
 
-        let events_list = PyList::empty_bound(py);
+        let events_list = PyList::empty(py);
         for ev in &self.events {
-            let obj: PyObject = ev.clone().into_py(py);
+            let obj: PyObject = ev.clone().into_py_any(py).unwrap();
             events_list.append(obj)?;
         }
         dict.set_item("events", events_list)?;
@@ -910,7 +912,9 @@ impl Pipeline {
                 events.push(wrap_event(
                     py,
                     "pipeline.resumed_from_checkpoint".to_string(),
-                    StageLifecycleEvent::new(self.name.clone(), "resumed".to_string()).into_py(py),
+                    StageLifecycleEvent::new(self.name.clone(), "resumed".to_string())
+                        .into_py_any(py)
+                        .unwrap(),
                     Some(correlation_id.clone()),
                     None,
                 )?);
@@ -921,7 +925,9 @@ impl Pipeline {
         events.push(wrap_event(
             py,
             "pipeline.started".to_string(),
-            StageLifecycleEvent::new(self.name.clone(), "started".to_string()).into_py(py),
+            StageLifecycleEvent::new(self.name.clone(), "started".to_string())
+                .into_py_any(py)
+                .unwrap(),
             Some(correlation_id.clone()),
             None,
         )?);
@@ -981,7 +987,9 @@ impl Pipeline {
                 events.push(wrap_event(
                     py,
                     "step.started".to_string(),
-                    StageLifecycleEvent::new(step.name.clone(), "started".to_string()).into_py(py),
+                    StageLifecycleEvent::new(step.name.clone(), "started".to_string())
+                        .into_py_any(py)
+                        .unwrap(),
                     Some(correlation_id.clone()),
                     None,
                 )?);
@@ -1040,7 +1048,9 @@ impl Pipeline {
                     events.push(wrap_event(
                         py,
                         "pipeline.failure".to_string(),
-                        FailureEvent::new("step_failure".to_string(), error_msg, false).into_py(py),
+                        FailureEvent::new("step_failure".to_string(), error_msg, false)
+                            .into_py_any(py)
+                            .unwrap(),
                         Some(correlation_id.clone()),
                         None,
                     )?);
@@ -1056,7 +1066,9 @@ impl Pipeline {
                     events.push(wrap_event(
                         py,
                         "pipeline.failure".to_string(),
-                        FailureEvent::new("step_failure".to_string(), error_msg, false).into_py(py),
+                        FailureEvent::new("step_failure".to_string(), error_msg, false)
+                            .into_py_any(py)
+                            .unwrap(),
                         Some(correlation_id.clone()),
                         None,
                     )?);
@@ -1086,7 +1098,8 @@ impl Pipeline {
                         py,
                         "step.started".to_string(),
                         StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                            .into_py(py),
+                            .into_py_any(py)
+                            .unwrap(),
                         Some(correlation_id.clone()),
                         None,
                     )?);
@@ -1154,7 +1167,8 @@ impl Pipeline {
                                 py,
                                 "pipeline.failure".to_string(),
                                 FailureEvent::new("step_failure".to_string(), error_msg, false)
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -1183,7 +1197,8 @@ impl Pipeline {
             py,
             "pipeline.completed".to_string(),
             CompletionEvent::new(py, overall_status.name().to_string(), None, total_duration)
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
             Some(correlation_id),
             None,
         )?);
@@ -1225,7 +1240,9 @@ impl Pipeline {
         events.push(wrap_event(
             py,
             "pipeline.resumed".to_string(),
-            StageLifecycleEvent::new(self.name.clone(), "resumed".to_string()).into_py(py),
+            StageLifecycleEvent::new(self.name.clone(), "resumed".to_string())
+                .into_py_any(py)
+                .unwrap(),
             Some(correlation_id.clone()),
             None,
         )?);
@@ -1273,7 +1290,9 @@ impl Pipeline {
                 events.push(wrap_event(
                     py,
                     "step.started".to_string(),
-                    StageLifecycleEvent::new(step.name.clone(), "started".to_string()).into_py(py),
+                    StageLifecycleEvent::new(step.name.clone(), "started".to_string())
+                        .into_py_any(py)
+                        .unwrap(),
                     Some(correlation_id.clone()),
                     None,
                 )?);
@@ -1308,7 +1327,9 @@ impl Pipeline {
                     events.push(wrap_event(
                         py,
                         "pipeline.failure".to_string(),
-                        FailureEvent::new("step_failure".to_string(), error_msg, false).into_py(py),
+                        FailureEvent::new("step_failure".to_string(), error_msg, false)
+                            .into_py_any(py)
+                            .unwrap(),
                         Some(correlation_id.clone()),
                         None,
                     )?);
@@ -1335,7 +1356,8 @@ impl Pipeline {
                         py,
                         "step.started".to_string(),
                         StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                            .into_py(py),
+                            .into_py_any(py)
+                            .unwrap(),
                         Some(correlation_id.clone()),
                         None,
                     )?);
@@ -1377,7 +1399,8 @@ impl Pipeline {
                                 py,
                                 "pipeline.failure".to_string(),
                                 FailureEvent::new("step_failure".to_string(), error_msg, false)
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -1404,7 +1427,8 @@ impl Pipeline {
             py,
             "pipeline.completed".to_string(),
             CompletionEvent::new(py, overall_status.name().to_string(), None, total_duration)
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
             Some(correlation_id),
             None,
         )?);
@@ -1575,7 +1599,7 @@ impl AsyncPipeline {
     /// Execute all steps asynchronously.
     ///
     /// The future is spawned on a background thread.  Each step acquires
-    /// the GIL via `Python::with_gil` for dispatch, then releases it so
+    /// the GIL via `Python::attach` for dispatch, then releases it so
     /// other Python tasks can make progress while I/O is in flight.
     fn run(&self, _py: Python<'_>, engine: &AsyncEngine) -> PyResult<PyFuture> {
         // Validate the dependency graph synchronously before spawning.
@@ -1618,13 +1642,13 @@ impl AsyncPipeline {
             let mut completed_set: HashSet<String> = completed_steps.iter().cloned().collect();
 
             // Emit pipeline started — acquire GIL for event construction.
-            Python::with_gil(|py| -> PyResult<()> {
+            Python::attach(|py| -> PyResult<()> {
                 let started_event =
                     StageLifecycleEvent::new(pipeline_name.clone(), "started".to_string());
                 events.push(wrap_event(
                     py,
                     "pipeline.started".to_string(),
-                    started_event.into_py(py),
+                    started_event.into_py_any(py).unwrap(),
                     Some(correlation_id.clone()),
                     None,
                 )?);
@@ -1675,12 +1699,13 @@ impl AsyncPipeline {
                     }
 
                     // Emit step.started
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         events.push(wrap_event(
                             py,
                             "step.started".to_string(),
                             StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                             Some(correlation_id.clone()),
                             None,
                         )?);
@@ -1690,8 +1715,7 @@ impl AsyncPipeline {
                     // Dispatch (GIL acquired/released inside dispatch)
                     let step_request = step.request.clone();
                     let step_start = std::time::Instant::now();
-                    let result =
-                        Python::with_gil(|py| sync_engine.dispatch(py, step_request, None));
+                    let result = Python::attach(|py| sync_engine.dispatch(py, step_request, None));
                     let duration = step_start.elapsed().as_millis() as u64;
 
                     // Emit step.completed / step.failed
@@ -1700,12 +1724,13 @@ impl AsyncPipeline {
                     } else {
                         "failed"
                     };
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         events.push(wrap_event(
                             py,
                             format!("step.{step_status}"),
                             StageLifecycleEvent::new(step.name.clone(), step_status.to_string())
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                             Some(correlation_id.clone()),
                             None,
                         )?);
@@ -1734,7 +1759,7 @@ impl AsyncPipeline {
 
                                     let retry_request = step.request.clone();
                                     let retry_start = std::time::Instant::now();
-                                    let retry_result = Python::with_gil(|py| {
+                                    let retry_result = Python::attach(|py| {
                                         sync_engine.dispatch(py, retry_request, None)
                                     });
                                     let retry_duration = retry_start.elapsed().as_millis() as u64;
@@ -1763,7 +1788,7 @@ impl AsyncPipeline {
                     if succeeded {
                         if let Some(ref store) = cp_store {
                             // Acquire GIL for checkpoint serialization
-                            Python::with_gil(|_py| -> PyResult<()> {
+                            Python::attach(|_py| -> PyResult<()> {
                                 save_step_checkpoint(
                                     store,
                                     &pipeline_id,
@@ -1798,7 +1823,7 @@ impl AsyncPipeline {
                             ExecutionStatus::Failed { error } => error.clone(),
                             other => format!("Step failed: {}", other.name()),
                         };
-                        Python::with_gil(|py| -> PyResult<()> {
+                        Python::attach(|py| -> PyResult<()> {
                             events.push(wrap_event(
                                 py,
                                 "pipeline.failure".to_string(),
@@ -1807,7 +1832,8 @@ impl AsyncPipeline {
                                     error_msg.clone(),
                                     false,
                                 )
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -1833,13 +1859,14 @@ impl AsyncPipeline {
                     }
 
                     // Emit step.started for all steps in the group
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         for step in &steps_to_run {
                             events.push(wrap_event(
                                 py,
                                 "step.started".to_string(),
                                 StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -1857,7 +1884,7 @@ impl AsyncPipeline {
                     for step in &steps_to_run {
                         if !evaluate_condition(step, &step_results)? {
                             // Emit skipped event
-                            Python::with_gil(|py| -> PyResult<()> {
+                            Python::attach(|py| -> PyResult<()> {
                                 events.push(wrap_event(
                                     py,
                                     "step.skipped".to_string(),
@@ -1865,7 +1892,8 @@ impl AsyncPipeline {
                                         step.name.clone(),
                                         "skipped".to_string(),
                                     )
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                     Some(correlation_id.clone()),
                                     None,
                                 )?);
@@ -1889,9 +1917,8 @@ impl AsyncPipeline {
 
                             let step_start = std::time::Instant::now();
                             let step_request = step_clone.request.clone();
-                            let result = Python::with_gil(|py| {
-                                engine_clone.dispatch(py, step_request, None)
-                            });
+                            let result =
+                                Python::attach(|py| engine_clone.dispatch(py, step_request, None));
                             let duration = step_start.elapsed().as_millis() as u64;
 
                             let mut local_events: Vec<EventEnvelope> = Vec::new();
@@ -1900,7 +1927,7 @@ impl AsyncPipeline {
                             } else {
                                 "failed"
                             };
-                            Python::with_gil(|py| -> PyResult<()> {
+                            Python::attach(|py| -> PyResult<()> {
                                 local_events.push(wrap_event(
                                     py,
                                     format!("step.{step_status}"),
@@ -1908,7 +1935,8 @@ impl AsyncPipeline {
                                         step_clone.name.clone(),
                                         step_status.to_string(),
                                     )
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                     Some(corr_id.clone()),
                                     None,
                                 )?);
@@ -1941,7 +1969,7 @@ impl AsyncPipeline {
 
                                             let retry_request = step_clone.request.clone();
                                             let retry_start = std::time::Instant::now();
-                                            let retry_result = Python::with_gil(|py| {
+                                            let retry_result = Python::attach(|py| {
                                                 engine_clone.dispatch(py, retry_request, None)
                                             });
                                             let retry_duration =
@@ -1952,7 +1980,7 @@ impl AsyncPipeline {
                                             } else {
                                                 "failed"
                                             };
-                                            Python::with_gil(|py| -> PyResult<()> {
+                                            Python::attach(|py| -> PyResult<()> {
                                                 local_events.push(wrap_event(
                                                     py,
                                                     format!("step.retry.{retry_status}"),
@@ -1960,7 +1988,8 @@ impl AsyncPipeline {
                                                         step_clone.name.clone(),
                                                         format!("retry_{retry_status}"),
                                                     )
-                                                    .into_py(py),
+                                                    .into_py_any(py)
+                                                    .unwrap(),
                                                     Some(corr_id.clone()),
                                                     None,
                                                 )?);
@@ -2005,7 +2034,7 @@ impl AsyncPipeline {
                             }
                             Ok(Err(e)) => {
                                 // Task returned a Python error — create a failed result
-                                Python::with_gil(|py| -> PyResult<()> {
+                                Python::attach(|py| -> PyResult<()> {
                                     events.push(wrap_event(
                                         py,
                                         "step.failed".to_string(),
@@ -2013,7 +2042,8 @@ impl AsyncPipeline {
                                             name.clone(),
                                             "failed".to_string(),
                                         )
-                                        .into_py(py),
+                                        .into_py_any(py)
+                                        .unwrap(),
                                         Some(correlation_id.clone()),
                                         None,
                                     )?);
@@ -2058,7 +2088,7 @@ impl AsyncPipeline {
                         let succeeded = sr.is_success();
                         if succeeded {
                             if let Some(ref store) = cp_store {
-                                Python::with_gil(|_py| -> PyResult<()> {
+                                Python::attach(|_py| -> PyResult<()> {
                                     save_step_checkpoint(
                                         store,
                                         &pipeline_id,
@@ -2084,7 +2114,7 @@ impl AsyncPipeline {
                                     ExecutionStatus::Failed { error } => error.clone(),
                                     other => format!("Step failed: {}", other.name()),
                                 };
-                                Python::with_gil(|py| -> PyResult<()> {
+                                Python::attach(|py| -> PyResult<()> {
                                     events.push(wrap_event(
                                         py,
                                         "pipeline.failure".to_string(),
@@ -2093,7 +2123,8 @@ impl AsyncPipeline {
                                             error_msg.clone(),
                                             false,
                                         )
-                                        .into_py(py),
+                                        .into_py_any(py)
+                                        .unwrap(),
                                         Some(correlation_id.clone()),
                                         None,
                                     )?);
@@ -2119,7 +2150,7 @@ impl AsyncPipeline {
             let total_duration = start.elapsed().as_millis() as u64;
 
             // Emit pipeline.completed
-            Python::with_gil(|py| -> PyResult<()> {
+            Python::attach(|py| -> PyResult<()> {
                 events.push(wrap_event(
                     py,
                     "pipeline.completed".to_string(),
@@ -2129,7 +2160,8 @@ impl AsyncPipeline {
                         None,
                         total_duration,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     Some(correlation_id),
                     None,
                 )?);
@@ -2190,12 +2222,13 @@ impl AsyncPipeline {
             let correlation_id = format!("pipeline-resume-async-{}", start.elapsed().as_millis());
             let mut retried_steps: u32 = 0;
 
-            Python::with_gil(|py| -> PyResult<()> {
+            Python::attach(|py| -> PyResult<()> {
                 events.push(wrap_event(
                     py,
                     "pipeline.resumed".to_string(),
                     StageLifecycleEvent::new(pipeline_name.clone(), "resumed".to_string())
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                     Some(correlation_id.clone()),
                     None,
                 )?);
@@ -2241,12 +2274,13 @@ impl AsyncPipeline {
                         continue;
                     }
 
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         events.push(wrap_event(
                             py,
                             "step.started".to_string(),
                             StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                             Some(correlation_id.clone()),
                             None,
                         )?);
@@ -2255,8 +2289,7 @@ impl AsyncPipeline {
 
                     let step_request = step.request.clone();
                     let step_start = std::time::Instant::now();
-                    let result =
-                        Python::with_gil(|py| sync_engine.dispatch(py, step_request, None));
+                    let result = Python::attach(|py| sync_engine.dispatch(py, step_request, None));
                     let duration = step_start.elapsed().as_millis() as u64;
 
                     let step_status = if result.is_success() {
@@ -2264,12 +2297,13 @@ impl AsyncPipeline {
                     } else {
                         "failed"
                     };
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         events.push(wrap_event(
                             py,
                             format!("step.{step_status}"),
                             StageLifecycleEvent::new(step.name.clone(), step_status.to_string())
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                             Some(correlation_id.clone()),
                             None,
                         )?);
@@ -2297,7 +2331,7 @@ impl AsyncPipeline {
 
                                     let retry_request = step.request.clone();
                                     let retry_start = std::time::Instant::now();
-                                    let retry_result = Python::with_gil(|py| {
+                                    let retry_result = Python::attach(|py| {
                                         sync_engine.dispatch(py, retry_request, None)
                                     });
                                     let retry_duration = retry_start.elapsed().as_millis() as u64;
@@ -2337,7 +2371,7 @@ impl AsyncPipeline {
                             ExecutionStatus::Failed { error } => error.clone(),
                             other => format!("Step failed: {}", other.name()),
                         };
-                        Python::with_gil(|py| -> PyResult<()> {
+                        Python::attach(|py| -> PyResult<()> {
                             events.push(wrap_event(
                                 py,
                                 "pipeline.failure".to_string(),
@@ -2346,7 +2380,8 @@ impl AsyncPipeline {
                                     error_msg.clone(),
                                     false,
                                 )
-                                .into_py(py),
+                                .into_py_any(py)
+                                .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -2370,13 +2405,14 @@ impl AsyncPipeline {
                         continue;
                     }
 
-                    Python::with_gil(|py| -> PyResult<()> {
+                    Python::attach(|py| -> PyResult<()> {
                         for step in &steps_to_run {
                             events.push(wrap_event(
                                 py,
                                 "step.started".to_string(),
                                 StageLifecycleEvent::new(step.name.clone(), "started".to_string())
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                 Some(correlation_id.clone()),
                                 None,
                             )?);
@@ -2393,7 +2429,7 @@ impl AsyncPipeline {
 
                     for step in &steps_to_run {
                         if !evaluate_condition(step, &step_results)? {
-                            Python::with_gil(|py| -> PyResult<()> {
+                            Python::attach(|py| -> PyResult<()> {
                                 events.push(wrap_event(
                                     py,
                                     "step.skipped".to_string(),
@@ -2401,7 +2437,8 @@ impl AsyncPipeline {
                                         step.name.clone(),
                                         "skipped".to_string(),
                                     )
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                     Some(correlation_id.clone()),
                                     None,
                                 )?);
@@ -2425,9 +2462,8 @@ impl AsyncPipeline {
 
                             let step_start = std::time::Instant::now();
                             let step_request = step_clone.request.clone();
-                            let result = Python::with_gil(|py| {
-                                engine_clone.dispatch(py, step_request, None)
-                            });
+                            let result =
+                                Python::attach(|py| engine_clone.dispatch(py, step_request, None));
                             let duration = step_start.elapsed().as_millis() as u64;
 
                             let mut local_events: Vec<EventEnvelope> = Vec::new();
@@ -2436,7 +2472,7 @@ impl AsyncPipeline {
                             } else {
                                 "failed"
                             };
-                            Python::with_gil(|py| -> PyResult<()> {
+                            Python::attach(|py| -> PyResult<()> {
                                 local_events.push(wrap_event(
                                     py,
                                     format!("step.{step_status}"),
@@ -2444,7 +2480,8 @@ impl AsyncPipeline {
                                         step_clone.name.clone(),
                                         step_status.to_string(),
                                     )
-                                    .into_py(py),
+                                    .into_py_any(py)
+                                    .unwrap(),
                                     Some(corr_id.clone()),
                                     None,
                                 )?);
@@ -2476,7 +2513,7 @@ impl AsyncPipeline {
 
                                             let retry_request = step_clone.request.clone();
                                             let retry_start = std::time::Instant::now();
-                                            let retry_result = Python::with_gil(|py| {
+                                            let retry_result = Python::attach(|py| {
                                                 engine_clone.dispatch(py, retry_request, None)
                                             });
                                             let retry_duration =
@@ -2487,7 +2524,7 @@ impl AsyncPipeline {
                                             } else {
                                                 "failed"
                                             };
-                                            Python::with_gil(|py| -> PyResult<()> {
+                                            Python::attach(|py| -> PyResult<()> {
                                                 local_events.push(wrap_event(
                                                     py,
                                                     format!("step.retry.{retry_status}"),
@@ -2495,7 +2532,8 @@ impl AsyncPipeline {
                                                         step_clone.name.clone(),
                                                         format!("retry_{retry_status}"),
                                                     )
-                                                    .into_py(py),
+                                                    .into_py_any(py)
+                                                    .unwrap(),
                                                     Some(corr_id.clone()),
                                                     None,
                                                 )?);
@@ -2539,7 +2577,7 @@ impl AsyncPipeline {
                                 group_results.push((name, sr));
                             }
                             Ok(Err(e)) => {
-                                Python::with_gil(|py| -> PyResult<()> {
+                                Python::attach(|py| -> PyResult<()> {
                                     events.push(wrap_event(
                                         py,
                                         "step.failed".to_string(),
@@ -2547,7 +2585,8 @@ impl AsyncPipeline {
                                             name.clone(),
                                             "failed".to_string(),
                                         )
-                                        .into_py(py),
+                                        .into_py_any(py)
+                                        .unwrap(),
                                         Some(correlation_id.clone()),
                                         None,
                                     )?);
@@ -2598,7 +2637,7 @@ impl AsyncPipeline {
                                     ExecutionStatus::Failed { error } => error.clone(),
                                     other => format!("Step failed: {}", other.name()),
                                 };
-                                Python::with_gil(|py| -> PyResult<()> {
+                                Python::attach(|py| -> PyResult<()> {
                                     events.push(wrap_event(
                                         py,
                                         "pipeline.failure".to_string(),
@@ -2607,7 +2646,8 @@ impl AsyncPipeline {
                                             error_msg.clone(),
                                             false,
                                         )
-                                        .into_py(py),
+                                        .into_py_any(py)
+                                        .unwrap(),
                                         Some(correlation_id.clone()),
                                         None,
                                     )?);
@@ -2632,7 +2672,7 @@ impl AsyncPipeline {
 
             let total_duration = start.elapsed().as_millis() as u64;
 
-            Python::with_gil(|py| -> PyResult<()> {
+            Python::attach(|py| -> PyResult<()> {
                 events.push(wrap_event(
                     py,
                     "pipeline.completed".to_string(),
@@ -2642,7 +2682,8 @@ impl AsyncPipeline {
                         None,
                         total_duration,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     Some(correlation_id),
                     None,
                 )?);
@@ -2738,7 +2779,9 @@ fn execute_step_with_retry(
     events.push(wrap_event(
         py,
         format!("step.{}", step_status),
-        StageLifecycleEvent::new(step.name.clone(), step_status).into_py(py),
+        StageLifecycleEvent::new(step.name.clone(), step_status)
+            .into_py_any(py)
+            .unwrap(),
         Some(correlation_id.to_string()),
         None,
     )?);
@@ -2779,7 +2822,8 @@ fn execute_step_with_retry(
                             step.name.clone(),
                             format!("retry_{}", retry_status),
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         Some(correlation_id.to_string()),
                         None,
                     )?);

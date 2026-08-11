@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 

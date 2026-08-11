@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::json;
@@ -412,7 +413,7 @@ impl ToolDescriptorPy {
 #[pymethods]
 impl ToolDescriptorPy {
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("tool_id", &self.tool_id)?;
         dict.set_item("operation_id", &self.operation_id)?;
         dict.set_item("title", &self.title)?;
@@ -731,7 +732,7 @@ impl OperationToolViewPy {
 
     /// Serialize all fields to a Python dict.
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("descriptor", &self.descriptor.to_dict(py)?)?;
         dict.set_item("request_type_name", &self.request_type_name)?;
         dict.set_item("result_type_name", &self.result_type_name)?;
@@ -817,7 +818,7 @@ pub struct ValidationReportPy {
 impl ValidationReportPy {
     /// Serialize all fields to a Python dict.
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("valid", self.valid)?;
         dict.set_item("errors", &self.errors)?;
         dict.set_item("warnings", &self.warnings)?;
@@ -901,10 +902,10 @@ impl SchemaGeneratorPy {
     ///     dict[str, dict]: Map of tool_id to {input_schema, output_schema}.
     #[staticmethod]
     fn all_schemas(py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for &op in StableOperation::ALL {
             let tool_id = op.id();
-            let entry = PyDict::new_bound(py);
+            let entry = PyDict::new(py);
 
             if let Some(input) = Self::generate_input_schema_for_tool(tool_id) {
                 let input_str = serde_json::to_string_pretty(&input).unwrap_or_default();
@@ -1800,14 +1801,14 @@ fn pyobject_to_json(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
     if let Ok(v) = obj.extract::<String>() {
         return Ok(serde_json::Value::String(v));
     }
-    if let Ok(list) = obj.downcast::<pyo3::types::PyList>() {
+    if let Ok(list) = obj.cast::<pyo3::types::PyList>() {
         let mut arr = Vec::new();
         for item in list.iter() {
             arr.push(pyobject_to_json(&item)?);
         }
         return Ok(serde_json::Value::Array(arr));
     }
-    if let Ok(dict) = obj.downcast::<PyDict>() {
+    if let Ok(dict) = obj.cast::<PyDict>() {
         return pydict_to_json(dict);
     }
     if obj.is_none() {
@@ -1879,8 +1880,8 @@ impl OpenApiAdapterPy {
         let input_schema_str = descriptor.input_schema.as_deref()?;
         let input_schema: serde_json::Value = serde_json::from_str(input_schema_str).ok()?;
 
-        Python::with_gil(|py| {
-            let path_item = PyDict::new_bound(py);
+        Python::attach(|py| {
+            let path_item = PyDict::new(py);
 
             // Build parameters from schema properties
             let mut parameters = Vec::new();
@@ -1936,7 +1937,7 @@ impl OpenApiAdapterPy {
             });
 
             let json_str = serde_json::to_string(&operation_json).ok()?;
-            let json_mod = py.import_bound("json").ok()?;
+            let json_mod = py.import("json").ok()?;
             let op_obj = json_mod.call_method1("loads", (json_str,)).ok()?;
 
             path_item.set_item("post", op_obj).ok()?;
@@ -1971,7 +1972,7 @@ impl OpenApiAdapterPy {
         // Convert to Python dict
         let json_str = serde_json::to_string(&spec)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let json_mod = py.import_bound("json")?;
+        let json_mod = py.import("json")?;
         let obj = json_mod.call_method1("loads", (json_str,))?;
         Ok(obj.into())
     }

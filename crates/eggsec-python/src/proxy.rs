@@ -239,7 +239,7 @@ impl ProxyConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("rotation_strategy", self.rotation_strategy.as_str())?;
         dict.set_item("health_check_enabled", self.health_check_enabled)?;
         dict.set_item(
@@ -396,7 +396,7 @@ impl ProxyEntryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("proxy_type", self.proxy_type.as_str())?;
         dict.set_item("address", &self.address)?;
@@ -512,7 +512,7 @@ impl HealthCheckResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("proxy_url", &self.proxy_url)?;
         dict.set_item("is_healthy", self.is_healthy)?;
         dict.set_item("latency_ms", self.latency_ms)?;
@@ -605,11 +605,11 @@ impl ProxyHealthPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("total", self.total)?;
         dict.set_item("healthy", self.healthy)?;
         dict.set_item("unhealthy", self.unhealthy)?;
-        let results_list = PyList::empty_bound(py);
+        let results_list = PyList::empty(py);
         for r in &self.results {
             results_list.append(r.to_dict(py)?)?;
         }
@@ -921,7 +921,7 @@ impl InterceptConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("listen_addr", &self.listen_addr)?;
         dict.set_item("listen_port", self.listen_port)?;
         dict.set_item("target_host", &self.target_host)?;
@@ -1028,7 +1028,7 @@ impl CapturedExchangePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", self.id)?;
         dict.set_item("method", &self.method)?;
         dict.set_item("uri", &self.uri)?;
@@ -1120,14 +1120,14 @@ impl InterceptSessionResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("listen_addr", &self.listen_addr)?;
         dict.set_item("listen_port", self.listen_port)?;
         dict.set_item("duration_ms", self.duration_ms)?;
         dict.set_item("total_exchanges", self.total_exchanges)?;
         dict.set_item("modified_requests", self.modified_requests)?;
         dict.set_item("modified_responses", self.modified_responses)?;
-        let exchanges_list = PyList::empty_bound(py);
+        let exchanges_list = PyList::empty(py);
         for e in &self.exchanges {
             exchanges_list.append(e.to_dict(py)?)?;
         }
@@ -1229,7 +1229,7 @@ impl InterceptStatsPy {
         }
     }
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("connections_total", self.connections_total)?;
         dict.set_item("exchanges_captured", self.exchanges_captured)?;
         dict.set_item("bytes_captured", self.bytes_captured)?;
@@ -1413,7 +1413,7 @@ impl RequestModificationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("header_name", &self.header_name)?;
         dict.set_item("header_value", &self.header_value)?;
         dict.set_item("new_path", &self.new_path)?;
@@ -1494,7 +1494,7 @@ impl ResponseModificationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("header_name", &self.header_name)?;
         dict.set_item("header_value", &self.header_value)?;
         dict.set_item("new_body", &self.new_body)?;
@@ -1578,7 +1578,7 @@ impl InterceptFilterPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host_pattern", &self.host_pattern)?;
         dict.set_item("path_pattern", &self.path_pattern)?;
         dict.set_item("method_pattern", &self.method_pattern)?;
@@ -1678,7 +1678,7 @@ impl InterceptRulePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("host_pattern", &self.host_pattern)?;
         dict.set_item("path_pattern", &self.path_pattern)?;
@@ -1840,7 +1840,7 @@ impl CertificateAuthorityConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ca_cert_path", &self.ca_cert_path)?;
         dict.set_item("ca_key_path", &self.ca_key_path)?;
         dict.set_item("auto_generate", self.auto_generate)?;
@@ -1891,7 +1891,7 @@ impl IssuedCertificatePy {
         }
     }
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("hostname", &self.hostname)?;
         dict.set_item("serial", &self.serial)?;
         dict.set_item("valid_from", &self.valid_from)?;
@@ -1975,7 +1975,7 @@ impl HarEntryPy {
         }
     }
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("method", &self.method)?;
         dict.set_item("url", &self.url)?;
         dict.set_item("status", self.status)?;
@@ -2038,11 +2038,11 @@ impl HarDocumentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", &self.version)?;
         dict.set_item("creator_name", &self.creator_name)?;
         dict.set_item("creator_version", &self.creator_version)?;
-        let entries_list = PyList::empty_bound(py);
+        let entries_list = PyList::empty(py);
         for e in &self.entries {
             entries_list.append(e.to_dict(py)?)?;
         }
@@ -2101,7 +2101,7 @@ pub enum MutationDecisionPy {
 #[pymethods]
 impl MutationDecisionPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("decision", format!("{:?}", self))?;
         Ok(dict.into())
     }
@@ -2160,7 +2160,7 @@ impl MutationErrorPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("error_kind", &self.error_kind)?;
         dict.set_item("rule_name", &self.rule_name)?;
         dict.set_item("message", &self.message)?;
@@ -2233,7 +2233,7 @@ impl CertificateAuthorityPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ca_fingerprint", &self.ca_fingerprint)?;
         dict.set_item("ca_subject", &self.ca_subject)?;
         dict.set_item("valid_from", &self.valid_from)?;
@@ -2293,10 +2293,10 @@ impl CertificateStorePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("total_issued", self.total_issued)?;
         dict.set_item("total_expired", self.total_expired)?;
-        let entry_list = PyList::empty_bound(py);
+        let entry_list = PyList::empty(py);
         for e in &self.entries {
             entry_list.append(e.to_dict(py)?)?;
         }
@@ -2384,7 +2384,7 @@ impl ReplayRequestPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("exchange_id", &self.exchange_id)?;
         dict.set_item("method", &self.method)?;
         dict.set_item("url", &self.url)?;
@@ -2466,7 +2466,7 @@ impl ReplayResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("exchange_id", &self.exchange_id)?;
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("response_headers", &self.response_headers)?;
@@ -2555,7 +2555,7 @@ impl ResponseComparisonPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("status_match", self.status_match)?;
         dict.set_item("original_status", self.original_status)?;
         dict.set_item("replayed_status", self.replayed_status)?;
@@ -2641,7 +2641,7 @@ impl ComparisonRulePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("compare_status", self.compare_status)?;
         dict.set_item("compare_headers", self.compare_headers)?;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -627,7 +628,7 @@ impl AsyncEngine {
 
         // Phase 1: Common lifecycle (planning, validation, preflight, cancel, deadline)
         // Need GIL for Python object creation in planning/preflight events
-        let deadline = match Python::with_gil(|py| {
+        let deadline = match Python::attach(|py| {
             crate::dispatch_helpers::pre_dispatch_lifecycle(
                 py,
                 &op,
@@ -1132,7 +1133,7 @@ impl AsyncEngine {
 
         // Emit: operation started (before spawn, on calling thread)
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1141,7 +1142,8 @@ impl AsyncEngine {
                         0,
                         ports.len(),
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1225,7 +1227,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1234,7 +1236,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1307,7 +1310,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1316,7 +1319,8 @@ impl AsyncEngine {
                         0,
                         ports_owned.len(),
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1381,7 +1385,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1390,7 +1394,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1479,7 +1484,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1488,7 +1493,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1573,7 +1579,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1582,7 +1588,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1662,7 +1669,7 @@ impl AsyncEngine {
 
         // Emit: operation started
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1671,7 +1678,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1761,7 +1769,7 @@ impl AsyncEngine {
         // Emit: operation started
         let event_tx = self.state.event_tx.clone();
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1770,7 +1778,8 @@ impl AsyncEngine {
                         0,
                         total_requests as usize,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1801,7 +1810,7 @@ impl AsyncEngine {
         // Emit: operation started
         let event_tx = self.state.event_tx.clone();
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1810,7 +1819,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,
@@ -1848,7 +1858,7 @@ impl AsyncEngine {
         // Emit: operation started
         let event_tx = self.state.event_tx.clone();
         if let Some(ref tx) = event_tx {
-            let _ = Python::with_gil(|py| {
+            let _ = Python::attach(|py| {
                 tx.try_send(crate::event_protocol::EventEnvelope::create(
                     "operation.started".to_string(),
                     crate::event_protocol::ProgressEvent::new(
@@ -1857,7 +1867,8 @@ impl AsyncEngine {
                         0,
                         0,
                     )
-                    .into_py(py),
+                    .into_py_any(py)
+                    .unwrap(),
                     None,
                     None,
                     None,

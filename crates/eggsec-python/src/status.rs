@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::collections::HashMap;
@@ -144,7 +145,7 @@ impl OperationError {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("code", &self.code)?;
@@ -286,14 +287,14 @@ impl OperationPayload {
             OperationPayload::Sbom(r) => Py::new(py, r.clone())?.into_any(),
             OperationPayload::ConsolidatedRecon(r) => Py::new(py, r.clone())?.into_any(),
             OperationPayload::Graphql(items) => {
-                let list = pyo3::types::PyList::empty_bound(py);
+                let list = pyo3::types::PyList::empty(py);
                 for item in items {
                     list.append(Py::new(py, item.clone())?)?;
                 }
                 list.into()
             }
             OperationPayload::Oauth(items) => {
-                let list = pyo3::types::PyList::empty_bound(py);
+                let list = pyo3::types::PyList::empty(py);
                 for item in items {
                     list.append(Py::new(py, item.clone())?)?;
                 }
@@ -469,7 +470,7 @@ impl ExecutionStats {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("duration_ms", self.duration_ms)?;
         dict.set_item("items_processed", self.items_processed)?;
         dict.set_item("items_failed", self.items_failed)?;
@@ -546,7 +547,7 @@ impl Artifact {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", "[REDACTED]")?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -556,7 +557,7 @@ impl Artifact {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -681,7 +682,7 @@ impl OperationResult {
 
     #[getter]
     fn metadata(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             dict.set_item(k, v)?;
         }
@@ -767,10 +768,10 @@ impl OperationResult {
     }
 
     pub(crate) fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
 
         // Status: represent as a dict with name + payload
-        let status_dict = PyDict::new_bound(py);
+        let status_dict = PyDict::new(py);
         status_dict.set_item("type", self.status.name())?;
         match &self.status {
             ExecutionStatus::Failed { error } => {
@@ -793,7 +794,7 @@ impl OperationResult {
         }
 
         // Artifacts
-        let artifacts_list = PyList::empty_bound(py);
+        let artifacts_list = PyList::empty(py);
         for a in &self.artifacts {
             artifacts_list.append(a.to_dict(py)?)?;
         }
@@ -805,7 +806,7 @@ impl OperationResult {
         }
         dict.set_item("error_message", self.error_message())?;
 
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }

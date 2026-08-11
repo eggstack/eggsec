@@ -152,7 +152,7 @@ impl StaticAnalysisSummary {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("package_id", &self.package_id)?;
         dict.set_item("package_name", &self.package_name)?;
         dict.set_item("version", &self.version)?;
@@ -217,7 +217,7 @@ impl AnalysisTarget {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("identifier", &self.identifier)?;
         dict.set_item("target_type", &self.target_type)?;
         dict.set_item("category", &self.category)?;
@@ -265,10 +265,10 @@ impl DynamicAnalysisPlan {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("package_id", &self.package_id)?;
 
-        let targets_list = PyList::empty_bound(py);
+        let targets_list = PyList::empty(py);
         for t in &self.targets {
             targets_list.append(t.to_dict(py)?)?;
         }
@@ -361,7 +361,7 @@ impl InstrumentationConfig {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("device_serial", &self.device_serial)?;
         dict.set_item("package_id", &self.package_id)?;
@@ -370,7 +370,7 @@ impl InstrumentationConfig {
         dict.set_item("allow_system_hooks", self.allow_system_hooks)?;
         dict.set_item("enable_logging", self.enable_logging)?;
 
-        let scripts_list = PyList::empty_bound(py);
+        let scripts_list = PyList::empty(py);
         for s in &self.scripts {
             scripts_list.append(s.to_dict(py)?)?;
         }
@@ -440,7 +440,7 @@ impl InstrumentationScript {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("source_hash", &self.source_hash)?;
         dict.set_item("script_type", &self.script_type)?;
@@ -517,7 +517,7 @@ impl InstrumentationEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("event_type", &self.event_type)?;
@@ -572,7 +572,7 @@ pub struct InstrumentationResult {
 #[pymethods]
 impl InstrumentationResult {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("success", self.success)?;
         dict.set_item("scripts_loaded", self.scripts_loaded)?;
@@ -710,7 +710,7 @@ impl MobileEvidence {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("evidence_id", &self.evidence_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("kind", self.kind.as_str())?;
@@ -772,10 +772,10 @@ impl MobileEvidenceCollection {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
 
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for e in &self.evidence {
             evidence_list.append(e.to_dict(py)?)?;
         }

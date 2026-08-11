@@ -1,3 +1,4 @@
+use crate::PyObject;
 use md5::{Digest, Md5};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
@@ -59,7 +60,7 @@ impl ArtifactInfo {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("artifact_id", &self.artifact_id)?;
         dict.set_item("content_hash", &self.content_hash)?;
         dict.set_item("content_type", &self.content_type)?;
@@ -102,7 +103,7 @@ impl ArtifactData {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("info", self.info.to_dict(py)?)?;
         dict.set_item("data_len", self.data.len())?;
         Ok(dict.into())
@@ -164,7 +165,7 @@ impl IntegrityResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("valid", self.valid)?;
         dict.set_item("expected_hash", &self.expected_hash)?;
         dict.set_item("actual_hash", &self.actual_hash)?;
@@ -231,7 +232,7 @@ impl ArtifactQuery {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("content_type", &self.content_type)?;
         dict.set_item("min_size", &self.min_size)?;
         dict.set_item("max_size", &self.max_size)?;
@@ -309,6 +310,7 @@ impl ContentAddressedArtifactStore {
 
     /// Store data and return its artifact info. The content hash is used as the
     /// storage key, so identical payloads are deduplicated.
+    #[pyo3(signature = (data, content_type, metadata_json=None))]
     fn put(
         &self,
         py: Python<'_>,
@@ -540,7 +542,7 @@ impl ContentAddressedArtifactStore {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("base_dir", &self.base_dir)?;
         let entries = self.entries.lock().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Lock poisoned: {}", e))
@@ -798,7 +800,7 @@ impl DirectoryArtifactStore {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("base_dir", &self.base_dir)?;
         dict.set_item("flat", self.flat)?;
         let entries = self.entries.lock().map_err(|e| {

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -77,7 +78,7 @@ impl AsyncCallback {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })
@@ -179,7 +180,7 @@ impl CallbackScheduler {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })

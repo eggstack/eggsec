@@ -100,7 +100,7 @@ impl SbomComponentPy {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("version", &self.version)?;
         dict.set_item("ecosystem", &self.ecosystem)?;
@@ -157,7 +157,7 @@ impl SbomVulnerabilityPy {
 impl SbomVulnerabilityPy {
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("component", &self.component)?;
         dict.set_item("cve_id", &self.cve_id)?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -219,19 +219,19 @@ impl SbomReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("format", self.format.as_str())?;
         dict.set_item("project_name", &self.project_name)?;
         dict.set_item("version", &self.version)?;
         dict.set_item("generated_at", &self.generated_at)?;
 
-        let components_list = PyList::empty_bound(py);
+        let components_list = PyList::empty(py);
         for c in &self.components {
             components_list.append(c.to_dict(py)?)?;
         }
         dict.set_item("components", components_list)?;
 
-        let vulns_list = PyList::empty_bound(py);
+        let vulns_list = PyList::empty(py);
         for v in &self.vulnerabilities {
             vulns_list.append(v.to_dict(py)?)?;
         }
@@ -292,7 +292,7 @@ pub fn generate_sbom(project_path: &str, ecosystem: &str, format: &str) -> PyRes
     let project_path_owned = project_path.to_string();
     let ecosystem_owned = ecosystem.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let gen = eggsec::supply_chain::sbom::SbomGenerator::new();
             let engine_format = sbom_format.to_engine();

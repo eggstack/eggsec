@@ -21,7 +21,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- Rust 1.85 or later
+- Rust 1.88 or later
 - Git
 - A GitHub account
 
@@ -168,7 +168,7 @@ cargo build -p eggsec --features full
 The CI runs these jobs on every push/PR:
 
 - **Rust**: `make check` (format, no-default build, clippy, all integration tests, architecture guards)
-- **MSRV**: Compile check with Rust 1.85
+- **MSRV**: Compile check with Rust 1.88
 - **Portability**: `cargo check -p eggsec` on macOS and Windows
 - **Python**: `make check-python` (one maturin build, all checks)
 

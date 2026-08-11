@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -43,12 +44,12 @@ impl Checkpoint {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("pipeline_name", &self.pipeline_name)?;
         dict.set_item("completed_steps", &self.completed_steps)?;
 
-        let results_list = PyList::empty_bound(py);
+        let results_list = PyList::empty(py);
         for r in &self.results {
             results_list.append(r.to_dict(py)?)?;
         }

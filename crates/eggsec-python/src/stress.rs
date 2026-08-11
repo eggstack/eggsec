@@ -125,7 +125,7 @@ impl StressConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", self.port)?;
         dict.set_item("stress_type", self.stress_type.as_str())?;
@@ -219,7 +219,7 @@ impl StressStatsPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("duration_ms", self.duration_ms)?;
         dict.set_item("packets_sent", self.packets_sent)?;
         dict.set_item("bytes_sent", self.bytes_sent)?;
@@ -281,7 +281,7 @@ pub struct StressConfigSummaryPy {
 #[pymethods]
 impl StressConfigSummaryPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("rate_pps", self.rate_pps)?;
         dict.set_item("duration_secs", self.duration_secs)?;
         dict.set_item("spoof_source", self.spoof_source)?;
@@ -336,17 +336,17 @@ pub struct StressResultPy {
 impl StressResultPy {
     #[getter]
     fn warnings(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::new_bound(py, &self.warnings);
+        let list = PyList::new(py, &self.warnings);
         Ok(list.into())
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("stress_type", self.stress_type.as_str())?;
         dict.set_item("stats", self.stats.to_dict(py)?)?;
         dict.set_item("config_used", self.config_used.to_dict(py)?)?;
-        let warn_list = PyList::new_bound(py, &self.warnings);
+        let warn_list = PyList::new(py, &self.warnings);
         dict.set_item("warnings", &warn_list)?;
         Ok(dict.into())
     }

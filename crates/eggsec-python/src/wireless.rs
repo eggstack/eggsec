@@ -98,7 +98,7 @@ impl WirelessNetworkPy {
 #[pymethods]
 impl WirelessNetworkPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ssid", &self.ssid)?;
         dict.set_item("bssid", &self.bssid)?;
         dict.set_item("channel", self.channel)?;
@@ -150,7 +150,7 @@ impl WirelessVulnerabilityPy {
 #[pymethods]
 impl WirelessVulnerabilityPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ssid", &self.ssid)?;
         dict.set_item("bssid", &self.bssid)?;
         dict.set_item("vulnerability_type", &self.vulnerability_type)?;
@@ -208,11 +208,11 @@ impl WirelessScanResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("scan_duration_secs", self.scan_duration_secs)?;
 
-        let nets_list = PyList::empty_bound(py);
+        let nets_list = PyList::empty(py);
         for n in &self.networks {
             nets_list.append(n.to_dict(py)?)?;
         }
@@ -281,7 +281,7 @@ pub fn wireless_scan(config: Option<WirelessScanConfigPy>) -> PyResult<WirelessS
         duration_secs: 30,
     });
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let mut scanner = eggsec::wireless::WirelessScanner::new();
             if let Some(iface) = &cfg.interface {

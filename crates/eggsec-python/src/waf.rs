@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,7 @@ impl WafDetectionResultPy {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("detected", self.detected)?;
         dict.set_item("vendor", &self.vendor)?;
@@ -107,7 +108,7 @@ impl WafDetectionResultPy {
 ///     NetworkError: If the HTTP request fails.
 #[pyfunction]
 pub fn detect_waf(url: &str) -> PyResult<WafDetectionResultPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         let result = runtime_sync::block_on(py, async move {
             let detector = eggsec::waf::WafDetector::new().map_pyerr()?;

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -244,7 +245,7 @@ pub(crate) fn pydict_to_string_metadata(
     dict: &Bound<'_, PyDict>,
 ) -> PyResult<HashMap<String, String>> {
     let mut map = HashMap::new();
-    let json_mod = dict.py().import_bound("json")?;
+    let json_mod = dict.py().import("json")?;
     for (key, value) in dict.iter() {
         if let Ok(key_str) = key.extract::<String>() {
             let val_str: String = if let Ok(s) = value.extract::<String>() {
@@ -279,10 +280,12 @@ pub(crate) fn check_cancel(
     if let Some(ref token) = cancel_token {
         if token.is_cancelled() {
             let reason = token.reason().unwrap_or_else(|| "cancelled".to_string());
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 state.emit_event(EventEnvelope::create(
                     "operation.cancelled".to_string(),
-                    CancellationEvent::new(reason, "operator".to_string()).into_py(py),
+                    CancellationEvent::new(reason, "operator".to_string())
+                        .into_py_any(py)
+                        .unwrap(),
                     None,
                     None,
                     Some(target.to_string()),
@@ -340,7 +343,7 @@ pub(crate) fn check_deadline(
 
 /// Emit a finding event through the engine state event channel.
 ///
-/// Safe to call with or without the GIL held (uses `Python::with_gil` internally).
+/// Safe to call with or without the GIL held (uses `Python::attach` internally).
 pub(crate) fn emit_finding_event(
     state: &EngineState,
     finding_id: String,
@@ -349,11 +352,11 @@ pub(crate) fn emit_finding_event(
     actionable: bool,
     target: String,
 ) {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let finding = FindingEvent::new(finding_id, severity, message, actionable);
         state.emit_event(EventEnvelope::create(
             "operation.finding".to_string(),
-            finding.into_py(py),
+            finding.into_py_any(py).unwrap(),
             None,
             None,
             Some(target),
@@ -387,7 +390,9 @@ pub(crate) fn pre_dispatch_lifecycle(
     // 1. Emit planning event
     let planning_event = EventEnvelope::create(
         "operation.planning".to_string(),
-        PlanningEvent::new(op_id.to_string(), target.to_string(), String::new()).into_py(py),
+        PlanningEvent::new(op_id.to_string(), target.to_string(), String::new())
+            .into_py_any(py)
+            .unwrap(),
         None,
         None,
         Some(target.to_string()),
@@ -403,7 +408,9 @@ pub(crate) fn pre_dispatch_lifecycle(
     // 3. Emit preflight event
     let preflight_event = EventEnvelope::create(
         "operation.preflight".to_string(),
-        PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new()).into_py(py),
+        PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new())
+            .into_py_any(py)
+            .unwrap(),
         None,
         None,
         Some(target.to_string()),

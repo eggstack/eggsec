@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::path::PathBuf;
@@ -13,7 +14,7 @@ pub fn resolve_path(path: &Bound<'_, PyAny>) -> PyResult<PathBuf> {
     // Try pathlib.Path via __fspath__()
     let fspath = path.getattr("__fspath__")?;
     let result = fspath.call0()?;
-    let pystr = result.downcast::<pyo3::types::PyString>().map_err(|_| {
+    let pystr = result.cast::<pyo3::types::PyString>().map_err(|_| {
         pyo3::exceptions::PyTypeError::new_err("__fspath__() must return str or bytes")
     })?;
     let s = pystr
@@ -24,8 +25,8 @@ pub fn resolve_path(path: &Bound<'_, PyAny>) -> PyResult<PathBuf> {
 
 /// Convert a chrono DateTime<Utc> to a Python datetime.datetime.
 pub fn py_datetime(dt: chrono::DateTime<chrono::Utc>) -> PyResult<PyObject> {
-    Python::with_gil(|py| {
-        let datetime_mod = py.import_bound("datetime")?;
+    Python::attach(|py| {
+        let datetime_mod = py.import("datetime")?;
         let utc = datetime_mod.getattr("timezone")?.getattr("utc")?;
         let timestamp = dt.timestamp() as f64 + dt.timestamp_subsec_micros() as f64 / 1_000_000.0;
         let naive = datetime_mod
@@ -68,7 +69,7 @@ pub fn pyobj_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_j
     if let Ok(v) = obj.extract::<String>() {
         return Ok(serde_json::Value::String(v));
     }
-    if let Ok(d) = obj.downcast::<PyDict>() {
+    if let Ok(d) = obj.cast::<PyDict>() {
         let mut map = serde_json::Map::new();
         for (key, value) in d.iter() {
             if let Ok(key_str) = key.extract::<String>() {
@@ -77,7 +78,7 @@ pub fn pyobj_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_j
         }
         return Ok(serde_json::Value::Object(map));
     }
-    if let Ok(list) = obj.downcast::<pyo3::types::PyList>() {
+    if let Ok(list) = obj.cast::<pyo3::types::PyList>() {
         let mut arr = Vec::new();
         for item in list.iter() {
             arr.push(pyobj_to_json(py, &item)?);

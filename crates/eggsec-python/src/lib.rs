@@ -129,6 +129,9 @@ mod wireless;
 pub use error::*;
 use pyo3::prelude::*;
 
+/// Compatibility alias for the removed `PyObject` type (was `Py<PyAny>` in PyO3 <0.28).
+pub(crate) type PyObject = pyo3::Py<pyo3::types::PyAny>;
+
 /// The eggsec Python module.
 ///
 /// Python bindings for the Eggsec security assessment engine.
@@ -139,29 +142,23 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version_info__", (0, 1, 0))?;
 
     // Exceptions
-    m.add("EggsecError", m.py().get_type_bound::<EggsecError>())?;
-    m.add("ConfigError", m.py().get_type_bound::<ConfigError>())?;
-    m.add("ScopeError", m.py().get_type_bound::<ScopeError>())?;
-    m.add(
-        "EnforcementError",
-        m.py().get_type_bound::<EnforcementError>(),
-    )?;
-    m.add("NetworkError", m.py().get_type_bound::<NetworkError>())?;
-    m.add("ScanError", m.py().get_type_bound::<ScanError>())?;
-    m.add("TimeoutError", m.py().get_type_bound::<TimeoutError>())?;
+    m.add("EggsecError", m.py().get_type::<EggsecError>())?;
+    m.add("ConfigError", m.py().get_type::<ConfigError>())?;
+    m.add("ScopeError", m.py().get_type::<ScopeError>())?;
+    m.add("EnforcementError", m.py().get_type::<EnforcementError>())?;
+    m.add("NetworkError", m.py().get_type::<NetworkError>())?;
+    m.add("ScanError", m.py().get_type::<ScanError>())?;
+    m.add("TimeoutError", m.py().get_type::<TimeoutError>())?;
     m.add(
         "FeatureUnavailableError",
-        m.py().get_type_bound::<FeatureUnavailableError>(),
+        m.py().get_type::<FeatureUnavailableError>(),
     )?;
     m.add(
         "SerializationError",
-        m.py().get_type_bound::<SerializationError>(),
+        m.py().get_type::<SerializationError>(),
     )?;
-    m.add("InternalError", m.py().get_type_bound::<InternalError>())?;
-    m.add(
-        "CancellationError",
-        m.py().get_type_bound::<CancellationError>(),
-    )?;
+    m.add("InternalError", m.py().get_type::<InternalError>())?;
+    m.add("CancellationError", m.py().get_type::<CancellationError>())?;
 
     // Classes
     m.add_class::<config_model::PySensitiveString>()?;
@@ -1241,18 +1238,18 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// and any deprecation info.
 #[pyfunction]
 fn api_surface() -> PyObject {
-    Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new_bound(py);
+    Python::attach(|py| {
+        let dict = pyo3::types::PyDict::new(py);
 
         macro_rules! add_entry {
             ($name:expr, $stability:expr) => {
-                let entry = pyo3::types::PyDict::new_bound(py);
+                let entry = pyo3::types::PyDict::new(py);
                 entry.set_item("stability", $stability).unwrap();
                 entry.set_item::<_, bool>("deprecated", false).unwrap();
                 dict.set_item($name, entry).unwrap();
             };
             ($name:expr, $stability:expr, $deprecated:expr) => {
-                let entry = pyo3::types::PyDict::new_bound(py);
+                let entry = pyo3::types::PyDict::new(py);
                 entry.set_item("stability", $stability).unwrap();
                 entry.set_item::<_, bool>("deprecated", true).unwrap();
                 entry.set_item("deprecated_with", $deprecated).unwrap();

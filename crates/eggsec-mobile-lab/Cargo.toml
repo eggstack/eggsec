@@ -46,7 +46,7 @@ zip = "2"
 plist = { version = "1.7", features = ["serde"] }
 
 # XML parsing (text AndroidManifest.xml fallback)
-quick-xml = { version = "0.31", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 
 # Regex (IPA secret pattern detection)
 regex = { workspace = true }

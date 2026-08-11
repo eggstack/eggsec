@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -56,7 +57,7 @@ impl CvssScorePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", &self.version)?;
         dict.set_item("vector", &self.vector)?;
         dict.set_item("base_score", self.base_score)?;
@@ -185,7 +186,7 @@ impl VulnerabilityRecordPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("cve_id", &self.cve_id)?;
         dict.set_item("cwe_id", &self.cwe_id)?;
         dict.set_item("title", &self.title)?;
@@ -266,7 +267,7 @@ impl RemediationRecordPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("status", &self.status)?;
         dict.set_item("assigned_to", &self.assigned_to)?;

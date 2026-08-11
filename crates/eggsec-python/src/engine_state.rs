@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::PyObject;
 use pyo3::prelude::*;
 
 use crate::config_model::PyEggsecConfig;
@@ -34,7 +35,7 @@ pub struct DispatchAuditEvent {
 #[pymethods]
 impl DispatchAuditEvent {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = pyo3::types::PyDict::new_bound(py);
+        let dict = pyo3::types::PyDict::new(py);
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
         dict.set_item("operation_id", &self.operation_id)?;

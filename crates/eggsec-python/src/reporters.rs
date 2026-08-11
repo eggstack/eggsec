@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -527,7 +528,7 @@ impl SeveritySummaryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("critical", self.critical)?;
         dict.set_item("high", self.high)?;
         dict.set_item("medium", self.medium)?;
@@ -604,7 +605,7 @@ impl ReportEnvelopePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("report_id", &self.report_id)?;
         dict.set_item("title", &self.title)?;
         dict.set_item("generated_at", &self.generated_at)?;
@@ -612,7 +613,7 @@ impl ReportEnvelopePy {
         dict.set_item("finding_count", self.finding_count)?;
 
         // Build severity_summary as a dict
-        let ss_dict = PyDict::new_bound(py);
+        let ss_dict = PyDict::new(py);
         ss_dict.set_item("critical", self.severity_summary.critical)?;
         ss_dict.set_item("high", self.severity_summary.high)?;
         ss_dict.set_item("medium", self.severity_summary.medium)?;
@@ -623,9 +624,9 @@ impl ReportEnvelopePy {
         dict.set_item("severity_summary", ss_dict)?;
 
         // Build findings as a list of dicts
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", &f.id)?;
             item_dict.set_item("title", &f.title)?;
             item_dict.set_item("severity", &f.severity)?;

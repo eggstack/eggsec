@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -135,7 +136,7 @@ impl SessionIdentity {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("session_type", &self.session_type)?;
         dict.set_item("created_at_ms", self.created_at_ms)?;
@@ -201,7 +202,7 @@ impl SessionStats {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("total_operations", self.total_operations)?;
         dict.set_item("completed_operations", self.completed_operations)?;
         dict.set_item("failed_operations", self.failed_operations)?;
@@ -265,7 +266,7 @@ impl SessionEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("sequence", self.sequence)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
         dict.set_item("event_type", &self.event_type)?;
@@ -326,10 +327,10 @@ impl SessionEventStream {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
 
-        let events_list = PyList::empty_bound(py);
+        let events_list = PyList::empty(py);
         for e in &self.events {
             events_list.append(e.to_dict(py)?)?;
         }
@@ -400,7 +401,7 @@ impl SessionCapabilities {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("supports_cancellation", self.supports_cancellation)?;
         dict.set_item("supports_timeout", self.supports_timeout)?;
         dict.set_item("supports_artifacts", self.supports_artifacts)?;

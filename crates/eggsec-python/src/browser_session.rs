@@ -45,7 +45,7 @@ pub struct BrowserCapabilities {
 #[pymethods]
 impl BrowserCapabilities {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("engine", &self.engine)?;
         dict.set_item("version", &self.version)?;
         dict.set_item("supports_javascript", self.supports_javascript)?;
@@ -210,7 +210,7 @@ impl BrowserSessionConfig {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target_url", &self.target_url)?;
         dict.set_item("headless", self.headless)?;
         dict.set_item("proxy", &self.proxy)?;
@@ -224,7 +224,7 @@ impl BrowserSessionConfig {
         dict.set_item("collect_cookies", self.collect_cookies)?;
         dict.set_item("collect_storage", self.collect_storage)?;
         dict.set_item("screenshot_on_complete", self.screenshot_on_complete)?;
-        let headers_list = PyList::new_bound(py, &self.extra_headers);
+        let headers_list = PyList::new(py, &self.extra_headers);
         dict.set_item("extra_headers", headers_list)?;
         dict.set_item("ignore_cert_errors", self.ignore_cert_errors)?;
         Ok(dict.into())
@@ -268,7 +268,7 @@ pub struct BrowserSessionStats {
 #[pymethods]
 impl BrowserSessionStats {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("pages_navigated", self.pages_navigated)?;
         dict.set_item("dom_snapshots", self.dom_snapshots)?;
         dict.set_item("console_events", self.console_events)?;
@@ -322,11 +322,11 @@ impl BrowserNavigationEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("final_url", &self.final_url)?;
         dict.set_item("status_code", self.status_code)?;
-        let redirects = PyList::new_bound(py, &self.redirect_chain);
+        let redirects = PyList::new(py, &self.redirect_chain);
         dict.set_item("redirect_chain", redirects)?;
         dict.set_item("load_time_ms", self.load_time_ms)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -365,7 +365,7 @@ pub struct BrowserConsoleEvent {
 #[pymethods]
 impl BrowserConsoleEvent {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("level", &self.level)?;
         dict.set_item("message", &self.message)?;
         dict.set_item("source", &self.source)?;
@@ -426,18 +426,18 @@ impl BrowserNetworkEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("method", &self.method)?;
         dict.set_item("url", &self.url)?;
         dict.set_item("status_code", self.status_code)?;
 
-        let req_headers = PyDict::new_bound(py);
+        let req_headers = PyDict::new(py);
         for (k, v) in &self.request_headers {
             req_headers.set_item(k.as_str(), v.as_str())?;
         }
         dict.set_item("request_headers", req_headers)?;
 
-        let resp_headers = PyDict::new_bound(py);
+        let resp_headers = PyDict::new(py);
         for (k, v) in &self.response_headers {
             resp_headers.set_item(k.as_str(), v.as_str())?;
         }
@@ -480,7 +480,7 @@ pub struct BrowserFormField {
 #[pymethods]
 impl BrowserFormField {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("field_type", &self.field_type)?;
         dict.set_item("value", &self.value)?;
@@ -513,11 +513,11 @@ impl BrowserFormInfo {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("action", &self.action)?;
         dict.set_item("method", &self.method)?;
 
-        let fields_list = PyList::empty_bound(py);
+        let fields_list = PyList::empty(py);
         for f in &self.fields {
             fields_list.append(f.to_dict(py)?)?;
         }
@@ -546,7 +546,7 @@ pub struct BrowserLinkInfo {
 #[pymethods]
 impl BrowserLinkInfo {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("href", &self.href)?;
         dict.set_item("text", &self.text)?;
         dict.set_item("rel", &self.rel)?;
@@ -598,26 +598,26 @@ impl BrowserDomSnapshot {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("title", &self.title)?;
 
-        let forms_list = PyList::empty_bound(py);
+        let forms_list = PyList::empty(py);
         for f in &self.forms {
             forms_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("forms", forms_list)?;
 
-        let links_list = PyList::empty_bound(py);
+        let links_list = PyList::empty(py);
         for l in &self.links {
             links_list.append(l.to_dict(py)?)?;
         }
         dict.set_item("links", links_list)?;
 
-        let scripts_list = PyList::new_bound(py, &self.scripts);
+        let scripts_list = PyList::new(py, &self.scripts);
         dict.set_item("scripts", scripts_list)?;
 
-        let frames_list = PyList::new_bound(py, &self.frames);
+        let frames_list = PyList::new(py, &self.frames);
         dict.set_item("frames", frames_list)?;
 
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -668,7 +668,7 @@ pub struct BrowserCookieInfo {
 #[pymethods]
 impl BrowserCookieInfo {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("domain", &self.domain)?;
@@ -712,23 +712,23 @@ impl BrowserStorageInfo {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
 
-        let local_list = PyList::empty_bound(py);
+        let local_list = PyList::empty(py);
         for (k, v) in &self.local_storage {
-            let pair = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             local_list.append(pair)?;
         }
         dict.set_item("local_storage", local_list)?;
 
-        let session_list = PyList::empty_bound(py);
+        let session_list = PyList::empty(py);
         for (k, v) in &self.session_storage {
-            let pair = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             session_list.append(pair)?;
         }
         dict.set_item("session_storage", session_list)?;
 
-        let cookies_list = PyList::empty_bound(py);
+        let cookies_list = PyList::empty(py);
         for c in &self.cookies {
             cookies_list.append(c.to_dict(py)?)?;
         }
@@ -1007,7 +1007,7 @@ impl BrowserSession {
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("state", inner.state.as_str())?;
         dict.set_item("config", self.config.to_dict(py)?)?;
@@ -1353,7 +1353,7 @@ impl AsyncBrowserSession {
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("state", inner.state.as_str())?;
         dict.set_item("config", self.config.to_dict(py)?)?;

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -115,7 +116,7 @@ impl GraphQLTestResultPy {
 #[pymethods]
 impl GraphQLTestResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("vulnerability", self.vulnerability.as_str())?;
         dict.set_item("success", self.success)?;
         dict.set_item("query", &self.query)?;
@@ -355,7 +356,7 @@ impl GraphQLSchemaPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("query_type", &self.query_type)?;
         dict.set_item("mutation_type", &self.mutation_type)?;
         dict.set_item("subscription_type", &self.subscription_type)?;
@@ -443,7 +444,7 @@ impl GraphQLTestConfigPy {
 ///     ConfigError: If the configuration is invalid.
 #[pyfunction]
 pub fn graphql_test(config: GraphQLTestConfigPy) -> PyResult<Vec<GraphQLTestResultPy>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let mut fuzzer =
                 eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())

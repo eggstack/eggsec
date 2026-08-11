@@ -27,7 +27,7 @@ authors = ["David Bowman"]
 repository = "https://github.com/eggstack/eggsec"
 homepage = "https://github.com/eggstack/eggsec"
 documentation = "https://github.com/eggstack/eggsec#readme"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

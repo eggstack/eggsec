@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -96,7 +97,7 @@ impl WorkflowTransitionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("from_state", self.from_state.as_str())?;
         dict.set_item("to_state", self.to_state.as_str())?;
         dict.set_item("changed_at", &self.changed_at)?;
@@ -156,7 +157,7 @@ impl SuppressionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("reason", &self.reason)?;
         dict.set_item("suppressed_by", &self.suppressed_by)?;

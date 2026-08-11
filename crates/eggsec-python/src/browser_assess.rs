@@ -132,7 +132,7 @@ impl DomXssFindingPy {
 #[pymethods]
 impl DomXssFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("source", &self.source)?;
         dict.set_item("sink", &self.sink)?;
@@ -327,7 +327,7 @@ impl ClientIssuePy {
 #[pymethods]
 impl ClientIssuePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("issue_type", self.issue_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -468,23 +468,23 @@ impl BrowserTestReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("total_findings", self.total_findings)?;
 
-        let xss_list = PyList::empty_bound(py);
+        let xss_list = PyList::empty(py);
         for f in &self.dom_xss {
             xss_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("dom_xss", xss_list)?;
 
-        let routes_list = PyList::empty_bound(py);
+        let routes_list = PyList::empty(py);
         for r in &self.spa_routes {
             routes_list.append(r.__repr__())?;
         }
         dict.set_item("spa_routes", routes_list)?;
 
-        let issues_list = PyList::empty_bound(py);
+        let issues_list = PyList::empty(py);
         for i in &self.client_issues {
             issues_list.append(i.to_dict(py)?)?;
         }
@@ -525,7 +525,7 @@ pub fn browser_test(
     let cfg = config.unwrap_or_default();
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let browser_config = eggsec::browser::BrowserConfig {
                 check_dom_xss: cfg.check_dom_xss,

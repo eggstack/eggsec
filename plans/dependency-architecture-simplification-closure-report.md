@@ -2,12 +2,15 @@
 
 ## Status
 
-Roadmap completed. All phases executed.
+Roadmap phases A–J executed. Corrective closure pass completed.
+
+A–J implementation substantially complete; corrective closure pass executed.
 
 ## Scope
 
-Corrective engineering and structural simplification across 10 phases (A–J).
-No feature expansion, no capability removal, no scope enforcement weakening.
+Corrective engineering and structural simplification across 10 phases (A–J),
+plus a corrective closure pass resolving remaining dependency security exceptions,
+CI simplification, and documentation reconciliation.
 
 ## Phase Status
 
@@ -18,19 +21,32 @@ No feature expansion, no capability removal, no scope enforcement weakening.
 | C | Exhaustive compile-time feature registry | Executed |
 | D | Operation, command, domain, and tool metadata consolidation | Executed |
 | E | Advisory cleanup and dependency security remediation | Executed |
-| F | Engine/application boundary and library-size reduction | Executed (partial — CLI parsing remains in engine behind `cli` feature gate) |
+| F | Engine/application boundary and library-size reduction | Executed (accepted residual: CLI parsing remains in engine behind `cli` feature gate) |
 | G | Daemon/TUI topology, TLS provider, and duplicate dependency cleanup | Executed |
-| H | Upstream modernization, MSRV, and justified native-dependency reduction | Executed (PyO3 and quick-xml upgrades deferred — see blockers below) |
+| H | Upstream modernization, MSRV, and justified native-dependency reduction | Executed |
 | I | CI and verification simplification | Executed |
-| J | Measurement, documentation reconciliation, and closure | Executed (this report) |
+| J | Measurement, documentation reconciliation, and closure | Executed |
+| — | Corrective closure pass | Executed |
 
-### Deferred items
+### Resolved in corrective closure pass
 
-| Item | Blocker | Owner | Reopen trigger |
-|------|---------|-------|----------------|
-| PyO3 0.22 → 0.29+ upgrade | Major API migration; 0.22 still maintained | eggsec-python | PyO3 0.22 EOL or security advisory |
-| quick-xml 0.31 → 0.41+ upgrade | Raises MSRV from 1.85 to 1.86 | eggsec-output / eggsec-mobile-lab | quick-xml 0.31 EOL or security advisory |
-| rusqlite 0.31 → 0.40 upgrade | Blocked by sqlx 0.8 libsqlite3-sys conflict; requires sqlx 0.9 which needs MSRV 1.94 | eggsec-daemon | sqlx 0.9 release |
+| Item | Resolution |
+|------|-----------|
+| PyO3 0.22 → 0.29.2 | Upgraded. RUSTSEC-2025-0020 and RUSTSEC-2026-0177 resolved. |
+| quick-xml 0.31 → 0.41.0 | Upgraded. RUSTSEC-2026-0194 and RUSTSEC-2026-0195 resolved. |
+| MSRV | Raised from 1.85 to 1.88 (required by quick-xml 0.41 + plist 1.10). |
+| CI simplification | MSRV and portability checks moved to deep-checks.yml. Routine CI: Rust + Python only. |
+| Legacy scope helpers | Removed (no production callers). |
+| Advisory exceptions | PyO3 and quick-xml exceptions removed from deny.toml and DEPENDENCY_EXCEPTIONS.md. |
+
+### Remaining residuals
+
+| Item | Blocker | Owner |
+|------|---------|-------|
+| rusqlite 0.31 → 0.40 | Blocked by sqlx 0.8 libsqlite3-sys conflict; requires sqlx 0.9 (MSRV 1.94) | eggsec-daemon |
+| fxhash unmaintained (RUSTSEC-2025-0057) | scraper upstream must drop it | eggsec-scanner |
+| instant unmaintained (RUSTSEC-2024-0384) | notify upstream must drop it | eggsec-cli |
+| number_prefix unmaintained (RUSTSEC-2025-0119) | indicatif upstream must drop it | eggsec-cli |
 
 ## Confirmed correctness outcomes
 

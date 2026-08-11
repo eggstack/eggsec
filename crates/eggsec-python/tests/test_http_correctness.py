@@ -1154,7 +1154,7 @@ class TestBodyChunking:
         client = _sync_client()
         req = eggsec.HttpRequestPy(method="GET", url=_get_url(stable_fixtures, "/"))
         resp = client.request(req)
-        assert isinstance(resp.body_bytes, list)
+        assert isinstance(resp.body_bytes, bytes)
         assert len(resp.body_bytes) > 0
 
     @pytest.mark.timeout(15)

@@ -49,7 +49,7 @@ impl MobileDeviceDescriptor {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("serial", &self.serial)?;
         dict.set_item("model", &self.model)?;
         dict.set_item("platform", &self.platform)?;
@@ -112,7 +112,7 @@ pub struct MobileDeviceCapabilities {
 #[pymethods]
 impl MobileDeviceCapabilities {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("supports_install", self.supports_install)?;
         dict.set_item("supports_uninstall", self.supports_uninstall)?;
         dict.set_item("supports_launch", self.supports_launch)?;
@@ -236,7 +236,7 @@ impl MobileSessionConfig {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("device_serial", &self.device_serial)?;
         dict.set_item("package_id", &self.package_id)?;
         dict.set_item("install_app", self.install_app)?;
@@ -339,7 +339,7 @@ pub struct MobileSessionStats {
 #[pymethods]
 impl MobileSessionStats {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("screenshots_captured", self.screenshots_captured)?;
         dict.set_item("log_entries", self.log_entries)?;
         dict.set_item("network_exchanges", self.network_exchanges)?;
@@ -538,7 +538,7 @@ impl MobileSession {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("state", self.state.as_str())?;
         dict.set_item("device_serial", &self.device_serial)?;
@@ -720,7 +720,7 @@ impl AsyncMobileSession {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("state", self.state.as_str())?;
         dict.set_item("device_serial", &self.device_serial)?;
@@ -836,8 +836,8 @@ impl MobileDeviceRegistry {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let devices_list = PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let devices_list = PyList::empty(py);
         for d in &self.devices {
             devices_list.append(d.to_dict(py)?)?;
         }

@@ -447,6 +447,7 @@ fn decode_axml_value(val_type: u32, val_data: u32, strings: &[String]) -> String
 fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
     use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::XmlVersion;
 
     let mut reader = Reader::from_reader(data);
     // We intentionally do not call config_mut().trim_text here; the parser is already
@@ -473,7 +474,10 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         let k = std::str::from_utf8(a.key.as_ref())
                             .unwrap_or("")
                             .to_string();
-                        let v = a.unescape_value().unwrap_or_default().to_string();
+                        let v = a
+                            .normalized_value(XmlVersion::Implicit1_0)
+                            .unwrap_or_default()
+                            .to_string();
                         let key = k.trim_start_matches("android:").to_string();
                         (key, v)
                     })
@@ -537,7 +541,10 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         let k = std::str::from_utf8(a.key.as_ref())
                             .unwrap_or("")
                             .to_string();
-                        let v = a.unescape_value().unwrap_or_default().to_string();
+                        let v = a
+                            .normalized_value(XmlVersion::Implicit1_0)
+                            .unwrap_or_default()
+                            .to_string();
                         let key = k.trim_start_matches("android:").to_string();
                         (key, v)
                     })

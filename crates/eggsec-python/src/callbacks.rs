@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 
 use crate::audit::EnforcementAuditEventPy;
@@ -80,7 +81,7 @@ impl AuditSink {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })
@@ -158,7 +159,7 @@ impl FindingSink {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })
@@ -236,7 +237,7 @@ impl ArtifactSink {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })
@@ -314,7 +315,7 @@ impl ProgressSink {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })
@@ -393,7 +394,7 @@ impl EventConsumer {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             slf.borrow_mut(py).close();
             Ok(())
         })

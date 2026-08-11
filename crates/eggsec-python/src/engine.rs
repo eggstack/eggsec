@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -1139,7 +1140,7 @@ impl Engine {
                     );
                     self.state.emit_event(EventEnvelope::create(
                         "operation.artifact".to_string(),
-                        artifact.into_py(py),
+                        artifact.into_py_any(py).unwrap(),
                         None,
                         None,
                         Some(target.to_string()),
@@ -1155,7 +1156,7 @@ impl Engine {
                     );
                     self.state.emit_event(EventEnvelope::create(
                         "operation.artifact".to_string(),
-                        artifact.into_py(py),
+                        artifact.into_py_any(py).unwrap(),
                         None,
                         None,
                         Some(target.to_string()),
@@ -1282,7 +1283,8 @@ impl Engine {
                     0,
                     ports.len(),
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1325,7 +1327,8 @@ impl Engine {
                             None,
                             py_result.elapsed_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1348,7 +1351,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1382,7 +1386,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1427,7 +1432,8 @@ impl Engine {
                             None,
                             py_result.elapsed_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1449,7 +1455,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1485,7 +1492,8 @@ impl Engine {
                     0,
                     ports.len(),
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1527,7 +1535,8 @@ impl Engine {
                             None,
                             py_result.elapsed_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1549,7 +1558,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1575,7 +1585,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1637,7 +1648,8 @@ impl Engine {
                             None,
                             0,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1659,7 +1671,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1689,7 +1702,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1747,7 +1761,8 @@ impl Engine {
                             None,
                             0,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1769,7 +1784,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1803,7 +1819,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1855,7 +1872,8 @@ impl Engine {
                             None,
                             0,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1877,7 +1895,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1907,7 +1926,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -1950,7 +1970,8 @@ impl Engine {
                             None,
                             0,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -1972,7 +1993,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2017,7 +2039,8 @@ impl Engine {
                     0,
                     total_requests as usize,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -2056,7 +2079,8 @@ impl Engine {
                             None,
                             r.total_duration_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2074,7 +2098,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2108,7 +2133,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -2138,7 +2164,8 @@ impl Engine {
                             None,
                             r.duration_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2160,7 +2187,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2204,7 +2232,8 @@ impl Engine {
                     0,
                     0,
                 )
-                .into_py(py),
+                .into_py_any(py)
+                .unwrap(),
                 None,
                 None,
                 None,
@@ -2244,7 +2273,8 @@ impl Engine {
                             None,
                             r.duration_ms,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,
@@ -2262,7 +2292,8 @@ impl Engine {
                             e.to_string(),
                             false,
                         )
-                        .into_py(py),
+                        .into_py_any(py)
+                        .unwrap(),
                         None,
                         None,
                         None,

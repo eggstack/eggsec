@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -41,7 +42,7 @@ pub struct BypassResultPy {
 #[pymethods]
 impl BypassResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("technique", &self.technique)?;
         dict.set_item("success", self.success)?;
         dict.set_item("description", &self.description)?;
@@ -101,7 +102,7 @@ impl WafScanResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("waf_detected", self.waf_detected)?;
         dict.set_item("waf_name", &self.waf_name)?;
@@ -165,7 +166,7 @@ pub struct PayloadPy {
 #[pymethods]
 impl PayloadPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("payload_type", &self.payload_type)?;
         dict.set_item("payload", &self.payload)?;
         dict.set_item("description", &self.description)?;
@@ -216,7 +217,7 @@ pub struct FuzzResultPy {
 #[pymethods]
 impl FuzzResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("payload", &self.payload)?;
         dict.set_item("payload_type", &self.payload_type)?;
         dict.set_item("status_code", self.status_code)?;
@@ -286,7 +287,7 @@ impl FuzzSessionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target_url", &self.target_url)?;
         dict.set_item("payload_type", &self.payload_type)?;
         dict.set_item("total_payloads", self.total_payloads)?;
@@ -368,7 +369,7 @@ impl FuzzConfig {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("payload_type", &self.payload_type)?;
         dict.set_item("method", &self.method)?;
@@ -511,7 +512,7 @@ pub fn validate_waf(
     let host = extract_host_from_url(url)?;
     scope.enforce_target(&host)?;
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         let test_type_owned = test_type.map(|s| s.to_string());
 
@@ -700,7 +701,7 @@ pub fn fuzz_http(
     let host = extract_host_from_url(url)?;
     scope.enforce_target(&host)?;
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         let pt_owned = payload_type.to_string();
         let method_owned = method.to_string();

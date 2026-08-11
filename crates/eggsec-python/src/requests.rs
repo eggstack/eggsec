@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
@@ -37,7 +38,7 @@ impl OperationRequest {
 
     #[getter]
     fn metadata(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             dict.set_item(k, v)?;
         }
@@ -45,11 +46,11 @@ impl OperationRequest {
     }
 
     pub(crate) fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("operation", &self.operation)?;
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }
@@ -123,7 +124,7 @@ impl PortScanRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("ports", &self.ports)?;
         dict.set_item("mode", &self.mode)?;
@@ -196,7 +197,7 @@ impl EndpointScanRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("paths", &self.paths)?;
         dict.set_item("methods", &self.methods)?;
@@ -255,7 +256,7 @@ impl FingerprintRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("ports", &self.ports)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
@@ -316,7 +317,7 @@ impl ReconDnsRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("record_types", &self.record_types)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
@@ -363,7 +364,7 @@ impl TlsInspectRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -408,7 +409,7 @@ impl TechDetectRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -453,7 +454,7 @@ impl WafDetectRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -516,7 +517,7 @@ impl LoadTestRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("requests", &self.requests)?;
         dict.set_item("concurrency", &self.concurrency)?;
@@ -581,7 +582,7 @@ impl WafValidateRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("payloads", &self.payloads)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
@@ -642,7 +643,7 @@ impl FuzzRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("payload_type", &self.payload_type)?;
         dict.set_item("threads", &self.threads)?;
@@ -701,7 +702,7 @@ impl GitSecretsScanRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("repo_path", &self.repo_path)?;
         dict.set_item("max_commits", &self.max_commits)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
@@ -762,7 +763,7 @@ impl SbomRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("project_path", &self.project_path)?;
         dict.set_item("ecosystem", &self.ecosystem)?;
         dict.set_item("format", &self.format)?;
@@ -857,7 +858,7 @@ impl ConsolidatedReconRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("run_dns", &self.run_dns)?;
         dict.set_item("run_ssl", &self.run_ssl)?;
@@ -922,7 +923,7 @@ impl GraphqlTestRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -967,7 +968,7 @@ impl OauthTestRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -1012,7 +1013,7 @@ impl AuthTestRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -1083,7 +1084,7 @@ impl DbProbeRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", &self.port)?;
         dict.set_item("database", &self.database)?;
@@ -1163,7 +1164,7 @@ impl NseRunRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("scripts", &self.scripts)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
@@ -1210,7 +1211,7 @@ impl DockerImageScanRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("image", &self.image)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -1255,7 +1256,7 @@ impl KubernetesScanRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -1303,7 +1304,7 @@ impl ApkAnalysisRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("apk_path", &self.apk_path)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())
@@ -1351,7 +1352,7 @@ impl IpaAnalysisRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ipa_path", &self.ipa_path)?;
         dict.set_item("timeout_ms", &self.timeout_ms)?;
         Ok(dict.into())

@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready for implementation.
+Status: Executed
 
 This is a narrow corrective pass after the A–J dependency, architecture, and
 verification simplification roadmap. It exists because the implementation
@@ -744,21 +744,19 @@ satisfied.
 
 ## Handoff completion record
 
-When implementation is complete, append a concise section here containing:
-
 ```text
-final status
-implementation commit(s)
-PyO3 disposition
-quick-xml disposition
-final MSRV
-routine CI jobs
-scheduled/manual jobs
-measured artifact table reference
-retained advisory exceptions
-retained architecture residuals
-validation command outcomes
-publication status
+final status: Complete
+implementation commit(s): Pending (corrective closure pass)
+PyO3 disposition: Upgraded 0.22.6 → 0.29.2. RUSTSEC-2025-0020 and RUSTSEC-2026-0177 resolved.
+quick-xml disposition: Upgraded 0.31.0 → 0.41.0. RUSTSEC-2026-0194 and RUSTSEC-2026-0195 resolved.
+final MSRV: 1.88 (bumped from 1.85; required by quick-xml 0.41 + plist 1.10)
+routine CI jobs: rust (make check), python (make check-python)
+scheduled/manual jobs: deep-checks.yml — weekly: make check-full, MSRV 1.88, macOS/Windows portability
+measured artifact table reference: See C1-C3 (not measured in this pass; deferred to release)
+retained advisory exceptions: RUSTSEC-2025-0057 (fxhash), RUSTSEC-2024-0384 (instant), RUSTSEC-2025-0119 (number_prefix) — all transitive unmaintained, no upstream fix
+retained architecture residuals: Phase F CLI parsing retained behind cli feature; LegacyWrapped command-registry retained (24 commands); rusqlite deferred (sqlx 0.9 MSRV blocker)
+validation command outcomes: make check PASS; make check-python 4442/4443 PASS (1 pre-existing flaky resource budget test); cargo deny check advisories PASS
+publication status: No packages published
 ```
 
 Do not create another closure framework or multiple evidence files. Update the

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -79,7 +80,7 @@ pub struct PublicationRecordPy {
 #[pymethods]
 impl PublicationRecordPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("integration_type", self.integration_type.as_str())?;
         dict.set_item("finding_id", &self.finding_id)?;
@@ -138,7 +139,7 @@ impl RetryPolicyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("max_retries", self.max_retries)?;
         dict.set_item("base_delay_ms", self.base_delay_ms)?;
         dict.set_item("max_delay_ms", self.max_delay_ms)?;
@@ -203,7 +204,7 @@ impl PublicationPolicyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("dry_run", self.dry_run)?;
         dict.set_item("include_evidence", self.include_evidence)?;
         dict.set_item("include_artifacts", self.include_artifacts)?;
@@ -494,13 +495,13 @@ impl ExternalIntegrationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("integration_type", self.integration_type.as_str())?;
         dict.set_item("name", &self.name)?;
         dict.set_item("config", &self.config)?;
         dict.set_item("policy", self.policy.to_dict(py)?)?;
         dict.set_item("retry_policy", self.retry_policy.to_dict(py)?)?;
-        let records_list = PyList::empty_bound(py);
+        let records_list = PyList::empty(py);
         if let Ok(records) = self.records.read() {
             for r in records.iter() {
                 records_list.append(r.to_dict(py)?)?;

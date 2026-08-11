@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -72,7 +73,7 @@ pub struct ServiceFingerprintResult {
 impl ServiceFingerprintResult {
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("port", self.port)?;
         dict.set_item("service", &self.service)?;
         dict.set_item("banner", &self.banner)?;
@@ -148,14 +149,14 @@ impl FingerprintScanResult {
 
     /// Convert result to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("services_identified", self.services_identified)?;
         dict.set_item("elapsed_ms", self.elapsed_ms)?;
 
-        let services_list = PyList::empty_bound(py);
+        let services_list = PyList::empty(py);
         for s in &self.services {
-            let s_dict = PyDict::new_bound(py);
+            let s_dict = PyDict::new(py);
             s_dict.set_item("port", s.port)?;
             s_dict.set_item("service", &s.service)?;
             s_dict.set_item("banner", &s.banner)?;
@@ -208,9 +209,9 @@ impl FingerprintScanResult {
 
     /// Convert service fingerprints to a list of row dicts suitable for tabular output.
     fn to_rows(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for s in &self.services {
-            let dict = PyDict::new_bound(py);
+            let dict = PyDict::new(py);
             dict.set_item("target", &self.target)?;
             dict.set_item("port", s.port)?;
             dict.set_item("service", &s.service)?;

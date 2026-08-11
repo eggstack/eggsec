@@ -67,7 +67,7 @@ impl BrowserDomEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("event_type", &self.event_type)?;
@@ -152,7 +152,7 @@ impl BrowserDownloadEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("sequence", self.sequence)?;
@@ -244,7 +244,7 @@ impl BrowserSecurityObservation {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("observation_id", &self.observation_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("sequence", self.sequence)?;

@@ -1,3 +1,5 @@
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -110,7 +112,7 @@ impl Evidence {
 
     #[getter]
     fn metadata(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             dict.set_item(k, v)?;
         }
@@ -118,12 +120,12 @@ impl Evidence {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("value", "[REDACTED]")?;
         dict.set_item("source", &self.source)?;
         dict.set_item("confidence", self.confidence)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }
@@ -132,12 +134,12 @@ impl Evidence {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("source", &self.source)?;
         dict.set_item("confidence", self.confidence)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }
@@ -224,7 +226,7 @@ impl Finding {
 
     #[getter]
     fn metadata(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             dict.set_item(k, v)?;
         }
@@ -233,7 +235,7 @@ impl Finding {
 
     /// Convert to a Python dictionary (redacted by default).
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("title", "[REDACTED]")?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -242,14 +244,14 @@ impl Finding {
         dict.set_item("description", "[REDACTED]")?;
         dict.set_item("recommendation", &self.recommendation)?;
 
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for e in &self.evidence_items {
-            let ev_dict = PyDict::new_bound(py);
+            let ev_dict = PyDict::new(py);
             ev_dict.set_item("kind", &e.kind)?;
             ev_dict.set_item("value", "[REDACTED]")?;
             ev_dict.set_item("source", &e.source)?;
             ev_dict.set_item("confidence", e.confidence)?;
-            let meta_dict = PyDict::new_bound(py);
+            let meta_dict = PyDict::new(py);
             for (k, v) in &e.metadata {
                 meta_dict.set_item(k, v)?;
             }
@@ -258,7 +260,7 @@ impl Finding {
         }
         dict.set_item("evidence", evidence_list)?;
 
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, _v) in &self.metadata {
             meta_dict.set_item(k, "[REDACTED]")?;
         }
@@ -269,7 +271,7 @@ impl Finding {
 
     /// Convert to a Python dictionary with raw (unredacted) values.
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("title", &self.title)?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -278,13 +280,13 @@ impl Finding {
         dict.set_item("description", &self.description)?;
         dict.set_item("recommendation", &self.recommendation)?;
 
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for e in &self.evidence_items {
             evidence_list.append(e.to_dict_raw(py)?)?;
         }
         dict.set_item("evidence", evidence_list)?;
 
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }
@@ -334,7 +336,7 @@ impl Finding {
 
     /// Convert to a row (list of key-value pairs) for tabular output.
     fn to_row(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("title", &self.title)?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -466,7 +468,7 @@ impl FindingSet {
 
     /// Convert to a list of dicts (materializes all findings).
     fn to_dicts(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for f in &self.findings {
             list.append(f.to_dict(py)?)?;
         }
@@ -475,7 +477,7 @@ impl FindingSet {
 
     /// Convert to rows for tabular output.
     fn to_rows(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for f in &self.findings {
             list.append(f.to_row(py)?)?;
         }
@@ -494,7 +496,7 @@ impl FindingSet {
     /// Iterate over findings.
     fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
         let findings = slf.findings.clone();
-        Ok(FindingSetIteratorPy::new(findings).into_py(py))
+        Ok(FindingSetIteratorPy::new(findings).into_py_any(py).unwrap())
     }
 
     /// Check if a finding with the given id exists in the set.
@@ -644,7 +646,7 @@ impl Report {
     /// Get report metadata.
     #[getter]
     fn metadata(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             dict.set_item(k, v)?;
         }
@@ -653,13 +655,13 @@ impl Report {
 
     /// Convert to a Python dictionary (redacted by default).
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let findings_list = PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("findings", findings_list)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, _v) in &self.metadata {
             meta_dict.set_item(k, "[REDACTED]")?;
         }
@@ -669,13 +671,13 @@ impl Report {
 
     /// Convert to a Python dictionary with raw (unredacted) values.
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let findings_list = PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict_raw(py)?)?;
         }
         dict.set_item("findings", findings_list)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         for (k, v) in &self.metadata {
             meta_dict.set_item(k, v)?;
         }
@@ -739,7 +741,7 @@ impl Report {
 
     /// Convert to rows for tabular output (suitable for pandas).
     fn to_rows(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for f in &self.findings {
             list.append(f.to_row(py)?)?;
         }

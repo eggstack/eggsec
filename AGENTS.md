@@ -2,7 +2,7 @@
 
 Guidelines for AI agents working on this codebase.
 
-**Minimum Rust version: 1.85** (workspace `rust-version` in `Cargo.toml`). CI tests the exact MSRV via the `msrv` job in `.github/workflows/ci.yml`. Verify locally with `make check-msrv` (requires `rustup toolchain install 1.85`).
+**Minimum Rust version: 1.88** (workspace `rust-version` in `Cargo.toml`). CI tests the exact MSRV via the `msrv` job in `.github/workflows/deep-checks.yml`. Verify locally with `make check-msrv` (requires `rustup toolchain install 1.88`).
 
 ## Quick Verification
 
@@ -100,7 +100,7 @@ make clippy                 # lint (-D warnings)
 make fmt                    # format check
 make test-feature-matrix    # feature + metadata validation
 make check-no-default       # no-default-features workspace build
-make check-msrv             # MSRV compile check (requires rustup toolchain install 1.85)
+make check-msrv             # MSRV compile check (requires rustup toolchain install 1.88)
 make check-feature-profiles # representative feature profile checks
 make build                  # release build
 ```
@@ -349,7 +349,7 @@ Major direct dependency families, owning crate/domain, and suggested review cade
 
 | Dependency Family | Owning Crate/Domain | Review Cadence | Notes |
 |-------------------|---------------------|----------------|-------|
-| PyO3/maturin | `eggsec-python` | Each PyO3 release cycle | Python bindings; 0.22 currently used (upgrade to 0.29 deferred) |
+| PyO3/maturin | `eggsec-python` | Each PyO3 release cycle | Python bindings; 0.29 currently used |
 | TLS (rustls, tokio-rustls) | `eggsec`, `eggsec-web-proxy` | Monthly or advisory-driven | Security-critical transport |
 | reqwest | `eggsec`, `eggsec-agent` | Monthly or advisory-driven | HTTP client; security-critical |
 | SQLx | `eggsec-db-lab` | Quarterly or compatibility-driven | Postgres/MySQL drivers; 0.8 blocks rusqlite 0.40 upgrade (libsqlite3-sys conflict) |

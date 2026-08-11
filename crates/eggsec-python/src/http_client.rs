@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -59,7 +60,7 @@ impl RedactConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("redact_headers", &self.redact_headers)?;
         dict.set_item("redact_query_params", &self.redact_query_params)?;
         dict.set_item("redact_body_fields", &self.redact_body_fields)?;
@@ -199,7 +200,7 @@ impl HttpRequestPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("method", &self.method)?;
         dict.set_item("url", &self.url)?;
         dict.set_item("headers", &self.headers)?;
@@ -306,10 +307,10 @@ impl HttpHeadersPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let entries_list = PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let entries_list = PyList::empty(py);
         for (k, v) in &self.entries {
-            let pair = PyDict::new_bound(py);
+            let pair = PyDict::new(py);
             pair.set_item("name", k)?;
             pair.set_item("value", v)?;
             entries_list.append(pair)?;
@@ -390,7 +391,7 @@ impl HttpCookiePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("domain", &self.domain)?;
@@ -450,7 +451,7 @@ impl RedirectEntryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("headers", &self.headers)?;
@@ -511,7 +512,7 @@ impl TlsMetadataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", &self.version)?;
         dict.set_item("cipher", &self.cipher)?;
         dict.set_item("certificate_chain", &self.certificate_chain)?;
@@ -591,7 +592,7 @@ impl HttpTimingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("dns_ms", &self.dns_ms)?;
         dict.set_item("connect_ms", &self.connect_ms)?;
         dict.set_item("tls_handshake_ms", &self.tls_handshake_ms)?;
@@ -699,9 +700,9 @@ impl HttpResponsePy {
         let redact_config = match &self.redact_config {
             Some(c) => c,
             None => {
-                let entries_list = PyList::empty_bound(py);
+                let entries_list = PyList::empty(py);
                 for (k, v) in &self.headers.entries {
-                    let pair = PyDict::new_bound(py);
+                    let pair = PyDict::new(py);
                     pair.set_item("0", k)?;
                     pair.set_item("1", v)?;
                     entries_list.append(pair)?;
@@ -716,9 +717,9 @@ impl HttpResponsePy {
             .map(|h| h.to_lowercase())
             .collect();
 
-        let entries_list = PyList::empty_bound(py);
+        let entries_list = PyList::empty(py);
         for (k, v) in &self.headers.entries {
-            let pair = PyDict::new_bound(py);
+            let pair = PyDict::new(py);
             pair.set_item("0", k)?;
             if sensitive.contains(&k.to_lowercase()) {
                 let masked = if v.len() > 4 {
@@ -736,12 +737,12 @@ impl HttpResponsePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("reason", &self.reason)?;
         dict.set_item("headers", self.headers.to_dict(py)?)?;
 
-        let cookies_list = PyList::empty_bound(py);
+        let cookies_list = PyList::empty(py);
         for cookie in &self.cookies {
             cookies_list.append(cookie.to_dict(py)?)?;
         }
@@ -752,7 +753,7 @@ impl HttpResponsePy {
         dict.set_item("content_length", &self.content_length)?;
         dict.set_item("final_url", &self.final_url)?;
 
-        let redirects_list = PyList::empty_bound(py);
+        let redirects_list = PyList::empty(py);
         for entry in &self.redirect_history {
             redirects_list.append(entry.to_dict(py)?)?;
         }
@@ -794,6 +795,7 @@ impl HttpResponsePy {
     ///
     /// Useful for processing large response bodies without loading
     /// everything into memory at once. Each chunk is a bytes object.
+    #[pyo3(signature = (chunk_size=None))]
     fn iter_body_chunks(&self, chunk_size: Option<usize>) -> Vec<Vec<u8>> {
         let chunk_size = chunk_size.unwrap_or(8192);
         self.body_bytes
@@ -883,7 +885,7 @@ impl HttpClientConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("base_url", &self.base_url)?;
         dict.set_item("default_headers", &self.default_headers)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;

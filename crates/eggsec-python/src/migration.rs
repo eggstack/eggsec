@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -35,7 +36,7 @@ impl SchemaVersionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", &self.version)?;
         dict.set_item("created_at", &self.created_at)?;
         dict.set_item("description", &self.description)?;
@@ -76,7 +77,7 @@ pub struct MigrationResultPy {
 #[pymethods]
 impl MigrationResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("success", self.success)?;
         dict.set_item("source_version", &self.source_version)?;
         dict.set_item("target_version", &self.target_version)?;
@@ -379,6 +380,7 @@ impl FindingMigrationPy {
     }
 
     /// Migrate from legacy Python Finding fields to VersionedFinding.
+    #[pyo3(signature = (id, title, severity, target, category, description, recommendation=None, evidence=None, metadata=None))]
     fn migrate_legacy_finding(
         &self,
         id: String,
@@ -415,7 +417,7 @@ impl FindingMigrationPy {
         let mut errors = Vec::<String>::new();
         let mut migrated = 0u32;
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             for (i, finding_ref) in legacy_findings.iter().enumerate() {
                 let finding = finding_ref.bind(py);
                 let get_str = |key: &str| -> String {

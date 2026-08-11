@@ -72,7 +72,7 @@ impl CaptureConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("filter", &self.filter)?;
         dict.set_item("promiscuous", self.promiscuous)?;
@@ -132,7 +132,7 @@ impl CaptureStatsPy {
 #[pymethods]
 impl CaptureStatsPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("packets_captured", self.packets_captured)?;
         dict.set_item("bytes_captured", self.bytes_captured)?;
         dict.set_item("packets_dropped", self.packets_dropped)?;
@@ -241,7 +241,7 @@ impl PacketInfoPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("timestamp", &self.timestamp)?;
         dict.set_item("src_ip", &self.src_ip)?;
         dict.set_item("dst_ip", &self.dst_ip)?;
@@ -301,7 +301,7 @@ impl NetworkInterfaceInfoPy {
 #[pymethods]
 impl NetworkInterfaceInfoPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("ips", &self.ips)?;
         dict.set_item("mac", &self.mac)?;
@@ -607,7 +607,7 @@ impl PacketFilterPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("bpf_expression", &self.bpf_expression)?;
         dict.set_item("protocol", &self.protocol)?;
         dict.set_item("src_port", self.src_port)?;
@@ -663,7 +663,7 @@ pub struct FlowRecordPy {
 #[pymethods]
 impl FlowRecordPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_ip", &self.src_ip)?;
         dict.set_item("dst_ip", &self.dst_ip)?;
         dict.set_item("src_port", self.src_port)?;
@@ -719,18 +719,18 @@ pub struct LiveCaptureResultPy {
 #[pymethods]
 impl LiveCaptureResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("duration_ms", self.duration_ms)?;
         dict.set_item("packets_captured", self.packets_captured)?;
         dict.set_item("packets_dropped", self.packets_dropped)?;
         dict.set_item("bytes_captured", self.bytes_captured)?;
-        let flows_list = PyList::empty_bound(py);
+        let flows_list = PyList::empty(py);
         for f in &self.flows {
             flows_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("flows", flows_list)?;
-        let packets_list = PyList::empty_bound(py);
+        let packets_list = PyList::empty(py);
         for p in &self.packets {
             packets_list.append(p.to_dict(py)?)?;
         }
@@ -820,7 +820,7 @@ impl TracerouteConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("max_hops", self.max_hops)?;
         dict.set_item("timeout_secs", self.timeout_secs)?;
@@ -878,7 +878,7 @@ pub struct TracerouteHopPy {
 #[pymethods]
 impl TracerouteHopPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("hop", self.hop)?;
         dict.set_item("address", &self.address)?;
         dict.set_item("rtt_ms", self.rtt_ms)?;
@@ -925,10 +925,10 @@ pub struct TracerouteResultPy {
 #[pymethods]
 impl TracerouteResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("resolved_address", &self.resolved_address)?;
-        let hops_list = PyList::empty_bound(py);
+        let hops_list = PyList::empty(py);
         for h in &self.hops {
             hops_list.append(h.to_dict(py)?)?;
         }
@@ -1065,7 +1065,7 @@ pub enum BackpressurePolicyPy {
 #[pymethods]
 impl BackpressurePolicyPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("policy", format!("{:?}", self))?;
         Ok(dict.into())
     }
@@ -1116,7 +1116,7 @@ impl CaptureDropStatsPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("dropped_by_policy", self.dropped_by_policy)?;
         dict.set_item("dropped_by_full_queue", self.dropped_by_full_queue)?;
         dict.set_item("dropped_by_error", self.dropped_by_error)?;
@@ -1187,7 +1187,7 @@ impl CapturedPacketPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("sequence", self.sequence)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
         dict.set_item("captured_len", self.captured_len)?;
@@ -1402,7 +1402,7 @@ impl EthernetFramePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_mac", &self.src_mac)?;
         dict.set_item("dst_mac", &self.dst_mac)?;
         dict.set_item("ether_type", self.ether_type)?;
@@ -1486,7 +1486,7 @@ impl Ipv4PacketPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_ip", &self.src_ip)?;
         dict.set_item("dst_ip", &self.dst_ip)?;
         dict.set_item("protocol", self.protocol)?;
@@ -1566,7 +1566,7 @@ impl Ipv6PacketPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_ip", &self.src_ip)?;
         dict.set_item("dst_ip", &self.dst_ip)?;
         dict.set_item("next_header", self.next_header)?;
@@ -1652,7 +1652,7 @@ impl TcpSegmentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_port", self.src_port)?;
         dict.set_item("dst_port", self.dst_port)?;
         dict.set_item("seq_num", self.seq_num)?;
@@ -1723,7 +1723,7 @@ impl UdpDatagramPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_port", self.src_port)?;
         dict.set_item("dst_port", self.dst_port)?;
         dict.set_item("length", self.length)?;
@@ -1794,7 +1794,7 @@ impl IcmpPacketPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("icmp_type", self.icmp_type)?;
         dict.set_item("icmp_type_name", &self.icmp_type_name)?;
         dict.set_item("icmp_code", self.icmp_code)?;
@@ -1852,7 +1852,7 @@ impl FlowKeyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_ip", &self.src_ip)?;
         dict.set_item("dst_ip", &self.dst_ip)?;
         dict.set_item("src_port", self.src_port)?;
@@ -1988,13 +1988,13 @@ impl FlowAggregatorPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("flow_count", self.flows.len())?;
         dict.set_item("eviction_count", self.eviction_count)?;
         dict.set_item("max_flows", self.max_flows)?;
         dict.set_item("total_packets", self.total_packets())?;
         dict.set_item("total_bytes", self.total_bytes())?;
-        let flows_list = PyList::empty_bound(py);
+        let flows_list = PyList::empty(py);
         for f in self.flows.values() {
             flows_list.append(f.to_dict(py)?)?;
         }
@@ -2068,7 +2068,7 @@ impl IcmpProbeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("count", self.count)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
@@ -2117,7 +2117,7 @@ impl IcmpProbeReplyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("seq", self.seq)?;
         dict.set_item("rtt_ms", self.rtt_ms)?;
         dict.set_item("ttl", self.ttl)?;
@@ -2204,7 +2204,7 @@ impl IcmpProbeResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("resolved_address", &self.resolved_address)?;
         dict.set_item("reachable", self.reachable)?;
@@ -2215,7 +2215,7 @@ impl IcmpProbeResultPy {
         dict.set_item("avg_rtt_ms", &self.avg_rtt_ms)?;
         dict.set_item("packet_loss_pct", self.packet_loss_pct)?;
         dict.set_item("error", &self.error)?;
-        let replies_list = PyList::empty_bound(py);
+        let replies_list = PyList::empty(py);
         for r in &self.replies {
             replies_list.append(r.to_dict(py)?)?;
         }
@@ -2283,7 +2283,7 @@ impl TcpProbeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", self.port)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
@@ -2347,7 +2347,7 @@ impl TcpProbeResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", self.port)?;
         dict.set_item("state", &self.state)?;
@@ -2595,7 +2595,7 @@ impl PacketTimestampPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("seconds", self.seconds)?;
         dict.set_item("nanos", self.nanos)?;
         dict.set_item("epoch_micros", self.epoch_micros)?;
@@ -2720,7 +2720,7 @@ impl PacketArtifactPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("packet_index", self.packet_index)?;
         dict.set_item("artifact_type", &self.artifact_type)?;
         dict.set_item("file_path", &self.file_path)?;
@@ -2965,7 +2965,7 @@ impl DnsPacketPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("transaction_id", self.transaction_id)?;
         dict.set_item("is_response", self.is_response)?;
         dict.set_item("op_code", self.op_code)?;
@@ -3059,7 +3059,7 @@ impl TlsRecordInfoPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("content_type", &self.content_type)?;
         dict.set_item("version", &self.version)?;
         dict.set_item("record_length", self.record_length)?;
@@ -3128,7 +3128,7 @@ impl UdpReachabilityConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("payload", &self.payload)?;
@@ -3198,7 +3198,7 @@ impl UdpReachabilityResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("reachable", self.reachable)?;
         dict.set_item("response", &self.response)?;
         dict.set_item("rtt_ms", &self.rtt_ms)?;

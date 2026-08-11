@@ -59,7 +59,7 @@ pub struct DaemonResponsePy {
 impl DaemonResponsePy {
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ok", self.ok)?;
         dict.set_item("request_id", &self.request_id)?;
         dict.set_item("message", &self.message)?;
@@ -305,7 +305,7 @@ impl DaemonClientPy {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("socket_path", &self.socket_path)?;
         dict.set_item("is_closed", self.is_closed())?;
         Ok(dict.into())
@@ -1030,7 +1030,7 @@ pub struct DaemonCapabilitiesPy {
 #[pymethods]
 impl DaemonCapabilitiesPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("protocol_version", self.protocol_version)?;
         dict.set_item("transports", &self.transports)?;
         dict.set_item("has_persistence", self.has_persistence)?;
@@ -1120,7 +1120,7 @@ pub struct TaskStatusPy {
 #[pymethods]
 impl TaskStatusPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("state", &self.state)?;
@@ -1165,7 +1165,7 @@ pub struct DaemonEventPy {
 #[pymethods]
 impl DaemonEventPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("event_type", &self.event_type)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -1209,7 +1209,7 @@ pub struct SessionSummaryPy {
 #[pymethods]
 impl SessionSummaryPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("surface", &self.surface)?;
         dict.set_item("state", &self.state)?;
@@ -1249,7 +1249,7 @@ pub struct TransportMetadataPy {
 #[pymethods]
 impl TransportMetadataPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("bind_address", &self.bind_address)?;
         dict.set_item("enabled", self.enabled)?;

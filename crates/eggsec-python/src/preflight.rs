@@ -176,7 +176,7 @@ pub fn preflight_operation(
     );
 
     // Run the preflight check using the engine's preflight_operation
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         eggsec::config::preflight_operation(
             eggsec::config::ExecutionSurface::CliManual,
             &enforcement,
@@ -221,7 +221,7 @@ pub fn preflight_with_descriptor(
         ..Default::default()
     });
 
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         eggsec::config::preflight_operation(
             surface.inner,
             &enforcement,

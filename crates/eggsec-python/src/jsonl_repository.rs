@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -379,10 +380,10 @@ impl JsonlFindingRepository {
             .findings
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for (id, json) in findings.iter() {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", id)?;
             item_dict.set_item("data", json)?;
             list.append(item_dict)?;
@@ -773,10 +774,10 @@ impl JsonlAssessmentRepository {
             .assessments
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for (id, json) in assessments.iter() {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", id)?;
             item_dict.set_item("data", json)?;
             list.append(item_dict)?;

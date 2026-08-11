@@ -57,10 +57,10 @@ test-architecture-guards:
 check-no-default:
 	cargo check --workspace --no-default-features
 
-# Validate MSRV (requires `rustup toolchain install 1.85`)
+# Validate MSRV (requires `rustup toolchain install 1.88`)
 check-msrv:
-	cargo +1.85 check --workspace --no-default-features
-	cargo +1.85 check -p eggsec-cli --no-default-features
+	cargo +1.88 check --workspace --no-default-features
+	cargo +1.88 check -p eggsec-cli --no-default-features
 
 # Full mandatory Rust CI contract (no cargo-nextest required)
 check:
@@ -125,5 +125,5 @@ help:
 	@echo "  make test-feature-matrix - Feature metadata validation tests"
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
-	@echo "  make check-msrv         - Validate MSRV (requires rustup toolchain install 1.85)"
+	@echo "  make check-msrv         - Validate MSRV (requires rustup toolchain install 1.88)"
 	@echo "  make check-feature-profiles - Representative feature profile checks"

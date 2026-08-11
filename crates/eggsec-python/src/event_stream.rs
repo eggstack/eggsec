@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -113,7 +114,7 @@ impl EventStream {
 
     /// Convert the stream to a Python list of dicts.
     fn to_list(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in &self.events {
             list.append(event.to_dict_impl(py)?)?;
         }
@@ -122,7 +123,7 @@ impl EventStream {
 
     /// Convert the stream to a Python list of dicts (alias).
     fn to_dict_list(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in &self.events {
             list.append(event.to_dict_impl(py)?)?;
         }
@@ -144,7 +145,7 @@ impl EventStream {
 
     /// Return a snapshot dict of stream metadata.
     fn snapshot(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("total_events", self.events.len())?;
         dict.set_item("filter_type", &self.filter_type)?;
         dict.set_item("filter_correlation", &self.filter_correlation)?;
@@ -166,7 +167,7 @@ impl EventStream {
 
     /// Iterate over events (yields event dicts).
     fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in slf.events.iter() {
             let dict = event.to_dict_impl(py)?;
             list.append(dict)?;

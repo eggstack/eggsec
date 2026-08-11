@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -63,7 +64,7 @@ impl TcpConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("connect_timeout_ms", self.connect_timeout_ms)?;
@@ -120,20 +121,20 @@ pub struct TcpConnectResultPy {
 #[pymethods]
 impl TcpConnectResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let local_dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
+        let local_dict = PyDict::new(py);
         local_dict.set_item("address", &self.local_endpoint.address)?;
         local_dict.set_item("port", self.local_endpoint.port)?;
         local_dict.set_item("address_family", &self.local_endpoint.address_family)?;
         local_dict.set_item("is_loopback", self.local_endpoint.is_loopback)?;
         dict.set_item("local_endpoint", local_dict)?;
-        let remote_dict = PyDict::new_bound(py);
+        let remote_dict = PyDict::new(py);
         remote_dict.set_item("address", &self.remote_endpoint.address)?;
         remote_dict.set_item("port", self.remote_endpoint.port)?;
         remote_dict.set_item("address_family", &self.remote_endpoint.address_family)?;
         remote_dict.set_item("is_loopback", self.remote_endpoint.is_loopback)?;
         dict.set_item("remote_endpoint", remote_dict)?;
-        let timing_dict = PyDict::new_bound(py);
+        let timing_dict = PyDict::new(py);
         timing_dict.set_item("dns_resolution_ms", &self.timing.dns_resolution_ms)?;
         timing_dict.set_item("tcp_connect_ms", &self.timing.tcp_connect_ms)?;
         timing_dict.set_item("tls_handshake_ms", &self.timing.tls_handshake_ms)?;
@@ -141,7 +142,7 @@ impl TcpConnectResultPy {
         timing_dict.set_item("total_ms", self.timing.total_ms)?;
         timing_dict.set_item("connection_reused", self.timing.connection_reused)?;
         dict.set_item("timing", timing_dict)?;
-        let meta_dict = PyDict::new_bound(py);
+        let meta_dict = PyDict::new(py);
         meta_dict.set_item("transport_protocol", &self.metadata.transport_protocol)?;
         meta_dict.set_item("connection_reused", self.metadata.connection_reused)?;
         meta_dict.set_item("bytes_sent", self.metadata.bytes_sent)?;
@@ -191,7 +192,7 @@ pub struct TcpReadResultPy {
 #[pymethods]
 impl TcpReadResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("data", &self.data)?;
         dict.set_item("bytes_read", self.bytes_read)?;
         dict.set_item("eof", self.eof)?;
@@ -237,7 +238,7 @@ pub struct TcpWriteResultPy {
 #[pymethods]
 impl TcpWriteResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("bytes_written", self.bytes_written)?;
         dict.set_item("duration_ms", self.duration_ms)?;
         Ok(dict.into())
@@ -567,6 +568,7 @@ impl TcpSessionPy {
     }
 
     /// Read until the delimiter byte is encountered or max_len is reached.
+    #[pyo3(signature = (delimiter=None, max_len=None))]
     fn read_until(
         &self,
         py: Python,
@@ -843,7 +845,7 @@ impl UdpConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
@@ -889,7 +891,7 @@ pub struct UdpSendResultPy {
 #[pymethods]
 impl UdpSendResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("bytes_sent", self.bytes_sent)?;
         dict.set_item("duration_ms", self.duration_ms)?;
         Ok(dict.into())
@@ -933,7 +935,7 @@ pub struct UdpRecvResultPy {
 #[pymethods]
 impl UdpRecvResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("data", &self.data)?;
         dict.set_item("bytes_received", self.bytes_received)?;
         dict.set_item("truncated", self.truncated)?;
@@ -987,7 +989,7 @@ pub struct UdpRecvFromResultPy {
 #[pymethods]
 impl UdpRecvFromResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("data", &self.data)?;
         dict.set_item("bytes_received", self.bytes_received)?;
         dict.set_item("source_address", &self.source_address)?;
@@ -1495,7 +1497,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let addr = format!("{}:{}", host, port);
                 let connect_start = Instant::now();
@@ -1585,7 +1587,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -1646,7 +1648,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -1693,6 +1695,7 @@ impl AsyncTcpSessionPy {
     }
 
     /// Read until the delimiter byte is encountered or max_len is reached.
+    #[pyo3(signature = (delimiter=None, max_len=None))]
     fn read_until(
         &self,
         py: Python,
@@ -1711,7 +1714,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -1786,7 +1789,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -1842,7 +1845,7 @@ impl AsyncTcpSessionPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -2048,7 +2051,7 @@ impl AsyncUdpSocketPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let socket = if let Some(ref bind) = bind_addr {
                     tokio::net::UdpSocket::bind(bind).await.map_err(|e| {
@@ -2095,7 +2098,7 @@ impl AsyncUdpSocketPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -2155,7 +2158,7 @@ impl AsyncUdpSocketPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -2212,7 +2215,7 @@ impl AsyncUdpSocketPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -2275,7 +2278,7 @@ impl AsyncUdpSocketPy {
             }
         }
 
-        py.allow_threads(|| {
+        py.detach(|| {
             runtime_async::spawn_async(async move {
                 let start = Instant::now();
                 let mut s = state.lock().await;
@@ -2428,7 +2431,7 @@ pub struct BannerProbeResultPy {
 #[pymethods]
 impl BannerProbeResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("banner_bytes", &self.banner_bytes)?;
@@ -2436,7 +2439,7 @@ impl BannerProbeResultPy {
         dict.set_item("encoding", &self.encoding)?;
         dict.set_item("timeout", self.timeout)?;
         dict.set_item("connection_error", &self.connection_error)?;
-        let timing_dict = PyDict::new_bound(py);
+        let timing_dict = PyDict::new(py);
         timing_dict.set_item("dns_resolution_ms", &self.timing.dns_resolution_ms)?;
         timing_dict.set_item("tcp_connect_ms", &self.timing.tcp_connect_ms)?;
         timing_dict.set_item("tls_handshake_ms", &self.timing.tls_handshake_ms)?;

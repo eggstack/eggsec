@@ -180,7 +180,7 @@ impl PostexTechniquePy {
 #[pymethods]
 impl PostexTechniquePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("mitre_id", &self.mitre_id)?;
@@ -231,7 +231,7 @@ impl PostexDetectionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("technique", self.technique.to_dict(py)?)?;
         dict.set_item("simulated", self.simulated)?;
         dict.set_item("confidence", self.confidence)?;
@@ -333,13 +333,13 @@ impl PostexReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timestamp", &self.timestamp)?;
         dict.set_item("dry_run", self.dry_run)?;
         dict.set_item("actions_performed", &self.actions_performed)?;
 
-        let det_list = PyList::empty_bound(py);
+        let det_list = PyList::empty(py);
         for d in &self.detections {
             det_list.append(d.to_dict(py)?)?;
         }
@@ -406,7 +406,7 @@ impl PostexScanConfigPy {
 ///     ScanError: If the scan fails.
 #[pyfunction]
 pub fn postex_scan(config: PostexScanConfigPy) -> PyResult<PostexReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner =
                 eggsec::postex::PostexScanner::new(config.dry_run, config.profile.to_engine());

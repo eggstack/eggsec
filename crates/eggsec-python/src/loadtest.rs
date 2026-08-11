@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -58,7 +59,7 @@ impl LoadTestResultPy {
     /// Status code to count mapping as a Python dict.
     #[getter]
     fn status_codes(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (&code, &count) in &self.status_codes {
             dict.set_item(code, count)?;
         }
@@ -67,7 +68,7 @@ impl LoadTestResultPy {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target_url", &self.target_url)?;
         dict.set_item("total_requests", self.total_requests)?;
         dict.set_item("successful_requests", self.successful_requests)?;
@@ -81,12 +82,12 @@ impl LoadTestResultPy {
         dict.set_item("latency_p90_ms", self.latency_p90_ms)?;
         dict.set_item("latency_p95_ms", self.latency_p95_ms)?;
         dict.set_item("latency_p99_ms", self.latency_p99_ms)?;
-        let status_dict = PyDict::new_bound(py);
+        let status_dict = PyDict::new(py);
         for (&code, &count) in &self.status_codes {
             status_dict.set_item(code, count)?;
         }
         dict.set_item("status_codes", &status_dict)?;
-        let error_list = PyList::new_bound(py, &self.errors);
+        let error_list = PyList::new(py, &self.errors)?;
         dict.set_item("errors", &error_list)?;
         Ok(dict.into())
     }
@@ -166,9 +167,9 @@ impl LoadTestConfig {
     /// Headers as a list of (key, value) tuples.
     #[getter]
     fn headers(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for (key, value) in &self.headers {
-            let tuple = pyo3::types::PyTuple::new_bound(py, &[key.as_str(), value.as_str()]);
+            let tuple = pyo3::types::PyTuple::new(py, &[key.as_str(), value.as_str()])?;
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -176,16 +177,16 @@ impl LoadTestConfig {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("total_requests", self.total_requests)?;
         dict.set_item("concurrency", self.concurrency)?;
         dict.set_item("timeout_secs", self.timeout_secs)?;
         dict.set_item("method", &self.method)?;
         dict.set_item("body", &self.body)?;
-        let header_list = PyList::empty_bound(py);
+        let header_list = PyList::empty(py);
         for (key, value) in &self.headers {
-            let tuple = pyo3::types::PyTuple::new_bound(py, &[key.as_str(), value.as_str()]);
+            let tuple = pyo3::types::PyTuple::new(py, &[key.as_str(), value.as_str()])?;
             header_list.append(tuple)?;
         }
         dict.set_item("headers", &header_list)?;

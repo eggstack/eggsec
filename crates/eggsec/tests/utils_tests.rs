@@ -2,8 +2,6 @@
 //!
 //! Tests URL normalization, target extraction, and other utility functions.
 
-use eggsec::config::{Scope, ScopeRule};
-use eggsec::utils::scope::{check_scope, check_scope_from_url};
 use eggsec::utils::target::{extract_domain, extract_host_port, normalize_url};
 
 #[test]
@@ -91,70 +89,4 @@ fn test_extract_host_port_with_port() {
     let (host, port) = result.unwrap();
     assert_eq!(host, "example.com");
     assert_eq!(port, 8080);
-}
-
-#[test]
-fn test_check_scope_allowed() {
-    let mut scope = Scope::new();
-    scope
-        .allowed_targets
-        .push(ScopeRule::new("example.com".to_string()));
-
-    assert!(check_scope(&scope, "example.com").is_ok());
-}
-
-#[test]
-fn test_check_scope_denied() {
-    let mut scope = Scope::new();
-    scope
-        .allowed_targets
-        .push(ScopeRule::new("example.com".to_string()));
-
-    assert!(check_scope(&scope, "other.com").is_err());
-}
-
-#[test]
-fn test_check_scope_wildcard() {
-    let mut scope = Scope::new();
-    scope
-        .allowed_targets
-        .push(ScopeRule::new("*.example.com".to_string()));
-
-    assert!(check_scope(&scope, "sub.example.com").is_ok());
-    assert!(check_scope(&scope, "example.com").is_ok());
-    assert!(check_scope(&scope, "other.com").is_err());
-}
-
-#[test]
-fn test_check_scope_excluded() {
-    let mut scope = Scope::new();
-    scope
-        .allowed_targets
-        .push(ScopeRule::new("*.example.com".to_string()));
-    scope
-        .excluded_targets
-        .push(ScopeRule::new("admin.example.com".to_string()));
-
-    assert!(check_scope(&scope, "sub.example.com").is_ok());
-    assert!(check_scope(&scope, "admin.example.com").is_err());
-}
-
-#[test]
-fn test_check_scope_from_url() {
-    let mut scope = Scope::new();
-    scope
-        .allowed_targets
-        .push(ScopeRule::new("example.com".to_string()));
-
-    assert!(check_scope_from_url(&scope, "https://example.com/path").is_ok());
-    assert!(check_scope_from_url(&scope, "https://other.com/path").is_err());
-}
-
-#[test]
-fn test_check_scope_explicit_required() {
-    let mut scope = Scope::new();
-    scope.require_explicit_scope = true;
-
-    // With explicit scope required and no targets, nothing is allowed
-    assert!(check_scope(&scope, "example.com").is_err());
 }

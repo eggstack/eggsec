@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -56,7 +57,7 @@ impl DnsQueryConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("domain", &self.domain)?;
         dict.set_item("record_types", &self.record_types)?;
         dict.set_item("resolver", &self.resolver)?;
@@ -119,7 +120,7 @@ impl DnsRecordPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("record_type", &self.record_type)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("data", &self.data)?;
@@ -179,10 +180,10 @@ impl DnsQueryResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("domain", &self.domain)?;
 
-        let records_list = PyList::empty_bound(py);
+        let records_list = PyList::empty(py);
         for record in &self.records {
             records_list.append(record.to_dict(py)?)?;
         }
@@ -292,7 +293,7 @@ impl TlsProbeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("sni", &self.sni)?;
@@ -366,7 +367,7 @@ impl CertificateInfoPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("subject", &self.subject)?;
         dict.set_item("issuer", &self.issuer)?;
         dict.set_item("valid_from", &self.valid_from)?;
@@ -379,9 +380,9 @@ impl CertificateInfoPy {
         dict.set_item("days_until_expiry", self.days_until_expiry)?;
         dict.set_item("subject_alternative_names", &self.subject_alternative_names)?;
 
-        let chain_list = PyList::empty_bound(py);
+        let chain_list = PyList::empty(py);
         for entry in &self.chain {
-            let entry_dict = PyDict::new_bound(py);
+            let entry_dict = PyDict::new(py);
             entry_dict.set_item("subject", &entry.subject)?;
             entry_dict.set_item("issuer", &entry.issuer)?;
             entry_dict.set_item("valid_from", &entry.valid_from)?;
@@ -444,7 +445,7 @@ impl CertificateChainEntryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("subject", &self.subject)?;
         dict.set_item("issuer", &self.issuer)?;
         dict.set_item("valid_from", &self.valid_from)?;
@@ -522,7 +523,7 @@ impl TlsProbeResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("has_tls", self.has_tls)?;
@@ -541,9 +542,9 @@ impl TlsProbeResultPy {
         dict.set_item("supported_versions", &self.supported_versions)?;
         dict.set_item("supported_ciphers", &self.supported_ciphers)?;
 
-        let issues_list = PyList::empty_bound(py);
+        let issues_list = PyList::empty(py);
         for issue in &self.issues {
-            let issue_dict = PyDict::new_bound(py);
+            let issue_dict = PyDict::new(py);
             issue_dict.set_item("severity", &issue.severity)?;
             issue_dict.set_item("code", &issue.code)?;
             issue_dict.set_item("description", &issue.description)?;
@@ -609,7 +610,7 @@ impl TlsIssuePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("severity", &self.severity)?;
         dict.set_item("code", &self.code)?;
         dict.set_item("description", &self.description)?;
@@ -691,7 +692,7 @@ impl HttpProbeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("method", &self.method)?;
         dict.set_item("headers", &self.headers)?;
@@ -765,15 +766,15 @@ impl HttpProbeResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("final_url", &self.final_url)?;
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("reason", &self.reason)?;
 
-        let headers_list = PyList::empty_bound(py);
+        let headers_list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let pair = pyo3::types::PyTuple::new_bound(py, &[k, v]);
+            let pair = pyo3::types::PyTuple::new(py, &[k, v])?;
             headers_list.append(pair)?;
         }
         dict.set_item("headers", headers_list)?;
@@ -851,7 +852,7 @@ pub fn dns_query(
     let resolver_owned = resolver.map(|s| s.to_string());
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             dns_query_impl(
                 &domain_owned,
@@ -1257,7 +1258,7 @@ pub fn tls_probe(
     let sni_owned = sni.map(|s| s.to_string());
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             tls_probe_impl(
                 &host_owned,
@@ -1494,7 +1495,7 @@ pub fn http_probe(
     let method_owned = method.to_uppercase();
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             http_probe_impl(&url_owned, &method_owned, timeout, follow_redirects, None).await
         })
@@ -1661,7 +1662,7 @@ impl UdpProbeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("payload", &self.payload)?;
@@ -1722,7 +1723,7 @@ pub struct UdpProbeResultPy {
 #[pymethods]
 impl UdpProbeResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("reachable", self.reachable)?;
@@ -1786,7 +1787,7 @@ pub fn udp_probe(
     let payload_owned = payload.unwrap_or_default();
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         runtime_sync::block_on(py, async move {
             udp_probe_impl(
                 &host_owned,

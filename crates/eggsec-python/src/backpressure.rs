@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::PyObject;
 use pyo3::prelude::*;
 
 use crate::event_protocol::EventEnvelope;
@@ -29,7 +30,7 @@ pub struct EventDeliveryStats {
 #[pymethods]
 impl EventDeliveryStats {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = pyo3::types::PyDict::new_bound(py);
+        let dict = pyo3::types::PyDict::new(py);
         dict.set_item("emitted_count", self.emitted_count)?;
         dict.set_item("delivered_count", self.delivered_count)?;
         dict.set_item("dropped_count", self.dropped_count)?;
@@ -271,7 +272,7 @@ mod tests {
     use super::*;
 
     fn event(kind: &str) -> EventEnvelope {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             EventEnvelope::create(kind.to_string(), py.None(), None, None, None, None)
         })
     }

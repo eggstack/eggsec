@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -144,7 +145,7 @@ impl OAuthEndpointPy {
 #[pymethods]
 impl OAuthEndpointPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("kind", self.kind.as_str())?;
         Ok(dict.into())
@@ -200,7 +201,7 @@ impl OAuthTestResultPy {
 #[pymethods]
 impl OAuthTestResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("vulnerability", self.vulnerability.as_str())?;
         dict.set_item("success", self.success)?;
         dict.set_item("endpoint", &self.endpoint)?;

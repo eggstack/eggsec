@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -90,7 +91,7 @@ impl AuthFindingPy {
 #[pymethods]
 impl AuthFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("test_type", self.test_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("title", &self.title)?;
@@ -264,18 +265,18 @@ impl AuthTestReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("total_attempts", self.total_attempts)?;
         dict.set_item("finding_count", self.findings.len())?;
 
-        let tests_list = PyList::empty_bound(py);
+        let tests_list = PyList::empty(py);
         for t in &self.tests_run {
             tests_list.append(t.as_str())?;
         }
         dict.set_item("tests_run", tests_list)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
@@ -346,7 +347,7 @@ pub fn auth_test(target: &str, config: Option<AuthTestConfigPy>) -> PyResult<Aut
 
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let mut engine = eggsec::auth::AuthEngine::new(
                 cfg.max_attempts,

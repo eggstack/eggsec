@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -152,14 +153,14 @@ impl WorkerRegistrationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("worker_id", &self.worker_id)?;
         dict.set_item("hostname", &self.hostname)?;
         dict.set_item("max_concurrency", self.max_concurrency)?;
         dict.set_item("status", self.status.as_str())?;
         dict.set_item("last_heartbeat_secs", &self.last_heartbeat_secs)?;
 
-        let caps_list = PyList::empty_bound(py);
+        let caps_list = PyList::empty(py);
         for c in &self.capabilities {
             caps_list.append(c.as_str())?;
         }
@@ -212,7 +213,7 @@ impl HeartbeatPy {
 #[pymethods]
 impl HeartbeatPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("worker_id", &self.worker_id)?;
         dict.set_item("status", self.status.as_str())?;
         dict.set_item("current_jobs", self.current_jobs)?;
@@ -263,7 +264,7 @@ impl DistributedTaskPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("task_type", self.task_type.as_str())?;
         dict.set_item("target", &self.target)?;
@@ -299,7 +300,7 @@ pub struct DistributedTaskResultPy {
 #[pymethods]
 impl DistributedTaskResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("worker_id", &self.worker_id)?;
         dict.set_item("success", self.success)?;

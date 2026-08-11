@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -72,7 +73,7 @@ impl AuditOutcomePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", self.name())?;
         Ok(dict.into())
     }
@@ -112,9 +113,9 @@ impl ManualOverrideAuditPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("reason", &self.inner.reason)?;
-        let classes_list = PyList::empty_bound(py);
+        let classes_list = PyList::empty(py);
         for c in &self.inner.classes {
             classes_list.append(c.as_str())?;
         }
@@ -183,7 +184,7 @@ impl ScopeAuditPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("source", self.source())?;
         dict.set_item("path", &self.inner.path)?;
         dict.set_item("allow_rule_count", self.inner.allow_rule_count)?;
@@ -331,7 +332,7 @@ impl EnforcementAuditEventPy {
 
     /// Serialize the event to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_id", &self.inner.event_id)?;
         dict.set_item("timestamp", self.inner.timestamp.to_rfc3339())?;
         dict.set_item("surface", format!("{}", self.inner.surface))?;
@@ -346,7 +347,7 @@ impl EnforcementAuditEventPy {
         dict.set_item("decision_allowed", self.inner.decision.allowed)?;
         dict.set_item("decision_summary", self.decision_summary())?;
 
-        let confirmation_list = PyList::empty_bound(py);
+        let confirmation_list = PyList::empty(py);
         for c in &self.inner.confirmation_classes {
             confirmation_list.append(c.as_str())?;
         }
@@ -405,7 +406,7 @@ impl EnforcementAuditEventPy {
     }
 
     pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_id", &self.inner.event_id)?;
         dict.set_item("timestamp", self.inner.timestamp.to_rfc3339())?;
         dict.set_item("surface", format!("{}", self.inner.surface))?;
@@ -418,7 +419,7 @@ impl EnforcementAuditEventPy {
         )?;
         dict.set_item("decision_id", &self.inner.decision.decision_id)?;
         dict.set_item("decision_allowed", self.inner.decision.allowed)?;
-        let confirmation_list = PyList::empty_bound(py);
+        let confirmation_list = PyList::empty(py);
         for c in &self.inner.confirmation_classes {
             confirmation_list.append(c.as_str())?;
         }
@@ -476,7 +477,7 @@ pub fn audit_event_from_enforcement(
     let manual_override_audit = if confirmed {
         // When confirmed and override provided, build a simplified audit record
         manual_override.and_then(|mo| {
-            let dict: PyResult<Bound<'_, PyDict>> = mo.extract(py);
+            let dict = mo.extract::<Bound<'_, PyDict>>(py);
             match dict {
                 Ok(d) => {
                     let reason = d

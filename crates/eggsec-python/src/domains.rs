@@ -1,3 +1,5 @@
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -62,19 +64,34 @@ impl DomainDescriptorPy {
     }
 
     /// Serialize all fields to a Python dict.
-    fn to_dict(&self) -> HashMap<String, pyo3::PyObject> {
-        Python::with_gil(|py| {
+    fn to_dict(&self) -> HashMap<String, PyObject> {
+        Python::attach(|py| {
             let mut d = HashMap::new();
-            d.insert("id".into(), self.id.clone().into_py(py));
-            d.insert("display_name".into(), self.display_name.clone().into_py(py));
-            d.insert("description".into(), self.description.clone().into_py(py));
-            d.insert("category".into(), self.category.clone().into_py(py));
+            d.insert("id".into(), self.id.clone().into_py_any(py).unwrap());
+            d.insert(
+                "display_name".into(),
+                self.display_name.clone().into_py_any(py).unwrap(),
+            );
+            d.insert(
+                "description".into(),
+                self.description.clone().into_py_any(py).unwrap(),
+            );
+            d.insert(
+                "category".into(),
+                self.category.clone().into_py_any(py).unwrap(),
+            );
             d.insert(
                 "required_feature".into(),
-                self.required_feature.clone().into_py(py),
+                self.required_feature.clone().into_py_any(py).unwrap(),
             );
-            d.insert("operations".into(), self.operations.clone().into_py(py));
-            d.insert("is_available".into(), self.is_available.into_py(py));
+            d.insert(
+                "operations".into(),
+                self.operations.clone().into_py_any(py).unwrap(),
+            );
+            d.insert(
+                "is_available".into(),
+                self.is_available.into_py_any(py).unwrap(),
+            );
             d
         })
     }
@@ -165,9 +182,9 @@ impl DomainRegistry {
 /// This table intentionally describes maturity independently from compile-time
 /// availability: an enabled feature can still be provisional or experimental.
 #[pyfunction]
-pub fn domain_maturity() -> pyo3::PyObject {
-    Python::with_gil(|py| {
-        let table = pyo3::types::PyDict::new_bound(py);
+pub fn domain_maturity() -> PyObject {
+    Python::attach(|py| {
+        let table = pyo3::types::PyDict::new(py);
         let entries = [
             (
                 "stable-core",
@@ -244,7 +261,7 @@ pub fn domain_maturity() -> pyo3::PyObject {
             ("ai", "experimental", "provider-dependent advisory behavior"),
         ];
         for (domain, state, gates) in entries {
-            let entry = pyo3::types::PyDict::new_bound(py);
+            let entry = pyo3::types::PyDict::new(py);
             entry.set_item("state", state).expect("set maturity state");
             entry
                 .set_item("required_gates", gates)

@@ -44,16 +44,16 @@ pub struct ConnectionTestResultPy {
 impl ConnectionTestResultPy {
     #[getter]
     fn response_headers(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for (k, v) in &self.response_headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             list.append(tuple)?;
         }
         Ok(list.into())
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("connected", self.connected)?;
         dict.set_item("subprotocols", &self.subprotocols)?;
@@ -61,9 +61,9 @@ impl ConnectionTestResultPy {
         dict.set_item("latency_ms", &self.latency_ms)?;
         dict.set_item("error", &self.error)?;
 
-        let headers_list = PyList::empty_bound(py);
+        let headers_list = PyList::empty(py);
         for (k, v) in &self.response_headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             headers_list.append(tuple)?;
         }
         dict.set_item("response_headers", headers_list)?;
@@ -117,7 +117,7 @@ pub struct InjectionTestResultPy {
 #[pymethods]
 impl InjectionTestResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("payload", &self.payload)?;
         dict.set_item("sent", self.sent)?;
         dict.set_item("received_response", self.received_response)?;
@@ -166,7 +166,7 @@ pub struct OriginTestResultPy {
 #[pymethods]
 impl OriginTestResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("origin", &self.origin)?;
         dict.set_item("accepted", self.accepted)?;
         dict.set_item("status_code", &self.status_code)?;
@@ -218,7 +218,7 @@ pub struct FuzzTestResultPy {
 #[pymethods]
 impl FuzzTestResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("test_name", &self.test_name)?;
         dict.set_item("payload_size", self.payload_size)?;
         dict.set_item("sent", self.sent)?;
@@ -287,7 +287,7 @@ impl WebSocketFindingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("category", &self.category)?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("title", &self.title)?;
@@ -366,7 +366,7 @@ impl WebSocketReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("finding_count", self.findings.len())?;
 
@@ -376,25 +376,25 @@ impl WebSocketReportPy {
             dict.set_item("connection_test", py.None())?;
         }
 
-        let inj_list = PyList::empty_bound(py);
+        let inj_list = PyList::empty(py);
         for t in &self.injection_tests {
             inj_list.append(t.to_dict(py)?)?;
         }
         dict.set_item("injection_tests", inj_list)?;
 
-        let orig_list = PyList::empty_bound(py);
+        let orig_list = PyList::empty(py);
         for t in &self.origin_tests {
             orig_list.append(t.to_dict(py)?)?;
         }
         dict.set_item("origin_tests", orig_list)?;
 
-        let fuzz_list = PyList::empty_bound(py);
+        let fuzz_list = PyList::empty(py);
         for t in &self.fuzz_tests {
             fuzz_list.append(t.to_dict(py)?)?;
         }
         dict.set_item("fuzz_tests", fuzz_list)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
@@ -567,7 +567,7 @@ impl WebSocketTestConfigPy {
 /// Run a WebSocket connectivity probe (connection test only).
 #[pyfunction]
 pub fn websocket_probe(url: &str, timeout_secs: u64) -> PyResult<WebSocketReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         let result = runtime_sync::block_on(py, async move {
             let config = eggsec::websocket::WebSocketTestConfig {
@@ -614,7 +614,7 @@ pub fn async_websocket_probe(
 /// Run a full WebSocket fuzz suite (connection, origin, injection, DoS, message fuzz).
 #[pyfunction]
 pub fn websocket_fuzz(url: &str, timeout_secs: u64) -> PyResult<WebSocketReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         let result = runtime_sync::block_on(py, async move {
             let config = eggsec::websocket::WebSocketTestConfig {
@@ -746,9 +746,9 @@ impl WebSocketSessionConfigPy {
 
     #[getter]
     fn headers(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -756,9 +756,9 @@ impl WebSocketSessionConfigPy {
 
     #[getter]
     fn cookies(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for (k, v) in &self.cookies {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -770,7 +770,7 @@ impl WebSocketSessionConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("origin", &self.origin)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
@@ -779,16 +779,16 @@ impl WebSocketSessionConfigPy {
         dict.set_item("close_timeout_ms", self.close_timeout_ms)?;
         dict.set_item("verify_tls", self.verify_tls)?;
 
-        let headers_list = PyList::empty_bound(py);
+        let headers_list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             headers_list.append(tuple)?;
         }
         dict.set_item("headers", headers_list)?;
 
-        let cookies_list = PyList::empty_bound(py);
+        let cookies_list = PyList::empty(py);
         for (k, v) in &self.cookies {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             cookies_list.append(tuple)?;
         }
         dict.set_item("cookies", cookies_list)?;
@@ -1012,12 +1012,12 @@ impl WebSocketMessagePy {
 
     #[getter]
     fn data<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
-        pyo3::types::PyBytes::new_bound(py, &self.data)
+        pyo3::types::PyBytes::new(py, &self.data)
     }
 
     #[getter]
     fn payload<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
-        pyo3::types::PyBytes::new_bound(py, &self.payload)
+        pyo3::types::PyBytes::new(py, &self.payload)
     }
 
     /// Decode the message data as UTF-8 text.
@@ -1027,13 +1027,13 @@ impl WebSocketMessagePy {
 
     /// Return the raw message bytes.
     fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
-        pyo3::types::PyBytes::new_bound(py, &self.data)
+        pyo3::types::PyBytes::new(py, &self.data)
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
-        let bytes_data = pyo3::types::PyBytes::new_bound(py, &self.data);
-        let bytes_payload = pyo3::types::PyBytes::new_bound(py, &self.payload);
+        let dict = PyDict::new(py);
+        let bytes_data = pyo3::types::PyBytes::new(py, &self.data);
+        let bytes_payload = pyo3::types::PyBytes::new(py, &self.payload);
         dict.set_item("data", bytes_data)?;
         dict.set_item("is_text", self.is_text)?;
         dict.set_item("is_binary", self.is_binary)?;
@@ -1202,11 +1202,11 @@ impl WebSocketFramePy {
 
     #[getter]
     fn payload<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
-        pyo3::types::PyBytes::new_bound(py, &self.payload)
+        pyo3::types::PyBytes::new(py, &self.payload)
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("opcode", self.opcode)?;
         dict.set_item("opcode_name", &self.opcode_name)?;
         dict.set_item("payload", &self.payload)?;
@@ -1270,7 +1270,7 @@ impl WebSocketCloseInfoPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("code", self.code)?;
         dict.set_item("reason", &self.reason)?;
         dict.set_item("was_clean", self.was_clean)?;
@@ -1428,9 +1428,9 @@ impl WebSocketHandshakePy {
 
     #[getter]
     fn response_headers(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -1447,15 +1447,15 @@ impl WebSocketHandshakePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("selected_subprotocol", &self.selected_subprotocol)?;
         dict.set_item("duration_ms", self.duration_ms)?;
 
-        let headers_list = PyList::empty_bound(py);
+        let headers_list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new_bound(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
             headers_list.append(tuple)?;
         }
         dict.set_item("headers", headers_list)?;
@@ -1918,7 +1918,7 @@ impl WebSocketSessionPy {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let _ = self.close(py, None, None);
         });
         false
@@ -2569,7 +2569,7 @@ impl WebSocketAssessmentConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
         dict.set_item("test_connection", self.test_connection)?;
@@ -2702,7 +2702,7 @@ impl WebSocketAssessmentResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("finding_count", self.findings.len())?;
 
@@ -2742,14 +2742,14 @@ impl WebSocketAssessmentResultPy {
             dict.set_item("close_test", py.None())?;
         }
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("findings", findings_list)?;
 
         // Construct timing dict manually (ConnectionTimingPy::to_dict is private)
-        let timing_dict = PyDict::new_bound(py);
+        let timing_dict = PyDict::new(py);
         timing_dict.set_item("dns_resolution_ms", &self.timing.dns_resolution_ms)?;
         timing_dict.set_item("tcp_connect_ms", &self.timing.tcp_connect_ms)?;
         timing_dict.set_item("tls_handshake_ms", &self.timing.tls_handshake_ms)?;
@@ -3188,7 +3188,7 @@ async fn run_assessment(url: &str, timeout_ms: u64) -> PyResult<WebSocketAssessm
 #[pyfunction]
 #[pyo3(signature = (url, timeout_ms=30000))]
 pub fn websocket_assess(url: &str, timeout_ms: u64) -> PyResult<WebSocketAssessmentResultPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let url_owned = url.to_string();
         runtime_sync::block_on(
             py,

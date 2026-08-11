@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -46,7 +47,7 @@ impl PlanStep {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("operation", &self.operation)?;
         dict.set_item("request", self.request.to_dict(py)?)?;
         dict.set_item("rationale", &self.rationale)?;
@@ -122,10 +123,10 @@ impl ScanPlan {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
 
-        let steps_list = PyList::empty_bound(py);
+        let steps_list = PyList::empty(py);
         for step in &self.steps {
             steps_list.append(step.to_dict(py)?)?;
         }

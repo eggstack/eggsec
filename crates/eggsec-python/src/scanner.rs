@@ -67,7 +67,7 @@ pub fn scan_ports(
 
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::scanner::scan_ports(&target_owned, config)
                 .await
@@ -162,7 +162,7 @@ pub fn scan_endpoints(
         max_results: None,
     };
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::scanner::scan_endpoints(config).await.map_pyerr()
         })?;
@@ -235,7 +235,7 @@ pub fn fingerprint_services(
 
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::scanner::fingerprint_services(
                 &target_owned,

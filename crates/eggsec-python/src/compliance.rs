@@ -100,7 +100,7 @@ impl ComplianceControlPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("framework", self.framework.as_str())?;
         dict.set_item("control_id", &self.control_id)?;
         dict.set_item("title", &self.title)?;
@@ -164,7 +164,7 @@ impl ComplianceMappingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("control", self.control.to_dict(py)?)?;
         dict.set_item("mapping_confidence", self.mapping_confidence)?;
@@ -255,10 +255,10 @@ impl ControlAssessmentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("control", self.control.to_dict(py)?)?;
         dict.set_item("result", self.result.as_str())?;
-        let finding_ids_list = PyList::empty_bound(py);
+        let finding_ids_list = PyList::empty(py);
         for id in &self.finding_ids {
             finding_ids_list.append(id.as_str())?;
         }
@@ -310,7 +310,7 @@ pub struct ComplianceReportPy {
 #[pymethods]
 impl ComplianceReportPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("framework", self.framework.as_str())?;
         dict.set_item("generated_at", &self.generated_at)?;
         dict.set_item("total_controls", self.total_controls)?;
@@ -319,7 +319,7 @@ impl ComplianceReportPy {
         dict.set_item("partial", self.partial)?;
         dict.set_item("not_applicable", self.not_applicable)?;
         dict.set_item("compliance_percentage", self.compliance_percentage)?;
-        let assessments_list = PyList::empty_bound(py);
+        let assessments_list = PyList::empty(py);
         for a in &self.assessments {
             assessments_list.append(a.to_dict(py)?)?;
         }

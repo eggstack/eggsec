@@ -23,3 +23,35 @@ jobs:
         uses: taiki-e/install-action@cargo-deny
       - name: Optional broad validation
         run: make check-full
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+      - name: Verify workspace compiles with declared MSRV
+        run: |
+          cargo check --workspace --no-default-features
+          cargo check -p eggsec-cli --no-default-features
+
+  portability:
+    name: Portability (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: portability-${{ matrix.os }}
+      - name: Check compilation
+        run: cargo check -p eggsec

@@ -14,7 +14,7 @@ fn resolve_path_arg(path: &Bound<'_, PyAny>) -> PyResult<PathBuf> {
     // Try pathlib.Path via __fspath__()
     let fspath = path.getattr("__fspath__")?;
     let result = fspath.call0()?;
-    let pystr = result.downcast::<pyo3::types::PyString>().map_err(|_| {
+    let pystr = result.cast::<pyo3::types::PyString>().map_err(|_| {
         pyo3::exceptions::PyTypeError::new_err("__fspath__() must return str or bytes")
     })?;
     let s = pystr

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ impl TargetPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host", &self.host)?;
         dict.set_item("port", &self.port)?;
         dict.set_item("scheme", &self.scheme)?;
@@ -134,7 +135,7 @@ impl ResolvedTargetPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("resolved_ips", &self.resolved_ips)?;
         dict.set_item("address_family", &self.address_family)?;
@@ -217,7 +218,7 @@ impl ConnectionConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("connect_timeout_ms", self.connect_timeout_ms)?;
         dict.set_item("read_timeout_ms", self.read_timeout_ms)?;
         dict.set_item("write_timeout_ms", self.write_timeout_ms)?;
@@ -299,7 +300,7 @@ impl TimeoutConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("connect_ms", self.connect_ms)?;
         dict.set_item("read_ms", self.read_ms)?;
         dict.set_item("write_ms", self.write_ms)?;
@@ -384,7 +385,7 @@ impl RetryPolicyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("max_retries", self.max_retries)?;
         dict.set_item("delay_ms", self.delay_ms)?;
         dict.set_item("backoff_multiplier", self.backoff_multiplier)?;
@@ -448,7 +449,7 @@ impl SocketEndpointPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("address", &self.address)?;
         dict.set_item("port", self.port)?;
         dict.set_item("address_family", &self.address_family)?;
@@ -532,7 +533,7 @@ impl ConnectionTimingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("dns_resolution_ms", &self.dns_resolution_ms)?;
         dict.set_item("tcp_connect_ms", &self.tcp_connect_ms)?;
         dict.set_item("tls_handshake_ms", &self.tls_handshake_ms)?;
@@ -640,7 +641,7 @@ impl ConnectionMetadataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
 
         if let Some(ref ep) = self.local_endpoint {
             dict.set_item("local_endpoint", ep.to_dict(py)?)?;
@@ -755,7 +756,7 @@ impl TranscriptEntryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("sequence", self.sequence)?;
         dict.set_item("direction", &self.direction)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -871,9 +872,9 @@ impl NetworkTranscriptPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
 
-        let entries_list = PyList::empty_bound(py);
+        let entries_list = PyList::empty(py);
         for entry in &self.entries {
             entries_list.append(entry.to_dict(py)?)?;
         }
@@ -951,7 +952,7 @@ impl NetworkEvidencePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("operation", &self.operation)?;
         dict.set_item("target", &self.target)?;
 
@@ -1047,7 +1048,7 @@ impl ProxyRoutePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("proxy_type", &self.proxy_type)?;
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
@@ -1085,7 +1086,7 @@ impl ProxyRoutePy {
 
 /// Convert a `ConnectionTimingPy` to a Python dict (callable from Rust).
 pub(crate) fn timing_to_dict(py: Python, timing: &ConnectionTimingPy) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     dict.set_item("dns_resolution_ms", &timing.dns_resolution_ms)?;
     dict.set_item("tcp_connect_ms", &timing.tcp_connect_ms)?;
     dict.set_item("tls_handshake_ms", &timing.tls_handshake_ms)?;
@@ -1114,7 +1115,7 @@ pub fn resolve_target_sync(
     let host = target.host.clone();
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         crate::runtime_sync::block_on(py, async move {
             resolve_host_async(&host, timeout, max_results).await
         })

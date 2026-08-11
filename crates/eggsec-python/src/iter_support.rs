@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -45,10 +46,10 @@ impl PaginatedResultsPy {
     fn get_page(&self, page: usize, py: Python) -> PyResult<PyObject> {
         let start = page * self.page_size;
         if start >= self.total {
-            return Ok(PyList::empty_bound(py).into());
+            return Ok(PyList::empty(py).into());
         }
         let end = std::cmp::min(start + self.page_size, self.total);
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for item in &self.items[start..end] {
             list.append(item.clone_ref(py))?;
         }
@@ -62,16 +63,16 @@ impl PaginatedResultsPy {
         let actual_end = std::cmp::min(start + self.page_size, self.total);
 
         let page_items: PyObject = if start < self.total {
-            let list = PyList::empty_bound(py);
+            let list = PyList::empty(py);
             for item in &self.items[start..actual_end] {
                 list.append(item.clone_ref(py))?;
             }
             list.into_any().unbind()
         } else {
-            PyList::empty_bound(py).into_any().unbind()
+            PyList::empty(py).into_any().unbind()
         };
 
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("items", page_items)?;
         dict.set_item("page", page)?;
         dict.set_item("page_size", self.page_size)?;
@@ -104,7 +105,7 @@ impl PaginatedResultsPy {
 
     /// Collect all items into a Python list.
     fn to_list(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for item in &self.items {
             list.append(item.clone_ref(py))?;
         }
@@ -128,17 +129,18 @@ impl PaginatedResultsPy {
 
 /// Batch converter — converts Rust items to Python dicts in batches.
 ///
-/// Takes a list of items that implement `ToPyObject` and returns
+/// Takes a list of items that implement `IntoPyObject` and returns
 /// them grouped into batches for efficient processing.
-pub fn batch_to_dicts<'py, T: ToPyObject>(
+pub fn batch_to_dicts<'py, T: for<'a> IntoPyObject<'a> + Clone>(
     py: Python<'py>,
     items: &[T],
     batch_size: usize,
 ) -> Vec<Vec<Bound<'py, PyAny>>> {
+    use pyo3::conversion::IntoPyObjectExt;
     if batch_size == 0 {
         return vec![items
             .iter()
-            .map(|i| i.to_object(py).into_bound(py))
+            .map(|i| i.clone().into_py_any(py).unwrap().bind(py).clone())
             .collect()];
     }
     items
@@ -146,7 +148,7 @@ pub fn batch_to_dicts<'py, T: ToPyObject>(
         .map(|chunk| {
             chunk
                 .iter()
-                .map(|i| i.to_object(py).into_bound(py))
+                .map(|i| i.clone().into_py_any(py).unwrap().bind(py).clone())
                 .collect()
         })
         .collect()

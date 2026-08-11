@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.85 or later (MSRV: 1.85)
+- Rust 1.88 or later (MSRV: 1.88)
 - Cargo package manager
 - Linux, macOS, or Windows
 
@@ -149,7 +149,7 @@ cargo clippy --lib -p eggsec-cli
 
 ### Build fails with Rust version error
 
-Ensure you have Rust 1.85 or later:
+Ensure you have Rust 1.88 or later:
 ```bash
 rustup update stable
 ```

@@ -46,19 +46,19 @@ This runs `scripts/check-python.sh` which builds the extension once and runs beh
 
 ## Platform portability
 
-Rust checks run on Linux in CI (`ci.yml` `rust` job). The `msrv` job in `ci.yml`
-verifies the declared MSRV (1.85) compiles the workspace with `--no-default-features`.
-Hosted CI runs narrow portability checks on macOS and Windows for every push and pull
-request to `main`:
+Rust checks run on Linux in CI (`ci.yml` `rust` job). The `msrv` and
+`portability` jobs have been moved to `deep-checks.yml` (weekly schedule or
+manual trigger) to keep routine PR CI lightweight. The declared MSRV is 1.88.
 
-- `cargo check -p eggsec` on macos-latest and windows-latest (in `ci.yml` `portability` job)
+- MSRV validation: `deep-checks.yml` `msrv` job (Rust 1.88, `--no-default-features`)
+- macOS/Windows portability: `deep-checks.yml` `portability` job
 
 Contributors generally need local platform testing only for platform-specific
 changes.
 
 ## Code MSRV vs release-tool Cargo
 
-The declared code MSRV (1.85) is the minimum Rust compiler version for building
+The declared code MSRV (1.88) is the minimum Rust compiler version for building
 the project. The `cargo package` and `cargo publish` commands may require a
 newer Cargo version than the MSRV — these are release-tooling operations, not
 code compilation. The release-tool Cargo requirement is validated separately
@@ -158,7 +158,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
-| `make check-msrv` | MSRV compile check | Every PR/push (requires `rustup toolchain install 1.85`) |
+| `make check-msrv` | MSRV compile check | Deep checks only (requires `rustup toolchain install 1.88`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |

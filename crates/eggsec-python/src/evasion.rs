@@ -183,7 +183,7 @@ impl EvasionTechniquePy {
 #[pymethods]
 impl EvasionTechniquePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("mitre_id", &self.mitre_id)?;
@@ -233,7 +233,7 @@ impl EvasionDetectionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("technique", self.technique.to_dict(py)?)?;
         dict.set_item("detected", self.detected)?;
         dict.set_item("confidence", self.confidence)?;
@@ -326,12 +326,12 @@ impl EvasionReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("timestamp", &self.timestamp)?;
         dict.set_item("dry_run", self.dry_run)?;
 
-        let det_list = PyList::empty_bound(py);
+        let det_list = PyList::empty(py);
         for d in &self.detections {
             det_list.append(d.to_dict(py)?)?;
         }
@@ -405,7 +405,7 @@ impl EvasionScanConfigPy {
 ///     ScanError: If the scan fails.
 #[pyfunction]
 pub fn evasion_scan(config: EvasionScanConfigPy) -> PyResult<EvasionReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner = eggsec::evasion::EvasionScanner::new(config.dry_run);
             let target = eggsec::evasion::EvasionTarget {

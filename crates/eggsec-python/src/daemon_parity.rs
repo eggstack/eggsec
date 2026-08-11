@@ -3,6 +3,7 @@
 //! Pure Python-side types extending the daemon client API for idempotency,
 //! reconnect, replay, cancellation, and artifact parity.
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ pub struct DaemonEventPy {
 #[pymethods]
 impl DaemonEventPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("event_type", &self.event_type)?;
         dict.set_item("sequence", self.sequence)?;
@@ -92,7 +93,7 @@ impl DaemonProtocolVersion {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("protocol_version", self.protocol_version)?;
         dict.set_item("api_schema_version", self.api_schema_version)?;
         dict.set_item("operation_registry_id", &self.operation_registry_id)?;
@@ -166,7 +167,7 @@ impl IdempotencyKey {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("key", &self.key)?;
         dict.set_item("created_at_ms", self.created_at_ms)?;
         dict.set_item("operation_name", &self.operation_name)?;
@@ -236,7 +237,7 @@ impl DaemonSubmissionResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("idempotency_key", &self.idempotency_key)?;
@@ -303,7 +304,7 @@ impl ReconnectOptions {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("max_retries", self.max_retries)?;
         dict.set_item("retry_delay_ms", self.retry_delay_ms)?;
         dict.set_item("backoff_multiplier", self.backoff_multiplier)?;
@@ -373,7 +374,7 @@ impl ReplayCursor {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("last_sequence", self.last_sequence)?;
         dict.set_item("total_events", self.total_events)?;
@@ -421,7 +422,7 @@ impl ReplayResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("cursor", self.cursor.to_dict(py)?)?;
         dict.set_item("has_more", self.has_more)?;
         Ok(dict.into())
@@ -480,7 +481,7 @@ impl CancellationRequest {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("reason", &self.reason)?;
@@ -546,7 +547,7 @@ impl CancellationResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("acknowledged", self.acknowledged)?;
         dict.set_item("task_was_running", self.task_was_running)?;
         dict.set_item("task_was_completed", self.task_was_completed)?;
@@ -632,7 +633,7 @@ impl TaskArtifactDescriptor {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("artifact_id", &self.artifact_id)?;
         dict.set_item("task_id", &self.task_id)?;
         dict.set_item("session_id", &self.session_id)?;
@@ -703,7 +704,7 @@ impl EventReplayInfo {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("session_id", &self.session_id)?;
         dict.set_item("from_sequence", self.from_sequence)?;
         dict.set_item("to_sequence", self.to_sequence)?;
@@ -780,7 +781,7 @@ impl DaemonHealthDetail {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("status", &self.status)?;
         dict.set_item("uptime_secs", self.uptime_secs)?;
         dict.set_item("protocol_version", self.protocol_version)?;

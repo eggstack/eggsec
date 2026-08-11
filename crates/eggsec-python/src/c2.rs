@@ -273,7 +273,7 @@ impl CampaignPhasePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("description", &self.description)?;
@@ -326,13 +326,13 @@ impl C2CampaignPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("description", &self.description)?;
         dict.set_item("mitre_profile", &self.mitre_profile)?;
 
-        let phases_list = PyList::empty_bound(py);
+        let phases_list = PyList::empty(py);
         for p in &self.phases {
             phases_list.append(p.to_dict(py)?)?;
         }
@@ -376,7 +376,7 @@ impl BeaconResultPy {
 #[pymethods]
 impl BeaconResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("protocol", self.protocol.as_str())?;
         dict.set_item("interval_ms", self.interval_ms)?;
         dict.set_item("jitter_percent", self.jitter_percent)?;
@@ -422,7 +422,7 @@ impl C2TaskResultPy {
 #[pymethods]
 impl C2TaskResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("task_type", self.task_type.as_str())?;
         dict.set_item("status", self.status.as_str())?;
         dict.set_item("output", &self.output)?;
@@ -467,7 +467,7 @@ impl OpsecFindingPy {
 #[pymethods]
 impl OpsecFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("category", self.category.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("description", &self.description)?;
@@ -517,11 +517,11 @@ impl OpsecAssessmentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("score", self.score)?;
         dict.set_item("max_score", self.max_score)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
@@ -636,20 +636,20 @@ impl C2ReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("campaign", self.campaign.to_dict(py)?)?;
         dict.set_item("timestamp", &self.timestamp)?;
         dict.set_item("dry_run", self.dry_run)?;
         dict.set_item("opsec_assessment", self.opsec_assessment.to_dict(py)?)?;
 
-        let beacons_list = PyList::empty_bound(py);
+        let beacons_list = PyList::empty(py);
         for b in &self.beacon_results {
             beacons_list.append(b.to_dict(py)?)?;
         }
         dict.set_item("beacon_results", beacons_list)?;
 
-        let tasks_list = PyList::empty_bound(py);
+        let tasks_list = PyList::empty(py);
         for t in &self.task_results {
             tasks_list.append(t.to_dict(py)?)?;
         }
@@ -713,7 +713,7 @@ impl C2ScanConfigPy {
 ///     ScanError: If the scan fails.
 #[pyfunction]
 pub fn c2_scan(config: C2ScanConfigPy) -> PyResult<C2ReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner = eggsec::c2::C2Scanner::new(config.dry_run, &config.campaign_profile);
             scanner.scan(&config.target).await.map_err(|e| {

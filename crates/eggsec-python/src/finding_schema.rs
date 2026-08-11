@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -229,7 +230,7 @@ impl AffectedAssetPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("asset_type", &self.asset_type)?;
         dict.set_item("identifier", &self.identifier)?;
         dict.set_item("host", &self.host)?;
@@ -296,7 +297,7 @@ impl FindingLocationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("path", &self.path)?;
         dict.set_item("parameter", &self.parameter)?;
@@ -362,7 +363,7 @@ impl VersionedEvidencePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", self.kind.as_str())?;
         dict.set_item("summary", "[REDACTED]")?;
         dict.set_item("data", &self.data)?;
@@ -371,7 +372,7 @@ impl VersionedEvidencePy {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", self.kind.as_str())?;
         dict.set_item("summary", &self.summary)?;
         dict.set_item("data", &self.data)?;
@@ -521,7 +522,7 @@ impl VersionedFindingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("id", &self.id)?;
         dict.set_item("fingerprint", &self.fingerprint)?;
@@ -536,9 +537,9 @@ impl VersionedFindingPy {
         dict.set_item("affected_asset", self.affected_asset.to_dict(py)?)?;
         dict.set_item("location", self.location.to_dict(py)?)?;
 
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for e in &self.evidence {
-            let ev_dict = PyDict::new_bound(py);
+            let ev_dict = PyDict::new(py);
             ev_dict.set_item("kind", e.kind.as_str())?;
             ev_dict.set_item("summary", "[REDACTED]")?;
             ev_dict.set_item("data", &e.data)?;
@@ -558,7 +559,7 @@ impl VersionedFindingPy {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("id", &self.id)?;
         dict.set_item("fingerprint", &self.fingerprint)?;
@@ -573,7 +574,7 @@ impl VersionedFindingPy {
         dict.set_item("affected_asset", self.affected_asset.to_dict(py)?)?;
         dict.set_item("location", self.location.to_dict(py)?)?;
 
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for e in &self.evidence {
             evidence_list.append(e.to_dict_raw(py)?)?;
         }

@@ -299,7 +299,7 @@ impl CronFieldMatcher {
         match self {
             Self::Any => true,
             Self::Exact(pattern) => *pattern == value,
-            Self::Step { start, step } => value >= *start && ((value - *start) % *step == 0),
+            Self::Step { start, step } => value >= *start && (value - *start).is_multiple_of(*step),
         }
     }
 

@@ -141,7 +141,7 @@ impl AttackChainPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("chain_type", self.chain_type.as_str())?;
@@ -268,7 +268,7 @@ impl BusinessLogicFlawPy {
 #[pymethods]
 impl BusinessLogicFlawPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("flaw_type", self.flaw_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -386,7 +386,7 @@ impl RaceConditionPy {
 #[pymethods]
 impl RaceConditionPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("race_type", self.race_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -501,7 +501,7 @@ impl AuthzBypassPy {
 #[pymethods]
 impl AuthzBypassPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("bypass_type", self.bypass_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -631,7 +631,7 @@ impl SessionIssuePy {
 #[pymethods]
 impl SessionIssuePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("issue_type", self.issue_type.as_str())?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -808,35 +808,35 @@ impl HuntReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("total_findings", self.total_findings)?;
 
-        let chains_list = PyList::empty_bound(py);
+        let chains_list = PyList::empty(py);
         for c in &self.attack_chains {
             chains_list.append(c.to_dict(py)?)?;
         }
         dict.set_item("attack_chains", chains_list)?;
 
-        let business_list = PyList::empty_bound(py);
+        let business_list = PyList::empty(py);
         for b in &self.business_logic {
             business_list.append(b.to_dict(py)?)?;
         }
         dict.set_item("business_logic", business_list)?;
 
-        let race_list = PyList::empty_bound(py);
+        let race_list = PyList::empty(py);
         for r in &self.race_conditions {
             race_list.append(r.to_dict(py)?)?;
         }
         dict.set_item("race_conditions", race_list)?;
 
-        let authz_list = PyList::empty_bound(py);
+        let authz_list = PyList::empty(py);
         for a in &self.authz_bypasses {
             authz_list.append(a.to_dict(py)?)?;
         }
         dict.set_item("authz_bypasses", authz_list)?;
 
-        let session_list = PyList::empty_bound(py);
+        let session_list = PyList::empty(py);
         for s in &self.session_issues {
             session_list.append(s.to_dict(py)?)?;
         }
@@ -876,7 +876,7 @@ pub fn hunt_test(target: &str, config: Option<HuntTestConfigPy>) -> PyResult<Hun
     let cfg = config.unwrap_or_default();
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let hunt_config = eggsec::hunt::HuntConfig {
                 check_attack_chains: cfg.check_attack_chains,

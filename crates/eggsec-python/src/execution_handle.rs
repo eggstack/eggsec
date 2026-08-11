@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -312,7 +313,7 @@ impl TrackedExecutionHandle {
             .inner
             .lock()
             .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("lock poisoned"))?;
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("operation_id", &guard.operation_id)?;
         dict.set_item("state", guard.state.name())?;
         dict.set_item("started_at_ms", guard.started_at_ms)?;

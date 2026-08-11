@@ -1,9 +1,9 @@
 # Dependency Advisory Exceptions
 
-Reviewed: 2026-08-07 (Phase E)
+Reviewed: 2026-08-11 (Corrective Closure Pass)
 
 This document tracks active advisory exceptions that cannot yet be resolved
-by simple dependency upgrades. All previously stale ignores have been removed.
+by simple dependency upgrades.
 
 ## Exception Policy
 
@@ -67,70 +67,18 @@ Every retained advisory ignore must include:
 | Review-by | 2026-11-07 |
 | Blocker | indicatif v0.18+ must drop number_prefix; no alternative available |
 
-### RUSTSEC-2025-0020 — pyo3 buffer overflow
+## Resolved in Corrective Closure Pass (2026-08-11)
 
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2025-0020 |
-| Path | `pyo3` v0.22.6 (direct dependency of eggsec-python) |
-| Feature | Python bindings |
-| API used | Unlikely — `PyString::from_object` not called directly |
-| Exploitability | Low — requires calling `PyString::from_object` with `&str` containing NUL bytes |
-| Compensating control | Eggsec Python API does not pass untrusted `&str` to this function |
-| Owner | eggsec-python |
-| Created | 2025-07-01 |
-| Review-by | 2026-11-07 |
-| Blocker | Requires pyo3 >=0.24.1 (major version bump from 0.22). Deferred to Phase H. |
+The following advisories were resolved by dependency upgrades in this pass:
 
-### RUSTSEC-2026-0177 — pyo3 missing Sync bound
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2026-0177 |
-| Path | `pyo3` v0.22.6 (direct dependency of eggsec-python) |
-| Feature | Python bindings |
-| API used | Possible — `PyCFunction::new_closure` may be used |
-| Exploitability | Low under GIL-protected Python; higher for free-threaded Python |
-| Compensating control | Eggsec targets GIL-protected CPython; free-threaded Python not supported |
-| Owner | eggsec-python |
-| Created | 2026-07-01 |
-| Review-by | 2026-11-07 |
-| Blocker | Requires pyo3 >=0.29.0 (major version bump from 0.22). Deferred to Phase H. |
-
-### RUSTSEC-2026-0194 — quick-xml quadratic DoS
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2026-0194 |
-| Path | `quick-xml` v0.31.0 (direct dependency of eggsec, eggsec-output, eggsec-mobile-lab) |
-| Feature | XML generation (junit.rs), APK manifest parsing (apk.rs) |
-| API used | Partial — `BytesStart::attributes()` with default checks used in apk.rs test path |
-| Exploitability | Medium — attacker-crafted XML with many attributes on one tag could cause CPU exhaustion |
-| Compensating control | APK manifests are local files, not network-untrusted; JUnit is write-only |
-| Owner | eggsec-output / eggsec-mobile-lab |
-| Created | 2026-07-01 |
-| Review-by | 2026-11-07 |
-| Blocker | Requires quick-xml >=0.41.0 which raises MSRV to 1.86 (current MSRV is 1.85). Deferred. |
-
-### RUSTSEC-2026-0195 — quick-xml NsReader OOM
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2026-0195 |
-| Path | `quick-xml` v0.31.0 (direct dependency of eggsec, eggsec-output, eggsec-mobile-lab) |
-| Feature | XML generation (junit.rs), APK manifest parsing (apk.rs) |
-| API used | No — `NsReader` is not used; only `Reader` is used |
-| Exploitability | Low — Eggsec does not use `NsReader` |
-| Compensating control | N/A — not using the affected API |
-| Owner | eggsec-output / eggsec-mobile-lab |
-| Created | 2026-07-01 |
-| Review-by | 2026-11-07 |
-| Blocker | Requires quick-xml >=0.41.0 which raises MSRV to 1.86 (current MSRV is 1.85). Deferred. |
+- **RUSTSEC-2025-0020** (pyo3 buffer overflow) — upgraded pyo3 0.22.6 -> 0.29.2
+- **RUSTSEC-2026-0177** (pyo3 missing Sync bound) — upgraded pyo3 0.22.6 -> 0.29.2
+- **RUSTSEC-2026-0194** (quick-xml quadratic DoS) — upgraded quick-xml 0.31.0 -> 0.41.0
+- **RUSTSEC-2026-0195** (quick-xml NsReader OOM) — upgraded quick-xml 0.31.0 -> 0.41.0
 
 ## Resolved in Phase E
 
-The following advisories were resolved by prior dependency upgrades and their
-stale ignores were removed:
+The following advisories were resolved by prior dependency upgrades:
 
 - RUSTSEC-2026-0097 (rand unsound) — upgraded rand 0.8.5 -> 0.8.6, 0.9.2 -> 0.9.3
 - RUSTSEC-2026-0204 (crossbeam-epoch) — already upgraded in lockfile
@@ -154,9 +102,3 @@ active at review time must be re-evaluated for:
 2. Whether the dependency path has changed
 3. Whether the exploitability assessment still holds
 4. Whether the review-by date should be extended (max 90 days)
-
-## Phase H Planned Resolutions
-
-- **PyO3**: Upgrade to 0.29+ (major migration). Will resolve RUSTSEC-2025-0020 and RUSTSEC-2026-0177.
-- **quick-xml**: Upgrade to 0.41+ (major migration, raises MSRV to 1.86). Will resolve RUSTSEC-2026-0194 and RUSTSEC-2026-0195.
-- **scraper/notify/indicatif**: Monitor upstream for unmaintained dependency removal.

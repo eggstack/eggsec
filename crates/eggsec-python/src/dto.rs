@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -76,14 +77,14 @@ impl PortScanResult {
 
     /// Convert result to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("scanned_ports", self.scanned_ports)?;
         dict.set_item("elapsed_ms", self.elapsed_ms)?;
 
-        let ports_list = PyList::empty_bound(py);
+        let ports_list = PyList::empty(py);
         for port in &self.open_ports {
-            let port_dict = PyDict::new_bound(py);
+            let port_dict = PyDict::new(py);
             port_dict.set_item("port", port.port)?;
             port_dict.set_item("protocol", &port.protocol)?;
             port_dict.set_item("service", &port.service)?;
@@ -93,7 +94,7 @@ impl PortScanResult {
         }
         dict.set_item("open_ports", ports_list)?;
 
-        let stats_dict = PyDict::new_bound(py);
+        let stats_dict = PyDict::new(py);
         stats_dict.set_item("ports_scanned", self.stats.ports_scanned)?;
         stats_dict.set_item("total_open", self.stats.total_open)?;
         stats_dict.set_item("elapsed_ms", self.stats.elapsed_ms)?;
@@ -147,9 +148,9 @@ impl PortScanResult {
 
     /// Convert open ports to a list of row dicts suitable for tabular output.
     fn to_rows(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for port in &self.open_ports {
-            let dict = PyDict::new_bound(py);
+            let dict = PyDict::new(py);
             dict.set_item("target", &self.target)?;
             dict.set_item("port", port.port)?;
             dict.set_item("protocol", &port.protocol)?;

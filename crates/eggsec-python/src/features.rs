@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
@@ -111,12 +112,12 @@ pub fn has_feature(name: &str) -> bool {
 /// and whether system dependencies are required.
 #[pyfunction]
 pub fn feature_matrix() -> PyObject {
-    Python::with_gil(|py| {
-        let dict = PyDict::new_bound(py);
+    Python::attach(|py| {
+        let dict = PyDict::new(py);
 
         macro_rules! add_feature {
             ($name:expr, $available:expr, $desc:expr, $sys_deps:expr) => {
-                let entry = PyDict::new_bound(py);
+                let entry = PyDict::new(py);
                 entry.set_item("available", $available).unwrap();
                 entry.set_item("description", $desc).unwrap();
                 entry.set_item("requires_system_deps", $sys_deps).unwrap();

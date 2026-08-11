@@ -1,3 +1,4 @@
+use crate::PyObject;
 use md5::{Digest, Md5};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -51,7 +52,7 @@ impl StreamingReportConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("format", &self.format)?;
         dict.set_item("output_path", &self.output_path)?;
         dict.set_item("buffer_size", self.buffer_size)?;
@@ -97,13 +98,13 @@ pub struct ReportSummaryPy {
 #[pymethods]
 impl ReportSummaryPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("format", &self.format)?;
         dict.set_item("total_findings", self.total_findings)?;
 
-        let severity_list = PyList::empty_bound(py);
+        let severity_list = PyList::empty(py);
         for (severity, count) in &self.findings_by_severity {
-            let item = PyDict::new_bound(py);
+            let item = PyDict::new(py);
             item.set_item("severity", severity)?;
             item.set_item("count", count)?;
             severity_list.append(item)?;
@@ -309,7 +310,7 @@ impl StreamingReporterPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("format", &self.config.format)?;
         dict.set_item("output_path", &self.config.output_path)?;
         dict.set_item("buffered_count", self.buffer.len())?;
@@ -376,7 +377,7 @@ pub struct FindingDiffResultPy {
 #[pymethods]
 impl FindingDiffResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("diff_status", &self.diff_status)?;
         dict.set_item("baseline_finding_id", &self.baseline_finding_id)?;
@@ -419,7 +420,7 @@ pub struct DiffReportSummaryPy {
 #[pymethods]
 impl DiffReportSummaryPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("total_findings", self.total_findings)?;
         dict.set_item("new_findings", self.new_findings)?;
         dict.set_item("resolved_findings", self.resolved_findings)?;
@@ -689,7 +690,7 @@ impl StreamingDiffReporterPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("format", &self.config.format)?;
         dict.set_item("output_path", &self.config.output_path)?;
         dict.set_item("started", self.started)?;
@@ -794,7 +795,7 @@ impl ReportManifestPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("report_id", &self.report_id)?;
         dict.set_item("format", &self.format)?;
         dict.set_item("schema_version", &self.schema_version)?;

@@ -78,7 +78,7 @@ impl MobileFindingPy {
 #[pymethods]
 impl MobileFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("category", &self.category)?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("title", &self.title)?;
@@ -173,7 +173,7 @@ impl MobileScanReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("scan_type", &self.scan_type)?;
         dict.set_item("platform", self.platform.as_str())?;
@@ -181,13 +181,13 @@ impl MobileScanReportPy {
         dict.set_item("version", &self.version)?;
         dict.set_item("timestamp", &self.timestamp)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("findings", findings_list)?;
 
-        let recs_list = PyList::new_bound(py, &self.recommendations);
+        let recs_list = PyList::new(py, &self.recommendations);
         dict.set_item("recommendations", recs_list)?;
 
         dict.set_item("duration_ms", self.duration_ms)?;
@@ -237,7 +237,7 @@ impl MobileScanReportPy {
 pub fn analyze_apk(path: &str) -> PyResult<MobileScanReportPy> {
     let path_owned = path.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let path_ref = Path::new(&path_owned);
             eggsec::mobile::analyze_apk(path_ref)
@@ -283,7 +283,7 @@ pub fn async_analyze_apk(path: &str) -> PyResult<PyFuture> {
 pub fn analyze_ipa(path: &str) -> PyResult<MobileScanReportPy> {
     let path_owned = path.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let path_ref = Path::new(&path_owned);
             eggsec::mobile::analyze_ipa(path_ref)
@@ -343,7 +343,7 @@ pub struct MobileDevicePy {
 #[pymethods]
 impl MobileDevicePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("serial", &self.serial)?;
         dict.set_item("model", &self.model)?;
         dict.set_item("android_version", &self.android_version)?;
@@ -453,7 +453,7 @@ impl DynamicMobileConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("install", self.install)?;
         dict.set_item("launch", &self.launch)?;
         dict.set_item("capture_logs", self.capture_logs)?;
@@ -524,7 +524,7 @@ pub struct DynamicMobileReportPy {
 #[pymethods]
 impl DynamicMobileReportPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("scan_type", &self.scan_type)?;
         dict.set_item("platform", &self.platform)?;

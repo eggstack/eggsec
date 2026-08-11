@@ -59,7 +59,7 @@ impl NseLibraryDescriptorPy {
 #[pymethods]
 impl NseLibraryDescriptorPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("category", &self.category)?;
         dict.set_item("description", &self.description)?;
@@ -154,7 +154,7 @@ impl NseArgumentPy {
             Some(val) => {
                 let json_str = serde_json::to_string(val)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                let json_mod = py.import_bound("json")?;
+                let json_mod = py.import("json")?;
                 Ok(json_mod.call_method1("loads", (json_str,))?.into())
             }
             None => Ok(py.None()),
@@ -162,7 +162,7 @@ impl NseArgumentPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("arg_type", &self.arg_type)?;
@@ -171,7 +171,7 @@ impl NseArgumentPy {
         } else if let Some(ref val) = self.arg_value {
             let json_str = serde_json::to_string(val)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-            let json_mod = py.import_bound("json")?;
+            let json_mod = py.import("json")?;
             let py_val = json_mod.call_method1("loads", (json_str,))?;
             dict.set_item("arg_value", py_val)?;
         } else {
@@ -296,7 +296,7 @@ impl NseConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("script", &self.script)?;
         dict.set_item("script_args", &self.script_args)?;
@@ -360,7 +360,7 @@ impl NseLibraryUsePy {
 #[pymethods]
 impl NseLibraryUsePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("category", &self.category)?;
         dict.set_item("loaded", self.loaded)?;
@@ -428,7 +428,7 @@ impl NseRuleEvaluationPy {
 #[pymethods]
 impl NseRuleEvaluationPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("evaluated", self.evaluated)?;
         dict.set_item("matched", self.matched)?;
@@ -495,7 +495,7 @@ pub struct NseEvidenceItemPy {
 #[pymethods]
 impl NseEvidenceItemPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("title", &self.title)?;
@@ -626,7 +626,7 @@ impl NseReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("script_name", &self.script_name)?;
         dict.set_item("output", &self.output)?;
@@ -638,17 +638,17 @@ impl NseReportPy {
         dict.set_item("compatibility_status", &self.compatibility_status)?;
         dict.set_item("fidelity", &self.fidelity)?;
         dict.set_item("elapsed_secs", self.elapsed_secs)?;
-        let libs_list = PyList::empty_bound(py);
+        let libs_list = PyList::empty(py);
         for lib in &self.libraries {
             libs_list.append(lib.to_dict(py)?)?;
         }
         dict.set_item("libraries", libs_list)?;
-        let rules_list = PyList::empty_bound(py);
+        let rules_list = PyList::empty(py);
         for rule in &self.rules {
             rules_list.append(rule.to_dict(py)?)?;
         }
         dict.set_item("rules", rules_list)?;
-        let evidence_list = PyList::empty_bound(py);
+        let evidence_list = PyList::empty(py);
         for ev in &self.evidence {
             evidence_list.append(ev.to_dict(py)?)?;
         }
@@ -698,7 +698,7 @@ pub(crate) fn run_nse_sync(
     config: eggsec::nse::NseConfig,
     limits: Option<eggsec::nse::NseExecutionLimits>,
 ) -> PyResult<NseReportPy> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             run_nse_inner(config, limits)
                 .await
@@ -1037,7 +1037,7 @@ pub struct NseScriptMetadataPy {
 #[pymethods]
 impl NseScriptMetadataPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.name)?;
         dict.set_item("category", &self.category)?;
         dict.set_item("description", &self.description)?;
@@ -1216,7 +1216,7 @@ pub fn nse_run_with_config(config: &NseConfigPy) -> PyResult<NseReportPy> {
 ///         - "script_name" (str): The script name or "<inline>"
 #[pyfunction]
 pub fn nse_validate_script(script: &str, py: Python) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
 
     if script.is_empty() {
         dict.set_item("valid", false)?;
@@ -1329,7 +1329,7 @@ impl NseSandboxPolicyPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("allow_filesystem", self.allow_filesystem)?;
         dict.set_item("allowed_dirs", &self.allowed_dirs)?;
         dict.set_item("allow_network", self.allow_network)?;
@@ -1410,7 +1410,7 @@ impl NseTargetContextPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("host_ip", &self.host_ip)?;
         dict.set_item("hostname", &self.hostname)?;
         dict.set_item("port", self.port)?;
@@ -1533,7 +1533,7 @@ impl NseExecutionLimitsPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("wall_clock_timeout_secs", self.wall_clock_timeout_secs)?;
         dict.set_item("lua_instruction_budget", self.lua_instruction_budget)?;
         dict.set_item("max_output_bytes", self.max_output_bytes)?;
@@ -1667,7 +1667,7 @@ impl NseRuntimeStatsPy {
 #[pymethods]
 impl NseRuntimeStatsPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("elapsed_ms", self.elapsed_ms)?;
         dict.set_item("output_bytes", self.output_bytes)?;
         dict.set_item("lua_instruction_count", self.lua_instruction_count)?;
@@ -1725,7 +1725,7 @@ impl NseRuntimeConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("profile_kind", &self.profile_kind)?;
         dict.set_item("verbose", self.verbose)?;
@@ -1906,7 +1906,7 @@ impl NseHostContextPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("ip", &self.ip)?;
         dict.set_item("hostname", &self.hostname)?;
         dict.set_item("target_label", &self.target_label)?;
@@ -1984,7 +1984,7 @@ impl NsePortContextPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("port", self.port)?;
         dict.set_item("protocol", &self.protocol)?;
         dict.set_item("state", &self.state)?;
@@ -2047,7 +2047,7 @@ impl NseRuleResultPy {
 #[pymethods]
 impl NseRuleResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("evaluated", self.evaluated)?;
         dict.set_item("matched", self.matched)?;
@@ -2120,7 +2120,7 @@ impl NseScriptSourcePy {
 #[pymethods]
 impl NseScriptSourcePy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("path", &self.path)?;
@@ -2205,7 +2205,7 @@ impl NseDiagnosticPy {
 #[pymethods]
 impl NseDiagnosticPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("kind", &self.kind)?;
         dict.set_item("message", &self.message)?;
         dict.set_item("path", &self.path)?;
@@ -2276,7 +2276,7 @@ impl NseCapabilityContextPy {
 #[pymethods]
 impl NseCapabilityContextPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("profile_kind", &self.profile_kind)?;
         dict.set_item("limits", self.limits.to_dict(py)?)?;
         dict.set_item("is_cancelled", self.is_cancelled)?;
@@ -2364,7 +2364,7 @@ impl NseLibraryVersionPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("library_name", &self.library_name)?;
         dict.set_item("version", &self.version)?;
         dict.set_item("min_nse_compat", &self.min_nse_compat)?;
@@ -2434,7 +2434,7 @@ impl NseLibraryConflictPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("library_a", &self.library_a)?;
         dict.set_item("library_b", &self.library_b)?;
         dict.set_item("conflict_type", &self.conflict_type)?;
@@ -2523,13 +2523,13 @@ impl NseExecutionRequestPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", &self.port)?;
         dict.set_item("scripts", &self.scripts)?;
         dict.set_item("script_args", &self.script_args)?;
         dict.set_item("script_file", &self.script_file)?;
-        let arg_list = PyList::empty_bound(py);
+        let arg_list = PyList::empty(py);
         for a in &self.arguments {
             arg_list.append(a.to_dict(py)?)?;
         }
@@ -2589,7 +2589,7 @@ impl NseOutputValuePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("key", &self.key)?;
         dict.set_item("value", &self.value)?;
         dict.set_item("value_type", &self.value_type)?;
@@ -2663,11 +2663,11 @@ impl NseScriptResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("script_name", &self.script_name)?;
         dict.set_item("output", &self.output)?;
         dict.set_item("output_lines", &self.output_lines)?;
-        let so_list = PyList::empty_bound(py);
+        let so_list = PyList::empty(py);
         for v in &self.structured_output {
             so_list.append(v.to_dict(py)?)?;
         }
@@ -2762,9 +2762,9 @@ impl NseExecutionResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
-        let sr_list = PyList::empty_bound(py);
+        let sr_list = PyList::empty(py);
         for r in &self.script_results {
             sr_list.append(r.to_dict(py)?)?;
         }

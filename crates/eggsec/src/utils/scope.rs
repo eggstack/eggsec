@@ -1,27 +1,24 @@
-use crate::config::Scope;
-use crate::error::{EggsecError, Result};
-use crate::utils::target::extract_target_from_url;
-
-pub fn check_scope(scope: &Scope, target: &str) -> Result<()> {
-    if !scope.is_target_allowed(target)? {
-        return Err(EggsecError::ScopeViolation(format!(
-            "Target {} is not in allowed scope",
-            target
-        )));
-    }
-    Ok(())
-}
-
-pub fn check_scope_from_url(scope: &Scope, url: &str) -> Result<()> {
-    let target = extract_target_from_url(url)
-        .ok_or_else(|| EggsecError::Parse(format!("Failed to parse URL: {}", url)))?;
-    check_scope(scope, &target)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config::ScopeRule;
+    use crate::config::{Scope, ScopeRule};
+    use crate::error::{EggsecError, Result};
+    use crate::utils::target::extract_target_from_url;
+
+    fn check_scope(scope: &Scope, target: &str) -> Result<()> {
+        if !scope.is_target_allowed(target)? {
+            return Err(EggsecError::ScopeViolation(format!(
+                "Target {} is not in allowed scope",
+                target
+            )));
+        }
+        Ok(())
+    }
+
+    fn check_scope_from_url(scope: &Scope, url: &str) -> Result<()> {
+        let target = extract_target_from_url(url)
+            .ok_or_else(|| EggsecError::Parse(format!("Failed to parse URL: {}", url)))?;
+        check_scope(scope, &target)
+    }
 
     #[test]
     fn test_check_scope_allowed() {

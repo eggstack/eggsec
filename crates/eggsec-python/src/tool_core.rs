@@ -5,6 +5,7 @@
 //! and execution history. These wrappers expose a Pythonic API with
 //! `to_dict()`, `to_json()`, `__repr__`, `__str__`, and static constructors.
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::collections::HashMap;
@@ -17,7 +18,7 @@ use serde_json;
 // ---------------------------------------------------------------------------
 
 fn hashmap_to_pydict(py: Python, map: &HashMap<String, String>) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     for (k, v) in map {
         dict.set_item(k, v)?;
     }
@@ -25,7 +26,7 @@ fn hashmap_to_pydict(py: Python, map: &HashMap<String, String>) -> PyResult<PyOb
 }
 
 fn fxsmap_to_pydict(py: Python, map: &rustc_hash::FxHashMap<String, String>) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     for (k, v) in map {
         dict.set_item(k, v)?;
     }
@@ -1070,7 +1071,7 @@ impl ScopeToolPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("allowed_patterns", &self.inner.allowed_patterns)?;
         dict.set_item("excluded_patterns", &self.inner.excluded_patterns)?;
         dict.set_item("allowed_ips", &self.inner.allowed_ips)?;
@@ -1188,7 +1189,7 @@ impl TargetPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target_type", format!("{}", self.inner.target_type))?;
         dict.set_item("value", &self.inner.value)?;
         match &self.inner.scope {
@@ -1306,7 +1307,7 @@ impl RequestOptionsPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("timeout_ms", self.inner.timeout_ms)?;
         dict.set_item("concurrency", self.inner.concurrency)?;
         dict.set_item("rate_limit", self.inner.rate_limit)?;
@@ -1399,9 +1400,9 @@ impl AuthConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("auth_type", format!("{}", self.inner.auth_type))?;
-        let creds_dict = PyDict::new_bound(py);
+        let creds_dict = PyDict::new(py);
         for (k, _v) in &self.inner.credentials {
             creds_dict.set_item(k, "[REDACTED]")?;
         }
@@ -1468,7 +1469,7 @@ impl ToolRequestPy {
     ) -> PyResult<Self> {
         let mut req = eggsec_tool_core::ToolRequest::new(tool, target.inner.clone());
         if let Some(p) = params {
-            let json_mod = p.py().import_bound("json")?;
+            let json_mod = p.py().import("json")?;
             let json_str_obj = json_mod.call_method1("dumps", (p,))?;
             let json_str: String = json_str_obj.extract()?;
             let json_val: serde_json::Value = serde_json::from_str(&json_str)
@@ -1500,7 +1501,7 @@ impl ToolRequestPy {
     fn params(&self, py: Python) -> PyResult<PyObject> {
         let json_str = serde_json::to_string(&self.inner.params)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let json_mod = py.import_bound("json")?;
+        let json_mod = py.import("json")?;
         let obj = json_mod.call_method1("loads", (json_str,))?;
         Ok(obj.into())
     }
@@ -1516,7 +1517,7 @@ impl ToolRequestPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.inner.id)?;
         dict.set_item("tool", &self.inner.tool)?;
         dict.set_item("target_type", format!("{}", self.inner.target.target_type))?;
@@ -1643,7 +1644,7 @@ impl ResponseMetadataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("started_at", self.inner.started_at.to_rfc3339())?;
         dict.set_item("completed_at", self.inner.completed_at.to_rfc3339())?;
         dict.set_item("duration_ms", self.inner.duration_ms)?;
@@ -1776,7 +1777,7 @@ impl ToolFindingPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.inner.id)?;
         dict.set_item("finding_type", self.inner.finding_type.to_string())?;
         dict.set_item("severity", self.inner.severity.as_str())?;
@@ -1793,7 +1794,7 @@ impl ToolFindingPy {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.inner.id)?;
         dict.set_item("finding_type", self.inner.finding_type.to_string())?;
         dict.set_item("severity", self.inner.severity.as_str())?;
@@ -1923,7 +1924,7 @@ impl ToolErrorPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("code", &self.inner.code)?;
         dict.set_item("message", &self.inner.message)?;
         dict.set_item("error_type", self.inner.error_type.as_str())?;
@@ -1993,7 +1994,7 @@ impl ToolResponsePy {
     fn results(&self, py: Python) -> PyResult<PyObject> {
         let json_str = serde_json::to_string(&self.inner.results)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let json_mod = py.import_bound("json")?;
+        let json_mod = py.import("json")?;
         let obj = json_mod.call_method1("loads", (json_str,))?;
         Ok(obj.into())
     }
@@ -2026,7 +2027,7 @@ impl ToolResponsePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("request_id", &self.inner.request_id)?;
         dict.set_item("tool_id", &self.inner.tool_id)?;
         dict.set_item("status", self.inner.status.to_string())?;
@@ -2035,12 +2036,12 @@ impl ToolResponsePy {
             "metadata",
             ResponseMetadataPy::from(self.inner.metadata.clone()).to_dict(py)?,
         )?;
-        let errors_list = PyList::empty_bound(py);
+        let errors_list = PyList::empty(py);
         for e in &self.inner.errors {
             errors_list.append(ToolErrorPy::from(e.clone()).to_dict(py)?)?;
         }
         dict.set_item("errors", errors_list)?;
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.inner.findings {
             findings_list.append(ToolFindingPy::from(f.clone()).to_dict(py)?)?;
         }
@@ -2145,7 +2146,7 @@ impl ProgressUpdatePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("request_id", &self.inner.request_id)?;
         dict.set_item("stage", &self.inner.stage)?;
         dict.set_item("progress", self.inner.progress)?;
@@ -2258,7 +2259,7 @@ impl StreamEventPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("event_type", self.inner.event_type.to_string())?;
         dict.set_item("request_id", &self.inner.request_id)?;
         match &self.inner.progress {
@@ -2382,7 +2383,7 @@ impl PortDataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("port", self.inner.port)?;
         dict.set_item("protocol", &self.inner.protocol)?;
         dict.set_item("state", format!("{:?}", self.inner.state).to_lowercase())?;
@@ -2467,7 +2468,7 @@ impl EndpointDataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.inner.url)?;
         dict.set_item("status_code", self.inner.status_code)?;
         dict.set_item("content_length", self.inner.content_length)?;
@@ -2563,7 +2564,7 @@ impl TechnologyDataPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("name", &self.inner.name)?;
         dict.set_item("version", &self.inner.version)?;
         dict.set_item("category", &self.inner.category)?;
@@ -2676,7 +2677,7 @@ impl RateLimitConfigPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("requests_per_minute", self.inner.requests_per_minute)?;
         dict.set_item("concurrent_scans", self.inner.concurrent_scans)?;
         dict.set_item("burst_size", self.inner.burst_size)?;
@@ -2775,7 +2776,7 @@ impl RateLimitStatusPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("tokens_available", self.inner.tokens_available)?;
         dict.set_item("requests_this_minute", self.inner.requests_this_minute)?;
         dict.set_item("requests_per_minute", self.inner.requests_per_minute)?;
@@ -2891,7 +2892,7 @@ impl ExecutionEntryPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("request_id", &self.inner.request_id)?;
         dict.set_item("tool_id", &self.inner.tool_id)?;
         dict.set_item("target", &self.inner.target)?;

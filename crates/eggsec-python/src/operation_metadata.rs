@@ -1,3 +1,5 @@
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -801,46 +803,56 @@ impl OperationMetadataViewPy {
     }
 
     /// Serialize all fields to a Python dict.
-    fn to_dict(&self) -> HashMap<String, pyo3::PyObject> {
-        Python::with_gil(|py| {
+    fn to_dict(&self) -> HashMap<String, PyObject> {
+        Python::attach(|py| {
             let mut d = HashMap::new();
-            d.insert("operation_id".into(), self.operation_id.clone().into_py(py));
+            d.insert(
+                "operation_id".into(),
+                self.operation_id.clone().into_py_any(py).unwrap(),
+            );
             d.insert(
                 "operation_name".into(),
-                self.operation_name.clone().into_py(py),
+                self.operation_name.clone().into_py_any(py).unwrap(),
             );
-            d.insert("default_risk".into(), self.default_risk.name().into_py(py));
+            d.insert(
+                "default_risk".into(),
+                self.default_risk.name().into_py_any(py).unwrap(),
+            );
             d.insert(
                 "default_mode".into(),
-                self.default_mode.name().to_string().into_py(py),
+                self.default_mode
+                    .name()
+                    .to_string()
+                    .into_py_any(py)
+                    .unwrap(),
             );
             d.insert(
                 "target_policy".into(),
-                self.target_policy.name().into_py(py),
+                self.target_policy.name().into_py_any(py).unwrap(),
             );
             d.insert(
                 "request_schema".into(),
-                self.request_schema.clone().into_py(py),
+                self.request_schema.clone().into_py_any(py).unwrap(),
             );
             d.insert(
                 "result_schema".into(),
-                self.result_schema.clone().into_py(py),
+                self.result_schema.clone().into_py_any(py).unwrap(),
             );
             d.insert(
                 "feature_required".into(),
-                self.feature_required.clone().into_py(py),
+                self.feature_required.clone().into_py_any(py).unwrap(),
             );
             d.insert(
                 "python_async_available".into(),
-                self.python_async_available.into_py(py),
+                self.python_async_available.into_py_any(py).unwrap(),
             );
             d.insert(
                 "supported_surfaces".into(),
-                self.supported_surfaces.clone().into_py(py),
+                self.supported_surfaces.clone().into_py_any(py).unwrap(),
             );
             d.insert(
                 "default_timeout_ms".into(),
-                self.default_timeout_ms.into_py(py),
+                self.default_timeout_ms.into_py_any(py).unwrap(),
             );
             d
         })

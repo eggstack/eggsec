@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde_json::json;
@@ -95,9 +96,9 @@ pub fn build_info() -> PyObject {
     .map(|(name, _)| name.to_string())
     .collect();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let python_version = py
-            .import_bound("sys")
+            .import("sys")
             .and_then(|sys| sys.getattr("version"))
             .and_then(|v| v.extract::<String>())
             .unwrap_or_else(|_| "unknown".to_string());
@@ -117,7 +118,7 @@ pub fn build_info() -> PyObject {
         });
 
         let json_str = info.to_string();
-        py.import_bound("json")
+        py.import("json")
             .expect("json module not available")
             .call_method1("loads", (json_str,))
             .expect("json.loads failed")
@@ -129,8 +130,8 @@ pub fn build_info() -> PyObject {
 /// plus the list of available feature names.
 #[pyfunction]
 pub fn api_surface_version() -> PyObject {
-    Python::with_gil(|py| {
-        let dict = PyDict::new_bound(py);
+    Python::attach(|py| {
+        let dict = PyDict::new(py);
 
         dict.set_item("package_version", env!("CARGO_PKG_VERSION"))
             .expect("set_item failed");
@@ -141,7 +142,7 @@ pub fn api_surface_version() -> PyObject {
         dict.set_item("abi_version", ABI_VERSION)
             .expect("set_item failed");
 
-        let features = PyList::empty_bound(py);
+        let features = PyList::empty(py);
         let feature_names: Vec<&str> = vec![
             "core",
             "scanner",

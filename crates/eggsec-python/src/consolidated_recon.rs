@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -145,7 +146,7 @@ pub struct ReconModuleResultPy {
 #[pymethods]
 impl ReconModuleResultPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("module", &self.module)?;
         dict.set_item("success", self.success)?;
         dict.set_item("data", &self.data)?;
@@ -193,13 +194,13 @@ impl ConsolidatedReconReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("modules_run", self.modules_run)?;
         dict.set_item("modules_succeeded", self.modules_succeeded)?;
         dict.set_item("modules_failed", self.modules_failed)?;
 
-        let modules_list = PyList::empty_bound(py);
+        let modules_list = PyList::empty(py);
         for m in &self.modules {
             modules_list.append(m.to_dict(py)?)?;
         }
@@ -254,7 +255,7 @@ pub fn run_consolidated_recon(
 ) -> PyResult<ConsolidatedReconReportPy> {
     let target_owned = target.to_string();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let mut modules = Vec::new();
 

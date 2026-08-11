@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -40,7 +41,7 @@ impl FindingCorrelationPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("baseline_finding_id", &self.baseline_finding_id)?;
         dict.set_item("current_finding_id", &self.current_finding_id)?;
         dict.set_item("correlation_method", &self.correlation_method)?;
@@ -129,7 +130,7 @@ pub struct AssessmentDiffPy {
 #[pymethods]
 impl AssessmentDiffPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("baseline_id", &self.baseline_id)?;
         dict.set_item("current_id", &self.current_id)?;
         dict.set_item("compared_at", &self.compared_at)?;

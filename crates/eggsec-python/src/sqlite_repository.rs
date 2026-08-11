@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
@@ -44,7 +45,7 @@ impl SqliteMigration {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", self.version)?;
         dict.set_item("description", &self.description)?;
         dict.set_item("applied_at_ms", self.applied_at_ms)?;
@@ -88,11 +89,11 @@ pub struct MigrationResult {
 #[pymethods]
 impl MigrationResult {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("applied", self.applied)?;
         dict.set_item("from_version", self.from_version)?;
         dict.set_item("to_version", self.to_version)?;
-        let list = pyo3::types::PyList::empty_bound(py);
+        let list = pyo3::types::PyList::empty(py);
         for m in &self.migrations_applied {
             list.append(m.to_dict(py)?)?;
         }
@@ -431,10 +432,10 @@ impl SqliteFindingRepository {
             .findings
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for (id, json) in findings.iter() {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", id)?;
             item_dict.set_item("data", json)?;
             list.append(item_dict)?;
@@ -758,10 +759,10 @@ impl SqliteAssessmentRepository {
             .assessments
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let dict = PyDict::new_bound(py);
-        let list = pyo3::types::PyList::empty_bound(py);
+        let dict = PyDict::new(py);
+        let list = pyo3::types::PyList::empty(py);
         for (id, json) in assessments.iter() {
-            let item_dict = PyDict::new_bound(py);
+            let item_dict = PyDict::new(py);
             item_dict.set_item("id", id)?;
             item_dict.set_item("data", json)?;
             list.append(item_dict)?;

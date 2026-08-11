@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyMemoryView};
 use serde::{Deserialize, Serialize};
@@ -93,7 +94,7 @@ impl ArtifactPy {
     /// Get the embedded content as bytes, if available.
     fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
         match &self.content {
-            Some(data) => Ok(Some(PyBytes::new_bound(py, data))),
+            Some(data) => Ok(Some(PyBytes::new(py, data))),
             None => Ok(None),
         }
     }
@@ -120,8 +121,8 @@ impl ArtifactPy {
     fn memoryview<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyMemoryView>>> {
         match &self.content {
             Some(data) => {
-                let bytes = PyBytes::new_bound(py, data);
-                Ok(Some(PyMemoryView::from_bound(&bytes)?))
+                let bytes = PyBytes::new(py, data);
+                Ok(Some(PyMemoryView::from(&bytes)?))
             }
             None => Ok(None),
         }
@@ -170,7 +171,7 @@ impl ArtifactPy {
     unsafe fn __releasebuffer__(&self, _view: *mut pyo3::ffi::Py_buffer) {}
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", "[REDACTED]")?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -185,7 +186,7 @@ impl ArtifactPy {
     }
 
     fn to_dict_raw(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -255,7 +256,7 @@ impl ArtifactReferencePy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("artifact_id", &self.artifact_id)?;
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("role", &self.role)?;
@@ -338,7 +339,7 @@ impl ArtifactStorePy {
 
     /// Convert to a dictionary mapping artifact IDs to artifact dicts.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         let artifacts = self.artifacts.read().unwrap();
         for (id, artifact) in artifacts.iter() {
             dict.set_item(id, artifact.to_dict(py)?)?;

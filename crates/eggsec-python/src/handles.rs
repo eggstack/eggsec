@@ -1,3 +1,5 @@
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -91,7 +93,7 @@ impl ExecutionHandle {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("handle_id", &self.handle_id)?;
         dict.set_item("status", self.status.name())?;
         match &self.result {
@@ -176,7 +178,7 @@ impl ExecutionEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("handle_id", &self.handle_id)?;
         dict.set_item("event_type", &self.event_type)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -228,7 +230,7 @@ impl serde::Serialize for ExecutionEvent {
 impl ExecutionEvent {
     /// Serialize to a Python dict (crate-internal).
     pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("handle_id", &self.handle_id)?;
         dict.set_item("event_type", &self.event_type)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -275,7 +277,7 @@ impl EventLog {
 
     /// Convert the log to a Python list of dicts.
     fn to_list(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in &self.events {
             list.append(event.to_dict(py)?)?;
         }
@@ -293,7 +295,7 @@ impl EventLog {
 
     /// Return events wrapped in versioned EventEnvelope dicts.
     fn to_versioned_list(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in &self.events {
             let env = crate::event_protocol::EventEnvelope::from_legacy(py, event)?;
             list.append(env.to_dict_impl(py)?)?;
@@ -310,7 +312,7 @@ impl EventLog {
     /// Returns the events wrapped in EventEnvelope dicts.
     fn drain(&mut self, py: Python) -> PyResult<PyObject> {
         let events: Vec<ExecutionEvent> = self.events.drain(..).collect();
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in &events {
             let env = crate::event_protocol::EventEnvelope::from_legacy(py, event)?;
             list.append(env.to_dict_impl(py)?)?;
@@ -328,9 +330,9 @@ impl EventLog {
 
     /// Iterate over events (yields ExecutionEvent objects).
     fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for event in slf.events.iter() {
-            let obj = event.clone().into_py(py);
+            let obj = event.clone().into_py_any(py).unwrap();
             list.append(obj)?;
         }
         list.call_method0("__iter__").map(|o| o.into())
@@ -413,7 +415,7 @@ impl LazyEventIterator {
         }
         let event = slf.events[slf.index].clone();
         slf.index += 1;
-        Ok(Some(event.into_py(py)))
+        Ok(Some(event.into_py_any(py).unwrap()))
     }
 
     fn __len__(&self) -> usize {

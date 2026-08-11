@@ -42,13 +42,13 @@ impl BinaryBufferPy {
 
     /// Return raw bytes.
     fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new_bound(py, &self.data)
+        PyBytes::new(py, &self.data)
     }
 
     /// Return a memoryview over the buffer.
     fn memoryview<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyMemoryView>> {
-        let bytes = PyBytes::new_bound(py, &self.data);
-        PyMemoryView::from_bound(&bytes)
+        let bytes = PyBytes::new(py, &self.data);
+        PyMemoryView::from(&bytes)
     }
 
     /// Hex-encoded representation of the data.
@@ -58,7 +58,7 @@ impl BinaryBufferPy {
 
     /// Return a copy of the internal data as a Python bytes object.
     fn to_py_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new_bound(py, &self.data)
+        PyBytes::new(py, &self.data)
     }
 
     /// PEP 3118 buffer protocol: fill a Py_buffer for the caller.

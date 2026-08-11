@@ -7,8 +7,8 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "transitive"
 unsound = "transitive"
 
-# Dependency advisory exceptions — reviewed 2026-08-07.
-# All previously stale ignores have been removed (advisory-not-detected).
+# Dependency advisory exceptions — reviewed 2026-08-11.
+# PyO3 upgraded to 0.29.2; quick-xml upgraded to 0.41.0.
 # Remaining exceptions are documented in docs/DEPENDENCY_EXCEPTIONS.md.
 #
 # Required fields per exception:
@@ -26,14 +26,6 @@ ignore = [
     { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify-types->notify v7. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
-
-    # --- Direct: PyO3 major version upgrade required ---
-    { id = "RUSTSEC-2025-0020", reason = "pyo3 0.22.6 buffer overflow; requires >=0.24.1 (major bump). Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
-    { id = "RUSTSEC-2026-0177", reason = "pyo3 0.22.6 missing Sync bound; requires >=0.29.0 (major bump). Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
-
-    # --- Direct: quick-xml major version + MSRV bump required ---
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.31.0 quadratic DoS; requires >=0.41.0 which raises MSRV to 1.86. Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.31.0 NsReader OOM; requires >=0.41.0 which raises MSRV to 1.86. Deferred to Phase H. See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 
 [licenses]

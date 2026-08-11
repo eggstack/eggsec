@@ -1,3 +1,4 @@
+use crate::PyObject;
 use md5::{Digest, Md5};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -106,7 +107,7 @@ impl PipelineCheckpoint {
         let now = current_epoch_ms();
         let parsed_results: HashMap<String, serde_json::Value> = match step_results {
             Some(obj) => {
-                let json_mod = py.import_bound("json")?;
+                let json_mod = py.import("json")?;
                 let json_str = json_mod
                     .call_method1("dumps", (obj,))
                     .map_err(|e| {
@@ -169,11 +170,11 @@ impl PipelineCheckpoint {
     /// can't be auto-converted by PyO3).
     #[getter]
     fn step_results(&self, py: Python) -> PyResult<PyObject> {
-        let results_dict = PyDict::new_bound(py);
+        let results_dict = PyDict::new(py);
         for (k, v) in &self.step_results {
             let json_str = serde_json::to_string(v)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-            let json_mod = py.import_bound("json")?;
+            let json_mod = py.import("json")?;
             let py_val = json_mod.call_method1("loads", (json_str,))?;
             results_dict.set_item(k, py_val)?;
         }
@@ -191,7 +192,7 @@ impl PipelineCheckpoint {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("version", self.version.0)?;
         dict.set_item("pipeline_id", &self.pipeline_id)?;
         dict.set_item("pipeline_name", &self.pipeline_name)?;
@@ -240,7 +241,7 @@ pub struct CheckpointLoadResult {
 #[pymethods]
 impl CheckpointLoadResult {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("checkpoint", self.checkpoint.to_dict(py)?)?;
         dict.set_item("migrated", self.migrated)?;
         dict.set_item("original_version", self.original_version)?;

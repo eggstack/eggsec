@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -67,14 +68,14 @@ impl CancellationToken {
     ///
     /// Returns a dict with `is_cancelled` and `reason` fields.
     fn cancel_token(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("is_cancelled", self.is_cancelled())?;
         dict.set_item("reason", self.reason())?;
         Ok(dict.into())
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("cancelled", self.is_cancelled())?;
         dict.set_item("reason", self.reason())?;
         Ok(dict.into())

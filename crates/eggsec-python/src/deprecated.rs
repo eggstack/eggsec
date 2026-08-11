@@ -35,8 +35,8 @@ impl DeprecatedWarning {
 /// for most deprecations.
 #[pyfunction]
 pub fn deprecated_warning(msg: String, py: Python) -> PyResult<()> {
-    let warnings = py.import_bound("warnings")?;
-    let exc_type = py.get_type_bound::<DeprecatedWarning>();
+    let warnings = py.import("warnings")?;
+    let exc_type = py.get_type::<DeprecatedWarning>();
     warnings.call_method1("warn", (msg, exc_type))?;
     Ok(())
 }

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -65,15 +66,15 @@ impl DnsRecordSet {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("domain", &self.domain)?;
         dict.set_item("a", &self.a_records)?;
         dict.set_item("aaaa", &self.aaaa_records)?;
         dict.set_item("cname", &self.cname_records)?;
 
-        let mx_list = PyList::empty_bound(py);
+        let mx_list = PyList::empty(py);
         for mx in &self.mx_records {
-            let mx_dict = PyDict::new_bound(py);
+            let mx_dict = PyDict::new(py);
             mx_dict.set_item("preference", mx.preference)?;
             mx_dict.set_item("exchange", &mx.exchange)?;
             mx_list.append(mx_dict)?;
@@ -83,7 +84,7 @@ impl DnsRecordSet {
         dict.set_item("ns", &self.ns_records)?;
 
         if let Some(ref soa) = self.soa_record {
-            let soa_dict = PyDict::new_bound(py);
+            let soa_dict = PyDict::new(py);
             soa_dict.set_item("mname", &soa.mname)?;
             soa_dict.set_item("rname", &soa.rname)?;
             soa_dict.set_item("serial", soa.serial)?;
@@ -197,7 +198,7 @@ impl TlsCertificateInfo {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("subject", &self.subject)?;
         dict.set_item("issuer", &self.issuer)?;
         dict.set_item("valid_from", &self.valid_from)?;
@@ -257,7 +258,7 @@ impl TlsInspectionResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("has_ssl", self.has_ssl)?;
         if let Some(ref cert) = self.certificate {
@@ -268,9 +269,9 @@ impl TlsInspectionResult {
         dict.set_item("supported_versions", &self.supported_versions)?;
         dict.set_item("supported_cipher_suites", &self.supported_cipher_suites)?;
 
-        let issues_list = PyList::empty_bound(py);
+        let issues_list = PyList::empty(py);
         for issue in &self.issues {
-            let issue_dict = PyDict::new_bound(py);
+            let issue_dict = PyDict::new(py);
             issue_dict.set_item("severity", &issue.severity)?;
             issue_dict.set_item("code", &issue.code)?;
             issue_dict.set_item("description", &issue.description)?;
@@ -369,7 +370,7 @@ impl TechStack {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("servers", &self.servers)?;
         dict.set_item("frameworks", &self.frameworks)?;
         dict.set_item("languages", &self.languages)?;
@@ -408,7 +409,7 @@ pub struct TechDetectionResult {
 impl TechDetectionResult {
     #[getter]
     fn headers(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         for (k, v) in &self.headers {
             dict.set_item(k, v)?;
         }
@@ -416,10 +417,10 @@ impl TechDetectionResult {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("status_code", self.status_code)?;
-        let headers_dict = PyDict::new_bound(py);
+        let headers_dict = PyDict::new(py);
         for (k, v) in &self.headers {
             headers_dict.set_item(k, v)?;
         }
@@ -454,7 +455,7 @@ impl TechDetectionResult {
 #[pyfunction]
 pub fn recon_dns(domain: &str) -> PyResult<DnsRecordSet> {
     let domain_owned = domain.to_string();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::recon::dns_records::enumerate_dns_records(&domain_owned)
                 .await
@@ -544,7 +545,7 @@ pub fn async_recon_dns(domain: &str) -> PyResult<crate::runtime_async::PyFuture>
 #[pyo3(signature = (host, *, port=443))]
 pub fn inspect_tls(host: &str, port: u16) -> PyResult<TlsInspectionResult> {
     let host_owned = host.to_string();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::recon::ssl::analyze_ssl(&host_owned, port)
                 .await
@@ -637,7 +638,7 @@ pub fn async_inspect_tls(host: &str, port: u16) -> PyResult<crate::runtime_async
 #[pyfunction]
 pub fn detect_technology(url: &str) -> PyResult<TechDetectionResult> {
     let url_owned = url.to_string();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::recon::techdetect::detect_tech_stack(&url_owned)
                 .await

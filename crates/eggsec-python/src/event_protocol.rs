@@ -1,5 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::PyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -71,7 +73,7 @@ impl serde::Serialize for EventEnvelope {
 
 impl Clone for EventEnvelope {
     fn clone(&self) -> Self {
-        Python::with_gil(|py| Self {
+        Python::attach(|py| Self {
             schema_version: self.schema_version.clone(),
             event_id: self.event_id.clone(),
             sequence: self.sequence,
@@ -183,7 +185,7 @@ impl EventEnvelope {
     }
 
     pub(crate) fn to_dict_impl(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("sequence", self.sequence)?;
@@ -195,7 +197,7 @@ impl EventEnvelope {
     }
 
     pub(crate) fn to_dict_raw_impl(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("schema_version", &self.schema_version)?;
         dict.set_item("event_id", &self.event_id)?;
         dict.set_item("sequence", self.sequence)?;
@@ -307,7 +309,7 @@ fn pyobject_to_json(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Valu
     if let Ok(v) = any.extract::<String>() {
         return Ok(serde_json::Value::String(v));
     }
-    if let Ok(d) = any.downcast::<PyDict>() {
+    if let Ok(d) = any.cast::<PyDict>() {
         let mut map = serde_json::Map::new();
         for (key, value) in d.iter() {
             if let Ok(key_str) = key.extract::<String>() {
@@ -316,7 +318,7 @@ fn pyobject_to_json(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Valu
         }
         return Ok(serde_json::Value::Object(map));
     }
-    if let Ok(list) = any.downcast::<PyList>() {
+    if let Ok(list) = any.cast::<PyList>() {
         let mut arr = Vec::new();
         for item in list.iter() {
             arr.push(pyobject_to_json(py, &item.into())?);
@@ -345,17 +347,17 @@ fn redact_pyobject(py: Python<'_>, obj: &PyObject) -> PyResult<PyObject> {
         return Ok(obj.clone_ref(py));
     }
     if any.extract::<String>().is_ok() {
-        return Ok("REDACTED".into_py(py));
+        return Ok("REDACTED".into_py_any(py).unwrap());
     }
-    if let Ok(d) = any.downcast::<PyDict>() {
-        let redacted = PyDict::new_bound(py);
+    if let Ok(d) = any.cast::<PyDict>() {
+        let redacted = PyDict::new(py);
         for (key, value) in d.iter() {
             redacted.set_item(&key, redact_pyobject(py, &value.into())?)?;
         }
         return Ok(redacted.into());
     }
-    if let Ok(list) = any.downcast::<PyList>() {
-        let redacted = PyList::empty_bound(py);
+    if let Ok(list) = any.cast::<PyList>() {
+        let redacted = PyList::empty(py);
         for item in list.iter() {
             redacted.append(redact_pyobject(py, &item.into())?)?;
         }
@@ -387,7 +389,7 @@ fn redact_json_value(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Val
     if any.extract::<String>().is_ok() {
         return Ok(serde_json::Value::String("[REDACTED]".to_string()));
     }
-    if let Ok(d) = any.downcast::<PyDict>() {
+    if let Ok(d) = any.cast::<PyDict>() {
         let mut map = serde_json::Map::new();
         for (key, value) in d.iter() {
             if let Ok(key_str) = key.extract::<String>() {
@@ -396,7 +398,7 @@ fn redact_json_value(py: Python<'_>, obj: &PyObject) -> PyResult<serde_json::Val
         }
         return Ok(serde_json::Value::Object(map));
     }
-    if let Ok(list) = any.downcast::<PyList>() {
+    if let Ok(list) = any.cast::<PyList>() {
         let mut arr = Vec::new();
         for item in list.iter() {
             arr.push(redact_json_value(py, &item.into())?);
@@ -430,7 +432,7 @@ impl PlanningEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("operation_id", &self.operation_id)?;
         dict.set_item("target", &self.target)?;
         dict.set_item("scope_summary", &self.scope_summary)?;
@@ -482,7 +484,7 @@ impl PreflightEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("outcome", &self.outcome)?;
         dict.set_item("confirmations_required", &self.confirmations_required)?;
         dict.set_item("suggested_flags", &self.suggested_flags)?;
@@ -521,7 +523,7 @@ impl StageLifecycleEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("stage", &self.stage)?;
         dict.set_item("status", &self.status)?;
         Ok(dict.into())
@@ -575,7 +577,7 @@ impl ProgressEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("percentage", self.percentage)?;
         dict.set_item("message", &self.message)?;
         dict.set_item("items_processed", self.items_processed)?;
@@ -633,7 +635,7 @@ impl FindingEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("finding_id", &self.finding_id)?;
         dict.set_item("severity", &self.severity)?;
         dict.set_item("title", &self.title)?;
@@ -691,7 +693,7 @@ impl ArtifactEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("artifact_name", &self.artifact_name)?;
         dict.set_item("kind", &self.kind)?;
         dict.set_item("mime_type", &self.mime_type)?;
@@ -738,7 +740,7 @@ impl CancellationEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("reason", &self.reason)?;
         dict.set_item("cancelled_by", &self.cancelled_by)?;
         Ok(dict.into())
@@ -784,7 +786,7 @@ impl FailureEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("error_type", &self.error_type)?;
         dict.set_item("error_message", &self.error_message)?;
         dict.set_item("is_retryable", self.is_retryable)?;
@@ -837,7 +839,7 @@ impl CompletionEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("status", &self.status)?;
         dict.set_item("stats", &self.stats)?;
         dict.set_item("duration_ms", self.duration_ms)?;
@@ -920,7 +922,7 @@ impl ResolutionEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("resolved_address", &self.resolved_address)?;
         dict.set_item("status", &self.status)?;
@@ -974,7 +976,7 @@ impl ConnectionEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("port", self.port)?;
         dict.set_item("status", &self.status)?;
@@ -1033,7 +1035,7 @@ impl ProbeEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("probe_type", &self.probe_type)?;
         dict.set_item("target", &self.target)?;
         dict.set_item("success", self.success)?;
@@ -1087,7 +1089,7 @@ impl WebSocketMessageEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("direction", &self.direction)?;
         dict.set_item("message_type", &self.message_type)?;
@@ -1150,7 +1152,7 @@ impl CaptureStatsEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("packets_captured", self.packets_captured)?;
         dict.set_item("packets_dropped", self.packets_dropped)?;
@@ -1224,7 +1226,7 @@ impl HandshakeCompletedEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("protocol", &self.protocol)?;
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
@@ -1296,7 +1298,7 @@ impl RequestSentEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("method", &self.method)?;
         dict.set_item("url", &self.url)?;
         dict.set_item("headers_count", self.headers_count)?;
@@ -1371,7 +1373,7 @@ impl ResponseHeadersReceivedEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("status_code", self.status_code)?;
         dict.set_item("reason", &self.reason)?;
         dict.set_item("headers_count", self.headers_count)?;
@@ -1441,7 +1443,7 @@ impl BodyProgressEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("bytes_received", self.bytes_received)?;
         dict.set_item("bytes_expected", &self.bytes_expected)?;
         dict.set_item("percentage", &self.percentage)?;
@@ -1505,7 +1507,7 @@ impl CaptureStartedEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("filter", &self.filter)?;
         dict.set_item("promiscuous", self.promiscuous)?;
@@ -1573,7 +1575,7 @@ impl PacketSampledEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("interface", &self.interface)?;
         dict.set_item("packet_index", self.packet_index)?;
         dict.set_item("captured_len", self.captured_len)?;
@@ -1651,7 +1653,7 @@ impl FlowObservedEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("src_address", &self.src_address)?;
         dict.set_item("src_port", self.src_port)?;
         dict.set_item("dst_address", &self.dst_address)?;
@@ -1725,7 +1727,7 @@ impl ArtifactCreatedEvent {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("artifact_type", &self.artifact_type)?;
         dict.set_item("path", &self.path)?;
         dict.set_item("size", self.size)?;

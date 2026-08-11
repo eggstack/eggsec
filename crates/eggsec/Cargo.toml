@@ -66,7 +66,7 @@ tracing-appender = { version = "0.2", optional = true }
 notify = { version = "7", features = ["serde"], optional = true }
 notify-debouncer-mini = { version = "0.5", optional = true }
 directories = "5"
-quick-xml = { version = "0.31", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 ipnetwork.workspace = true
 hickory-resolver.workspace = true
 hostname.workspace = true

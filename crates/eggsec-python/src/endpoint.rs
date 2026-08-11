@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -101,7 +102,7 @@ pub struct EndpointFinding {
 impl EndpointFinding {
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("url", &self.url)?;
         dict.set_item("path", &self.path)?;
         dict.set_item("status_code", self.status_code)?;
@@ -183,14 +184,14 @@ impl EndpointScanResult {
 
     /// Convert result to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("base_url", &self.base_url)?;
         dict.set_item("endpoints_found", self.endpoints_found)?;
         dict.set_item("elapsed_ms", self.elapsed_ms)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
-            let f_dict = PyDict::new_bound(py);
+            let f_dict = PyDict::new(py);
             f_dict.set_item("url", &f.url)?;
             f_dict.set_item("path", &f.path)?;
             f_dict.set_item("status_code", f.status_code)?;
@@ -203,7 +204,7 @@ impl EndpointScanResult {
         }
         dict.set_item("findings", findings_list)?;
 
-        let stats_dict = PyDict::new_bound(py);
+        let stats_dict = PyDict::new(py);
         stats_dict.set_item("endpoints_scanned", self.stats.endpoints_scanned)?;
         stats_dict.set_item("endpoints_found", self.stats.endpoints_found)?;
         stats_dict.set_item("interesting_findings", self.stats.interesting_findings)?;
@@ -251,9 +252,9 @@ impl EndpointScanResult {
 
     /// Convert endpoint findings to a list of row dicts suitable for tabular output.
     fn to_rows(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::empty_bound(py);
+        let list = PyList::empty(py);
         for f in &self.findings {
-            let dict = PyDict::new_bound(py);
+            let dict = PyDict::new(py);
             dict.set_item("base_url", &self.base_url)?;
             dict.set_item("url", &f.url)?;
             dict.set_item("path", &f.path)?;

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -32,8 +33,8 @@ impl EventStreamAsyncIterator {
         }
         let env = slf.events[slf.index].clone();
         slf.index += 1;
-        Python::with_gil(|py| {
-            let dict = PyDict::new_bound(py);
+        Python::attach(|py| {
+            let dict = PyDict::new(py);
             dict.set_item("schema_version", &env.schema_version)?;
             dict.set_item("event_id", &env.event_id)?;
             dict.set_item("timestamp_ms", env.timestamp_ms)?;

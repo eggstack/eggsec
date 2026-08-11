@@ -160,7 +160,7 @@ impl ImageLayerPy {
 #[pymethods]
 impl ImageLayerPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("layer_id", &self.layer_id)?;
         dict.set_item("instruction", &self.instruction)?;
         dict.set_item("size_bytes", self.size_bytes)?;
@@ -215,7 +215,7 @@ impl DockerMisconfigPy {
 #[pymethods]
 impl DockerMisconfigPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("check", &self.check)?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("description", &self.description)?;
@@ -302,15 +302,15 @@ impl DockerScanResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("image_name", &self.image_name)?;
         dict.set_item("base_image", &self.base_image)?;
-        let layers_list = PyList::empty_bound(py);
+        let layers_list = PyList::empty(py);
         for l in &self.layers {
             layers_list.append(l.to_dict(py)?)?;
         }
         dict.set_item("layers", layers_list)?;
-        let misconfigs_list = PyList::empty_bound(py);
+        let misconfigs_list = PyList::empty(py);
         for m in &self.misconfigurations {
             misconfigs_list.append(m.to_dict(py)?)?;
         }
@@ -373,7 +373,7 @@ impl ClusterInfoPy {
 #[pymethods]
 impl ClusterInfoPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("server_version", &self.server_version)?;
         dict.set_item("node_count", self.node_count)?;
         dict.set_item("namespace_count", self.namespace_count)?;
@@ -433,7 +433,7 @@ impl K8sFindingPy {
 #[pymethods]
 impl K8sFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("resource_type", &self.resource_type)?;
         dict.set_item("resource_name", &self.resource_name)?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -537,28 +537,28 @@ impl KubernetesScanResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         if let Some(ref info) = self.cluster_info {
             dict.set_item("cluster_info", info.to_dict(py)?)?;
         } else {
             dict.set_item("cluster_info", py.None())?;
         }
-        let rbac_list = PyList::empty_bound(py);
+        let rbac_list = PyList::empty(py);
         for f in &self.rbac_issues {
             rbac_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("rbac_issues", rbac_list)?;
-        let netpol_list = PyList::empty_bound(py);
+        let netpol_list = PyList::empty(py);
         for f in &self.network_policy_issues {
             netpol_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("network_policy_issues", netpol_list)?;
-        let pod_list = PyList::empty_bound(py);
+        let pod_list = PyList::empty(py);
         for f in &self.pod_security_issues {
             pod_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("pod_security_issues", pod_list)?;
-        let secret_list = PyList::empty_bound(py);
+        let secret_list = PyList::empty(py);
         for f in &self.secret_exposure {
             secret_list.append(f.to_dict(py)?)?;
         }
@@ -620,7 +620,7 @@ impl EscapeRiskPy {
 #[pymethods]
 impl EscapeRiskPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("risk_type", &self.risk_type)?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("description", &self.description)?;
@@ -684,9 +684,9 @@ impl EscapeDetectionResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
-        let risks_list = PyList::empty_bound(py);
+        let risks_list = PyList::empty(py);
         for r in &self.escape_risks {
             risks_list.append(r.to_dict(py)?)?;
         }
@@ -750,7 +750,7 @@ impl CisCheckPy {
 #[pymethods]
 impl CisCheckPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("id", &self.id)?;
         dict.set_item("description", &self.description)?;
         dict.set_item("severity", self.severity.as_str())?;
@@ -826,13 +826,13 @@ impl CisBenchmarkResultPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("benchmark_version", &self.benchmark_version)?;
         dict.set_item("total_checks", self.total_checks)?;
         dict.set_item("passed", self.passed)?;
         dict.set_item("failed", self.failed)?;
         dict.set_item("warnings", self.warnings)?;
-        let checks_list = PyList::empty_bound(py);
+        let checks_list = PyList::empty(py);
         for c in &self.checks {
             checks_list.append(c.to_dict(py)?)?;
         }
@@ -891,7 +891,7 @@ impl ContainerFindingPy {
 #[pymethods]
 impl ContainerFindingPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("category", &self.category)?;
         dict.set_item("severity", self.severity.as_str())?;
         dict.set_item("title", &self.title)?;
@@ -988,7 +988,7 @@ impl ContainerReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("target", &self.target)?;
         dict.set_item("scan_type", self.scan_type.as_str())?;
         if let Some(ref docker) = self.docker {
@@ -1011,7 +1011,7 @@ impl ContainerReportPy {
         } else {
             dict.set_item("cis_benchmarks", py.None())?;
         }
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
@@ -1056,7 +1056,7 @@ impl ContainerReportPy {
 #[pyfunction]
 pub fn scan_docker_image(image_name: &str) -> PyResult<DockerScanResultPy> {
     let image_owned = image_name.to_string();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner = eggsec::container::docker::DockerScanner::new();
             scanner.scan_image(&image_owned).await.map_pyerr()
@@ -1101,7 +1101,7 @@ pub fn scan_kubernetes(
 ) -> PyResult<KubernetesScanResultPy> {
     let api_owned = api_server.to_string();
     let token_owned = token.map(|s| s.to_string());
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             let scanner = eggsec::container::kubernetes::KubernetesScanner::new(
                 &api_owned,

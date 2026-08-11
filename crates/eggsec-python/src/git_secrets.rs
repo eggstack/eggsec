@@ -201,7 +201,7 @@ impl SecretFindingPy {
 impl SecretFindingPy {
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("secret_type", self.secret_type.as_str())?;
         dict.set_item("value_preview", &self.value_preview)?;
         dict.set_item("location", &self.location)?;
@@ -303,7 +303,7 @@ impl GitSecretFindingPy {
 
     /// Convert to a Python dictionary.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("commit_hash", &self.commit_hash)?;
         dict.set_item("commit_message", &self.commit_message)?;
         dict.set_item("author", &self.author)?;
@@ -376,7 +376,7 @@ impl GitSecretsSummaryPy {
 #[pymethods]
 impl GitSecretsSummaryPy {
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("critical", self.critical)?;
         dict.set_item("high", self.high)?;
         dict.set_item("medium", self.medium)?;
@@ -428,12 +428,12 @@ impl GitSecretsReportPy {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("repo_path", &self.repo_path)?;
         dict.set_item("commits_scanned", self.commits_scanned)?;
         dict.set_item("files_scanned", self.files_scanned)?;
 
-        let findings_list = PyList::empty_bound(py);
+        let findings_list = PyList::empty(py);
         for f in &self.findings {
             findings_list.append(f.to_dict(py)?)?;
         }
@@ -484,7 +484,7 @@ impl GitSecretsReportPy {
 #[pyo3(signature = (repo_path, *, max_commits=1000))]
 pub fn scan_git_secrets(repo_path: &str, max_commits: usize) -> PyResult<GitSecretsReportPy> {
     let repo_path_owned = repo_path.to_string();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
             eggsec::recon::git_secrets::scan_git_secrets(&repo_path_owned, max_commits).map_pyerr()
         })?;
