@@ -169,14 +169,15 @@ impl FuzzEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgsCli, FuzzArgs};
     use crate::error::EggsecError;
+    use crate::fuzzer::config::FuzzConfig;
+    use crate::types::CommonHttpArgs;
 
     fn make_engine_with_payload_type(payload_type: &str) -> FuzzEngine {
-        let args = FuzzArgs {
+        let args = FuzzConfig {
             url: "http://example.com".to_string(),
             payload_type: payload_type.to_string(),
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,
@@ -192,7 +193,7 @@ mod tests {
             session: false,
             diffing: false,
             capture_baseline: false,
-            mode: crate::cli::FuzzMode::Sequential,
+            mode: crate::fuzzer::config::FuzzMode::Sequential,
             target: None,
             graphql_introspection: false,
             graphql_depth_bypass: false,

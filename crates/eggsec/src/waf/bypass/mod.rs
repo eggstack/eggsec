@@ -15,7 +15,6 @@ pub use profiles::{
 pub use smuggling::SmugglingBypass;
 
 use super::detector::WafDetectionResult;
-use crate::cli::WafArgs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum TestType {
@@ -72,14 +71,18 @@ pub struct BypassResult {
 }
 
 pub struct BypassEngine {
-    args: WafArgs,
+    args: crate::fuzzer::config::WafConfig,
     client: reqwest::Client,
     profile: Option<WafProfile>,
     test_type: TestType,
 }
 
 impl BypassEngine {
-    pub fn new(args: &WafArgs, profile: Option<WafProfile>, test_type: TestType) -> Result<Self> {
+    pub fn new(
+        args: &crate::fuzzer::config::WafConfig,
+        profile: Option<WafProfile>,
+        test_type: TestType,
+    ) -> Result<Self> {
         let client = crate::utils::create_insecure_client_with_options(args.timeout, |builder| {
             builder.redirect(reqwest::redirect::Policy::limited(
                 crate::constants::waf::MAX_REDIRECTS,

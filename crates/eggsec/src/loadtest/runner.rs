@@ -14,9 +14,9 @@ use tokio_util::sync::CancellationToken;
 use tracing;
 
 use super::metrics::{LoadTestResults, Metrics};
-use crate::cli::{CommonHttpArgs, LoadArgs};
 use crate::config::EggsecConfig;
 use crate::output::report::Report;
+use crate::types::CommonHttpArgs;
 
 pub struct LoadTestRunner {
     url: String,
@@ -84,7 +84,7 @@ impl LoadTestRunner {
         })
     }
 
-    pub fn from_args_with_tui_mode(args: LoadArgs, tui_mode: bool) -> Result<Self> {
+    pub fn from_args_with_tui_mode(args: crate::cli::LoadArgs, tui_mode: bool) -> Result<Self> {
         let timeout =
             Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
 
@@ -107,7 +107,10 @@ impl LoadTestRunner {
         Ok(runner)
     }
 
-    pub fn from_args_with_config(args: LoadArgs, config: &EggsecConfig) -> Result<Self> {
+    pub fn from_args_with_config(
+        args: crate::cli::LoadArgs,
+        config: &EggsecConfig,
+    ) -> Result<Self> {
         let timeout = Duration::from_secs(args.timeout.unwrap_or(config.http.timeout_secs));
 
         let mut runner =

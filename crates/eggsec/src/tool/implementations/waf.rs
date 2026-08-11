@@ -115,7 +115,7 @@ impl SecurityTool for WafTool {
                 crate::waf::run_cli(args).await
             }
             WafMode::Bypass => {
-                let args = crate::cli::WafArgs {
+                let args = crate::fuzzer::config::WafConfig {
                     url: target.clone(),
                     detect_only: false,
                     bypass: true,
@@ -130,12 +130,12 @@ impl SecurityTool for WafTool {
                     verbose: false,
                     quiet: false,
                     output: None,
-                    common: crate::cli::CommonHttpArgsCli::default(),
+                    common: crate::types::CommonHttpArgs::default(),
                 };
-                crate::waf::run_cli(args).await
+                crate::waf::WafEngine::new(args)?.run().await
             }
             WafMode::Stress => {
-                let args = crate::cli::WafStressArgs {
+                let args = crate::fuzzer::config::WafStressConfig {
                     url: target.clone(),
                     concurrency,
                     timeout: timeout / 1000,
@@ -143,7 +143,7 @@ impl SecurityTool for WafTool {
                     verbose: false,
                     quiet: false,
                     output: None,
-                    common: crate::cli::CommonHttpArgsCli::default(),
+                    common: crate::types::CommonHttpArgs::default(),
                 };
                 crate::fuzzer::run_waf_stress(args).await
             }

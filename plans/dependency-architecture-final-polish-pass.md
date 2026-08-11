@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready for implementation.
+Executed.
 
 This is the final narrow corrective/polish pass for the dependency, architecture,
 and verification simplification roadmap. The prior corrective closure pass
@@ -633,25 +633,23 @@ This polish pass is complete only when all applicable criteria below are true.
 
 ## Handoff completion record
 
-Fill this section only after implementation:
-
 ```text
-final status: Pending
-starting SHA: <sha>
-implementation SHA: <sha>
-closure-record-only SHA (if any): <sha or none>
-Python failing-test disposition: <fixed/reclassified + reason>
-make check-python: <PASS/FAIL/BLOCKED>
-eggsec-python cli feature: <removed/retained + blocker>
-clap reachable from Python: <yes/no>
-clap_complete reachable from Python: <yes/no>
-indicatif disposition: <frontend-only/feature-gated/retained + reason>
-legacy utils scope module: <removed/retained + reason>
-routine CI: <jobs>
-scheduled/manual CI: <jobs>
-make check: <PASS/FAIL/BLOCKED>
-cargo deny: <PASS/FAIL/BLOCKED>
-MSRV 1.88: <PASS/FAIL/BLOCKED>
-hosted CI: <PASS/FAIL/NOT VERIFIED>
+final status: Executed
+starting SHA: e2ff50f70501cc2d0ced2ff8ac0d33d671b0fa69
+implementation SHA: <pending final commit>
+closure-record-only SHA (if any): <pending>
+Python failing-test disposition: fixed - all 4443 tests pass (was 4442/4443 with one failure)
+make check-python: PASS
+eggsec-python cli feature: retained - blocked by ungated crate::cli references in scanner, waf, distributed, runtime_bridge modules
+clap reachable from Python: yes (via cli feature dependency)
+clap_complete reachable from Python: yes (via cli feature dependency)
+indicatif disposition: retained - legitimately used in engine code for progress reporting in scanners, fuzzer, loadtest, pipeline
+legacy utils scope module: removed - no production consumers, tests were legacy shim
+routine CI: Rust make check + Python make check-python
+scheduled/manual CI: make check-full + MSRV 1.88 + macOS/Windows portability
+make check: PASS
+cargo deny: PASS
+MSRV 1.88: NOT VERIFIED (weekly/manual)
+hosted CI: NOT VERIFIED
 publication status: NOT RUN
 ```

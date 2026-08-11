@@ -529,7 +529,7 @@ pub fn validate_waf(
                     None => eggsec::waf::TestType::All,
                 };
                 let profile = eggsec::waf::get_auto_profile();
-                let waf_args = eggsec::cli::WafArgs {
+                let waf_args = eggsec::fuzzer::config::WafConfig {
                     url: url_owned.clone(),
                     detect_only: false,
                     bypass: true,
@@ -544,7 +544,7 @@ pub fn validate_waf(
                     verbose: false,
                     quiet: true,
                     output: None,
-                    common: eggsec::cli::CommonHttpArgsCli::default(),
+                    common: eggsec::types::CommonHttpArgs::default(),
                 };
                 let bypass_engine =
                     eggsec::waf::BypassEngine::new(&waf_args, Some(profile), tt).map_pyerr()?;
@@ -611,7 +611,7 @@ pub fn async_validate_waf(
                 None => eggsec::waf::TestType::All,
             };
             let profile = eggsec::waf::get_auto_profile();
-            let waf_args = eggsec::cli::WafArgs {
+            let waf_args = eggsec::fuzzer::config::WafConfig {
                 url: url_owned.clone(),
                 detect_only: false,
                 bypass: true,
@@ -626,7 +626,7 @@ pub fn async_validate_waf(
                 verbose: false,
                 quiet: true,
                 output: None,
-                common: eggsec::cli::CommonHttpArgsCli::default(),
+                common: eggsec::types::CommonHttpArgs::default(),
             };
             let bypass_engine =
                 eggsec::waf::BypassEngine::new(&waf_args, Some(profile), tt).map_pyerr()?;
@@ -708,10 +708,10 @@ pub fn fuzz_http(
         let param_owned = param.map(|s| s.to_string());
 
         let session = runtime_sync::block_on(py, async move {
-            let fuzz_args = eggsec::cli::FuzzArgs {
+            let fuzz_args = eggsec::fuzzer::config::FuzzConfig {
                 url: url_owned,
                 payload_type: pt_owned,
-                mode: eggsec::cli::FuzzMode::Sequential,
+                mode: eggsec::fuzzer::config::FuzzMode::Sequential,
                 mutate: false,
                 mutation_count: 3,
                 grammar_fuzz: false,
@@ -758,7 +758,7 @@ pub fn fuzz_http(
                 fl: None,
                 ft: None,
                 fr: None,
-                common: eggsec::cli::CommonHttpArgsCli::default(),
+                common: eggsec::types::CommonHttpArgs::default(),
             };
 
             let mut engine = eggsec::fuzzer::FuzzEngine::new(fuzz_args).map_pyerr()?;
@@ -803,10 +803,10 @@ pub fn async_fuzz_http(
     let param_owned = param.map(|s| s.to_string());
 
     runtime_async::spawn_async(async move {
-        let fuzz_args = eggsec::cli::FuzzArgs {
+        let fuzz_args = eggsec::fuzzer::config::FuzzConfig {
             url: url_owned,
             payload_type: pt_owned,
-            mode: eggsec::cli::FuzzMode::Sequential,
+            mode: eggsec::fuzzer::config::FuzzMode::Sequential,
             mutate: false,
             mutation_count: 3,
             grammar_fuzz: false,
@@ -853,7 +853,7 @@ pub fn async_fuzz_http(
             fl: None,
             ft: None,
             fr: None,
-            common: eggsec::cli::CommonHttpArgsCli::default(),
+            common: eggsec::types::CommonHttpArgs::default(),
         };
 
         let mut engine = eggsec::fuzzer::FuzzEngine::new(fuzz_args).map_pyerr()?;

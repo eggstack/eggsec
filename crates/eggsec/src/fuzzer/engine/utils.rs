@@ -359,15 +359,16 @@ fn compute_severity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgsCli, FuzzArgs, FuzzMode};
+    use crate::fuzzer::config::{FuzzConfig, FuzzMode};
     use crate::fuzzer::payloads::{Payload, PayloadType};
+    use crate::types::CommonHttpArgs;
     use std::time::Duration;
 
     fn make_test_engine() -> FuzzEngine {
-        let args = FuzzArgs {
+        let args = FuzzConfig {
             url: "http://example.com".to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,

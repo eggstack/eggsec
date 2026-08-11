@@ -85,7 +85,7 @@ pub async fn run_fuzz(
         common: CommonHttpArgsCli::default(),
     };
 
-    let mut engine = FuzzEngine::new_with_tui_mode(args, true)?;
+    let mut engine = FuzzEngine::new_with_tui_mode(args.into(), true)?;
     let session = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         engine.run_return_session(),
@@ -120,7 +120,6 @@ pub async fn run_waf(
         };
 
     if bypass_mode {
-        use crate::cli::WafArgs;
         use crate::waf::{get_auto_profile, BypassEngine, TestType};
 
         let header_bypass = techniques
@@ -133,7 +132,7 @@ pub async fn run_waf(
             .iter()
             .any(|t| t.eq_ignore_ascii_case("smuggling") || t.eq_ignore_ascii_case("all"));
 
-        let args = WafArgs {
+        let args = crate::fuzzer::config::WafConfig {
             url: target.clone(),
             detect_only: false,
             bypass: true,
@@ -148,7 +147,7 @@ pub async fn run_waf(
             verbose: false,
             quiet: false,
             output: None,
-            common: crate::cli::CommonHttpArgsCli::default(),
+            common: crate::types::CommonHttpArgs::default(),
         };
 
         let bypass_engine = BypassEngine::new(&args, Some(get_auto_profile()), TestType::All)?;
@@ -195,7 +194,7 @@ pub async fn run_waf_stress(
 
     match tokio::time::timeout(
         std::time::Duration::from_secs(60),
-        fuzzer_run_waf_stress(args),
+        fuzzer_run_waf_stress(args.into()),
     )
     .await
     {

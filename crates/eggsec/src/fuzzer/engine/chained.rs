@@ -1,7 +1,7 @@
-use crate::cli::FuzzArgs;
 use crate::error::Result;
 use crate::fuzzer::chain::ExtractRule;
 use crate::fuzzer::chain::ExtractionSource;
+use crate::fuzzer::config::FuzzConfig;
 use crate::fuzzer::engine::types::FuzzSession;
 use crate::fuzzer::FuzzEngine;
 use regex::Regex;
@@ -10,14 +10,14 @@ use rustc_hash::FxHashMap;
 
 #[derive(Clone)]
 pub struct FuzzChainStep {
-    pub args: FuzzArgs,
+    pub args: FuzzConfig,
     pub extract_rules: Vec<ExtractRule>,
 }
 
 impl std::fmt::Debug for FuzzChainStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzChainStep")
-            .field("args", &"<FuzzArgs>")
+            .field("args", &"<FuzzConfig>")
             .field("extract_rules", &self.extract_rules)
             .finish()
     }
@@ -25,14 +25,14 @@ impl std::fmt::Debug for FuzzChainStep {
 
 #[derive(Clone)]
 pub struct ChainedFuzzInput {
-    pub initial_args: FuzzArgs,
+    pub initial_args: FuzzConfig,
     pub steps: Vec<FuzzChainStep>,
 }
 
 impl std::fmt::Debug for ChainedFuzzInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChainedFuzzInput")
-            .field("initial_args", &"<FuzzArgs>")
+            .field("initial_args", &"<FuzzConfig>")
             .field("steps", &self.steps)
             .finish()
     }
@@ -154,7 +154,7 @@ impl StatefulFuzzer {
         }
     }
 
-    fn apply_variables_to_args(&self, mut args: FuzzArgs) -> FuzzArgs {
+    fn apply_variables_to_args(&self, mut args: FuzzConfig) -> FuzzConfig {
         if args.param.is_none() {
             if let Some(idx) = args.url.find("${") {
                 let start = idx + 2;
@@ -192,7 +192,7 @@ impl StatefulFuzzer {
     }
 }
 
-impl FuzzArgs {
+impl FuzzConfig {
     pub fn with_variable(mut self, key: &str, value: &str) -> Self {
         if self.url.contains(&format!("${{{}}}", key)) {
             self.url = self.url.replace(&format!("${{{}}}", key), value);
@@ -204,13 +204,14 @@ impl FuzzArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgsCli, FuzzMode};
+    use crate::fuzzer::config::{FuzzConfig, FuzzMode};
+    use crate::types::CommonHttpArgs;
 
-    fn make_test_args(url: &str) -> FuzzArgs {
-        FuzzArgs {
+    fn make_test_args(url: &str) -> FuzzConfig {
+        FuzzConfig {
             url: url.to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,

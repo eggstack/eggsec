@@ -324,14 +324,15 @@ impl FuzzEngine {
 
 #[cfg(test)]
 mod tests {
-    use crate::cli::{CommonHttpArgsCli, FuzzArgs, FuzzMode};
+    use crate::fuzzer::config::{FuzzConfig, FuzzMode};
     use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+    use crate::types::CommonHttpArgs;
 
-    fn make_fuzz_args(url: &str) -> FuzzArgs {
-        FuzzArgs {
+    fn make_fuzz_args(url: &str) -> FuzzConfig {
+        FuzzConfig {
             url: url.to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,

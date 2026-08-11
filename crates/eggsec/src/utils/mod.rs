@@ -1,12 +1,11 @@
 //! Utility functions and helpers
 //!
 //! Common utilities used throughout the codebase for HTTP handling,
-//! URL parsing, scope checking, and output formatting.
+//! URL parsing, and output formatting.
 //!
 //! ## Key Components
 //!
 //! - [`http`] - HTTP client creation with various configurations
-//! - [`scope`] - Target scope validation
 //! - [`parsing`] - URL and header parsing utilities
 //! - [`target`] - Target extraction and normalization
 //! - [`formatting`] - String truncation and formatting
@@ -15,7 +14,7 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use eggsec::utils::{check_scope, create_http_client, strip_controls};
+//! use eggsec::utils::{create_http_client, strip_controls};
 //!
 //! # fn example() -> eggsec::error::Result<()> {
 //! // Create HTTP client
@@ -41,7 +40,6 @@ pub mod parsing;
 pub mod progress;
 pub mod rate_limiter;
 pub mod redaction;
-pub mod scope;
 pub mod service_detection;
 pub mod stealth;
 pub mod target;

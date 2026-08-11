@@ -10,7 +10,7 @@ use super::super::payloads::{get_all_payloads_cached, get_payloads, Payload, Pay
 use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
 
-use crate::cli::{FuzzArgs, FuzzMode, WafStressArgs};
+use super::super::config::{FuzzConfig, FuzzMode, WafStressConfig};
 use crate::types::Severity;
 use crate::utils::sanitize_for_logging;
 
@@ -36,14 +36,15 @@ fn payload_type_for_target_category(category: &str) -> PayloadType {
 /// # Examples
 ///
 /// ```no_run
-/// use eggsec::cli::{FuzzArgs, CommonHttpArgs, FuzzMode};
+/// use eggsec::fuzzer::config::{FuzzConfig, FuzzMode};
 /// use eggsec::fuzzer::engine::FuzzEngine;
+/// use eggsec::types::CommonHttpArgs;
 ///
 /// # fn main() -> eggsec::error::Result<()> {
-/// let args = FuzzArgs {
+/// let args = FuzzConfig {
 ///     url: "http://example.com".to_string(),
 ///     payload_type: "sqli".to_string(),
-///     common: CommonHttpArgsCli::default(),
+///     common: CommonHttpArgs::default(),
 ///     method: "GET".to_string(),
 ///     param: None,
 ///     concurrency: 10,
@@ -84,6 +85,13 @@ fn payload_type_for_target_category(category: &str) -> PayloadType {
 ///     schema: None,
 ///     discover_only: false,
 ///     auto_discover_schema: false,
+///     calibrate: false,
+///     fc: None,
+///     fs: None,
+///     fw: None,
+///     fl: None,
+///     ft: None,
+///     fr: None,
 /// };
 /// let engine = FuzzEngine::new(args)?;
 /// # Ok(())
@@ -95,7 +103,7 @@ fn payload_type_for_target_category(category: &str) -> PayloadType {
 /// Returns [`EggsecError`](crate::error::EggsecError) if the HTTP client
 /// cannot be built (e.g., invalid proxy configuration).
 pub struct FuzzEngine {
-    pub(crate) args: FuzzArgs,
+    pub(crate) args: FuzzConfig,
     pub(crate) client: Client,
     pub(crate) timing_analyzer: Arc<Mutex<TimingAnalyzer>>,
     pub(crate) pattern_matcher: PatternMatcher,
@@ -117,7 +125,7 @@ impl FuzzEngine {
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
-    pub fn new(args: FuzzArgs) -> Result<Self> {
+    pub fn new(args: FuzzConfig) -> Result<Self> {
         Self::new_with_tui_mode(args, false)
     }
 
@@ -129,7 +137,7 @@ impl FuzzEngine {
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
-    pub fn new_with_tui_mode(args: FuzzArgs, tui_mode: bool) -> Result<Self> {
+    pub fn new_with_tui_mode(args: FuzzConfig, tui_mode: bool) -> Result<Self> {
         let mut args = args;
         // Ensure execution paths never observe a zero-concurrency configuration.
         args.concurrency = args.concurrency.clamp(1, 500);
@@ -211,7 +219,7 @@ impl FuzzEngine {
         })
     }
 
-    fn build_client(args: &FuzzArgs) -> Result<Client> {
+    fn build_client(args: &FuzzConfig) -> Result<Client> {
         if args.common.insecure {
             tracing::warn!(
                 "TLS certificate verification disabled. This is insecure and should only \
@@ -247,8 +255,8 @@ impl FuzzEngine {
             .map_err(|e| crate::error::EggsecError::from(e).with_timeout(args.timeout * 1000))
     }
 
-    pub fn new_from_waf_args(args: WafStressArgs) -> Result<Self> {
-        Self::new(FuzzArgs::from(args))
+    pub fn new_from_waf_args(args: WafStressConfig) -> Result<Self> {
+        Self::new(FuzzConfig::from(args))
     }
 
     #[cfg(feature = "ai-integration")]
@@ -480,13 +488,14 @@ impl FuzzEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{CommonHttpArgsCli, FuzzMode};
+    use crate::fuzzer::config::{FuzzConfig, FuzzMode};
+    use crate::types::CommonHttpArgs;
 
-    fn make_fuzz_args(url: &str) -> FuzzArgs {
-        FuzzArgs {
+    fn make_fuzz_args(url: &str) -> FuzzConfig {
+        FuzzConfig {
             url: url.to_string(),
             payload_type: "sqli".to_string(),
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
             method: "GET".to_string(),
             param: None,
             concurrency: 10,
@@ -624,8 +633,8 @@ mod tests {
 
     #[test]
     fn test_fuzz_engine_from_waf_args() {
-        use crate::cli::WafStressArgs;
-        let waf_args = WafStressArgs {
+        use crate::fuzzer::config::WafStressConfig;
+        let waf_args = WafStressConfig {
             url: "http://example.com".to_string(),
             concurrency: 20,
             timeout: 10,
@@ -633,7 +642,7 @@ mod tests {
             verbose: false,
             quiet: false,
             output: None,
-            common: CommonHttpArgsCli::default(),
+            common: CommonHttpArgs::default(),
         };
         let engine = FuzzEngine::new_from_waf_args(waf_args);
         assert!(engine.is_ok());

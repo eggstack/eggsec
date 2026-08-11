@@ -42,9 +42,6 @@ pub mod runner;
 
 use crate::error::Result;
 
-use crate::cli::LoadArgs;
-use crate::config::EggsecConfig;
-
 pub use metrics::LoadTestResults;
 pub use runner::LoadTestRunner;
 
@@ -62,7 +59,10 @@ pub use runner::LoadTestRunner;
 /// - HTTP client construction fails
 /// - Network connectivity issues occur
 /// - Output file cannot be written
-pub async fn run_cli(args: LoadArgs, config: &EggsecConfig) -> Result<()> {
+pub async fn run_cli(
+    args: crate::cli::LoadArgs,
+    config: &crate::config::EggsecConfig,
+) -> Result<()> {
     let verbose = args.verbose;
     let quiet = args.quiet;
     let json = args.json;

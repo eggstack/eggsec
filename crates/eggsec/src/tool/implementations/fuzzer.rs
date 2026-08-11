@@ -91,10 +91,10 @@ impl SecurityTool for FuzzerTool {
             .and_then(|v| v.as_str())
             .map(String::from);
 
-        let args = crate::cli::FuzzArgs {
+        let args = crate::fuzzer::config::FuzzConfig {
             url: target.clone(),
             payload_type: payload_types,
-            mode: crate::cli::FuzzMode::Sequential,
+            mode: crate::fuzzer::config::FuzzMode::Sequential,
             mutate,
             mutation_count,
             grammar_fuzz: params
@@ -165,7 +165,7 @@ impl SecurityTool for FuzzerTool {
             fl: None,
             ft: None,
             fr: None,
-            common: crate::cli::CommonHttpArgsCli::default(),
+            common: crate::types::CommonHttpArgs::default(),
         };
 
         let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =

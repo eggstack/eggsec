@@ -19,7 +19,7 @@ history solely to satisfy a static guard.
 Roadmap:
 [`dependency-architecture-simplification-roadmap.md`](dependency-architecture-simplification-roadmap.md)
 
-Ordered implementation plans:
+Ordered implementation plans (all executed):
 
 1. [`dependency-architecture-phase-a-authorization-target-binding.md`](dependency-architecture-phase-a-authorization-target-binding.md)
 2. [`dependency-architecture-phase-b-scope-resolution-correctness.md`](dependency-architecture-phase-b-scope-resolution-correctness.md)
@@ -38,17 +38,12 @@ CI, and replaced estimated artifact measurements with observed values:
 
 [`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
 
-Final review found a small set of remaining closure/polish defects: the canonical
-Python check was recorded as PASS despite one failing test, the Python binding
-still enables the engine `cli` feature, progress/UI dependency ownership needs
-one final graph-level disposition, and several active docs/scope-helper remnants
-still describe the pre-corrective state.
+Final review found a small set of remaining closure/polish defects. The final
+polish pass has been executed, resolving Python CI success, fuzzer/waf config
+boundary cleanup, indicatif ownership documentation, scope-helper removal, and
+documentation reconciliation:
 
-Active final handoff:
 [`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
 
-This final pass is intentionally bounded to genuine Python CI success, Python/CLI
-dependency separation, small dependency/documentation cleanup, and exact-final-SHA
-validation. It does not reopen authorization, scope/DNS semantics, metadata,
-daemon topology, dependency modernization, or CI architecture. Package
-publication and release cadence remain manual maintainer actions.
+This line is now closed. Package publication and release cadence remain manual
+maintainer actions.

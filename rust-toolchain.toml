@@ -3,6 +3,6 @@ channel = "stable"
 components = ["rustfmt", "clippy"]
 
 # MSRV is declared in workspace Cargo.toml `rust-version`.
-# CI tests the exact MSRV via the `msrv` job in .github/workflows/ci.yml.
+# CI tests the exact MSRV via the `msrv` job in .github/workflows/deep-checks.yml.
 # This file uses stable for day-to-day development; the MSRV compile check
 # pins the exact toolchain separately.

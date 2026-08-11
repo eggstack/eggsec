@@ -33,11 +33,11 @@
 //! ### Running a Fuzz Session
 //!
 //! ```rust,compile_fail
-//! use eggsec::cli::{FuzzArgs, FuzzMode, CommonHttpArgs};
+//! use eggsec::fuzzer::config::{FuzzConfig, FuzzMode};
 //! use eggsec::fuzzer::FuzzEngine;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let args = FuzzArgs {
+//! let args = FuzzConfig {
 //!     url: "https://example.com/api?id=1".to_string(),
 //!     payload_type: "sqli".to_string(),
 //!     mode: FuzzMode::Sequential,
@@ -88,6 +88,7 @@ pub mod advanced;
 pub mod api_schema;
 pub mod calibration;
 pub mod chain;
+pub mod config;
 pub mod detection;
 pub mod diff;
 pub mod engine;
@@ -109,8 +110,6 @@ use crate::error::Result;
 
 #[cfg(feature = "tool-api")]
 use crate::tool::response::Finding;
-
-use crate::cli::FuzzArgs;
 
 pub use calibration::{BaselineStats, CalibrationResult, Calibrator};
 pub use chain::{
@@ -142,7 +141,7 @@ pub use waf_fingerprint::{WafDetectionResult, WafFingerprint, WafFingerprinter};
 /// # Returns
 ///
 /// Result indicating success or failure of the fuzzing operation
-pub async fn run_cli(args: FuzzArgs) -> Result<()> {
+pub async fn run_cli(args: crate::fuzzer::config::FuzzConfig) -> Result<()> {
     let mut engine = engine::FuzzEngine::new(args.clone())?;
     engine.run().await
 }
@@ -158,7 +157,10 @@ pub async fn run_cli(args: FuzzArgs) -> Result<()> {
 ///
 /// Result indicating success or failure of the fuzzing operation
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: FuzzArgs, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: crate::fuzzer::config::FuzzConfig,
+    mut callback: F,
+) -> Result<()>
 where
     F: FnMut(Finding) + Send + 'static,
 {
@@ -183,7 +185,7 @@ where
 /// # Returns
 ///
 /// Result indicating success or failure of the stress test
-pub async fn run_waf_stress(args: crate::cli::WafStressArgs) -> Result<()> {
+pub async fn run_waf_stress(args: crate::fuzzer::config::WafStressConfig) -> Result<()> {
     let mut engine = engine::FuzzEngine::new_from_waf_args(args.clone())?;
     engine.run_all_types().await
 }

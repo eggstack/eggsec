@@ -23,7 +23,7 @@ pub async fn handle_fuzz(ctx: &CommandContext, mut args: crate::cli::FuzzArgs) -
     ctx.notify_manager
         .notify_scan_started(&scan_id, &target)
         .await;
-    match crate::fuzzer::run_cli(args)
+    match crate::fuzzer::run_cli(args.into())
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
     {
@@ -66,7 +66,7 @@ pub async fn handle_waf_stress(
     ctx.notify_manager
         .notify_scan_started(&scan_id, &target)
         .await;
-    match crate::fuzzer::run_waf_stress(args)
+    match crate::fuzzer::run_waf_stress(args.into())
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
     {

@@ -1079,7 +1079,8 @@ impl Pipeline {
             },
         };
 
-        let mut engine = crate::fuzzer::engine::FuzzEngine::new_with_tui_mode(args, self.tui_mode)?;
+        let mut engine =
+            crate::fuzzer::engine::FuzzEngine::new_with_tui_mode(args.into(), self.tui_mode)?;
         engine.run().await?;
 
         Ok(())

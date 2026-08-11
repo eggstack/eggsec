@@ -196,6 +196,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     if args.verbose {
         eprintln!(
@@ -240,6 +241,7 @@ pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "cli")]
 pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
     let session = session::load(&args.session).await?;
     let pipeline = Pipeline::from_session(session).with_config(config.clone());

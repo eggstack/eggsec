@@ -107,7 +107,6 @@ pub mod distributed;
 pub mod domain;
 pub mod error;
 pub mod findings;
-#[cfg(feature = "cli")]
 pub mod fuzzer;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
@@ -119,7 +118,6 @@ pub mod integrations;
 #[cfg(not(feature = "external-integrations"))]
 #[allow(dead_code)]
 mod integrations;
-#[cfg(feature = "cli")]
 pub mod loadtest;
 #[cfg(feature = "logging-subscriber")]
 pub mod logging;

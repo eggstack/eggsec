@@ -4,8 +4,8 @@
 //! before fuzzing to automatically configure filters. This helps eliminate
 //! false positives by learning what "normal" responses look like.
 
-use crate::cli::FuzzArgs;
 use crate::error::Result;
+use crate::fuzzer::config::FuzzConfig;
 use crate::fuzzer::engine::FuzzResult;
 use crate::fuzzer::filters::FilterChain;
 use reqwest::Client;
@@ -64,13 +64,13 @@ impl BaselineStats {
 /// Auto-calibration system that samples baseline responses
 pub struct Calibrator {
     client: Client,
-    args: FuzzArgs,
+    args: FuzzConfig,
     samples: Vec<FuzzResult>,
 }
 
 impl Calibrator {
     /// Create a new Calibrator with the given HTTP client and arguments
-    pub fn new(client: Client, args: FuzzArgs) -> Self {
+    pub fn new(client: Client, args: FuzzConfig) -> Self {
         Calibrator {
             client,
             args,

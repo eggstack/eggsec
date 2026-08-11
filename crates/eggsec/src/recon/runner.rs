@@ -1,3 +1,4 @@
+#[cfg(feature = "cli")]
 use crate::cli::ReconArgs;
 use crate::config::EggsecConfig;
 use crate::error::Result;
@@ -515,6 +516,7 @@ fn nvd_api_key_from_config(config: &EggsecConfig) -> Option<String> {
         .map(|k| k.expose_secret().to_string())
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_full_recon(
     args: &ReconArgs,
     config: &EggsecConfig,

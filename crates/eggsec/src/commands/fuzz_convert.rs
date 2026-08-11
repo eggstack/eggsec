@@ -103,14 +103,14 @@ impl From<OAuthArgs> for FuzzArgs {
 
 pub async fn run_graphql(args: GraphQlArgs) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args)
+    crate::fuzzer::run_cli(fuzz_args.into())
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 pub async fn run_oauth(args: OAuthArgs) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args)
+    crate::fuzzer::run_cli(fuzz_args.into())
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
 }

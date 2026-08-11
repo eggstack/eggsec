@@ -582,7 +582,7 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         },
     };
 
-    let mut engine = crate::fuzzer::engine::FuzzEngine::new(args)?;
+    let mut engine = crate::fuzzer::engine::FuzzEngine::new(args.into())?;
     let session = engine.run_return_session().await?;
 
     let findings: Vec<_> = session

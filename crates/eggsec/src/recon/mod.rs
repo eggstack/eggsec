@@ -103,6 +103,7 @@ pub mod threatintel;
 pub mod wayback;
 pub mod whois;
 
+#[cfg(feature = "cli")]
 use crate::cli::ReconArgs;
 use crate::config::EggsecConfig;
 use crate::error::Result;
@@ -115,11 +116,13 @@ use std::sync::Arc;
 
 pub use spinner::Spinner;
 
+#[cfg(feature = "cli")]
 struct SpinnerGuard {
     stop: Arc<AtomicBool>,
     has_spinner: bool,
 }
 
+#[cfg(feature = "cli")]
 impl SpinnerGuard {
     fn start(args: &ReconArgs, stage: &Arc<Mutex<String>>) -> Self {
         let has_spinner = !args.quiet;
@@ -150,6 +153,7 @@ impl SpinnerGuard {
     }
 }
 
+#[cfg(feature = "cli")]
 async fn write_recon_output(
     recon: &FullReconResult,
     args: &ReconArgs,
@@ -321,6 +325,7 @@ where
     write_recon_output(&recon, &args, spinner.has_spinner).await
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()> {
     let stage = Arc::new(Mutex::new(String::new()));
     let spinner = SpinnerGuard::start(&args, &stage);

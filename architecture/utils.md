@@ -77,13 +77,6 @@ Common utility functions and helpers used throughout the codebase for HTTP handl
 | `parse_headers(headers)` | Parse header strings into key-value pairs |
 | `parse_url_validated(url)` | Parse and validate a URL string |
 
-### Scope (`scope`)
-
-| Function | Description |
-|----------|-------------|
-| `check_scope(target, scope)` | Check if a target is within scope |
-| `check_scope_from_url(url, scope)` | Check if a URL's host is within scope |
-
 ### Target (`target`)
 
 | Function | Description |

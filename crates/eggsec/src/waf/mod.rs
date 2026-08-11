@@ -83,7 +83,7 @@ pub mod waf_patterns;
 use crate::error::Result;
 use std::time::Instant;
 
-use crate::cli::WafArgs;
+use crate::fuzzer::config::WafConfig;
 use crate::utils::sanitize_for_logging;
 
 pub use bypass::{
@@ -106,13 +106,14 @@ pub use waf_patterns::get_waf_signatures;
 /// # Returns
 ///
 /// Result indicating success or failure
-pub async fn run_cli(args: WafArgs) -> Result<()> {
-    let mut engine = WafEngine::new(args)?;
+#[cfg(feature = "cli")]
+pub async fn run_cli(args: crate::cli::WafArgs) -> Result<()> {
+    let mut engine = WafEngine::new(args.into())?;
     engine.run().await
 }
 
 pub struct WafEngine {
-    args: WafArgs,
+    args: WafConfig,
     detector: WafDetector,
     bypass_engine: Option<BypassEngine>,
     selected_profile: Option<String>,
@@ -121,7 +122,7 @@ pub struct WafEngine {
 }
 
 impl WafEngine {
-    pub fn new(args: WafArgs) -> Result<Self> {
+    pub fn new(args: WafConfig) -> Result<Self> {
         let detector = WafDetector::new()?;
         Ok(Self {
             args,
