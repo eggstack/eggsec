@@ -83,7 +83,7 @@ CI simplification, and documentation reconciliation.
 ### Phase E — Advisory cleanup
 
 - 17 stale ignores removed
-- 7 live exceptions documented in `docs/DEPENDENCY_EXCEPTIONS.md` with review-by dates
+- 7 live exceptions documented in `docs/DEPENDENCY_EXCEPTIONS.md` with review-by dates; 4 resolved in corrective closure pass (PyO3, quick-xml), 3 retained (transitive unmaintained)
 - `cargo deny check advisories` passes
 
 ### Phase F — Engine/application boundary
@@ -101,7 +101,7 @@ CI simplification, and documentation reconciliation.
 
 ### Phase H — Upstream modernization
 
-- MSRV raised from 1.80 to 1.85 (required for kube 4.x)
+- MSRV raised from 1.80 to 1.85 (required for kube 4.x); further raised to 1.88 in corrective closure pass (required by quick-xml 0.41 + plist 1.10)
 - kube upgraded 0.92 → 4.2, k8s-openapi 0.22 → 0.28
 - MongoDB/BSON 2.x → 3.x, Redis 0.25 → 1.x
 - native-tls made optional behind `nse` feature
@@ -110,8 +110,8 @@ CI simplification, and documentation reconciliation.
 ### Phase I — CI simplification
 
 - `make check` uses package-level Cargo commands
-- Mandatory CI: Linux-first (Rust, MSRV, Python)
-- Portability: separate optional job (macOS/Windows)
+- Mandatory CI: Linux-first (Rust, Python)
+- MSRV and portability: scheduled/manual via deep-checks.yml
 - `make check-full`: optional weekly/manual workflow
 - No publication or tag-triggered release in any CI workflow
 
@@ -126,13 +126,15 @@ CI simplification, and documentation reconciliation.
 
 ### Artifact sizes
 
-| Profile | Artifact | Size | Stripped | Crates |
-|---------|----------|------|----------|--------|
-| Default (TUI + daemon-client) | `target/release/eggsec` | 17.6 MB | Yes | 157 |
-| Headless (no-default) | `target/release/eggsec` | ~8 MB (estimated) | Yes | 40 |
-| Daemon-client only | `target/release/eggsec` | ~4 MB (estimated) | Yes | 12 |
-| Daemon server | `target/release/eggsec-daemon` | 4.1 MB | Yes | 27 |
-| Python wheel | `eggsec-0.1.0-cp312-cp312-manylinux_2_38_x86_64.whl` | 9.6 MB | N/A | — |
+Measured at commit `7b878d79` on Ubuntu 24.04 x86_64, rustc 1.97.1.
+
+| Profile | Artifact | Size | Stripped |
+|---------|----------|------|----------|
+| Default (TUI + daemon-client) | `target/release/eggsec` | 20.9 MB | Yes |
+| Headless (no-default) | `target/release/eggsec` | 16.6 MB | Yes |
+| Daemon-client only | `target/release/eggsec` | 17.6 MB | Yes |
+| Daemon server | `target/release/eggsec-daemon` | 4.1 MB | Yes |
+| Python wheel | `eggsec-0.1.0-cp312-cp312-manylinux_2_38_x86_64.whl` | 9.5 MB | N/A |
 
 ### Dependency topology
 
@@ -157,25 +159,25 @@ CI simplification, and documentation reconciliation.
 
 | Item | Status |
 |------|--------|
-| `cargo deny check advisories` | PASS (7 live exceptions documented) |
-| MSRV 1.85 workspace check | PASS |
+| `cargo deny check advisories` | PASS (3 live exceptions documented) |
+| MSRV 1.88 workspace check | PASS |
 | Stable Rust check | PASS |
 | RUSTSEC-2025-0057 (fxhash) | Exception until scraper 0.22+ |
 | RUSTSEC-2024-0384 (instant) | Exception until notify 8+ |
 | RUSTSEC-2025-0119 (number_prefix) | Exception until indicatif 0.18+ |
-| RUSTSEC-2025-0020 (pyo3 buffer overflow) | Exception until pyo3 0.24+ |
-| RUSTSEC-2026-0177 (pyo3 missing Sync) | Exception until pyo3 0.29+ |
-| RUSTSEC-2026-0194 (quick-xml quadratic DoS) | Exception until quick-xml 0.41+ |
-| RUSTSEC-2026-0195 (quick-xml NsReader OOM) | Exception until quick-xml 0.41+ |
+| RUSTSEC-2025-0020 (pyo3) | Resolved — upgraded to 0.29.2 |
+| RUSTSEC-2026-0177 (pyo3) | Resolved — upgraded to 0.29.2 |
+| RUSTSEC-2026-0194 (quick-xml) | Resolved — upgraded to 0.41.0 |
+| RUSTSEC-2026-0195 (quick-xml) | Resolved — upgraded to 0.41.0 |
 
 ## CI/release status
 
 | Item | Status |
 |------|--------|
-| Mandatory CI jobs | `rust` (make check), `msrv` (1.85), `python` (make check-python) |
-| Optional CI jobs | `portability` (macOS/Windows), `deep-checks` (weekly/manual) |
+| Mandatory CI jobs | `rust` (make check), `python` (make check-python) |
+| Scheduled/manual jobs | `deep-checks.yml` — weekly: make check-full, MSRV 1.88, macOS/Windows portability |
 | Python build count | 1 (ubuntu-latest, CPython 3.12) |
-| Portability policy | Compile-check only on macOS/Windows; Linux-first |
+| Portability policy | Compile-check only on macOS/Windows; scheduled/manual |
 | Publication | Manual maintainer action only |
 | Registry preflight | NOT RUN (requires maintainer release environment) |
 | Tag-triggered release | None |
@@ -186,21 +188,23 @@ CI simplification, and documentation reconciliation.
 
 | Command | Outcome |
 |---------|---------|
-| `git rev-parse HEAD` | Clean commit |
-| `git status --porcelain` | Clean working tree (before changes) |
+| `git rev-parse HEAD` | `7b878d79` |
+| `git status --porcelain` | Clean working tree |
 | `rustc --version` | 1.97.1 |
 | `cargo --version` | 1.97.1 |
 | `python3 --version` | 3.12.3 |
 | `make check` | PASS |
-| `make check-python` | PASS |
-| `make check-full` | PASS |
+| `make check-python` | PASS (4442/4443; 1 pre-existing flaky resource budget test) |
 | `cargo deny check advisories` | PASS |
-| `cargo +1.85 check --workspace --no-default-features` | PASS |
-| `cargo build -p eggsec-cli --release` | PASS (17.6 MB) |
-| `cargo build -p eggsec-cli --release --no-default-features` | PASS |
-| `cargo build -p eggsec-cli --release --no-default-features --features daemon-client` | PASS |
+| `cargo +1.88 check --workspace --no-default-features` | PASS |
+| `cargo tree -p eggsec-python -i pyo3` | PASS — only 0.29.2 reachable |
+| `cargo tree -i quick-xml` | PASS — only 0.41.0 reachable |
+| `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches |
+| `cargo build -p eggsec-cli --release` | PASS (20.9 MB) |
+| `cargo build -p eggsec-cli --release --no-default-features` | PASS (16.6 MB) |
+| `cargo build -p eggsec-cli --release --no-default-features --features daemon-client` | PASS (17.6 MB) |
 | `cargo build -p eggsec-daemon --release` | PASS (4.1 MB) |
-| `maturin build --release` | PASS (9.6 MB wheel) |
+| `maturin build --release` | PASS (9.5 MB wheel) |
 
 ## Publication status
 

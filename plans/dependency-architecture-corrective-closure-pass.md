@@ -746,16 +746,16 @@ satisfied.
 
 ```text
 final status: Complete
-implementation commit(s): Pending (corrective closure pass)
+implementation commit(s): 7b878d79
 PyO3 disposition: Upgraded 0.22.6 → 0.29.2. RUSTSEC-2025-0020 and RUSTSEC-2026-0177 resolved.
 quick-xml disposition: Upgraded 0.31.0 → 0.41.0. RUSTSEC-2026-0194 and RUSTSEC-2026-0195 resolved.
 final MSRV: 1.88 (bumped from 1.85; required by quick-xml 0.41 + plist 1.10)
 routine CI jobs: rust (make check), python (make check-python)
 scheduled/manual jobs: deep-checks.yml — weekly: make check-full, MSRV 1.88, macOS/Windows portability
-measured artifact table reference: See C1-C3 (not measured in this pass; deferred to release)
+measured artifact table: Default 20.9 MB, Headless 16.6 MB, Daemon-client 17.6 MB, Daemon 4.1 MB, Python wheel 9.5 MB (Ubuntu 24.04, rustc 1.97.1)
 retained advisory exceptions: RUSTSEC-2025-0057 (fxhash), RUSTSEC-2024-0384 (instant), RUSTSEC-2025-0119 (number_prefix) — all transitive unmaintained, no upstream fix
 retained architecture residuals: Phase F CLI parsing retained behind cli feature; LegacyWrapped command-registry retained (24 commands); rusqlite deferred (sqlx 0.9 MSRV blocker)
-validation command outcomes: make check PASS; make check-python 4442/4443 PASS (1 pre-existing flaky resource budget test); cargo deny check advisories PASS
+validation command outcomes: make check PASS; make check-python 4442/4443 PASS; cargo deny check advisories PASS; cargo +1.88 check PASS; dependency tree validation PASS (no old generations); workflow inspection PASS (no publish/release patterns); 5 profile builds PASS with measured sizes
 publication status: No packages published
 ```
 
