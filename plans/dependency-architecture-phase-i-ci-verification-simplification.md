@@ -2,7 +2,13 @@
 
 ## Status
 
-Ready for implementation after Phases A–H.
+Executed. Changes landed in main.
+
+Phase I is fully implemented. `make check` uses package-level Cargo commands
+(not hand-curated test lists). Mandatory CI is Linux-first (Rust, MSRV, Python).
+Portability (macOS/Windows) is a separate optional job. `make check-full` is the
+optional broad validation workflow (weekly schedule or manual trigger). No
+publication or tag-triggered release in any CI workflow.
 
 ## Objective
 

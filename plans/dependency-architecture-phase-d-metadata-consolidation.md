@@ -2,7 +2,15 @@
 
 ## Status
 
-Ready for implementation after Phase C.
+Executed. Changes landed in main.
+
+Phase D is fully implemented. `OperationMetadata` in `ALL_OPERATION_METADATA`
+(`config/policy.rs`) is the single source of truth for 31 operations. Domain
+descriptors reference operation IDs. Tool registrations are derived from
+operation metadata cross-referenced with domain descriptors. Command registrations
+reference operation IDs via `metadata()`. Risk, mode, target policy, feature
+requirements, aliases, and surface exposure are all owned by the canonical
+catalog.
 
 ## Objective
 

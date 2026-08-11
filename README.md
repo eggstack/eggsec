@@ -84,6 +84,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-web-proxy` | Web proxy and MITM interception domain crate |
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate |
 | `eggsec-daemon` | Long-running daemon host for persistent sessions |
+| `eggsec-daemon-protocol` | Daemon IPC protocol types and client registry |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
 | `eggsec-python` | Python bindings (PyO3/maturin) |

@@ -19,7 +19,7 @@ Eggsec is a Rust-native, scope-enforced security assessment and defense-validati
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 15 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with 16 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -47,6 +47,7 @@ nor hosted CI publishes a package.
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept, TLS, protocol handlers. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing. |
 | `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite persistence. |
+| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | Session/task DTOs, client registry. No persistence/TLS deps. |
 | `eggsec-tui` | Terminal UI | No | 33 tabs, ratatui/crossterm. Depends on engine + runtime + daemon. |
 | `eggsec-cli` | CLI binary | Yes | Thin wrapper: `eggsec` + `eggsec-tui` (optional) + `eggsec-daemon` (optional). |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations. |
@@ -403,6 +404,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
     │       ├── eggsec-ui-model  (frontend-neutral view DTOs)
+    │       ├── eggsec-daemon-protocol (IPC DTOs, client registry)
     │       └── eggsec-daemon    (persistent sessions, Unix socket IPC)
     │
     ├── eggsec-db-lab        (database pentest domain)
@@ -512,4 +514,4 @@ Within the `eggsec` crate:
 
 ---
 
-*Last updated: 2026-07-28 — architecture overview rewrite with runtime_bridge module doc*
+*Last updated: 2026-08-11 — Phase J closure; all roadmap phases executed*

@@ -1,6 +1,6 @@
 # Compile Time Baseline
 
-> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 15 crates (this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
+> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 16 crates (this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
 
 ## Context
 

@@ -2,7 +2,15 @@
 
 ## Status
 
-Ready for implementation.
+Executed. Changes landed in main.
+
+Phase A is fully implemented. `OperationMetadata::try_descriptor_for_target()`
+makes construction fallible and target-policy-aware. `ApprovedOperation` binds
+normalized target identity. `validate_request_binding()` prevents dispatch token
+reuse across targets. Surface/profile mismatches are rejected before approval.
+Seven regression tests in `enforced_dispatch_regression.rs` cover target
+mismatch, missing target, smuggled target, conflicting targets, and surface
+profile mismatch.
 
 ## Objective
 

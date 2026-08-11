@@ -2,7 +2,15 @@
 
 ## Status
 
-Ready for implementation after Phases A and B.
+Executed. Changes landed in main.
+
+Phase C is fully implemented. The `feature_registry!` macro in
+`config/feature_registry.rs` generates `ALL_FEATURES`, `feature_state()`,
+`is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()`, and
+`classify_feature()`. Unknown features return `false`/`FeatureState::Unknown`
+(fail-closed). A bidirectional test validates every Cargo.toml feature is in the
+registry and vice versa. Domain availability and policy checks delegate to the
+unified registry.
 
 ## Objective
 

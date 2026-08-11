@@ -2,7 +2,8 @@
 
 ## Status
 
-Ready for implementation.
+Completed. All phases executed. Closure report:
+[`dependency-architecture-simplification-closure-report.md`](dependency-architecture-simplification-closure-report.md)
 
 This document is a handoff roadmap. It authorizes corrective engineering and
 structural simplification only. It does not authorize feature expansion, removal

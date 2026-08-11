@@ -2,7 +2,12 @@
 
 ## Status
 
-Ready for implementation after Phase F.
+Executed. Changes landed in main.
+
+Phase G is fully implemented. `eggsec-daemon-protocol` is dependency-light
+(only eggsec-runtime, serde, serde_json, anyhow). No rusqlite in client/TUI
+crates. One Rustls provider (ring) selected per artifact. Tokio features
+managed at workspace level. Headless CLI excludes TUI and server deps by default.
 
 ## Objective
 

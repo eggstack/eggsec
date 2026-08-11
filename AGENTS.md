@@ -19,7 +19,7 @@ Prerequisites: `ripgrep` (`rg`) for architecture guards. No `cargo-nextest` requ
 
 ## Project Overview
 
-Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15 crates:
+Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 16 crates:
 
 | Crate | Purpose |
 |-------|---------|
@@ -36,6 +36,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 15
 | `eggsec-mobile-lab` | Mobile app analysis domain crate |
 | `eggsec-runtime` | Frontend-neutral task lifecycle (Runtime, RuntimeTaskExecutor) |
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
+| `eggsec-daemon-protocol` | Daemon IPC protocol types and client registry |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
 | `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A+B+C+D+E completed) |
 
