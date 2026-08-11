@@ -32,18 +32,30 @@ Ordered implementation plans (all executed):
 9. [`dependency-architecture-phase-i-ci-verification-simplification.md`](dependency-architecture-phase-i-ci-verification-simplification.md)
 10. [`dependency-architecture-phase-j-measurement-and-closure.md`](dependency-architecture-phase-j-measurement-and-closure.md)
 
-The A–J roadmap is implemented. The first corrective closure pass is also
-implemented and resolved the active PyO3/quick-xml advisories, simplified routine
-CI, and replaced estimated artifact measurements with observed values:
+The A–J roadmap is implemented. The first corrective closure pass resolved the
+active PyO3/quick-xml advisories, simplified routine CI, and replaced estimated
+artifact measurements with observed values:
 
 [`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
 
-Final review found a small set of remaining closure/polish defects. The final
-polish pass has been executed, resolving Python CI success, fuzzer/waf config
-boundary cleanup, indicatif ownership documentation, scope-helper removal, and
-documentation reconciliation:
+The subsequent final polish pass made the canonical Python test suite green,
+introduced parser-independent Fuzz/WAF configuration types, removed stale scope
+helpers, and removed the Python binding's direct `eggsec/cli` dependency:
 
 [`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
 
-This line is now closed. Package publication and release cadence remain manual
-maintainer actions.
+Final review of that implementation found one remaining correctness issue: the
+CLI dependency separation also gated real engine/headless pipeline and tool-API
+behavior behind `cli`, while the closure/documentation record was marked complete
+before the resulting head received exact-SHA validation.
+
+Active corrective handoff:
+[`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)
+
+This follow-up is intentionally narrow. It restores non-CLI Fuzz/LoadTest/WAF/Recon
+pipeline and reusable tool/API behavior through plain engine configuration,
+classifies the `cli` gates introduced by the last separation commit, corrects
+remaining stale CI/closure documentation, and requires final validation against
+one exact implementation SHA. It does not reopen dependency security,
+authorization, scope/DNS semantics, metadata, daemon topology, or CI architecture.
+Package publication and release cadence remain manual maintainer actions.
