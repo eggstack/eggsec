@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Active roadmap: dependency, architecture, and verification simplification
+## Dependency, architecture, and verification simplification
 
 Roadmap:
 [`dependency-architecture-simplification-roadmap.md`](dependency-architecture-simplification-roadmap.md)
@@ -32,9 +32,15 @@ Ordered implementation plans:
 9. [`dependency-architecture-phase-i-ci-verification-simplification.md`](dependency-architecture-phase-i-ci-verification-simplification.md)
 10. [`dependency-architecture-phase-j-measurement-and-closure.md`](dependency-architecture-phase-j-measurement-and-closure.md)
 
-The sequence is intentionally security-first. Phases A–D correct authorization,
-scope, feature, and metadata ownership before dependency and binary-topology
-work. Phases E–H address security debt, artifact boundaries, upstream support,
-and native dependencies. Phase I simplifies verification around the resulting
-architecture, and Phase J records measured closure. Package publication remains
-manual and is outside the implementation plans.
+The A–J implementation substantially landed, but final review found a small set
+of security-dependency, CI-contract, measurement, and closure-record issues that
+must be corrected before this line is treated as fully closed.
+
+Active corrective handoff:
+[`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
+
+The corrective pass is intentionally narrow. It resolves active PyO3/quick-xml
+advisory disposition, moves compatibility/MSRV verification out of the routine
+iteration loop, replaces estimated artifact sizes with measured values, and
+reconciles accepted architecture residuals with the closure record. Package
+publication remains manual and is outside all implementation plans.
