@@ -156,6 +156,28 @@ pub struct WafConfig {
     pub common: CommonHttpArgs,
 }
 
+impl Default for WafConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            detect_only: false,
+            bypass: true,
+            header_bypass: true,
+            smuggling: true,
+            evasion: true,
+            profile: "auto".to_string(),
+            test_type: None,
+            concurrency: 10,
+            timeout: 30,
+            json: false,
+            verbose: false,
+            quiet: false,
+            output: None,
+            common: CommonHttpArgs::default(),
+        }
+    }
+}
+
 /// Plain WAF stress test configuration (no clap derives)
 #[derive(Debug, Clone)]
 pub struct WafStressConfig {
@@ -167,6 +189,21 @@ pub struct WafStressConfig {
     pub quiet: bool,
     pub output: Option<String>,
     pub common: CommonHttpArgs,
+}
+
+impl Default for WafStressConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            concurrency: 10,
+            timeout: 30,
+            json: false,
+            verbose: false,
+            quiet: false,
+            output: None,
+            common: CommonHttpArgs::default(),
+        }
+    }
 }
 
 #[cfg(feature = "cli")]

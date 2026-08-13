@@ -107,14 +107,14 @@ ScanArgs → Pipeline::from_args_with_config()
               ↓
          Pipeline::run() → sequential stage iteration
               ↓
-execute_stage() → match Stage:
+execute_stage() → match Stage (all stages available without `cli` feature):
   Stage::PortScan → scanner::ports::scan_ports()
   Stage::Fingerprint → scanner::fingerprint::fingerprint_services()
   Stage::EndpointScan → scanner::endpoints::scan_endpoints()
-  Stage::Fuzz → FuzzEngine::new_with_tui_mode().run()
-  Stage::LoadTest → LoadTestRunner::from_args_with_config().run()
-  Stage::Waf → waf::run_cli()
-  Stage::Recon → recon::run_cli()
+  Stage::Fuzz → fuzzer::engine::FuzzEngine::new_with_tui_mode(FuzzConfig).run()
+  Stage::LoadTest → loadtest::LoadTestRunner::from_config_with_engine().run()
+  Stage::Waf → waf::WafEngine::new(WafConfig).run()
+  Stage::Recon → recon::runner::run_full_recon_from_request()
   Stage::Vuln → vuln::run_cli()
   Stage::DbPentest → db_pentest::run_cli() (feature-gated)
   Stage::WebProxy → proxy::intercept::run_cli() (feature-gated)
@@ -122,12 +122,19 @@ execute_stage() → match Stage:
          PipelineReport → Display / JSON / HTML / CSV / SARIF / JUnit
 ```
 
+Parser-independent engine entry points are the canonical constructors for
+non-CLI consumers. CLI args are converted into plain config types (`FuzzConfig`,
+`WafConfig`, `LoadTestRunConfig`, `ReconRequest`) before reaching engine code,
+so removing the `cli` feature no longer hides any pipeline stage.
+
 ## Key Patterns
 
 1. **Sequential execution** via simple `match` in `execute_stage()` - no trait abstraction
 2. **Context sharing** via `Arc<Mutex<PipelineContext>>`
 3. **Session persistence** only when output path is session-like
-4. **No verify_tls in FuzzArgs** - use `common.insecure` flag instead
+4. **Plain config types** for engine entry points (FuzzConfig, WafConfig,
+   LoadTestRunConfig, ReconRequest) — CLI args convert via `From` impls; non-CLI
+   consumers construct the plain type directly
 5. **Hash Collections**: Always use `FxHashMap` from `rustc_hash` instead of `std::collections::HashMap`
 6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:63-95` to avoid code duplication
 

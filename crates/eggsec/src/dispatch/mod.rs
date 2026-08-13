@@ -161,19 +161,19 @@ pub async fn dispatch_inner(
         }
         TaskKind::Pipeline(p) => {
             let profile = match p.profile.as_deref() {
-                Some("quick") => crate::cli::ScanProfile::Quick,
-                Some("endpoint") => crate::cli::ScanProfile::Endpoint,
-                Some("web") => crate::cli::ScanProfile::Web,
-                Some("waf") => crate::cli::ScanProfile::Waf,
-                Some("full") => crate::cli::ScanProfile::Full,
-                Some("api") => crate::cli::ScanProfile::Api,
-                Some("recon") => crate::cli::ScanProfile::Recon,
-                Some("stealth") => crate::cli::ScanProfile::Stealth,
-                Some("deep") => crate::cli::ScanProfile::Deep,
-                Some("vuln") => crate::cli::ScanProfile::Vuln,
-                Some("auth") => crate::cli::ScanProfile::Auth,
-                Some("defense-lab") => crate::cli::ScanProfile::DefenseLab,
-                _ => crate::cli::ScanProfile::Quick,
+                Some("quick") => crate::types::ScanProfile::Quick,
+                Some("endpoint") => crate::types::ScanProfile::Endpoint,
+                Some("web") => crate::types::ScanProfile::Web,
+                Some("waf") => crate::types::ScanProfile::Waf,
+                Some("full") => crate::types::ScanProfile::Full,
+                Some("api") => crate::types::ScanProfile::Api,
+                Some("recon") => crate::types::ScanProfile::Recon,
+                Some("stealth") => crate::types::ScanProfile::Stealth,
+                Some("deep") => crate::types::ScanProfile::Deep,
+                Some("vuln") => crate::types::ScanProfile::Vuln,
+                Some("auth") => crate::types::ScanProfile::Auth,
+                Some("defense-lab") => crate::types::ScanProfile::DefenseLab,
+                _ => crate::types::ScanProfile::Quick,
             };
             recon::run_pipeline(
                 p.target,

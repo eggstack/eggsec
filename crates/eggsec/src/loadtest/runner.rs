@@ -18,6 +18,61 @@ use crate::config::EggsecConfig;
 use crate::output::report::Report;
 use crate::types::CommonHttpArgs;
 
+/// Plain load-test run configuration (no Clap derives).
+///
+/// This is the engine-facing contract used by the pipeline, Python bindings,
+/// and tool/API consumers. CLI parsing converts `LoadArgs` into this type.
+#[derive(Debug, Clone)]
+pub struct LoadTestRunConfig {
+    pub url: String,
+    pub requests: u64,
+    pub concurrency: usize,
+    pub timeout: Duration,
+    pub method: String,
+    pub body: Option<String>,
+    pub headers: Vec<String>,
+    pub common: CommonHttpArgs,
+    pub tui_mode: bool,
+}
+
+impl LoadTestRunConfig {
+    pub fn new(
+        url: impl Into<String>,
+        requests: u64,
+        concurrency: usize,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            url: url.into(),
+            requests,
+            concurrency,
+            timeout,
+            method: "GET".to_string(),
+            body: None,
+            headers: Vec::new(),
+            common: CommonHttpArgs::default(),
+            tui_mode: false,
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+impl From<crate::cli::LoadArgs> for LoadTestRunConfig {
+    fn from(args: crate::cli::LoadArgs) -> Self {
+        Self {
+            url: args.url,
+            requests: args.requests,
+            concurrency: args.concurrency,
+            timeout: Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT)),
+            method: args.method,
+            body: args.body,
+            headers: args.headers,
+            common: args.common.into(),
+            tui_mode: false,
+        }
+    }
+}
+
 pub struct LoadTestRunner {
     url: String,
     total_requests: u64,
@@ -86,26 +141,7 @@ impl LoadTestRunner {
 
     #[cfg(feature = "cli")]
     pub fn from_args_with_tui_mode(args: crate::cli::LoadArgs, tui_mode: bool) -> Result<Self> {
-        let timeout =
-            Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
-
-        let mut runner =
-            Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, tui_mode)?;
-
-        runner.set_method(args.method.clone());
-
-        if let Some(body) = args.body {
-            runner.set_body(body);
-        }
-
-        let headers = crate::utils::parse_headers(&args.headers);
-        for (key, value) in headers {
-            runner.add_header(key, value);
-        }
-
-        runner.set_common(args.common.into());
-
-        Ok(runner)
+        Self::from_config_with_mode(args.into(), tui_mode)
     }
 
     #[cfg(feature = "cli")]
@@ -113,23 +149,56 @@ impl LoadTestRunner {
         args: crate::cli::LoadArgs,
         config: &EggsecConfig,
     ) -> Result<Self> {
-        let timeout = Duration::from_secs(args.timeout.unwrap_or(config.http.timeout_secs));
+        Self::from_config_with_engine(args.into(), config)
+    }
 
-        let mut runner =
-            Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, false)?;
+    /// Construct a runner from a plain [`LoadTestRunConfig`].
+    pub fn from_config(cfg: LoadTestRunConfig) -> Result<Self> {
+        Self::from_config_with_mode(cfg, false)
+    }
 
-        runner.set_method(args.method.clone());
+    /// Construct a runner from a plain [`LoadTestRunConfig`] with explicit
+    /// TUI mode.
+    pub fn from_config_with_mode(cfg: LoadTestRunConfig, tui_mode: bool) -> Result<Self> {
+        let mut runner = Self::new_with_tui_mode(
+            cfg.url,
+            cfg.requests,
+            cfg.concurrency,
+            cfg.timeout,
+            tui_mode,
+        )?;
 
-        if let Some(body) = args.body {
+        runner.set_method(cfg.method);
+
+        if let Some(body) = cfg.body {
             runner.set_body(body);
         }
 
-        let headers = crate::utils::parse_headers(&args.headers);
+        let headers = crate::utils::parse_headers(&cfg.headers);
         for (key, value) in headers {
             runner.add_header(key, value);
         }
 
-        runner.set_common_with_config(args.common.into(), config);
+        runner.set_common(cfg.common.clone());
+
+        Ok(runner)
+    }
+
+    /// Construct a runner from a plain [`LoadTestRunConfig`] and an
+    /// [`EggsecConfig`]. Honors config-derived defaults for headers, proxy,
+    /// user-agent, and timeout fallbacks where the plain config leaves them
+    /// unset.
+    pub fn from_config_with_engine(cfg: LoadTestRunConfig, config: &EggsecConfig) -> Result<Self> {
+        let timeout = if cfg.timeout.is_zero() {
+            Duration::from_secs(config.http.timeout_secs)
+        } else {
+            cfg.timeout
+        };
+
+        let cfg = LoadTestRunConfig { timeout, ..cfg };
+
+        let mut runner = Self::from_config_with_mode(cfg.clone(), false)?;
+        runner.set_common_with_config(cfg.common, config);
 
         Ok(runner)
     }

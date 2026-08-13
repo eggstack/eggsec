@@ -135,6 +135,41 @@ async fn write_output(
 /// - Any stage fails to execute
 /// - Output file cannot be written
 #[cfg(feature = "tool-api")]
+pub async fn run_with_callback<F>(
+    target: &str,
+    config: &EggsecConfig,
+    mut callback: F,
+) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let pipeline = Pipeline::new(target);
+    let report = pipeline.run().await?;
+
+    for port in &report.open_ports {
+        callback(port.clone().into());
+    }
+    for service in &report.services {
+        callback(service.clone().into());
+    }
+    for endpoint in &report.endpoints {
+        callback(endpoint.clone().into());
+    }
+
+    if let Some(failed_stage) = report.first_failed_stage() {
+        return Err(EggsecError::ScanFailed {
+            stage: failed_stage.stage.to_string(),
+            error: failed_stage
+                .error
+                .clone()
+                .unwrap_or_else(|| "unknown pipeline stage failure".to_string()),
+        });
+    }
+
+    Ok(())
+}
+
+#[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: ScanArgs,
     config: &EggsecConfig,

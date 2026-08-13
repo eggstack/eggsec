@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::recon::cloud;
 use crate::recon::{
     content, cors, cve, dns_records, email, geolocation, js, reverse_dns, secrets, ssl, subdomain,
-    takeover, techdetect, threatintel, wayback, whois, FullReconResult,
+    takeover, techdetect, threatintel, wayback, whois, FullReconResult, ReconRequest,
 };
 use crate::types::SensitiveString;
 use crate::utils::{create_insecure_http_client, sanitize_for_logging};
@@ -523,8 +523,24 @@ pub async fn run_full_recon(
     stage: Arc<Mutex<String>>,
     verbose: bool,
 ) -> Result<FullReconResult> {
-    let target = &args.target;
-    let concurrency = args
+    let request: ReconRequest = args.clone().into();
+    run_full_recon_from_request(&request, config, stage, verbose).await
+}
+
+/// Plain engine-facing recon entry point.
+///
+/// Accepts a parser-independent [`ReconRequest`] and the engine
+/// [`EggsecConfig`]. CLI parsing converts `ReconArgs` into `ReconRequest`
+/// via the `From` impl. Pipeline, Python, and tool-API callers should
+/// construct `ReconRequest` directly.
+pub async fn run_full_recon_from_request(
+    request: &ReconRequest,
+    config: &EggsecConfig,
+    stage: Arc<Mutex<String>>,
+    verbose: bool,
+) -> Result<FullReconResult> {
+    let target = &request.target;
+    let concurrency = request
         .concurrency
         .unwrap_or(config.recon.dns_concurrency)
         .max(1);
@@ -585,30 +601,30 @@ pub async fn run_full_recon(
         cors_result,
         email_result,
     ) = tokio::join!(
-        run_reverse_dns(resolved_ip.as_ref(), args.no_dns),
+        run_reverse_dns(resolved_ip.as_ref(), request.no_dns),
         run_geo_lookup(
             resolved_ip.as_ref(),
-            args.no_geo,
+            request.no_geo,
             ipapi_key,
             maxmind_settings
         ),
         run_threat_intel(
             threat_target,
-            args.no_threat,
+            request.no_threat,
             virustotal_key,
             alienvault_key,
             shodan_key
         ),
-        run_ssl_recon(ssl_host, port, args.no_ssl),
-        run_whois_lookup(domain.as_ref(), args.no_whois),
-        run_subdomain_enum(domain.as_ref(), concurrency, args.no_subdomains),
-        run_dns_records(domain.as_ref(), args.no_dns_records),
-        run_tech_detection(&url, args.no_tech),
-        run_js_analysis(&url, args.no_js),
-        run_wayback_check(domain.as_ref(), args.no_wayback, wayback_key),
-        run_content_analysis(&url, concurrency, args.no_content),
-        run_cors_check(&url, args.no_cors),
-        run_email_security(&url, args.no_email),
+        run_ssl_recon(ssl_host, port, request.no_ssl),
+        run_whois_lookup(domain.as_ref(), request.no_whois),
+        run_subdomain_enum(domain.as_ref(), concurrency, request.no_subdomains),
+        run_dns_records(domain.as_ref(), request.no_dns_records),
+        run_tech_detection(&url, request.no_tech),
+        run_js_analysis(&url, request.no_js),
+        run_wayback_check(domain.as_ref(), request.no_wayback, wayback_key),
+        run_content_analysis(&url, concurrency, request.no_content),
+        run_cors_check(&url, request.no_cors),
+        run_email_security(&url, request.no_email),
     );
 
     let reverse_dns_failed = reverse_dns_result.is_failed();
@@ -626,14 +642,14 @@ pub async fn run_full_recon(
 
     #[cfg(feature = "cloud")]
     let (cloud_result, cloud_failed) = {
-        let result = run_cloud_detection(domain.as_ref(), concurrency, args.no_cloud).await;
+        let result = run_cloud_detection(domain.as_ref(), concurrency, request.no_cloud).await;
         let failed = result.is_failed();
         (result, failed)
     };
 
     let subdomain_result = subdomain_result.into_option();
-    let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
-    let takeover_failed = !args.no_takeover
+    let takeover_result = run_takeover_check(subdomain_result.as_ref(), request.no_takeover).await;
+    let takeover_failed = !request.no_takeover
         && matches!(subdomain_result.as_ref(), Some(s) if !s.subdomains.is_empty())
         && takeover_result.is_none();
 
@@ -722,11 +738,11 @@ pub async fn run_full_recon(
 
     recon.cve_mapping = run_cve_check(
         techdetect_result.as_ref(),
-        args.no_cve,
+        request.no_cve,
         nvd_api_key.as_deref(),
     )
     .await;
-    if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
+    if recon.cve_mapping.is_none() && !request.no_cve && techdetect_result.is_some() {
         recon.cve_error =
             Some("CVE mapping failed (see logs for the underlying error)".to_string());
     }

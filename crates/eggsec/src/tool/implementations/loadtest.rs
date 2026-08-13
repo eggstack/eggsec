@@ -57,19 +57,16 @@ impl SecurityTool for LoadTestTool {
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;
 
-        let args = crate::cli::LoadArgs {
+        let run_cfg = crate::loadtest::LoadTestRunConfig {
             url: target.clone(),
             requests,
             concurrency,
+            timeout: std::time::Duration::from_secs(30),
             method: "GET".to_string(),
             body: None,
             headers: vec![],
-            timeout: None,
-            json: true,
-            verbose: false,
-            quiet: false,
-            output: None,
-            common: crate::cli::CommonHttpArgsCli::default(),
+            common: crate::types::CommonHttpArgs::default(),
+            tui_mode: false,
         };
 
         let config = crate::config::load_config(None::<&str>)
@@ -78,7 +75,8 @@ impl SecurityTool for LoadTestTool {
             })
             .unwrap_or_default();
 
-        let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, &config)?;
+        let runner =
+            crate::loadtest::runner::LoadTestRunner::from_config_with_engine(run_cfg, &config)?;
         let results = tokio::time::timeout(std::time::Duration::from_secs(60), runner.run())
             .await
             .map_err(|e| crate::error::EggsecError::Timeout {

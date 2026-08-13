@@ -636,8 +636,18 @@ This polish pass is complete only when all applicable criteria below are true.
 ```text
 final status: Executed
 starting SHA: e2ff50f70501cc2d0ced2ff8ac0d33d671b0fa69
-implementation SHA: <pending final commit>
-closure-record-only SHA (if any): <pending>
+implementation SHAs:
+  440da70c3ee3998665b756b719bcaa254ee65705 - initial final-polish implementation
+  b28f6711e0a1d9d60f54c9087e17f2af3d9995c1 - removed eggsec-python -> eggsec/cli and added broad cli gating
+closure-record-only SHA (if any): none
+follow-up corrective plan: dependency-architecture-post-polish-corrective-pass.md
+follow-up reason: final review found that the b28f6711 cli gating also hid
+  real engine/headless pipeline and tool-API capability (Fuzz/LoadTest/WAF/Recon
+  pipeline stages and scanner/recon/fingerprint run_cli_with_callback paths).
+  The post-polish corrective pass restored non-CLI execution via parser-
+  independent engine types (FuzzConfig, WafConfig, WafStressConfig,
+  ReconRequest, LoadTestRunConfig, PortScanRequest, EndpointScanRequest,
+  FingerprintRequest) without reintroducing eggsec-python -> eggsec/cli.
 Python failing-test disposition: fixed - all 4443 tests pass (was 4442/4443 with one failure)
 make check-python: PASS
 eggsec-python cli feature: removed - clap/clap_complete no longer reachable from Python

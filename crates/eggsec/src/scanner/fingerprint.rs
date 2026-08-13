@@ -21,6 +21,50 @@ use crate::config::EggsecConfig;
 
 const MAX_SCAN_RESULTS: usize = 100_000;
 
+/// Plain fingerprint request (no Clap derives).
+///
+/// This is the engine-facing contract used by the pipeline, Python bindings,
+/// and tool/API consumers. CLI parsing converts `FingerprintArgs` into this
+/// type.
+#[derive(Debug, Clone)]
+pub struct FingerprintRequest {
+    pub host: String,
+    pub ports: Vec<u16>,
+    pub timeout: u64,
+    pub udp: bool,
+    pub concurrency: usize,
+}
+
+impl FingerprintRequest {
+    pub fn new(host: impl Into<String>, ports: Vec<u16>) -> Self {
+        Self {
+            host: host.into(),
+            ports,
+            timeout: 5,
+            udp: false,
+            concurrency: 20,
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+pub fn fingerprint_request_from_args(
+    args: crate::cli::FingerprintArgs,
+) -> crate::error::Result<FingerprintRequest> {
+    let ports = if args.udp && args.ports == "80,443,22,21,25,3306,5432,6379,27017" {
+        get_default_udp_ports()
+    } else {
+        parse_ports(&args.ports)?
+    };
+    Ok(FingerprintRequest {
+        host: args.host,
+        ports,
+        timeout: args.timeout,
+        udp: args.udp,
+        concurrency: args.concurrency,
+    })
+}
+
 static PROBES: &[(&str, &[u8], &str)] = &[
     ("HTTP", b"HEAD / HTTP/1.0\r\n\r\n", "HTTP"),
     ("SSH", b"", "SSH"),
@@ -180,62 +224,90 @@ pub async fn run_cli(args: FingerprintArgs, config: &EggsecConfig) -> Result<()>
     Ok(())
 }
 
+#[cfg(feature = "tool-api")]
+pub async fn run_with_callback<F>(
+    request: &FingerprintRequest,
+    config: &EggsecConfig,
+    mut callback: F,
+) -> Result<FingerprintResults>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let timeout_secs = if request.timeout == 5 {
+        config.scan.port_timeout_secs
+    } else {
+        request.timeout
+    };
+
+    if request.udp {
+        let udp_results = fingerprint_udp_services(
+            &request.host,
+            request.ports.clone(),
+            Duration::from_secs(timeout_secs),
+        )
+        .await?;
+        // Convert UDP results to FingerprintResults for the unified callback.
+        let services_identified = udp_results.results.len();
+        let mut results = FingerprintResults {
+            host: udp_results.host,
+            ports_scanned: udp_results.ports_scanned,
+            services_identified,
+            total_services_identified: services_identified,
+            duration_ms: udp_results.duration_ms,
+            results: udp_results
+                .results
+                .into_iter()
+                .map(|fp| ServiceFingerprint {
+                    port: fp.port,
+                    service: fp.service,
+                    banner: fp.banner,
+                    version: None,
+                    product: None,
+                    extra: fp.response,
+                    confidence: fp.confidence,
+                })
+                .collect(),
+        };
+        for fp in &results.results {
+            callback(crate::tool::response::Finding::from(fp.clone()));
+        }
+        return Ok(results);
+    }
+
+    let results = fingerprint_services(
+        &request.host,
+        request.ports.clone(),
+        Duration::from_secs(timeout_secs),
+        false,
+        request.concurrency,
+        None,
+        None,
+    )
+    .await?;
+
+    for fp in &results.results {
+        callback(crate::tool::response::Finding::from(fp.clone()));
+    }
+
+    Ok(results)
+}
+
 #[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: FingerprintArgs,
     config: &EggsecConfig,
-    mut callback: F,
+    callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
-    let timeout_secs = if args.timeout == 5 {
-        config.scan.port_timeout_secs
+    let request = fingerprint_request_from_args(args.clone())?;
+    let results = run_with_callback(&request, config, callback).await?;
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&results)?);
     } else {
-        args.timeout
-    };
-
-    if args.udp {
-        let ports = if args.ports == "80,443,22,21,25,3306,5432,6379,27017" {
-            get_default_udp_ports()
-        } else {
-            parse_ports(&args.ports)?
-        };
-
-        let results =
-            fingerprint_udp_services(&args.host, ports, Duration::from_secs(timeout_secs)).await?;
-
-        for fp in &results.results {
-            callback(crate::tool::response::Finding::from(fp.clone()));
-        }
-
-        if args.json {
-            println!("{}", serde_json::to_string_pretty(&results)?);
-        } else {
-            println!("{}", results);
-        }
-    } else {
-        let ports = parse_ports(&args.ports)?;
-        let results = fingerprint_services(
-            &args.host,
-            ports,
-            Duration::from_secs(timeout_secs),
-            false,
-            args.concurrency,
-            None,
-            None,
-        )
-        .await?;
-
-        for fp in &results.results {
-            callback(crate::tool::response::Finding::from(fp.clone()));
-        }
-
-        if args.json {
-            println!("{}", serde_json::to_string_pretty(&results)?);
-        } else {
-            println!("{}", results);
-        }
+        println!("{}", results);
     }
 
     Ok(())

@@ -83,8 +83,9 @@ impl SecurityTool for ReconTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let args = crate::cli::ReconArgs {
+        let recon_request = crate::recon::ReconRequest {
             target: target.clone(),
+            concurrency: request.options.concurrency,
             no_tech,
             no_dns,
             no_geo,
@@ -128,11 +129,6 @@ impl SecurityTool for ReconTool {
                 .get("no_takeover")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
-            concurrency: request.options.concurrency,
-            json: true,
-            quiet: true,
-            verbose: false,
-            output: None,
         };
 
         let config = crate::config::load_config(None::<&str>)
@@ -143,7 +139,7 @@ impl SecurityTool for ReconTool {
 
         tokio::time::timeout(
             std::time::Duration::from_secs(60),
-            crate::recon::run_cli_with_callback(args, &config, move |f| {
+            crate::recon::run_with_callback(&recon_request, &config, move |f| {
                 let mut findings = findings_clone.lock();
                 findings.push(f);
             }),

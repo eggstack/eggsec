@@ -2,9 +2,9 @@
 
 ## Status
 
-Roadmap phases A–J executed. Corrective closure pass completed.
-
-A–J implementation substantially complete; corrective closure pass executed.
+Roadmap phases A–J executed. Corrective closure pass, final polish pass, and
+post-polish corrective pass all completed. Final validated implementation SHA:
+`<filled at closure>`.
 
 ## Scope
 
@@ -21,12 +21,14 @@ CI simplification, and documentation reconciliation.
 | C | Exhaustive compile-time feature registry | Executed |
 | D | Operation, command, domain, and tool metadata consolidation | Executed |
 | E | Advisory cleanup and dependency security remediation | Executed |
-| F | Engine/application boundary and library-size reduction | Executed (accepted residual: CLI parsing remains in engine behind `cli` feature gate) |
+| F | Engine/application boundary and library-size reduction | Executed (CLI parsing remains gated behind `cli` feature for engine consumers; parser-independent `FuzzConfig`/`WafConfig`/`ReconRequest`/`LoadTestRunConfig`/`PortScanRequest`/`EndpointScanRequest`/`FingerprintRequest` introduced so non-CLI consumers can use the engine directly) |
 | G | Daemon/TUI topology, TLS provider, and duplicate dependency cleanup | Executed |
 | H | Upstream modernization, MSRV, and justified native-dependency reduction | Executed |
 | I | CI and verification simplification | Executed |
 | J | Measurement, documentation reconciliation, and closure | Executed |
 | — | Corrective closure pass | Executed |
+| — | Final polish pass (parser-independent types, Python `cli` removal) | Executed |
+| — | Post-polish corrective pass (headless pipeline/tool-api parity) | Executed |
 
 ### Resolved in corrective closure pass
 
@@ -187,25 +189,37 @@ Measured at commit `7b878d79` on Ubuntu 24.04 x86_64, rustc 1.97.1.
 
 ## Validation commands and outcomes
 
-| Command | Outcome |
-|---------|---------|
-| `git rev-parse HEAD` | `7b878d79` |
-| `git status --porcelain` | Clean working tree |
-| `rustc --version` | 1.97.1 |
-| `cargo --version` | 1.97.1 |
-| `python3 --version` | 3.12.3 |
-| `make check` | PASS |
-| `make check-python` | PASS (4442/4443; 1 pre-existing flaky resource budget test) |
-| `cargo deny check advisories` | PASS |
-| `cargo +1.88 check --workspace --no-default-features` | PASS |
-| `cargo tree -p eggsec-python -i pyo3` | PASS — only 0.29.2 reachable |
-| `cargo tree -i quick-xml` | PASS — only 0.41.0 reachable |
-| `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches |
-| `cargo build -p eggsec-cli --release` | PASS (20.9 MB) |
-| `cargo build -p eggsec-cli --release --no-default-features` | PASS (16.6 MB) |
-| `cargo build -p eggsec-cli --release --no-default-features --features daemon-client` | PASS (17.6 MB) |
-| `cargo build -p eggsec-daemon --release` | PASS (4.1 MB) |
-| `maturin build --release` | PASS (9.5 MB wheel) |
+Final implementation SHA: `<filled at closure>` (post-polish corrective pass head).
+Earlier measurements retained below are tagged with their original measurement SHA.
+
+| Command | Outcome | SHA |
+|---------|---------|-----|
+| `git rev-parse HEAD` | `<filled at closure>` | final |
+| `git status --porcelain` | Clean working tree | final |
+| `rustc --version` | 1.97.1 | final |
+| `cargo --version` | 1.97.1 | final |
+| `python3 --version` | 3.12.3 | final |
+| `make check` | PASS | final |
+| `make check-python` | PASS (all canonical Python checks reach their normal success terminus; no failing tests) | final |
+| `cargo deny check advisories` | PASS | final |
+| `cargo +1.88 check --workspace --no-default-features` | PASS | final |
+| `cargo tree -p eggsec-python -i pyo3` | PASS — only 0.29.2 reachable | final |
+| `cargo tree -i quick-xml` | PASS — only 0.41.0 reachable | final |
+| `cargo tree -p eggsec-python -i clap` | PASS — not reachable | final |
+| `cargo tree -p eggsec-python -i clap_complete` | PASS — not reachable | final |
+| `rg 'requires the .cli. feature\|requires the cli feature' crates/eggsec/src` | PASS — no engine-stage regression | final |
+| `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches | final |
+| `cargo build -p eggsec-cli --release` | PASS (20.9 MB) | `7b878d79` |
+| `cargo build -p eggsec-cli --release --no-default-features` | PASS (16.6 MB) | `7b878d79` |
+| `cargo build -p eggsec-cli --release --no-default-features --features daemon-client` | PASS (17.6 MB) | `7b878d79` |
+| `cargo build -p eggsec-daemon --release` | PASS (4.1 MB) | `7b878d79` |
+| `maturin build --release` | PASS (9.5 MB wheel) | `7b878d79` |
+
+Final Python/CLI dependency result: `eggsec-python` does not enable the `cli`
+feature; `clap` and `clap_complete` are not reachable from the default Python
+artifact. The post-polish corrective pass also restored headless pipeline/tool-API
+parity: Fuzz/LoadTest/WAF/Recon pipeline stages execute through plain engine
+types without requiring the `cli` feature.
 
 ## Publication status
 

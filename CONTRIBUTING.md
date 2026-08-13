@@ -159,22 +159,22 @@ cargo build -p eggsec --features stress-testing
 
 # Test all features
 cargo build -p eggsec --features full
-
-# CI tests all feature combinations via matrix strategy
 ```
 
 #### CI Matrix
 
-The CI runs these jobs on every push/PR:
+Routine CI runs on every push/PR (`ci.yml`):
 
 - **Rust**: `make check` (format, no-default build, clippy, all integration tests, architecture guards)
-- **MSRV**: Compile check with Rust 1.88
-- **Portability**: `cargo check -p eggsec` on macOS and Windows
 - **Python**: `make check-python` (one maturin build, all checks)
 
-Optional deep checks run weekly or on manual trigger (`deep-checks.yml`): `cargo deny check`, representative feature profiles.
+Scheduled/manual CI runs weekly or on manual trigger (`deep-checks.yml`):
 
-This catches undeclared or miswired features early.
+- `make check-full` — broad validation (cargo-deny advisories, representative feature profiles)
+- Exact MSRV 1.88 compile check
+- macOS/Windows portability compile checks
+
+This catches undeclared or miswired features early without burning routine PR capacity on broad validation.
 
 #### Adding a New Feature
 

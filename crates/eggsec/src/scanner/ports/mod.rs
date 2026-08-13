@@ -66,6 +66,65 @@ impl PortScanConfig {
     }
 }
 
+/// Plain port-scan request (no Clap derives).
+///
+/// This is the engine-facing contract used by the pipeline, Python bindings,
+/// and tool/API consumers. CLI parsing converts `PortScanArgs` into this type.
+#[derive(Debug, Clone)]
+pub struct PortScanRequest {
+    pub host: String,
+    pub ports: Vec<u16>,
+    pub concurrency: usize,
+    pub timeout: u64,
+    pub spoof_config: SpoofConfig,
+    pub dry_run: bool,
+}
+
+impl PortScanRequest {
+    pub fn new(host: impl Into<String>, ports: Vec<u16>) -> Self {
+        Self {
+            host: host.into(),
+            ports,
+            concurrency: 100,
+            timeout: 2,
+            spoof_config: SpoofConfig::default(),
+            dry_run: false,
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+pub fn port_scan_request_from_args(
+    args: crate::cli::PortScanArgs,
+) -> crate::error::Result<PortScanRequest> {
+    let ports = parse_ports(&args.ports)?;
+    let spoof_config = SpoofConfig::from_args(
+        args.source_ip,
+        args.spoof_range,
+        false,
+        args.decoy,
+        args.decoy_range,
+        args.decoy_count,
+        args.decoy_mode,
+        args.include_me,
+        args.source_port,
+        args.random_source_port,
+        args.fragment,
+        args.scan_type,
+        args.packet_trace,
+        args.max_rate,
+        args.ttl,
+    )?;
+    Ok(PortScanRequest {
+        host: args.host,
+        ports,
+        concurrency: args.concurrency,
+        timeout: args.timeout,
+        spoof_config,
+        dry_run: args.dry_run,
+    })
+}
+
 pub use spoofed::{init_packet_trace, shutdown_packet_trace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,11 +334,62 @@ pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
 #[cfg(all(feature = "tool-api", feature = "cli"))]
 pub type PortFindingCallback = Box<dyn FnMut(crate::tool::response::Finding) + Send + 'static>;
 
+#[cfg(feature = "tool-api")]
+pub async fn run_with_callback<F>(
+    request: &PortScanRequest,
+    config: &EggsecConfig,
+    callback: F,
+) -> Result<PortScanResults>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let timeout_secs = if request.timeout == 2 {
+        config.scan.port_timeout_secs
+    } else {
+        request.timeout
+    };
+
+    if let Some(ref trace_path) = request.spoof_config.packet_trace {
+        if let Err(e) = init_packet_trace(trace_path, false) {
+            eprintln!("Warning: Failed to initialize packet trace: {}", e);
+        }
+    }
+
+    if request.dry_run {
+        return Ok(PortScanResults {
+            host: request.host.clone(),
+            ports_scanned: request.ports.len() as u32,
+            open_ports: Vec::new(),
+            total_open_ports: 0,
+            duration_ms: 0,
+            spoof_stats: None,
+        });
+    }
+
+    let config = PortScanConfig {
+        ports: request.ports.clone(),
+        concurrency: request.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        tui_mode: false,
+        spoof_config: request.spoof_config.clone(),
+        progress_tx: None,
+        max_results: None,
+    };
+    let results = scan_ports(&request.host, config).await?;
+
+    let mut callback = callback;
+    for port_result in &results.open_ports {
+        callback(crate::tool::response::Finding::from(port_result.clone()));
+    }
+
+    Ok(results)
+}
+
 #[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: PortScanArgs,
     config: &EggsecConfig,
-    mut callback: F,
+    callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
@@ -292,39 +402,10 @@ where
         );
     }
 
-    let ports = parse_ports(&args.ports)?;
-    let timeout_secs = if args.timeout == 2 {
-        config.scan.port_timeout_secs
-    } else {
-        args.timeout
-    };
+    let mut request = port_scan_request_from_args(args.clone())?;
 
-    let spoof_config = SpoofConfig::from_args(
-        args.source_ip.clone(),
-        args.spoof_range.clone(),
-        false,
-        args.decoy.clone(),
-        args.decoy_range.clone(),
-        args.decoy_count,
-        args.decoy_mode.clone(),
-        args.include_me,
-        args.source_port,
-        args.random_source_port,
-        args.fragment,
-        args.scan_type.clone(),
-        args.packet_trace.clone(),
-        args.max_rate,
-        args.ttl,
-    )?;
-
-    if let Some(ref trace_path) = spoof_config.packet_trace {
-        if let Err(e) = init_packet_trace(trace_path, false) {
-            eprintln!("Warning: Failed to initialize packet trace: {}", e);
-        }
-    }
-
-    if spoof_config.enabled {
-        eprintln!("{}", format_spoof_warning(&spoof_config));
+    if request.spoof_config.enabled {
+        eprintln!("{}", format_spoof_warning(&request.spoof_config));
     }
 
     if args.dry_run {
@@ -332,43 +413,46 @@ where
         eprintln!("Target: {}", sanitize_for_logging(&args.host));
         eprintln!("Ports: {}", args.ports);
         eprintln!("Concurrency: {}", args.concurrency);
-        eprintln!("Timeout: {}s", timeout_secs);
-        if spoof_config.enabled {
-            if let Some(ref ip) = spoof_config.source_ip {
+        eprintln!("Timeout: {}s", request.timeout);
+        if request.spoof_config.enabled {
+            if let Some(ref ip) = request.spoof_config.source_ip {
                 eprintln!("Spoof Source IP: {}", ip);
             }
-            if let Some(ref range) = spoof_config.ip_range {
+            if let Some(ref range) = request.spoof_config.ip_range {
                 eprintln!("Spoof IP Range: {}", range);
             }
-            if let Some(port) = spoof_config.source_port {
+            if let Some(port) = request.spoof_config.source_port {
                 eprintln!("Source Port: {}", port);
             }
-            if spoof_config.random_source_port {
+            if request.spoof_config.random_source_port {
                 eprintln!("Source Port: RANDOM");
             }
-            if spoof_config.fragment {
+            if request.spoof_config.fragment {
                 eprintln!("Fragmentation: YES (8-byte fragments)");
             }
-            eprintln!("Scan Type: {:?}", spoof_config.scan_type);
-            if let Some(ref trace) = spoof_config.packet_trace {
+            eprintln!("Scan Type: {:?}", request.spoof_config.scan_type);
+            if let Some(ref trace) = request.spoof_config.packet_trace {
                 eprintln!("Packet Trace: {}", trace);
             }
-            if let Some(rate) = spoof_config.max_rate {
+            if let Some(rate) = request.spoof_config.max_rate {
                 eprintln!("Max Rate: {} pps", rate);
             }
-            if let Some(ttl) = spoof_config.ttl {
+            if let Some(ttl) = request.spoof_config.ttl {
                 eprintln!("TTL: {}", ttl);
             }
-            if !spoof_config.decoy_ips.is_empty() {
-                eprintln!("Decoy IPs: {} total", spoof_config.decoy_ips.len());
-                for ip in spoof_config.decoy_ips.iter().take(5) {
+            if !request.spoof_config.decoy_ips.is_empty() {
+                eprintln!("Decoy IPs: {} total", request.spoof_config.decoy_ips.len());
+                for ip in request.spoof_config.decoy_ips.iter().take(5) {
                     eprintln!("  - {}", ip);
                 }
-                if spoof_config.decoy_ips.len() > 5 {
-                    eprintln!("  ... and {} more", spoof_config.decoy_ips.len() - 5);
+                if request.spoof_config.decoy_ips.len() > 5 {
+                    eprintln!(
+                        "  ... and {} more",
+                        request.spoof_config.decoy_ips.len() - 5
+                    );
                 }
-                eprintln!("Decoy Mode: {:?}", spoof_config.decoy_mode);
-                if spoof_config.include_real_ip {
+                eprintln!("Decoy Mode: {:?}", request.spoof_config.decoy_mode);
+                if request.spoof_config.include_real_ip {
                     eprintln!("Include Real IP: YES");
                 }
             }
@@ -377,18 +461,14 @@ where
         return Ok(());
     }
 
-    let ports_count = ports.len();
+    let ports_count = request.ports.len();
 
-    let config = PortScanConfig {
-        ports,
-        concurrency: args.concurrency,
-        timeout_duration: Duration::from_secs(timeout_secs),
-        tui_mode: false,
-        spoof_config,
-        progress_tx: None,
-        max_results: None,
-    };
-    let results = scan_ports(&args.host, config).await?;
+    // For callback path, dry_run is already handled by run_with_callback if
+    // set. We reset it here to ensure dry-run mode goes through the same
+    // presentation flow as before.
+    request.dry_run = false;
+
+    let results = run_with_callback(&request, config, callback).await?;
 
     if args.verbose {
         eprintln!(
@@ -396,10 +476,6 @@ where
             results.open_ports.len(),
             ports_count
         );
-    }
-
-    for port_result in &results.open_ports {
-        callback(crate::tool::response::Finding::from(port_result.clone()));
     }
 
     let output = if args.json {

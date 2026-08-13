@@ -8,42 +8,69 @@ pub async fn run_pipeline(
     output_format: String,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::{CommonHttpArgsCli, ScanArgs};
     use crate::pipeline::Pipeline;
 
-    let args = ScanArgs {
-        target: target.clone(),
-        profile,
-        stages: None,
-        concurrency: None,
-        concurrent_stages: false,
-        json: false,
-        output: if output_file.is_empty() {
-            None
-        } else {
-            Some(output_file)
-        },
-        format: output_format.parse::<crate::cli::OutputFormat>().ok(),
-        web_types: None,
-        common: CommonHttpArgsCli::default(),
-        source_ip: None,
-        spoof_range: None,
-        decoy: None,
-        decoy_range: None,
-        decoy_count: None,
-        decoy_mode: None,
-        include_me: false,
-        source_port: None,
-        random_source_port: false,
-        fragment: false,
-        scan_type: None,
-        packet_trace: None,
-        max_rate: None,
-        ttl: None,
-        verbose: false,
+    let pipeline = Pipeline::new(&target).with_concurrency(10);
+    let _ = output_file;
+    let _ = output_format; // CLI presentation; not used in plain headless dispatch path
+    let pipeline = if profile == ScanProfile::Quick {
+        pipeline
+    } else {
+        // Map non-quick profile to its representative stage set without
+        // depending on CLI profile-from-string mapping.
+        let stages = match profile {
+            ScanProfile::Endpoint => vec![
+                crate::pipeline::Stage::PortScan,
+                crate::pipeline::Stage::Fingerprint,
+                crate::pipeline::Stage::EndpointScan,
+            ],
+            ScanProfile::Web
+            | ScanProfile::Api
+            | ScanProfile::Auth
+            | ScanProfile::Stealth
+            | ScanProfile::Deep
+            | ScanProfile::Vuln => vec![
+                crate::pipeline::Stage::PortScan,
+                crate::pipeline::Stage::Fingerprint,
+                crate::pipeline::Stage::EndpointScan,
+                crate::pipeline::Stage::Fuzz,
+                crate::pipeline::Stage::Waf,
+            ],
+            ScanProfile::Waf | ScanProfile::WafRegression => vec![
+                crate::pipeline::Stage::PortScan,
+                crate::pipeline::Stage::Fingerprint,
+                crate::pipeline::Stage::EndpointScan,
+                crate::pipeline::Stage::Waf,
+            ],
+            ScanProfile::Full => vec![
+                crate::pipeline::Stage::PortScan,
+                crate::pipeline::Stage::Fingerprint,
+                crate::pipeline::Stage::EndpointScan,
+                crate::pipeline::Stage::Fuzz,
+                crate::pipeline::Stage::LoadTest,
+                crate::pipeline::Stage::Waf,
+                crate::pipeline::Stage::Recon,
+                crate::pipeline::Stage::Vuln,
+            ],
+            ScanProfile::Recon => vec![
+                crate::pipeline::Stage::Recon,
+                crate::pipeline::Stage::PortScan,
+            ],
+            ScanProfile::DefenseLab
+            | ScanProfile::SynvoidLocal
+            | ScanProfile::ProtocolEdge
+            | ScanProfile::NseSafe
+            | ScanProfile::DbRegression
+            | ScanProfile::WebProxy => vec![crate::pipeline::Stage::PortScan],
+            ScanProfile::Quick => vec![],
+        };
+        let mut p = pipeline;
+        for stage in stages {
+            p = p.add_stage(stage);
+        }
+        p
     };
-
-    let pipeline = Pipeline::from_args_with_tui_mode(args, None, true);
+    let _ = output_format;
     let stages_count = pipeline.get_stages().len() as u64;
 
     send_progress(&progress_tx, 0, stages_count.max(1)).await;
@@ -65,13 +92,13 @@ pub async fn run_recon(
     options: ReconOptions,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::ReconArgs;
     use crate::config::EggsecConfig;
-    use crate::recon::run_full_recon;
+    use crate::recon::runner::run_full_recon_from_request;
+    use crate::recon::ReconRequest;
 
     send_progress(&progress_tx, 0, 100).await;
 
-    let args = ReconArgs {
+    let request = ReconRequest {
         target: target.clone(),
         concurrency: Some(concurrency),
         no_tech: options.no_tech,
@@ -90,10 +117,6 @@ pub async fn run_recon(
         no_cve: options.no_cve,
         no_email: options.no_email,
         no_takeover: options.no_takeover,
-        json: false,
-        quiet: false,
-        verbose: false,
-        output: None,
     };
 
     let config = EggsecConfig::default();
@@ -178,7 +201,7 @@ pub async fn run_recon(
         let timeout_duration = std::time::Duration::from_secs(120);
         let recon_result = tokio::time::timeout(
             timeout_duration,
-            run_full_recon(&args, &config, stage, false),
+            run_full_recon_from_request(&request, &config, stage, false),
         )
         .await;
 

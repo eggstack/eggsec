@@ -560,26 +560,15 @@ impl Pipeline {
             Stage::PortScan => self.run_port_scan().await,
             Stage::Fingerprint => self.run_fingerprint().await,
             Stage::EndpointScan => self.run_endpoint_scan().await,
-            #[cfg(feature = "cli")]
             Stage::Fuzz => self.run_fuzz().await,
-            #[cfg(feature = "cli")]
             Stage::LoadTest => self.run_load_test().await,
-            #[cfg(feature = "cli")]
             Stage::Waf => self.run_waf().await,
-            #[cfg(feature = "cli")]
             Stage::Recon => self.run_recon().await,
             Stage::Vuln => self.run_vuln().await,
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => self.run_db_pentest_stage().await,
             #[cfg(feature = "web-proxy")]
             Stage::WebProxy => self.run_web_proxy_stage().await,
-            #[cfg(not(feature = "cli"))]
-            Stage::Fuzz | Stage::LoadTest | Stage::Waf | Stage::Recon => {
-                Err(crate::error::EggsecError::Config(format!(
-                    "stage {:?} requires the `cli` feature",
-                    stage
-                )))
-            }
         }
     }
 
@@ -1015,7 +1004,6 @@ impl Pipeline {
         Ok(())
     }
 
-    #[cfg(feature = "cli")]
     async fn run_fuzz(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1037,40 +1025,18 @@ impl Pipeline {
         };
 
         let stealth = self.profile == ScanProfile::Stealth || self.common.stealth;
+        let mut common = self.common.clone();
+        common.stealth = stealth;
 
-        let args = crate::cli::FuzzArgs {
+        let config = crate::fuzzer::config::FuzzConfig {
             url: base_url,
             payload_type,
-            mode: crate::cli::FuzzMode::Sequential,
+            mode: crate::fuzzer::config::FuzzMode::Sequential,
             mutate,
             mutation_count,
-            grammar_fuzz: false,
-            grammar_type: None,
-            adaptive_rate: false,
-            session: false,
-            diffing: false,
-            capture_baseline: false,
-            enhanced_redos: false,
-            waf_fingerprint: false,
-            chaining: false,
-            chain_file: None,
-            method: "GET".to_string(),
-            param: None,
             concurrency: self.concurrency,
             timeout: 10,
-            json: false,
-            output: None,
-            verbose: false,
-            quiet: false,
-            format: None,
-            target: None,
-            jwt_token: None,
-            oauth_issuer: None,
-            oauth_client_id: None,
-            oauth_client_secret: None,
-            idor_base_id: None,
-            idor_user_ids: None,
-            ssti_param: None,
+            method: "GET".to_string(),
             graphql_introspection: true,
             graphql_depth_bypass: true,
             graphql_alias_overload: true,
@@ -1078,30 +1044,17 @@ impl Pipeline {
             oauth_scope: true,
             oauth_state: true,
             oauth_grant: true,
-            schema: None,
-            discover_only: false,
-            auto_discover_schema: false,
-            calibrate: false,
-            fc: None,
-            fs: None,
-            fw: None,
-            fl: None,
-            ft: None,
-            fr: None,
-            common: crate::cli::CommonHttpArgsCli {
-                stealth,
-                ..crate::cli::CommonHttpArgsCli::from(self.common.clone())
-            },
+            common,
+            ..Default::default()
         };
 
         let mut engine =
-            crate::fuzzer::engine::FuzzEngine::new_with_tui_mode(args.into(), self.tui_mode)?;
+            crate::fuzzer::engine::FuzzEngine::new_with_tui_mode(config, self.tui_mode)?;
         engine.run().await?;
 
         Ok(())
     }
 
-    #[cfg(feature = "cli")]
     async fn run_load_test(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1115,22 +1068,19 @@ impl Pipeline {
 
         let default_config = EggsecConfig::default();
         let config = self.config.as_ref().unwrap_or(&default_config);
-        let args = crate::cli::LoadArgs {
+        let run_cfg = crate::loadtest::LoadTestRunConfig {
             url: base_url,
             requests: 100,
             concurrency: self.concurrency,
+            timeout: std::time::Duration::from_secs(10),
             method: "GET".to_string(),
             body: None,
             headers: Vec::new(),
-            timeout: None,
-            json: false,
-            verbose: false,
-            quiet: false,
-            output: None,
-            common: self.common.clone().into(),
+            common: self.common.clone(),
+            tui_mode: self.tui_mode,
         };
 
-        let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
+        let runner = crate::loadtest::LoadTestRunner::from_config_with_engine(run_cfg, config)?;
         let results = runner.run().await?;
 
         let mut context = self.context.lock().await;
@@ -1139,7 +1089,6 @@ impl Pipeline {
         Ok(())
     }
 
-    #[cfg(feature = "cli")]
     async fn run_waf(&self) -> Result<()> {
         let context = self.context.lock().await;
         let base_url = context.get_base_url().unwrap_or_else(|| {
@@ -1151,7 +1100,7 @@ impl Pipeline {
         });
         drop(context);
 
-        let args = crate::cli::WafArgs {
+        let config = crate::fuzzer::config::WafConfig {
             url: base_url,
             detect_only: false,
             bypass: true,
@@ -1162,48 +1111,24 @@ impl Pipeline {
             test_type: None,
             concurrency: self.concurrency,
             timeout: 15,
-            json: false,
-            verbose: false,
-            quiet: false,
-            output: None,
-            common: self.common.clone().into(),
+            common: self.common.clone(),
+            ..Default::default()
         };
 
-        crate::waf::run_cli(args).await?;
+        let mut engine = crate::waf::WafEngine::new(config)?;
+        engine.run().await?;
 
         Ok(())
     }
 
-    #[cfg(feature = "cli")]
     async fn run_recon(&self) -> Result<()> {
-        let args = crate::cli::ReconArgs {
-            target: self.target.clone(),
-            no_tech: false,
-            no_dns: false,
-            no_geo: false,
-            no_whois: false,
-            no_subdomains: false,
-            no_ssl: false,
-            no_dns_records: false,
-            no_js: false,
-            no_content: false,
-            no_cloud: false,
-            no_wayback: false,
-            no_cors: false,
-            no_threat: false,
-            no_cve: false,
-            no_email: false,
-            no_takeover: false,
-            concurrency: Some(self.concurrency),
-            json: false,
-            quiet: false,
-            verbose: false,
-            output: None,
-        };
-
         let default_config = EggsecConfig::default();
         let config = self.config.as_ref().unwrap_or(&default_config);
-        crate::recon::run_cli(args, config).await?;
+        let request =
+            crate::recon::ReconRequest::new(self.target.clone()).with_concurrency(self.concurrency);
+
+        let stage = Arc::new(parking_lot::Mutex::new(String::new()));
+        crate::recon::runner::run_full_recon_from_request(&request, config, stage, false).await?;
 
         Ok(())
     }

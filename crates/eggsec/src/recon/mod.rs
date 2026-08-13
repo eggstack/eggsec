@@ -233,23 +233,115 @@ impl FullReconResult {
     }
 }
 
+/// Plain reconnaissance request (no Clap derives).
+///
+/// This is the engine-facing contract used by the pipeline, Python bindings,
+/// and tool/API consumers. CLI parsing converts `ReconArgs` into this type.
+#[derive(Debug, Clone, Default)]
+pub struct ReconRequest {
+    pub target: String,
+    pub concurrency: Option<usize>,
+    pub no_tech: bool,
+    pub no_dns: bool,
+    pub no_geo: bool,
+    pub no_whois: bool,
+    pub no_subdomains: bool,
+    pub no_ssl: bool,
+    pub no_dns_records: bool,
+    pub no_js: bool,
+    pub no_content: bool,
+    pub no_cloud: bool,
+    pub no_wayback: bool,
+    pub no_cors: bool,
+    pub no_threat: bool,
+    pub no_cve: bool,
+    pub no_email: bool,
+    pub no_takeover: bool,
+}
+
+impl ReconRequest {
+    pub fn new(target: impl Into<String>) -> Self {
+        Self {
+            target: target.into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_concurrency(mut self, concurrency: usize) -> Self {
+        self.concurrency = Some(concurrency);
+        self
+    }
+}
+
+#[cfg(feature = "cli")]
+impl From<crate::cli::ReconArgs> for ReconRequest {
+    fn from(args: crate::cli::ReconArgs) -> Self {
+        Self {
+            target: args.target,
+            concurrency: args.concurrency,
+            no_tech: args.no_tech,
+            no_dns: args.no_dns,
+            no_geo: args.no_geo,
+            no_whois: args.no_whois,
+            no_subdomains: args.no_subdomains,
+            no_ssl: args.no_ssl,
+            no_dns_records: args.no_dns_records,
+            no_js: args.no_js,
+            no_content: args.no_content,
+            no_cloud: args.no_cloud,
+            no_wayback: args.no_wayback,
+            no_cors: args.no_cors,
+            no_threat: args.no_threat,
+            no_cve: args.no_cve,
+            no_email: args.no_email,
+            no_takeover: args.no_takeover,
+        }
+    }
+}
+
 #[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: ReconArgs,
     config: &EggsecConfig,
-    mut callback: F,
+    callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
+    let verbose = args.verbose;
     let stage = Arc::new(Mutex::new(String::new()));
     let spinner = SpinnerGuard::start(&args, &stage);
-    let verbose = args.verbose;
 
-    let recon = runner::run_full_recon(&args, config, stage, verbose).await?;
+    let recon =
+        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await?;
 
     spinner.stop().await;
 
+    emit_recon_findings(&recon, callback);
+
+    write_recon_output(&recon, &args, spinner.has_spinner).await
+}
+
+#[cfg(feature = "tool-api")]
+pub async fn run_with_callback<F>(
+    request: &ReconRequest,
+    config: &EggsecConfig,
+    callback: F,
+) -> Result<FullReconResult>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let stage = Arc::new(Mutex::new(String::new()));
+    let recon = runner::run_full_recon_from_request(request, config, stage, false).await?;
+    emit_recon_findings(&recon, callback);
+    Ok(recon)
+}
+
+#[cfg(feature = "tool-api")]
+fn emit_recon_findings<F>(recon: &FullReconResult, mut callback: F)
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
     if let Some(ref cve_mapping) = recon.cve_mapping {
         for vuln in &cve_mapping.vulnerabilities {
             callback(crate::tool::response::Finding::from(vuln.clone()));
@@ -321,8 +413,6 @@ where
             });
         }
     }
-
-    write_recon_output(&recon, &args, spinner.has_spinner).await
 }
 
 #[cfg(feature = "cli")]
@@ -331,7 +421,8 @@ pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()> {
     let spinner = SpinnerGuard::start(&args, &stage);
     let verbose = args.verbose;
 
-    let recon = runner::run_full_recon(&args, config, stage, verbose).await?;
+    let recon =
+        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await?;
 
     spinner.stop().await;
 
@@ -341,6 +432,7 @@ pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()> {
 pub use runner::print_recon_results_string;
 #[cfg(feature = "cli")]
 pub use runner::run_full_recon;
+pub use runner::run_full_recon_from_request;
 
 pub const FULL_RECON_PIPELINE_MODULES: &[&str] = &[
     "reverse_dns",

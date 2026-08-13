@@ -98,7 +98,7 @@ pub struct LoadArgs {
     pub common: CommonHttpArgsCli,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 pub struct ReconArgs {
     #[arg(help = "Target domain or URL")]
     pub target: String,

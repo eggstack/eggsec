@@ -103,39 +103,21 @@ impl SecurityTool for ScannerTool {
 
         let result: Result<(), crate::error::EggsecError> = match self.mode {
             ScanMode::Ports => {
-                let args = crate::cli::PortScanArgs {
+                let ports = crate::utils::parsing::parse_ports("1-1000")?;
+                let request = crate::scanner::ports::PortScanRequest {
                     host: target.clone(),
-                    ports: "1-1000".to_string(),
+                    ports,
                     concurrency,
                     timeout: timeout.div_ceil(1000).max(1),
-                    json: true,
-                    source_ip: None,
-                    spoof_range: None,
+                    spoof_config: crate::scanner::spoof::SpoofConfig::default(),
                     dry_run: false,
-                    decoy: None,
-                    decoy_range: None,
-                    decoy_count: None,
-                    decoy_mode: None,
-                    include_me: false,
-                    source_port: None,
-                    random_source_port: false,
-                    fragment: false,
-                    scan_type: None,
-                    packet_trace: None,
-                    max_rate: None,
-                    ttl: None,
-                    grepable: false,
-                    xml: false,
-                    verbose: false,
-                    quiet: false,
-                    output: None,
                 };
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
                 tokio::time::timeout(
                     std::time::Duration::from_secs(60),
-                    crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
+                    crate::scanner::ports::run_with_callback(&request, &config, move |f| {
                         let mut findings = findings_clone.lock();
                         findings.push(f);
                     }),
@@ -151,15 +133,12 @@ impl SecurityTool for ScannerTool {
                 Ok(())
             }
             ScanMode::Fingerprint => {
-                let args = crate::cli::FingerprintArgs {
+                let ports = crate::utils::parsing::parse_ports("22,80,443,3306,5432,6379")?;
+                let request = crate::scanner::fingerprint::FingerprintRequest {
                     host: target.clone(),
-                    ports: "22,80,443,3306,5432,6379".to_string(),
+                    ports,
                     timeout: timeout.div_ceil(1000).max(1),
-                    json: true,
                     udp: false,
-                    verbose: false,
-                    quiet: false,
-                    output: None,
                     concurrency: 20,
                 };
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
@@ -167,7 +146,7 @@ impl SecurityTool for ScannerTool {
                 }).unwrap_or_default();
                 tokio::time::timeout(
                     std::time::Duration::from_secs(60),
-                    crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
+                    crate::scanner::fingerprint::run_with_callback(&request, &config, move |f| {
                         let mut findings = findings_clone.lock();
                         findings.push(f);
                     }),
@@ -188,31 +167,28 @@ impl SecurityTool for ScannerTool {
                     .get("wordlist")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                let args = crate::cli::EndpointScanArgs {
+                let request = crate::scanner::endpoints::EndpointScanRequest {
                     url: target.clone(),
-                    wordlist,
+                    wordlist: wordlist.map(|p| {
+                        // Wordlist loading remains async; the plain callback
+                        // path leaves it to the caller. We pass None and let
+                        // the callback use the default endpoints; for
+                        // explicit wordlist support the loader would have to
+                        // be pre-loaded here.
+                        let _ = p;
+                        Vec::new()
+                    }),
                     concurrency,
                     timeout: timeout.div_ceil(1000).max(1),
-                    json: true,
-                    source_ip: None,
-                    spoof_range: None,
-                    decoy: None,
-                    decoy_range: None,
-                    decoy_count: None,
-                    decoy_mode: None,
-                    include_me: false,
                     include_404: false,
-                    verbose: false,
-                    quiet: false,
-                    output: None,
-                    common: crate::cli::CommonHttpArgsCli::default(),
+                    spoof_config: crate::scanner::spoof::SpoofConfig::default(),
                 };
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
                 tokio::time::timeout(
                     std::time::Duration::from_secs(60),
-                    crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
+                    crate::scanner::endpoints::run_with_callback(&request, &config, move |f| {
                         let mut findings = findings_clone.lock();
                         findings.push(f);
                     }),

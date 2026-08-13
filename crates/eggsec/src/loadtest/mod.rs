@@ -43,7 +43,7 @@ pub mod runner;
 use crate::error::Result;
 
 pub use metrics::LoadTestResults;
-pub use runner::LoadTestRunner;
+pub use runner::{LoadTestRunConfig, LoadTestRunner};
 
 /// Run load test from CLI
 ///
@@ -78,7 +78,7 @@ pub async fn run_cli(
         );
     }
 
-    let runner = LoadTestRunner::from_args_with_config(args, config)?;
+    let runner = LoadTestRunner::from_config_with_engine(args.into(), config)?;
     let results = runner.run().await?;
 
     let output_str = if json {

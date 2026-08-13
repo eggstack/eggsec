@@ -61,35 +61,7 @@ impl SecurityTool for PipelineTool {
             .unwrap_or("quick")
             .to_string();
 
-        let profile_enum = profile_from_str(&profile).unwrap_or(crate::cli::ScanProfile::Quick);
-
-        let args = crate::cli::ScanArgs {
-            target: target.clone(),
-            profile: profile_enum,
-            stages: None,
-            concurrency: None,
-            concurrent_stages: false,
-            json: true,
-            output: None,
-            format: None,
-            web_types: None,
-            common: crate::cli::CommonHttpArgsCli::default(),
-            source_ip: None,
-            spoof_range: None,
-            decoy: None,
-            decoy_range: None,
-            decoy_count: None,
-            decoy_mode: None,
-            include_me: false,
-            random_source_port: false,
-            fragment: false,
-            scan_type: None,
-            packet_trace: None,
-            max_rate: None,
-            ttl: None,
-            source_port: None,
-            verbose: false,
-        };
+        let profile_enum = profile_from_str(&profile).unwrap_or(crate::types::ScanProfile::Quick);
 
         let config = crate::config::load_config(None::<&str>)
             .inspect_err(|e| {
@@ -102,7 +74,7 @@ impl SecurityTool for PipelineTool {
 
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            crate::pipeline::run_cli_with_callback(args, &config, move |f| {
+            crate::pipeline::run_with_callback(target, &config, move |f| {
                 let mut findings = findings_clone.lock();
                 findings.push(f);
             }),

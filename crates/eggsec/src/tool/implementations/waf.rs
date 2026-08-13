@@ -95,7 +95,7 @@ impl SecurityTool for WafTool {
 
         let result = match self.mode {
             WafMode::Detect => {
-                let args = crate::cli::WafArgs {
+                let args = crate::fuzzer::config::WafConfig {
                     url: target.clone(),
                     detect_only: true,
                     bypass: false,
@@ -110,9 +110,9 @@ impl SecurityTool for WafTool {
                     verbose: false,
                     quiet: false,
                     output: None,
-                    common: crate::cli::CommonHttpArgsCli::default(),
+                    common: crate::types::CommonHttpArgs::default(),
                 };
-                crate::waf::run_cli(args).await
+                crate::waf::WafEngine::new(args)?.run().await
             }
             WafMode::Bypass => {
                 let args = crate::fuzzer::config::WafConfig {

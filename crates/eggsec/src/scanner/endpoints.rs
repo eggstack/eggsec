@@ -32,6 +32,65 @@ pub struct EndpointScanConfig {
     pub max_results: Option<usize>,
 }
 
+/// Plain endpoint-scan request (no Clap derives).
+///
+/// This is the engine-facing contract used by the pipeline, Python bindings,
+/// and tool/API consumers. CLI parsing converts `EndpointScanArgs` into this
+/// type.
+#[derive(Debug, Clone)]
+pub struct EndpointScanRequest {
+    pub url: String,
+    pub wordlist: Option<Vec<String>>,
+    pub concurrency: usize,
+    pub timeout: u64,
+    pub include_404: bool,
+    pub spoof_config: SpoofConfig,
+}
+
+impl EndpointScanRequest {
+    pub fn new(url: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            wordlist: None,
+            concurrency: 20,
+            timeout: 10,
+            include_404: false,
+            spoof_config: SpoofConfig::default(),
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+pub fn endpoint_scan_request_from_args(
+    args: crate::cli::EndpointScanArgs,
+) -> crate::error::Result<EndpointScanRequest> {
+    let spoof_config = SpoofConfig::from_args(
+        args.source_ip,
+        args.spoof_range,
+        false,
+        args.decoy,
+        args.decoy_range,
+        args.decoy_count,
+        args.decoy_mode,
+        args.include_me,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )?;
+    Ok(EndpointScanRequest {
+        url: args.url,
+        wordlist: None,
+        concurrency: args.concurrency,
+        timeout: args.timeout,
+        include_404: args.include_404,
+        spoof_config,
+    })
+}
+
 pub static DEFAULT_ENDPOINTS: &[&str] = &[
     "/admin",
     "/admin/login",
@@ -540,11 +599,56 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
     false
 }
 
+#[cfg(feature = "tool-api")]
+pub async fn run_with_callback<F>(
+    request: &EndpointScanRequest,
+    config: &EggsecConfig,
+    callback: F,
+) -> Result<EndpointScanResults>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let endpoints = if let Some(ref wordlist) = request.wordlist {
+        wordlist.clone()
+    } else {
+        DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
+    };
+
+    let timeout_secs = if request.timeout == 10 {
+        config.http.timeout_secs
+    } else {
+        request.timeout
+    };
+
+    let results = scan_endpoints(EndpointScanConfig {
+        base_url: request.url.clone(),
+        endpoints,
+        concurrency: request.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        include_404: request.include_404,
+        tui_mode: false,
+        spoof_config: Arc::new(request.spoof_config.clone()),
+        verify_tls: config.http.verify_tls,
+        progress_tx: None,
+        max_results: None,
+    })
+    .await?;
+
+    let mut callback = callback;
+    for endpoint_result in &results.results {
+        callback(crate::tool::response::Finding::from(
+            endpoint_result.clone(),
+        ));
+    }
+
+    Ok(results)
+}
+
 #[cfg(all(feature = "tool-api", feature = "cli"))]
 pub async fn run_cli_with_callback<F>(
     args: EndpointScanArgs,
     config: &EggsecConfig,
-    mut callback: F,
+    callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
@@ -556,67 +660,28 @@ where
         );
     }
 
-    let endpoints = if let Some(wordlist_path) = args.wordlist {
-        crate::scanner::wordlist::Wordlist::from_file(&wordlist_path)
+    let mut request = endpoint_scan_request_from_args(args.clone())?;
+
+    // If a wordlist path is provided, load it; otherwise the plain path uses
+    // DEFAULT_ENDPOINTS.
+    if let Some(ref wordlist_path) = args.wordlist {
+        let loaded = crate::scanner::wordlist::Wordlist::from_file(wordlist_path)
             .await?
-            .into_endpoints()
-    } else {
-        DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
-    };
-
-    let timeout_secs = if args.timeout == 10 {
-        config.http.timeout_secs
-    } else {
-        args.timeout
-    };
-
-    let spoof_config = SpoofConfig::from_args(
-        args.source_ip.clone(),
-        args.spoof_range.clone(),
-        false,
-        args.decoy.clone(),
-        args.decoy_range.clone(),
-        args.decoy_count,
-        args.decoy_mode.clone(),
-        args.include_me,
-        None,
-        false,
-        false,
-        None,
-        None,
-        None,
-        None,
-    )?;
-
-    if spoof_config.enabled {
-        eprintln!("{}", format_spoof_warning(&spoof_config));
+            .into_endpoints();
+        request.wordlist = Some(loaded);
     }
 
-    let results = scan_endpoints(EndpointScanConfig {
-        base_url: args.url.clone(),
-        endpoints,
-        concurrency: args.concurrency,
-        timeout_duration: Duration::from_secs(timeout_secs),
-        include_404: args.include_404,
-        tui_mode: false,
-        spoof_config: Arc::new(spoof_config),
-        verify_tls: config.http.verify_tls,
-        progress_tx: None,
-        max_results: None,
-    })
-    .await?;
+    if request.spoof_config.enabled {
+        eprintln!("{}", format_spoof_warning(&request.spoof_config));
+    }
+
+    let results = run_with_callback(&request, config, callback).await?;
 
     if args.verbose {
         eprintln!(
             "Endpoint scan complete: {} endpoints found",
             results.endpoints_found
         );
-    }
-
-    for endpoint_result in &results.results {
-        callback(crate::tool::response::Finding::from(
-            endpoint_result.clone(),
-        ));
     }
 
     let output = if args.json {

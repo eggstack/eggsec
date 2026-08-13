@@ -525,39 +525,21 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    let args = crate::cli::FuzzArgs {
+    let common = crate::types::CommonHttpArgs {
+        auth_context: auth_context_path,
+        auth_role,
+        ..Default::default()
+    };
+
+    let config = crate::fuzzer::config::FuzzConfig {
         url: target.to_string(),
         payload_type: payload_type.to_string(),
-        mode: crate::cli::FuzzMode::Sequential,
+        mode: crate::fuzzer::config::FuzzMode::Sequential,
         mutate: false,
         mutation_count: 3,
-        grammar_fuzz: false,
-        grammar_type: None,
-        adaptive_rate: false,
-        session: false,
-        diffing: false,
-        capture_baseline: false,
-        enhanced_redos: false,
-        waf_fingerprint: false,
-        chaining: false,
-        chain_file: None,
-        method: "GET".to_string(),
-        param: None,
         concurrency,
         timeout: 10,
-        json: false,
-        output: None,
-        verbose: false,
-        quiet: false,
-        format: None,
-        target: None,
-        jwt_token: None,
-        oauth_issuer: None,
-        oauth_client_id: None,
-        oauth_client_secret: None,
-        idor_base_id: None,
-        idor_user_ids: None,
-        ssti_param: None,
+        method: "GET".to_string(),
         graphql_introspection: true,
         graphql_depth_bypass: true,
         graphql_alias_overload: true,
@@ -565,24 +547,11 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         oauth_scope: true,
         oauth_state: true,
         oauth_grant: true,
-        schema: None,
-        discover_only: false,
-        auto_discover_schema: false,
-        calibrate: false,
-        fc: None,
-        fs: None,
-        fw: None,
-        fl: None,
-        ft: None,
-        fr: None,
-        common: crate::cli::CommonHttpArgsCli {
-            auth_context: auth_context_path,
-            auth_role,
-            ..Default::default()
-        },
+        common,
+        ..Default::default()
     };
 
-    let mut engine = crate::fuzzer::engine::FuzzEngine::new(args.into())?;
+    let mut engine = crate::fuzzer::engine::FuzzEngine::new(config)?;
     let session = engine.run_return_session().await?;
 
     let findings: Vec<_> = session
@@ -624,7 +593,13 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    let args = crate::cli::WafArgs {
+    let common = crate::types::CommonHttpArgs {
+        auth_context: auth_context_path,
+        auth_role,
+        ..Default::default()
+    };
+
+    let config = crate::fuzzer::config::WafConfig {
         url: target.to_string(),
         detect_only,
         bypass: !detect_only,
@@ -635,18 +610,12 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
         test_type: None,
         concurrency: 10,
         timeout: 15,
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: crate::cli::CommonHttpArgsCli {
-            auth_context: auth_context_path,
-            auth_role,
-            ..Default::default()
-        },
+        common,
+        ..Default::default()
     };
 
-    crate::waf::run_cli(args).await?;
+    let mut engine = crate::waf::WafEngine::new(config)?;
+    engine.run().await?;
 
     Ok(serde_json::json!({
         "target": target,
@@ -683,27 +652,26 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    let args = crate::cli::LoadArgs {
+    let common = crate::types::CommonHttpArgs {
+        auth_context: auth_context_path,
+        auth_role,
+        ..Default::default()
+    };
+
+    let run_cfg = crate::loadtest::LoadTestRunConfig {
         url: target.to_string(),
         requests,
         concurrency,
+        timeout: std::time::Duration::from_secs(10),
         method: method.to_string(),
         body: None,
         headers: Vec::new(),
-        timeout: None,
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: crate::cli::CommonHttpArgsCli {
-            auth_context: auth_context_path,
-            auth_role,
-            ..Default::default()
-        },
+        common,
+        tui_mode: false,
     };
 
     let config = crate::config::EggsecConfig::default();
-    let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, &config)?;
+    let runner = crate::loadtest::LoadTestRunner::from_config_with_engine(run_cfg, &config)?;
     let results = runner.run().await?;
 
     Ok(serde_json::json!({
@@ -734,33 +702,13 @@ async fn process_recon(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let args = crate::cli::ReconArgs {
-        target: target.to_string(),
-        no_tech,
-        no_dns,
-        no_geo: false,
-        no_whois: false,
-        no_subdomains: false,
-        no_ssl: false,
-        no_dns_records: false,
-        no_js: false,
-        no_content: false,
-        no_cloud: false,
-        no_wayback: false,
-        no_cors: false,
-        no_threat: false,
-        no_cve: false,
-        no_email: false,
-        no_takeover: false,
-        concurrency: Some(10),
-        json: false,
-        quiet: false,
-        verbose: false,
-        output: None,
-    };
+    let mut request = crate::recon::ReconRequest::new(target.clone()).with_concurrency(10);
+    request.no_tech = no_tech;
+    request.no_dns = no_dns;
 
     let config = crate::config::EggsecConfig::default();
-    crate::recon::run_cli(args, &config).await?;
+    let stage = Arc::new(parking_lot::Mutex::new(String::new()));
+    crate::recon::runner::run_full_recon_from_request(&request, &config, stage, false).await?;
 
     Ok(serde_json::json!({
         "target": target,

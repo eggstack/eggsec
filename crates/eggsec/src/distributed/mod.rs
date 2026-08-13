@@ -47,7 +47,6 @@ pub mod command;
 pub mod io;
 pub mod queue;
 pub mod remote;
-#[cfg(feature = "cli")]
 pub mod worker;
 
 pub use command::{generate_psk, RemoteResult};

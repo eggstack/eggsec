@@ -72,7 +72,7 @@ Examples:
   eggsec resume session.json
   eggsec resume /path/to/session.json";
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 pub struct PortScanArgs {
     #[arg(help = "Target host (IP or hostname)")]
     pub host: String,
@@ -177,7 +177,7 @@ pub struct PortScanArgs {
     pub output: Option<String>,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 pub struct EndpointScanArgs {
     #[arg(help = "Target base URL")]
     pub url: String,
@@ -237,7 +237,7 @@ pub struct EndpointScanArgs {
     pub common: CommonHttpArgsCli,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 pub struct FingerprintArgs {
     #[arg(help = "Target host (IP or hostname)")]
     pub host: String,

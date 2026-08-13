@@ -41,7 +41,7 @@ impl OperationExecutor for ReconExecutor {
                     .await
                 }
                 "pipeline" => {
-                    let profile = crate::cli::ScanProfile::Quick;
+                    let profile = crate::types::ScanProfile::Quick;
                     crate::dispatch::recon::run_pipeline(
                         target,
                         profile,

@@ -20,7 +20,7 @@ pub async fn run_fuzz(
     oauth_grant_test: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::{CommonHttpArgsCli, FuzzArgs, FuzzMode};
+    use crate::fuzzer::config::{FuzzConfig, FuzzMode};
     use crate::fuzzer::engine::FuzzEngine;
 
     let mode_lower = mode.to_lowercase();
@@ -32,39 +32,16 @@ pub async fn run_fuzz(
         FuzzMode::Sequential
     };
 
-    let args = FuzzArgs {
+    let config = FuzzConfig {
         url: target,
         payload_type,
         mode: fuzz_mode,
         mutate: mutations,
         mutation_count,
-        grammar_fuzz: false,
-        grammar_type: None,
-        adaptive_rate: false,
-        session: false,
-        diffing: false,
-        capture_baseline: false,
-        enhanced_redos: false,
-        waf_fingerprint: false,
-        chaining: false,
-        chain_file: None,
         method,
         param,
         concurrency,
         timeout,
-        json: false,
-        output: None,
-        verbose: false,
-        quiet: false,
-        format: None,
-        target: None,
-        jwt_token: None,
-        oauth_issuer: None,
-        oauth_client_id: None,
-        oauth_client_secret: None,
-        idor_base_id: None,
-        idor_user_ids: None,
-        ssti_param: None,
         graphql_introspection,
         graphql_depth_bypass,
         graphql_alias_overload,
@@ -72,20 +49,11 @@ pub async fn run_fuzz(
         oauth_scope: oauth_scope_test,
         oauth_state: oauth_state_test,
         oauth_grant: oauth_grant_test,
-        schema: None,
-        discover_only: false,
-        auto_discover_schema: false,
-        calibrate: false,
-        fc: None,
-        fs: None,
-        fw: None,
-        fl: None,
-        ft: None,
-        fr: None,
-        common: CommonHttpArgsCli::default(),
+        common: crate::types::CommonHttpArgs::default(),
+        ..Default::default()
     };
 
-    let mut engine = FuzzEngine::new_with_tui_mode(args.into(), true)?;
+    let mut engine = FuzzEngine::new_with_tui_mode(config, true)?;
     let session = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         engine.run_return_session(),
@@ -178,23 +146,20 @@ pub async fn run_waf_stress(
     timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::cli::WafStressArgs;
+    use crate::fuzzer::config::WafStressConfig;
     use crate::fuzzer::run_waf_stress as fuzzer_run_waf_stress;
 
-    let args = WafStressArgs {
+    let config = WafStressConfig {
         url: target,
         concurrency,
         timeout,
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: Default::default(),
+        common: crate::types::CommonHttpArgs::default(),
+        ..Default::default()
     };
 
     match tokio::time::timeout(
         std::time::Duration::from_secs(60),
-        fuzzer_run_waf_stress(args.into()),
+        fuzzer_run_waf_stress(config),
     )
     .await
     {
