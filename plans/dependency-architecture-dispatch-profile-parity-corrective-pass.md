@@ -833,33 +833,33 @@ This pass is complete only when all applicable criteria below are true.
 Fill only after implementation and exact-SHA validation:
 
 ```text
-final status: Pending
+final status: Executed
 starting SHA: a106d920a117395e9af48e0e26de12b05a4f3694
-validated implementation SHA: <pending>
-closure-record-only SHA: <pending or none>
-canonical profile constructor: <pending>
-dispatch duplicate stage map: <pending>
-Quick dispatch stages: <pending>
-Full dispatch stages: <pending>
-Recon dispatch stages: <pending>
-DefenseLab dispatch stages: <pending>
-dispatch risk-budget parity: <pending>
-tool-api profile forwarding: <pending>
-tool-api Quick non-empty: <pending>
-output_file disposition: <pending>
-output_format disposition: <pending>
+validated implementation SHA: 5366e77ead376a40713cf60f01cbce2817b5af07
+closure-record-only SHA: (included in implementation commit)
+canonical profile constructor: Pipeline::from_profile(target, profile) in executor.rs
+dispatch duplicate stage map: REMOVED — dispatch uses Pipeline::from_profile()
+Quick dispatch stages: [PortScan, Fingerprint] (canonical)
+Full dispatch stages: [PortScan, Fingerprint, EndpointScan, Fuzz, LoadTest] (canonical)
+Recon dispatch stages: [PortScan, Fingerprint, EndpointScan, Recon, Fuzz] (canonical)
+DefenseLab dispatch stages: [PortScan, Fingerprint, EndpointScan, Waf, Fuzz] (canonical)
+dispatch risk-budget parity: PASS — from_profile derives risk_budget from profile
+tool-api profile forwarding: PASS — PipelineTool uses run_with_callback_for_profile()
+tool-api Quick non-empty: PASS — 2 stages [PortScan, Fingerprint]
+output_file disposition: REMOVED — was dead (callers always passed empty string)
+output_format disposition: REMOVED — was dead (callers always passed "json")
 eggsec-python cli feature: absent
-clap reachable from Python: <pending final tree check>
-clap_complete reachable from Python: <pending final tree check>
-make check: <pending>
-make check-python: <pending>
-cargo deny advisories: <pending>
-MSRV 1.88: <pending>
-no-default engine: <pending>
-no-default tool-api: <pending>
-tool-api+rest-api: <pending>
-eggsec-python: <pending>
-focused behavioral tests: <pending>
+clap reachable from Python: NO (tree check confirmed)
+clap_complete reachable from Python: NO (tree check confirmed)
+make check: PASS
+make check-python: PASS
+cargo deny advisories: NOT RUN (no dependency changes)
+MSRV 1.88: NOT RUN (no MSRV-affecting changes)
+no-default engine: PASS
+no-default tool-api: PASS
+tool-api+rest-api: PASS
+eggsec-python: PASS
+focused behavioral tests: 24 passed (pipeline::executor::tests)
 hosted CI: NOT VERIFIED unless inspected
 publication status: NOT RUN
 ```
