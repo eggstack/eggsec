@@ -32,22 +32,22 @@ Ordered implementation plans (all executed):
 9. [`dependency-architecture-phase-i-ci-verification-simplification.md`](dependency-architecture-phase-i-ci-verification-simplification.md)
 10. [`dependency-architecture-phase-j-measurement-and-closure.md`](dependency-architecture-phase-j-measurement-and-closure.md)
 
-The A–J roadmap is implemented. Three corrective passes followed:
+The A-J roadmap and the first three corrective passes are implemented and remain
+part of the engineering record:
 
-- First corrective closure pass: PyO3/quick-xml advisories, routine CI
-  simplification, observed artifact measurements
-  ([`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)).
-- Final polish pass: parser-independent Fuzz/WAF types, Python `cli`
-  removal, stale-scope helper cleanup
-  ([`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)).
-- Post-polish corrective pass: headless pipeline/tool-API parity,
-  `cli`-gate classification, CI/closure reconciliation, exact-SHA validation
-  ([`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)).
+- [`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
+- [`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
+- [`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)
 
-Final validated implementation SHA: `2966ebc5878215de3a5ca78c1d2339af69d057b7`.
+Final behavioral review found one narrow remaining pipeline-construction issue:
+dispatch and tool-API callers do not consistently preserve the requested
+`ScanProfile`, canonical stage set, and risk budget.
 
-This line is now closed. No active corrective handoff remains.
+Active corrective handoff:
+[`dependency-architecture-dispatch-profile-parity-corrective-pass.md`](dependency-architecture-dispatch-profile-parity-corrective-pass.md)
 
-Publication status remains manual maintainer action only; `cargo publish`,
-`maturin publish`, `twine upload`, `gh release`, and OIDC `id-token: write`
-remain absent from every workflow.
+This handoff is limited to canonical profile construction, dispatch/tool-API
+profile parity, output/session parameter disposition, focused behavioral tests,
+and final exact-SHA closure evidence. The broader roadmap remains closed.
+
+Package publication and release cadence remain manual maintainer actions.
