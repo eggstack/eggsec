@@ -3,8 +3,12 @@
 ## Status
 
 Roadmap phases A–J executed. Corrective closure pass, final polish pass, and
-post-polish corrective pass all completed. Final validated implementation SHA:
-`<filled at closure>`.
+post-polish corrective pass all completed.
+
+Final validated implementation SHA (post-polish corrective pass head):
+`2966ebc5878215de3a5ca78c1d2339af69d057b7`.
+
+Closure-record-only SHA for this document: `<filled at closure-record commit>`.
 
 ## Scope
 
@@ -189,12 +193,12 @@ Measured at commit `7b878d79` on Ubuntu 24.04 x86_64, rustc 1.97.1.
 
 ## Validation commands and outcomes
 
-Final implementation SHA: `<filled at closure>` (post-polish corrective pass head).
+Final implementation SHA (post-polish corrective pass head): `2966ebc5878215de3a5ca78c1d2339af69d057b7`.
 Earlier measurements retained below are tagged with their original measurement SHA.
 
 | Command | Outcome | SHA |
 |---------|---------|-----|
-| `git rev-parse HEAD` | `<filled at closure>` | final |
+| `git rev-parse HEAD` | `2966ebc5878215de3a5ca78c1d2339af69d057b7` | final |
 | `git status --porcelain` | Clean working tree | final |
 | `rustc --version` | 1.97.1 | final |
 | `cargo --version` | 1.97.1 | final |
@@ -207,6 +211,10 @@ Earlier measurements retained below are tagged with their original measurement S
 | `cargo tree -i quick-xml` | PASS — only 0.41.0 reachable | final |
 | `cargo tree -p eggsec-python -i clap` | PASS — not reachable | final |
 | `cargo tree -p eggsec-python -i clap_complete` | PASS — not reachable | final |
+| `cargo check -p eggsec --no-default-features` | PASS | final |
+| `cargo check -p eggsec --no-default-features --features tool-api` | PASS | final |
+| `cargo check -p eggsec --no-default-features --features tool-api,rest-api` | PASS | final |
+| `cargo check -p eggsec-python` | PASS | final |
 | `rg 'requires the .cli. feature\|requires the cli feature' crates/eggsec/src` | PASS — no engine-stage regression | final |
 | `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches | final |
 | `cargo build -p eggsec-cli --release` | PASS (20.9 MB) | `7b878d79` |

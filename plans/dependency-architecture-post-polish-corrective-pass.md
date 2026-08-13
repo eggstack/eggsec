@@ -809,29 +809,29 @@ This plan is complete only when all applicable criteria below are satisfied.
 
 # Handoff completion record
 
-Fill this only after implementation and validation:
-
 ```text
-final status: Pending
+final status: Executed
 starting SHA: b28f6711e0a1d9d60f54c9087e17f2af3d9995c1
-validated implementation SHA: <pending>
-closure-record-only SHA: <pending or none>
-Fuzz non-cli pipeline: <pending>
-LoadTest non-cli pipeline: <pending>
-WAF non-cli pipeline: <pending>
-Recon non-cli pipeline: <pending>
-tool-api callback disposition: <pending>
-runtime_bridge disposition: <pending>
-distributed worker disposition: <pending>
+validated implementation SHA: 2966ebc5878215de3a5ca78c1d2339af69d057b7
+closure-record-only SHA: <this commit>
+Fuzz non-cli pipeline: PASS — Pipeline::run_fuzz constructs FuzzConfig directly; FuzzConfig gained Default so dispatch::fuzzer::run_fuzz no longer needs cli types
+LoadTest non-cli pipeline: PASS — Pipeline::run_load_test uses LoadTestRunner::from_config_with_engine with LoadTestRunConfig
+WAF non-cli pipeline: PASS — Pipeline::run_waf constructs WafConfig and drives waf::WafEngine::new(WafConfig).run()
+Recon non-cli pipeline: PASS — Pipeline::run_recon uses recon::runner::run_full_recon_from_request(&ReconRequest, ...)
+tool-api callback disposition: RESTORED — PortScanRequest/EndpointScanRequest/FingerprintRequest introduced; run_with_callback takes plain requests; run_cli_with_callback remains as CLI wrapper gated by both tool-api and cli
+runtime_bridge disposition: RETAIN cli gate — runtime_bridge depends on dispatch which uses cli-gated worker types in dispatch::fuzzer/dispatch::recon; the bridge itself is process-host and not parser-dependent, but its caller (dispatch) requires cli to compile
+distributed worker disposition: RESTORED — distributed::worker no longer gated by cli; worker modules use plain FuzzConfig/WafConfig/LoadTestRunConfig/ReconRequest directly
 eggsec-python cli feature: absent
-clap reachable from Python: <pending final tree check>
-clap_complete reachable from Python: <pending final tree check>
-make check: <pending>
-make check-python: <pending>
-cargo deny advisories: <pending>
-MSRV 1.88: <pending>
-no-default engine: <pending>
-no-default tool-api: <pending>
-hosted CI: NOT VERIFIED unless inspected
+clap reachable from Python: not reachable (cargo tree -i returns no inverse path)
+clap_complete reachable from Python: not reachable (cargo tree -i returns no inverse path)
+make check: PASS
+make check-python: PASS (all canonical Python checks reach their normal success terminus)
+cargo deny advisories: PASS (3 retained documented exceptions)
+MSRV 1.88: PASS (cargo +1.88 check --workspace --no-default-features)
+no-default engine: PASS (cargo check -p eggsec --no-default-features)
+no-default tool-api: PASS (cargo check -p eggsec --no-default-features --features tool-api)
+tool-api+rest-api: PASS (cargo check -p eggsec --no-default-features --features tool-api,rest-api)
+eggsec-python: PASS (cargo check -p eggsec-python)
+hosted CI: NOT VERIFIED — only local validation was performed
 publication status: NOT RUN
 ```

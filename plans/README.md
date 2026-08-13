@@ -32,30 +32,22 @@ Ordered implementation plans (all executed):
 9. [`dependency-architecture-phase-i-ci-verification-simplification.md`](dependency-architecture-phase-i-ci-verification-simplification.md)
 10. [`dependency-architecture-phase-j-measurement-and-closure.md`](dependency-architecture-phase-j-measurement-and-closure.md)
 
-The A–J roadmap is implemented. The first corrective closure pass resolved the
-active PyO3/quick-xml advisories, simplified routine CI, and replaced estimated
-artifact measurements with observed values:
+The A–J roadmap is implemented. Three corrective passes followed:
 
-[`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)
+- First corrective closure pass: PyO3/quick-xml advisories, routine CI
+  simplification, observed artifact measurements
+  ([`dependency-architecture-corrective-closure-pass.md`](dependency-architecture-corrective-closure-pass.md)).
+- Final polish pass: parser-independent Fuzz/WAF types, Python `cli`
+  removal, stale-scope helper cleanup
+  ([`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)).
+- Post-polish corrective pass: headless pipeline/tool-API parity,
+  `cli`-gate classification, CI/closure reconciliation, exact-SHA validation
+  ([`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)).
 
-The subsequent final polish pass made the canonical Python test suite green,
-introduced parser-independent Fuzz/WAF configuration types, removed stale scope
-helpers, and removed the Python binding's direct `eggsec/cli` dependency:
+Final validated implementation SHA: `2966ebc5878215de3a5ca78c1d2339af69d057b7`.
 
-[`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
+This line is now closed. No active corrective handoff remains.
 
-Final review of that implementation found one remaining correctness issue: the
-CLI dependency separation also gated real engine/headless pipeline and tool-API
-behavior behind `cli`, while the closure/documentation record was marked complete
-before the resulting head received exact-SHA validation.
-
-Active corrective handoff:
-[`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)
-
-This follow-up is intentionally narrow. It restores non-CLI Fuzz/LoadTest/WAF/Recon
-pipeline and reusable tool/API behavior through plain engine configuration,
-classifies the `cli` gates introduced by the last separation commit, corrects
-remaining stale CI/closure documentation, and requires final validation against
-one exact implementation SHA. It does not reopen dependency security,
-authorization, scope/DNS semantics, metadata, daemon topology, or CI architecture.
-Package publication and release cadence remain manual maintainer actions.
+Publication status remains manual maintainer action only; `cargo publish`,
+`maturin publish`, `twine upload`, `gh release`, and OIDC `id-token: write`
+remain absent from every workflow.
