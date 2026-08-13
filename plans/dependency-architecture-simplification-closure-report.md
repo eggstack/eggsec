@@ -8,7 +8,8 @@ post-polish corrective pass all completed.
 Final validated implementation SHA (post-polish corrective pass head):
 `2966ebc5878215de3a5ca78c1d2339af69d057b7`.
 
-Closure-record-only SHA for this document: `<filled at closure-record commit>`.
+Closure-record-only SHA for this document: `11db32b5` (documentation-only;
+no Rust/Python/manifest/script/Makefile/workflow changes).
 
 ## Scope
 
