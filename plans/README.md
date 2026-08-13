@@ -39,15 +39,13 @@ part of the engineering record:
 - [`dependency-architecture-final-polish-pass.md`](dependency-architecture-final-polish-pass.md)
 - [`dependency-architecture-post-polish-corrective-pass.md`](dependency-architecture-post-polish-corrective-pass.md)
 
-Final behavioral review found one narrow remaining pipeline-construction issue:
-dispatch and tool-API callers do not consistently preserve the requested
-`ScanProfile`, canonical stage set, and risk budget.
+The final dispatch-profile parity corrective pass is complete:
 
-Active corrective handoff:
-[`dependency-architecture-dispatch-profile-parity-corrective-pass.md`](dependency-architecture-dispatch-profile-parity-corrective-pass.md)
+- [`dependency-architecture-dispatch-profile-parity-corrective-pass.md`](dependency-architecture-dispatch-profile-parity-corrective-pass.md)
 
-This handoff is limited to canonical profile construction, dispatch/tool-API
-profile parity, output/session parameter disposition, focused behavioral tests,
-and final exact-SHA closure evidence. The broader roadmap remains closed.
+This pass corrected dispatch and tool-API pipeline construction to use
+`Pipeline::from_profile()` as the canonical parser-independent constructor,
+ensuring `ScanProfile` is the single source of truth for stage selection, risk
+budget, and profile-specific validation. No active corrective handoff remains.
 
 Package publication and release cadence remain manual maintainer actions.

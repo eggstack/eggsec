@@ -11,14 +11,12 @@ use super::report::PipelineReport;
 use super::session::{save, PipelineSession};
 use super::stage::{parse_stages, Stage, EXTENDED_SCAN_PORTS};
 #[cfg(feature = "cli")]
-use crate::cli::{ScanArgs, ScanProfile};
+use crate::cli::ScanArgs;
 use crate::config::EggsecConfig;
 use crate::probe::ProbeRisk;
 use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
-use crate::types::CommonHttpArgs;
-#[cfg(not(feature = "cli"))]
-use crate::types::ScanProfile;
+use crate::types::{CommonHttpArgs, ScanProfile};
 
 /// A simple finding type for pipeline proxy stage results.
 #[cfg(feature = "web-proxy")]
@@ -62,6 +60,34 @@ impl Pipeline {
             target: target.to_string(),
             stages: Vec::new(),
             risk_budget: profile.max_risk_budget(),
+            profile,
+            concurrency: 10,
+            concurrent_stages: false,
+            common: CommonHttpArgs::default(),
+            spoof_config: SpoofConfig::default(),
+            context: Arc::new(Mutex::new(PipelineContext::new(target))),
+            session_path: None,
+            tui_mode: false,
+            config: None,
+        }
+    }
+
+    /// Construct a pipeline from a predefined profile with canonical stage
+    /// selection, risk budget, and profile state.
+    ///
+    /// This is the parser-independent constructor for callers that already hold
+    /// a [`ScanProfile`] value (dispatch, tool-API, library). It uses
+    /// [`Stage::from_profile`] as the single source of truth for stage
+    /// selection and derives the risk budget from the profile.
+    ///
+    /// Use [`Pipeline::new`] when you intend to manually build an empty
+    /// pipeline and call [`add_stage`](Self::add_stage) yourself.
+    pub fn from_profile(target: &str, profile: ScanProfile) -> Self {
+        let stages = Stage::from_profile(profile);
+        Self {
+            target: target.to_string(),
+            risk_budget: profile.max_risk_budget(),
+            stages,
             profile,
             concurrency: 10,
             concurrent_stages: false,
@@ -1233,4 +1259,244 @@ fn get_default_endpoints() -> Vec<String> {
         "/phpinfo.php".to_string(),
         "/server-status".to_string(),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipeline::stage::Stage;
+    use crate::types::ScanProfile;
+
+    /// Helper: build a pipeline the same way dispatch does and return (profile,
+    /// risk_budget, stages) for assertion.
+    fn dispatch_pipeline_state(
+        target: &str,
+        profile: ScanProfile,
+    ) -> (ScanProfile, ProbeRisk, Vec<Stage>) {
+        let pipeline = Pipeline::from_profile(target, profile);
+        (
+            pipeline.profile,
+            pipeline.risk_budget,
+            pipeline.stages.clone(),
+        )
+    }
+
+    // ── E1: Canonical profile constructor tests ──────────────────────────
+
+    #[test]
+    fn from_profile_quick_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Quick);
+        assert_eq!(profile, ScanProfile::Quick);
+        assert_eq!(budget, ScanProfile::Quick.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Quick));
+    }
+
+    #[test]
+    fn from_profile_full_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Full);
+        assert_eq!(profile, ScanProfile::Full);
+        assert_eq!(budget, ScanProfile::Full.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Full));
+    }
+
+    #[test]
+    fn from_profile_recon_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Recon);
+        assert_eq!(profile, ScanProfile::Recon);
+        assert_eq!(budget, ScanProfile::Recon.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Recon));
+    }
+
+    #[test]
+    fn from_profile_defense_lab_state() {
+        let (profile, budget, stages) =
+            dispatch_pipeline_state("127.0.0.1", ScanProfile::DefenseLab);
+        assert_eq!(profile, ScanProfile::DefenseLab);
+        assert_eq!(budget, ScanProfile::DefenseLab.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::DefenseLab));
+    }
+
+    #[test]
+    fn from_profile_endpoint_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Endpoint);
+        assert_eq!(profile, ScanProfile::Endpoint);
+        assert_eq!(budget, ScanProfile::Endpoint.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Endpoint));
+    }
+
+    #[test]
+    fn from_profile_api_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Api);
+        assert_eq!(profile, ScanProfile::Api);
+        assert_eq!(budget, ScanProfile::Api.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Api));
+    }
+
+    #[test]
+    fn from_profile_stealth_state() {
+        let (profile, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Stealth);
+        assert_eq!(profile, ScanProfile::Stealth);
+        assert_eq!(budget, ScanProfile::Stealth.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Stealth));
+    }
+
+    #[test]
+    fn from_profile_protocol_edge_state() {
+        let (profile, budget, stages) =
+            dispatch_pipeline_state("127.0.0.1", ScanProfile::ProtocolEdge);
+        assert_eq!(profile, ScanProfile::ProtocolEdge);
+        assert_eq!(budget, ScanProfile::ProtocolEdge.max_risk_budget());
+        assert_eq!(stages, Stage::from_profile(ScanProfile::ProtocolEdge));
+    }
+
+    // ── E2: Quick regression — not empty ─────────────────────────────────
+
+    #[test]
+    fn quick_not_empty() {
+        let stages = Stage::from_profile(ScanProfile::Quick);
+        assert_eq!(stages, vec![Stage::PortScan, Stage::Fingerprint]);
+        assert!(
+            !stages.is_empty(),
+            "Quick must not produce an empty pipeline"
+        );
+    }
+
+    // ── E3: Dispatch construction — canonical stages ─────────────────────
+
+    #[test]
+    fn dispatch_quick_uses_canonical_stages() {
+        let (_, _, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Quick);
+        assert_eq!(stages, vec![Stage::PortScan, Stage::Fingerprint]);
+    }
+
+    #[test]
+    fn dispatch_full_uses_canonical_stages() {
+        let (_, _, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Full);
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Full));
+    }
+
+    #[test]
+    fn dispatch_recon_uses_canonical_stages() {
+        let (_, _, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Recon);
+        assert_eq!(stages, Stage::from_profile(ScanProfile::Recon));
+    }
+
+    #[test]
+    fn dispatch_defense_lab_uses_canonical_stages() {
+        let (_, _, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::DefenseLab);
+        assert_eq!(stages, Stage::from_profile(ScanProfile::DefenseLab));
+    }
+
+    // ── E4: Risk-budget regression ───────────────────────────────────────
+
+    #[test]
+    fn full_has_stress_budget() {
+        let (_, budget, _) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Full);
+        assert_eq!(budget, ProbeRisk::Stress);
+    }
+
+    #[test]
+    fn quick_has_safe_active_budget() {
+        let (_, budget, _) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Quick);
+        assert_eq!(budget, ProbeRisk::SafeActive);
+    }
+
+    #[test]
+    fn stealth_has_passive_budget() {
+        let (_, budget, _) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Stealth);
+        assert_eq!(budget, ProbeRisk::Passive);
+    }
+
+    #[test]
+    fn defense_lab_has_intrusive_budget() {
+        let (_, budget, _) = dispatch_pipeline_state("127.0.0.1", ScanProfile::DefenseLab);
+        assert_eq!(budget, ProbeRisk::Intrusive);
+    }
+
+    #[test]
+    fn full_stages_fit_budget() {
+        let (_, budget, stages) = dispatch_pipeline_state("127.0.0.1", ScanProfile::Full);
+        for stage in &stages {
+            assert!(
+                stage.to_probe_risk().risk_level() <= budget.risk_level(),
+                "Stage {:?} risk {:?} exceeds Full budget {:?}",
+                stage,
+                stage.to_probe_risk(),
+                budget
+            );
+        }
+    }
+
+    // ── E5: Defense-lab scope validation ─────────────────────────────────
+
+    #[test]
+    fn defense_lab_rejects_public_target() {
+        let pipeline = Pipeline::from_profile("https://example.com", ScanProfile::DefenseLab);
+        let result = pipeline.validate_defense_lab_scope();
+        assert!(result.is_err(), "Defense-lab must reject public targets");
+    }
+
+    #[test]
+    fn defense_lab_accepts_localhost() {
+        let pipeline = Pipeline::from_profile("127.0.0.1", ScanProfile::DefenseLab);
+        let result = pipeline.validate_defense_lab_scope();
+        assert!(result.is_ok(), "Defense-lab must accept localhost");
+    }
+
+    #[test]
+    fn defense_lab_accepts_private_cidr() {
+        let pipeline = Pipeline::from_profile("10.0.0.1", ScanProfile::DefenseLab);
+        let result = pipeline.validate_defense_lab_scope();
+        assert!(result.is_ok(), "Defense-lab must accept private CIDR");
+    }
+
+    // ── new() remains empty/manual builder ───────────────────────────────
+
+    #[test]
+    fn new_remains_empty_manual_builder() {
+        let pipeline = Pipeline::new("127.0.0.1");
+        assert!(
+            pipeline.stages.is_empty(),
+            "new() must produce empty stages"
+        );
+        assert_eq!(pipeline.profile, ScanProfile::Quick);
+    }
+
+    // ── Profile-specific feature validation observes profile ─────────────
+
+    #[test]
+    fn protocol_edge_feature_validation_observest_profile() {
+        let pipeline = Pipeline::from_profile("127.0.0.1", ScanProfile::ProtocolEdge);
+        // ProtocolEdge requires packet-inspection; if not compiled in, validation
+        // should see ProtocolEdge (not Quick).
+        let result = pipeline.validate_feature_gates();
+        if cfg!(feature = "packet-inspection") {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("protocol-edge"),
+                "Error should reference protocol-edge profile, got: {}",
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn nse_safe_feature_validation_observest_profile() {
+        let pipeline = Pipeline::from_profile("127.0.0.1", ScanProfile::NseSafe);
+        let result = pipeline.validate_feature_gates();
+        if cfg!(feature = "nse") {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("nse-safe"),
+                "Error should reference nse-safe profile, got: {}",
+                err
+            );
+        }
+    }
 }

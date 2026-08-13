@@ -102,6 +102,8 @@ Feature-gated on `web-proxy`. Simple finding type for pipeline proxy stage resul
 
 #### Pipeline Methods
 
+- `new(target)` — Construct an empty manual pipeline (stages added via `add_stage`)
+- `from_profile(target, profile)` — Construct a pipeline from a predefined [`ScanProfile`] with canonical stage selection, risk budget, and profile state; parser-independent
 - `from_session(session)` — Reconstruct pipeline from a `PipelineSession` checkpoint
 - `with_spoof_config(spoof_config)` — Set IP spoofing/decoy/fragment configuration
 - `with_config(config)` — Set `EggsecConfig` for TLS, concurrency, defaults
@@ -202,6 +204,8 @@ pub struct PipelineReport {
 
 - `run_cli(args, config)` - Standard CLI pipeline execution
 - `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction); feature-gated on `tool-api`
+- `run_with_callback(target, config, callback)` - Parser-independent callback entry point; defaults to Quick profile; feature-gated on `tool-api`
+- `run_with_callback_for_profile(target, profile, config, callback)` - Profile-aware callback entry point using `Pipeline::from_profile`; feature-gated on `tool-api`
 - `resume_cli(args, config)` - Resume from session checkpoint
 
 #### `write_output(report, output_path, format)` (`mod.rs:64-119`)

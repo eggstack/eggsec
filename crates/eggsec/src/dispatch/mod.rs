@@ -175,14 +175,7 @@ pub async fn dispatch_inner(
                 Some("defense-lab") => crate::types::ScanProfile::DefenseLab,
                 _ => crate::types::ScanProfile::Quick,
             };
-            recon::run_pipeline(
-                p.target,
-                profile,
-                String::new(),
-                "json".to_string(),
-                progress_tx,
-            )
-            .await
+            recon::run_pipeline(p.target, profile, progress_tx).await
         }
         TaskKind::Recon(p) => {
             recon::run_recon(p.target, 20, ReconOptions::default(), progress_tx).await

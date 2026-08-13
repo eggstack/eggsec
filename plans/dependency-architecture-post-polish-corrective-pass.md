@@ -813,7 +813,7 @@ This plan is complete only when all applicable criteria below are satisfied.
 final status: Executed
 starting SHA: b28f6711e0a1d9d60f54c9087e17f2af3d9995c1
 validated implementation SHA: 2966ebc5878215de3a5ca78c1d2339af69d057b7
-closure-record-only SHA: <this commit>
+closure-record-only SHA: 11db32b53b8f335c2d3f5a3e666441b779fda952
 Fuzz non-cli pipeline: PASS — Pipeline::run_fuzz constructs FuzzConfig directly; FuzzConfig gained Default so dispatch::fuzzer::run_fuzz no longer needs cli types
 LoadTest non-cli pipeline: PASS — Pipeline::run_load_test uses LoadTestRunner::from_config_with_engine with LoadTestRunConfig
 WAF non-cli pipeline: PASS — Pipeline::run_waf constructs WafConfig and drives waf::WafEngine::new(WafConfig).run()

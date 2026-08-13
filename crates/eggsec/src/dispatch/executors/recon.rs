@@ -42,14 +42,7 @@ impl OperationExecutor for ReconExecutor {
                 }
                 "pipeline" => {
                     let profile = crate::types::ScanProfile::Quick;
-                    crate::dispatch::recon::run_pipeline(
-                        target,
-                        profile,
-                        String::new(),
-                        "json".to_string(),
-                        progress_tx,
-                    )
-                    .await
+                    crate::dispatch::recon::run_pipeline(target, profile, progress_tx).await
                 }
                 _ => {
                     return ExecutionOutput::Failed(format!(

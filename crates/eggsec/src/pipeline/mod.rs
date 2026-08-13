@@ -135,15 +135,29 @@ async fn write_output(
 /// - Any stage fails to execute
 /// - Output file cannot be written
 #[cfg(feature = "tool-api")]
-pub async fn run_with_callback<F>(
+pub async fn run_with_callback<F>(target: &str, config: &EggsecConfig, callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    run_with_callback_for_profile(target, crate::types::ScanProfile::Quick, config, callback).await
+}
+
+/// Run security assessment pipeline for a specific profile with a finding callback.
+///
+/// This is the profile-aware entry point for the tool-API. It constructs the
+/// pipeline through the canonical [`Pipeline::from_profile`] path so that the
+/// requested profile's stages, risk budget, and validation are all honoured.
+#[cfg(feature = "tool-api")]
+pub async fn run_with_callback_for_profile<F>(
     target: &str,
+    profile: crate::types::ScanProfile,
     config: &EggsecConfig,
     mut callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
-    let pipeline = Pipeline::new(target);
+    let pipeline = Pipeline::from_profile(target, profile).with_config(config.clone());
     let report = pipeline.run().await?;
 
     for port in &report.open_ports {

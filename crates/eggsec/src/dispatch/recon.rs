@@ -4,73 +4,11 @@ use crate::types::ScanProfile;
 pub async fn run_pipeline(
     target: String,
     profile: ScanProfile,
-    output_file: String,
-    output_format: String,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::pipeline::Pipeline;
 
-    let pipeline = Pipeline::new(&target).with_concurrency(10);
-    let _ = output_file;
-    let _ = output_format; // CLI presentation; not used in plain headless dispatch path
-    let pipeline = if profile == ScanProfile::Quick {
-        pipeline
-    } else {
-        // Map non-quick profile to its representative stage set without
-        // depending on CLI profile-from-string mapping.
-        let stages = match profile {
-            ScanProfile::Endpoint => vec![
-                crate::pipeline::Stage::PortScan,
-                crate::pipeline::Stage::Fingerprint,
-                crate::pipeline::Stage::EndpointScan,
-            ],
-            ScanProfile::Web
-            | ScanProfile::Api
-            | ScanProfile::Auth
-            | ScanProfile::Stealth
-            | ScanProfile::Deep
-            | ScanProfile::Vuln => vec![
-                crate::pipeline::Stage::PortScan,
-                crate::pipeline::Stage::Fingerprint,
-                crate::pipeline::Stage::EndpointScan,
-                crate::pipeline::Stage::Fuzz,
-                crate::pipeline::Stage::Waf,
-            ],
-            ScanProfile::Waf | ScanProfile::WafRegression => vec![
-                crate::pipeline::Stage::PortScan,
-                crate::pipeline::Stage::Fingerprint,
-                crate::pipeline::Stage::EndpointScan,
-                crate::pipeline::Stage::Waf,
-            ],
-            ScanProfile::Full => vec![
-                crate::pipeline::Stage::PortScan,
-                crate::pipeline::Stage::Fingerprint,
-                crate::pipeline::Stage::EndpointScan,
-                crate::pipeline::Stage::Fuzz,
-                crate::pipeline::Stage::LoadTest,
-                crate::pipeline::Stage::Waf,
-                crate::pipeline::Stage::Recon,
-                crate::pipeline::Stage::Vuln,
-            ],
-            ScanProfile::Recon => vec![
-                crate::pipeline::Stage::Recon,
-                crate::pipeline::Stage::PortScan,
-            ],
-            ScanProfile::DefenseLab
-            | ScanProfile::SynvoidLocal
-            | ScanProfile::ProtocolEdge
-            | ScanProfile::NseSafe
-            | ScanProfile::DbRegression
-            | ScanProfile::WebProxy => vec![crate::pipeline::Stage::PortScan],
-            ScanProfile::Quick => vec![],
-        };
-        let mut p = pipeline;
-        for stage in stages {
-            p = p.add_stage(stage);
-        }
-        p
-    };
-    let _ = output_format;
+    let pipeline = Pipeline::from_profile(&target, profile).with_concurrency(10);
     let stages_count = pipeline.get_stages().len() as u64;
 
     send_progress(&progress_tx, 0, stages_count.max(1)).await;

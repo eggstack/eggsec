@@ -74,10 +74,15 @@ impl SecurityTool for PipelineTool {
 
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            crate::pipeline::run_with_callback(target, &config, move |f| {
-                let mut findings = findings_clone.lock();
-                findings.push(f);
-            }),
+            crate::pipeline::run_with_callback_for_profile(
+                target,
+                profile_enum,
+                &config,
+                move |f| {
+                    let mut findings = findings_clone.lock();
+                    findings.push(f);
+                },
+            ),
         )
         .await
         .map_err(|_| crate::error::EggsecError::Timeout {
