@@ -836,7 +836,7 @@ Fill only after implementation and exact-SHA validation:
 final status: Executed
 starting SHA: a106d920a117395e9af48e0e26de12b05a4f3694
 validated implementation SHA: 5366e77ead376a40713cf60f01cbce2817b5af07
-closure-record-only SHA: (included in implementation commit)
+closure-record-only SHA: ca57755c206dec4940ce1a7b9dac2a84b8f1d182
 canonical profile constructor: Pipeline::from_profile(target, profile) in executor.rs
 dispatch duplicate stage map: REMOVED — dispatch uses Pipeline::from_profile()
 Quick dispatch stages: [PortScan, Fingerprint] (canonical)

@@ -2,13 +2,14 @@
 
 ## Status
 
-Roadmap phases A–J executed. Corrective closure pass, final polish pass, and
-post-polish corrective pass all completed.
+Roadmap phases A–J executed. Corrective closure pass, final polish pass,
+post-polish corrective pass, and dispatch-profile parity corrective pass all
+completed.
 
-Final validated implementation SHA (post-polish corrective pass head):
-`2966ebc5878215de3a5ca78c1d2339af69d057b7`.
+Final validated implementation SHA (dispatch-profile parity corrective pass):
+`5366e77ead376a40713cf60f01cbce2817b5af07`.
 
-Closure-record-only SHA for this document: `11db32b5` (documentation-only;
+Closure-record-only SHA for this document: `ca57755c` (documentation-only;
 no Rust/Python/manifest/script/Makefile/workflow changes).
 
 ## Scope
@@ -34,6 +35,7 @@ CI simplification, and documentation reconciliation.
 | — | Corrective closure pass | Executed |
 | — | Final polish pass (parser-independent types, Python `cli` removal) | Executed |
 | — | Post-polish corrective pass (headless pipeline/tool-api parity) | Executed |
+| — | Dispatch-profile parity corrective pass (profile state preservation) | Executed |
 
 ### Resolved in corrective closure pass
 
@@ -122,6 +124,15 @@ CI simplification, and documentation reconciliation.
 - `make check-full`: optional weekly/manual workflow
 - No publication or tag-triggered release in any CI workflow
 
+### Dispatch-profile parity corrective pass
+
+- `Pipeline::from_profile(target, profile)` added as canonical parser-independent constructor
+- Dispatch `run_pipeline()` now uses `Pipeline::from_profile()` instead of hand-mapping profiles to stages
+- Tool-API `PipelineTool` forwards parsed profile via `run_with_callback_for_profile()`
+- Dead `output_file`/`output_format` parameters removed from dispatch internal API
+- 24 behavioral regression tests: profile construction, Quick non-empty, dispatch canonical stages, risk-budget consistency, defense-lab scope, feature-gate validation, `new()` emptiness
+- `eggsec-python` remains independent of `cli`/Clap (verified via `cargo tree`)
+
 ## Artifact measurements
 
 ### Build host
@@ -194,30 +205,32 @@ Measured at commit `7b878d79` on Ubuntu 24.04 x86_64, rustc 1.97.1.
 
 ## Validation commands and outcomes
 
-Final implementation SHA (post-polish corrective pass head): `2966ebc5878215de3a5ca78c1d2339af69d057b7`.
+Final validated implementation SHA (dispatch-profile parity corrective pass):
+`5366e77ead376a40713cf60f01cbce2817b5af07`.
 Earlier measurements retained below are tagged with their original measurement SHA.
 
 | Command | Outcome | SHA |
 |---------|---------|-----|
-| `git rev-parse HEAD` | `2966ebc5878215de3a5ca78c1d2339af69d057b7` | final |
-| `git status --porcelain` | Clean working tree | final |
-| `rustc --version` | 1.97.1 | final |
-| `cargo --version` | 1.97.1 | final |
-| `python3 --version` | 3.12.3 | final |
-| `make check` | PASS | final |
-| `make check-python` | PASS (all canonical Python checks reach their normal success terminus; no failing tests) | final |
-| `cargo deny check advisories` | PASS | final |
-| `cargo +1.88 check --workspace --no-default-features` | PASS | final |
-| `cargo tree -p eggsec-python -i pyo3` | PASS — only 0.29.2 reachable | final |
-| `cargo tree -i quick-xml` | PASS — only 0.41.0 reachable | final |
-| `cargo tree -p eggsec-python -i clap` | PASS — not reachable | final |
-| `cargo tree -p eggsec-python -i clap_complete` | PASS — not reachable | final |
-| `cargo check -p eggsec --no-default-features` | PASS | final |
-| `cargo check -p eggsec --no-default-features --features tool-api` | PASS | final |
-| `cargo check -p eggsec --no-default-features --features tool-api,rest-api` | PASS | final |
-| `cargo check -p eggsec-python` | PASS | final |
-| `rg 'requires the .cli. feature\|requires the cli feature' crates/eggsec/src` | PASS — no engine-stage regression | final |
-| `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches | final |
+| `git rev-parse HEAD` | `5366e77ead376a40713cf60f01cbce2817b5af07` | `5366e77` |
+| `git status --porcelain` | Clean working tree | `5366e77` |
+| `rustc --version` | 1.97.1 | `5366e77` |
+| `cargo --version` | 1.97.1 | `5366e77` |
+| `python3 --version` | 3.12.3 | `5366e77` |
+| `make check` | PASS | `5366e77` |
+| `make check-python` | PASS | `5366e77` |
+| `cargo deny check advisories` | PASS | `5366e77` |
+| `cargo +1.88 check --workspace --no-default-features` | PASS | `5366e77` |
+| `cargo tree -p eggsec-python -i clap` | PASS — not reachable | `5366e77` |
+| `cargo tree -p eggsec-python -i clap_complete` | PASS — not reachable | `5366e77` |
+| `cargo check -p eggsec --no-default-features` | PASS | `5366e77` |
+| `cargo check -p eggsec --no-default-features --features tool-api` | PASS | `5366e77` |
+| `cargo check -p eggsec --no-default-features --features tool-api,rest-api` | PASS | `5366e77` |
+| `cargo check -p eggsec-python` | PASS | `5366e77` |
+| `rg 'requires the .cli. feature\|requires the cli feature' crates/eggsec/src` | PASS — no regression | `5366e77` |
+| `rg 'cargo publish\|maturin publish\|twine upload\|gh release\|id-token: write' .github/workflows` | PASS — no matches | `5366e77` |
+| focused behavioral tests (24 in `pipeline::executor::tests`) | PASS | `5366e77` |
+| hosted CI: `ci.yml` workflow 31724388231 | PASS | `5366e77` |
+| hosted CI: `code-quality.yml` workflow 31724387469 | PASS | `5366e77` |
 | `cargo build -p eggsec-cli --release` | PASS (20.9 MB) | `7b878d79` |
 | `cargo build -p eggsec-cli --release --no-default-features` | PASS (16.6 MB) | `7b878d79` |
 | `cargo build -p eggsec-cli --release --no-default-features --features daemon-client` | PASS (17.6 MB) | `7b878d79` |
@@ -226,9 +239,12 @@ Earlier measurements retained below are tagged with their original measurement S
 
 Final Python/CLI dependency result: `eggsec-python` does not enable the `cli`
 feature; `clap` and `clap_complete` are not reachable from the default Python
-artifact. The post-polish corrective pass also restored headless pipeline/tool-API
+artifact. The post-polish corrective pass restored headless pipeline/tool-API
 parity: Fuzz/LoadTest/WAF/Recon pipeline stages execute through plain engine
-types without requiring the `cli` feature.
+types without requiring the `cli` feature. The dispatch-profile parity corrective
+pass ensured `ScanProfile` is the single source of truth for pipeline profile
+state, stage selection, risk budget, and profile-specific validation across
+dispatch and tool-API construction paths.
 
 ## Publication status
 
