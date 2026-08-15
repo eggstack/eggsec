@@ -10,11 +10,11 @@ Tools in Eggsec are registered and filtered through multiple independent sources
 
 | Source | Location | Type | Purpose |
 |--------|----------|------|---------|
-| `ToolRegistry` | `tool/registry.rs:54` | `FxHashMap<String, Arc<dyn SecurityTool>>` | Runtime tool storage |
-| `create_default_registry()` | `tool/mod.rs:88` | Imperative builder | Populates `ToolRegistry` with 11 base + 3 feature-gated tools |
-| `ALL_OPERATION_METADATA` | `config/policy.rs:1034` | Static slice (32 entries + 33 aliases) | Risk, capabilities, exposure flags per operation |
-| `metadata_for_tool_id()` | `config/policy.rs:1626` | Lookup function | Resolves tool ID → `OperationMetadata` (alias-aware) |
-| `all_domain_descriptors()` | `domain/mod.rs:274` | Static slice (3 domains) | Domain-level tool integration metadata |
+| `ToolRegistry` | `tool/registry.rs:23` | `FxHashMap<String, Arc<dyn SecurityTool>>` | Runtime tool storage |
+| `create_default_registry()` | `tool/mod.rs:99` | Imperative builder | Populates `ToolRegistry` with 11 base + 3 feature-gated tools |
+| `ALL_OPERATION_METADATA` | `config/policy.rs:1492` | Static slice (33 entries + 42 aliases) | Risk, capabilities, exposure flags per operation |
+| `metadata_for_tool_id()` | `config/policy.rs:2076` | Lookup function | Resolves tool ID → `OperationMetadata` (alias-aware) |
+| `all_domain_descriptors()` | `domain/mod.rs:276` | Static slice (3 domains) | Domain-level tool integration metadata |
 | `ToolMetadataRegistry` | `tool/metadata.rs:82` | Per-tool risk/policy metadata | Supplementary risk metadata (separate from `OperationMetadata`) |
 | `McpProfilePolicy` | `tool/protocol/mcp/policy.rs:64` | Per-profile filtering | MCP tool visibility by profile |
 
@@ -118,9 +118,9 @@ respective exposure flags are enforced at execute time via
 
 1. **No bypass**: Strict surfaces (REST, MCP, Agent, gRPC) must obtain `ApprovedOperation` before dispatch
 2. **No raw dispatch**: `ToolDispatcher::dispatch()` is `pub(crate)` + `#[doc(hidden)]`; regression tests enforce this
-3. **Metadata coverage**: Every registered tool must have a matching `OperationMetadata` entry (validated in `config/policy.rs` tests at line ~1841)
+3. **Metadata coverage**: Every registered tool must have a matching `OperationMetadata` entry (validated in `config/policy.rs` tests at line ~2280)
 4. **Domain descriptors always present**: Domain descriptors exist regardless of feature state; check `required_feature` before use
-5. **Alias resolution**: `metadata_for_tool_id()` resolves aliases before falling back to exact match (`config/policy.rs:1630`)
+5. **Alias resolution**: `metadata_for_tool_id()` resolves aliases before falling back to exact match (`config/policy.rs:2080`)
 
 ## 10. Phase 7 Changes
 
@@ -143,7 +143,7 @@ respective exposure flags are enforced at execute time via
 
 **Resolved (Phase D):**
 
-- `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap: The two registries serve different purposes and are intentionally separate. `ALL_OPERATION_METADATA` is the canonical catalog for the 31 engine operations (kebab-case IDs, used by MCP/REST/gRPC/agent surfaces). `ToolMetadataRegistry` in `tool/metadata.rs` provides policy-level metadata for 7 specialized tools (`plan`, `fuzz`, `stress`, `raw_packet_send`, `credential_test`, `remote_exec`) that are used by the tool abstraction layer for policy checks (`is_allowed_by()`) and MCP profile filtering (`is_available_for_profile()`). These tools use shorthand names that don't map 1:1 to canonical operation IDs. The overlap is documented and the two registries are cross-validated by construction tests in `metadata_consistency.rs`.
+- `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap: The two registries serve different purposes and are intentionally separate. `ALL_OPERATION_METADATA` is the canonical catalog for the 33 engine operations (kebab-case IDs, used by MCP/REST/gRPC/agent surfaces). `ToolMetadataRegistry` in `tool/metadata.rs` provides policy-level metadata for 7 specialized tools (`plan`, `fuzz`, `stress`, `raw_packet_send`, `credential_test`, `remote_exec`) that are used by the tool abstraction layer for policy checks (`is_allowed_by()`) and MCP profile filtering (`is_available_for_profile()`). These tools use shorthand names that don't map 1:1 to canonical operation IDs. The overlap is documented and the two registries are cross-validated by construction tests in `metadata_consistency.rs`.
 
 - Python operation metadata now bridges to canonical engine IDs via `StableOperation::to_engine_id()` and `StableOperation::metadata()`. Risk, mode, and features are derived from `OperationMetadata` when available.
 

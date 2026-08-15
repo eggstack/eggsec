@@ -371,8 +371,8 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities.
 | `vuln-management` | `vuln/` | Vulnerability triage |
 | `wireless` | `wireless/` | WiFi passive recon + security analysis |
 | `wireless-advanced` | `wireless/active/` | Active WiFi attacks (deauth/disassoc). Lab-only. |
-| `mobile` | `mobile/` | APK/IPA static analysis |
-| `mobile-dynamic` | `mobile/` | Android dynamic testing (ADB + Frida) |
+| `mobile` | `eggsec-mobile-lab` | APK/IPA static analysis |
+| `mobile-dynamic` | `eggsec-mobile-lab` | Android dynamic testing (ADB + Frida) |
 | `db-pentest` | `db_pentest/` | Database security assessment. Defense-lab only. |
 | `postex` | `postex/` | Post-exploitation simulation. Defense-lab only. |
 | `c2` | `c2/` | C2 simulation |

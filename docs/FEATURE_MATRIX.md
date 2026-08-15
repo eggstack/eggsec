@@ -10,7 +10,7 @@
 > **Fail-closed contract**: Unknown feature names in policy checks return `false`.
 > The `feature_state()` function returns `FeatureState::Unknown` for unrecognized names.
 >
-> **Scope**: Covers the main `eggsec` crate (46 features) and domain crate features. Does not
+> **Scope**: Covers the main `eggsec` crate (49 features) and domain crate features. Does not
 > repeat domain crate internals (those are documented in their own Cargo.toml comments).
 
 ---
@@ -37,7 +37,7 @@ Categories:
 | `tool-api` | Marker-only | — | eggsec | No | Yes (required by programmatic surfaces) | all | all |
 | `insecure-tls` | Marker-only | — | eggsec | No | No | — | — |
 | `rest-api` | Protocol/front-end adapter | `tool-api` | eggsec | No | Yes (REST surface) | all (REST-exposed) | all (REST-exposed) |
-| `ws-api` | Protocol/front-end adapter | — | eggsec | No | Yes (WebSocket surface) | all | all |
+| `ws-api` | Protocol/front-end adapter | `axum/ws` | eggsec | No | Yes (WebSocket surface) | all | all |
 | `grpc-api` | Protocol/front-end adapter | `tool-api` | eggsec | No | Yes (gRPC surface) | all (gRPC-exposed) | all (gRPC-exposed) |
 | `stress-testing` | Domain capability | `pnet`, `pnet_packet`, `socket2`, `nix`, `libc`, `surge-ping`, `eggsec-nse?/stress-testing` | eggsec | No | No | `stress-test` | — |
 | `packet-inspection` | Domain capability | `pnet`, `pnet_packet`, `libc` | eggsec | No | No | `packet` | — |
