@@ -2,8 +2,26 @@
 
 Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. This document provides a birds-eye view of the entire system and serves as an index to detailed architecture documentation for each component.
 
+## Quick Navigation
+
+Jump to a topic by role:
+
+| I want to understand... | Start here |
+|--------------------------|------------|
+| **How the system is laid out** (crates, deps, layers) | [Workspace Crates](#workspace-crates) and [System Architecture](#system-architecture) |
+| **A specific module** (scanner, fuzzer, recon, etc.) | [Module Index](#module-index) — each entry links to a deep-dive doc |
+| **How policy/enforcement works** | [Enforcement Model](#enforcement-model) |
+| **How data flows through the system** | [Data Flow](#data-flow) |
+| **What features are available and what they gate** | [Feature Flags](#feature-flags) |
+| **The core types I'll encounter** | [Key Types](#key-types) |
+| **How crates depend on each other** | [Dependency Map](#dependency-map) |
+| **Error handling, config, logging patterns** | [Cross-Cutting Concerns](#cross-cutting-concerns) |
+| **How the daemon/runtime bridge works** | [daemon.md](daemon.md), [runtime.md](runtime.md), [runtime_bridge.md](runtime_bridge.md) |
+| **Python bindings** | [python_api.md](python_api.md) |
+
 ## Table of Contents
 
+- [Quick Navigation](#quick-navigation)
 - [Workspace Crates](#workspace-crates)
 - [System Architecture](#system-architecture)
 - [Module Index](#module-index)
@@ -98,116 +116,138 @@ nor hosted CI publishes a package.
 
 ## Module Index
 
-This is the complete index of all modules and components. Each entry links to its detailed architecture document.
+This is the complete index of all modules and components. Each entry links to its detailed architecture document. Modules are grouped by functional area; the **Source** column shows where the code lives, and the **Architecture Doc** links to the deep-dive.
 
 ### Reconnaissance & Discovery
 
+The discovery layer gathers intelligence about a target before active testing. These modules are typically the first stage in any assessment pipeline.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Recon | `crates/eggsec/src/recon/` | DNS enumeration, WHOIS, SSL analysis, subdomain discovery, technology detection, CVE mapping, cloud asset discovery | [recon.md](recon.md) |
-| Scanner | `crates/eggsec/src/scanner/` | TCP/UDP port scanning, endpoint discovery, service fingerprinting, IP spoofing, timing presets | [scanner.md](scanner.md) |
-| Probe | `crates/eggsec/src/probe.rs` | ICMP probing, probe intent classification, risk assessment | [probe.md](probe.md) |
-| Wireless | `crates/eggsec/src/wireless/` | WiFi passive recon + security analysis + rogue heuristic; active deauth/disassoc under `wireless-advanced` | [wireless.md](wireless.md) |
+| Recon | `crates/eggsec/src/recon/` | 30+ sub-modules: DNS enumeration, WHOIS, SSL/TLS analysis, subdomain discovery, technology detection, CVE mapping, cloud asset discovery, email/security analysis, secrets detection | [recon.md](recon.md) |
+| Scanner | `crates/eggsec/src/scanner/` | TCP/UDP port scanning (connect + SYN), endpoint discovery (223 built-in paths), service fingerprinting with confidence scoring, IP spoofing, Nmap-style T0-T5 timing presets | [scanner.md](scanner.md) |
+| Probe | `crates/eggsec/src/probe.rs` | ICMP host discovery, probe intent classification (`ProbeIntent`), risk assessment (`ProbeRisk`) shared across scan profiles | [probe.md](probe.md) |
+| Wireless | `crates/eggsec/src/wireless/` | WiFi passive recon + security analysis + rogue AP heuristic; active deauth/disassoc under `wireless-advanced` (lab-only) | [wireless.md](wireless.md) |
 
 ### Security Testing
 
+Active vulnerability discovery modules. Each sends crafted input to targets and analyzes responses for signs of vulnerability.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine with 42+ payload types (SQLi, XSS, SSRF, SSTI, etc.) | [fuzzer.md](fuzzer.md) |
-| WAF | `crates/eggsec/src/waf/` | WAF detection (34 products), bypass techniques, evasion-resistance testing | [waf.md](waf.md) |
-| Auth | `crates/eggsec/src/auth/` | Authentication testing (brute force, credential stuffing, MFA bypass, lockout/rate-limit) | [auth.md](auth.md) |
-| Hunt | `crates/eggsec/src/hunt/` | Advanced threat hunting (authorization bypass, race conditions, advanced injection) | [hunt.md](hunt.md) |
-| Browser | `crates/eggsec/src/browser/` | Headless browser for DOM XSS detection, SPA crawling | [browser.md](browser.md) |
-| WebSocket | `crates/eggsec/src/websocket/` | WebSocket security testing | [websocket.md](websocket.md) |
-| Evasion | `crates/eggsec/src/evasion/` | Evasion technique detection for defense validation | [evasion.md](evasion.md) |
+| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine with 42+ payload types (SQLi, XSS, SSRF, SSTI, IDOR, OAuth, JWT, GraphQL, gRPC, etc.), Aho-Corasick leak detection, timing analysis, response diffing, grammar fuzzer | [fuzzer.md](fuzzer.md) |
+| WAF | `crates/eggsec/src/waf/` | WAF detection (34 products) via fingerprinting, bypass technique library, evasion-resistance regression testing | [waf.md](waf.md) |
+| Auth | `crates/eggsec/src/auth/` | Authentication testing: brute force, credential stuffing, MFA bypass, lockout detection, rate-limit analysis, timing attacks | [auth.md](auth.md) |
+| Hunt | `crates/eggsec/src/hunt/` | Advanced threat hunting: authorization bypass, race conditions, advanced injection patterns (feature-gated: `advanced-hunting`) | [hunt.md](hunt.md) |
+| Browser | `crates/eggsec/src/browser/` | Headless browser for DOM XSS detection, SPA route discovery, client-side security checks (feature-gated: `headless-browser`) | [browser.md](browser.md) |
+| WebSocket | `crates/eggsec/src/websocket/` | WebSocket security testing: protocol upgrade, message fuzzing, cross-site WebSocket hijacking (feature-gated: `websocket`) | [websocket.md](websocket.md) |
+| Evasion | `crates/eggsec/src/evasion/` | Evasion technique detection for defense validation, MITRE ATT&CK mapped (feature-gated: `evasion`) | [evasion.md](evasion.md) |
 
 ### Performance & Stress
 
+Modules for testing system resilience, throughput, and behavior under load.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Load Test | `crates/eggsec/src/loadtest/` | HTTP load testing with hdrhistogram metrics, concurrency control | [loadtest.md](loadtest.md) |
-| Stress | `crates/eggsec/src/stress/` | Network stress testing (SYN, UDP, HTTP, TCP, ICMP floods), IP spoofing | [stress.md](stress.md) |
-| Packet | `crates/eggsec/src/packet/` | Packet capture, crafting, parsing (pnet-based), traceroute | [networking.md](networking.md) |
+| Load Test | `crates/eggsec/src/loadtest/` | HTTP load testing with hdrhistogram latency percentiles, concurrency control, rate limiting, warm-up phases | [loadtest.md](loadtest.md) |
+| Stress | `crates/eggsec/src/stress/` | Network stress testing: SYN/UDP/HTTP/TCP/ICMP floods, IP spoofing, raw sockets (feature-gated: `stress-testing`) | [stress.md](stress.md) |
+| Packet | `crates/eggsec/src/packet/` | Packet capture, crafting, parsing (pnet-based), hexdump, traceroute (feature-gated: `packet-inspection` or `stress-testing`) | [networking.md](networking.md) |
 
 ### Orchestration & Pipeline
 
+Modules that coordinate, schedule, and chain other modules into complete assessments.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Pipeline | `crates/eggsec/src/pipeline/` | Chained security assessment profiles (18 built-in profiles) | [pipeline.md](pipeline.md) |
-| Tool Registry | `crates/eggsec/src/tool/` | Unified tool registry, execution framework, MCP/REST/gRPC protocol integration | [ai_agents.md](ai_agents.md) |
-| Agent | `crates/eggsec/src/agent/` | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
-| Distributed | `crates/eggsec/src/distributed/` | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
+| Pipeline | `crates/eggsec/src/pipeline/` | Chained security assessment profiles: 18 built-in profiles (Quick, Endpoint, Web, WAF, Full, API, Recon, Stealth, Deep, etc.) | [pipeline.md](pipeline.md) |
+| Tool Registry | `crates/eggsec/src/tool/` | Unified tool registry, execution framework, MCP/REST/gRPC/agent protocol integration (feature-gated: `tool-api`/`rest-api`/`grpc-api`) | [ai_agents.md](ai_agents.md) |
+| Agent | `crates/eggsec/src/agent/` | Autonomous security agent: event-driven scheduling, longitudinal memory, portfolio management, alert routing (feature-gated: `rest-api`) | [ai_agents.md](ai_agents.md) |
+| Distributed | `crates/eggsec/src/distributed/` | Worker/coordinator cluster architecture: PSK-authenticated, TLS, task distribution, result aggregation | [distributed.md](distributed.md) |
 
 ### Infrastructure & Output
 
+Configuration, persistence, reporting, and supporting infrastructure.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Config | `crates/eggsec/src/config/` | TOML/YAML configuration loading, scope enforcement, policy model, execution profiles | [config.md](config.md) |
-| Output | `crates/eggsec-output/src/` + `crates/eggsec/src/output/` | Multi-format report generation (JSON, CSV, HTML, SARIF, JUnit, Markdown, PDF) | [output.md](output.md) |
-| Proxy | `crates/eggsec/src/proxy/` | SOCKS4/5, HTTP, HTTPS, Tor proxy pool with health checking and rotation | [proxy.md](proxy.md) |
-| Web Proxy | `crates/eggsec-web-proxy/` | MITM web proxy: HTTP/HTTPS/WebSocket/HTTP2/gRPC interception, TLS cert generation | [web_proxy.md](web_proxy.md) |
-| Storage | `crates/eggsec/src/storage/` | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
-| Workflow | `crates/eggsec/src/workflow/` | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
-| Findings | `crates/eggsec/src/findings/` | Finding types, store, lifecycle management, fingerprinting | [findings.md](findings.md) |
-| Diff | (distributed) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
-| Domain Contract | `crates/eggsec/src/domain/` | Static metadata descriptors for capability domains | [domain_contract.md](domain_contract.md) |
+| Config | `crates/eggsec/src/config/` | TOML/YAML configuration loading, scope enforcement (`TargetScope`), policy model (`OperationMetadata`, `EnforcementContext`), execution profiles, feature registry | [config.md](config.md) |
+| Output | `crates/eggsec-output/src/` + `crates/eggsec/src/output/` | Multi-format report generation: JSON, CSV, HTML, SARIF, JUnit, Markdown, PDF; envelope wrapping, deduplication, trend analysis, baseline comparison | [output.md](output.md) |
+| Proxy | `crates/eggsec/src/proxy/` | SOCKS4/5, HTTP, HTTPS, Tor proxy pool with health checking, rotation, and failover | [proxy.md](proxy.md) |
+| Web Proxy | `crates/eggsec-web-proxy/` | MITM web proxy domain: HTTP/HTTPS/WebSocket/HTTP2/gRPC interception, TLS cert generation, protocol handlers (feature-gated: `web-proxy`) | [web_proxy.md](web_proxy.md) |
+| Storage | `crates/eggsec/src/storage/` | SQLx-based PostgreSQL persistence for findings and scan history (feature-gated: `database`) | [storage.md](storage.md) |
+| Workflow | `crates/eggsec/src/workflow/` | Finding lifecycle management: assignment, SLA tracking, status transitions (feature-gated: `finding-workflow`) | [workflow.md](workflow.md) |
+| Findings | `crates/eggsec/src/findings/` | Canonical `Finding` schema, finding store, lifecycle management, fingerprinting for deduplication | [findings.md](findings.md) |
+| Diff | (distributed) | Scan result diffing, baseline comparison, regression detection | [diff.md](diff.md) |
+| Domain Contract | `crates/eggsec/src/domain/` | `DomainDescriptor` static metadata: declares what each capability domain can do without performing authorization | [domain_contract.md](domain_contract.md) |
 
 ### Daemon & Runtime
 
+The daemon architecture enables persistent sessions, background task execution, and multi-client connectivity.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Daemon | `crates/eggsec-daemon/` | Long-running daemon host: session persistence (SQLite), client registry, Unix socket/HTTP transport | [daemon.md](daemon.md) |
-| Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: task lifecycle, session management, event broadcasting | [runtime.md](runtime.md) |
-| Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `eggsec-runtime` DTOs to engine enforcement types; preflight/approval/dispatch | [runtime_bridge.md](runtime_bridge.md) |
-| UI Model | `crates/eggsec-ui-model/` | Frontend-neutral view DTOs and renderer registry | [ui_model.md](ui_model.md) |
+| Daemon | `crates/eggsec-daemon/` | Long-running daemon host: session persistence (SQLite via rusqlite), client registry, Unix socket IPC, optional HTTP/SSE transport | [daemon.md](daemon.md) |
+| Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, session management, event broadcasting. Dependency-light (serde/tokio/tracing only) | [runtime.md](runtime.md) |
+| Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to engine enforcement types; preflight policy preview, approval binding, dispatch validation | [runtime_bridge.md](runtime_bridge.md) |
+| UI Model | `crates/eggsec-ui-model/` | Frontend-neutral view DTOs: `SessionView`, `TaskView`, `ResultEnvelopeView`, `DashboardSummaryView`; renderer registry | [ui_model.md](ui_model.md) |
 
 ### User Interfaces
 
+Frontend entry points for human interaction.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| CLI | `crates/eggsec/src/cli/` + `crates/eggsec-cli/` | Command-line argument parsing (clap), 52 commands, handler dispatch | [cli_commands.md](cli_commands.md) |
-| TUI | `crates/eggsec-tui/src/` | Real-time terminal UI (ratatui), 33 tabs, event loop, 50 themes | [tui.md](tui.md) |
+| CLI | `crates/eggsec/src/cli/` + `crates/eggsec-cli/` | Command-line interface: clap-based argument parsing, 52 commands, handler dispatch, logging setup, daemon CLI integration | [cli_commands.md](cli_commands.md) |
+| TUI | `crates/eggsec-tui/src/` | Real-time terminal UI: ratatui/crossterm, 33 tabs, event loop, 50 LZMA-compressed themes, search, session management, visual regression testing | [tui.md](tui.md) |
 
 ### Compliance & Risk
 
+Modules for regulatory compliance, vulnerability management, and supply chain security.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Compliance | `crates/eggsec/src/compliance/` | HIPAA, PCI, SOC2, OWASP compliance scanning and reporting | [compliance.md](compliance.md) |
-| Vuln Management | `crates/eggsec/src/vuln/` | Vulnerability triage, CVSS scoring, prioritization | [vuln.md](vuln.md) |
-| Supply Chain | `crates/eggsec/src/supply_chain/` | SBOM generation (CycloneDX, SPDX), typosquat detection | [supply_chain.md](supply_chain.md) |
-| Container | `crates/eggsec/src/container/` | Kubernetes/Docker security scanning | [container.md](container.md) |
+| Compliance | `crates/eggsec/src/compliance/` | HIPAA, PCI DSS, SOC2, OWASP Top 10 compliance scanning and reporting (feature-gated: `compliance`) | [compliance.md](compliance.md) |
+| Vuln Management | `crates/eggsec/src/vuln/` | Vulnerability triage, CVSS scoring, prioritization (feature-gated: `vuln-management`) | [vuln.md](vuln.md) |
+| Supply Chain | `crates/eggsec/src/supply_chain/` | SBOM generation (CycloneDX, SPDX), typosquat detection, dependency vulnerability checking (feature-gated: `sbom`) | [supply_chain.md](supply_chain.md) |
+| Container | `crates/eggsec/src/container/` | Kubernetes/Docker security scanning, CIS benchmark checks (feature-gated: `container`) | [container.md](container.md) |
 
 ### Specialized / Lab
 
+Defense-lab and specialized testing domains. These operate in controlled environments with explicit authorization.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Mobile | `crates/eggsec-mobile-lab/` | APK/IPA static analysis + Android dynamic testing (ADB, Frida, behavioral correlation) | [mobile.md](mobile.md) |
-| DB Pentest | `crates/eggsec-db-lab/` + `crates/eggsec/src/db_pentest/` | Database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis) | [database_pentest.md](database_pentest.md) |
-| Post-Exploitation | `crates/eggsec/src/postex/` | LOTL simulation for purple teaming (MITRE ATT&CK mapped, 16 techniques) | [postex.md](postex.md) |
-| C2 | `crates/eggsec/src/c2/` | C2 simulation for defense validation | [c2.md](c2.md) |
+| Mobile | `crates/eggsec-mobile-lab/` | APK/IPA static analysis (manifest, permissions, code signing, secrets) + Android dynamic testing via ADB/Frida with behavioral correlation (feature-gated: `mobile`/`mobile-dynamic`) | [mobile.md](mobile.md) |
+| DB Pentest | `crates/eggsec-db-lab/` + `crates/eggsec/src/db_pentest/` | Database security assessment: Postgres/MySQL/MSSQL/MongoDB/Redis checks, compliance mapping, baseline comparison (feature-gated: `db-pentest`) | [database_pentest.md](database_pentest.md) |
+| Post-Exploitation | `crates/eggsec/src/postex/` | LOTL (Living-off-the-Land) simulation for purple teaming, MITRE ATT&CK mapped, 16 techniques (feature-gated: `postex`) | [postex.md](postex.md) |
+| C2 | `crates/eggsec/src/c2/` | C2 framework simulation for defense validation (feature-gated: `c2`, requires `postex` + `evasion`) | [c2.md](c2.md) |
 
 ### Integration & External Services
 
+Modules that connect to external platforms and AI services.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| AI/LLM | `crates/eggsec/src/ai/` | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation | [ai_agents.md](ai_agents.md) |
-| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine support (Lua 5.4), 166 library implementations | [nse_integration.md](nse_integration.md) |
-| Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
-| Notifications | `crates/eggsec/src/notify/` | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
+| AI/LLM | `crates/eggsec/src/ai/` | AI/LLM client (OpenAI, Anthropic, Azure), response cache, adaptive planner, script generation, smart WAF bypass (feature-gated: `ai-integration`) | [ai_agents.md](ai_agents.md) |
+| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM, 166 library implementations, sandbox, script resolver, profile system (feature-gated: `nse`) | [nse_integration.md](nse_integration.md) |
+| Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab external connectors for ticket creation and issue tracking (feature-gated: `external-integrations`) | [integrations.md](integrations.md) |
+| Notifications | `crates/eggsec/src/notify/` | Webhook, Slack, Discord, Microsoft Teams notification delivery | [notify.md](notify.md) |
 
 ### Supporting Modules
 
+Shared types, utilities, and cross-cutting infrastructure used by all other modules.
+
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Core Types | `crates/eggsec-core/` | Dependency-light shared types (`Severity`, `SensitiveString`), constants | [types.md](types.md) |
-| Tool Core | `crates/eggsec-tool-core/` | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
-| Error | `crates/eggsec/src/error/` | Canonical error type with domain-specific variants | [error.md](error.md) |
-| Logging | `crates/eggsec/src/logging/` | Structured logging with tracing | [logging.md](logging.md) |
-| Utils | `crates/eggsec/src/utils/` | HTTP client, rate limiting, circuit breaker, formatting (23 submodules) | [utils.md](utils.md) |
-| Auth Context | `crates/eggsec/src/auth_context/` | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
-| Constants | `crates/eggsec/src/constants.rs` | Compatibility facade over core constants + engine-local constants | [constants.md](constants.md) |
-| Generated | `crates/eggsec/src/generated/` | Auto-generated protobuf code | [generated.md](generated.md) |
-| Python | `crates/eggsec-python/` | Python bindings via PyO3/maturin. 22 stable-core operations. | [docs/python/](../docs/python/) |
+| Core Types | `crates/eggsec-core/` | Dependency-light shared primitives: `Severity` (5 levels), `SensitiveString` (zeroized), constants. Zero workspace deps — the leaf crate | [types.md](types.md) |
+| Tool Core | `crates/eggsec-tool-core/` | Protocol-neutral DTOs: `ToolRequest`, `ToolResponse`, `ToolError`, history types. No engine deps | [ai_agents.md](ai_agents.md) |
+| Error | `crates/eggsec/src/error/` | `EggsecError` canonical error type with 18 domain-specific variants, `From` impls for reqwest/toml/json/url | [error.md](error.md) |
+| Logging | `crates/eggsec/src/logging/` | Structured logging with `tracing`, subscriber/appender setup (feature-gated: `logging-subscriber`) | [logging.md](logging.md) |
+| Utils | `crates/eggsec/src/utils/` | 22 utility sub-modules: HTTP client, caching, circuit breaker, rate limiting, formatting, stealth, rate-limited clients | [utils.md](utils.md) |
+| Auth Context | `crates/eggsec/src/auth_context/` | Auth context YAML parsing with environment variable interpolation for credential management | [auth_context.md](auth_context.md) |
+| Constants | `crates/eggsec/src/constants.rs` | Compatibility facade over `eggsec-core` constants + engine-local constants (WAF count validation, timing defaults) | [constants.md](constants.md) |
+| Generated | `crates/eggsec/src/generated/` | Auto-generated protobuf/gRPC code (checked-in, regenerated via `build.rs`) | [generated.md](generated.md) |
+| Python | `crates/eggsec-python/` | Python bindings via PyO3/maturin: 22 stable-core operations, sync/async clients, feature-gated provisional domains | [python_api.md](python_api.md) |
 
 ---
 
@@ -514,4 +554,4 @@ Within the `eggsec` crate:
 
 ---
 
-*Last updated: 2026-08-11 — Phase J closure; all roadmap phases executed*
+*Last updated: 2026-08-15 — Enhanced module index with capability summaries, quick-nav, and Python deep-dive link*
