@@ -281,7 +281,6 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **File paths**: Use `commands/handlers/`, not `cli/handlers/` (doesn't exist).
 - **Dead code detection**: Check if `#![allow(dead_code)]` is at file top before flagging.
 - **Count verification**: Always verify statistical claims against actual source.
-- **Orphan directories**: `crates/eggstack-tui/` and `crates/slapper/` are orphan dirs — do not reference.
 - **`cargo install`**: Use `cargo install --path crates/eggsec-cli` (workspace root is virtual manifest).
 
 ## Architecture Guards
