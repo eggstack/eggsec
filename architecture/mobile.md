@@ -76,9 +76,9 @@ the adapter at `crates/eggsec/src/mobile/`.
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `MobileArgs` | `crates/eggsec-cli/src/cli/mobile.rs` | CLI args (path, json, output, quiet, command: Option<MobileSubcommand>) + `MOBILE_ABOUT` |
-| `MobileStaticArgs` | `crates/eggsec-cli/src/cli/mobile.rs` | Static subcommand args |
-| `DynamicMobileArgs` (CLI) | `crates/eggsec-cli/src/cli/mobile.rs` | Dynamic subcommand args (CLI-facing) |
+| `MobileArgs` | `crates/eggsec/src/cli/mobile.rs` | CLI args (path, json, output, quiet, command: Option<MobileSubcommand>) + `MOBILE_ABOUT` |
+| `MobileStaticArgs` | `crates/eggsec/src/cli/mobile.rs` | Static subcommand args |
+| `DynamicMobileArgs` (CLI) | `crates/eggsec/src/cli/mobile.rs` | Dynamic subcommand args (CLI-facing) |
 
 ## Handler
 

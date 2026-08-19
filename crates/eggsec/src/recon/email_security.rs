@@ -682,7 +682,11 @@ impl EmailSecurityAnalyzer {
         }
 
         let ehlo_cmd = "EHLO eggsec-test\r\n".to_string();
-        let _ = tokio::time::timeout(timeout, buf_stream.write_all(ehlo_cmd.as_bytes())).await;
+        if let Err(error) =
+            tokio::time::timeout(timeout, buf_stream.write_all(ehlo_cmd.as_bytes())).await
+        {
+            tracing::debug!(%error, host = %hostname, port, "EHLO write failed during STARTTLS probe");
+        }
 
         let mut supports_starttls = false;
         let mut ehlo_response = String::new();

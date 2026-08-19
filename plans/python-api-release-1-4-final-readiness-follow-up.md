@@ -90,7 +90,7 @@ Dedicated feature profiles can skip tests when their binary, service, browser, e
 
 Introduce a profile contract file, preferably machine-readable, such as:
 
-`crates/eggsec-python/validation_profiles.json`
+`crates/eggsec-python/validation/profiles.json`
 
 Each profile must declare:
 
@@ -488,7 +488,7 @@ Create a release evidence bundle containing:
 
 Add a script such as:
 
-`scripts/build_python_release_evidence.sh`
+the historical Python evidence helper (removed)
 
 The script must fail if required component reports are absent or refer to a different commit.
 
@@ -555,7 +555,7 @@ The report must include:
 
 Suggested file:
 
-`docs/python/RELEASES_1_4_FINAL_VALIDATION.md`
+`docs/python/RELEASES_1_4_FINAL_READINESS.md`
 
 ---
 

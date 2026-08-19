@@ -56,14 +56,12 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use eggsec::recon::{FullReconResult, TechDetector};
-//! use eggsec::config::EggsecConfig;
+//! use eggsec::recon::techdetect::TechDetector;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let config = EggsecConfig::default();
-//! let detector = TechDetector::new("example.com".to_string(), config.into());
-//! let tech_stack = detector.detect().await?;
-//! println!("Detected {} technologies", tech_stack.technologies.len());
+//! let detector = TechDetector::new()?;
+//! let result = detector.detect("https://example.com").await?;
+//! println!("Detected {} server technologies", result.tech_stack.servers.len());
 //! # Ok(())
 //! # }
 //! ```

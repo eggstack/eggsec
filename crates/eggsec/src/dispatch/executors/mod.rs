@@ -1,6 +1,6 @@
 //! Domain executor adapters for the dispatch registry.
 //!
-//! Each executor implements [`OperationExecutor`] to handle a group of
+//! Each executor implements [`crate::dispatch::executor::OperationExecutor`] to handle a group of
 //! related operations. The executors delegate to existing domain functions
 //! in `dispatch/scanner.rs`, `dispatch/recon.rs`, etc., without
 //! reimplementing logic.

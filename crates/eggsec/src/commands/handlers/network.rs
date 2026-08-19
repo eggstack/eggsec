@@ -3,7 +3,7 @@ use anyhow::Result;
 
 pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -> Result<()> {
     #[cfg(not(feature = "packet-inspection"))]
-    let _ = (ctx, args);
+    drop((ctx, args));
 
     #[cfg(feature = "packet-inspection")]
     {

@@ -27,6 +27,7 @@ pub struct ToolRegistry {
 impl ToolRegistry {
     /// Creates a new empty tool registry.
     pub fn new() -> Self {
+        crate::install_tls_provider();
         Self {
             tools: Arc::new(RwLock::new(FxHashMap::default())),
         }

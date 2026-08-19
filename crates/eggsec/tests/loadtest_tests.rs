@@ -344,23 +344,11 @@ async fn test_load_test_from_args_with_config() {
     let server = create_test_server().await;
     mock_ok("/").mount(&server).await;
 
-    let args = eggsec::cli::LoadArgs {
-        url: server.uri(),
-        requests: 10,
-        concurrency: 2,
-        method: "GET".to_string(),
-        body: None,
-        headers: vec![],
-        timeout: Some(5),
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: eggsec::cli::CommonHttpArgsCli::default(),
-    };
-
     let config = eggsec::config::EggsecConfig::default();
-    let runner = eggsec::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    let run_config =
+        eggsec::loadtest::LoadTestRunConfig::new(server.uri(), 10, 2, Duration::from_secs(5));
+    let runner =
+        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);
     assert_eq!(results.successful_requests, 10);
@@ -371,22 +359,9 @@ async fn test_load_test_from_args_with_tui_mode() {
     let server = create_test_server().await;
     mock_ok("/").mount(&server).await;
 
-    let args = eggsec::cli::LoadArgs {
-        url: server.uri(),
-        requests: 10,
-        concurrency: 2,
-        method: "GET".to_string(),
-        body: None,
-        headers: vec![],
-        timeout: Some(5),
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: eggsec::cli::CommonHttpArgsCli::default(),
-    };
-
-    let runner = eggsec::loadtest::LoadTestRunner::from_args_with_tui_mode(args, true).unwrap();
+    let run_config =
+        eggsec::loadtest::LoadTestRunConfig::new(server.uri(), 10, 2, Duration::from_secs(5));
+    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_mode(run_config, true).unwrap();
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);
     assert_eq!(results.successful_requests, 10);
@@ -653,50 +628,30 @@ fn test_load_test_zero_timeout() {
 
 #[test]
 fn test_load_test_from_args_with_config_uses_config_timeout() {
-    let args = eggsec::cli::LoadArgs {
-        url: "http://example.com".to_string(),
-        requests: 1,
-        concurrency: 1,
-        method: "GET".to_string(),
-        body: None,
-        headers: vec![],
-        timeout: None,
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: eggsec::cli::CommonHttpArgsCli::default(),
-    };
-
     let mut config = eggsec::config::EggsecConfig::default();
     config.http.timeout_secs = 42;
 
-    let runner = eggsec::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    let run_config =
+        eggsec::loadtest::LoadTestRunConfig::new("http://example.com", 1, 1, Duration::ZERO);
+    let runner =
+        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
     // When timeout is None, config value (42) should be used.
     drop(runner);
 }
 
 #[test]
 fn test_load_test_from_args_with_config_explicit_timeout() {
-    let args = eggsec::cli::LoadArgs {
-        url: "http://example.com".to_string(),
-        requests: 1,
-        concurrency: 1,
-        method: "GET".to_string(),
-        body: None,
-        headers: vec![],
-        timeout: Some(15),
-        json: false,
-        verbose: false,
-        quiet: false,
-        output: None,
-        common: eggsec::cli::CommonHttpArgsCli::default(),
-    };
-
     let mut config = eggsec::config::EggsecConfig::default();
     config.http.timeout_secs = 42;
 
-    let runner = eggsec::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    let run_config = eggsec::loadtest::LoadTestRunConfig::new(
+        "http://example.com",
+        1,
+        1,
+        Duration::from_secs(15),
+    );
+    let runner =
+        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
     // When timeout is Some(15), explicit value (15) should override config (42).
     drop(runner);
 }

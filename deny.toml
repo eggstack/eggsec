@@ -51,3 +51,4 @@ confidence-threshold = 0.8
 multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
+deny = ["aws-lc-rs"]

@@ -290,7 +290,7 @@ mod tests {
 Place integration tests in the `tests/` directory:
 
 ```rust
-// tests/integration_test.rs
+// crates/eggsec/tests/scanner_tests.rs
 use eggsec::*;
 
 #[tokio::test]
@@ -405,7 +405,7 @@ When adding new features, ensure they respect the current input mode:
 
 ### Adding a New Tab
 
-1. **Create the tab struct** in `crates/eggsec-tui/src/tabs/new_feature.rs`:
+1. **Create the tab struct** in your feature tab module:
 
 ```rust
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
@@ -534,7 +534,7 @@ impl Tab {
 }
 ```
 
-3. **Add to App struct** in `crates/eggsec-tui/src/mod.rs`:
+3. **Add to the application state** in `crates/eggsec-tui/src/lib.rs`:
 
 ```rust
 pub struct App {
@@ -543,7 +543,7 @@ pub struct App {
 }
 ```
 
-4. **Add TaskConfig variant** in `crates/eggsec-tui/src/workers/runner.rs`:
+4. **Add the task variant** in the dispatch layer (`crates/eggsec/src/dispatch/mod.rs`):
 
 ```rust
 pub enum TaskConfig {

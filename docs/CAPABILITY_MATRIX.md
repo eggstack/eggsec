@@ -144,6 +144,6 @@ If you add or modify an operation:
 3. Run `cargo test -p eggsec --lib` to verify metadata consistency
 4. Update this file to reflect the new metadata (risk, capabilities, exposure flags, etc.)
 
-Metadata consistency tests (`tests/metadata_consistency.rs`) validate the underlying metadata structures
+Metadata consistency tests (`crates/eggsec/tests/metadata_consistency.rs`) validate the underlying metadata structures
 but do not yet validate this markdown file's content. When updating, compare each column against the
 source metadata to ensure accuracy.

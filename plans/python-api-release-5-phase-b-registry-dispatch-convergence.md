@@ -196,7 +196,7 @@ Phase B is complete when:
 
 ### Workstreams Completed
 
-- **B1**: Golden contract test suite (`tests/test_golden_contract.py`) — 1076 parametrized tests across 72 test methods
+- **B1**: Golden contract test suite (`crates/eggsec-python/tests/test_golden_contract.py`) — 1076 parametrized tests across 72 test methods
 - **B2**: Shared dispatch helpers (`dispatch_helpers.rs`) — 7 extracted + 5 new helpers, eliminating ~420 lines of duplication
 - **B3**: Expanded OperationExecutorDescriptor — 14 new metadata fields, `from_operation()` constructor, `all_descriptors()` and `descriptor_metadata_list()` methods
 - **B4**: Operation executors module (`operation_executors.rs`) — NormalizedRequest, parameter extraction helpers, per-operation normalizers

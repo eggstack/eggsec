@@ -214,7 +214,7 @@ Rules:
 - Feature strings must not be empty (enforced by
   `feature_gated_ops_declare_feature_name` test).
 - The feature must exist in the workspace `Cargo.toml`. The
-  `tests/feature_matrix.rs` test validates that feature strings in metadata
+  `crates/eggsec/tests/feature_matrix.rs` test validates that feature strings in metadata
   match actual Cargo features.
 - If you add a new feature-gated operation, add the feature to the authoritative
   feature registry in `config/feature_registry.rs`.

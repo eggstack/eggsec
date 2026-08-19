@@ -105,7 +105,7 @@ Add stable marker names such as:
 - `requires_linux`
 - `requires_macos`
 
-Update `validate_python_release_1_2.sh` so each profile reports:
+Update the retained Python profile validation so each profile reports:
 
 - collected;
 - passed;
@@ -546,7 +546,7 @@ Convert performance tooling into reproducible release evidence.
 The closure pass should drive the repository through the canonical script:
 
 ```bash
-scripts/validate_python_release_1_2.sh --all --ci
+python scripts/validate_python_profiles.py
 ```
 
 Supplement with profile-specific commands for privileged or externally hosted fixtures.

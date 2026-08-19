@@ -822,7 +822,7 @@ impl BrowserSession {
 
     /// Start the browser session.
     fn start(&self) -> PyResult<()> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -836,10 +836,9 @@ impl BrowserSession {
             )));
         }
 
-        inner.state = BrowserSessionState::Launching;
-        // TODO: Launch actual browser engine
-        inner.state = BrowserSessionState::Ready;
-        Ok(())
+        Err(ScanError::new_err(
+            "Browser session requires an active browser engine",
+        ))
     }
 
     /// Stop the browser session and release resources.
@@ -998,7 +997,9 @@ impl BrowserSession {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.stop();
+        if let Err(error) = self.stop() {
+            tracing::warn!(%error, "Failed to stop browser session during context cleanup");
+        }
         false
     }
 
@@ -1138,7 +1139,7 @@ impl AsyncBrowserSession {
 
     /// Start the browser session asynchronously.
     fn async_start(&self) -> PyResult<PyFuture> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -1152,10 +1153,7 @@ impl AsyncBrowserSession {
             )));
         }
 
-        inner.state = BrowserSessionState::Launching;
-
         runtime_async::spawn_async(async move {
-            // TODO: Launch actual browser engine
             Err::<(), PyErr>(ScanError::new_err(
                 "Async browser session requires an active browser engine",
             ))
@@ -1165,7 +1163,7 @@ impl AsyncBrowserSession {
     /// Stop the browser session asynchronously.
     fn async_stop(&self) -> PyResult<PyFuture> {
         {
-            let mut inner = self
+            let inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -1175,12 +1173,9 @@ impl AsyncBrowserSession {
             {
                 return runtime_async::spawn_async(async { Ok(()) });
             }
-
-            inner.state = BrowserSessionState::Stopping;
         }
 
         runtime_async::spawn_async(async move {
-            // TODO: Tear down browser
             Err::<(), PyErr>(ScanError::new_err(
                 "Async browser session requires an active browser engine",
             ))
@@ -1190,7 +1185,7 @@ impl AsyncBrowserSession {
     /// Navigate to a URL asynchronously.
     fn async_navigate(&self, url: &str) -> PyResult<PyFuture> {
         {
-            let mut inner = self
+            let inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -1203,8 +1198,6 @@ impl AsyncBrowserSession {
                     inner.state
                 )));
             }
-
-            inner.state = BrowserSessionState::Navigating;
         }
 
         let url_owned = url.to_string();
@@ -1344,7 +1337,9 @@ impl AsyncBrowserSession {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.stop_inner();
+        if let Err(error) = self.stop_inner() {
+            tracing::warn!(%error, "Failed to stop async browser session during context cleanup");
+        }
         false
     }
 

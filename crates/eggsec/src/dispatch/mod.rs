@@ -70,11 +70,15 @@ pub async fn dispatch_task(
 
     match result {
         Ok(task_result) => {
-            let _ = result_tx.send(task_result).await;
+            if let Err(error) = result_tx.send(task_result).await {
+                tracing::warn!(?error, "Failed to deliver dispatch result");
+            }
         }
         Err(e) => {
             tracing::warn!("Dispatch failed: {}", e);
-            let _ = result_tx.send(TaskResult::Error(e.to_string())).await;
+            if let Err(error) = result_tx.send(TaskResult::Error(e.to_string())).await {
+                tracing::warn!(?error, "Failed to deliver dispatch error result");
+            }
         }
     }
 
@@ -84,7 +88,7 @@ pub async fn dispatch_task(
 /// Internal dispatch that routes `TaskKind` to worker functions.
 ///
 /// Returns the [`TaskResult`] directly so callers can convert it to a
-/// [`TaskResultEnvelope`] for the runtime outcome path. Worker functions
+/// `eggsec_runtime::event::TaskResultEnvelope` for the runtime outcome path. Worker functions
 /// return `TaskResult` values directly instead of sending through channels.
 pub async fn dispatch_inner(
     request: RunRequest,

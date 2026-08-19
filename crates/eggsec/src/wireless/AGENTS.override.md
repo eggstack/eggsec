@@ -8,7 +8,7 @@ Specialized guidance for the `wireless/` module (passive recon + active deauth/d
 
 - **Local types direct**: `WirelessScanResult` / `WirelessNetwork` (passive) and `ActiveWirelessAttackResult` / `ActiveWirelessFinding` (active) are emitted from the CLI/TUI as first-class types. Human-readable output, `--json`, and file writes all use these local types.
 - **Optional `to_scan_report_data()` bridge**: provides a thin conversion to `ScanReportData` for unified consumers. The report handler (`commands/handlers/report.rs`) auto-bridges native JSON when the relevant feature is enabled, so `eggsec report convert <wireless.json> -f sarif` works without manual conversion. Categories are `wireless-*` (passive) and `wireless-active-*` (active, under `wireless-advanced`).
-- **No `ScanProfile` participation**: wireless does not have a dedicated pipeline stage. The proposed `WirelessAnalysis` / `wireless-defense` profile is **deferred** (see `architecture/proposed-wireless-mobile-stages.md`).
+- **No `ScanProfile` participation**: wireless does not have a dedicated pipeline stage. The proposed `WirelessAnalysis` / `wireless-defense` profile is **deferred** (see `architecture/wireless.md`).
 - **MCP/agentic exposure absent**: wireless is **not** registered as a `SecurityTool`. `tools/list` and the `OpsAgent` / `CodingAgent` MCP profiles do not see wireless commands. This is a deliberate design decision recorded in `architecture/wireless.md` (MCP/Agentic section).
 - **No persistence** (no `FindingStore` writes, no DB rows for `wireless` commands).
 

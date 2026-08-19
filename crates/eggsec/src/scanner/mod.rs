@@ -24,19 +24,20 @@
 //! ### Basic Port Scan
 //!
 //! ```rust,no_run
-//! use eggsec::scanner::{scan_ports, SpoofConfig};
+//! use eggsec::scanner::{scan_ports, PortScanConfig, SpoofConfig};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let results = scan_ports(
-//!     "example.com",
-//!     vec![80, 443, 8080],
-//!     100,  // concurrency
-//!     Duration::from_secs(5),
-//!     false,  // tui_mode
-//!     SpoofConfig::default(),
-//!     None,  // progress_tx
-//! ).await?;
+//! let config = PortScanConfig {
+//!     ports: vec![80, 443, 8080],
+//!     concurrency: 100,
+//!     timeout_duration: Duration::from_secs(5),
+//!     tui_mode: false,
+//!     spoof_config: SpoofConfig::default(),
+//!     progress_tx: None,
+//!     max_results: Some(100),
+//! };
+//! let results = scan_ports("example.com", config).await?;
 //!
 //! for port in &results.open_ports {
 //!     println!("Open: {}/tcp ({})", port.port, port.service);
@@ -62,6 +63,7 @@
 //!     spoof_config: std::sync::Arc::new(Default::default()),
 //!     verify_tls: true,
 //!     progress_tx: None,
+//!     max_results: Some(100),
 //! };
 //!
 //! let results = scan_endpoints(config).await?;

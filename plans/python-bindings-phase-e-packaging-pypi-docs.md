@@ -138,7 +138,7 @@ docs/python/async-api.md
 docs/python/scope-and-safety.md
 docs/python/scanner.md
 docs/python/endpoint-discovery.md
-docs/python/fingerprinting.md
+docs/python/service-fingerprinting.md
 docs/python/reports.md
 docs/python/recon.md
 docs/python/waf.md

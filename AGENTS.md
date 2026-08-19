@@ -219,7 +219,9 @@ Feature-gated modules require explicit build flags:
 | `cli` | `clap`, `clap_complete` | CLI types, command dispatch, and argument parsing |
 | `config-watch` | (none) | File watching (notify + debouncer) for config hot-reload |
 
-Marker features (no deps): `rest-api`, `grpc-api`, `tool-api`, `ws-api`, `insecure-tls`, `api-schema`, `sbom`, `container`, `ai-integration`, `websocket`, `headless-browser`, `database`, `cloud`, `git-secrets`, `pdf`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `email-notifications`, `logging-subscriber`, `config-watch`
+Marker features (no direct dependency activation): `tool-api`, `insecure-tls`, `api-schema`, `ai-integration`, `cloud`, `git-secrets`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`.
+
+Dependency-backed feature flags: `rest-api`, `grpc-api`, `ws-api`, `sbom`, `container`, `websocket`, `headless-browser`, `database`, `pdf`, `transparent-proxy`, `dynamic-plugins`, `email-notifications`, `logging-subscriber`, `config-watch`.
 
 Note: `http-api` is a feature on `eggsec-daemon` (not `eggsec`), enabling HTTP/SSE transport.
 

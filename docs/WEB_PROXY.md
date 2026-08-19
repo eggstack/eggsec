@@ -689,4 +689,4 @@ eggsec report convert report.json -f sarif  # works as before
 - Handler/policy: `crates/eggsec/src/commands/handlers/web_proxy.rs`
 - Output conversion: `crates/eggsec/src/commands/handlers/report.rs` (auto-bridge)
 - Architecture: `architecture/proxy.md`
-- TUI: `crates/eggsec-tui/src/tabs/intercept.rs`
+- TUI: `crates/eggsec-tui/src/tabs/intercept/mod.rs`

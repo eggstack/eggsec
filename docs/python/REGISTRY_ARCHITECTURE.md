@@ -549,7 +549,7 @@ pub fn build_executor_table() -> Vec<OperationExecutor> {
 macro in the sync engine.
 
 **Changes**:
-1. Create `crates/eggsec-python/src/utils.rs` with shared functions:
+1. Add shared utility functions to the Python binding utility module:
    - `extract_host_from_url()`
    - `parse_ports_string()`
    - `operation_ok()`
@@ -568,7 +568,7 @@ macro in the sync engine.
 **Goal**: Define the `OperationExecutor` struct and registry integration.
 
 **Changes**:
-1. Create `crates/eggsec-python/src/operation_executor.rs` with:
+1. Add the operation executor implementation to the Python binding registry:
    - `OperationExecutor` struct
    - `OperationExecutorTable` (Vec or HashMap keyed by `StableOperation`)
    - `build_executor_table()` function

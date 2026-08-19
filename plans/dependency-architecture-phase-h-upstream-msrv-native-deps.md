@@ -63,7 +63,7 @@ crates/eggsec-db-lab/
 crates/eggsec-daemon/
 crates/eggsec-nse/
 crates/eggsec-web-proxy/
-crates/eggsec/src/commands/grpc.rs
+crates/eggsec/src/commands/handlers/grpc.rs
 crates/eggsec/src/tool/protocol/grpc.rs
 crates/eggsec/build.rs
 proto/

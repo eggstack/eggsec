@@ -67,6 +67,8 @@ check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
 	cargo clippy --lib -p eggsec -- -D warnings
+	cargo test -p eggsec --doc
+	cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 	cargo test -p eggsec-output --tests
 	bash scripts/check-architecture-guards.sh

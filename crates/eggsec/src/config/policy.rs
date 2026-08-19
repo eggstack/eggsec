@@ -268,7 +268,7 @@ impl std::fmt::Display for IntendedUse {
 /// Descriptor for an operation that can be evaluated against policy and scope.
 ///
 /// Bundles the metadata needed by [`super::policy_decision::evaluate_operation_policy`]
-/// to produce a [`PolicyDecision`]. Command handlers, MCP dispatchers, agent
+/// to produce a policy decision. Command handlers, MCP dispatchers, agent
 /// workflows, and API endpoints all construct an `OperationDescriptor` instead of
 /// reinventing policy checks.
 ///
@@ -1120,15 +1120,17 @@ fn normalize_url(raw: &str) -> OperationTarget {
             // Lowercase the host.
             if let Some(host) = parsed.host_str() {
                 let lower_host = host.to_lowercase();
-                let _ = parsed.set_host(Some(&lower_host));
+                if let Err(error) = parsed.set_host(Some(&lower_host)) {
+                    tracing::debug!(%error, "Failed to normalize URL host");
+                }
             }
             // Strip default port.
             let needs_port_strip = matches!(
                 (parsed.scheme(), parsed.port()),
                 ("http", Some(80)) | ("https", Some(443))
             );
-            if needs_port_strip {
-                let _ = parsed.set_port(None);
+            if needs_port_strip && parsed.set_port(None).is_err() {
+                tracing::debug!("Failed to remove default URL port");
             }
             // Normalize path: remove trailing slash unless root.
             let path = parsed.path().to_string();
@@ -1219,7 +1221,7 @@ impl OperationMetadata {
     /// Generate an `OperationDescriptor` from this metadata.
     ///
     /// The `normalized_target` is auto-detected from the raw target string.
-    /// Prefer [`try_descriptor_for_target`] for new code, which validates
+    /// Prefer [`Self::try_descriptor_for_target`] for new code, which validates
     /// target policy before construction.
     pub fn descriptor_for_target(&self, target: Option<String>) -> OperationDescriptor {
         let normalized = target
@@ -1387,7 +1389,7 @@ impl OperationMetadata {
     /// Generate an `OperationDescriptor` from this metadata, overriding the risk tier,
     /// and validating the target against this metadata's target policy.
     ///
-    /// Combines [`try_descriptor_for_target`] with a risk override. Returns
+    /// Combines [`Self::try_descriptor_for_target`] with a risk override. Returns
     /// [`DescriptorError`] on target-policy violation.
     pub fn try_descriptor_for_target_with_risk(
         &self,

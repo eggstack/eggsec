@@ -155,7 +155,7 @@ impl std::fmt::Display for PortScanResults {
         if self.open_ports.is_empty() {
             writeln!(f, "no open ports")?;
         } else {
-            let _ = writeln!(f, "open ports");
+            writeln!(f, "open ports")?;
             for port in &self.open_ports {
                 writeln!(f, "\t{}/tcp\t{}\t{}", port.port, port.status, port.service)?;
             }

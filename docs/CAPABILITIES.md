@@ -42,7 +42,7 @@ Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence
 | **ASN Lookup** | `crates/eggsec/src/recon/asn.rs` | Retrieves Autonomous System Number info (ASN, prefix, organization details, abuse contacts) via ARIN RDAP |
 | **CVE Mapping** | `crates/eggsec/src/recon/cve.rs` | Maps detected technologies to known CVEs with severity ratings (CRITICAL, HIGH, MEDIUM), queries NVD API with optional API key |
 | **CORS Analysis** | `crates/eggsec/src/recon/cors.rs` | Tests for CORS misconfigurations including wildcard with credentials, null origin reflection, arbitrary origin acceptance |
-| **Cloud Asset Discovery** | `crates/eggsec/src/recon/cloud.rs` | Enumerates AWS S3 buckets, Azure Blob Storage, GCP Storage, Firebase projects, Heroku apps, and GitHub repositories |
+| **Cloud Asset Discovery** | `crates/eggsec/src/recon/cloud/mod.rs` | Enumerates AWS S3 buckets, Azure Blob Storage, GCP Storage, Firebase projects, Heroku apps, and GitHub repositories |
 | **Sensitive Content** | `crates/eggsec/src/recon/content.rs` | Scans for 100+ sensitive paths including .env files, Git config, credentials, backups, admin panels, API endpoints, database dumps, logs |
 | **JavaScript Analysis** | `crates/eggsec/src/recon/js.rs` | Extracts JavaScript files, finds endpoints, secrets (API keys, passwords, tokens, JWTs), and URLs from JS files |
 | **Wayback Machine** | `crates/eggsec/src/recon/wayback.rs` | Retrieves historical snapshots, discovers old endpoints/paths from archive.org |
@@ -115,17 +115,17 @@ Static analysis of Android APKs and iOS IPAs for authorized lab/defense use only
 
 | Area | Coverage | File |
 |------|----------|------|
-| **Manifest / Info.plist** | Package/app ID, version, platform metadata | `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` |
-| **Permissions** | Android permissions (normal/dangerous/signature); iOS usage descriptions and sensitive entitlements | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
-| **Transport / ATS** | Android `usesCleartextTraffic`, `networkSecurityConfig`; iOS `NSAppTransportSecurity` exceptions (allowsArbitraryLoads, domain exceptions) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
-| **Secrets / Hardcoded Values** | Bounded scan of text assets for API keys, tokens, credentials (isolated scanner) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
-| **Debug / Backup / Exported** | Android `debuggable`, `allowBackup`, `android:exported` on activities/services/receivers/providers; iOS `UIFileSharingEnabled`, `get-task-allow` profile markers | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
-| **Signing / Provisioning** | Android v1 signing (META-INF/*.RSA|DSA|EC|CERT.* presence); iOS `_CodeSignature` presence and `embedded.mobileprovision` markers (enterprise, debug/ad-hoc indicators) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
-| **Custom URL Schemes / Extensions** | iOS `CFBundleURLTypes`; Android intent-filter schemes; extension markers | `crates/eggsec/src/mobile/ipa.rs` |
+| **Manifest / Info.plist** | Package/app ID, version, platform metadata | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Permissions** | Android permissions (normal/dangerous/signature); iOS usage descriptions and sensitive entitlements | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Transport / ATS** | Android `usesCleartextTraffic`, `networkSecurityConfig`; iOS `NSAppTransportSecurity` exceptions (allowsArbitraryLoads, domain exceptions) | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Secrets / Hardcoded Values** | Bounded scan of text assets for API keys, tokens, credentials (isolated scanner) | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Debug / Backup / Exported** | Android `debuggable`, `allowBackup`, `android:exported` on activities/services/receivers/providers; iOS `UIFileSharingEnabled`, `get-task-allow` profile markers | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Signing / Provisioning** | Android v1 signing (META-INF/*.RSA|DSA|EC|CERT.* presence); iOS `_CodeSignature` presence and `embedded.mobileprovision` markers (enterprise, debug/ad-hoc indicators) | `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs` |
+| **Custom URL Schemes / Extensions** | iOS `CFBundleURLTypes`; Android intent-filter schemes; extension markers | `crates/eggsec-mobile-lab/src/ipa.rs` |
 
 **Feature gate**: Requires `--features mobile` (or `--features full`, which includes it). Dependencies: `zip` (always under feature); `plist` (iOS path only, optional under feature).
 
-**Safety**: Pure-Rust ZIP + plist + bounded AXML extraction. No shelling out. Explicit `mobile` command; lab-only framing. See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs`, `crates/eggsec/src/cli/mobile.rs`, `crates/eggsec/src/commands/handlers/mobile.rs`, and policy integration in `config/policy_decision.rs`.
+**Safety**: Pure-Rust ZIP + plist + bounded AXML extraction. No shelling out. Explicit `mobile` command; lab-only framing. See `crates/eggsec-mobile-lab/src/apk.rs`, `crates/eggsec-mobile-lab/src/ipa.rs`, `crates/eggsec/src/mobile/mod.rs`, `crates/eggsec/src/commands/handlers/mobile.rs`, and policy integration in `config/policy_decision.rs`.
 Dynamic mobile (Android ADB + logcat + Frida instrumentation + behavioral correlation + evidence bundles) implemented under `mobile-dynamic`. Same standalone defense-lab pattern: gated `mobile-dynamic` feature, MCP-absent, `to_scan_report_data_dynamic` bridge with `mobile-dynamic-android-*` categories. See docs/MOBILE.md for full details.
 
 ---
@@ -150,7 +150,7 @@ Dynamic mobile (Android ADB + logcat + Frida instrumentation + behavioral correl
 | **gRPC API** | `crates/eggsec/src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
 | **MCP Server** | `crates/eggsec/src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (built-in) |
 | **Web Proxy** | `crates/eggsec/src/proxy/intercept/` | Interactive HTTP/HTTPS MITM proxy with protocol interception, rule engine, session management, and MCP integration (requires web-proxy feature) |
-| **Plugin System** | `crates/eggsec/src/proxy/intercept/plugins.rs` | Extensible protocol handler plugin system with capability-based sandboxing (requires dynamic-plugins feature) |
+| **Plugin System** | `crates/eggsec-web-proxy/src/intercept/plugins.rs` | Extensible protocol handler plugin system with capability-based sandboxing (requires dynamic-plugins feature) |
 
 ---
 

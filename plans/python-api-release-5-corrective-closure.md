@@ -61,8 +61,7 @@ Audit:
 - `.github/workflows/test.yml`;
 - `.github/workflows/release.yml`;
 - any reusable Python validation workflows;
-- `scripts/python_skip_budget.py`;
-- `scripts/build_python_release_evidence.py`;
+- historical Python skip-budget and evidence helpers (removed);
 - `scripts/run_python_profile.py`;
 - `scripts/validate_python_profiles.py`.
 
@@ -175,7 +174,7 @@ Canonicalize names around the files that actually exist, including:
 - `scripts/check_python_compatibility.py`;
 - `crates/eggsec-python/tests/test_redaction_comprehensive.py`;
 - `crates/eggsec-python/tests/test_resource_budgets.py`;
-- `scripts/build_python_release_evidence.py`.
+- the historical Python evidence helper (removed).
 
 Add a documentation-link and command-reference checker that scans Markdown, Makefiles, AGENTS files, and skill files for repository-local paths and verifies that referenced files exist. Allow explicit placeholders only when marked as such.
 
@@ -326,13 +325,13 @@ The implementation agent must provide final output for at least:
 ```sh
 cargo test -p eggsec-python
 python scripts/check-python-architecture-guards.py
-python scripts/check_phase_c_governance.py
+python scripts/check_python_compatibility.py
 python scripts/validate_python_profiles.py
 python scripts/check_python_compatibility.py
 python -m pytest crates/eggsec-python/tests/test_resource_budgets.py -v
 python -m pytest crates/eggsec-python/tests/test_redaction_comprehensive.py -v
 python -m pytest crates/eggsec-python/tests/test_golden_contract.py -v
-python scripts/build_python_release_evidence.py --commit "$(git rev-parse HEAD)"
+python scripts/validate_python_profiles.py
 ```
 
 Also run any new negative evidence tests, documentation-reference checker, disposition validator, installed-wheel tests, and TestPyPI rehearsal workflow introduced by this pass.

@@ -875,9 +875,9 @@ mod tests {
     #[test]
     fn feature_gated_entries_declare_feature() {
         for reg in REGISTERED_COMMANDS {
-            if reg.feature.is_some() {
+            if let Some(feature) = reg.feature {
                 assert!(
-                    !reg.feature.unwrap().is_empty(),
+                    !feature.is_empty(),
                     "Command '{}' has empty feature gate",
                     reg.command_id
                 );

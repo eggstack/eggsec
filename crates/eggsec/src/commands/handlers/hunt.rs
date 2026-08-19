@@ -75,95 +75,114 @@ fn format_hunt_report(report: &crate::hunt::HuntReport) -> String {
     use std::fmt::Write;
 
     let mut out = String::new();
-    let _ = writeln!(out, "Vulnerability Hunt Report");
-    let _ = writeln!(out, "========================");
-    let _ = writeln!(out, "Target: {}", report.target);
-    let _ = writeln!(out, "Total findings: {}", report.total_findings);
-    let _ = writeln!(out);
+    writeln!(out, "Vulnerability Hunt Report").expect("writing to String cannot fail");
+    writeln!(out, "========================").expect("writing to String cannot fail");
+    writeln!(out, "Target: {}", report.target).expect("writing to String cannot fail");
+    writeln!(out, "Total findings: {}", report.total_findings)
+        .expect("writing to String cannot fail");
+    writeln!(out).expect("writing to String cannot fail");
 
     if !report.attack_chains.is_empty() {
-        let _ = writeln!(out, "Attack Chains ({}):", report.attack_chains.len());
+        writeln!(out, "Attack Chains ({}):", report.attack_chains.len())
+            .expect("writing to String cannot fail");
         for chain in &report.attack_chains {
-            let _ = writeln!(
+            writeln!(
                 out,
                 "  [{}] {} (CVSS: {:?}) - {} steps",
                 chain.severity,
                 chain.name,
                 chain.cvss_score,
                 chain.steps.len()
-            );
-            let _ = writeln!(out, "    {}", chain.description);
+            )
+            .expect("writing to String cannot fail");
+            writeln!(out, "    {}", chain.description).expect("writing to String cannot fail");
             for step in &chain.steps {
-                let _ = writeln!(
+                writeln!(
                     out,
                     "    Step {}: [{}] {} - {}",
                     step.step_number, step.severity, step.vulnerability, step.impact
-                );
+                )
+                .expect("writing to String cannot fail");
             }
-            let _ = writeln!(out);
+            writeln!(out).expect("writing to String cannot fail");
         }
     }
 
     if !report.business_logic.is_empty() {
-        let _ = writeln!(
+        writeln!(
             out,
             "Business Logic Flaws ({}):",
             report.business_logic.len()
-        );
+        )
+        .expect("writing to String cannot fail");
         for flaw in &report.business_logic {
-            let _ = writeln!(
+            writeln!(
                 out,
                 "  [{}] {:?} - {}",
                 flaw.severity, flaw.flaw_type, flaw.description
-            );
-            let _ = writeln!(out, "    Location: {}", flaw.location);
-            let _ = writeln!(out, "    Evidence: {}", flaw.evidence);
-            let _ = writeln!(out);
+            )
+            .expect("writing to String cannot fail");
+            writeln!(out, "    Location: {}", flaw.location)
+                .expect("writing to String cannot fail");
+            writeln!(out, "    Evidence: {}", flaw.evidence)
+                .expect("writing to String cannot fail");
+            writeln!(out).expect("writing to String cannot fail");
         }
     }
 
     if !report.race_conditions.is_empty() {
-        let _ = writeln!(out, "Race Conditions ({}):", report.race_conditions.len());
+        writeln!(out, "Race Conditions ({}):", report.race_conditions.len())
+            .expect("writing to String cannot fail");
         for race in &report.race_conditions {
-            let _ = writeln!(
+            writeln!(
                 out,
                 "  [{}] {:?} - {}",
                 race.severity, race.race_type, race.description
-            );
-            let _ = writeln!(out, "    Endpoint: {}", race.endpoint);
-            let _ = writeln!(out, "    Evidence: {}", race.evidence);
-            let _ = writeln!(out);
+            )
+            .expect("writing to String cannot fail");
+            writeln!(out, "    Endpoint: {}", race.endpoint)
+                .expect("writing to String cannot fail");
+            writeln!(out, "    Evidence: {}", race.evidence)
+                .expect("writing to String cannot fail");
+            writeln!(out).expect("writing to String cannot fail");
         }
     }
 
     if !report.authz_bypasses.is_empty() {
-        let _ = writeln!(
+        writeln!(
             out,
             "Authorization Bypasses ({}):",
             report.authz_bypasses.len()
-        );
+        )
+        .expect("writing to String cannot fail");
         for bypass in &report.authz_bypasses {
-            let _ = writeln!(
+            writeln!(
                 out,
                 "  [{}] {:?} - {}",
                 bypass.severity, bypass.bypass_type, bypass.description
-            );
-            let _ = writeln!(out, "    Endpoint: {}", bypass.endpoint);
-            let _ = writeln!(out, "    Evidence: {}", bypass.evidence);
-            let _ = writeln!(out);
+            )
+            .expect("writing to String cannot fail");
+            writeln!(out, "    Endpoint: {}", bypass.endpoint)
+                .expect("writing to String cannot fail");
+            writeln!(out, "    Evidence: {}", bypass.evidence)
+                .expect("writing to String cannot fail");
+            writeln!(out).expect("writing to String cannot fail");
         }
     }
 
     if !report.session_issues.is_empty() {
-        let _ = writeln!(out, "Session Issues ({}):", report.session_issues.len());
+        writeln!(out, "Session Issues ({}):", report.session_issues.len())
+            .expect("writing to String cannot fail");
         for issue in &report.session_issues {
-            let _ = writeln!(
+            writeln!(
                 out,
                 "  [{}] {:?} - {}",
                 issue.severity, issue.issue_type, issue.description
-            );
-            let _ = writeln!(out, "    Evidence: {}", issue.evidence);
-            let _ = writeln!(out);
+            )
+            .expect("writing to String cannot fail");
+            writeln!(out, "    Evidence: {}", issue.evidence)
+                .expect("writing to String cannot fail");
+            writeln!(out).expect("writing to String cannot fail");
         }
     }
 

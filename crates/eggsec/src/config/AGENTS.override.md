@@ -73,7 +73,7 @@ See `docs/ENFORCEMENT_MODES.md` Phase 4 section for the full invariant-to-test m
 
 ## Phase 8 Enforcement Matrix
 
-`tests/enforcement_matrix.rs` (105 tests) provides systematic cross-surface coverage for the dual-mode enforcement contract. Tests cover:
+`crates/eggsec/tests/enforcement_matrix.rs` (105 tests) provides systematic cross-surface coverage for the dual-mode enforcement contract. Tests cover:
 
 - All 8 execution surfaces mapped to correct profiles
 - Manual permissive: safe ops allow, scope misses require confirmation, assume_yes narrow

@@ -25,7 +25,7 @@ use super::bundle::approve_run_request_bundle;
 ///
 /// # Trust boundary
 ///
-/// The executor receives a [`RuntimeExecutionContext`] carrying the session's
+/// The executor receives an `eggsec_runtime::session::RuntimeExecutionContext` carrying the session's
 /// creation surface and scope metadata. For strict surfaces (MCP, REST, gRPC,
 /// Agent, CI), the executor **fails closed** if scope cannot be resolved from
 /// the stored path. Manual surfaces (CLI, TUI) fall back to permissive defaults

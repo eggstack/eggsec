@@ -442,7 +442,7 @@ Add a small regression test or script to prevent invalid Make commands from retu
 Recommended path:
 
 ```text
-scripts/check-make-targets.sh
+the historical make-target validation helper (removed)
 ```
 
 Possible checks:

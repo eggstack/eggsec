@@ -62,7 +62,7 @@ anyhow = { workspace = true }
 rustc-hash = { workspace = true }
 uuid = { workspace = true }
 md-5 = { workspace = true }
-reqwest = { version = "0.13", features = ["rustls"], default-features = false }
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
+reqwest = { version = "0.13", features = ["rustls-no-provider"], default-features = false }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"], optional = true }
 futures = { version = "0.3", optional = true }
 url = "2"

@@ -296,7 +296,7 @@ The following files are the canonical implementation, test, and doc anchors for 
 
 ### Canonical Implementation
 
-- `crates/eggsec-nse/src/resolver.rs` — `ScriptResolver`, `validate_existing_path_under_roots` (read-only), `validate_parent_under_roots` (write/create, `#[allow(dead_code)]`), module-name grammar, structured diagnostics.
+- `crates/eggsec-nse/src/resolver/mod.rs` — `ScriptResolver`, `validate_existing_path_under_roots` (read-only), `validate_parent_under_roots` (write/create, `#[allow(dead_code)]`), module-name grammar, structured diagnostics.
 - `crates/eggsec-nse/src/profile.rs` — `ResolvedNseExecutionProfile` constructors (`manual_permissive`, `manual_strict`, `agent_safe`, `ci_safe`, `compatibility_lab`), `NseScriptPolicy` and `NseModulePolicy` doc tables defining empty-roots semantics.
 - `crates/eggsec-nse/src/executor_core.rs` — `setup_require()` delegates Lua `require()` filesystem loading to `ScriptResolver::resolve_module()`. `default_script_policy()` / `default_module_policy()` mirror `ManualPermissive` and are reserved for manual constructors.
 
@@ -678,8 +678,8 @@ Phase 05 polished user-facing report output and improved runtime corpus usabilit
 
 #### WS5: ReportEnvelope Bridge Hardening
 
-- Extended `tests/evidence_tests.rs` (363→693 lines) — 7 new bridge tests: compatible/partial envelopes, denial severity, rule-error/raw-output evidence, weak-evidence-not-high-severity, metadata fields
-- Created `tests/bridge_tests.rs` — 4 envelope shape tests: manifest counts, finding categories, multiple evidence, no circular deps
+- Extended `crates/eggsec-nse/tests/evidence_tests.rs` (363→693 lines) — 7 new bridge tests: compatible/partial envelopes, denial severity, rule-error/raw-output evidence, weak-evidence-not-high-severity, metadata fields
+- Created `crates/eggsec-nse/tests/bridge_tests.rs` — 4 envelope shape tests: manifest counts, finding categories, multiple evidence, no circular deps
 
 **Verification:** All tests pass, architecture guards pass, clippy clean.
 
@@ -1252,7 +1252,7 @@ A representative corpus of NSE script fixtures verifies supported, partial, appr
 
 - **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
 - **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification per fixture
-- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`, plus `tests/context_fidelity_tests.rs` — 8 context fidelity unit tests
+- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`, plus `crates/eggsec-nse/tests/context_fidelity_tests.rs` — 8 context fidelity unit tests
 
 ### Corpus Categories
 
@@ -1351,7 +1351,7 @@ Phase 03 introduces structured context types for host, port, and service data, r
 **What was added**:
 - 4 new context types in `context.rs` with Lua table builders and provenance tracking
 - 3 new corpus fixtures: `portrule_host_port.nse`, `hostrule_host_context.nse`, `portrule_service_context.nse`
-- 8 new unit tests in `tests/context_fidelity_tests.rs`
+- 8 new unit tests in `crates/eggsec-nse/tests/context_fidelity_tests.rs`
 - Manifest entries with `gap_classification = "approximate"` and `expected_fidelity = "approximate"`
 - 402 tests pass (1 ignored), 0 compilation errors
 
@@ -1377,7 +1377,7 @@ Phase 04 introduces structured evidence extraction from NSE run reports, bridgin
 - `extract_evidence()` wired into `run_cli_with_profile()` JSON path
 - `bridge.rs` module with `to_report_envelope()` and mapping functions
 - `eggsec-core` and `eggsec-output` dependencies in `Cargo.toml`
-- 12 evidence tests in `tests/evidence_tests.rs` — all pass
+- 12 evidence tests in `crates/eggsec-nse/tests/evidence_tests.rs` — all pass
 
 ### Milestone 4 Closure Note
 

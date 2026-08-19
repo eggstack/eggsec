@@ -7,6 +7,12 @@ use crate::fuzzer::FuzzEngine;
 use regex::Regex;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
+use std::num::NonZeroUsize;
+
+const REGEX_CACHE_SIZE: NonZeroUsize = match NonZeroUsize::new(100) {
+    Some(size) => size,
+    None => unreachable!(),
+};
 
 #[derive(Clone)]
 pub struct FuzzChainStep {
@@ -53,6 +59,7 @@ pub struct StepResults {
 pub struct StatefulFuzzer {
     _client: Client,
     variables: FxHashMap<String, String>,
+    regex_cache: lru::LruCache<String, Regex>,
 }
 
 impl StatefulFuzzer {
@@ -61,7 +68,17 @@ impl StatefulFuzzer {
         Self {
             _client: client,
             variables: FxHashMap::default(),
+            regex_cache: lru::LruCache::new(REGEX_CACHE_SIZE),
         }
+    }
+
+    fn cached_regex(&mut self, pattern: &str) -> Option<Regex> {
+        if let Some(regex) = self.regex_cache.get(pattern) {
+            return Some(regex.clone());
+        }
+        let regex = Regex::new(pattern).ok()?;
+        self.regex_cache.put(pattern.to_string(), regex.clone());
+        Some(regex)
     }
 
     pub async fn run_chain(&mut self, chain: ChainedFuzzInput) -> Result<ChainedFuzzOutput> {
@@ -135,7 +152,7 @@ impl StatefulFuzzer {
             return;
         }
 
-        let value = if let Ok(re) = Regex::new(&rule.pattern) {
+        let value = if let Some(re) = self.cached_regex(&rule.pattern) {
             re.captures(&source).and_then(|caps| {
                 if let Some(group) = rule.group {
                     caps.get(group).map(|m| m.as_str().to_string())

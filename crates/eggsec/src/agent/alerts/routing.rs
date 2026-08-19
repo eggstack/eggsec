@@ -63,6 +63,7 @@ pub struct AlertRouter {
 
 impl AlertRouter {
     fn create_pooled_client() -> Result<reqwest::Client> {
+        crate::install_tls_provider();
         reqwest::Client::builder()
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
             .pool_idle_timeout(Duration::from_secs(
@@ -91,6 +92,7 @@ impl AlertRouter {
     }
 
     fn default() -> Self {
+        crate::install_tls_provider();
         Self {
             registry: Arc::new(Mutex::new(ChannelRegistry::new())),
             recent_alerts: Arc::new(Mutex::new(FxHashMap::default())),

@@ -3,6 +3,8 @@
 //! Validates that the canonical registration builder stays consistent
 //! with OperationMetadata, DomainDescriptor, and protocol exposure rules.
 
+#![cfg(feature = "tool-api")]
+
 use eggsec::config::{metadata_for_tool_id, OperationRisk};
 use eggsec::domain::{all_domain_descriptors, DomainCategory};
 use eggsec::tool::registration::{

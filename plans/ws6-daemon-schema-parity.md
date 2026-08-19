@@ -81,7 +81,7 @@ Tests:
 
 ### Step 5: Add Python-side compatibility tests
 
-**File:** `crates/eggsec-python/tests/test_daemon_serialization.py`
+**File:** `crates/eggsec-python/tests/test_daemon_repository_operational.py`
 
 Tests:
 1. `DaemonResponsePy` JSON structure: has `ok`, `request_id`, `message`, `error_code`
@@ -111,7 +111,7 @@ Add section:
 | `crates/eggsec-daemon/src/client.rs` | Add `cancel_active()` and `approve_policy()` methods |
 | `crates/eggsec-python/src/daemon.rs` | Add 7 async functions, Rust-side wire tests |
 | `crates/eggsec-python/src/lib.rs` | Register new functions in module and API surface |
-| `crates/eggsec-python/tests/test_daemon_serialization.py` | New test file for wire compatibility |
+| `crates/eggsec-python/tests/test_daemon_repository_operational.py` | Operational daemon serialization coverage |
 | `crates/eggsec-python/README.md` | Add wire compatibility section |
 
 ## Verification
@@ -121,5 +121,5 @@ cargo check -p eggsec-daemon
 cargo check -p eggsec-python --features daemon-client
 cargo test -p eggsec-daemon
 cargo test -p eggsec-python
-pytest crates/eggsec-python/tests/test_daemon_serialization.py
+pytest crates/eggsec-python/tests/test_daemon_repository_operational.py
 ```

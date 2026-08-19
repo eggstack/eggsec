@@ -223,7 +223,7 @@ maturity-aware severity rules:
 | deprecated | **blocking if before removal floor** | Allowlist entry required |
 
 The checker compares the current `api_surface()` snapshot against the
-baseline snapshot tracked in `tests/api_surface_snapshot.json`. Any stable
+baseline snapshot tracked in `crates/eggsec-python/tests/api_surface_snapshot.json`. Any stable
 symbol that is removed, renamed, or has its signature changed without an
 allowlist entry causes a gating failure.
 
@@ -235,5 +235,5 @@ allowlist entry causes a gating failure.
   graduation checklist
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) — migration examples for
   breaking and material changes
-- `tests/api_surface_snapshot.json` — machine-readable baseline for
+- `crates/eggsec-python/tests/api_surface_snapshot.json` — machine-readable baseline for
   compatibility checking

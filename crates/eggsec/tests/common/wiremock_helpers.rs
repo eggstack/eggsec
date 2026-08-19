@@ -2,6 +2,8 @@
 //!
 //! Provides common mock server setup and response builders for integration tests.
 
+#![allow(dead_code)]
+
 use wiremock::matchers::{header, method, path as path_matcher};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

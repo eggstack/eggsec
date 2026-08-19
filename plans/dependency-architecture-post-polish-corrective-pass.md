@@ -148,7 +148,7 @@ crates/eggsec/src/types.rs
 crates/eggsec/src/fuzzer/config.rs
 crates/eggsec/src/distributed/mod.rs
 crates/eggsec/src/distributed/worker.rs
-crates/eggsec/src/runtime_bridge.rs
+crates/eggsec/src/runtime_bridge/mod.rs
 crates/eggsec/src/loadtest/mod.rs
 crates/eggsec/src/loadtest/runner.rs
 crates/eggsec/src/pipeline/executor.rs

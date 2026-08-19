@@ -53,6 +53,7 @@ pub struct CveSearchResult {
 
 impl SearchTool {
     pub fn new(searxng_url: Option<String>) -> Self {
+        crate::install_tls_provider();
         Self {
             searxng_url: searxng_url.unwrap_or_else(|| "http://localhost:8888".to_string()),
             cache: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),

@@ -131,11 +131,9 @@ A lightweight profile-manifest JSON schema/consistency check may run in the prim
 Review and normally remove or archive the following when they exist solely to support the retired CI process:
 
 ```text
-scripts/build_python_release_evidence.py
-scripts/check_maturity_guard.py
-scripts/python_skip_budget.py
+historical Python evidence, maturity, and skip-budget helpers (removed)
 scripts/generate_python_compatibility_baseline.py
-scripts/validate_python_release_candidate.sh
+the historical Python release-candidate helper (removed)
 ```
 
 For each script:
@@ -246,7 +244,7 @@ Repository searches:
 
 ```bash
 rg -n "python-evidence-bundle|python-maturity-guard|python-skip-budget|python-release-gate" .github Makefile scripts docs AGENTS.md
-rg -n "build_python_release_evidence|check_maturity_guard|python_skip_budget" .
+rg -n "historical Python evidence|maturity|skip-budget helper" .
 rg -n "maturin develop" .github/workflows
 ```
 

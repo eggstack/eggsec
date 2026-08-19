@@ -988,7 +988,7 @@ Changed `.get(0)` to `.first()` across 13 files (19 occurrences): fuzz.rs, graph
 
 ## TUI Architecture and Usability Pass (2026-06-11)
 
-Completed the 10-phase plan in `docs/plans/tui-architecture-usability-pass.md` (using subagents for context isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 301 tests green. Workspace/all-features run before handoff (pre-existing non-TUI protobuf/codegen errors in eggsec lib).
+Completed the 10-phase plan in `docs/plans/archive/tui-architecture-usability-pass.md` (using subagents for context isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 301 tests green. Workspace/all-features run before handoff (pre-existing non-TUI protobuf/codegen errors in eggsec lib).
 
 Key new modules / surfaces (per phase):
 - `app/action.rs`: `UiAction`, `CommandPaletteInput`, `QuickSwitchInput`. Decode in KeyHandler; `App::apply_action` is the mutation point for global UI actions.

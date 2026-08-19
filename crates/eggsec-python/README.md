@@ -191,7 +191,7 @@ All Release 5 Phase A types are **stable** — they are generated from
 operations. See `docs/python/tools.md` for the full guide and
 `docs/python/TOOL_CORE_BINDING_MAP.md` for the binding map.
 
-**New test file**: `tests/test_tool_core.py`
+**New test file**: `crates/eggsec-python/tests/test_tool_core.py`
 
 ### Release 5 Phase B — Registry Dispatch Architecture
 
@@ -220,7 +220,7 @@ lifecycle (`pre_dispatch_lifecycle` → `execute_operation` →
   methods used by generic dispatch.
 - **Architecture guard tests** — CI enforces one-descriptor-per-operation,
   unique IDs, alias non-collision, and schema identity via
-  `tests/test_golden_contract.py` (1076 parametrized tests across 72 methods).
+  `crates/eggsec-python/tests/test_golden_contract.py` (1076 parametrized tests across 72 methods).
 
 **New source files**
 

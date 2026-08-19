@@ -355,7 +355,7 @@ cargo test -p eggsec --test feature_matrix
    `build_descriptor()`. Failing this means the dispatch bridge cannot evaluate
    the command.
 
-4. **Feature strings must match `Cargo.toml`.** The `tests/feature_matrix.rs`
+4. **Feature strings must match `Cargo.toml`.** The `crates/eggsec/tests/feature_matrix.rs`
    test validates that feature strings in registry entries and operation metadata
    match actual Cargo features. Add new feature strings to the authoritative
    feature registry in `config/feature_registry.rs` when introducing new features.

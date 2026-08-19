@@ -473,7 +473,7 @@ impl std::fmt::Display for EndpointScanResults {
         if self.results.is_empty() {
             writeln!(f, "no endpoints found")?;
         } else {
-            let _ = writeln!(f, "endpoints");
+            writeln!(f, "endpoints")?;
             for result in &self.results {
                 let marker = if result.interesting { "[!]" } else { "   " };
                 let size = result
@@ -942,6 +942,7 @@ mod tests {
 }
 
 pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanResults> {
+    crate::install_tls_provider();
     if config.concurrency == 0 {
         return Err(EggsecError::Runtime(
             "concurrency must be greater than zero".to_string(),

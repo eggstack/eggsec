@@ -11,7 +11,7 @@ pub async fn handle_storage(_ctx: &CommandContext, args: StorageArgs) -> Result<
     }
 }
 
-async fn handle_storage_query(args: crate::cli::storage::StorageQueryArgs) -> Result<()> {
+async fn handle_storage_query(_args: crate::cli::storage::StorageQueryArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
         use crate::storage::{init_storage, StorageConfig};
@@ -20,7 +20,7 @@ async fn handle_storage_query(args: crate::cli::storage::StorageQueryArgs) -> Re
         let config = StorageConfig::default();
         let db = init_storage(&config).await?;
 
-        if let Some(ref sql) = args.sql {
+        if let Some(ref sql) = _args.sql {
             let rows = sqlx::query(sql)
                 .fetch_all(db.pool_ref())
                 .await
@@ -31,8 +31,8 @@ async fn handle_storage_query(args: crate::cli::storage::StorageQueryArgs) -> Re
                 println!("  Row {}: {:?}", i + 1, row.columns());
             }
         } else {
-            let query_type = args.query.as_deref().unwrap_or("recent_scans");
-            let limit = args.limit.unwrap_or(10);
+            let query_type = _args.query.as_deref().unwrap_or("recent_scans");
+            let limit = _args.limit.unwrap_or(10);
             match query_type {
                 "recent_scans" => {
                     let scans = db.list_scans(limit).await?;
@@ -66,14 +66,13 @@ async fn handle_storage_query(args: crate::cli::storage::StorageQueryArgs) -> Re
     }
     #[cfg(not(feature = "database"))]
     {
-        let _ = args;
         println!("Database storage requires the 'database' feature to be enabled.");
         println!("Rebuild with: cargo build --features database");
         Ok(())
     }
 }
 
-async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> Result<()> {
+async fn handle_storage_export(_args: crate::cli::storage::StorageExportArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
         use crate::storage::{init_storage, StorageConfig};
@@ -81,9 +80,9 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
         let config = StorageConfig::default();
         let db = init_storage(&config).await?;
 
-        let output_path = args.output.as_deref().unwrap_or("storage_export.json");
+        let output_path = _args.output.as_deref().unwrap_or("storage_export.json");
 
-        if let Some(ref scan_id) = args.scan_id {
+        if let Some(ref scan_id) = _args.scan_id {
             let findings = db.list_findings(scan_id, 0, 10000).await?;
             let json = serde_json::to_string_pretty(&findings)
                 .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
@@ -94,7 +93,7 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
                 scan_id,
                 output_path
             );
-        } else if let Some(ref finding_id) = args.finding_id {
+        } else if let Some(ref finding_id) = _args.finding_id {
             match db.get_finding(finding_id).await? {
                 Some(finding) => {
                     let json = serde_json::to_string_pretty(&finding)
@@ -117,14 +116,13 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
     }
     #[cfg(not(feature = "database"))]
     {
-        let _ = args;
         println!("Database storage requires the 'database' feature to be enabled.");
         println!("Rebuild with: cargo build --features database");
         Ok(())
     }
 }
 
-async fn handle_storage_stats(args: crate::cli::storage::StorageStatsArgs) -> Result<()> {
+async fn handle_storage_stats(_args: crate::cli::storage::StorageStatsArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
         use crate::storage::{init_storage, StorageConfig};
@@ -132,7 +130,7 @@ async fn handle_storage_stats(args: crate::cli::storage::StorageStatsArgs) -> Re
         let config = StorageConfig::default();
         let db = init_storage(&config).await?;
 
-        if let Some(ref scan_id) = args.scan_id {
+        if let Some(ref scan_id) = _args.scan_id {
             match db.get_scan(scan_id).await? {
                 Some(scan) => {
                     println!("Scan: {}", scan.id);
@@ -179,14 +177,13 @@ async fn handle_storage_stats(args: crate::cli::storage::StorageStatsArgs) -> Re
     }
     #[cfg(not(feature = "database"))]
     {
-        let _ = args;
         println!("Database storage requires the 'database' feature to be enabled.");
         println!("Rebuild with: cargo build --features database");
         Ok(())
     }
 }
 
-async fn handle_storage_init(args: crate::cli::storage::StorageInitArgs) -> Result<()> {
+async fn handle_storage_init(_args: crate::cli::storage::StorageInitArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
         use crate::storage::{init_storage, StorageConfig};
@@ -194,7 +191,7 @@ async fn handle_storage_init(args: crate::cli::storage::StorageInitArgs) -> Resu
         let config = StorageConfig::default();
         let db = init_storage(&config).await?;
 
-        if args.force {
+        if _args.force {
             println!("Dropping existing tables...");
             sqlx::query("DROP TABLE IF EXISTS findings CASCADE")
                 .execute(db.pool_ref())
@@ -236,7 +233,6 @@ async fn handle_storage_init(args: crate::cli::storage::StorageInitArgs) -> Resu
     }
     #[cfg(not(feature = "database"))]
     {
-        let _ = args;
         println!("Database storage requires the 'database' feature to be enabled.");
         println!("Rebuild with: cargo build --features database");
         Ok(())

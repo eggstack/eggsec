@@ -510,7 +510,7 @@ python scripts/run_python_profile.py web-proxy
 python scripts/run_python_profile.py db-postgres
 python scripts/run_python_profile.py daemon-client
 python scripts/run_python_profile.py headless-browser
-python scripts/build_python_release_evidence.py --commit "$(git rev-parse HEAD)"
+python scripts/validate_python_profiles.py
 ```
 
 Profile-specific setup may be delegated to scripts or CI services, but the profile runner must be the canonical interface.

@@ -59,7 +59,7 @@ Rationale to preserve in the commit or documentation:
 Before deletion, identify any useful consumer instructions and move them to an explicitly non-executing example document, such as:
 
 ```text
-docs/integrations/github-actions-scanning.md
+the historical GitHub Actions scanning integration document (removed)
 ```
 
 or an examples directory. The example must make authorization, target ownership, version pinning, and scope configuration explicit. It must not be wired to Eggsec's own repository triggers.

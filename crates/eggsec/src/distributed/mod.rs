@@ -30,7 +30,7 @@
 //! use eggsec::distributed::RemoteClient;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let client = RemoteClient::new("my-secret-psk".to_string());
+//! let mut client = RemoteClient::new("my-secret-psk".to_string());
 //! let result = client.execute(
 //!     "worker-host",
 //!     9000,

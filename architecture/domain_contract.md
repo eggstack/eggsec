@@ -171,7 +171,7 @@ The `db-pentest` domain is the first pilot implementation:
 
 This contract was defined in Phase 3 of the architecture extensibility plan. Phase 4 completed metadata unification:
 
-- **Phase 4 (complete)**: Added `description` field, `CapabilityMatrixRow` type, `generate_capability_matrix()`, `docs/CAPABILITY_MATRIX.md`, metadata consistency tests (`tests/metadata_consistency.rs`), preflight domain metadata integration, and README simplification.
+- **Phase 4 (complete)**: Added `description` field, `CapabilityMatrixRow` type, `generate_capability_matrix()`, `docs/CAPABILITY_MATRIX.md`, metadata consistency tests (`crates/eggsec/tests/metadata_consistency.rs`), preflight domain metadata integration, and README simplification.
 - **Phase 5**: Migrate additional domains to the contract.
 - **Future**: Consider `eggsec-domain-core` crate extraction if the contract outgrows the main crate.
 

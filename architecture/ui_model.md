@@ -102,7 +102,7 @@ All `From` implementations are one-directional: runtime types → view DTOs. Vie
 - `renderer_registry_covers_known_kinds` — verifies all expected kinds are registered
 - `renderer_registry_no_duplicates` — no duplicate kind entries
 - `unknown_kind_returns_none` — unknown kinds gracefully return None
-- `tests/view_roundtrip.rs` — serialization roundtrip for all view DTOs
+- `crates/eggsec-ui-model/tests/view_roundtrip.rs` — serialization roundtrip for all view DTOs
 
 ## See Also
 

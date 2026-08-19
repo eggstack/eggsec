@@ -330,6 +330,7 @@ impl LoadTestRunner {
     }
 
     pub async fn run(&self) -> Result<LoadTestResults> {
+        crate::install_tls_provider();
         if self.insecure {
             tracing::warn!(
                 "TLS certificate verification disabled. This is insecure and should only \

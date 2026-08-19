@@ -214,9 +214,9 @@ Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `Enfo
 
 `ManualOverride` (with `permits(class: ConfirmationClass)`) and `ConfirmationClass` live in `policy_decision.rs`; they are not part of MCP/agent schemas or automated paths. Override flags are CLI-only (global, manual-only; ignored/rejected under `--strict-scope` or strict profiles). Strict profiles/MCP/agent never honor overrides.
 
-This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/2026-06-10-manual-discretion-mode-plan.md`.
+This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/archive/2026-06-10-manual-discretion-mode-plan.md`.
 
-**Phase 4 regression coverage**: 96 tests across `config::policy_decision::tests` (48) and `commands::handlers::tests` (48) lock all manual-mode invariants. **Phase 8 enforcement matrix**: 169 tests in `tests/enforcement_matrix.rs` provide systematic cross-surface coverage for the dual-mode contract. See `docs/ENFORCEMENT_MODES.md` Phase 4 and Phase 8 sections for the full invariant-to-test mapping.
+**Phase 4 regression coverage**: 96 tests across `config::policy_decision::tests` (48) and `commands::handlers::tests` (48) lock all manual-mode invariants. **Phase 8 enforcement matrix**: 169 tests in `crates/eggsec/tests/enforcement_matrix.rs` provide systematic cross-surface coverage for the dual-mode contract. See `docs/ENFORCEMENT_MODES.md` Phase 4 and Phase 8 sections for the full invariant-to-test mapping.
 
 ### `EnforcementContext` (`policy_decision.rs`)
 

@@ -178,10 +178,10 @@ The safety doc should explain that Python library mode is not the same as NSE/Lu
 Add Python tests:
 
 ```text
-crates/eggsec-python/python/tests/test_import.py
-crates/eggsec-python/python/tests/test_scope.py
-crates/eggsec-python/python/tests/test_scan_ports.py
-crates/eggsec-python/python/tests/test_serialization.py
+crates/eggsec-python/tests/test_import.py
+crates/eggsec-python/tests/test_scope.py
+crates/eggsec-python/tests/test_scan_ports.py
+crates/eggsec-python/tests/test_serialization.py
 ```
 
 Recommended test strategy:

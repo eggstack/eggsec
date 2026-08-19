@@ -18,7 +18,7 @@
 //! - Automated surfaces (`McpServer`, `RestApi`, `GrpcApi`, `SecurityAgent`, `Ci`)
 //!   never honor manual overrides.
 //! - Any new [`RuntimeSurface`](eggsec_runtime::RuntimeSurface) variant must update
-//!   the conversion tests in [`surface`].
+//!   the conversion tests in the private `surface` module.
 
 mod bundle;
 mod descriptor;

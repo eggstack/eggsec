@@ -48,8 +48,8 @@ Final review found these concrete issues:
 5. `rust-toolchain.toml` still points readers to the old `ci.yml` MSRV job;
 6. `plans/README.md` still describes the prior corrective pass as the active
    handoff even though that pass is marked executed;
-7. production scope helper exports were removed, but `crates/eggsec/src/utils/scope.rs`
-   still exists only as a test-local reimplementation and `utils/mod.rs` still
+7. production scope helper exports were removed, but the historical `utils::scope`
+   shim still exists only as a test-local reimplementation and `utils/mod.rs` still
    documents/imports a removed `utils::check_scope` API;
 8. final validation evidence is recorded against the implementation commit rather
    than the exact final closure commit after documentation reconciliation.
@@ -338,12 +338,12 @@ measurement exercise.
 ### D1. Delete the test-only legacy shim when it has no supported consumer
 
 Production exports for `utils::check_scope` and `utils::check_scope_from_url`
-were already removed. The remaining `crates/eggsec/src/utils/scope.rs` defines
+were already removed. The remaining historical `utils::scope` shim defines
 local test-only versions of those names and tests the old helper semantics.
 
 If no production/public consumer exists:
 
-- remove `crates/eggsec/src/utils/scope.rs`;
+- remove the historical `utils::scope` shim;
 - remove `pub mod scope;` from `utils/mod.rs`;
 - do not transplant those legacy tests elsewhere simply to preserve test count.
 

@@ -61,6 +61,7 @@ pub struct AiClient {
 
 impl AiClient {
     pub fn new(config: AiConfig) -> Result<Self> {
+        crate::install_tls_provider();
         if config.provider.is_empty() {
             return Err(AiError::invalid_config("provider cannot be empty"));
         }

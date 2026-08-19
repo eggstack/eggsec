@@ -459,14 +459,17 @@ impl TcpSessionPy {
         }
 
         let start = Instant::now();
-        let (result, buf) = {
-            let mut s = state.lock().unwrap();
-            let stream = s.stream.as_mut().unwrap();
-            let stream_ref = unsafe { &mut *(stream as *mut tokio::net::TcpStream) };
-
-            runtime_sync::block_on(py, async move {
+        let stream = state
+            .lock()
+            .unwrap()
+            .stream
+            .take()
+            .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+        let (stream, operation) = runtime_sync::block_on(py, async move {
+            let mut stream = stream;
+            let operation = async {
                 let mut buf = vec![0u8; max_bytes];
-                let n = tokio::time::timeout(read_timeout, stream_ref.read(&mut buf))
+                let n = tokio::time::timeout(read_timeout, stream.read(&mut buf))
                     .await
                     .map_err(|_| {
                         TimeoutError::new_err(format!(
@@ -476,8 +479,12 @@ impl TcpSessionPy {
                     })?
                     .map_err(|e| NetworkError::new_err(format!("TCP read error: {}", e)))?;
                 Ok::<_, PyErr>((n, buf))
-            })?
-        };
+            }
+            .await;
+            Ok::<_, PyErr>((stream, operation))
+        })?;
+        state.lock().unwrap().stream = Some(stream);
+        let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let eof = result == 0;
@@ -522,14 +529,17 @@ impl TcpSessionPy {
         }
 
         let start = Instant::now();
-        let buf = {
-            let mut s = state.lock().unwrap();
-            let stream = s.stream.as_mut().unwrap();
-            let stream_ref = unsafe { &mut *(stream as *mut tokio::net::TcpStream) };
-
-            runtime_sync::block_on(py, async move {
+        let stream = state
+            .lock()
+            .unwrap()
+            .stream
+            .take()
+            .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+        let (stream, operation) = runtime_sync::block_on(py, async move {
+            let mut stream = stream;
+            let operation = async {
                 let mut buf = vec![0u8; n];
-                tokio::time::timeout(read_timeout, stream_ref.read_exact(&mut buf))
+                tokio::time::timeout(read_timeout, stream.read_exact(&mut buf))
                     .await
                     .map_err(|_| {
                         TimeoutError::new_err(format!(
@@ -539,8 +549,12 @@ impl TcpSessionPy {
                     })?
                     .map_err(|e| NetworkError::new_err(format!("TCP read_exact error: {}", e)))?;
                 Ok::<_, PyErr>(buf)
-            })?
-        };
+            }
+            .await;
+            Ok::<_, PyErr>((stream, operation))
+        })?;
+        state.lock().unwrap().stream = Some(stream);
+        let buf = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -588,17 +602,20 @@ impl TcpSessionPy {
         }
 
         let start = Instant::now();
-        let (result, buf) = {
-            let mut s = state.lock().unwrap();
-            let stream = s.stream.as_mut().unwrap();
-            let stream_ref = unsafe { &mut *(stream as *mut tokio::net::TcpStream) };
-
-            runtime_sync::block_on(py, async move {
+        let stream = state
+            .lock()
+            .unwrap()
+            .stream
+            .take()
+            .ok_or_else(|| NetworkError::new_err("Not connected"))?;
+        let (stream, operation) = runtime_sync::block_on(py, async move {
+            let mut stream = stream;
+            let operation = async {
                 let mut buf = vec![0u8; max_len];
                 let total = tokio::time::timeout(read_timeout, async {
                     let mut total = 0;
                     for byte in buf.iter_mut().take(max_len) {
-                        match stream_ref.read(std::slice::from_mut(byte)).await {
+                        match stream.read(std::slice::from_mut(byte)).await {
                             Ok(0) => break,
                             Ok(_) => {
                                 total += 1;
@@ -620,8 +637,12 @@ impl TcpSessionPy {
                 })?
                 .map_err(|e| NetworkError::new_err(format!("TCP read_until error: {}", e)))?;
                 Ok::<_, PyErr>((total, buf))
-            })?
-        };
+            }
+            .await;
+            Ok::<_, PyErr>((stream, operation))
+        })?;
+        state.lock().unwrap().stream = Some(stream);
+        let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let bytes_read = result;
@@ -657,16 +678,17 @@ impl TcpSessionPy {
         let state = Arc::clone(&self.state);
         let write_timeout = std::time::Duration::from_millis(self.config.write_timeout_ms);
 
-        let mut s = state.lock().unwrap();
-        let stream = s
+        let stream = state
+            .lock()
+            .unwrap()
             .stream
-            .as_mut()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let stream_ref = unsafe { &mut *(stream as *mut tokio::net::TcpStream) };
 
         let start = Instant::now();
-        let result = runtime_sync::block_on(py, async move {
-            tokio::time::timeout(write_timeout, stream_ref.write(&data))
+        let (stream, operation) = runtime_sync::block_on(py, async move {
+            let mut stream = stream;
+            let operation = tokio::time::timeout(write_timeout, stream.write(&data))
                 .await
                 .map_err(|_| {
                     TimeoutError::new_err(format!(
@@ -674,8 +696,11 @@ impl TcpSessionPy {
                         write_timeout.as_millis()
                     ))
                 })?
-                .map_err(|e| NetworkError::new_err(format!("TCP write error: {}", e)))
+                .map_err(|e| NetworkError::new_err(format!("TCP write error: {}", e)));
+            Ok::<_, PyErr>((stream, operation))
         })?;
+        state.lock().unwrap().stream = Some(stream);
+        let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -706,16 +731,17 @@ impl TcpSessionPy {
         let write_timeout = std::time::Duration::from_millis(self.config.write_timeout_ms);
         let len = data.len();
 
-        let mut s = state.lock().unwrap();
-        let stream = s
+        let stream = state
+            .lock()
+            .unwrap()
             .stream
-            .as_mut()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let stream_ref = unsafe { &mut *(stream as *mut tokio::net::TcpStream) };
 
         let start = Instant::now();
-        runtime_sync::block_on(py, async move {
-            tokio::time::timeout(write_timeout, stream_ref.write_all(&data))
+        let (stream, operation) = runtime_sync::block_on(py, async move {
+            let mut stream = stream;
+            let operation = tokio::time::timeout(write_timeout, stream.write_all(&data))
                 .await
                 .map_err(|_| {
                     TimeoutError::new_err(format!(
@@ -723,8 +749,11 @@ impl TcpSessionPy {
                         write_timeout.as_millis()
                     ))
                 })?
-                .map_err(|e| NetworkError::new_err(format!("TCP write_all error: {}", e)))
+                .map_err(|e| NetworkError::new_err(format!("TCP write_all error: {}", e)));
+            Ok::<_, PyErr>((stream, operation))
         })?;
+        state.lock().unwrap().stream = Some(stream);
+        operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -770,7 +799,9 @@ impl TcpSessionPy {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.close();
+        if let Err(error) = self.close() {
+            tracing::warn!(%error, "Failed to close TCP session during context exit");
+        }
         false
     }
 
@@ -1149,16 +1180,16 @@ impl UdpSocketPy {
         let state = Arc::clone(&self.state);
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
 
-        let s = state.lock().unwrap();
-        let socket = s
+        let socket = state
+            .lock()
+            .unwrap()
             .socket
-            .as_ref()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let socket_ref = unsafe { &*(socket as *const tokio::net::UdpSocket) };
 
         let start = Instant::now();
-        let result = runtime_sync::block_on(py, async move {
-            tokio::time::timeout(timeout, socket_ref.send(&data))
+        let (socket, operation) = runtime_sync::block_on(py, async move {
+            let operation = tokio::time::timeout(timeout, socket.send(&data))
                 .await
                 .map_err(|_| {
                     TimeoutError::new_err(format!(
@@ -1166,8 +1197,11 @@ impl UdpSocketPy {
                         timeout.as_millis()
                     ))
                 })?
-                .map_err(|e| NetworkError::new_err(format!("UDP send error: {}", e)))
+                .map_err(|e| NetworkError::new_err(format!("UDP send error: {}", e)));
+            Ok::<_, PyErr>((socket, operation))
         })?;
+        state.lock().unwrap().socket = Some(socket);
+        let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -1198,16 +1232,16 @@ impl UdpSocketPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
         let addr_owned = addr.to_string();
 
-        let s = state.lock().unwrap();
-        let socket = s
+        let socket = state
+            .lock()
+            .unwrap()
             .socket
-            .as_ref()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let socket_ref = unsafe { &*(socket as *const tokio::net::UdpSocket) };
 
         let start = Instant::now();
-        let result = runtime_sync::block_on(py, async move {
-            tokio::time::timeout(timeout, socket_ref.send_to(&data, &addr_owned))
+        let (socket, operation) = runtime_sync::block_on(py, async move {
+            let operation = tokio::time::timeout(timeout, socket.send_to(&data, &addr_owned))
                 .await
                 .map_err(|_| {
                     TimeoutError::new_err(format!(
@@ -1215,8 +1249,11 @@ impl UdpSocketPy {
                         timeout.as_millis()
                     ))
                 })?
-                .map_err(|e| NetworkError::new_err(format!("UDP send_to error: {}", e)))
+                .map_err(|e| NetworkError::new_err(format!("UDP send_to error: {}", e)));
+            Ok::<_, PyErr>((socket, operation))
         })?;
+        state.lock().unwrap().socket = Some(socket);
+        let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -1247,27 +1284,34 @@ impl UdpSocketPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
         let max_size = self.config.max_datagram_size;
 
-        let s = state.lock().unwrap();
-        let socket = s
+        let socket = state
+            .lock()
+            .unwrap()
             .socket
-            .as_ref()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let socket_ref = unsafe { &*(socket as *const tokio::net::UdpSocket) };
 
         let start = Instant::now();
-        let (result, buf) = runtime_sync::block_on(py, async move {
-            let mut buf = vec![0u8; max_size];
-            let n = tokio::time::timeout(timeout, socket_ref.recv(&mut buf))
-                .await
-                .map_err(|_| {
-                    TimeoutError::new_err(format!(
-                        "UDP recv timed out after {}ms",
-                        timeout.as_millis()
-                    ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("UDP recv error: {}", e)))?;
-            Ok::<_, PyErr>((n, buf))
+        let (socket, operation) = runtime_sync::block_on(py, async move {
+            let socket = socket;
+            let operation = async {
+                let mut buf = vec![0u8; max_size];
+                let n = tokio::time::timeout(timeout, socket.recv(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP recv timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP recv error: {}", e)))?;
+                Ok::<_, PyErr>((n, buf))
+            }
+            .await;
+            Ok::<_, PyErr>((socket, operation))
         })?;
+        state.lock().unwrap().socket = Some(socket);
+        let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let truncated = result == max_size;
@@ -1304,27 +1348,34 @@ impl UdpSocketPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
         let max_size = self.config.max_datagram_size;
 
-        let s = state.lock().unwrap();
-        let socket = s
+        let socket = state
+            .lock()
+            .unwrap()
             .socket
-            .as_ref()
+            .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let socket_ref = unsafe { &*(socket as *const tokio::net::UdpSocket) };
 
         let start = Instant::now();
-        let (result, buf, from_addr) = runtime_sync::block_on(py, async move {
-            let mut buf = vec![0u8; max_size];
-            let (n, from) = tokio::time::timeout(timeout, socket_ref.recv_from(&mut buf))
-                .await
-                .map_err(|_| {
-                    TimeoutError::new_err(format!(
-                        "UDP recv_from timed out after {}ms",
-                        timeout.as_millis()
-                    ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("UDP recv_from error: {}", e)))?;
-            Ok::<_, PyErr>((n, buf, from))
+        let (socket, operation) = runtime_sync::block_on(py, async move {
+            let socket = socket;
+            let operation = async {
+                let mut buf = vec![0u8; max_size];
+                let (n, from) = tokio::time::timeout(timeout, socket.recv_from(&mut buf))
+                    .await
+                    .map_err(|_| {
+                        TimeoutError::new_err(format!(
+                            "UDP recv_from timed out after {}ms",
+                            timeout.as_millis()
+                        ))
+                    })?
+                    .map_err(|e| NetworkError::new_err(format!("UDP recv_from error: {}", e)))?;
+                Ok::<_, PyErr>((n, buf, from))
+            }
+            .await;
+            Ok::<_, PyErr>((socket, operation))
         })?;
+        state.lock().unwrap().socket = Some(socket);
+        let (result, buf, from_addr) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let truncated = result == max_size;
@@ -1381,7 +1432,9 @@ impl UdpSocketPy {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.close();
+        if let Err(error) = self.close() {
+            tracing::warn!(%error, "Failed to close UDP socket during context exit");
+        }
         false
     }
 
@@ -1913,7 +1966,9 @@ impl AsyncTcpSessionPy {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.close();
+        if let Err(error) = self.close() {
+            tracing::warn!(%error, "Failed to close async TCP session during context exit");
+        }
         false
     }
 
@@ -2357,7 +2412,9 @@ impl AsyncUdpSocketPy {
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
     ) -> bool {
-        let _ = self.close();
+        if let Err(error) = self.close() {
+            tracing::warn!(%error, "Failed to close async UDP socket during context exit");
+        }
         false
     }
 

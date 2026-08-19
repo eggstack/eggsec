@@ -377,16 +377,15 @@ If sync and async paths genuinely return different semantic vulnerability outcom
 Required validation:
 
 ```bash
-cd crates/eggsec-python
-pytest tests/test_stable_core_fixtures.py -q
-pytest tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q --count-or-loop-equivalent
+pytest crates/eggsec-python/tests/test_stable_core_fixtures.py -q
+pytest crates/eggsec-python/tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q --count-or-loop-equivalent
 ```
 
 Do not add a repeat-test plugin. Repeat with a small shell loop if needed:
 
 ```bash
 for i in 1 2 3 4 5; do
-  pytest tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q || exit 1
+  pytest crates/eggsec-python/tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q || exit 1
 done
 ```
 
@@ -596,8 +595,7 @@ Use the actual intended package count from metadata if the package set changes d
 
 ```bash
 for i in 1 2 3 4 5; do
-  (cd crates/eggsec-python && \
-   pytest tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q) || exit 1
+  pytest crates/eggsec-python/tests/test_stable_core_fixtures.py::test_stable_core_sync_async_normalized_equivalence -q || exit 1
 done
 ```
 

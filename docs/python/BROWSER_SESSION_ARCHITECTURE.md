@@ -18,7 +18,7 @@ but not yet part of the stable-core operation registry.
 │  Python Surface (eggsec.browser)                        │
 │  BrowserSession, BrowserCapabilities, session state     │
 ├─────────────────────────────────────────────────────────┤
-│  PyO3 Bindings (crates/eggsec-python/src/browser.rs)   │
+│  PyO3 Bindings (crates/eggsec-python/src/browser_session.rs)   │
 │  DTOs, conversion, sync/async dispatch                  │
 ├─────────────────────────────────────────────────────────┤
 │  Eggsec Browser Engine (crates/eggsec/src/browser/)     │

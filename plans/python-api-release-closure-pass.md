@@ -60,7 +60,7 @@ The remaining open gates are:
   replacement, compatibility identity fields, typed result restoration, and
   recursive redaction of sensitive keys before persistence.
 - **Publication boundary:** Local wheel/profile and installed-wheel checks are
-  automated by `scripts/validate_python_release_candidate.sh`. TestPyPI and
+automated by the retained Python profile checks. TestPyPI and
   production publication remain manual CI/environment gates and are not
   represented as completed by this repository-only pass.
 
@@ -806,7 +806,7 @@ bash scripts/validate_wheel.sh
 Add a single release-validation entry point, for example:
 
 ```bash
-bash scripts/validate_python_release_candidate.sh
+python scripts/validate_python_profiles.py
 ```
 
 That script should orchestrate all required local checks and fail on any skipped stable-core fixture.

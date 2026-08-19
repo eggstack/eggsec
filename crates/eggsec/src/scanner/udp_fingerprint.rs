@@ -317,7 +317,7 @@ impl TokenBucket {
                 }
             } else {
                 tokio::time::sleep(self.refill_interval).await;
-                let _ = self.refill();
+                self.refill();
             }
         }
     }

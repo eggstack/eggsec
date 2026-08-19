@@ -54,7 +54,7 @@ See docs/MOBILE.md "Phase 3c" and architecture/mobile.md for details.
 
 ## References
 
-- Plan: plans/mobile-dynamic-phase3-frida-expansion-plan.md (Phase 3c section)
-- Implementation: crates/eggsec/src/mobile/frida.rs (library consts + compose + run_builtin), dynamic.rs (multi-script, baseline, bundle, correlate)
+- Plan: the archived mobile-dynamic Phase 3 plan (Phase 3c section)
+- Implementation: crates/eggsec-mobile-lab/src/frida.rs (library consts + compose + run_builtin), dynamic.rs (multi-script, baseline, bundle, correlate)
 - Smoke: scripts/test-mobile-dynamic.sh (Phase 3c leg)
 - Docs: docs/MOBILE.md, architecture/mobile.md

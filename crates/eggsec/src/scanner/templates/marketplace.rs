@@ -60,6 +60,7 @@ pub fn validate_template_id(template_id: &str) -> Result<()> {
 
 impl TemplateMarketplace {
     pub fn new(base_url: &str) -> Result<Self> {
+        crate::install_tls_provider();
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
@@ -302,6 +303,7 @@ impl TemplateMarketplace {
 
 impl Default for TemplateMarketplace {
     fn default() -> Self {
+        crate::install_tls_provider();
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()

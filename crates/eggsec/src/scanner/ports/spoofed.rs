@@ -65,11 +65,13 @@ fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, sc
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let _ = writeln!(
+        if let Err(error) = writeln!(
             guard,
             "{},{},{},{},{},{}",
             timestamp, src_ip, src_port, dst_ip, dst_port, scan_type
-        );
+        ) {
+            tracing::warn!(%error, "Failed to write packet trace");
+        }
     }
 }
 

@@ -205,9 +205,9 @@ impl CommandContext {
 
     /// Evaluate an operation against the current execution policy and scope.
     ///
-    /// Wraps the shared [`evaluate_operation_policy`] evaluator with
-    /// profile-aware enforcement via [`evaluate_enforcement`]. Returns the
-    /// [`PolicyDecision`] on allow, or an error with denial details on deny.
+    /// Wraps the shared operation-policy evaluator with profile-aware
+    /// enforcement. Returns the policy decision on allow, or an error with
+    /// denial details on deny.
     ///
     /// `RequireConfirmation` (produced only under ManualPermissive for operator-discretion
     /// cases) is converted to proceed only if matching manual override flags are present.

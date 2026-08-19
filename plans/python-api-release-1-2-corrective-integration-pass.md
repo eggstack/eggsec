@@ -109,7 +109,7 @@ Record explicitly:
 Add a script such as:
 
 ```text
-scripts/validate_python_release_1_2.sh
+the retained Python profile validation
 ```
 
 and emit a JSON report such as:

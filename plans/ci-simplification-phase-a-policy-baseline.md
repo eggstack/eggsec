@@ -43,12 +43,10 @@ scripts/check-python-architecture-guards.py
 scripts/check_python_stub_parity.py
 scripts/validate_python_profiles.py
 scripts/run_python_profile.py
-scripts/build_python_release_evidence.py
-scripts/check_maturity_guard.py
-scripts/python_skip_budget.py
+historical Python evidence, maturity, and skip-budget helpers (removed)
 scripts/check_python_compatibility.py
 scripts/generate_python_compatibility_baseline.py
-scripts/validate_python_release_candidate.sh
+the historical Python release-candidate helper (removed)
 crates/eggsec-python/validation/profiles.json
 crates/eggsec-python/wheel-profiles.json
 docs/python/packaging.md
@@ -213,7 +211,7 @@ Run repository searches such as:
 ```bash
 find .github/workflows -maxdepth 1 -type f -print
 rg -n "maturin (develop|build|publish)|twine upload|cargo publish|gh release|pypi|testpypi" .github .gitlab-ci.yml Makefile scripts docs AGENTS.md
-rg -n "build_python_release_evidence|check_maturity_guard|python_skip_budget|validate_python_release_candidate" .
+rg -n "historical Python evidence|maturity|skip-budget helper" .
 rg -n "cargo (check|test|clippy|build)" .github/workflows Makefile
 ```
 
@@ -268,9 +266,9 @@ If branch protection status names are not accessible, record that as an explicit
 | python-maturity-consistency | push/PR | `check-python-capability-matrix.py --check-maturity` | Linux | Requires maturin develop | Maturity label consistency | mandatory-retain | — | Metadata consistency |
 | python-feature-metadata | push/PR | `check-python-architecture-guards.py --check-feature-metadata` | Linux | Requires maturin develop | Feature metadata consistency | mandatory-retain | — | Metadata consistency |
 | python-profile-manifest | push/PR | `validate_python_profiles.py` | Linux | 0 (no build) | Profile manifest validity | mandatory-retain | — | Profile schema validation |
-| python-evidence-bundle | push/PR (needs: python-tests) | `build_python_release_evidence.py` | Linux | Requires wheel + test results | Evidence generation | optional-move | — | Evidence is not behavioral verification |
-| python-maturity-guard | push/PR (needs: python-evidence-bundle) | `check_maturity_guard.py` | Linux | Requires evidence bundle | Maturity claim validation | optional-move | — | Depends on evidence bundle; can be release-gated |
-| python-skip-budget | push/PR (needs: python-tests) | `python_skip_budget.py` | Linux | Requires JUnit XML | Skip budget enforcement | mandatory-retain | — | Prevents test suite erosion |
+| python-evidence-bundle | push/PR (needs: python-tests) | historical helper (removed) | Linux | Requires wheel + test results | Evidence generation | optional-move | — | Evidence is not behavioral verification |
+| python-maturity-guard | push/PR (needs: python-evidence-bundle) | historical helper (removed) | Linux | Requires evidence bundle | Maturity claim validation | optional-move | — | Depends on evidence bundle; can be release-gated |
+| python-skip-budget | push/PR (needs: python-tests) | historical helper (removed) | Linux | Requires JUnit XML | Skip budget enforcement | mandatory-retain | — | Prevents test suite erosion |
 | python-release-gate | push/PR (if: always) | Aggregates all python-* jobs | Linux | — | Python gate aggregation | mandatory-retain | — | Single merge gate for Python |
 | release-gate | push/PR (if: always) | Aggregates fmt, clippy, check, test-features, security-audit, architecture-guards, feature-profiles, python-release-gate | Linux | — | Top-level merge gate | mandatory-retain | — | Single required status check |
 
@@ -297,7 +295,7 @@ If branch protection status names are not accessible, record that as an explicit
 | publish-testpypi | workflow_dispatch only | maturin upload to TestPyPI | Linux | release-local | — | Manual release gate |
 | publish-pypi | workflow_dispatch + approval | pypi-publish action | Linux | release-local | — | Manual release gate with environment approval |
 | test-feature-profiles | push/PR (needs: build) | Build with features + pytest per profile | Linux | release-local | — | Feature-specific wheel testing |
-| validation-matrix | push/PR (needs: build) | `validate_python_release_1_2.sh` | Linux | release-local | — | Release validation script |
+| validation-matrix | push/PR (needs: build) | retained Python profile validation | Linux | release-local | — | Release validation script |
 | performance-report | push/PR (needs: build) | Performance pytest suite | Linux | release-local | — | Performance benchmarking |
 | skip-report | push/PR (always) | Capture pytest skip reasons | Linux | release-local | — | Diagnostic skip analysis |
 | python-architecture-guards | push/PR | capability matrix + arch guards + stub parity | Linux | mandatory-retain | Duplicate of test.yml jobs | Can be consolidated |
@@ -348,12 +346,12 @@ If branch protection status names are not accessible, record that as an explicit
 | `scripts/check_python_stub_parity.py` | metadata consistency check | No | Yes (maturin develop) | No | No | No | No | No | mandatory-retain |
 | `scripts/validate_python_profiles.py` | packaging smoke check | No | No | No | No | No | No | No | mandatory-retain |
 | `scripts/run_python_profile.py` | behavioral test runner | No | Yes (maturin build) | Yes | No | No | No | Per profile | optional-move |
-| `scripts/build_python_release_evidence.py` | historical evidence/process helper | No | Yes (maturin develop) | Yes | Yes (git SHA) | No | No | ripgrep (rg) | release-local |
-| `scripts/check_maturity_guard.py` | metadata consistency check | No | Yes (maturin develop) | No | No | No | No | ripgrep (rg) | optional-move |
-| `scripts/python_skip_budget.py` | behavioral test runner | No | No | Yes | No | No | No | No | mandatory-retain |
+| historical evidence/process helper (removed) | historical evidence/process helper | No | Yes (maturin develop) | Yes | Yes (git SHA) | No | No | ripgrep (rg) | release-local |
+| historical maturity guard (removed) | metadata consistency check | No | Yes (maturin develop) | No | No | No | No | ripgrep (rg) | optional-move |
+| historical Python skip-budget helper (removed) | behavioral test runner | No | No | Yes | No | No | No | No | mandatory-retain |
 | `scripts/check_python_compatibility.py` | behavioral test runner | No | Yes (maturin develop) | No | No | No | No | No | mandatory-retain |
 | `scripts/generate_python_compatibility_baseline.py` | manual release helper | No | Yes (maturin develop) | No | No | No | No | No | release-local |
-| `scripts/validate_python_release_candidate.sh` | packaging smoke check | No | Yes (maturin build) | Yes | No | No | No | No | release-local |
+| historical Python release-candidate helper (removed) | packaging smoke check | No | Yes (maturin build) | Yes | No | No | No | No | release-local |
 
 ### Additional scripts (not in scoped list but discovered)
 
@@ -363,7 +361,7 @@ If branch protection status names are not accessible, record that as an explicit
 | `scripts/validate_wheel.sh` | packaging smoke check | release-local |
 | `scripts/test_documentation_examples.py` | behavioral test runner | release-local |
 | `scripts/generate_api_reference.py` | manual release helper | example-relocate |
-| `scripts/validate_python_release_1_2.sh` | packaging smoke check | release-local |
+| historical Python release validation helper (removed) | packaging smoke check | release-local |
 
 ## Deliverable 4: Critical invariant list
 
@@ -481,7 +479,7 @@ jobs:
       - python scripts/check_python_stub_parity.py
       - bash scripts/check_python_types.sh
       - pytest crates/eggsec-python/tests/ -v --timeout=60
-      - python scripts/python_skip_budget.py ...
+      - retained Python verification checks ...
 
   portability:
     # Narrow macOS/Windows checks (build only, not full test)

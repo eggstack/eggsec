@@ -401,7 +401,7 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
     }
     #[cfg(not(feature = "ai-integration"))]
     {
-        let _ = args;
+        drop(args);
         println!("AI integration not enabled. Rebuild with --features ai-integration");
         Ok(())
     }

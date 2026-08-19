@@ -124,7 +124,7 @@ The `hint` field should be a user-facing message naming the exact Cargo feature
 flag needed, e.g. `"enable feature 'my-new-feature' in Cargo.toml: cargo build --features my-new-feature"`.
 
 **This is required.** The `all_cargo_features_are_in_registry` test in
-`tests/feature_matrix.rs` validates that every feature in `Cargo.toml [features]`
+`crates/eggsec/tests/feature_matrix.rs` validates that every feature in `Cargo.toml [features]`
 appears in the registry. If you add a feature to `Cargo.toml` without updating
 the registry, CI will fail.
 
@@ -297,7 +297,7 @@ When adding a new feature, verify each item:
 
 - [ ] Feature declared in `crates/eggsec/Cargo.toml` `[features]`
 - [ ] Feature added to `feature_registry!` in `crates/eggsec/src/config/feature_registry.rs`
-- [ ] Dependency edges added to `FEATURE_DEPENDENCIES` in `tests/feature_matrix.rs`
+- [ ] Dependency edges added to `FEATURE_DEPENDENCIES` in `crates/eggsec/tests/feature_matrix.rs`
 - [ ] If in `full` aggregate: `("full", "my-new-feature")` edge added
 - [ ] `cargo test -p eggsec --test feature_matrix` passes
 - [ ] `cargo test -p eggsec --test metadata_consistency` passes

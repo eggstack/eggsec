@@ -436,7 +436,7 @@ When adding or modifying a domain:
       domains
 - [ ] Add `ReportIntegration` if the domain produces report output
 - [ ] Add unit tests in `domain/mod.rs` for the new descriptor
-- [ ] Add integration tests in `tests/metadata_consistency.rs` if
+- [ ] Add integration tests in `crates/eggsec/tests/metadata_consistency.rs` if
       adding new safety invariants
 - [ ] Update `docs/CAPABILITY_MATRIX.md` with new rows
 - [ ] Run metadata/feature/tool registration tests:
@@ -513,7 +513,7 @@ const MY_DOMAIN_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
     evidence: EvidenceSupport::NotSupported,
     baseline: BaselineSupport::NotSupported,
     strict_surface_support: true,
-    docs_url: Some("docs/MY_DOMAIN.md"),
+    docs_url: Some("docs/CAPABILITY_MATRIX.md"),
 };
 ```
 

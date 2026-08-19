@@ -931,6 +931,8 @@ impl HttpClientConfigPy {
 
 /// Build a reqwest::Client from the given configuration.
 fn build_reqwest_client(config: &HttpClientConfigPy) -> PyResult<reqwest::Client> {
+    eggsec::install_tls_provider();
+
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(config.timeout_ms))
         .connect_timeout(std::time::Duration::from_millis(config.connect_timeout_ms))

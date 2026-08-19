@@ -2413,7 +2413,7 @@ Comprehensive audit using 4 parallel subagents across all tabs and components.
  4. `fuzz.rs` had 6 orphaned tests outside `mod tests` — structurally misplaced, some using direct `fields[0]` access
 
 ### TUI Architecture and Usability Pass (2026-06-11)
-Completed the 10-phase plan in `docs/plans/tui-architecture-usability-pass.md` (using subagents for isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 479 tests green. Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass).
+Completed the 10-phase plan in `docs/plans/archive/tui-architecture-usability-pass.md` (using subagents for isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 479 tests green. Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass).
 
 Key new modules / surfaces (per phase):
 - `app/action.rs`: `UiAction`, `CommandPaletteInput`, `QuickSwitchInput`. Decode in KeyHandler; `App::apply_action` is the mutation point for global UI actions.

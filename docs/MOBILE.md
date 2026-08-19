@@ -267,7 +267,7 @@ allowed_packages = ["com.example.vuln.test"]
 - Builds cleanly on Phase 3c baseline/regression/bundles (`--baseline`, regression_notes, evidence bundles remain unchanged and can be post-processed with the engine).
 - Standalone defense-lab (MCP/agent/TUI/pipeline absent); policy/allow gates and EnforcementContext usage unchanged from prior phases.
 - Phase 4b TUI deferred; reporting polish delivered (human output only) per standalone defense-lab policy.
-- See `crates/eggsec/src/mobile/dynamic.rs` (CorrelationEngine ~281, correlate_reports ~343, new types ~247-289, updated correlate_findings ~1276).
+- See `crates/eggsec-mobile-lab/src/dynamic.rs` (CorrelationEngine and dynamic report correlation).
 
 ## Phase 4b Success Criteria (reviewed + reporting polish delivered 2026-06-12 under single mobile-dynamic)
 
@@ -277,7 +277,7 @@ allowed_packages = ["com.example.vuln.test"]
 - Phase 4b TUI deferred per standalone defense-lab policy (confirmed absent from TUI crate; 30 Tab variants, no Mobile tab or wiring; wireless/auth are wired precedents).
 - No regressions in prior mobile-dynamic functionality or ~85+ tests; dry-run safe/hardware-free; presentation-only polish (no public API changes).
 - Standalone defense-lab (MCP/agent/TUI/pipeline absent).
-- See plan (updated 2026-06-12) + `crates/eggsec/src/mobile/dynamic.rs` (~1063 build_dynamic_recommendations, ~1088 format_dynamic_report, ~1122 section, new test ~2179).
+- See the dynamic-mobile plan plus `crates/eggsec-mobile-lab/src/dynamic.rs` for recommendations and report formatting.
 
 ## Recommendations
 
@@ -406,7 +406,7 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> ScanReportDa
 
 Phase 4a adds (to same module): `CorrelatedFinding` (now enriched: optional `score: Option<u8>`, `correlation_type: Option<CorrelationType>`, `enrichment: Option<String>`; non-breaking), `CorrelationType` (Direct/Indirect/Behavioral/CrossLayer), `CorrelationSummary`, `CorrelationResult` (correlations + timeline + summary), `CorrelationEngine` (min_score, `correlate`), and `correlate_reports` convenience. Scoring inside `correlate_findings` + engine path; `build_timeline` for cross-layer chronology.
 
-See `crates/eggsec/src/mobile/{mod,apk,ipa,dynamic,adb,runtime,traffic}.rs`. Phase 1 handoff (complete 2026-06-12) + Phase 2 closed 2026-06-12. Phase 3 (Frida) + Phase 4a (Core Correlation Engine) delivered 2026-06-12. Phase 4b TUI deferred; reporting polish (human output) delivered 2026-06-12.
+See `crates/eggsec/src/mobile/mod.rs` and `crates/eggsec-mobile-lab/src/` for the adapter and domain implementation. Phase 1 handoff (complete 2026-06-12) + Phase 2 closed 2026-06-12. Phase 3 (Frida) + Phase 4a (Core Correlation Engine) delivered 2026-06-12. Phase 4b TUI deferred; reporting polish (human output) delivered 2026-06-12.
 
 ## Example Output (Human, abbreviated)
 

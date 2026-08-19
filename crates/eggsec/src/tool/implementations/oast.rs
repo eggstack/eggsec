@@ -41,6 +41,7 @@ pub struct Interaction {
 
 impl OastTool {
     pub fn new() -> Self {
+        crate::install_tls_provider();
         let client = Client::builder()
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
             .pool_idle_timeout(Duration::from_secs(

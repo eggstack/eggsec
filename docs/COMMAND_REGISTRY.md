@@ -133,7 +133,7 @@ through `EnforcementContext::evaluate()` before execution.
 | `registry_backed` | `bool` | Shorthand for `dispatch_mode == RegistryBacked`. The descriptor/execution path uses registry metadata. |
 | `dispatch_mode` | `CommandDispatchMode` | See below. |
 
-Invariants enforced by `tests/command_registry.rs`:
+Invariants enforced by `crates/eggsec/tests/command_registry.rs`:
 - `cli_interactive_only → !programmatic_visible`
 - `cli_interactive_only → !tui_visible`
 - `HelperOnly → cli_interactive_only`

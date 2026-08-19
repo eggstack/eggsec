@@ -199,7 +199,7 @@ Add:
 ```text
 docs/python/async-api.md
 docs/python/endpoint-discovery.md
-docs/python/fingerprinting.md
+docs/python/service-fingerprinting.md
 examples/python/async_multi_target_scan.py
 examples/python/endpoint_discovery.py
 examples/python/service_fingerprint.py

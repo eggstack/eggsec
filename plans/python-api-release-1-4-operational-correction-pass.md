@@ -96,9 +96,9 @@ Remove runtime-lifetime skip markers and add:
 
 ### Likely files
 
-- `crates/eggsec-python/src/runtime.rs`
 - `crates/eggsec-python/src/runtime_async.rs`
-- `crates/eggsec-python/src/runtime_bridge.rs`
+- `crates/eggsec-python/src/runtime_async.rs`
+- `crates/eggsec-python/src/runtime_sync.rs`
 - `crates/eggsec-runtime/`
 - all stateful async binding modules
 - `test_async_io_lifecycle.py`
@@ -668,7 +668,7 @@ python scripts/check-python-capability-matrix.py
 python scripts/check-python-architecture-guards.py
 python scripts/check_python_stub_parity.py
 bash scripts/check_python_types.sh
-bash scripts/validate_python_release_1_2.sh --all --ci
+python scripts/validate_python_profiles.py
 ```
 
 Add subsystem scripts such as:

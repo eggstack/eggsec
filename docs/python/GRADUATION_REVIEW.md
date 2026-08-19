@@ -29,7 +29,7 @@ classification.
 | Cancellation | `test_cancellation_contract.py` — CancellationToken lifecycle (create/cancel/reset), engine-level cancellation, async detachment, resource leak prevention, latency < 10ms | PASS | 15+ tests across 5 test classes |
 | Events | `test_events_cancellation.py:50-80` — pipeline emits `StageLifecycleEvent` with monotonic sequence IDs; `pipeline.started` → `step.started` → `step.completed` → `pipeline.completed` | PASS | Timestamp monotonicity verified |
 | Serialization | `test_serialization.py:43-80` — `OperationRequest`, all typed request DTOs (`PortScanRequest`, `EndpointScanRequest`, etc.) survive JSON round-trip | PASS | to_dict() and to_json() verified |
-| Fixtures | `tests/fixtures/stable_core.py` — `StableCoreFixtures` context manager provides loopback TCP, TLS, HTTP servers with deterministic ports | PASS | Used by `test_stable_core_fixtures.py` |
+| Fixtures | `crates/eggsec-python/tests/fixtures/stable_core.py` — `StableCoreFixtures` context manager provides loopback TCP, TLS, HTTP servers with deterministic ports | PASS | Used by the stable-core fixture tests |
 | Documentation/stubs | `eggsec` top-level package exports all 10 operations with `__all__`; type stubs (`.pyi`) generated from Rust bindings | PASS | All importable as `eggsec.scan_ports`, `eggsec.async_scan_ports`, etc. |
 | Wheel profile | `default-wheel` profile (`profiles.json`) requires `required_min_tests: 1977`, `max_skips: 0` | PASS | Core profile always runs |
 

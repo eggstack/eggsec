@@ -25,7 +25,7 @@ Do not paper over failures with skipped tests or `|| true`.
 
 ### Problem
 
-`tests/test_enforcement.py` currently documents that `load_test_http`, `validate_waf`, and `fuzz_http` do not accept a `scope` parameter at the Python binding level. This is not acceptable for a host-language binding. The Python library is not the CLI, and it cannot rely on CLI-layer enforcement for functions that can generate significant traffic or active test payloads.
+`crates/eggsec-python/tests/test_enforcement.py` currently documents that `load_test_http`, `validate_waf`, and `fuzz_http` do not accept a `scope` parameter at the Python binding level. This is not acceptable for a host-language binding. The Python library is not the CLI, and it cannot rely on CLI-layer enforcement for functions that can generate significant traffic or active test payloads.
 
 ### Required API changes
 

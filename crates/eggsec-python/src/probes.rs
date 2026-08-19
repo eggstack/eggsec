@@ -1528,6 +1528,7 @@ async fn http_probe_impl(
     _extra_headers: Option<&[(String, String)]>,
 ) -> PyResult<HttpProbeResultPy> {
     let start = std::time::Instant::now();
+    eggsec::install_tls_provider();
 
     let mut builder = reqwest::Client::builder()
         .timeout(timeout)

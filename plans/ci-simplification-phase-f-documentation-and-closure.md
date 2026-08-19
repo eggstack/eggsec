@@ -124,11 +124,9 @@ Use call-site searches to identify orphaned files after workflow consolidation.
 Candidates include, subject to actual retained ownership:
 
 ```text
-scripts/build_python_release_evidence.py
-scripts/check_maturity_guard.py
-scripts/python_skip_budget.py
+historical Python evidence, maturity, and skip-budget helpers (removed)
 scripts/generate_python_compatibility_baseline.py
-scripts/validate_python_release_candidate.sh
+the historical Python release-candidate helper (removed)
 scripts/run_python_profile.py
 scripts/validate_python_profiles.py
 crates/eggsec-python/validation/profiles.json

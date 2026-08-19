@@ -18,6 +18,7 @@ impl ClientPool {
         user_agent: Option<String>,
         proxy: Option<reqwest::Proxy>,
     ) -> Self {
+        crate::install_tls_provider();
         let user_agent = user_agent.unwrap_or_else(|| "Eggsec/1.0".to_string());
 
         let mut builders = Vec::new();

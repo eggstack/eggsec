@@ -128,7 +128,7 @@ respective exposure flags are enforced at execute time via
 
 - `ToolRegistration` type and builder functions added in `tool::registration` (`all_tool_registrations()`, `mcp_tool_registrations()`, `mcp_tool_registrations_default_visible()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`)
 - MCP, REST, gRPC, and Agent listing now filter through registration metadata instead of raw `registry.list()` calls
-- 10 new tool registration consistency tests (`tests/tool_registration.rs`) validate registration coverage, exposure flag alignment, source correctness, and protocol filtering
+- 10 new tool registration consistency tests (`crates/eggsec/tests/tool_registration.rs`) validate registration coverage, exposure flag alignment, source correctness, and protocol filtering
 - Enforcement paths verified unchanged — `EnforcementContext::evaluate()` remains the sole authorization gate
 - Registration-to-execution bridge demonstrated for the `search` tool: registration metadata resolves to `OperationDescriptor` via `metadata_for_tool_id()` → `descriptor_for_target()` → `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`
 

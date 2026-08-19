@@ -27,6 +27,7 @@ static INSECURE_HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
     });
 
 pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
+    crate::install_tls_provider();
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
@@ -39,6 +40,7 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
 }
 
 pub fn get_shared_http_client() -> Client {
+    crate::install_tls_provider();
     HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
         // First try with full options
         if let Ok(client) = Client::builder()
@@ -59,6 +61,7 @@ pub fn get_shared_http_client() -> Client {
 }
 
 pub fn get_shared_insecure_http_client() -> Client {
+    crate::install_tls_provider();
     INSECURE_HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
         // First try with full options
         if let Ok(client) = Client::builder()
@@ -110,6 +113,7 @@ pub fn get_shared_insecure_http_client() -> Client {
 /// Only use this for testing in isolated environments. For production testing,
 /// ensure proper certificates are installed on target systems.
 pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
+    crate::install_tls_provider();
     tracing::debug!(
         "Creating HTTP client with disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."
@@ -128,6 +132,7 @@ pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
 }
 
 pub fn create_http_client_with_proxy(timeout_secs: u64, proxy: &str) -> Result<Client> {
+    crate::install_tls_provider();
     let proxy = reqwest::Proxy::http(proxy).context("Invalid proxy URL")?;
 
     Client::builder()
@@ -146,6 +151,7 @@ pub fn create_http_client_with_options<F>(timeout_secs: u64, builder_fn: F) -> R
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
+    crate::install_tls_provider();
     let builder = builder_fn(
         Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
@@ -190,6 +196,7 @@ pub fn create_insecure_client_with_options<F>(timeout_secs: u64, builder_fn: F) 
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
+    crate::install_tls_provider();
     tracing::debug!(
         "Creating HTTP client with custom options and disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."

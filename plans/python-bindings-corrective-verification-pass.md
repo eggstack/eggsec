@@ -212,7 +212,7 @@ Validate that `.pyi` files match runtime exports.
 Add a small checker script, for example:
 
 ```text
-scripts/check_eggsec_python_stubs.py
+the historical Python stub checker (removed)
 ```
 
 The script should:

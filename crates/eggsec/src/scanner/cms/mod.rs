@@ -98,6 +98,7 @@ impl CmsScanner {
     }
 
     pub fn new_with_tls_verification(verify_tls: bool) -> Result<Self> {
+        crate::install_tls_provider();
         let client = if verify_tls {
             create_http_client(30)?
         } else {
@@ -343,6 +344,7 @@ fn version_lt(current: &str, fixed: &str) -> bool {
 
 impl Default for CmsScanner {
     fn default() -> Self {
+        crate::install_tls_provider();
         Self::new().unwrap_or_else(|_| Self {
             http_client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))

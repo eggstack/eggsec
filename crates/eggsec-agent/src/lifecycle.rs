@@ -81,6 +81,9 @@ impl LifecycleManager {
         config: LifecycleConfig,
     ) -> (Self, mpsc::Receiver<LifecycleEvent>) {
         let (event_tx, event_rx) = mpsc::channel(100);
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .unwrap_or(());
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(eggsec_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)

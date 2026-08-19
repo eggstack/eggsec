@@ -39,7 +39,7 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use eggsec::scanner::templates::{TemplateEngine, TemplateLoader};
+//! use eggsec::scanner::templates::{TemplateEngine, TemplateExecutor, TemplateLoader};
 //! use std::path::PathBuf;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {

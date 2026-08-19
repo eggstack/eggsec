@@ -6,9 +6,12 @@
 
 use crate::types::SensitiveString;
 use crate::utils::create_insecure_http_client;
+use lru::LruCache;
+use parking_lot::Mutex;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -444,12 +447,28 @@ impl SessionState {
 /// Login sequence executor - executes recorded login steps
 pub struct LoginExecutor {
     client: reqwest::Client,
+    regex_cache: Mutex<LruCache<String, Regex>>,
 }
 
 impl LoginExecutor {
     pub fn new(timeout_secs: u64) -> crate::error::Result<Self> {
         let client = create_insecure_http_client(timeout_secs)?;
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            regex_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(100).expect("regex cache size is non-zero"),
+            )),
+        })
+    }
+
+    fn cached_regex(&self, pattern: &str) -> Option<Regex> {
+        let mut cache = self.regex_cache.lock();
+        if let Some(regex) = cache.get(pattern) {
+            return Some(regex.clone());
+        }
+        let regex = Regex::new(pattern).ok()?;
+        cache.put(pattern.to_string(), regex.clone());
+        Some(regex)
     }
 
     /// Execute a login sequence and return the result
@@ -578,7 +597,7 @@ impl LoginExecutor {
                         }
                         ResponseField::Regex(pattern) => {
                             if let Some(body) = variables.get("_response_body") {
-                                if let Ok(re) = Regex::new(pattern) {
+                                if let Some(re) = self.cached_regex(pattern) {
                                     re.find(body)
                                         .map(|m| m.as_str().to_string())
                                         .unwrap_or_default()
@@ -593,7 +612,7 @@ impl LoginExecutor {
 
                     // Apply optional pattern
                     let value = if let Some(pat) = pattern {
-                        if let Ok(re) = Regex::new(pat) {
+                        if let Some(re) = self.cached_regex(pat) {
                             re.find(&value)
                                 .map(|m| m.as_str().to_string())
                                 .unwrap_or(value)
@@ -634,9 +653,8 @@ impl LoginExecutor {
                     };
                     // Recursively execute nested steps
                     // (simplified - full implementation would need recursive execution)
-                    for step in steps {
+                    for _ in steps {
                         // Placeholder for future recursive step execution
-                        let _ = step;
                     }
                 }
             }
@@ -836,6 +854,7 @@ pub struct FormDetector {
     username_fields: Vec<String>,
     /// Common password field names
     password_fields: Vec<String>,
+    regex_cache: Mutex<LruCache<String, Regex>>,
 }
 
 impl FormDetector {
@@ -857,7 +876,20 @@ impl FormDetector {
                 "pwd".to_string(),
                 "passwd".to_string(),
             ],
+            regex_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(100).expect("regex cache size is non-zero"),
+            )),
         }
+    }
+
+    fn cached_regex(&self, pattern: &str) -> Option<Regex> {
+        let mut cache = self.regex_cache.lock();
+        if let Some(regex) = cache.get(pattern) {
+            return Some(regex.clone());
+        }
+        let regex = Regex::new(pattern).ok()?;
+        cache.put(pattern.to_string(), regex.clone());
+        Some(regex)
     }
 
     /// Detect login forms in HTML and return form details
@@ -926,7 +958,7 @@ impl FormDetector {
     fn find_field_name(&self, html: &str, names: &[String]) -> Option<String> {
         for name in names {
             let pattern = format!(r#"name=["']({}|{}_?)["']"#, name, name);
-            let re = Regex::new(&pattern).ok()?;
+            let re = self.cached_regex(&pattern)?;
             if let Some(cap) = re.captures(html) {
                 if let Some(name_match) = cap.get(1) {
                     return Some(name_match.as_str().to_string());
@@ -938,7 +970,7 @@ impl FormDetector {
 
     fn extract_attribute(&self, html: &str, attr: &str) -> Option<String> {
         let pattern = format!(r#"{}=["']([^"']+)["']"#, attr);
-        let re = Regex::new(&pattern).ok()?;
+        let re = self.cached_regex(&pattern)?;
         re.captures(html)
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().to_string())

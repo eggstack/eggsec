@@ -451,4 +451,4 @@ sensitive workflows.
 Symbols not in `api_surface()` but present in the public API are those
 accessed via `try/except AttributeError` blocks in `__init__.py` (feature-gated)
 and the `DeprecatedWarning` class. The `api_surface()` snapshot is tracked
-in `tests/api_surface_snapshot.json` for regression detection.
+in `crates/eggsec-python/tests/api_surface_snapshot.json` for regression detection.

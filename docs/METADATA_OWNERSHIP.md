@@ -19,7 +19,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 | Tool aliases | `ALL_OPERATION_METADATA_ALIASES` in `config/policy.rs` | `metadata_for_tool_id()` resolver |
 | Domain category, integrations, dry-run/evidence/baseline | `DomainDescriptor` in `domain/mod.rs` | Capability matrix generation, preflight domain info, documentation |
 | Capability matrix | `docs/CAPABILITY_MATRIX.md` | Humans (manually maintained from OperationMetadata + DomainDescriptor; metadata consistency tests validate underlying structures) |
-| Consistency tests | `tests/metadata_consistency.rs` | CI, development validation |
+| Consistency tests | `crates/eggsec/tests/metadata_consistency.rs` | CI, development validation |
 
 ## Ownership Rules
 
@@ -37,7 +37,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 1. Define `const` integration structs in `crates/eggsec/src/domain/mod.rs` (operations, CLI, TUI, tools, reports).
 2. Define a `const DomainDescriptor` with all required fields.
 3. Add the descriptor to `all_domain_descriptors()`.
-4. Add unit tests in `domain/mod.rs` and integration tests in `tests/metadata_consistency.rs`.
+4. Add unit tests in `domain/mod.rs` and integration tests in `crates/eggsec/tests/metadata_consistency.rs`.
 5. Update `docs/CAPABILITY_MATRIX.md`.
 6. Run `cargo test -p eggsec --lib -- domain` and `cargo test -p eggsec --test metadata_consistency`.
 

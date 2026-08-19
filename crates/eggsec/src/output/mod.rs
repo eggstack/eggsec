@@ -47,7 +47,7 @@ pub use run_manifest::RunManifest;
 pub mod extensions {
     use crate::pipeline::PipelineReport;
 
-    /// Extension trait for [`SarifBuilder`] to populate from a [`PipelineReport`].
+    /// Extension trait for the `SarifBuilder` type to populate from a [`PipelineReport`].
     pub trait SarifBuilderExt {
         fn with_report(self, report: &PipelineReport) -> Self;
     }
@@ -109,7 +109,7 @@ pub mod extensions {
         }
     }
 
-    /// Extension trait for [`JUnitBuilder`] to populate from a [`PipelineReport`].
+    /// Extension trait for the `JUnitBuilder` type to populate from a [`PipelineReport`].
     pub trait JUnitBuilderExt {
         fn with_report(self, report: &PipelineReport) -> Self;
     }
