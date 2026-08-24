@@ -36,6 +36,21 @@ pub fn escape_csv(s: &str) -> String {
     }
 }
 
+pub fn escape_xml(s: &str) -> String {
+    let mut buf = String::with_capacity(s.len() + 64);
+    for c in s.chars() {
+        match c {
+            '&' => buf.push_str("&amp;"),
+            '<' => buf.push_str("&lt;"),
+            '>' => buf.push_str("&gt;"),
+            '"' => buf.push_str("&quot;"),
+            '\'' => buf.push_str("&apos;"),
+            _ => buf.push(c),
+        }
+    }
+    buf
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,19 +78,4 @@ mod tests {
         assert!(result.starts_with('"'));
         assert!(result.contains('\r'));
     }
-}
-
-pub fn escape_xml(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len() + 64);
-    for c in s.chars() {
-        match c {
-            '&' => buf.push_str("&amp;"),
-            '<' => buf.push_str("&lt;"),
-            '>' => buf.push_str("&gt;"),
-            '"' => buf.push_str("&quot;"),
-            '\'' => buf.push_str("&apos;"),
-            _ => buf.push(c),
-        }
-    }
-    buf
 }

@@ -110,12 +110,30 @@ fn error_response(status: StatusCode, code: ErrorCode, message: String) -> Respo
         .into_response()
 }
 
+/// Serialize a `ServerMessage` for an HTTP response.
+///
+/// Falls back to a 500 response instead of panicking when serialization
+/// fails, so one malformed message cannot cascade into handler-wide panics.
+fn json_response(msg: &ServerMessage) -> Response {
+    match serde_json::to_value(msg) {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => {
+            tracing::warn!(?error, "failed to serialize daemon response");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorCode::Internal,
+                "response serialization failed".to_string(),
+            )
+        }
+    }
+}
+
 async fn health(State(state): State<Arc<HttpState>>) -> Response {
     let cmd = ClientCommand::Health {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
     let resp = state.host.handle_command(cmd, make_ctx(None)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn capabilities(State(state): State<Arc<HttpState>>) -> Response {
@@ -123,7 +141,7 @@ async fn capabilities(State(state): State<Arc<HttpState>>) -> Response {
         request_id: uuid::Uuid::new_v4().to_string(),
     };
     let resp = state.host.handle_command(cmd, make_ctx(None)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn declare_client(
@@ -161,7 +179,7 @@ async fn declare_client(
         label,
     };
     let resp = state.host.handle_command(cmd, make_ctx(None)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn list_sessions(
@@ -175,7 +193,7 @@ async fn list_sessions(
         request_id: uuid::Uuid::new_v4().to_string(),
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn create_session(
@@ -204,7 +222,7 @@ async fn create_session(
         labels,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn get_snapshot(
@@ -230,7 +248,7 @@ async fn get_snapshot(
         session_id,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn submit_task(
@@ -271,7 +289,7 @@ async fn submit_task(
         request,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn cancel_task(
@@ -308,7 +326,7 @@ async fn cancel_task(
         task_id,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn cancel_active(
@@ -334,7 +352,7 @@ async fn cancel_active(
         session_id,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn subscribe_events(
@@ -368,7 +386,13 @@ async fn subscribe_events(
                     session_id: sid,
                     event,
                 };
-                let data = serde_json::to_string(&msg).unwrap();
+                let data = match serde_json::to_string(&msg) {
+                    Ok(data) => data,
+                    Err(error) => {
+                        tracing::warn!(?error, "failed to serialize SSE runtime event");
+                        continue;
+                    }
+                };
                 yield Ok(Event::default().data(data));
             }
         }
@@ -422,7 +446,7 @@ async fn approve_policy(
         reason,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn close_session(
@@ -448,7 +472,7 @@ async fn close_session(
         session_id,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn list_persisted_sessions(
@@ -462,7 +486,7 @@ async fn list_persisted_sessions(
         request_id: uuid::Uuid::new_v4().to_string(),
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 async fn get_persisted_snapshot(
@@ -488,7 +512,7 @@ async fn get_persisted_snapshot(
         session_id,
     };
     let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
-    Json(serde_json::to_value(&resp).unwrap()).into_response()
+    json_response(&resp)
 }
 
 fn validate_bind_addr(addr: &SocketAddr, allow_public: bool) -> Result<(), String> {

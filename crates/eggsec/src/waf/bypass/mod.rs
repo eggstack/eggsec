@@ -84,7 +84,7 @@ impl BypassEngine {
         test_type: TestType,
     ) -> Result<Self> {
         let client = crate::utils::create_insecure_client_with_options(args.timeout, |builder| {
-            builder.redirect(reqwest::redirect::Policy::limited(
+            builder.redirect(crate::utils::same_host_redirect_policy(
                 crate::constants::waf::MAX_REDIRECTS,
             ))
         })?;

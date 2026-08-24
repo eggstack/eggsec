@@ -91,7 +91,9 @@ impl AdaptiveRateLimiter {
             .unwrap_or(true);
 
         if should_backoff {
-            let current = self.consecutive_errors.fetch_add(1, Ordering::SeqCst);
+            // Compare the post-increment count so errors trigger backoff at
+            // exactly `rate_limit_threshold` occurrences.
+            let current = self.consecutive_errors.fetch_add(1, Ordering::SeqCst) + 1;
             if current >= self.rate_limit_threshold {
                 self.backoff();
             }
@@ -99,10 +101,9 @@ impl AdaptiveRateLimiter {
     }
 
     pub fn record_timeout(&self) {
-        self.consecutive_errors.fetch_add(1, Ordering::SeqCst);
-        let errors = self.consecutive_errors.load(Ordering::SeqCst);
+        let current = self.consecutive_errors.fetch_add(1, Ordering::SeqCst) + 1;
 
-        if errors >= self.rate_limit_threshold {
+        if current >= self.rate_limit_threshold {
             self.backoff();
         }
     }
@@ -123,8 +124,10 @@ impl AdaptiveRateLimiter {
             return;
         }
 
-        let new_rate = ((current as f64) * self.recovery_multiplier) as u64;
-        let new_rate = new_rate.min(self.max_rate);
+        // Round up so recovery always makes progress; with truncation a rate
+        // below 4 req/s could never recover ((n * 1.25) as u64 == n).
+        let new_rate = ((current as f64) * self.recovery_multiplier).ceil() as u64;
+        let new_rate = new_rate.max(current + 1).min(self.max_rate);
 
         self.current_rate.store(new_rate, Ordering::SeqCst);
     }

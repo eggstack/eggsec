@@ -26,7 +26,7 @@ impl ClientPool {
             let mut builder = Client::builder()
                 .timeout(timeout)
                 .danger_accept_invalid_certs(insecure)
-                .redirect(reqwest::redirect::Policy::limited(
+                .redirect(super::same_host_redirect_policy(
                     constants::http::DEFAULT_MAX_REDIRECTS as usize,
                 ))
                 .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::PyObject;
@@ -10,11 +11,24 @@ use pyo3::types::PyDict;
 
 const JSONL_REPOSITORY_SCHEMA_VERSION: u32 = 1;
 
+/// Disambiguates concurrent flush temp files (same-millisecond flushes from
+/// parallel instances must not collide on one temp path).
+static FLUSH_SEQ: AtomicU64 = AtomicU64::new(0);
+
 fn current_epoch_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn unique_flush_suffix() -> String {
+    format!(
+        "{}_{}_{}",
+        current_epoch_ms(),
+        std::process::id(),
+        FLUSH_SEQ.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +351,7 @@ impl JsonlFindingRepository {
         let dir = Path::new(&self.path)
             .parent()
             .unwrap_or_else(|| Path::new("."));
-        let tmp_path = dir.join(format!(".jsonl_finding_tmp_{}", current_epoch_ms()));
+        let tmp_path = dir.join(format!(".jsonl_finding_tmp_{}", unique_flush_suffix()));
         let final_path = Path::new(&self.path);
 
         {
@@ -731,7 +745,7 @@ impl JsonlAssessmentRepository {
         let dir = Path::new(&self.path)
             .parent()
             .unwrap_or_else(|| Path::new("."));
-        let tmp_path = dir.join(format!(".jsonl_assessment_tmp_{}", current_epoch_ms()));
+        let tmp_path = dir.join(format!(".jsonl_assessment_tmp_{}", unique_flush_suffix()));
         let final_path = Path::new(&self.path);
 
         {

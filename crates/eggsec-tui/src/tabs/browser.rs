@@ -187,8 +187,8 @@ impl TabRender for BrowserTab {
             .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let input_area = chunks.get(0).copied().unwrap_or(area);
+        let results_area = chunks.get(1).copied().unwrap_or_default();
 
         let config_inner = render_config_block(
             f,

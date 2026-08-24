@@ -489,12 +489,10 @@ impl TabInput for WafTab {
         }
 
         if self.focus_area == WafFocusArea::ModeRadio {
-            if let Some(sel) = self.mode_radio.selected {
-                let len = self.mode_radio.options.len();
-                if len > 0 {
-                    self.mode_radio.select((sel + 1) % len);
-                }
-            }
+            // Radio selection is changed with Up/Down; Enter confirms and
+            // advances to the next focus area, consistent with other tabs.
+            self.focused_checkbox_index = 0;
+            self.focus_area = WafFocusArea::Techniques;
             return;
         }
 
@@ -510,11 +508,8 @@ impl TabInput for WafTab {
             return;
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        // Not running and no earlier focus area consumed the key: start.
+        self.start();
     }
 
     fn handle_escape(&mut self) {

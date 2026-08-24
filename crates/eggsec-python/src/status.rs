@@ -675,9 +675,19 @@ impl OperationResult {
     }
 
     /// Compatibility accessor for callers that used the old string error.
+    ///
+    /// Prefers the structured error; falls back to the message embedded in a
+    /// `Failed` status so results built without a structured error still
+    /// surface their reason.
     #[getter]
     fn error_message(&self) -> Option<String> {
-        self.error.as_ref().map(|error| error.message.clone())
+        if let Some(error) = self.error.as_ref() {
+            return Some(error.message.clone());
+        }
+        match &self.status {
+            ExecutionStatus::Failed { error } => Some(error.clone()),
+            _ => None,
+        }
     }
 
     #[getter]

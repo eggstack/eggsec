@@ -1204,7 +1204,7 @@ pub fn render_standard_2area(
 
     let input_inner = render_config_block(
         f,
-        chunks[0],
+        chunks.get(0).copied().unwrap_or(area),
         config.title,
         config.focus_area == config.inputs_focused,
     );
@@ -1271,7 +1271,7 @@ pub fn render_standard_3area(
 
     let input_inner = render_config_block(
         f,
-        chunks[0],
+        chunks.get(0).copied().unwrap_or(area),
         config.title,
         config.focus_area == config.inputs_focused,
     );

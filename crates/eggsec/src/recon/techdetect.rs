@@ -46,7 +46,7 @@ impl TechDetector {
     pub fn new() -> Result<Self> {
         let client = create_insecure_client_with_options(15, |builder| {
             builder
-                .redirect(reqwest::redirect::Policy::limited(5))
+                .redirect(crate::utils::same_host_redirect_policy(5))
                 .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         })?;
 

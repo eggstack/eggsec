@@ -68,6 +68,28 @@ impl McpConstraintContext {
                 resolved_addresses: Vec::new(),
             }
         });
+
+        // A hostname target that failed to resolve carries no addresses, so
+        // address-based (CIDR) rules cannot evaluate against it. Fail closed
+        // unless a hostname-only rule independently matches, so a transient
+        // DNS outage cannot silently narrow CIDR+hostname enforcement to
+        // hostname-only.
+        let unresolved = target_scope.ip.is_none() && target_scope.resolved_addresses.is_empty();
+        let has_address_rule = self.allowed_targets.iter().any(|rule| rule.cidr.is_some());
+        if unresolved && has_address_rule {
+            let hostname_rule_matches = self
+                .allowed_targets
+                .iter()
+                .any(|rule| rule.cidr.is_none() && rule.matches(&target_scope));
+            if !hostname_rule_matches {
+                tracing::warn!(
+                    target = %target,
+                    "target unresolved while address-based scope rules are configured; denying"
+                );
+                return false;
+            }
+        }
+
         self.allowed_targets
             .iter()
             .any(|rule| rule.matches(&target_scope))

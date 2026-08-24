@@ -299,12 +299,18 @@ impl Tab {
 
     pub fn next(&self) -> Tab {
         let all = Self::all();
+        if all.is_empty() {
+            return *self;
+        }
         let idx = all.iter().position(|t| t == self).unwrap_or(0);
         all[(idx + 1) % all.len()]
     }
 
     pub fn prev(&self) -> Tab {
         let all = Self::all();
+        if all.is_empty() {
+            return *self;
+        }
         let idx = all.iter().position(|t| t == self).unwrap_or(0);
         if idx == 0 {
             all[all.len() - 1]

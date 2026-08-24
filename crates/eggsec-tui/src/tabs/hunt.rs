@@ -232,8 +232,8 @@ impl TabRender for HuntTab {
             .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let input_area = chunks.get(0).copied().unwrap_or(area);
+        let results_area = chunks.get(1).copied().unwrap_or_default();
 
         let is_config_focused = self.focus_area == StandardFocusArea::Inputs
             || self.focus_area == StandardFocusArea::Options;

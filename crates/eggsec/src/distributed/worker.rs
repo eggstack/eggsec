@@ -350,57 +350,75 @@ impl Worker {
                     #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
                     let dispatcher = dispatcher.clone();
 
+                    let timeout_task_id = task_id.clone();
+                    let timeout_stats = Arc::clone(&stats);
                     tokio::spawn(async move {
-                        #[cfg(any(
-                            feature = "tool-api",
-                            feature = "rest-api",
-                            feature = "grpc-api"
-                        ))]
-                        let result = process_task(task, enforcement, dispatcher).await;
-                        #[cfg(not(any(
-                            feature = "tool-api",
-                            feature = "rest-api",
-                            feature = "grpc-api"
-                        )))]
-                        let result = process_task(task).await;
+                        let process = async move {
+                            #[cfg(any(
+                                feature = "tool-api",
+                                feature = "rest-api",
+                                feature = "grpc-api"
+                            ))]
+                            let result = process_task(task, enforcement, dispatcher).await;
+                            #[cfg(not(any(
+                                feature = "tool-api",
+                                feature = "rest-api",
+                                feature = "grpc-api"
+                            )))]
+                            let result = process_task(task).await;
 
-                        let task_result = match result {
-                            Ok(r) => r,
-                            Err(e) => {
-                                tracing::error!("Task processing error: {}", e);
-                                TaskResult {
-                                    task_id: task_id.clone(),
-                                    success: false,
-                                    output: String::new(),
-                                    error: Some(e.to_string()),
-                                    duration_millis: 0,
+                            let task_result = match result {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    tracing::error!("Task processing error: {}", e);
+                                    TaskResult {
+                                        task_id: task_id.clone(),
+                                        success: false,
+                                        output: String::new(),
+                                        error: Some(e.to_string()),
+                                        duration_millis: 0,
+                                    }
+                                }
+                            };
+
+                            {
+                                let mut s = stats.lock().await;
+                                s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
+                                if task_result.success {
+                                    s.tasks_completed += 1;
+                                } else {
+                                    s.tasks_failed += 1;
                                 }
                             }
-                        };
 
-                        {
-                            let mut s = stats.lock().await;
-                            s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
-                            if task_result.success {
-                                s.tasks_completed += 1;
-                            } else {
-                                s.tasks_failed += 1;
-                            }
-                        }
-
-                        let Some(domain) = tls_domain.as_deref() else {
-                            tracing::warn!("TLS domain is required for worker task results");
-                            return;
-                        };
-                        let mut client = match RemoteClient::with_tls(psk, domain) {
-                            Ok(client) => client,
-                            Err(error) => {
-                                tracing::warn!(%error, "Failed to initialize worker result TLS");
+                            let Some(domain) = tls_domain.as_deref() else {
+                                tracing::warn!("TLS domain is required for worker task results");
                                 return;
+                            };
+                            let mut client = match RemoteClient::with_tls(psk, domain) {
+                                Ok(client) => client,
+                                Err(error) => {
+                                    tracing::warn!(%error, "Failed to initialize worker result TLS");
+                                    return;
+                                }
+                            };
+                            if let Err(e) = client.send_result(&host, port, task_result).await {
+                                tracing::warn!("Failed to send task result to coordinator: {}", e);
                             }
                         };
-                        if let Err(e) = client.send_result(&host, port, task_result).await {
-                            tracing::warn!("Failed to send task result to coordinator: {}", e);
+                        const TASK_PROCESSING_TIMEOUT: std::time::Duration =
+                            std::time::Duration::from_secs(300);
+                        if tokio::time::timeout(TASK_PROCESSING_TIMEOUT, process)
+                            .await
+                            .is_err()
+                        {
+                            tracing::warn!(
+                                task_id = %timeout_task_id,
+                                "worker task processing timed out after 300s"
+                            );
+                            let mut s = timeout_stats.lock().await;
+                            s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
+                            s.tasks_failed += 1;
                         }
                     });
                 }

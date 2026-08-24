@@ -1,3 +1,4 @@
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -33,6 +34,18 @@ pub async fn run_server(
     let socket_path = &host.config().socket_path;
     let _ = std::fs::remove_file(socket_path);
     let listener = UnixListener::bind(socket_path)?;
+
+    // Restrict the socket to its owner. With a permissive umask the socket
+    // inherits world-connectable permissions, which would let any local user
+    // connect and drive scans as the daemon owner.
+    let permissions = std::fs::Permissions::from_mode(0o600);
+    if let Err(e) = std::fs::set_permissions(socket_path, permissions) {
+        tracing::warn!(
+            "Failed to restrict daemon socket {} to 0600: {}",
+            socket_path,
+            e
+        );
+    }
 
     let max_clients = host.config().max_clients;
     let semaphore = Arc::new(Semaphore::new(max_clients));
@@ -121,11 +134,18 @@ async fn handle_client(
     };
 
     loop {
-        let line = match reader.next_line().await {
-            Ok(Some(line)) => line,
-            Ok(None) => break,
-            Err(e) => {
+        // Idle bound for the command loop: a client that connects and then
+        // stalls would otherwise hold its semaphore permit indefinitely.
+        const IDLE_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+        let line = match tokio::time::timeout(IDLE_READ_TIMEOUT, reader.next_line()).await {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => break,
+            Ok(Err(e)) => {
                 tracing::warn!("Read error: {}", e);
+                break;
+            }
+            Err(_) => {
+                tracing::debug!("Client idle timeout (300s); closing connection");
                 break;
             }
         };

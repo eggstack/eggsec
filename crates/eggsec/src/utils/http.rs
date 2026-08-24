@@ -217,6 +217,34 @@ where
     builder.build().context("Failed to create HTTP client")
 }
 
+/// A redirect policy that follows at most `max_redirects` redirects but only
+/// when the redirect target stays on the same host as the original request.
+///
+/// Scoped tooling must never be bounced onto out-of-scope hosts via 3xx
+/// responses (e.g., a target answering `302 -> http://169.254.169.254/`).
+/// Cross-host redirects are stopped (not an error), so the redirect response
+/// itself is still surfaced to the caller.
+pub fn same_host_redirect_policy(max_redirects: usize) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= max_redirects {
+            return attempt.error("too many redirects");
+        }
+        let same_host = match attempt.previous().first() {
+            Some(original) => original.host_str() == attempt.url().host_str(),
+            None => true,
+        };
+        if same_host {
+            attempt.follow()
+        } else {
+            tracing::warn!(
+                to = %attempt.url(),
+                "blocked cross-host redirect to out-of-scope host"
+            );
+            attempt.stop()
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

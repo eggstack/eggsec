@@ -277,9 +277,12 @@ impl RemoteResult {
 }
 
 pub fn generate_psk() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
+    // OsRng (getrandom) rather than a fork-reproducible PRNG: PSKs are
+    // long-lived key material and must not repeat across process forks.
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    OsRng.fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 

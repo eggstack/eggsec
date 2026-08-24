@@ -213,6 +213,7 @@ impl TabState for ScanEndpointsTab {
         }
         self.focus_area = StandardFocusArea::Inputs;
         self.include_404_checkbox.checked = true;
+        self.include_404_checkbox.focused = false;
     }
 }
 
@@ -223,8 +224,8 @@ impl TabRender for ScanEndpointsTab {
             .constraints([Constraint::Length(17), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let input_area = chunks.get(0).copied().unwrap_or(area);
+        let results_area = chunks.get(1).copied().unwrap_or_default();
 
         let input_block = Block::default()
             .borders(Borders::ALL)

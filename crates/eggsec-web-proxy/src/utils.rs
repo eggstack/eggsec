@@ -5,6 +5,23 @@ use tokio::time::timeout;
 
 use crate::error::{Result, WebProxyError};
 
+/// Ensure a rustls crypto provider is installed before building TLS clients.
+///
+/// reqwest built with `rustls-no-provider` panics if no process-level provider
+/// has been installed. Installation is idempotent; the error from a second
+/// install attempt is intentionally ignored.
+pub fn ensure_rustls_provider() {
+    static INSTALL_PROVIDER: std::sync::Once = std::sync::Once::new();
+    INSTALL_PROVIDER.call_once(|| {
+        if rustls::crypto::ring::default_provider()
+            .install_default()
+            .is_err()
+        {
+            tracing::debug!("rustls crypto provider already installed");
+        }
+    });
+}
+
 /// Create an insecure (skip certificate verification) reqwest client
 /// with a custom timeout and optional builder customization.
 pub fn create_insecure_client_with_options<F>(
@@ -14,6 +31,7 @@ pub fn create_insecure_client_with_options<F>(
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
+    ensure_rustls_provider();
     let builder = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(timeout_secs));

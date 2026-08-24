@@ -147,7 +147,7 @@ impl SslAuditor {
     /// protocol versions. A future improvement could use raw `rustls` or `native_tls`
     /// connections to test specific protocol support.
     async fn probe_protocol(&self, url: &str, _protocol: &str) -> bool {
-        let client = match create_insecure_client_with_options(self.timeout.as_secs() as u64, |builder| {
+        let client = match create_insecure_client_with_options(self.timeout.as_secs(), |builder| {
             builder
         }) {
             Ok(c) => c,

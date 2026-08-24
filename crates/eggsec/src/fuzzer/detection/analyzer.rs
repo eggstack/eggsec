@@ -238,8 +238,10 @@ impl TimingAnalyzer {
             sorted[len / 2]
         };
 
-        let p90_idx = (len as f64 * 0.90) as usize;
-        let p99_idx = (len as f64 * 0.99) as usize;
+        // Nearest-rank index over 0-based sorted data so small samples don't
+        // collapse percentiles onto the maximum element.
+        let nearest_rank =
+            |p: f64| -> usize { (((len - 1) as f64 * p).round() as usize).min(len - 1) };
         let max_val = sorted[len - 1];
 
         Some(TimingStats {
@@ -247,8 +249,8 @@ impl TimingAnalyzer {
             max: max_val,
             mean,
             median,
-            p90: sorted.get(p90_idx).copied().unwrap_or(max_val),
-            p99: sorted.get(p99_idx).copied().unwrap_or(max_val),
+            p90: sorted[nearest_rank(0.90)],
+            p99: sorted[nearest_rank(0.99)],
             sample_count: len,
         })
     }

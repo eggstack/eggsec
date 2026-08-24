@@ -220,6 +220,7 @@ impl FuzzEngine {
     }
 
     fn build_client(args: &FuzzConfig) -> Result<Client> {
+        crate::install_tls_provider();
         if args.common.insecure {
             tracing::warn!(
                 "TLS certificate verification disabled. This is insecure and should only \
@@ -229,7 +230,7 @@ impl FuzzEngine {
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))
             .danger_accept_invalid_certs(args.common.insecure)
-            .redirect(reqwest::redirect::Policy::limited(
+            .redirect(crate::utils::same_host_redirect_policy(
                 crate::constants::http::DEFAULT_MAX_REDIRECTS as usize,
             ))
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)

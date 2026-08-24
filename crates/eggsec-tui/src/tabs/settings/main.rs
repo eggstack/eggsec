@@ -772,6 +772,12 @@ impl SettingsTab {
         self.current_section = SettingsSection::Http;
         self.detail_focus_index = 0;
         self.status_message = String::new();
+        // Transient theme state mirrors new() defaults; a stale pending
+        // reload or preview would otherwise trigger unintended refreshes.
+        self.pending_theme_name = None;
+        self.resolved_theme_colors = None;
+        self.needs_theme_preview_refresh = false;
+        self.pending_theme_reload = false;
         self.sync_component_focus();
     }
 

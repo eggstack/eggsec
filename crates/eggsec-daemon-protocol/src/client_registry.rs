@@ -6,7 +6,7 @@ use crate::protocol::ClientCommand;
 use eggsec_runtime::{ClientId, RuntimeSurface};
 
 /// The kind of client connecting to the daemon.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientKind {
     Cli,
@@ -15,13 +15,8 @@ pub enum ClientKind {
     Mcp,
     Rest,
     Agent,
+    #[default]
     Unknown,
-}
-
-impl Default for ClientKind {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Role a client has for a specific session.

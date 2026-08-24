@@ -30,7 +30,7 @@ impl WafDetector {
         let ua = crate::waf::bypass::headers::get_random_ua().to_string();
         let client = create_insecure_client_with_options(waf::SMUGGLING_TIMEOUT_SECS, |builder| {
             builder
-                .redirect(reqwest::redirect::Policy::limited(waf::MAX_REDIRECTS))
+                .redirect(crate::utils::same_host_redirect_policy(waf::MAX_REDIRECTS))
                 .user_agent(ua)
         })?;
 

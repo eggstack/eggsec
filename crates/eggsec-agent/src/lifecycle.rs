@@ -118,13 +118,23 @@ impl LifecycleManager {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        Self::perform_health_check(
-                            &health_status,
-                            &agent_registry,
-                            &config,
-                            &event_tx,
-                            &client,
-                        ).await;
+                        // Bound each pass so a stalled registry/network cannot
+                        // wedge the monitor task indefinitely.
+                        if tokio::time::timeout(
+                            Duration::from_secs(60),
+                            Self::perform_health_check(
+                                &health_status,
+                                &agent_registry,
+                                &config,
+                                &event_tx,
+                                &client,
+                            ),
+                        )
+                        .await
+                        .is_err()
+                        {
+                            tracing::warn!("Agent health check pass timed out after 60s");
+                        }
                     }
                 }
             }
@@ -147,13 +157,23 @@ impl LifecycleManager {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        Self::perform_health_check(
-                            &health_status,
-                            &agent_registry,
-                            &config,
-                            &event_tx,
-                            &client,
-                        ).await;
+                        // Bound each pass so a stalled registry/network cannot
+                        // wedge the monitor task indefinitely.
+                        if tokio::time::timeout(
+                            Duration::from_secs(60),
+                            Self::perform_health_check(
+                                &health_status,
+                                &agent_registry,
+                                &config,
+                                &event_tx,
+                                &client,
+                            ),
+                        )
+                        .await
+                        .is_err()
+                        {
+                            tracing::warn!("Agent health check pass timed out after 60s");
+                        }
                     }
                     _ = token.cancelled() => {
                         break;

@@ -1124,7 +1124,9 @@ impl serde::Serialize for DbProbeRequest {
         map.serialize_entry("port", &self.port)?;
         map.serialize_entry("database", &self.database)?;
         map.serialize_entry("username", &self.username)?;
-        map.serialize_entry("password", &self.password)?;
+        // Never serialize the raw credential; mirror the to_dict/to_json
+        // redaction so any serde-based persistence/logging path is safe.
+        map.serialize_entry("password", &self.password.as_ref().map(|_| "[REDACTED]"))?;
         map.serialize_entry("timeout_ms", &self.timeout_ms)?;
         map.end()
     }
@@ -1724,9 +1726,10 @@ mod tests {
     fn test_db_probe_request_no_password() {
         let req = DbProbeRequest::new("10.0.0.1".into(), None, None, None, None, None);
         assert!(req.password().is_none());
-        // Serialize and verify no password field leaked
+        // Serialize and verify no password value leaked (null is expected)
         let json = serde_json::to_string(&req).unwrap();
-        assert!(!json.contains("password"));
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("password").map(|v| v.is_null()).unwrap_or(true));
     }
 
     #[test]

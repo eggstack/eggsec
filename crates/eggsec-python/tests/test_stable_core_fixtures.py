@@ -53,6 +53,9 @@ def _normalized(value: Any) -> Any:
             # Fuzz result timing-dependent counters (vary across runs/platforms)
             "waf_bypasses",
             "time_anomalies",
+            # Per-result is_vulnerable derives from is_anomaly, which flips on
+            # sub-millisecond loopback timings when baseline IQR lands near 0.
+            "is_vulnerable",
         }
         return {key: _normalized(item) for key, item in value.items() if key not in ignored}
     if isinstance(value, list):

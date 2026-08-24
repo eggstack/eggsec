@@ -54,8 +54,12 @@ impl PcapWriter {
 
         let len = data.len().min(self.snapshot_len);
 
+        // pcap timestamps are u32; saturate instead of silently truncating
+        // (Y2038) when the system clock is past the representable range.
+        let secs = u32::try_from(ts.as_secs()).unwrap_or(u32::MAX);
+
         let pkt_hdr = [
-            (ts.as_secs() as u32).to_le_bytes(),
+            secs.to_le_bytes(),
             (ts.subsec_nanos() as u32).to_le_bytes(),
             (len as u32).to_le_bytes(),
             (data.len() as u32).to_le_bytes(),

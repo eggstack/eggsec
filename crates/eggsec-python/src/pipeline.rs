@@ -2971,7 +2971,7 @@ fn evaluate_condition(step: &PipelineStep, step_results: &[StepResult]) -> PyRes
         let (step_id, expected) = parse_comparison(rest)?;
         let status_str = find_step_status(step_results, &step_id);
         return match status_str {
-            Some(s) => Ok(s.eq_ignore_ascii_case(expected)),
+            Some(s) => Ok(normalize_status_keyword(s) == normalize_status_keyword(expected)),
             None => Ok(false),
         };
     }
@@ -3065,12 +3065,34 @@ fn parse_findings_comparison(rest: &str) -> PyResult<(&str, ComparisonOp, u64)> 
     )))
 }
 
-/// Find the status name for a given step in the results list.
+/// Find the condition keyword for a given step in the results list.
+///
+/// Conditions use the documented vocabulary from PIPELINE_SCHEMA.md
+/// (`success`, `failed`, `cancelled`), not the raw `ExecutionStatus::name()`
+/// variants (`Completed`, `Failed`, ...).
 fn find_step_status(step_results: &[StepResult], step_id: &str) -> Option<&'static str> {
     step_results
         .iter()
         .find(|r| r.step_name == step_id)
-        .map(|r| r.status.name())
+        .map(|r| match &r.status {
+            ExecutionStatus::Pending() => "pending",
+            ExecutionStatus::Running() => "running",
+            ExecutionStatus::Completed() => "success",
+            ExecutionStatus::Failed { .. } | ExecutionStatus::Timeout { .. } => "failed",
+            ExecutionStatus::Cancelled { .. } => "cancelled",
+        })
+}
+
+/// Normalize a status keyword so documented (`failed`) and common alternate
+/// spellings (`failure`, `Completed`, ...) compare equal.
+fn normalize_status_keyword(kw: &str) -> String {
+    let lowered = kw.trim().to_ascii_lowercase();
+    match lowered.as_str() {
+        "completed" => "success".to_string(),
+        "failure" | "timed_out" => "failed".to_string(),
+        "canceled" => "cancelled".to_string(),
+        _ => lowered,
+    }
 }
 
 /// Find the artifact (findings) count for a given step in the results list.

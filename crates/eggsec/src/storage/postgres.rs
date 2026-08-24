@@ -22,18 +22,19 @@ impl Database {
     pub async fn new(config: &StorageConfig) -> Result<Self> {
         #[cfg(feature = "database")]
         {
-            let url = format!(
-                "postgres://{}:{}@{}:{}/{}",
-                config.username,
-                config.password.expose_secret(),
-                config.host,
-                config.port,
-                config.database
-            );
+            // Build connection options from discrete fields rather than
+            // interpolating the password into a URL string, which sqlx may
+            // echo in error/log output.
+            let options = sqlx::postgres::PgConnectOptions::new()
+                .host(&config.host)
+                .port(config.port)
+                .username(&config.username)
+                .password(config.password.expose_secret())
+                .database(&config.database);
 
             let pool = PgPoolOptions::new()
                 .max_connections(config.max_connections)
-                .connect(&url)
+                .connect_with(options)
                 .await
                 .map_err(|e| {
                     EggsecError::Config(format!("Failed to connect to database: {}", e))

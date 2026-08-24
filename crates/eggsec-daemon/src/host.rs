@@ -21,6 +21,19 @@ async fn record_audit_event_logged(store: &dyn DaemonStore, event: PersistedAudi
     }
 }
 
+/// Upper bound for fire-and-forget persistence fan-out tasks so a stalled
+/// store cannot leak long-lived tasks (project invariant: 30-300s timeouts).
+const PERSISTENCE_TASK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+async fn persistence_with_timeout(label: &str, fut: impl std::future::Future<Output = ()>) {
+    if tokio::time::timeout(PERSISTENCE_TASK_TIMEOUT, fut)
+        .await
+        .is_err()
+    {
+        tracing::warn!(action = label, "daemon persistence task timed out");
+    }
+}
+
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
 ///
 /// `DaemonHost` is the bridge between the IPC protocol and the runtime.
@@ -196,7 +209,7 @@ impl DaemonHost {
                 };
                 self.session_access
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .insert(snapshot.session_id, access);
             }
 
@@ -385,7 +398,7 @@ impl DaemonHost {
                             .and_then(|cid| {
                                 self.client_registry
                                     .lock()
-                                    .unwrap()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner())
                                     .get(&cid)
                                     .map(|c| c.kind.clone())
                             })
@@ -398,7 +411,7 @@ impl DaemonHost {
                         };
                         self.session_access
                             .lock()
-                            .unwrap()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
                             .insert(session_id, access);
                         // Set owner on the runtime session for snapshot persistence
                         if let Some(owner) = client_id {
@@ -414,7 +427,7 @@ impl DaemonHost {
                         let enable_persistence = self.config.enable_persistence;
                         let client_id_str = client_id.map(|c| c.to_string());
                         let session_id_copy = session_id;
-                        tokio::spawn(async move {
+                        tokio::spawn(persistence_with_timeout("create-session", async move {
                             if enable_persistence {
                                 if let Ok(snapshot) = runtime.snapshot(session_id_copy).await {
                                     if let Err(e) = store.save_session_snapshot(&snapshot).await {
@@ -443,7 +456,7 @@ impl DaemonHost {
                                 )
                                 .await;
                             }
-                        });
+                        }));
                         ServerMessage::SessionCreated {
                             request_id,
                             session_id,
@@ -491,7 +504,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
-                    tokio::spawn(async move {
+                    tokio::spawn(persistence_with_timeout("submit-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
                                 if let Err(e) = store.save_session_snapshot(&snapshot).await {
@@ -520,7 +533,7 @@ impl DaemonHost {
                             )
                             .await;
                         }
-                    });
+                    }));
                     ServerMessage::TaskSubmitted {
                         request_id,
                         task_id,
@@ -551,7 +564,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
-                    tokio::spawn(async move {
+                    tokio::spawn(persistence_with_timeout("cancel-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
                                 if let Err(e) = store.save_session_snapshot(&snapshot).await {
@@ -580,7 +593,7 @@ impl DaemonHost {
                             )
                             .await;
                         }
-                    });
+                    }));
                     ServerMessage::Ok { request_id }
                 }
                 Err(e) => {
@@ -608,7 +621,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
-                    tokio::spawn(async move {
+                    tokio::spawn(persistence_with_timeout("cancel-active", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
                                 if let Err(e) = store.save_session_snapshot(&snapshot).await {
@@ -637,7 +650,7 @@ impl DaemonHost {
                             )
                             .await;
                         }
-                    });
+                    }));
                     ServerMessage::Ok { request_id }
                 }
                 Err(e) => ServerMessage::Error {
@@ -663,7 +676,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
-                    tokio::spawn(async move {
+                    tokio::spawn(persistence_with_timeout("close-session", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
                                 if let Err(e) = store.save_session_snapshot(&snapshot).await {
@@ -692,7 +705,7 @@ impl DaemonHost {
                             )
                             .await;
                         }
-                    });
+                    }));
                     ServerMessage::SessionClosed { request_id }
                 }
                 Err(e) => ServerMessage::Error {
@@ -923,7 +936,7 @@ impl DaemonHost {
         let kind = self
             .client_registry
             .lock()
-            .unwrap()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(&client_id)
             .map(|c| c.kind.clone())
             .unwrap_or(ClientKind::Unknown);

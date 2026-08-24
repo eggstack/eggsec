@@ -56,7 +56,7 @@ pub use formatting::{preserve_all, strip_controls};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,
     create_insecure_client_with_options, create_insecure_http_client, get_shared_http_client,
-    get_shared_insecure_http_client,
+    get_shared_insecure_http_client, same_host_redirect_policy,
 };
 pub use logging::sanitize_for_logging;
 pub use network::{connect_with_nodelay, connect_with_nodelay_timeout};

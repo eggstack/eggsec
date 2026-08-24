@@ -282,7 +282,7 @@ async fn handle_websocket_interception(
     let (mut client_sink, mut client_source) = ws_client.split();
     let (mut upstream_sink, mut upstream_source) = ws_upstream.split();
 
-    let client_to_upstream = tokio::spawn(async move {
+    let mut client_to_upstream = tokio::spawn(async move {
         while let Some(msg) = client_source.next().await {
             match msg {
                 Ok(TungsteniteMessage::Text(text)) => {
@@ -319,7 +319,7 @@ async fn handle_websocket_interception(
         }
     });
 
-    let upstream_to_client = tokio::spawn(async move {
+    let mut upstream_to_client = tokio::spawn(async move {
         while let Some(msg) = upstream_source.next().await {
             match msg {
                 Ok(TungsteniteMessage::Text(text)) => {
@@ -357,14 +357,30 @@ async fn handle_websocket_interception(
     });
 
     tokio::select! {
-        result = client_to_upstream => {
+        result = &mut client_to_upstream => {
             if let Err(e) = result {
                 tracing::debug!("WebSocket client->upstream task error: {}", e);
             }
+            // Give the sibling pump a bounded window to flush in-flight
+            // frames, then abort it so it cannot linger detached forever.
+            if tokio::time::timeout(std::time::Duration::from_secs(30), &mut upstream_to_client)
+                .await
+                .is_err()
+            {
+                tracing::debug!("WebSocket upstream->client pump did not drain in time");
+                upstream_to_client.abort();
+            }
         }
-        result = upstream_to_client => {
+        result = &mut upstream_to_client => {
             if let Err(e) = result {
                 tracing::debug!("WebSocket upstream->client task error: {}", e);
+            }
+            if tokio::time::timeout(std::time::Duration::from_secs(30), &mut client_to_upstream)
+                .await
+                .is_err()
+            {
+                tracing::debug!("WebSocket client->upstream pump did not drain in time");
+                client_to_upstream.abort();
             }
         }
     };
@@ -433,7 +449,7 @@ async fn handle_http2_interception(
 
     // Drive the upstream connection in the background
     let host_clone = host.to_string();
-    tokio::spawn(async move {
+    let h2_upstream_driver = tokio::spawn(async move {
         if let Err(e) = h2_upstream_conn.await {
             tracing::debug!("HTTP/2 upstream connection error for {}: {}", host_clone, e);
         }
@@ -642,6 +658,10 @@ async fn handle_http2_interception(
         }
     }
 
+    // The client side is gone; stop driving the upstream connection so the
+    // task cannot linger detached beyond the session lifetime.
+    h2_upstream_driver.abort();
+
     session.closed_at = Some(chrono::Utc::now().to_rfc3339());
     tracing::debug!(
         "HTTP/2 session closed for {}: {} streams",
@@ -693,7 +713,14 @@ async fn handle_connection(
     http2_live: bool,
 ) -> Result<()> {
     let mut buf = [0u8; 8192];
-    let n = stream.read(&mut buf).await?;
+    // Bound the wait for the initial request so slowloris-style clients
+    // cannot hold connection tasks open indefinitely.
+    const INITIAL_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    let n = tokio::time::timeout(INITIAL_REQUEST_TIMEOUT, stream.read(&mut buf))
+        .await
+        .map_err(|_| {
+            WebProxyError::Network("Timed out waiting for initial request".to_string())
+        })??;
 
     let request = String::from_utf8_lossy(&buf[..n]);
 

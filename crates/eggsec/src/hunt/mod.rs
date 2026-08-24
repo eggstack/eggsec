@@ -43,7 +43,7 @@ impl HuntClient {
         let client = Client::builder()
             .timeout(timeout)
             .cookie_store(true)
-            .redirect(reqwest::redirect::Policy::limited(10))
+            .redirect(crate::utils::same_host_redirect_policy(10))
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
             .pool_idle_timeout(Duration::from_secs(
                 crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
