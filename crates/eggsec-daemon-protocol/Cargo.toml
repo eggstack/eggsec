@@ -6,7 +6,6 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Daemon IPC protocol types and client registry for Eggsec"
-publish = false
 
 [dependencies]
 eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }

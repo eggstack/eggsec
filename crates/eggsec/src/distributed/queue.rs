@@ -72,31 +72,32 @@ impl TaskQueue {
     }
 
     pub async fn reassign_stale_tasks(&self, timeout_secs: i64) -> Vec<Task> {
-        let mut stale_tasks = Vec::new();
         let now = chrono::Utc::now().timestamp();
 
-        let mut in_progress = self.in_progress.write().await;
-        let mut pending = self.pending.write().await;
-
-        in_progress.retain(|_id, task| {
-            if let Some(assigned_at) = task.assigned_at_secs {
-                if now - assigned_at > timeout_secs {
-                    stale_tasks.push(task.clone());
-                    return false;
+        let stale_tasks = {
+            let mut stale_tasks = Vec::new();
+            let mut in_progress = self.in_progress.write().await;
+            in_progress.retain(|_id, task| {
+                if let Some(assigned_at) = task.assigned_at_secs {
+                    if now - assigned_at > timeout_secs {
+                        stale_tasks.push(task.clone());
+                        return false;
+                    }
                 }
+                true
+            });
+            stale_tasks
+        };
+
+        if !stale_tasks.is_empty() {
+            let mut pending = self.pending.write().await;
+            for task in &stale_tasks {
+                let mut task = task.clone();
+                task.worker_id = None;
+                task.assigned_at_secs = None;
+                pending.push_back(task);
             }
-            true
-        });
-
-        for task in stale_tasks.iter() {
-            let mut t = task.clone();
-            t.worker_id = None;
-            t.assigned_at_secs = None;
-            pending.push_back(t);
         }
-
-        drop(in_progress);
-        drop(pending);
 
         stale_tasks
     }

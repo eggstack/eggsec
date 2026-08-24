@@ -366,8 +366,18 @@ impl Scope {
     }
 
     pub fn is_target_allowed(&self, target: &str) -> Result<bool, ScopeError> {
+        self.is_target_allowed_with_resolver(target, &SystemResolver)
+    }
+
+    /// Evaluate a target with an injected resolver, primarily for deterministic
+    /// policy tests and callers that already own a resolver.
+    pub fn is_target_allowed_with_resolver(
+        &self,
+        target: &str,
+        resolver: &dyn HostResolver,
+    ) -> Result<bool, ScopeError> {
         let target_scope = if self.has_ip_based_rules() {
-            let scope = TargetScope::parse(target)?;
+            let scope = TargetScope::parse_with_resolver(target, resolver)?;
             if scope.ip.is_none() {
                 return Err(ScopeError::DnsResolution(
                     target.to_string(),
@@ -376,7 +386,7 @@ impl Scope {
             }
             scope
         } else {
-            TargetScope::parse_hostname_only(target)?
+            TargetScope::parse_hostname_only_with_resolver(target, resolver)?
         };
 
         if self.is_explicitly_excluded(&target_scope) {
@@ -398,16 +408,19 @@ impl Scope {
             // Block non-public addresses even when no scope rules are defined.
             // Loopback addresses are exempt — they are inherently local and
             // represent no scope violation on any machine.
-            if let Some(ref ip) = target_scope.ip {
-                let class = classify_address(ip);
-                if class != AddressClass::Loopback && class.is_non_public() {
-                    tracing::warn!(
-                        target = %target,
-                        address_class = %class,
-                        "Non-public IP address blocked by security policy"
-                    );
-                    return Ok(false);
-                }
+            let blocked_classes: Vec<AddressClass> = target_scope
+                .resolved_addresses
+                .iter()
+                .map(classify_address)
+                .filter(|class| *class != AddressClass::Loopback && class.is_non_public())
+                .collect();
+            if !blocked_classes.is_empty() {
+                tracing::warn!(
+                    target = %target,
+                    address_classes = ?blocked_classes,
+                    "Non-public IP address blocked by security policy"
+                );
+                return Ok(false);
             }
             return Ok(true);
         }
@@ -982,6 +995,35 @@ mod tests {
             .push(ScopeRule::new("internal.example.com".to_string()));
 
         assert!(!scope.is_target_allowed("internal.example.com").unwrap());
+    }
+
+    struct FixedResolver;
+
+    impl HostResolver for FixedResolver {
+        fn resolve_all(&self, _host: &str) -> ResolutionResult {
+            ResolutionResult {
+                hostname: "mixed.example".to_string(),
+                addresses: vec![
+                    "93.184.216.34".parse().unwrap(),
+                    "192.168.1.10".parse().unwrap(),
+                ],
+                error: None,
+            }
+        }
+    }
+
+    #[test]
+    fn default_scope_checks_every_resolved_address() {
+        let scope = Scope::new();
+        let target =
+            TargetScope::parse_hostname_only_with_resolver("mixed.example", &FixedResolver)
+                .unwrap();
+
+        assert_eq!(target.ip, Some("93.184.216.34".parse().unwrap()));
+        assert!(target.resolved_addresses.len() > 1);
+        assert!(!scope
+            .is_target_allowed_with_resolver("mixed.example", &FixedResolver)
+            .unwrap());
     }
 
     #[test]

@@ -93,6 +93,50 @@ fn compute_tcp_checksum_v6(
     checksum_data(&pseudo)
 }
 
+fn compute_udp_checksum(
+    src_ip: IpAddr,
+    dst_ip: IpAddr,
+    src_port: u16,
+    dst_port: u16,
+    payload: &[u8],
+) -> u16 {
+    let segment_len = 8 + payload.len();
+    let mut pseudo = match (src_ip, dst_ip) {
+        (IpAddr::V4(_), IpAddr::V4(_)) => vec![0u8; 12 + segment_len],
+        (IpAddr::V6(_), IpAddr::V6(_)) => vec![0u8; 40 + segment_len],
+        _ => return 0,
+    };
+    let segment_offset = match (src_ip, dst_ip) {
+        (IpAddr::V4(src), IpAddr::V4(dst)) => {
+            pseudo[0..4].copy_from_slice(&src.octets());
+            pseudo[4..8].copy_from_slice(&dst.octets());
+            pseudo[8] = 0;
+            pseudo[9] = 17;
+            pseudo[10..12].copy_from_slice(&(segment_len as u16).to_be_bytes());
+            12
+        }
+        (IpAddr::V6(src), IpAddr::V6(dst)) => {
+            pseudo[0..16].copy_from_slice(&src.octets());
+            pseudo[16..32].copy_from_slice(&dst.octets());
+            pseudo[32..36].copy_from_slice(&(segment_len as u32).to_be_bytes());
+            pseudo[39] = 17;
+            40
+        }
+        _ => return 0,
+    };
+    pseudo[segment_offset..segment_offset + 2].copy_from_slice(&src_port.to_be_bytes());
+    pseudo[segment_offset + 2..segment_offset + 4].copy_from_slice(&dst_port.to_be_bytes());
+    pseudo[segment_offset + 4..segment_offset + 6]
+        .copy_from_slice(&(segment_len as u16).to_be_bytes());
+    pseudo[segment_offset + 8..].copy_from_slice(payload);
+    let checksum = checksum_data(&pseudo);
+    if checksum == 0 {
+        0xffff
+    } else {
+        checksum
+    }
+}
+
 fn checksum_data(data: &[u8]) -> u16 {
     let mut sum: u32 = 0;
     for i in (0..data.len()).step_by(2) {
@@ -111,6 +155,7 @@ fn checksum_data(data: &[u8]) -> u16 {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PacketValidationError {
+    AddressFamilyMismatch,
     InvalidTtl,
     InvalidHopLimit,
     InvalidTcpOptionsLength(usize),
@@ -121,6 +166,9 @@ pub enum PacketValidationError {
 impl std::fmt::Display for PacketValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PacketValidationError::AddressFamilyMismatch => {
+                write!(f, "IPv4 and IPv6 headers cannot be combined")
+            }
             PacketValidationError::InvalidTtl => write!(f, "IPv4 TTL cannot be zero"),
             PacketValidationError::InvalidHopLimit => write!(f, "IPv6 hop limit cannot be zero"),
             PacketValidationError::InvalidTcpOptionsLength(len) => {
@@ -234,6 +282,9 @@ impl PacketBuilder {
     }
 
     pub fn validate(&self) -> Result<(), PacketValidationError> {
+        if self.ipv4.is_some() && self.ipv6.is_some() {
+            return Err(PacketValidationError::AddressFamilyMismatch);
+        }
         if let Some(ref ip) = self.ipv4 {
             if ip.ttl == 0 {
                 return Err(PacketValidationError::InvalidTtl);
@@ -280,7 +331,8 @@ impl PacketBuilder {
         Ok(())
     }
 
-    pub fn build(&self) -> Vec<u8> {
+    pub fn build(&self) -> Result<Vec<u8>, PacketValidationError> {
+        self.validate()?;
         let mut packet = Vec::new();
 
         if let Some(ref eth) = self.ethernet {
@@ -313,12 +365,12 @@ impl PacketBuilder {
             match trans {
                 TransportBuilder::Tcp(tcp) => {
                     let payload = self.payload.as_deref().unwrap_or(&[]);
-                    packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload));
+                    packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload)?);
                     payload_appended = true;
                 }
                 TransportBuilder::Udp(udp) => {
                     let payload = self.payload.as_deref().unwrap_or(&[]);
-                    packet.extend_from_slice(&udp.to_bytes(payload));
+                    packet.extend_from_slice(&udp.to_bytes(src_ip, dst_ip, payload));
                 }
                 TransportBuilder::Icmp(icmp) => {
                     let payload = self.payload.as_deref().unwrap_or(&[]);
@@ -334,13 +386,48 @@ impl PacketBuilder {
             }
         }
 
-        packet
+        Ok(packet)
     }
 }
 
 impl Default for PacketBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn udp_checksum_is_present_for_ipv4_and_ipv6() {
+        let ipv4 = PacketBuilder::new()
+            .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 17, 64)
+            .udp(1000, 1001)
+            .payload(vec![1, 2, 3])
+            .build()
+            .unwrap();
+        let ipv6 = PacketBuilder::new()
+            .ipv6(Ipv6Addr::LOCALHOST, Ipv6Addr::LOCALHOST, 17, 64)
+            .udp(1000, 1001)
+            .payload(vec![1, 2, 3])
+            .build()
+            .unwrap();
+
+        assert_ne!(&ipv4[26..28], &[0, 0]);
+        assert_ne!(&ipv6[46..48], &[0, 0]);
+    }
+
+    #[test]
+    fn mixed_address_families_are_rejected() {
+        let builder = PacketBuilder::new()
+            .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 6, 64)
+            .ipv6(Ipv6Addr::LOCALHOST, Ipv6Addr::LOCALHOST, 6, 64);
+        assert_eq!(
+            builder.build(),
+            Err(PacketValidationError::AddressFamilyMismatch)
+        );
     }
 }
 
@@ -428,7 +515,12 @@ pub struct TcpBuilder {
 }
 
 impl TcpBuilder {
-    fn to_bytes(&self, src_ip: IpAddr, dst_ip: IpAddr, payload: &[u8]) -> Vec<u8> {
+    fn to_bytes(
+        &self,
+        src_ip: IpAddr,
+        dst_ip: IpAddr,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, PacketValidationError> {
         let header_len = 20 + self.options.len();
         let data_offset = ((header_len / 4) as u8) << 4;
         let mut bytes = vec![0u8; header_len];
@@ -473,11 +565,11 @@ impl TcpBuilder {
                 &self.options,
                 payload,
             ),
-            _ => 0,
+            _ => return Err(PacketValidationError::AddressFamilyMismatch),
         };
         bytes[16..18].copy_from_slice(&checksum.to_be_bytes());
 
-        bytes
+        Ok(bytes)
     }
 }
 
@@ -488,13 +580,14 @@ pub struct UdpBuilder {
 }
 
 impl UdpBuilder {
-    fn to_bytes(&self, payload: &[u8]) -> [u8; 8] {
+    fn to_bytes(&self, src_ip: IpAddr, dst_ip: IpAddr, payload: &[u8]) -> [u8; 8] {
         let mut bytes = [0u8; 8];
         let len = (8 + payload.len()) as u16;
         bytes[0..2].copy_from_slice(&self.src_port.to_be_bytes());
         bytes[2..4].copy_from_slice(&self.dst_port.to_be_bytes());
         bytes[4..6].copy_from_slice(&len.to_be_bytes());
-        bytes[6..8].copy_from_slice(&0u16.to_be_bytes());
+        let checksum = compute_udp_checksum(src_ip, dst_ip, self.src_port, self.dst_port, payload);
+        bytes[6..8].copy_from_slice(&checksum.to_be_bytes());
         bytes
     }
 }

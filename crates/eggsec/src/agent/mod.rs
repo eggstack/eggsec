@@ -28,6 +28,7 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono::{DateTime, Timelike, Utc};
 use futures::FutureExt;
+use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
@@ -213,8 +214,8 @@ pub struct Agent {
     scans_failed: u64,
     alerts_sent: u64,
     last_error: Option<String>,
-    last_preflight_denial: std::sync::Mutex<Option<AgentPreflightDenial>>,
-    recent_policy_denials: std::sync::Mutex<Vec<crate::audit::EnforcementAuditEvent>>,
+    last_preflight_denial: Mutex<Option<AgentPreflightDenial>>,
+    recent_policy_denials: Mutex<Vec<crate::audit::EnforcementAuditEvent>>,
 }
 
 impl Agent {
@@ -338,8 +339,8 @@ impl Agent {
             scans_failed: 0,
             alerts_sent: 0,
             last_error: None,
-            last_preflight_denial: std::sync::Mutex::new(None),
-            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
+            last_preflight_denial: Mutex::new(None),
+            recent_policy_denials: Mutex::new(Vec::new()),
         })
     }
 
@@ -387,8 +388,8 @@ impl Agent {
             scans_failed: 0,
             alerts_sent: 0,
             last_error: None,
-            last_preflight_denial: std::sync::Mutex::new(None),
-            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
+            last_preflight_denial: Mutex::new(None),
+            recent_policy_denials: Mutex::new(Vec::new()),
         })
     }
 
@@ -440,8 +441,8 @@ impl Agent {
             scans_failed: 0,
             alerts_sent: 0,
             last_error: None,
-            last_preflight_denial: std::sync::Mutex::new(None),
-            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
+            last_preflight_denial: Mutex::new(None),
+            recent_policy_denials: Mutex::new(Vec::new()),
         })
     }
 
@@ -466,7 +467,7 @@ impl Agent {
         if event.outcome == crate::audit::AuditOutcome::Deny
             || event.outcome == crate::audit::AuditOutcome::ConfirmationRequired
         {
-            let mut denials = self.recent_policy_denials.lock().unwrap();
+            let mut denials = self.recent_policy_denials.lock();
             denials.push(event);
             let len = denials.len();
             if len > 50 {
@@ -476,7 +477,7 @@ impl Agent {
     }
 
     pub fn recent_policy_denials(&self) -> Vec<crate::audit::EnforcementAuditEvent> {
-        self.recent_policy_denials.lock().unwrap().clone()
+        self.recent_policy_denials.lock().clone()
     }
 
     pub fn get_snapshot_path(&self) -> std::path::PathBuf {
@@ -511,8 +512,8 @@ impl Agent {
             scans_completed: self.scans_completed,
             scans_failed: self.scans_failed,
             alerts_sent: self.alerts_sent,
-            last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
-            recent_denial_count: self.recent_policy_denials.lock().unwrap().len(),
+            last_preflight_denial: self.last_preflight_denial.lock().clone(),
+            recent_denial_count: self.recent_policy_denials.lock().len(),
         }
     }
 
@@ -527,8 +528,8 @@ impl Agent {
             alerts_sent: self.alerts_sent,
             last_error: self.last_error.clone(),
             last_shutdown_at: None,
-            last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
-            recent_denial_count: self.recent_policy_denials.lock().unwrap().len(),
+            last_preflight_denial: self.last_preflight_denial.lock().clone(),
+            recent_denial_count: self.recent_policy_denials.lock().len(),
         }
     }
 
@@ -973,14 +974,13 @@ impl Agent {
                     reasons = ?preflight_result.decision.denied_reasons,
                     "agent preflight denied - scan will not proceed"
                 );
-                if let Ok(mut denial) = self.last_preflight_denial.lock() {
-                    *denial = Some(AgentPreflightDenial {
-                        operation: scan_type.to_string(),
-                        target: target.to_string(),
-                        timestamp: Utc::now(),
-                        denied_reasons: preflight_result.decision.denied_reasons.clone(),
-                    });
-                }
+                let mut denial = self.last_preflight_denial.lock();
+                *denial = Some(AgentPreflightDenial {
+                    operation: scan_type.to_string(),
+                    target: target.to_string(),
+                    timestamp: Utc::now(),
+                    denied_reasons: preflight_result.decision.denied_reasons.clone(),
+                });
             }
         }
 

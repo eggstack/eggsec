@@ -18,7 +18,7 @@ Eggsec. Release cadence and publication are explicit maintainer decisions.
 
 | Registry | Package | Publication method |
 |----------|---------|-------------------|
-| crates.io | `eggsec-core`, `eggsec`, `eggsec-nse`, `eggsec-output`, `eggsec-tool-core`, `eggsec-agent`, `eggsec-runtime`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-daemon`, `eggsec-ui-model` | `cargo publish` (manual) |
+| crates.io | `eggsec-core`, `eggsec`, `eggsec-nse`, `eggsec-output`, `eggsec-tool-core`, `eggsec-agent`, `eggsec-runtime`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-daemon-protocol`, `eggsec-daemon`, `eggsec-ui-model` | `cargo publish` (manual) |
 | PyPI | `eggsec` | `maturin publish` (manual) |
 | TestPyPI | `eggsec` | Optional, manual rehearsal |
 
@@ -119,7 +119,8 @@ Current validated order (dependencies before dependents):
 9. `eggsec-ui-model` (depends on `eggsec-runtime`)
 10. `eggsec-web-proxy` (depends on `eggsec-core`, `eggsec-output`)
 11. `eggsec` (depends on `eggsec-core`, `eggsec-runtime`, `eggsec-output`, `eggsec-tool-core`, `eggsec-agent`, plus optional domain crates)
-12. `eggsec-daemon` (depends on `eggsec-runtime`, `eggsec`)
+12. `eggsec-daemon-protocol` (depends on `eggsec-runtime`)
+13. `eggsec-daemon` (depends on `eggsec-runtime`, `eggsec`, `eggsec-daemon-protocol`)
 
 Wait for each crate to appear on crates.io before publishing dependents. The
 staged sequence is:

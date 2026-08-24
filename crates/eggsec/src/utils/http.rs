@@ -62,6 +62,9 @@ pub fn get_shared_http_client() -> Client {
 
 pub fn get_shared_insecure_http_client() -> Client {
     crate::install_tls_provider();
+    tracing::warn!(
+        "Using shared HTTP client with disabled TLS certificate verification; use get_shared_http_client for verified TLS"
+    );
     INSECURE_HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
         // First try with full options
         if let Ok(client) = Client::builder()
@@ -114,7 +117,7 @@ pub fn get_shared_insecure_http_client() -> Client {
 /// ensure proper certificates are installed on target systems.
 pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
     crate::install_tls_provider();
-    tracing::debug!(
+    tracing::warn!(
         "Creating HTTP client with disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."
     );
@@ -197,7 +200,7 @@ where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
     crate::install_tls_provider();
-    tracing::debug!(
+    tracing::warn!(
         "Creating HTTP client with custom options and disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."
     );

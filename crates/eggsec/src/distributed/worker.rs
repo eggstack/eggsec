@@ -1,6 +1,15 @@
-use crate::distributed::{RemoteClient, Task, TaskResult, TaskType, CAPABILITIES};
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+use crate::config::{metadata_for_tool_id, ExecutionSurface};
+use crate::config::{EnforcementContext, LoadedScope};
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+use crate::distributed::TaskType;
+use crate::distributed::{RemoteClient, Task, TaskResult, CAPABILITIES};
 use crate::error::{EggsecError, Result};
 use crate::scanner::endpoints::EndpointScanConfig;
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+use crate::tool::{
+    create_default_registry, EnforcedDispatcher, Target, ToolDispatcher, ToolRequest,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
@@ -40,6 +49,8 @@ pub struct WorkerConfig {
     pub coordinator_url: String,
     pub max_concurrency: usize,
     pub heartbeat_interval_secs: u64,
+    #[serde(default)]
+    pub tls_domain: Option<String>,
 }
 
 impl Default for WorkerConfig {
@@ -49,6 +60,7 @@ impl Default for WorkerConfig {
             coordinator_url: "http://localhost:8080".to_string(),
             max_concurrency: 10,
             heartbeat_interval_secs: 30,
+            tls_domain: Some("localhost".to_string()),
         }
     }
 }
@@ -71,11 +83,33 @@ pub struct Worker {
     task_request_handle: Option<JoinHandle<()>>,
     task_processor_handle: Option<JoinHandle<()>>,
     psk: String,
+    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+    enforcement: Arc<EnforcementContext>,
+    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+    dispatcher: EnforcedDispatcher,
     shutdown_tx: watch::Sender<bool>,
 }
 
 impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
+        Self::with_enforcement(
+            config,
+            psk,
+            EnforcementContext::agent_strict(
+                crate::config::ExecutionPolicy::default(),
+                LoadedScope::default_empty(),
+            ),
+        )
+    }
+
+    /// Construct a worker with the explicit scope and policy it must enforce.
+    /// The worker always rebuilds this as an AgentStrict context because tasks
+    /// received over the coordinator connection are automated work.
+    pub fn with_enforcement(
+        config: WorkerConfig,
+        psk: String,
+        _enforcement: EnforcementContext,
+    ) -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
             config: config.clone(),
@@ -92,6 +126,13 @@ impl Worker {
             task_request_handle: None,
             task_processor_handle: None,
             psk,
+            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+            enforcement: Arc::new(EnforcementContext::agent_strict(
+                _enforcement.execution_policy.clone(),
+                _enforcement.loaded_scope.clone(),
+            )),
+            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+            dispatcher: EnforcedDispatcher::new(ToolDispatcher::new(create_default_registry())),
             shutdown_tx,
         }
     }
@@ -115,7 +156,11 @@ impl Worker {
 
         let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
 
-        let mut client = RemoteClient::new_plaintext(self.psk.clone());
+        let domain = self.config.tls_domain.as_deref().ok_or_else(|| {
+            EggsecError::Config("TLS domain is required for worker connections".to_string())
+        })?;
+        let mut client = RemoteClient::with_tls(self.psk.clone(), domain)
+            .map_err(|e| EggsecError::Network(format!("Failed to initialize TLS: {}", e)))?;
 
         client
             .register_worker(
@@ -135,6 +180,7 @@ impl Worker {
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
         let psk = self.psk.clone();
+        let tls_domain = self.config.tls_domain.clone();
         let stats = Arc::clone(&self.stats);
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
@@ -151,7 +197,19 @@ impl Worker {
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
 
-            let mut client = RemoteClient::new_plaintext(psk);
+            let mut client = match tls_domain.as_deref() {
+                Some(domain) => match RemoteClient::with_tls(psk, domain) {
+                    Ok(client) => client,
+                    Err(error) => {
+                        tracing::error!(%error, "Failed to initialize worker heartbeat TLS");
+                        return;
+                    }
+                },
+                None => {
+                    tracing::error!("TLS domain is required for worker heartbeat");
+                    return;
+                }
+            };
 
             loop {
                 tokio::select! {
@@ -187,6 +245,7 @@ impl Worker {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let psk = self.psk.clone();
+        let tls_domain = self.config.tls_domain.clone();
         let sender = self
             .sender
             .clone()
@@ -212,7 +271,19 @@ impl Worker {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        let mut client = RemoteClient::new_plaintext(psk.clone());
+                        let mut client = match tls_domain.as_deref() {
+                            Some(domain) => match RemoteClient::with_tls(psk.clone(), domain) {
+                                Ok(client) => client,
+                                Err(error) => {
+                                    tracing::warn!(%error, "Failed to initialize worker task-request TLS");
+                                    continue;
+                                }
+                            },
+                            None => {
+                                tracing::warn!("TLS domain is required for worker task requests");
+                                continue;
+                            }
+                        };
                         match client.request_tasks(&host, port, worker_id.clone(), MAX_TASKS_PER_REQUEST).await {
                             Ok(tasks) => {
                                 for task in tasks {
@@ -240,8 +311,13 @@ impl Worker {
     async fn start_task_processing_loop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
             let stats = Arc::clone(&self.stats);
+            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+            let enforcement = Arc::clone(&self.enforcement);
+            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+            let dispatcher = self.dispatcher.clone();
             let coordinator_url = self.config.coordinator_url.clone();
             let psk = self.psk.clone();
+            let tls_domain = self.config.tls_domain.clone();
 
             let (host, port) = match parse_coordinator_url(&coordinator_url) {
                 Ok(hp) => hp,
@@ -267,9 +343,25 @@ impl Worker {
 
                     let host = host.clone();
                     let psk = psk.clone();
+                    let tls_domain = tls_domain.clone();
                     let stats = Arc::clone(&stats);
+                    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+                    let enforcement = Arc::clone(&enforcement);
+                    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+                    let dispatcher = dispatcher.clone();
 
                     tokio::spawn(async move {
+                        #[cfg(any(
+                            feature = "tool-api",
+                            feature = "rest-api",
+                            feature = "grpc-api"
+                        ))]
+                        let result = process_task(task, enforcement, dispatcher).await;
+                        #[cfg(not(any(
+                            feature = "tool-api",
+                            feature = "rest-api",
+                            feature = "grpc-api"
+                        )))]
                         let result = process_task(task).await;
 
                         let task_result = match result {
@@ -296,7 +388,17 @@ impl Worker {
                             }
                         }
 
-                        let mut client = RemoteClient::new_plaintext(psk);
+                        let Some(domain) = tls_domain.as_deref() else {
+                            tracing::warn!("TLS domain is required for worker task results");
+                            return;
+                        };
+                        let mut client = match RemoteClient::with_tls(psk, domain) {
+                            Ok(client) => client,
+                            Err(error) => {
+                                tracing::warn!(%error, "Failed to initialize worker result TLS");
+                                return;
+                            }
+                        };
                         if let Err(e) = client.send_result(&host, port, task_result).await {
                             tracing::warn!("Failed to send task result to coordinator: {}", e);
                         }
@@ -344,20 +446,38 @@ impl Drop for Worker {
     }
 }
 
-async fn process_task(task: Task) -> Result<TaskResult> {
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+async fn process_task(
+    task: Task,
+    enforcement: Arc<EnforcementContext>,
+    dispatcher: EnforcedDispatcher,
+) -> Result<TaskResult> {
     let start_time = std::time::Instant::now();
     let task_id = task.id.clone();
-    let task_type = task.task_type;
-
-    let result = match task_type {
-        TaskType::PortScan => process_port_scan(task).await,
-        TaskType::ServiceFingerprint => process_fingerprint(task).await,
-        TaskType::EndpointDiscovery => process_endpoints(task).await,
-        TaskType::Fuzz => process_fuzz(task).await,
-        TaskType::WafTest => process_waf(task).await,
-        TaskType::LoadTest => process_load_test(task).await,
-        TaskType::Recon => process_recon(task).await,
+    let operation = match task.task_type {
+        TaskType::PortScan => "scan-ports",
+        TaskType::ServiceFingerprint => "fingerprint",
+        TaskType::EndpointDiscovery => "scan-endpoints",
+        TaskType::Fuzz => "fuzz",
+        TaskType::WafTest => "waf-detect",
+        TaskType::LoadTest => "load-test",
+        TaskType::Recon => "recon",
     };
+    let metadata = metadata_for_tool_id(operation).ok_or_else(|| {
+        EggsecError::Config(format!(
+            "no operation metadata for distributed task {}",
+            operation
+        ))
+    })?;
+    let descriptor = metadata
+        .try_descriptor_for_target(Some(&task.target))
+        .map_err(|error| EggsecError::Config(error.to_string()))?;
+    let approved = enforcement
+        .approve(ExecutionSurface::SecurityAgent, descriptor)
+        .map_err(|error| EggsecError::Config(error.to_string()))?;
+    let request = ToolRequest::new(operation, Target::url(task.target))
+        .with_params(serde_json::to_value(task.payload)?);
+    let result = dispatcher.dispatch_checked(&approved, request).await;
 
     let duration = start_time.elapsed();
     let success = result.is_ok();
@@ -376,6 +496,15 @@ async fn process_task(task: Task) -> Result<TaskResult> {
     })
 }
 
+#[cfg(not(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api")))]
+async fn process_task(task: Task) -> Result<TaskResult> {
+    Err(EggsecError::Config(format!(
+        "distributed task execution requires the tool-api feature (task {})",
+        task.id
+    )))
+}
+
+#[allow(dead_code)]
 async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let ports = task
@@ -417,6 +546,7 @@ async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_fingerprint(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let ports: Vec<u16> = task
@@ -458,6 +588,7 @@ async fn process_fingerprint(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let wordlist = if let Some(w) = task.payload.get("wordlist").and_then(|v| v.as_str()) {
@@ -501,6 +632,7 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let payload_type = task
@@ -574,6 +706,7 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_waf(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let detect_only = task
@@ -623,6 +756,7 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_load_test(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let requests: u64 = task
@@ -689,6 +823,7 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 async fn process_recon(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let no_tech = task
@@ -714,4 +849,35 @@ async fn process_recon(task: Task) -> Result<serde_json::Value> {
         "target": target,
         "status": "completed",
     }))
+}
+
+#[cfg(all(
+    test,
+    any(feature = "tool-api", feature = "rest-api", feature = "grpc-api")
+))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn worker_rejects_tasks_without_an_explicit_scope() {
+        let task = Task {
+            id: "task-1".to_string(),
+            job_id: "job-1".to_string(),
+            task_type: TaskType::PortScan,
+            target: "203.0.113.10".to_string(),
+            payload: rustc_hash::FxHashMap::default(),
+            worker_id: None,
+            assigned_at_secs: None,
+        };
+        let enforcement = Arc::new(EnforcementContext::agent_strict(
+            crate::config::ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        ));
+        let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(create_default_registry()));
+
+        let error = process_task(task, enforcement, dispatcher)
+            .await
+            .expect_err("an empty strict scope must reject the task");
+        assert!(error.to_string().contains("denied"));
+    }
 }

@@ -182,7 +182,7 @@ async fn test_task_result_serde_roundtrip() {
 async fn test_listener_client_auth_success() {
     let psk = "test-psk-12345";
 
-    let listener_clone = RemoteListener::new(psk.to_string());
+    let listener_clone = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -217,7 +217,7 @@ async fn test_listener_client_auth_success() {
 async fn test_listener_client_invalid_psk() {
     let psk = "correct-psk";
 
-    let listener_clone = RemoteListener::new(psk.to_string());
+    let listener_clone = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -251,7 +251,7 @@ async fn test_listener_client_invalid_psk() {
 async fn test_listener_task_assignment_cycle() {
     let psk = "task-cycle-psk";
 
-    let listener_clone = RemoteListener::new(psk.to_string());
+    let listener_clone = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -293,7 +293,7 @@ async fn test_listener_task_assignment_cycle() {
 async fn test_listener_heartbeat() {
     let psk = "heartbeat-psk";
 
-    let listener_clone = RemoteListener::new(psk.to_string());
+    let listener_clone = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -324,7 +324,7 @@ async fn test_listener_heartbeat() {
 #[tokio::test]
 async fn test_listener_connection_count() {
     let psk = "count-psk";
-    let listener = RemoteListener::new(psk.to_string());
+    let listener = RemoteListener::new_plaintext(psk.to_string());
     let count = listener.connection_count().await;
     assert_eq!(count, 0);
 }
@@ -369,7 +369,7 @@ async fn test_stale_task_reassignment() {
 async fn test_enqueue_task_command() {
     let psk = "enqueue-psk";
 
-    let listener = RemoteListener::new(psk.to_string());
+    let listener = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -414,7 +414,7 @@ async fn test_enqueue_task_command() {
 async fn test_status_request() {
     let psk = "status-psk";
 
-    let listener = RemoteListener::new(psk.to_string());
+    let listener = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
@@ -464,7 +464,7 @@ async fn test_status_request() {
 async fn test_worker_registry_disconnect_cleanup() {
     let psk = "cleanup-psk";
 
-    let listener = RemoteListener::new(psk.to_string());
+    let listener = RemoteListener::new_plaintext(psk.to_string());
     let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {

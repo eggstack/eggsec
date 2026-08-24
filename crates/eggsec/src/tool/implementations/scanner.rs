@@ -167,17 +167,17 @@ impl SecurityTool for ScannerTool {
                     .get("wordlist")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
+                let wordlist = match wordlist {
+                    Some(path) => Some(
+                        crate::scanner::wordlist::Wordlist::from_file(path)
+                            .await?
+                            .into_endpoints(),
+                    ),
+                    None => None,
+                };
                 let request = crate::scanner::endpoints::EndpointScanRequest {
                     url: target.clone(),
-                    wordlist: wordlist.map(|p| {
-                        // Wordlist loading remains async; the plain callback
-                        // path leaves it to the caller. We pass None and let
-                        // the callback use the default endpoints; for
-                        // explicit wordlist support the loader would have to
-                        // be pre-loaded here.
-                        let _ = p;
-                        Vec::new()
-                    }),
+                    wordlist,
                     concurrency,
                     timeout: timeout.div_ceil(1000).max(1),
                     include_404: false,

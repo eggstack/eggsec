@@ -11,6 +11,16 @@ use crate::config::DaemonConfig;
 use crate::protocol::{ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage};
 use crate::store::{DaemonStore, PersistedAuditEvent};
 
+async fn record_audit_event_logged(store: &dyn DaemonStore, event: PersistedAuditEvent) {
+    if let Err(error) = store.record_audit_event(&event).await {
+        tracing::warn!(
+            ?error,
+            action = %event.action,
+            "failed to persist daemon audit event"
+        );
+    }
+}
+
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
 ///
 /// `DaemonHost` is the bridge between the IPC protocol and the runtime.
@@ -98,7 +108,13 @@ impl DaemonHost {
 
     pub fn register_client(&self, info: ClientInfo) -> ClientId {
         let client_id = info.client_id;
-        self.client_registry.lock().unwrap().register(info);
+        self.client_registry
+            .lock()
+            .unwrap_or_else(|poisoned| {
+                tracing::warn!("client registry mutex was poisoned; recovering state");
+                poisoned.into_inner()
+            })
+            .register(info);
         client_id
     }
 
@@ -107,7 +123,10 @@ impl DaemonHost {
         client_id: &ClientId,
         session_id: &eggsec_runtime::SessionId,
     ) -> ClientRole {
-        let access = self.session_access.lock().unwrap();
+        let access = self.session_access.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("session access mutex was poisoned; recovering state");
+            poisoned.into_inner()
+        });
         if let Some(session_access) = access.get(session_id) {
             if session_access.owner_client_id == Some(*client_id) {
                 return ClientRole::Owner;
@@ -128,7 +147,15 @@ impl DaemonHost {
         if !self.config.enable_persistence {
             return Ok(());
         }
-        self.store.record_audit_event(&event).await
+        let result = self.store.record_audit_event(&event).await;
+        if let Err(error) = &result {
+            tracing::warn!(
+                ?error,
+                action = %event.action,
+                "failed to persist daemon audit event"
+            );
+        }
+        result
     }
 
     /// Recover persisted session state from the store on startup.
@@ -185,7 +212,7 @@ impl DaemonHost {
         }
 
         // Record recovery audit event
-        let _ = self
+        if let Err(error) = self
             .record_audit_event(PersistedAuditEvent {
                 action: "daemon-recovery".into(),
                 surface: "daemon".into(),
@@ -194,10 +221,16 @@ impl DaemonHost {
                 session_id: None,
                 timestamp_secs: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(?error, "system clock is before Unix epoch");
+                        std::time::Duration::ZERO
+                    })
                     .as_secs(),
             })
-            .await;
+            .await
+        {
+            tracing::warn!(?error, "failed to record daemon recovery audit event");
+        }
 
         tracing::info!(
             sessions_recovered = recovered,
@@ -226,7 +259,7 @@ impl DaemonHost {
                 self.check_command_permission(&cmd, &ctx, session_id).await
             {
                 // Record permission denial audit event
-                let _ = self
+                if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: format!("command-denied:{}", cmd.discriminant()),
                         surface: "daemon".into(),
@@ -235,10 +268,16 @@ impl DaemonHost {
                         session_id: Some(session_id.to_string()),
                         timestamp_secs: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
+                            .unwrap_or_else(|error| {
+                                tracing::warn!(?error, "system clock is before Unix epoch");
+                                std::time::Duration::ZERO
+                            })
                             .as_secs(),
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!(?error, "failed to record permission denial audit event");
+                }
                 return ServerMessage::Error {
                     request_id: cmd.request_id().to_owned(),
                     code,
@@ -292,12 +331,15 @@ impl DaemonHost {
                     surface: eggsec_runtime::RuntimeSurface::Unknown,
                     connected_at_secs: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(?error, "system clock is before Unix epoch");
+                            std::time::Duration::ZERO
+                        })
                         .as_secs(),
                     label,
                 };
                 self.register_client(info);
-                let _ = self
+                if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: "declare-client".into(),
                         surface: "daemon".into(),
@@ -306,10 +348,16 @@ impl DaemonHost {
                         session_id: None,
                         timestamp_secs: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
+                            .unwrap_or_else(|error| {
+                                tracing::warn!(?error, "system clock is before Unix epoch");
+                                std::time::Duration::ZERO
+                            })
                             .as_secs(),
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!(?error, "failed to record client declaration audit event");
+                }
                 ServerMessage::ClientDeclared {
                     request_id,
                     client_id,
@@ -354,7 +402,11 @@ impl DaemonHost {
                             .insert(session_id, access);
                         // Set owner on the runtime session for snapshot persistence
                         if let Some(owner) = client_id {
-                            let _ = self.runtime().set_session_owner(session_id, owner).await;
+                            if let Err(error) =
+                                self.runtime().set_session_owner(session_id, owner).await
+                            {
+                                tracing::warn!(?error, %session_id, "failed to set session owner");
+                            }
                         }
                         // Persist session snapshot and record audit event
                         let store = self.store.clone();
@@ -369,8 +421,9 @@ impl DaemonHost {
                                         tracing::warn!(error = %e, "Failed to persist session snapshot");
                                     }
                                 }
-                                let _ = store
-                                    .record_audit_event(&PersistedAuditEvent {
+                                record_audit_event_logged(
+                                    store.as_ref(),
+                                    PersistedAuditEvent {
                                         action: "create-session".into(),
                                         surface: "daemon".into(),
                                         outcome: "allow".into(),
@@ -378,10 +431,17 @@ impl DaemonHost {
                                         session_id: Some(session_id_copy.to_string()),
                                         timestamp_secs: std::time::SystemTime::now()
                                             .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap_or_default()
+                                            .unwrap_or_else(|error| {
+                                                tracing::warn!(
+                                                    ?error,
+                                                    "system clock is before Unix epoch"
+                                                );
+                                                std::time::Duration::ZERO
+                                            })
                                             .as_secs(),
-                                    })
-                                    .await;
+                                    },
+                                )
+                                .await;
                             }
                         });
                         ServerMessage::SessionCreated {
@@ -438,8 +498,9 @@ impl DaemonHost {
                                     tracing::warn!(error = %e, "Failed to persist snapshot after task submit");
                                 }
                             }
-                            let _ = store
-                                .record_audit_event(&PersistedAuditEvent {
+                            record_audit_event_logged(
+                                store.as_ref(),
+                                PersistedAuditEvent {
                                     action: "submit-task".into(),
                                     surface: "daemon".into(),
                                     outcome: "allow".into(),
@@ -447,10 +508,17 @@ impl DaemonHost {
                                     session_id: Some(session_id.to_string()),
                                     timestamp_secs: std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap_or_default()
+                                        .unwrap_or_else(|error| {
+                                            tracing::warn!(
+                                                ?error,
+                                                "system clock is before Unix epoch"
+                                            );
+                                            std::time::Duration::ZERO
+                                        })
                                         .as_secs(),
-                                })
-                                .await;
+                                },
+                            )
+                            .await;
                         }
                     });
                     ServerMessage::TaskSubmitted {
@@ -490,8 +558,9 @@ impl DaemonHost {
                                     tracing::warn!(error = %e, "Failed to persist snapshot after cancel");
                                 }
                             }
-                            let _ = store
-                                .record_audit_event(&PersistedAuditEvent {
+                            record_audit_event_logged(
+                                store.as_ref(),
+                                PersistedAuditEvent {
                                     action: "cancel-task".into(),
                                     surface: "daemon".into(),
                                     outcome: "allow".into(),
@@ -499,10 +568,17 @@ impl DaemonHost {
                                     session_id: Some(session_id.to_string()),
                                     timestamp_secs: std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap_or_default()
+                                        .unwrap_or_else(|error| {
+                                            tracing::warn!(
+                                                ?error,
+                                                "system clock is before Unix epoch"
+                                            );
+                                            std::time::Duration::ZERO
+                                        })
                                         .as_secs(),
-                                })
-                                .await;
+                                },
+                            )
+                            .await;
                         }
                     });
                     ServerMessage::Ok { request_id }
@@ -539,8 +615,9 @@ impl DaemonHost {
                                     tracing::warn!(error = %e, "Failed to persist snapshot after cancel-active");
                                 }
                             }
-                            let _ = store
-                                .record_audit_event(&PersistedAuditEvent {
+                            record_audit_event_logged(
+                                store.as_ref(),
+                                PersistedAuditEvent {
                                     action: "cancel-active".into(),
                                     surface: "daemon".into(),
                                     outcome: "allow".into(),
@@ -548,10 +625,17 @@ impl DaemonHost {
                                     session_id: Some(session_id.to_string()),
                                     timestamp_secs: std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap_or_default()
+                                        .unwrap_or_else(|error| {
+                                            tracing::warn!(
+                                                ?error,
+                                                "system clock is before Unix epoch"
+                                            );
+                                            std::time::Duration::ZERO
+                                        })
                                         .as_secs(),
-                                })
-                                .await;
+                                },
+                            )
+                            .await;
                         }
                     });
                     ServerMessage::Ok { request_id }
@@ -586,8 +670,9 @@ impl DaemonHost {
                                     tracing::warn!(error = %e, "Failed to persist final closed session snapshot");
                                 }
                             }
-                            let _ = store
-                                .record_audit_event(&PersistedAuditEvent {
+                            record_audit_event_logged(
+                                store.as_ref(),
+                                PersistedAuditEvent {
                                     action: "close-session".into(),
                                     surface: "daemon".into(),
                                     outcome: "allow".into(),
@@ -595,10 +680,17 @@ impl DaemonHost {
                                     session_id: Some(session_id.to_string()),
                                     timestamp_secs: std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap_or_default()
+                                        .unwrap_or_else(|error| {
+                                            tracing::warn!(
+                                                ?error,
+                                                "system clock is before Unix epoch"
+                                            );
+                                            std::time::Duration::ZERO
+                                        })
                                         .as_secs(),
-                                })
-                                .await;
+                                },
+                            )
+                            .await;
                         }
                     });
                     ServerMessage::SessionClosed { request_id }
@@ -618,7 +710,7 @@ impl DaemonHost {
                 reason: _,
             } => {
                 // Record audit event even though this is not yet wired
-                let _ = self
+                if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: "approve-policy".into(),
                         surface: "daemon".into(),
@@ -627,10 +719,16 @@ impl DaemonHost {
                         session_id: None,
                         timestamp_secs: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
+                            .unwrap_or_else(|error| {
+                                tracing::warn!(?error, "system clock is before Unix epoch");
+                                std::time::Duration::ZERO
+                            })
                             .as_secs(),
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!(?error, "failed to record policy approval audit event");
+                }
                 ServerMessage::Error {
                     request_id,
                     code: ErrorCode::Unsupported,
@@ -650,7 +748,12 @@ impl DaemonHost {
                         // the single-user local daemon model. This can be relaxed via config
                         // if multi-client scenarios arise.
                         let is_elevated = client_id.map_or(false, |cid| {
-                            let registry = self.client_registry.lock().unwrap();
+                            let registry = self.client_registry.lock().unwrap_or_else(|poisoned| {
+                                tracing::warn!(
+                                    "client registry mutex was poisoned; recovering state"
+                                );
+                                poisoned.into_inner()
+                            });
                             registry.get(&cid).map_or(false, |info| {
                                 matches!(info.kind, ClientKind::DaemonInternal)
                             })
@@ -695,7 +798,10 @@ impl DaemonHost {
                     let in_access_table;
                     let is_authorized;
                     {
-                        let access = self.session_access.lock().unwrap();
+                        let access = self.session_access.lock().unwrap_or_else(|poisoned| {
+                            tracing::warn!("session access mutex was poisoned; recovering state");
+                            poisoned.into_inner()
+                        });
                         match access.get(&session_id) {
                             Some(session_access) => {
                                 in_access_table = true;
@@ -804,7 +910,10 @@ impl DaemonHost {
         // If the session doesn't exist in the access table, let the runtime
         // return SessionNotFound — don't block on permissions for a ghost session.
         {
-            let access = self.session_access.lock().unwrap();
+            let access = self.session_access.lock().unwrap_or_else(|poisoned| {
+                tracing::warn!("session access mutex was poisoned; recovering state");
+                poisoned.into_inner()
+            });
             if !access.contains_key(session_id) {
                 return Ok(());
             }

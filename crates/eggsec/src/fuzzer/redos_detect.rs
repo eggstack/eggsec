@@ -94,7 +94,11 @@ impl RegexExecutor {
     pub fn check_pattern(&self, pattern: &str) -> ReDosResult {
         let start = Instant::now();
 
-        let regex = match RegexBuilder::new(pattern).size_limit(100_000).build() {
+        let regex = match RegexBuilder::new(pattern)
+            .size_limit(100_000)
+            .dfa_size_limit(10_000_000)
+            .build()
+        {
             Ok(r) => r,
             Err(e) => {
                 return ReDosResult {
@@ -162,32 +166,22 @@ impl RegexExecutor {
         iterations: Arc<AtomicU64>,
         timeout_flag: Arc<AtomicU64>,
     ) -> RegexMatchResult {
-        let mut last_len = 0;
-
-        for _ in 0.. {
-            if iterations.fetch_add(1, Ordering::SeqCst) > self.max_iterations {
-                timeout_flag.store(1, Ordering::SeqCst);
-                break;
-            }
-
-            if timeout_flag.load(Ordering::SeqCst) == 1 {
-                break;
-            }
-
-            match regex.find(input) {
-                Some(m) => {
-                    if m.len() == last_len {
-                        break;
-                    }
-                    last_len = m.len();
-                }
-                None => break,
-            }
+        // `regex` guarantees linear-time matching. Re-running the same search
+        // until its match length stabilizes only inflated the iteration count
+        // and could falsely classify ordinary matches as ReDoS.
+        if iterations.fetch_add(1, Ordering::SeqCst) >= self.max_iterations {
+            timeout_flag.store(1, Ordering::SeqCst);
+            return RegexMatchResult {
+                is_match: false,
+                match_length: 0,
+            };
         }
 
+        let match_length = regex.find(input).map_or(0, |m| m.len());
+
         RegexMatchResult {
-            is_match: last_len > 0,
-            match_length: last_len,
+            is_match: match_length > 0,
+            match_length,
         }
     }
 

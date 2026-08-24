@@ -11,8 +11,8 @@ pub fn hexdump_with_offset(data: &[u8], start_offset: usize, bytes_per_line: usi
         return String::new();
     }
 
+    let bytes_per_line = bytes_per_line.max(1);
     let mut output = String::new();
-    let _total_len = data.len();
 
     for (i, chunk) in data.chunks(bytes_per_line).enumerate() {
         let offset = start_offset + (i * bytes_per_line);
@@ -36,7 +36,7 @@ pub fn hexdump_with_offset(data: &[u8], start_offset: usize, bytes_per_line: usi
 
         let padding_len = bytes_per_line - chunk.len();
         for j in 0..padding_len {
-            if (chunk.len() + j) % 8 == 0 && j > 0 {
+            if (chunk.len() + j) % 8 == 0 && chunk.len() + j > 0 {
                 hex_part.push(' ');
             }
             hex_part.push_str("   ");
@@ -69,7 +69,7 @@ impl<W: fmt::Write> HexDumper<W> {
     }
 
     pub fn with_bytes_per_line(mut self, bytes_per_line: usize) -> Self {
-        self.bytes_per_line = bytes_per_line;
+        self.bytes_per_line = bytes_per_line.max(1);
         self
     }
 
@@ -102,7 +102,7 @@ impl<W: fmt::Write> HexDumper<W> {
 
             let padding_len = self.bytes_per_line - chunk.len();
             for j in 0..padding_len {
-                if (chunk.len() + j) % 8 == 0 && j > 0 {
+                if (chunk.len() + j) % 8 == 0 && chunk.len() + j > 0 {
                     hex_part.push(' ');
                 }
                 hex_part.push_str("   ");
@@ -124,7 +124,9 @@ impl<W: fmt::Write> HexDumper<W> {
 impl HexDumper<String> {
     pub fn to_string(data: &[u8]) -> String {
         let mut dumper = Self::new(String::new());
-        let _ = dumper.write_packet(data);
+        if let Err(error) = dumper.write_packet(data) {
+            tracing::warn!(?error, "failed to format packet hexdump");
+        }
         dumper.writer
     }
 }
@@ -142,7 +144,7 @@ mod tests {
     fn test_hexdump_basic() {
         let data = b"Hello, World!";
         let output = hexdump(data);
-        assert!(output.contains("48656c6c 6f2c2057 6f726c64 21"));
+        assert!(output.contains("48 65 6c 6c 6f 2c 20 57  6f 72 6c 64 21"));
         assert!(output.contains("Hello, World!"));
     }
 
@@ -166,7 +168,7 @@ mod tests {
         let output = hexdump(&data);
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 1);
-        assert!(output.contains("00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f"));
+        assert!(output.contains("00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f"));
     }
 
     #[test]
@@ -175,5 +177,16 @@ mod tests {
         let output = hexdump(&data);
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn zero_bytes_per_line_is_safe() {
+        assert!(!hexdump_with_offset(b"x", 0, 0).is_empty());
+        let mut output = String::new();
+        HexDumper::new(&mut output)
+            .with_bytes_per_line(0)
+            .write_packet(b"x")
+            .unwrap();
+        assert!(output.contains("78"));
     }
 }

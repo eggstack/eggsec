@@ -24,7 +24,6 @@ unsound = "transitive"
 ignore = [
     # --- Transitive: unmaintained crates with no upstream fix ---
     { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
-    { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify-types->notify v7. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 

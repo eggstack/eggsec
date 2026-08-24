@@ -114,7 +114,7 @@ fn build_patterns() -> Vec<SecretPattern> {
             description: "AWS Access Key ID",
         },
         SecretPattern {
-            pattern: Regex::new(r#"(?i)aws(.{0,20})?(?-i)['\"][0-9a-zA-Z/+]{40}['\"]"#)
+            pattern: Regex::new(r#"(?i)\baws(.{0,20})?(?-i)['\"][0-9a-zA-Z/+]{40}['\"]"#)
                 .expect("invalid AWS secret key regex"),
             secret_type: SecretType::AwsSecretKey,
             confidence: Confidence::High,
@@ -331,6 +331,10 @@ impl SecretScanner {
         for pattern in PATTERNS.iter() {
             for mat in pattern.pattern.find_iter(content) {
                 let value = mat.as_str();
+                if pattern.secret_type == SecretType::AwsSecretKey && secret_entropy(value) < 3.5 {
+                    tracing::debug!("Ignoring low-entropy AWS secret-key candidate");
+                    continue;
+                }
                 let preview = if value.chars().count() > 20 {
                     format!("{}...", value.chars().take(20).collect::<String>())
                 } else {
@@ -355,6 +359,30 @@ impl SecretScanner {
         let content = std::fs::read_to_string(path)?;
         Ok(self.scan(&content))
     }
+}
+
+fn secret_entropy(value: &str) -> f64 {
+    let candidate = value
+        .split(['\'', '"'])
+        .find(|part| part.len() == 40)
+        .unwrap_or(value);
+    if candidate.is_empty() {
+        return 0.0;
+    }
+
+    let mut counts = [0usize; 256];
+    for byte in candidate.bytes() {
+        counts[byte as usize] += 1;
+    }
+    let length = candidate.len() as f64;
+    counts
+        .iter()
+        .filter(|&&count| count > 0)
+        .map(|&count| {
+            let probability = count as f64 / length;
+            -probability * probability.log2()
+        })
+        .sum()
 }
 
 pub fn scan_content(content: &str) -> Vec<SecretFinding> {
@@ -388,6 +416,14 @@ mod tests {
         let findings = scan_content(content);
         assert!(!findings.is_empty());
         assert_eq!(findings[0].secret_type, SecretType::GithubToken);
+    }
+
+    #[test]
+    fn low_entropy_aws_secret_candidate_is_ignored() {
+        let content = r#"aws_secret = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA""#;
+        assert!(scan_content(content)
+            .iter()
+            .all(|finding| finding.secret_type != SecretType::AwsSecretKey));
     }
 
     #[test]

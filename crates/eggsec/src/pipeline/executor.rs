@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::error::Result;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -507,7 +507,18 @@ impl Pipeline {
                     let stage_risk = stage.to_probe_risk();
                     let allowed = stage_risk.risk_level() <= risk_budget.risk_level();
                     let result = if allowed {
-                        self.execute_stage(stage).await
+                        match tokio::time::timeout(
+                            Duration::from_secs(300),
+                            self.execute_stage(stage),
+                        )
+                        .await
+                        {
+                            Ok(result) => result,
+                            Err(_) => Err(crate::error::EggsecError::Timeout {
+                                timeout_ms: 300_000,
+                                operation: format!("pipeline stage {}", stage),
+                            }),
+                        }
                     } else {
                         tracing::info!(stage = %stage, "Stage skipped due to risk budget");
                         Ok(())

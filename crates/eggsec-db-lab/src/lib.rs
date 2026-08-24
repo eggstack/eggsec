@@ -181,7 +181,7 @@ pub async fn run_db_pentest(args: DbPentestRunArgs) -> anyhow::Result<DbPentestR
         // Phase 6: baseline capture and regression comparison (dry-run)
         if args.capture_baseline {
             let bl = baseline::capture_baseline(&report, args.baseline_label.as_deref());
-            let bl_json = baseline::export_baseline_json(&bl).unwrap_or_default();
+            let bl_json = baseline::export_baseline_json(&bl)?;
             report.actions_performed.push(format!(
                 "baseline captured: {} findings, label={:?}",
                 bl.total_findings, bl.label
@@ -200,11 +200,16 @@ pub async fn run_db_pentest(args: DbPentestRunArgs) -> anyhow::Result<DbPentestR
             report.baseline_label = bl.label;
         }
         if let Some(ref baseline_path) = args.baseline {
-            match baseline::import_baseline_json(
-                &tokio::fs::read_to_string(baseline_path)
-                    .await
-                    .unwrap_or_default(),
-            ) {
+            let baseline_contents = match tokio::fs::read_to_string(baseline_path).await {
+                Ok(contents) => contents,
+                Err(error) => {
+                    report
+                        .actions_performed
+                        .push(format!("baseline read error (non-fatal): {}", error));
+                    String::new()
+                }
+            };
+            match baseline::import_baseline_json(&baseline_contents) {
                 Ok(bl) => {
                     let regression = baseline::compare_to_baseline(&bl, &report);
                     report.regression_summary = Some(regression.summary.clone());
@@ -465,7 +470,7 @@ pub async fn run_db_pentest(args: DbPentestRunArgs) -> anyhow::Result<DbPentestR
     // Phase 6: baseline capture and regression comparison (real runs)
     if args.capture_baseline {
         let bl = baseline::capture_baseline(&report, args.baseline_label.as_deref());
-        let bl_json = baseline::export_baseline_json(&bl).unwrap_or_default();
+        let bl_json = baseline::export_baseline_json(&bl)?;
         report.actions_performed.push(format!(
             "baseline captured: {} findings, label={:?}",
             bl.total_findings, bl.label
@@ -485,11 +490,16 @@ pub async fn run_db_pentest(args: DbPentestRunArgs) -> anyhow::Result<DbPentestR
     }
 
     if let Some(ref baseline_path) = args.baseline {
-        match baseline::import_baseline_json(
-            &tokio::fs::read_to_string(baseline_path)
-                .await
-                .unwrap_or_default(),
-        ) {
+        let baseline_contents = match tokio::fs::read_to_string(baseline_path).await {
+            Ok(contents) => contents,
+            Err(error) => {
+                report
+                    .actions_performed
+                    .push(format!("baseline read error (non-fatal): {}", error));
+                String::new()
+            }
+        };
+        match baseline::import_baseline_json(&baseline_contents) {
             Ok(bl) => {
                 let regression = baseline::compare_to_baseline(&bl, &report);
                 report.regression_summary = Some(regression.summary.clone());

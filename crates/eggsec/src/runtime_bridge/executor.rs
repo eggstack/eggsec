@@ -357,7 +357,9 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
             };
 
             // Wait for the forwarder to drain remaining progress messages.
-            let _ = progress_forwarder.await;
+            if let Err(error) = progress_forwarder.await {
+                tracing::warn!(?error, "runtime progress forwarder failed");
+            }
 
             // Convert TaskResult → TaskOutcome.
             let outcome = Self::task_result_to_outcome(&task_result);

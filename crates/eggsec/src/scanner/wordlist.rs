@@ -93,6 +93,12 @@ fn validate_endpoint(line: &str) -> Option<&'static str> {
     if line.bytes().any(|b| b < 0x20 || b == 0x7f) {
         return Some("contains control characters");
     }
+    if line
+        .split('/')
+        .any(|component| component == "." || component == "..")
+    {
+        return Some("contains path traversal component");
+    }
     None
 }
 
@@ -173,6 +179,11 @@ mod tests {
     fn validate_endpoint_too_long() {
         let long = "/".repeat(MAX_ENDPOINT_LENGTH + 1);
         assert!(validate_endpoint(&long).is_some());
+    }
+
+    #[test]
+    fn validate_endpoint_rejects_traversal() {
+        assert!(validate_endpoint("/../secret").is_some());
     }
 
     #[test]

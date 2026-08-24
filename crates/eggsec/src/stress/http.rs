@@ -142,8 +142,7 @@ async fn build_clients(proxy_manager: Option<&ProxyManager>) -> Result<Vec<reqwe
                 ))
                 .connect_timeout(Duration::from_secs(5))
                 .tcp_keepalive(Duration::from_secs(60))
-                .tcp_nodelay(true)
-                .danger_accept_invalid_certs(true);
+                .tcp_nodelay(true);
             builder = builder.proxy(build_reqwest_proxy(&proxy_entry)?);
             clients.push(builder.build()?);
         }

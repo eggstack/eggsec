@@ -4,8 +4,9 @@ use crate::agent::constraints::{
 use crate::agent::portfolio::{ScanDepth, TargetConfig};
 use crate::types::Severity;
 use chrono::Timelike;
+use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const RATE_LIMIT_RESET_INTERVAL: Duration = Duration::from_secs(60);
@@ -219,11 +220,8 @@ impl ConstraintChecker {
 
     pub fn evaluate_rate_limit(&self, key: &str) -> Result<(), ConstraintViolation> {
         if let Some(limit) = self.constraints.rate_limit_budget {
-            let mut request_counts = self
-                .request_counts
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            let mut last_reset = self.last_reset_at.lock().unwrap_or_else(|e| e.into_inner());
+            let mut request_counts = self.request_counts.lock();
+            let mut last_reset = self.last_reset_at.lock();
             if last_reset.elapsed() >= RATE_LIMIT_RESET_INTERVAL {
                 request_counts.clear();
                 *last_reset = Instant::now();
@@ -302,10 +300,7 @@ impl ConstraintChecker {
     }
 
     pub fn reset_rate_limits(&self) {
-        let mut request_counts = self
-            .request_counts
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut request_counts = self.request_counts.lock();
         request_counts.clear();
     }
 

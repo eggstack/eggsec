@@ -49,6 +49,11 @@ pub struct ClusterWorkerArgs {
     pub psk: Option<String>,
     #[arg(long, default_value = "30", help = "Heartbeat interval in seconds")]
     pub heartbeat_interval: u64,
+    #[arg(
+        long,
+        help = "TLS server name used to verify the coordinator certificate"
+    )]
+    pub tls_domain: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -61,12 +66,21 @@ pub struct ClusterCoordinatorArgs {
     pub max_workers: Option<usize>,
     #[arg(long, help = "Pre-shared key for worker authentication")]
     pub psk: Option<String>,
+    #[arg(
+        long,
+        help = "TLS certificate PEM path (required for coordinator mode)"
+    )]
+    pub tls_cert: Option<String>,
+    #[arg(long, help = "TLS private-key PEM path (required with --tls-cert)")]
+    pub tls_key: Option<String>,
 }
 
 #[derive(clap::Args)]
 pub struct ClusterStatusArgs {
     #[arg(long, help = "Coordinator address (for remote status)")]
     pub coordinator: Option<String>,
+    #[arg(long, default_value = "localhost", help = "TLS server name")]
+    pub tls_domain: String,
 }
 
 #[derive(clap::Args)]
@@ -86,4 +100,6 @@ pub struct ClusterAddTaskArgs {
     pub payload: Option<String>,
     #[arg(long, help = "Job ID (auto-generated if not set)")]
     pub job_id: Option<String>,
+    #[arg(long, default_value = "localhost", help = "TLS server name")]
+    pub tls_domain: String,
 }

@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing;
+use url::Url;
 
 #[cfg(feature = "cli")]
 use crate::cli::EndpointScanArgs;
@@ -585,18 +586,55 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
         ".envrc",
     ];
 
-    let path_lower = path.to_lowercase();
-
     if status_code == 200 || status_code == crate::constants::STATUS_FORBIDDEN || status_code == 401
     {
+        let path_segments: Vec<String> = path
+            .to_lowercase()
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(str::to_string)
+            .collect();
         for pattern in &sensitive_patterns {
-            if path_lower.contains(pattern) {
+            let pattern_segments: Vec<&str> = pattern.split('/').collect();
+            if path_segments.windows(pattern_segments.len()).any(|window| {
+                window
+                    .iter()
+                    .zip(&pattern_segments)
+                    .all(|(segment, pattern)| {
+                        *segment == *pattern
+                            || (pattern_segments.len() == 1
+                                && segment.strip_prefix(pattern).is_some_and(|suffix| {
+                                    suffix.starts_with('.')
+                                        || suffix.starts_with('-')
+                                        || suffix.starts_with('_')
+                                }))
+                    })
+            }) {
                 return true;
             }
         }
     }
 
     false
+}
+
+fn join_endpoint_url(base: &str, endpoint: &str) -> Result<String> {
+    if endpoint
+        .split('/')
+        .any(|component| component == "." || component == "..")
+    {
+        return Err(EggsecError::Config(format!(
+            "endpoint path escapes the base URL: {}",
+            endpoint
+        )));
+    }
+
+    let mut base_url = Url::parse(base)
+        .map_err(|error| EggsecError::Config(format!("invalid base URL: {}", error)))?;
+    let base_path = base_url.path().trim_end_matches('/');
+    let endpoint_path = endpoint.trim_start_matches('/');
+    base_url.set_path(&format!("{}/{}", base_path, endpoint_path));
+    Ok(base_url.to_string())
 }
 
 #[cfg(feature = "tool-api")]
@@ -823,6 +861,7 @@ mod tests {
         assert!(!is_interesting("/contact", 200));
         assert!(!is_interesting("/faq", 200));
         assert!(!is_interesting("/pricing", 200));
+        assert!(!is_interesting("/notadmin", 200));
     }
 
     #[test]
@@ -838,6 +877,15 @@ mod tests {
         assert!(is_interesting("/ADMIN", 200));
         assert!(is_interesting("/Admin", 200));
         assert!(is_interesting("/CONFIG.PHP", 200));
+    }
+
+    #[test]
+    fn endpoint_urls_stay_under_the_base_path() {
+        assert_eq!(
+            join_endpoint_url("https://example.com/app", "/admin").unwrap(),
+            "https://example.com/app/admin"
+        );
+        assert!(join_endpoint_url("https://example.com/app", "/../secret").is_err());
     }
 
     #[test]
@@ -995,7 +1043,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         let client = client.clone();
         let results = results.clone();
         let progress = progress.clone();
-        let url = format!("{}{}", base, endpoint);
+        let url = join_endpoint_url(base, &endpoint)?;
         let endpoint_path = endpoint;
         let spoof_config = Arc::clone(&spoof_config);
         let scanned_count = scanned_count.clone();

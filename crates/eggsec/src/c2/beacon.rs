@@ -75,7 +75,6 @@ fn dry_run_beacons(campaign: &C2Campaign) -> Vec<BeaconResult> {
 async fn real_beacons(campaign: &C2Campaign, target: &str) -> Vec<BeaconResult> {
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .danger_accept_invalid_certs(true)
         .build()
     {
         Ok(c) => c,

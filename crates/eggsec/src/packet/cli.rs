@@ -121,16 +121,16 @@ pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(),
     }
 
     let packet_data = if args.icmp {
-        build_icmp_packet(src_ip)
+        build_icmp_packet(src_ip)?
     } else if args.udp {
-        build_udp_packet(src_ip, args.src_port.unwrap_or(40000), target.port())
+        build_udp_packet(src_ip, args.src_port.unwrap_or(40000), target.port())?
     } else {
         build_tcp_packet(
             src_ip,
             args.src_port.unwrap_or(40000),
             target.port(),
             args.flags.as_deref(),
-        )
+        )?
     };
 
     let socket = UdpSocket::bind("0.0.0.0:0")?;
@@ -570,7 +570,7 @@ fn build_tcp_packet(
     src_port: u16,
     dst_port: u16,
     flags_str: Option<&str>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, crate::packet::craft::PacketValidationError> {
     let mut flags = TcpFlags::syn();
 
     if let Some(f) = flags_str {
@@ -587,30 +587,30 @@ fn build_tcp_packet(
         }
     }
 
-    let packet = PacketBuilder::new()
+    PacketBuilder::new()
         .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 6, 64)
         .tcp(src_port, dst_port, 1000, 0, flags, 65535)
-        .build();
-
-    packet
+        .build()
 }
 
-fn build_udp_packet(src_ip: Option<IpAddr>, src_port: u16, dst_port: u16) -> Vec<u8> {
-    let packet = PacketBuilder::new()
+fn build_udp_packet(
+    src_ip: Option<IpAddr>,
+    src_port: u16,
+    dst_port: u16,
+) -> Result<Vec<u8>, crate::packet::craft::PacketValidationError> {
+    PacketBuilder::new()
         .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 17, 64)
         .udp(src_port, dst_port)
-        .build();
-
-    packet
+        .build()
 }
 
-fn build_icmp_packet(src_ip: Option<IpAddr>) -> Vec<u8> {
-    let packet = PacketBuilder::new()
+fn build_icmp_packet(
+    src_ip: Option<IpAddr>,
+) -> Result<Vec<u8>, crate::packet::craft::PacketValidationError> {
+    PacketBuilder::new()
         .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 1, 64)
         .icmp(8, 0, 1, 1)
-        .build();
-
-    packet
+        .build()
 }
 
 fn source_ipv4(src_ip: Option<IpAddr>) -> Ipv4Addr {

@@ -59,7 +59,10 @@ impl SqliteStore {
     }
 
     fn migrate(&self) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         conn.execute_batch(SCHEMA_DDL)?;
         let stored: Option<String> = conn
             .query_row(
@@ -99,10 +102,16 @@ impl DaemonStore for SqliteStore {
         let json = serde_json::to_string(snapshot)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
+            .unwrap_or_else(|error| {
+                tracing::warn!(?error, "system clock is before Unix epoch");
+                std::time::Duration::ZERO
+            })
             .as_secs() as i64;
         let session_id = snapshot.session_id.to_string();
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         conn.execute(
             "INSERT OR REPLACE INTO session_snapshots (session_id, snapshot_json, created_at_secs) VALUES (?1, ?2, ?3)",
             rusqlite::params![session_id, json, now],
@@ -114,7 +123,10 @@ impl DaemonStore for SqliteStore {
         &self,
         session_id: SessionId,
     ) -> anyhow::Result<Option<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         let mut stmt =
             conn.prepare("SELECT snapshot_json FROM session_snapshots WHERE session_id = ?1")?;
         let mut rows = stmt.query_map([session_id.to_string()], |row| {
@@ -132,7 +144,10 @@ impl DaemonStore for SqliteStore {
     }
 
     async fn load_all_sessions(&self) -> anyhow::Result<Vec<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         let mut stmt = conn
             .prepare("SELECT snapshot_json FROM session_snapshots ORDER BY created_at_secs ASC")?;
         let rows = stmt.query_map([], |row| {
@@ -149,7 +164,10 @@ impl DaemonStore for SqliteStore {
     }
 
     async fn record_audit_event(&self, event: &PersistedAuditEvent) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         conn.execute(
             "INSERT INTO audit_events (action, surface, outcome, client_id, session_id, created_at_secs) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
@@ -165,7 +183,10 @@ impl DaemonStore for SqliteStore {
     }
 
     async fn delete_session(&self, session_id: SessionId) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         conn.execute(
             "DELETE FROM session_snapshots WHERE session_id = ?1",
             [session_id.to_string()],
@@ -174,7 +195,10 @@ impl DaemonStore for SqliteStore {
     }
 
     fn blocking_list_sessions(&self) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         let mut stmt = conn
             .prepare("SELECT snapshot_json FROM session_snapshots ORDER BY created_at_secs ASC")?;
         let rows = stmt.query_map([], |row| {
@@ -202,7 +226,10 @@ impl DaemonStore for SqliteStore {
         &self,
         session_id: &SessionId,
     ) -> anyhow::Result<Option<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+            poisoned.into_inner()
+        });
         let mut stmt =
             conn.prepare("SELECT snapshot_json FROM session_snapshots WHERE session_id = ?1")?;
         let mut rows = stmt.query_map([session_id.to_string()], |row| {

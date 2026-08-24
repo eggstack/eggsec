@@ -32,6 +32,12 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                 coordinator_url: worker_args.coordinator.clone(),
                 max_concurrency: worker_args.workers,
                 heartbeat_interval_secs: worker_args.heartbeat_interval,
+                tls_domain: Some(
+                    worker_args
+                        .tls_domain
+                        .clone()
+                        .unwrap_or_else(|| "localhost".to_string()),
+                ),
             };
 
             println!("Starting worker node...");
@@ -40,7 +46,11 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
             println!("  Max concurrency: {}", worker_args.workers);
             println!("  Heartbeat interval: {}s", worker_args.heartbeat_interval);
 
-            let mut worker = crate::distributed::worker::Worker::new(config, psk);
+            let mut worker = crate::distributed::worker::Worker::with_enforcement(
+                config,
+                psk,
+                ctx.enforcement.clone(),
+            );
 
             match worker.start().await {
                 Ok(()) => {
@@ -87,7 +97,19 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
             println!("Starting distributed coordinator...");
             println!("  Bind: {}:{}", bind_addr, coordinator_args.port);
 
-            let listener = RemoteListener::new(psk);
+            let tls_cert = coordinator_args.tls_cert.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("--tls-cert and --tls-key are required for coordinator mode")
+            })?;
+            let tls_key = coordinator_args.tls_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("--tls-cert and --tls-key are required for coordinator mode")
+            })?;
+            let listener = RemoteListener::with_tls(
+                psk,
+                crate::distributed::TlsConfig {
+                    cert_path: tls_cert.clone().into(),
+                    key_path: tls_key.clone().into(),
+                },
+            )?;
 
             println!(
                 "Coordinator started on {}:{}",
@@ -126,7 +148,8 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
                 let (host, port) = extract_host_and_port(addr);
 
-                let mut client = RemoteClient::new(psk);
+                let mut client = RemoteClient::with_tls(psk, &status_args.tls_domain)
+                    .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?;
 
                 match client.request_status(&host, port).await {
                     Ok(data) => {
@@ -241,7 +264,8 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
             let (host, port) = extract_host_and_port(&add_args.coordinator);
 
-            let mut client = RemoteClient::new(psk);
+            let mut client = RemoteClient::with_tls(psk, &add_args.tls_domain)
+                .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?;
 
             println!(
                 "Enqueueing {} task for target '{}'...",
@@ -323,18 +347,19 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
                     key
                 });
 
-            let listener = if let Some(tls_cert) = &start_args.tls_cert {
-                let tls_key = start_args.tls_key.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("TLS key path required when using --tls-cert")
-                })?;
-                let tls_config = TlsConfig {
+            let tls_cert = start_args.tls_cert.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("--tls-cert and --tls-key are required for remote listener mode")
+            })?;
+            let tls_key = start_args.tls_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("--tls-cert and --tls-key are required for remote listener mode")
+            })?;
+            let listener = RemoteListener::with_tls(
+                psk,
+                TlsConfig {
                     cert_path: tls_cert.clone().into(),
                     key_path: tls_key.clone().into(),
-                };
-                RemoteListener::with_tls(psk, tls_config)?
-            } else {
-                RemoteListener::new(psk)
-            };
+                },
+            )?;
 
             if listener.is_tls() {
                 println!("TLS enabled");
@@ -375,7 +400,7 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
         RemoteClient::with_tls(psk, domain)
             .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?
     } else {
-        RemoteClient::new(psk)
+        anyhow::bail!("--tls-cert and --tls-key are required for remote execution");
     };
 
     if client.is_tls() {

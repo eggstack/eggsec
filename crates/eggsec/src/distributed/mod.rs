@@ -15,10 +15,16 @@
 //! ### Starting a Coordinator
 //!
 //! ```rust,no_run
-//! use eggsec::distributed::RemoteListener;
+//! use eggsec::distributed::{RemoteListener, TlsConfig};
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let listener = RemoteListener::new("my-secret-psk".to_string());
+//! let listener = RemoteListener::with_tls(
+//!     "my-secret-psk".to_string(),
+//!     TlsConfig {
+//!         cert_path: "server.crt".into(),
+//!         key_path: "server.key".into(),
+//!     },
+//! )?;
 //! listener.start(9000).await?;
 //! # Ok(())
 //! # }
@@ -30,7 +36,7 @@
 //! use eggsec::distributed::RemoteClient;
 //!
 //! # async fn example() -> eggsec::error::Result<()> {
-//! let mut client = RemoteClient::new("my-secret-psk".to_string());
+//! let mut client = RemoteClient::with_tls("my-secret-psk".to_string(), "worker-host")?;
 //! let result = client.execute(
 //!     "worker-host",
 //!     9000,

@@ -10,9 +10,8 @@ pub fn format_ipv6(bytes: &[u8]) -> String {
 pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
     let mut name = SmallVec::<[u8; 128]>::new();
     let mut pos = offset;
-    let mut jumped = false;
+    let mut jump_end = None;
     let mut jumps = 0;
-    let original_offset = offset;
 
     while pos < data.len() {
         let length = data[pos] as usize;
@@ -20,7 +19,7 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
         if length == 0 {
             return Some((
                 String::from_utf8_lossy(&name).to_string(),
-                if !jumped { pos + 1 } else { original_offset },
+                jump_end.unwrap_or(pos + 1),
             ));
         }
 
@@ -29,11 +28,8 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
                 return None;
             }
             let new_offset = ((length & 0x3f) as usize) << 8 | data[pos + 1] as usize;
-            if jumps == 0 {
-                jumps = pos - original_offset + 2;
-            }
+            jump_end.get_or_insert(pos + 2);
             pos = new_offset;
-            jumped = true;
             jumps += 1;
             if jumps > 100 {
                 return None;
@@ -56,6 +52,19 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
     }
 
     Some((String::from_utf8_lossy(&name).to_string(), pos))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_dns_name;
+
+    #[test]
+    fn compressed_name_returns_offset_after_pointer() {
+        let data = [3, b'w', b'w', b'w', 0, 0xc0, 0];
+        let (name, next) = parse_dns_name(&data, 5).unwrap();
+        assert_eq!(name, "www");
+        assert_eq!(next, 7);
+    }
 }
 
 pub fn parse_dns_rdata(data: &[u8], offset: usize, rtype: u16, _rdlen: usize) -> String {

@@ -33,6 +33,7 @@ pub struct RemoteListener {
     rate_limit: u32,
     ip_allowlist: Option<Vec<String>>,
     tls_server: Option<Arc<TlsServer>>,
+    plaintext_allowed: bool,
     task_queue: Arc<TaskQueue>,
     workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
 }
@@ -49,6 +50,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: None,
+            plaintext_allowed: false,
             task_queue: Arc::new(TaskQueue::new(
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
@@ -67,6 +69,7 @@ impl RemoteListener {
             rate_limit,
             ip_allowlist: None,
             tls_server: None,
+            plaintext_allowed: false,
             task_queue: Arc::new(TaskQueue::new(
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
@@ -85,6 +88,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: Some(allowlist),
             tls_server: None,
+            plaintext_allowed: false,
             task_queue: Arc::new(TaskQueue::new(
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
@@ -106,6 +110,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: Some(Arc::new(tls_server)),
+            plaintext_allowed: false,
             task_queue: Arc::new(TaskQueue::new(
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
@@ -114,7 +119,10 @@ impl RemoteListener {
     }
 
     pub fn new_plaintext(psk: String) -> Self {
-        Self::new(psk)
+        tracing::warn!("Creating plaintext distributed listener; use TLS for any non-isolated lab");
+        let mut listener = Self::new(psk);
+        listener.plaintext_allowed = true;
+        listener
     }
 
     pub fn is_tls(&self) -> bool {
@@ -180,6 +188,12 @@ impl RemoteListener {
     }
 
     pub async fn start(&self, port: u16) -> Result<()> {
+        if !self.is_tls() && !self.plaintext_allowed {
+            return Err(EggsecError::Config(
+                "TLS is required for distributed listeners; configure a certificate and key"
+                    .to_string(),
+            ));
+        }
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         let listener = TcpListener::bind(addr).await?;
 
@@ -637,6 +651,7 @@ pub struct RemoteClient {
     psk: String,
     tls: Option<TlsClient>,
     cached_addr: Option<(SocketAddr, Instant)>,
+    plaintext_allowed: bool,
 }
 
 impl Drop for RemoteClient {
@@ -651,6 +666,7 @@ impl RemoteClient {
             psk,
             tls: None,
             cached_addr: None,
+            plaintext_allowed: false,
         }
     }
 
@@ -661,11 +677,17 @@ impl RemoteClient {
             psk,
             tls: Some(tls),
             cached_addr: None,
+            plaintext_allowed: false,
         })
     }
 
     pub fn new_plaintext(psk: String) -> Self {
-        Self::new(psk)
+        tracing::warn!(
+            "Creating plaintext distributed client; the PSK and task data will be sent unencrypted"
+        );
+        let mut client = Self::new(psk);
+        client.plaintext_allowed = true;
+        client
     }
 
     pub fn is_tls(&self) -> bool {
@@ -711,6 +733,12 @@ impl RemoteClient {
     }
 
     async fn connect_to_coordinator_with_addr(&mut self, addr: &SocketAddr) -> Result<LineWriter> {
+        if self.tls.is_none() && !self.plaintext_allowed {
+            return Err(EggsecError::Config(
+                "TLS is required for distributed clients; use with_tls or explicitly opt into plaintext"
+                    .to_string(),
+            ));
+        }
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = connect_with_nodelay_timeout(addr, connect_timeout)
             .await
@@ -990,6 +1018,12 @@ impl RemoteClient {
             resolved
         };
 
+        if self.tls.is_none() && !self.plaintext_allowed {
+            return Err(EggsecError::Config(
+                "TLS is required for distributed clients; use with_tls or explicitly opt into plaintext"
+                    .to_string(),
+            ));
+        }
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
             .await

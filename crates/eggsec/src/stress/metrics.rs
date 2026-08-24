@@ -63,7 +63,7 @@ impl Clone for StressMetrics {
     fn clone(&self) -> Self {
         let start_time = std::sync::OnceLock::new();
         if let Some(t) = self.start_time.get() {
-            let _ = start_time.set(*t);
+            start_time.get_or_init(|| *t);
         }
         Self {
             packets_sent: AtomicU64::new(self.packets_sent.load(Ordering::Relaxed)),

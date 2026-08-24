@@ -186,8 +186,17 @@ impl TlsClient {
     }
 
     #[cfg(not(feature = "insecure-tls"))]
-    pub fn new(_domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        Err("TLS client requires the 'insecure-tls' feature flag. This feature disables certificate verification and should only be used for testing.".into())
+    pub fn new(domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let mut roots = rustls::RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+
+        Ok(Self {
+            connector: TlsConnector::from(Arc::new(config)),
+            domain: domain.to_string(),
+        })
     }
 
     pub fn connector(&self) -> &TlsConnector {
