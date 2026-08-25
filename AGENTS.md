@@ -15,6 +15,11 @@ make check-python           # Python CI (when Python-facing code, bindings, stub
 
 Prerequisites: `ripgrep` (`rg`) for architecture guards. No `cargo-nextest` required.
 
+Scope notes:
+- `make test` runs `cargo test --lib -p eggsec` only (engine lib unit tests). Use `make test-ci` for the full package suite.
+- `make clippy` lints `-p eggsec --lib` only; whole-workspace compile coverage comes from `make check`.
+- `make check-python` builds into `.venv-ci/` (override with `EGGSEC_PYTHON_VENV`). Pytest excludes tests marked `network` by default (`-m 'not network'`).
+
 `make check-full` is optional; run before broad feature/release work. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full verification contract.
 
 ## Project Overview
@@ -133,8 +138,8 @@ cargo test -p eggsec-python
 ### CI workflows
 
 GitHub Actions (`.github/workflows/`):
-- `ci.yml` — mandatory Rust, Python (`make check-python`), and macOS/Windows portability checks
-- `deep-checks.yml` — optional diagnostic workflow (weekly schedule or manual trigger)
+- `ci.yml` — mandatory Rust (`make check`) and Python (`make check-python`) checks on ubuntu
+- `deep-checks.yml` — optional diagnostic workflow (weekly schedule or manual trigger): `make check-full` + cargo-deny, exact-MSRV 1.88 job, macOS/Windows portability job
 
 Consumer GitLab CI example: `examples/ci/gitlab/eggsec-scan.yml` (not wired to repository triggers).
 
@@ -156,9 +161,9 @@ Scope must come from `LoadedScope` (not raw `Scope`) for automated surfaces.
 1. **OperationMetadata** is the single source of truth for operation policy. Don't build policy checks inline.
 2. **DomainDescriptor** in `domain/mod.rs` groups operations under domains. Always present; check `required_feature` before use.
 3. **ApprovedOperation** token required for strict surfaces. `EnforcedDispatcher::dispatch_checked()` verifies tool+target match.
-4. **eggsec-runtime** must be dependency-light (serde, tokio, tracing only). No TUI, no transport deps. Enforced by architecture guards.
+4. **eggsec-runtime** must stay dependency-light (serde/serde_json, thiserror, tokio, tokio-util, tracing, uuid only). No TUI, transport, or persistence deps. Enforced by architecture guards.
 5. **eggsec-output** must not depend on `eggsec` (engine) or `eggsec-runtime`. Only depends on `eggsec-core`.
-6. **eggsec-daemon** must not depend on TUI or engine crates. Only depends on `eggsec-runtime`.
+6. **eggsec-daemon** must never depend on TUI crates. Engine dep (`eggsec`) is optional behind `full-executor`; transport deps (axum etc.) are optional behind `http-api`. Default deps: `eggsec-runtime` + `eggsec-daemon-protocol` only. Guard rejects non-optional engine/transport deps.
 
 ### Runtime dispatch flow
 
@@ -231,25 +236,9 @@ Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/egg
 
 Provisional subsystems (scope-checked, policy-gated, not stable-core): network types (`eggsec.net`, `eggsec.sessions`, `eggsec.storage`), NSE runtime, interception proxy, database assessment. Experimental: raw packet injection (feature: `packet-inspection`). Package layout: stable core at top-level `eggsec`, provisional under `eggsec.net`/`eggsec.sessions`/`eggsec.storage`/`eggsec.reporting`/`eggsec.daemon`, experimental under `eggsec.experimental`. Feature introspection via `eggsec._feature_guard`.
 
-| Python Feature | Engine Feature | Notes |
-|----------------|----------------|-------|
-| `websocket` | `websocket` | WebSocket security testing |
-| `git-secrets` | `git-secrets` | Git secret detection |
-| `sbom` | `sbom` | SBOM generation |
-| `db-pentest` | `db-pentest` | Database pentest (requires `eggsec-db-lab`) |
-| `db-pentest-mongodb` | `db-pentest-mongodb` | MongoDB pentest |
-| `db-pentest-redis` | `db-pentest-redis` | Redis pentest |
-| `web-proxy` | `web-proxy` | Web proxy MITM (requires `eggsec-web-proxy`) |
-| `mobile` | `mobile` | APK/IPA static analysis; mobile session types (Release 4) |
-| `mobile-dynamic` | `mobile-dynamic` | Android dynamic testing |
-| `packet-inspection` | `packet-inspection` | Packet capture; raw packet injection remains experimental |
-| `stress-testing` | `stress-testing` | Stress testing (raw sockets) |
-| `nse` | `nse` | Nmap NSE scripts (requires `eggsec-nse`) |
-| `container` | `container` | K8s/Docker scanning |
-| `headless-browser` | `headless-browser` | Browser session types (Release 4) |
-| `daemon-client` | — | Daemon session access |
+Python extras map 1:1 to engine features (`websocket`, `git-secrets`, `sbom`, `db-pentest*`, `web-proxy`, `mobile`, `mobile-dynamic` → requires `mobile`, `packet-inspection`, `stress-testing`, `nse`, `container`, `headless-browser`, `daemon-client`). Authoritative list lives in `[project.optional-dependencies]` of `crates/eggsec-python/pyproject.toml`; system-dependent ones need libpcap/libssl/wireless-tools/Chromium at build or run time.
 
-Aggregate: `full` — all non-default features. Not conservative/production.
+Aggregate: `full-no-system` = all non-system features. Not conservative/production.
 
 ## Key Patterns
 
@@ -280,7 +269,7 @@ Aggregate: `full` — all non-default features. Not conservative/production.
 - **TUI reset()**: Must reset all state (selectors, checkboxes, fields, focus areas).
 - **Silent error suppression**: Never use `let _ =` or `filter_map(|e| e.ok())` — always log with tracing.
 - **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
-- **File paths**: Use `commands/handlers/`, not `cli/handlers/` (doesn't exist).
+- **File paths**: CLI command handlers live in the engine crate at `crates/eggsec/src/commands/handlers/`; there is no `crates/eggsec/src/cli/handlers/` (`crates/eggsec/src/cli/` holds command types only). `crates/eggsec-cli/src/` is just the binary shell (main, daemon client, logging).
 - **Dead code detection**: Check if `#![allow(dead_code)]` is at file top before flagging.
 - **Count verification**: Always verify statistical claims against actual source.
 - **`cargo install`**: Use `cargo install --path crates/eggsec-cli` (workspace root is virtual manifest).
