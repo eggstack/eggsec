@@ -90,6 +90,14 @@ pub async fn dispatch_task(
 /// Returns the [`TaskResult`] directly so callers can convert it to a
 /// `eggsec_runtime::event::TaskResultEnvelope` for the runtime outcome path. Worker functions
 /// return `TaskResult` values directly instead of sending through channels.
+///
+/// **Enforcement note:** this function performs *no* policy checks of its
+/// own. It must only be invoked from manual surfaces (CLI/TUI, whose
+/// `ManualPermissive` context supports operator-directed overrides). Strict
+/// surfaces (REST/MCP/agent/gRPC) must never call it directly — route through
+/// `EnforcementContext::evaluate()` and `EnforcedDispatcher::dispatch_checked()`.
+/// Kept `pub` because `eggsec-tui`'s dispatcher is a sanctioned caller.
+#[doc(hidden)]
 pub async fn dispatch_inner(
     request: RunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
@@ -261,7 +269,7 @@ pub async fn dispatch_inner(
         TaskKind::Compliance(p) => {
             security::run_compliance_task(
                 p.target,
-                crate::compliance::ComplianceFramework::OwaspTop10,
+                crate::compliance::ComplianceFramework::OWASP,
                 progress_tx,
             )
             .await

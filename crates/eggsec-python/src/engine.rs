@@ -1140,7 +1140,13 @@ impl Engine {
                     );
                     self.state.emit_event(EventEnvelope::create(
                         "operation.artifact".to_string(),
-                        artifact.into_py_any(py).unwrap(),
+                        artifact.into_py_any(py).unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         Some(target.to_string()),
@@ -1156,7 +1162,13 @@ impl Engine {
                     );
                     self.state.emit_event(EventEnvelope::create(
                         "operation.artifact".to_string(),
-                        artifact.into_py_any(py).unwrap(),
+                        artifact.into_py_any(py).unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         Some(target.to_string()),
@@ -1284,7 +1296,13 @@ impl Engine {
                     ports.len(),
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1328,7 +1346,13 @@ impl Engine {
                             py_result.elapsed_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1352,7 +1376,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1387,7 +1417,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1433,7 +1469,13 @@ impl Engine {
                             py_result.elapsed_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1456,7 +1498,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1493,7 +1541,13 @@ impl Engine {
                     ports.len(),
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1536,7 +1590,13 @@ impl Engine {
                             py_result.elapsed_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1559,7 +1619,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1586,7 +1652,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1649,7 +1721,13 @@ impl Engine {
                             0,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1672,7 +1750,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1703,7 +1787,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1762,7 +1852,13 @@ impl Engine {
                             0,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1785,7 +1881,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1820,7 +1922,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1873,7 +1981,13 @@ impl Engine {
                             0,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1896,7 +2010,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1927,7 +2047,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -1971,7 +2097,13 @@ impl Engine {
                             0,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -1994,7 +2126,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2015,7 +2153,9 @@ impl Engine {
         }
 
         let total_requests = request.requests.unwrap_or(100) as u64;
-        let concurrency = request.concurrency.unwrap_or(self.state.concurrency as u32) as usize;
+        let concurrency = request.concurrency.map_or(self.state.concurrency, |c| {
+            usize::try_from(c).unwrap_or(usize::MAX)
+        });
         let method = request.method.clone().unwrap_or_else(|| "GET".to_string());
         let timeout_secs = request.timeout_ms.map(|ms| ms / 1000).unwrap_or(30);
 
@@ -2040,7 +2180,13 @@ impl Engine {
                     total_requests as usize,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -2080,7 +2226,13 @@ impl Engine {
                             r.total_duration_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2099,7 +2251,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2134,7 +2292,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -2165,7 +2329,13 @@ impl Engine {
                             r.duration_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2188,7 +2358,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2233,7 +2409,13 @@ impl Engine {
                     0,
                 )
                 .into_py_any(py)
-                .unwrap(),
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "event payload conversion failed; emitting None payload"
+                    );
+                    py.None()
+                }),
                 None,
                 None,
                 None,
@@ -2274,7 +2456,13 @@ impl Engine {
                             r.duration_ms,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,
@@ -2293,7 +2481,13 @@ impl Engine {
                             false,
                         )
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                         None,
                         None,
                         None,

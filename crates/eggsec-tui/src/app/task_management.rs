@@ -352,7 +352,7 @@ impl TaskBuilder for super::tabs::ComplianceTab {
         Some(RunRequest {
             task_kind: TaskKind::Compliance(eggsec_runtime::request::ComplianceParams {
                 target: target.to_string(),
-                framework: self.selected_framework().map(|f| format!("{:?}", f)),
+                framework: Some(format!("{:?}", self.selected_framework())),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -412,7 +412,7 @@ impl TaskBuilder for super::tabs::VulnTab {
     fn build_run_request(&self) -> Option<RunRequest> {
         Some(RunRequest {
             task_kind: TaskKind::Vuln(eggsec_runtime::request::VulnParams {
-                target: self.target().unwrap_or_default(),
+                target: self.core.target().to_string(),
                 vuln_type: None,
             }),
             requested_by: None,

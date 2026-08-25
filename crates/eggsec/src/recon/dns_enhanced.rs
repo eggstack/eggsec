@@ -198,23 +198,82 @@ impl DnsEnumerator {
         }
     }
 
-    pub fn enumerate_subdomains(&self, domain: &str) -> Vec<SubdomainResult> {
-        let mut results = Vec::new();
+    /// Enumerate candidate subdomains via DNS lookups.
+    ///
+    /// Each blocking resolver call runs on the blocking pool behind a
+    /// per-entry timeout, lookups are bounded by a concurrency semaphore
+    /// (mirroring `recon::subdomain`), and oversized custom wordlists are
+    /// capped so enumeration cannot run unbounded.
+    pub async fn enumerate_subdomains(&self, domain: &str) -> Vec<SubdomainResult> {
+        use futures::future::join_all;
 
-        for prefix in &self.wordlist {
+        /// Cap on processed wordlist entries.
+        const MAX_SUBDOMAIN_ENTRIES: usize = 1024;
+        /// Per-entry upper bound on the blocking resolver call.
+        const LOOKUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+        /// Concurrent lookup bound.
+        const CONCURRENCY: usize = 32;
+
+        let wordlist: &[String] = if self.wordlist.len() > MAX_SUBDOMAIN_ENTRIES {
+            tracing::warn!(
+                requested = self.wordlist.len(),
+                capped = MAX_SUBDOMAIN_ENTRIES,
+                "subdomain wordlist truncated to bound runtime"
+            );
+            &self.wordlist[..MAX_SUBDOMAIN_ENTRIES]
+        } else {
+            &self.wordlist[..]
+        };
+
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
+        let mut handles = Vec::with_capacity(wordlist.len());
+
+        for prefix in wordlist {
+            let Ok(permit) = semaphore.clone().acquire_owned() else {
+                tracing::warn!("subdomain lookup semaphore closed; stopping enumeration");
+                break;
+            };
             let subdomain = format!("{}.{}", prefix, domain);
-
-            if let Ok(ips) = dns_lookup::lookup_host(&subdomain) {
-                if !ips.is_empty() {
-                    results.push(SubdomainResult {
-                        subdomain: subdomain.clone(),
-                        ips: ips.iter().map(|ip| ip.to_string()).collect(),
-                        has_http: false,
-                        has_https: false,
-                    });
+            handles.push(tokio::spawn(async move {
+                let _permit = permit;
+                let lookup_target = subdomain.clone();
+                let ips =
+                    match tokio::time::timeout(
+                        LOOKUP_TIMEOUT,
+                        tokio::task::spawn_blocking(
+                            move || dns_lookup::lookup_host(&lookup_target),
+                        ),
+                    )
+                    .await
+                    {
+                        Ok(Ok(Ok(ips))) => ips,
+                        Ok(Ok(Err(e))) => {
+                            tracing::debug!(target = %subdomain, error = %e, "subdomain lookup failed");
+                            return None;
+                        }
+                        Ok(Err(e)) => {
+                            tracing::warn!(error = %e, "subdomain lookup task failed");
+                            return None;
+                        }
+                        Err(_) => {
+                            tracing::debug!(target = %subdomain, "subdomain lookup timed out");
+                            return None;
+                        }
+                    };
+                if ips.is_empty() {
+                    return None;
                 }
-            }
+                Some(SubdomainResult {
+                    subdomain,
+                    ips: ips.iter().map(|ip| ip.to_string()).collect(),
+                    has_http: false,
+                    has_https: false,
+                })
+            }));
         }
+
+        let mut results: Vec<SubdomainResult> =
+            join_all(handles).await.into_iter().flatten().collect();
 
         results.sort_by(|a, b| b.ips.len().cmp(&a.ips.len()));
 

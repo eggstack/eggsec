@@ -287,9 +287,12 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
         "No matching tabs"
     };
 
-    // Compute visible window around selected item
-    let popup_area = constrained_popup_area(area, 60, 18, 2);
-    let visible_rows = popup_area.height.saturating_sub(6).max(1) as usize; // borders(2) + margin(2) + query(2) + status(1)
+    // Compute visible window around selected item.
+    // Must match SelectableListPopup::render, which constrains the popup to
+    // 60x20; rows consumed by chrome are outer borders (2), layout margin
+    // (2), query (2), status (1), and the list's own borders (2).
+    let popup_area = constrained_popup_area(area, 60, 20, 2);
+    let visible_rows = popup_area.height.saturating_sub(9).max(1) as usize;
     let start = selected.saturating_sub(visible_rows.saturating_sub(1));
     let end = (start + visible_rows).min(results.len());
 

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
@@ -224,7 +225,7 @@ impl BrowserSessionConfig {
         dict.set_item("collect_cookies", self.collect_cookies)?;
         dict.set_item("collect_storage", self.collect_storage)?;
         dict.set_item("screenshot_on_complete", self.screenshot_on_complete)?;
-        let headers_list = PyList::new(py, &self.extra_headers);
+        let headers_list = PyList::new(py, &self.extra_headers)?;
         dict.set_item("extra_headers", headers_list)?;
         dict.set_item("ignore_cert_errors", self.ignore_cert_errors)?;
         Ok(dict.into())
@@ -326,7 +327,7 @@ impl BrowserNavigationEvent {
         dict.set_item("url", &self.url)?;
         dict.set_item("final_url", &self.final_url)?;
         dict.set_item("status_code", self.status_code)?;
-        let redirects = PyList::new(py, &self.redirect_chain);
+        let redirects = PyList::new(py, &self.redirect_chain)?;
         dict.set_item("redirect_chain", redirects)?;
         dict.set_item("load_time_ms", self.load_time_ms)?;
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -614,10 +615,10 @@ impl BrowserDomSnapshot {
         }
         dict.set_item("links", links_list)?;
 
-        let scripts_list = PyList::new(py, &self.scripts);
+        let scripts_list = PyList::new(py, &self.scripts)?;
         dict.set_item("scripts", scripts_list)?;
 
-        let frames_list = PyList::new(py, &self.frames);
+        let frames_list = PyList::new(py, &self.frames)?;
         dict.set_item("frames", frames_list)?;
 
         dict.set_item("timestamp_ms", self.timestamp_ms)?;
@@ -716,14 +717,14 @@ impl BrowserStorageInfo {
 
         let local_list = PyList::empty(py);
         for (k, v) in &self.local_storage {
-            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             local_list.append(pair)?;
         }
         dict.set_item("local_storage", local_list)?;
 
         let session_list = PyList::empty(py);
         for (k, v) in &self.session_storage {
-            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let pair = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             session_list.append(pair)?;
         }
         dict.set_item("session_storage", session_list)?;

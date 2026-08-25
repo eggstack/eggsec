@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -187,7 +188,7 @@ impl MobileScanReportPy {
         }
         dict.set_item("findings", findings_list)?;
 
-        let recs_list = PyList::new(py, &self.recommendations);
+        let recs_list = PyList::new(py, &self.recommendations)?;
         dict.set_item("recommendations", recs_list)?;
 
         dict.set_item("duration_ms", self.duration_ms)?;

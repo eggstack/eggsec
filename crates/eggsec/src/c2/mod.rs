@@ -496,6 +496,7 @@ pub fn to_scan_report_data(report: &C2Report) -> crate::output::convert::ScanRep
     }
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(
     args: crate::cli::C2Args,
     _config: &crate::config::EggsecConfig,

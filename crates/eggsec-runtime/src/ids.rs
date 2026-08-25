@@ -127,6 +127,17 @@ impl fmt::Display for ClientId {
     }
 }
 
+impl FromStr for ClientId {
+    type Err = IdParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let stripped = s.strip_prefix("client:").unwrap_or(s);
+        let uuid = Uuid::parse_str(stripped)
+            .map_err(|e| IdParseError(format!("invalid client ID '{}': {}", s, e)))?;
+        Ok(Self(uuid))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -210,7 +210,7 @@ impl HtmlReport {
             severity_class,
             super::escape::escape_html(&finding.title),
             severity_class,
-            finding.severity,
+            super::escape::escape_html(&finding.severity),
             super::escape::escape_html(&finding.category),
             super::escape::escape_html(&finding.location),
             super::escape::escape_html(&finding.description),

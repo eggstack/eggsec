@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use rusqlite::Connection;
@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 const SCHEMA_VERSION: &str = "2";
 
 pub struct SqliteStore {
-    conn: Mutex<Connection>,
+    /// Shared so per-call bodies can run on the blocking thread pool via
+    /// `spawn_blocking` (rusqlite performs synchronous disk I/O).
+    conn: Arc<Mutex<Connection>>,
 }
 
 impl SqliteStore {
@@ -42,7 +44,7 @@ impl SqliteStore {
         conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;
         let store = Self {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
         };
         store.migrate()?;
         Ok(store)
@@ -52,17 +54,14 @@ impl SqliteStore {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;
         let store = Self {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
         };
         store.migrate()?;
         Ok(store)
     }
 
     fn migrate(&self) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
+        let conn = lock_conn(&self.conn);
         conn.execute_batch(SCHEMA_DDL)?;
         let stored: Option<String> = conn
             .query_row(
@@ -96,6 +95,14 @@ impl SqliteStore {
     }
 }
 
+/// Lock the shared SQLite connection, recovering from poisoning.
+fn lock_conn(conn: &Arc<Mutex<Connection>>) -> std::sync::MutexGuard<'_, Connection> {
+    conn.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
+        poisoned.into_inner()
+    })
+}
+
 #[async_trait]
 impl DaemonStore for SqliteStore {
     async fn save_session_snapshot(&self, snapshot: &SessionSnapshot) -> anyhow::Result<()> {
@@ -108,97 +115,106 @@ impl DaemonStore for SqliteStore {
             })
             .as_secs() as i64;
         let session_id = snapshot.session_id.to_string();
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
-        conn.execute(
-            "INSERT OR REPLACE INTO session_snapshots (session_id, snapshot_json, created_at_secs) VALUES (?1, ?2, ?3)",
-            rusqlite::params![session_id, json, now],
-        )?;
-        Ok(())
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let conn = lock_conn(&conn);
+            conn.execute(
+                "INSERT OR REPLACE INTO session_snapshots (session_id, snapshot_json, created_at_secs) VALUES (?1, ?2, ?3)",
+                rusqlite::params![session_id, json, now],
+            )?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("sqlite task failed: {}", e))?
     }
 
     async fn load_session_snapshot(
         &self,
         session_id: SessionId,
     ) -> anyhow::Result<Option<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
-        let mut stmt =
-            conn.prepare("SELECT snapshot_json FROM session_snapshots WHERE session_id = ?1")?;
-        let mut rows = stmt.query_map([session_id.to_string()], |row| {
-            let json: String = row.get(0)?;
-            Ok(json)
-        })?;
-        match rows.next() {
-            Some(row) => {
-                let json = row?;
-                let snapshot: SessionSnapshot = serde_json::from_str(&json)?;
-                Ok(Some(snapshot))
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || -> anyhow::Result<Option<SessionSnapshot>> {
+            let conn = lock_conn(&conn);
+            let mut stmt =
+                conn.prepare("SELECT snapshot_json FROM session_snapshots WHERE session_id = ?1")?;
+            let mut rows = stmt.query_map([session_id.to_string()], |row| {
+                let json: String = row.get(0)?;
+                Ok(json)
+            })?;
+            match rows.next() {
+                Some(row) => {
+                    let json = row?;
+                    let snapshot: SessionSnapshot = serde_json::from_str(&json)?;
+                    Ok(Some(snapshot))
+                }
+                None => Ok(None),
             }
-            None => Ok(None),
-        }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("sqlite task failed: {}", e))?
     }
 
     async fn load_all_sessions(&self) -> anyhow::Result<Vec<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
-        let mut stmt = conn
-            .prepare("SELECT snapshot_json FROM session_snapshots ORDER BY created_at_secs ASC")?;
-        let rows = stmt.query_map([], |row| {
-            let json: String = row.get(0)?;
-            Ok(json)
-        })?;
-        let mut sessions = Vec::new();
-        for row in rows {
-            let json = row?;
-            let snapshot: SessionSnapshot = serde_json::from_str(&json)?;
-            sessions.push(snapshot);
-        }
-        Ok(sessions)
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<SessionSnapshot>> {
+            let conn = lock_conn(&conn);
+            let mut stmt = conn.prepare(
+                "SELECT snapshot_json FROM session_snapshots ORDER BY created_at_secs ASC",
+            )?;
+            let rows = stmt.query_map([], |row| {
+                let json: String = row.get(0)?;
+                Ok(json)
+            })?;
+            let mut sessions = Vec::new();
+            for row in rows {
+                let json = row?;
+                let snapshot: SessionSnapshot = serde_json::from_str(&json)?;
+                sessions.push(snapshot);
+            }
+            Ok(sessions)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("sqlite task failed: {}", e))?
     }
 
     async fn record_audit_event(&self, event: &PersistedAuditEvent) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
-        conn.execute(
-            "INSERT INTO audit_events (action, surface, outcome, client_id, session_id, created_at_secs) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                event.action,
-                event.surface,
-                event.outcome,
-                event.client_id,
-                event.session_id,
-                event.timestamp_secs as i64,
-            ],
-        )?;
-        Ok(())
+        let event = event.clone();
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let conn = lock_conn(&conn);
+            conn.execute(
+                "INSERT INTO audit_events (action, surface, outcome, client_id, session_id, created_at_secs) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![
+                    event.action,
+                    event.surface,
+                    event.outcome,
+                    event.client_id,
+                    event.session_id,
+                    event.timestamp_secs as i64,
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("sqlite task failed: {}", e))?
     }
 
     async fn delete_session(&self, session_id: SessionId) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
-        conn.execute(
-            "DELETE FROM session_snapshots WHERE session_id = ?1",
-            [session_id.to_string()],
-        )?;
-        Ok(())
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let conn = lock_conn(&conn);
+            conn.execute(
+                "DELETE FROM session_snapshots WHERE session_id = ?1",
+                [session_id.to_string()],
+            )?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("sqlite task failed: {}", e))?
     }
 
     fn blocking_list_sessions(&self) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
+        let conn = lock_conn(&self.conn);
         let mut stmt = conn
             .prepare("SELECT snapshot_json FROM session_snapshots ORDER BY created_at_secs ASC")?;
         let rows = stmt.query_map([], |row| {
@@ -226,10 +242,7 @@ impl DaemonStore for SqliteStore {
         &self,
         session_id: &SessionId,
     ) -> anyhow::Result<Option<SessionSnapshot>> {
-        let conn = self.conn.lock().unwrap_or_else(|poisoned| {
-            tracing::warn!("sqlite connection mutex was poisoned; recovering connection");
-            poisoned.into_inner()
-        });
+        let conn = lock_conn(&self.conn);
         let mut stmt =
             conn.prepare("SELECT snapshot_json FROM session_snapshots WHERE session_id = ?1")?;
         let mut rows = stmt.query_map([session_id.to_string()], |row| {

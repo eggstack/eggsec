@@ -1845,6 +1845,8 @@ impl PyEggsecConfig {
             search,
             alert_channels: eggsec::config::AlertChannelsConfig::default(),
             execution_policy: eggsec::config::ExecutionPolicy::default(),
+            #[cfg(feature = "external-integrations")]
+            integrations: eggsec::integrations::IntegrationConfig::default(),
             auto_save_interval_secs: self.auto_save_interval_secs,
         }
     }

@@ -1,3 +1,4 @@
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
@@ -336,7 +337,7 @@ pub struct StressResultPy {
 impl StressResultPy {
     #[getter]
     fn warnings(&self, py: Python) -> PyResult<PyObject> {
-        let list = PyList::new(py, &self.warnings);
+        let list = PyList::new(py, &self.warnings)?;
         Ok(list.into())
     }
 
@@ -346,7 +347,7 @@ impl StressResultPy {
         dict.set_item("stress_type", self.stress_type.as_str())?;
         dict.set_item("stats", self.stats.to_dict(py)?)?;
         dict.set_item("config_used", self.config_used.to_dict(py)?)?;
-        let warn_list = PyList::new(py, &self.warnings);
+        let warn_list = PyList::new(py, &self.warnings)?;
         dict.set_item("warnings", &warn_list)?;
         Ok(dict.into())
     }

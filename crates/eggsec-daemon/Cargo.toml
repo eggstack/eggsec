@@ -38,3 +38,6 @@ futures = { version = "0.3", optional = true }
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["json", "rustls-no-provider"], default-features = false }
 eggsec = { path = "../eggsec", version = "0.1.0" }
+# Ring provider for the reqwest test client (`rustls-no-provider` requires an
+# explicitly installed process-level crypto provider).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

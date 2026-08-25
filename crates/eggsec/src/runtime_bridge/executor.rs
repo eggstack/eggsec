@@ -242,11 +242,14 @@ impl EggsecRuntimeExecutor {
                 Some(format!("{} issues found", issues.len())),
             ),
             #[cfg(feature = "finding-workflow")]
-            TaskResult::Workflow(r) => ("workflow".into(), Some(format!("{}", r.name))),
+            TaskResult::Workflow(r) => (
+                "workflow".into(),
+                Some(format!("{} total findings", r.total_findings)),
+            ),
             #[cfg(feature = "vuln-management")]
             TaskResult::Vuln(r) => (
                 "vuln".into(),
-                Some(format!("{} findings", r.findings.len())),
+                Some(format!("{} findings", r.prioritized_findings.len())),
             ),
             #[cfg(feature = "wireless")]
             TaskResult::Wireless(r) => (

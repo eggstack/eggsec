@@ -18,6 +18,7 @@ pub use types::{
 };
 
 #[cfg(feature = "packet-inspection")]
+#[cfg(feature = "cli")]
 pub mod cli;
 
 use serde::{Deserialize, Serialize};

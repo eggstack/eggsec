@@ -821,6 +821,7 @@ pub fn to_scan_report_data(report: &EvasionReport) -> crate::output::convert::Sc
     }
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(
     args: crate::cli::EvasionArgs,
     _config: &crate::config::EggsecConfig,

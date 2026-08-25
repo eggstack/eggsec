@@ -116,7 +116,11 @@ impl HttpConnectProxy {
     }
 
     async fn read_response(&self, stream: &mut TcpStream) -> Result<String> {
-        let mut response = String::new();
+        // Cap accumulated header bytes so a hostile upstream proxy cannot
+        // push unbounded data within the timeout window.
+        const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+
+        let mut response_bytes: Vec<u8> = Vec::new();
         let mut reader = BufReader::with_capacity(8192, stream);
         let mut buf = [0u8; 8192];
         let mut seen_cr_lf_cr_lf = 0;
@@ -125,7 +129,7 @@ impl HttpConnectProxy {
             loop {
                 let bytes_read = reader.read(&mut buf).await?;
                 if bytes_read == 0 {
-                    if response.is_empty() {
+                    if response_bytes.is_empty() {
                         return Err(WebProxyError::Proxy(
                             "Empty response from proxy".to_string(),
                         ));
@@ -133,23 +137,28 @@ impl HttpConnectProxy {
                     break;
                 }
 
-                for &byte in &buf[..bytes_read] {
-                    let ch = byte as char;
-                    response.push(ch);
+                if response_bytes.len() + bytes_read > MAX_RESPONSE_BYTES {
+                    return Err(WebProxyError::Proxy(format!(
+                        "Proxy response exceeds {} byte limit",
+                        MAX_RESPONSE_BYTES
+                    )));
+                }
+                response_bytes.extend_from_slice(&buf[..bytes_read]);
 
-                    match ch {
-                        '\r' => {
+                for &byte in &buf[..bytes_read] {
+                    match byte {
+                        b'\r' => {
                             if seen_cr_lf_cr_lf == 0 || seen_cr_lf_cr_lf == 2 {
                                 seen_cr_lf_cr_lf += 1;
                             } else {
                                 seen_cr_lf_cr_lf = 1;
                             }
                         }
-                        '\n' => {
+                        b'\n' => {
                             if seen_cr_lf_cr_lf == 1 {
                                 seen_cr_lf_cr_lf = 2;
                             } else if seen_cr_lf_cr_lf == 3 {
-                                return Ok(response);
+                                return Ok(String::from_utf8_lossy(&response_bytes).into_owned());
                             }
                         }
                         _ => {
@@ -158,7 +167,7 @@ impl HttpConnectProxy {
                     }
                 }
             }
-            Ok(response)
+            Ok(String::from_utf8_lossy(&response_bytes).into_owned())
         })
         .await;
 

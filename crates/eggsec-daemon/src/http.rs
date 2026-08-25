@@ -52,7 +52,6 @@ struct HttpState {
 #[derive(Clone)]
 struct AuthenticatedClientId(Option<eggsec_runtime::ClientId>);
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedClientId
 where
     S: Send + Sync,
@@ -357,8 +356,12 @@ async fn cancel_active(
 
 async fn subscribe_events(
     State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, Response> {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return Err(resp);
+    }
     let session_id: eggsec_runtime::SessionId = session_id.parse().map_err(|_| {
         error_response(
             StatusCode::BAD_REQUEST,
@@ -366,6 +369,16 @@ async fn subscribe_events(
             "invalid session_id".into(),
         )
     })?;
+
+    // Mirror the Unix-socket path: require a declared client and enforce the
+    // host-level session access/role check before streaming any events.
+    if let Err((code, message)) = state
+        .host
+        .check_event_stream_access(session_id, &make_ctx(auth.0))
+        .await
+    {
+        return Err(error_response(StatusCode::OK, code, message));
+    }
 
     if state.host.runtime().snapshot(session_id).await.is_err() {
         return Err(error_response(
@@ -584,6 +597,9 @@ pub async fn run_http_server(
         .await
         .map_err(|e| crate::error::DaemonError::Protocol(format!("failed to bind: {}", e)))?;
 
+    // Leaked intentionally: axum's graceful shutdown future requires 'static
+    // and the token lives for the remainder of the process. One leak per HTTP
+    // server start; run_http_server is called at most once per daemon.
     let shutdown_static: &'static CancellationToken = Box::leak(Box::new(shutdown));
 
     axum::serve(listener, app)
@@ -628,6 +644,13 @@ mod tests {
     }
 
     async fn start_server() -> (String, CancellationToken) {
+        // reqwest's dev-dependency uses `rustls-no-provider`; install the
+        // ring provider once per test process before any client is built.
+        static CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();
+        CRYPTO_PROVIDER.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+
         let config = DaemonConfig::default();
         let host = Arc::new(DaemonHost::new(
             config,
@@ -1019,13 +1042,49 @@ mod tests {
         shutdown.cancel();
     }
 
+    /// Regression test for the SSE authorization bypass: an undeclared caller
+    /// must not be able to subscribe to a session's event stream.
+    #[tokio::test]
+    async fn http_sse_undeclared_client_denied() {
+        let (addr, shutdown) = start_server().await;
+        let owner_id = declare_client_id(&addr, "sse-owner").await;
+        let (name, value) = auth_header(&owner_id);
+        let client = reqwest::Client::new();
+
+        let resp = client
+            .post(format!("http://{}/sessions", addr))
+            .header(name, value)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        let body: serde_json::Value = resp.json().await.unwrap();
+        let session_id = body["session_id"].as_str().unwrap().to_string();
+
+        // No X-Eggsec-Client-Id header at all.
+        let resp = reqwest::Client::new()
+            .get(format!("http://{}/sessions/{}/events", addr, session_id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        // The HTTP error_response helper emits {code, message} without the
+        // protocol envelope's "type" tag.
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        shutdown.cancel();
+    }
+
     #[tokio::test]
     async fn http_list_persisted_sessions() {
         let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "persisted-list").await;
+        let (name, value) = auth_header(&client_id);
         let client = reqwest::Client::new();
 
         let resp = client
             .get(format!("http://{}/sessions/persisted", addr))
+            .header(name, value)
             .send()
             .await
             .unwrap();
@@ -1037,7 +1096,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn http_list_persisted_sessions_undeclared_denied() {
+        let (addr, shutdown) = start_server().await;
+        let client = reqwest::Client::new();
+
+        let resp = client
+            .get(format!("http://{}/sessions/persisted", addr))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "Error");
+        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
     async fn http_get_persisted_snapshot() {
+        let (addr, shutdown) = start_server().await;
+        let client_id = declare_client_id(&addr, "persisted-get").await;
+        let (name, value) = auth_header(&client_id);
+        let client = reqwest::Client::new();
+
+        let fake_id = eggsec_runtime::SessionId::new();
+        let resp = client
+            .get(format!("http://{}/sessions/persisted/{}", addr, fake_id))
+            .header(name, value)
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "PersistedSnapshot");
+        assert!(body["snapshot"].is_null());
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_get_persisted_snapshot_undeclared_denied() {
         let (addr, shutdown) = start_server().await;
         let client = reqwest::Client::new();
 
@@ -1049,8 +1146,8 @@ mod tests {
             .unwrap();
         assert!(resp.status().is_success());
         let body: serde_json::Value = resp.json().await.unwrap();
-        assert_eq!(body["type"], "PersistedSnapshot");
-        assert!(body["snapshot"].is_null());
+        assert_eq!(body["type"], "Error");
+        assert_eq!(body["code"]["type"], "ClientNotDeclared");
         shutdown.cancel();
     }
 

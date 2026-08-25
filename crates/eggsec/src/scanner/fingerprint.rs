@@ -332,7 +332,7 @@ pub async fn fingerprint_services(
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let results_count = Arc::new(AtomicU64::new(0));
     let total_matches_count = Arc::new(AtomicU64::new(0));
-    let total_ports = ports.len() as u64;
+    let total_ports = u64::try_from(ports.len()).unwrap_or(u64::MAX);
 
     let progress = if tui_mode {
         None
@@ -362,35 +362,40 @@ pub async fn fingerprint_services(
         let results_count = results_count.clone();
         let total_matches_count = total_matches_count.clone();
 
-        let handle = tokio::spawn(async move {
-            if let Some(fp) = fingerprint_port(resolved_ip, port, timeout_dur).await {
-                total_matches_count.fetch_add(1, Ordering::Relaxed);
-                let should_insert = match max_results {
-                    Some(limit) => {
-                        let old = results_count.fetch_add(1, Ordering::Relaxed);
-                        old < limit as u64
+        // Project invariant: every spawned tokio task carries a timeout
+        // wrapper (30-300s).
+        let handle = tokio::spawn(tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            async move {
+                if let Some(fp) = fingerprint_port(resolved_ip, port, timeout_dur).await {
+                    total_matches_count.fetch_add(1, Ordering::Relaxed);
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            old < limit as u64
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(port, fp);
                     }
-                    None => true,
-                };
-                if should_insert {
-                    results.insert(port, fp);
                 }
-            }
-            if let Some(ref pb) = progress {
-                pb.inc(1);
-            }
-            if let Some(ref tx) = progress_tx {
-                let count = {
-                    let mut c = scanned_count.lock().await;
-                    *c += 1;
-                    *c
-                };
-                if tx.send((count, total_ports)).await.is_err() {
-                    tracing::warn!("Progress receiver dropped");
+                if let Some(ref pb) = progress {
+                    pb.inc(1);
                 }
-            }
-            drop(permit);
-        });
+                if let Some(ref tx) = progress_tx {
+                    let count = {
+                        let mut c = scanned_count.lock().await;
+                        *c += 1;
+                        *c
+                    };
+                    if tx.send((count, total_ports)).await.is_err() {
+                        tracing::warn!("Progress receiver dropped");
+                    }
+                }
+                drop(permit);
+            },
+        ));
 
         handles.push(handle);
     }

@@ -671,6 +671,7 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
     }
 }
 
+#[cfg(feature = "cli")]
 pub async fn run_cli(
     args: crate::cli::WirelessArgs,
     _config: &crate::config::EggsecConfig,

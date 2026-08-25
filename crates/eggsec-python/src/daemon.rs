@@ -3,6 +3,7 @@
 //! Feature-gated behind `daemon-client`. When the daemon crate is not available,
 //! functions return `FeatureUnavailableError`.
 
+use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};

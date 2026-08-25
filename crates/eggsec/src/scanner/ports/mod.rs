@@ -582,41 +582,46 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         let results_count = results_count.clone();
         let total_matches_count = total_matches_count.clone();
 
-        let handle = tokio::spawn(async move {
-            let socket_addr = std::net::SocketAddr::new(addr, port);
-            let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
+        // Project invariant: every spawned tokio task carries a timeout
+        // wrapper (30-300s).
+        let handle = tokio::spawn(tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            async move {
+                let socket_addr = std::net::SocketAddr::new(addr, port);
+                let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
 
-            if result.is_ok() {
-                total_matches_count.fetch_add(1, Ordering::Relaxed);
-                let should_insert = match config.max_results {
-                    Some(limit) => {
-                        let old = results_count.fetch_add(1, Ordering::Relaxed);
-                        old < limit as u64
-                    }
-                    None => true,
-                };
-                if should_insert {
-                    results.insert(
-                        port,
-                        PortResult {
+                if result.is_ok() {
+                    total_matches_count.fetch_add(1, Ordering::Relaxed);
+                    let should_insert = match config.max_results {
+                        Some(limit) => {
+                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            old < limit as u64
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(
                             port,
-                            status: "open".to_string(),
-                            service: get_service_name(port).to_string(),
-                        },
-                    );
+                            PortResult {
+                                port,
+                                status: "open".to_string(),
+                                service: get_service_name(port).to_string(),
+                            },
+                        );
+                    }
                 }
-            }
-            if let Some(ref pb) = progress {
-                pb.inc(1);
-            }
-            if let Some(ref tx) = progress_tx {
-                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                if tx.send((count, total_ports)).await.is_err() {
-                    tracing::warn!("Progress receiver dropped");
+                if let Some(ref pb) = progress {
+                    pb.inc(1);
                 }
-            }
-            drop(permit);
-        });
+                if let Some(ref tx) = progress_tx {
+                    let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    if tx.send((count, total_ports)).await.is_err() {
+                        tracing::warn!("Progress receiver dropped");
+                    }
+                }
+                drop(permit);
+            },
+        ));
 
         handles.push(handle);
     }
@@ -641,7 +646,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: ports_count as u32,
+        ports_scanned: u32::try_from(ports_count).unwrap_or(u32::MAX),
         open_ports,
         total_open_ports,
         duration_ms: start.elapsed().as_millis() as u64,

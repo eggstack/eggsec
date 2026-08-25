@@ -78,25 +78,43 @@ impl RuntimeEventReceiver {
     }
 
     /// Receive the next event. Returns `None` if the channel is closed.
-    /// Logs a warning if events were dropped due to broadcast overflow.
+    /// Logs a warning each time events were dropped due to broadcast
+    /// overflow, then keeps receiving — lag is recoverable and must not be
+    /// misreported as channel closure.
     pub async fn recv(&mut self) -> Option<RuntimeEvent> {
-        match self.rx.recv().await {
-            Ok(event) => Some(event),
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                tracing::warn!(
-                    dropped = n,
-                    "Broadcast event channel overflow, events dropped"
-                );
-                // Return the next available event after the lag
-                self.rx.recv().await.ok()
+        loop {
+            match self.rx.recv().await {
+                Ok(event) => return Some(event),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(
+                        dropped = n,
+                        "Broadcast event channel overflow, events dropped"
+                    );
+                    // Keep consuming; the channel is still open.
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
             }
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
         }
     }
 
-    /// Try to receive an event without blocking.
+    /// Try to receive an event without blocking. Returns `None` when no event
+    /// is available or the channel is closed. Logs a warning on overflow and
+    /// keeps draining instead of swallowing the lag.
     pub fn try_recv(&mut self) -> Option<RuntimeEvent> {
-        self.rx.try_recv().ok()
+        loop {
+            match self.rx.try_recv() {
+                Ok(event) => return Some(event),
+                Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
+                    tracing::warn!(
+                        dropped = n,
+                        "Broadcast event channel overflow, events dropped"
+                    );
+                    // Keep draining; the channel is still open.
+                }
+                Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return None,
+                Err(tokio::sync::broadcast::error::TryRecvError::Closed) => return None,
+            }
+        }
     }
 }
 

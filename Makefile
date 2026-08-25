@@ -89,6 +89,11 @@ check-feature-profiles:
 	cargo check -p eggsec --features web-proxy
 	cargo check -p eggsec --features web-proxy-mcp,tool-api,rest-api
 	cargo check -p eggsec --features c2-mcp,tool-api,rest-api
+	# Marker-feature profiles that previously regressed silently (stale
+	# TaskResult match arms); keep these compiling.
+	cargo check -p eggsec --features compliance
+	cargo check -p eggsec --features finding-workflow
+	cargo check -p eggsec --features vuln-management
 
 # Release validation (local only, no publication)
 release-check:

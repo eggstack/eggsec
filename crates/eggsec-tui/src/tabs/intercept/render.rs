@@ -228,7 +228,7 @@ impl InterceptTab {
         f.render_widget(paragraph, area);
     }
 
-    fn render_protocol_info(&self, f: &mut Frame, area: Rect, protocol: &str) {
+    pub(crate) fn render_protocol_info(&self, f: &mut Frame, area: Rect, protocol: &str) {
         let flow = match self.selected_flow_data() {
             Some(f) => f,
             None => {
@@ -618,7 +618,7 @@ impl InterceptTab {
         f.render_widget(paragraph, area);
     }
 
-    fn render_stream_multiplexing(&self, f: &mut Frame, area: Rect) {
+    pub(crate) fn render_stream_multiplexing(&self, f: &mut Frame, area: Rect) {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Stream Multiplexing",
@@ -880,7 +880,7 @@ impl InterceptTab {
         f.render_widget(paragraph, area);
     }
 
-    fn render_correlation(&self, f: &mut Frame, area: Rect) {
+    pub(crate) fn render_correlation(&self, f: &mut Frame, area: Rect) {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Cross-Loadout Correlation",
@@ -1451,10 +1451,10 @@ impl InterceptTab {
         let edit_para = Paragraph::new(edit_content).style(Style::default().fg(tc!(text)));
         f.render_widget(edit_block, edit_area);
         let inner_rect = Rect::new(
-            edit_area.x + 1,
-            edit_area.y + 1,
-            edit_area.width - 2,
-            edit_area.height - 2,
+            edit_area.x.saturating_add(1),
+            edit_area.y.saturating_add(1),
+            edit_area.width.saturating_sub(2),
+            edit_area.height.saturating_sub(2),
         );
         f.render_widget(edit_para, inner_rect);
 

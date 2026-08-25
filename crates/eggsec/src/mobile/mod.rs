@@ -63,6 +63,7 @@ pub use eggsec_mobile_lab::traffic;
 
 /// High-level entry for CLI handlers (static analysis).
 /// Delegates to the domain crate's `run_static_cli`.
+#[cfg(feature = "cli")]
 pub async fn run_cli(args: crate::cli::MobileArgs, _config: &EggsecConfig) -> Result<()> {
     let _start = std::time::Instant::now();
 

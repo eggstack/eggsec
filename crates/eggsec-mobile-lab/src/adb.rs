@@ -60,7 +60,23 @@ impl AdbMessage {
     }
 
     async fn write_to<W: AsyncWriteExt + Unpin>(&self, w: &mut W) -> Result<()> {
-        let len = self.data.len() as u32;
+        // Enforce the same payload bound as the read path so oversized
+        // messages fail explicitly instead of silently truncating the
+        // declared length.
+        let len = u32::try_from(self.data.len()).map_err(|_| {
+            anyhow!(
+                "adb payload {} exceeds max {}",
+                self.data.len(),
+                ADB_MAX_PAYLOAD
+            )
+        })?;
+        if len > ADB_MAX_PAYLOAD {
+            return Err(anyhow!(
+                "adb payload {} exceeds max payload {}",
+                len,
+                ADB_MAX_PAYLOAD
+            ));
+        }
         let crc = self
             .data
             .iter()

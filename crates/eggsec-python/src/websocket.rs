@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::PyObject;
 use futures::{SinkExt, StreamExt};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
@@ -46,7 +47,7 @@ impl ConnectionTestResultPy {
     fn response_headers(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty(py);
         for (k, v) in &self.response_headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -63,7 +64,7 @@ impl ConnectionTestResultPy {
 
         let headers_list = PyList::empty(py);
         for (k, v) in &self.response_headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             headers_list.append(tuple)?;
         }
         dict.set_item("response_headers", headers_list)?;
@@ -748,7 +749,7 @@ impl WebSocketSessionConfigPy {
     fn headers(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -758,7 +759,7 @@ impl WebSocketSessionConfigPy {
     fn cookies(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty(py);
         for (k, v) in &self.cookies {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -781,14 +782,14 @@ impl WebSocketSessionConfigPy {
 
         let headers_list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             headers_list.append(tuple)?;
         }
         dict.set_item("headers", headers_list)?;
 
         let cookies_list = PyList::empty(py);
         for (k, v) in &self.cookies {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             cookies_list.append(tuple)?;
         }
         dict.set_item("cookies", cookies_list)?;
@@ -1430,7 +1431,7 @@ impl WebSocketHandshakePy {
     fn response_headers(&self, py: Python) -> PyResult<PyObject> {
         let list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             list.append(tuple)?;
         }
         Ok(list.into())
@@ -1455,7 +1456,7 @@ impl WebSocketHandshakePy {
 
         let headers_list = PyList::empty(py);
         for (k, v) in &self.headers {
-            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()]);
+            let tuple = PyTuple::new(py, &[k.as_str(), v.as_str()])?;
             headers_list.append(tuple)?;
         }
         dict.set_item("headers", headers_list)?;

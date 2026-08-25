@@ -166,12 +166,23 @@ impl ChainExecutor {
             ChainAction::Request(template) => self.execute_request(template).await,
             ChainAction::ExtractVar(rule) => self.execute_extract(rule).await,
             ChainAction::Sleep(duration) => {
-                tokio::time::sleep(tokio::time::Duration::from_millis(duration)).await;
+                // Clamp user-supplied sleeps so a chain file cannot stall the
+                // executor for an unbounded period.
+                const MAX_SLEEP_MS: u64 = 60_000;
+                let clamped_ms = duration.min(MAX_SLEEP_MS);
+                if clamped_ms < duration {
+                    tracing::warn!(
+                        requested_ms = duration,
+                        clamped_ms,
+                        "chain sleep action clamped to maximum"
+                    );
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(clamped_ms)).await;
                 ChainResult {
                     action_index: self.results.len(),
                     success: true,
                     status_code: None,
-                    response_time_ms: duration,
+                    response_time_ms: clamped_ms,
                     extracted_vars: FxHashMap::default(),
                     error: None,
                 }

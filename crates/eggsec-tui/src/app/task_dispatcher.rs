@@ -150,12 +150,12 @@ pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> 
         #[cfg(feature = "advanced-hunting")]
         TaskResult::Hunt(r) => (
             "hunt".into(),
-            Some(format!("{} findings", r.findings.len())),
+            Some(format!("{} findings", r.total_findings)),
         ),
         #[cfg(feature = "headless-browser")]
         TaskResult::Browser(r) => (
             "browser".into(),
-            Some(format!("{} findings", r.findings.len())),
+            Some(format!("{} findings", r.total_findings)),
         ),
         #[cfg(feature = "compliance")]
         TaskResult::Compliance(r) => ("compliance".into(), Some(format!("{}", r.framework))),
@@ -183,11 +183,14 @@ pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> 
             Some(format!("{} issues found", issues.len())),
         ),
         #[cfg(feature = "finding-workflow")]
-        TaskResult::Workflow(r) => ("workflow".into(), Some(format!("{}", r.name))),
+        TaskResult::Workflow(r) => (
+            "workflow".into(),
+            Some(format!("{} total findings", r.total_findings)),
+        ),
         #[cfg(feature = "vuln-management")]
         TaskResult::Vuln(r) => (
             "vuln".into(),
-            Some(format!("{} findings", r.findings.len())),
+            Some(format!("{} findings", r.prioritized_findings.len())),
         ),
         #[cfg(feature = "wireless")]
         TaskResult::Wireless(r) => (
@@ -204,7 +207,7 @@ pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> 
         #[cfg(feature = "web-proxy")]
         TaskResult::Intercept(r) => ("intercept".into(), Some(format!("{} flows", r.flows.len()))),
         #[cfg(feature = "c2")]
-        TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.profile))),
+        TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.campaign.mitre_profile))),
     };
 
     TaskResultEnvelope {
@@ -522,6 +525,8 @@ mod tests {
             manifest: None,
             vuln_assessment: None,
             load_test_results: None,
+            #[cfg(feature = "web-proxy")]
+            web_proxy_report: None,
         });
         let envelope = task_result_to_envelope(&result);
         assert_eq!(envelope.kind, "pipeline");

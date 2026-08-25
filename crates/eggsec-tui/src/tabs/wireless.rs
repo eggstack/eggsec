@@ -971,7 +971,7 @@ mod tests {
             .expect("run request should be present");
         match req.task_kind {
             eggsec_runtime::request::TaskKind::WirelessActive(params) => {
-                assert_eq!(params.interface, "wlan0");
+                assert_eq!(params.interface.as_deref(), Some("wlan0"));
                 assert_eq!(params.target_bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
             }
             _ => panic!("expected WirelessActive task kind"),
@@ -1094,7 +1094,7 @@ mod tests {
         let task = tab.build_run_request().expect("run request present");
         match task.task_kind {
             eggsec_runtime::request::TaskKind::WirelessActive(params) => {
-                assert_eq!(params.interface, "wlan0");
+                assert_eq!(params.interface.as_deref(), Some("wlan0"));
                 assert_eq!(params.target_bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
             }
             _ => panic!("expected WirelessActive"),

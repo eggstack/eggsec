@@ -64,7 +64,6 @@ fn status_label(s: &TaskStatus) -> &'static str {
     match s {
         TaskStatus::Queued => "Queued",
         TaskStatus::Running => "Running",
-        TaskStatus::Completing => "Completing",
         TaskStatus::Completed => "Completed",
         TaskStatus::Failed => "Failed",
         TaskStatus::Cancelled => "Cancelled",

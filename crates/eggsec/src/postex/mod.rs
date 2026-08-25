@@ -92,7 +92,8 @@ pub struct PostexSummary {
 }
 
 /// Profile controlling which techniques are exercised.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 #[serde(rename_all = "kebab-case")]
 pub enum PostexProfile {
     Minimal,
@@ -444,6 +445,7 @@ pub fn to_scan_report_data(report: &PostexReport) -> crate::output::convert::Sca
 }
 
 /// CLI entry point for post-exploitation testing.
+#[cfg(feature = "cli")]
 pub async fn run_cli(
     args: crate::cli::PostexArgs,
     _config: &crate::config::EggsecConfig,

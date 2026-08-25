@@ -104,7 +104,7 @@ impl EventSender {
     ) -> Result<(), tokio::sync::mpsc::error::TrySendError<crate::event_protocol::EventEnvelope>>
     {
         if event.sequence == 0 {
-            event.sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed);
+            event.sequence = self.next_sequence.fetch_add(1, Ordering::SeqCst);
         }
         if let Ok(mut stats) = self.stats.lock() {
             stats.emitted_count += 1;

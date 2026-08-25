@@ -590,7 +590,9 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Scan;
         let mut found = false;
-        for _ in 0..20 {
+        // Iterate at most the full tab-list length so the bound holds
+        // regardless of which feature-gated tabs are compiled in.
+        for _ in 0..Tab::all().len() {
             if app.current_tab == Tab::Cluster {
                 found = true;
                 break;
@@ -605,7 +607,7 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Load;
         let mut found = false;
-        for _ in 0..20 {
+        for _ in 0..Tab::all().len() {
             if app.current_tab == Tab::Cluster {
                 found = true;
                 break;

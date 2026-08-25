@@ -297,6 +297,16 @@ impl DaemonHost {
                     message,
                 };
             }
+        } else if let ClientCommand::ListPersistedSessions { request_id } = &cmd {
+            // Persisted-session enumeration carries no session id but still
+            // requires a declared client identity.
+            if client_id.is_none() {
+                return ServerMessage::Error {
+                    request_id: request_id.clone(),
+                    code: ErrorCode::ClientNotDeclared,
+                    message: "client must declare before listing persisted sessions".into(),
+                };
+            }
         }
 
         match cmd {
@@ -891,6 +901,24 @@ impl DaemonHost {
         }
     }
 
+    /// Check whether the caller may access a session's event stream.
+    ///
+    /// Applies the same RBAC rules as [`Self::handle_command`] without
+    /// dispatching, so transports that stream events out-of-band (e.g. the
+    /// HTTP SSE endpoint) can enforce authentication and session access
+    /// before subscribing.
+    pub async fn check_event_stream_access(
+        &self,
+        session_id: eggsec_runtime::SessionId,
+        ctx: &DaemonRequestContext,
+    ) -> Result<(), (ErrorCode, String)> {
+        let cmd = ClientCommand::Subscribe {
+            request_id: String::new(),
+            session_id,
+        };
+        self.check_command_permission(&cmd, ctx, &session_id).await
+    }
+
     /// Look up the client's role for a session and run the permission check.
     /// Returns Ok(()) if permitted, or Err((ErrorCode, message)) if denied.
     async fn check_command_permission(
@@ -906,9 +934,15 @@ impl DaemonHost {
             return Ok(());
         }
 
-        // Declared-client commands (DeclareClient, CreateSession, ListSessions)
-        // do not require a session — they operate at the daemon level.
+        // Declared-client commands that carry a session id (e.g.
+        // GetPersistedSnapshot) still require a declared client identity.
         if perm == CommandPermission::DeclaredClient {
+            if ctx.client_id.is_none() {
+                return Err((
+                    ErrorCode::ClientNotDeclared,
+                    "client must declare before sending this command".into(),
+                ));
+            }
             return Ok(());
         }
 
@@ -2663,6 +2697,52 @@ mod tests {
             // Expected
         } else {
             panic!("expected PermissionDenied, got {:?}", msg);
+        }
+    }
+
+    /// Regression test: an undeclared client must not be able to enumerate
+    /// persisted sessions.
+    #[tokio::test]
+    async fn undeclared_client_cannot_list_persisted_sessions() {
+        let host = test_host();
+        let msg = host
+            .handle_command(
+                ClientCommand::ListPersistedSessions {
+                    request_id: "list-1".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match msg {
+            ServerMessage::Error {
+                code: ErrorCode::ClientNotDeclared,
+                ..
+            } => {}
+            other => panic!("expected ClientNotDeclared, got {:?}", other),
+        }
+    }
+
+    /// Regression test: an undeclared client must not be able to read any
+    /// persisted snapshot.
+    #[tokio::test]
+    async fn undeclared_client_cannot_get_persisted_snapshot() {
+        let host = test_host();
+        let sid = eggsec_runtime::SessionId::new();
+        let msg = host
+            .handle_command(
+                ClientCommand::GetPersistedSnapshot {
+                    request_id: "get-1".into(),
+                    session_id: sid,
+                },
+                test_ctx(None),
+            )
+            .await;
+        match msg {
+            ServerMessage::Error {
+                code: ErrorCode::ClientNotDeclared,
+                ..
+            } => {}
+            other => panic!("expected ClientNotDeclared, got {:?}", other),
         }
     }
 

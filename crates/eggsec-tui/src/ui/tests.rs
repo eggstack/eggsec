@@ -11,16 +11,21 @@ fn quick_switch_renders_selected_tail_item_in_viewport() {
     let mut app = create_test_app();
     app.quick_switch.visible = true;
     app.quick_switch.query.clear();
-    app.quick_switch.selected = app.get_quick_switch_results().len().saturating_sub(1);
+    let results = app.get_quick_switch_results();
+    let selected_tab = *results.last().expect("quick switch should list tabs");
+    app.quick_switch.selected = results.len().saturating_sub(1);
 
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| draw(f, &mut app)).unwrap();
 
     let text = buffer_to_text(terminal.backend().buffer());
+    // Long descriptions may be truncated by the popup width, so match on
+    // the tab title rather than the full row.
     assert!(
-        text.contains("Dashboard - View scan results dashboard"),
-        "Expected selected tail quick-switch item to be visible in rendered popup"
+        text.contains(selected_tab.title()),
+        "Expected selected tail quick-switch item ({}) to be visible in rendered popup",
+        selected_tab.title()
     );
 }
 

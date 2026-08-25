@@ -1143,7 +1143,13 @@ impl AsyncEngine {
                         ports.len(),
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1237,7 +1243,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1320,7 +1332,13 @@ impl AsyncEngine {
                         ports_owned.len(),
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1395,7 +1413,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1494,7 +1518,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1589,7 +1619,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1679,7 +1715,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1776,10 +1818,16 @@ impl AsyncEngine {
                         0.0,
                         format!("Starting load test on {}", target),
                         0,
-                        total_requests as usize,
+                        usize::try_from(total_requests).unwrap_or(usize::MAX),
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1820,7 +1868,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,
@@ -1868,7 +1922,13 @@ impl AsyncEngine {
                         0,
                     )
                     .into_py_any(py)
-                    .unwrap(),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            ?error,
+                            "event payload conversion failed; emitting None payload"
+                        );
+                        py.None()
+                    }),
                     None,
                     None,
                     None,

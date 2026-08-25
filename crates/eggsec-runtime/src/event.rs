@@ -8,7 +8,6 @@ use crate::request::RunRequest;
 pub enum TaskStatus {
     Queued,
     Running,
-    Completing,
     Completed,
     Failed,
     Cancelled,
@@ -182,7 +181,6 @@ mod tests {
         assert!(TaskStatus::TimedOut.is_terminal());
         assert!(!TaskStatus::Queued.is_terminal());
         assert!(!TaskStatus::Running.is_terminal());
-        assert!(!TaskStatus::Completing.is_terminal());
     }
 
     #[test]

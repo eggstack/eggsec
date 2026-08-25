@@ -12,6 +12,60 @@ use crate::protocol::{
     ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
 };
 
+/// Maximum size of a single JSON-line request. Prevents a client from
+/// streaming unbounded bytes without a newline and exhausting memory.
+const MAX_LINE_LEN: usize = 1024 * 1024;
+
+/// Read one `\n`-terminated line with a hard byte cap of [`MAX_LINE_LEN`].
+///
+/// Returns `Ok(Some(line))`, or `Ok(None)` on clean EOF. Returns an error on
+/// I/O failure, invalid UTF-8, or when the peer exceeds the length cap
+/// (previously `BufReader::lines()` would buffer such input without bound).
+async fn read_bounded_line(
+    reader: &mut BufReader<tokio::net::unix::OwnedReadHalf>,
+) -> std::io::Result<Option<String>> {
+    let overflow = || {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("line exceeds maximum length of {} bytes", MAX_LINE_LEN),
+        )
+    };
+    let mut bytes: Vec<u8> = Vec::new();
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return if bytes.is_empty() {
+                Ok(None)
+            } else {
+                // EOF mid-frame; treat trailing bytes as a final line.
+                String::from_utf8(bytes)
+                    .map(|line| Some(line))
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            };
+        }
+        match available.iter().position(|&b| b == b'\n') {
+            Some(pos) => {
+                if bytes.len() + pos > MAX_LINE_LEN {
+                    return Err(overflow());
+                }
+                bytes.extend_from_slice(&available[..pos]);
+                reader.consume(pos + 1);
+                return String::from_utf8(bytes)
+                    .map(|line| Some(line))
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+            }
+            None => {
+                let n = available.len();
+                if bytes.len() + n > MAX_LINE_LEN {
+                    return Err(overflow());
+                }
+                bytes.extend_from_slice(available);
+                reader.consume(n);
+            }
+        }
+    }
+}
+
 /// RAII guard that cancels a `CancellationToken` when dropped.
 struct CancelOnDrop(CancellationToken);
 
@@ -123,7 +177,7 @@ async fn handle_client(
     _permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     let (read_half, mut write_half) = stream.into_split();
-    let mut reader = BufReader::new(read_half).lines();
+    let mut reader = BufReader::new(read_half);
 
     let mut local_client_id: Option<eggsec_runtime::ClientId> = None;
 
@@ -137,18 +191,27 @@ async fn handle_client(
         // Idle bound for the command loop: a client that connects and then
         // stalls would otherwise hold its semaphore permit indefinitely.
         const IDLE_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
-        let line = match tokio::time::timeout(IDLE_READ_TIMEOUT, reader.next_line()).await {
-            Ok(Ok(Some(line))) => line,
-            Ok(Ok(None)) => break,
-            Ok(Err(e)) => {
-                tracing::warn!("Read error: {}", e);
-                break;
-            }
-            Err(_) => {
-                tracing::debug!("Client idle timeout (300s); closing connection");
-                break;
-            }
-        };
+        let line =
+            match tokio::time::timeout(IDLE_READ_TIMEOUT, read_bounded_line(&mut reader)).await {
+                Ok(Ok(Some(line))) => line,
+                Ok(Ok(None)) => break,
+                Ok(Err(e)) => {
+                    tracing::warn!("Read error: {}", e);
+                    let err_resp = ServerMessage::Error {
+                        request_id: String::new(),
+                        code: ErrorCode::InvalidRequest,
+                        message: format!("invalid frame (max line length {} bytes)", MAX_LINE_LEN),
+                    };
+                    if write_message(&mut write_half, &err_resp).await.is_err() {
+                        break;
+                    }
+                    break;
+                }
+                Err(_) => {
+                    tracing::debug!("Client idle timeout (300s); closing connection");
+                    break;
+                }
+            };
 
         if line.is_empty() {
             continue;
@@ -218,7 +281,7 @@ async fn handle_client(
                             None => break,
                         }
                     }
-                    line = reader.next_line() => {
+                    line = read_bounded_line(&mut reader) => {
                         match line {
                             Ok(Some(line)) => {
                                 if line.is_empty() {

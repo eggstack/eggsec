@@ -254,252 +254,307 @@ pub(crate) async fn scan_ports_spoofed(
         let ttl = spoof_config.ttl;
         let random_source_port = spoof_config.random_source_port;
 
-        let handle = tokio::spawn(async move {
-            let src_port: u16 = if let Some(port) = spoof_config.source_port {
-                port
-            } else if random_source_port {
-                rand::random::<u16>() % 32768 + 32768
-            } else {
-                rand::random::<u16>() % 20000 + 40000
-            };
-            let seq: u32 = rand::random::<u32>();
+        // Project invariant: every spawned tokio task carries a timeout
+        // wrapper (30-300s) so a stuck send/receive cannot leak forever.
+        let handle = tokio::spawn(tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            async move {
+                let src_port: u16 = if let Some(port) = spoof_config.source_port {
+                    port
+                } else if random_source_port {
+                    rand::random::<u16>() % 32768 + 32768
+                } else {
+                    rand::random::<u16>() % 20000 + 40000
+                };
+                let seq: u32 = rand::random::<u32>();
 
-            let total_packets = if has_decoys {
-                1 + decoy_count_for_port(&spoof_config, port)
-            } else {
-                1
-            };
-            if let Some(rate) = max_rate {
-                if rate > 0 {
-                    let delay_ms = (1000u64.saturating_mul(total_packets as u64)) / rate as u64;
-                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
-                }
-            }
-
-            if do_fragment {
-                match build_fragmented_packets(
-                    src_ip,
-                    src_port,
-                    target_ipv4,
-                    port,
-                    seq,
-                    scan_type,
-                    ttl,
-                ) {
-                    Ok(packets) => {
-                        let mut tx_guard = tx.lock();
-                        for pkt in &packets {
-                            if tx_guard.send_to(pkt, Some(interface.clone())).is_none() {
-                                tracing::warn!("Failed to send spoofed packet");
-                            } else {
-                                packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            }
-                        }
-                        let src_ip_u32: u32 = u32::from(src_ip);
-                        sent_packets.insert(port, src_ip_u32);
-                    }
-                    Err(e) => {
-                        tracing::debug!("Failed to build fragmented TCP packets: {}", e);
-                        if let Some(ref pb) = progress {
-                            pb.inc(1);
-                        }
-                        if let Some(ref tx) = progress_tx {
-                            let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            if tx.send((count, total_ports)).await.is_err() {
-                                tracing::warn!("Progress receiver dropped");
-                            }
-                        }
-                        drop(permit);
-                        return;
+                let total_packets = if has_decoys {
+                    1 + decoy_count_for_port(&spoof_config, port)
+                } else {
+                    1
+                };
+                if let Some(rate) = max_rate {
+                    if rate > 0 {
+                        let delay_ms = (1000u64.saturating_mul(total_packets as u64)) / rate as u64;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                     }
                 }
-            } else {
-                match build_tcp_packet(src_ip, src_port, target_ipv4, port, seq, scan_type, ttl) {
-                    Ok(packet) => {
-                        let mut tx_guard = tx.lock();
-                        match tx_guard.send_to(&packet, Some(interface.clone())) {
-                            Some(Ok(_)) => {
-                                packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                let src_ip_u32: u32 = u32::from(src_ip);
-                                sent_packets.insert(port, src_ip_u32);
-                            }
-                            _ => {
-                                tracing::warn!("Failed to send TCP packet for port {}", port);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Failed to build spoofed TCP packet for port {}: {}",
-                            port,
-                            e
-                        );
-                        if let Some(ref pb) = progress {
-                            pb.inc(1);
-                        }
-                        if let Some(ref tx) = progress_tx {
-                            let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            if tx.send((count, total_ports)).await.is_err() {
-                                tracing::warn!("Progress receiver dropped");
-                            }
-                        }
-                        drop(permit);
-                        return;
-                    }
-                }
-            }
 
-            if has_decoys {
-                let decoy_ips = spoof_config.get_all_source_ips(local_ip);
-                let decoy_count = decoy_count_for_port(&spoof_config, port);
-
-                match spoof_config.decoy_mode {
-                    crate::scanner::spoof::DecoyMode::Simultaneous => {
-                        let mut tx_guard = tx.lock();
-
-                        let mut all_ips: Vec<(Ipv4Addr, u16, u32)> = decoy_ips
-                            .iter()
-                            .take(decoy_count)
-                            .enumerate()
-                            .map(|(i, ip)| {
-                                (
-                                    *ip,
-                                    src_port.wrapping_add(i as u16),
-                                    seq.wrapping_add(i as u32),
-                                )
-                            })
-                            .collect();
-
-                        for i in 0..all_ips.len() {
-                            let j = i + rand::random::<usize>() % (all_ips.len() - i);
-                            all_ips.swap(i, j);
-                        }
-
-                        for (ip, port_offset, seq_offset) in all_ips {
-                            if let Ok(packet) = build_tcp_packet(
-                                ip,
-                                port_offset,
-                                target_ipv4,
-                                port,
-                                seq_offset,
-                                scan_type,
-                                ttl,
-                            ) {
-                                let send_result =
-                                    tx_guard.send_to(&packet, Some(interface.clone()));
-                                if send_result.is_none() {
-                                    tracing::warn!("Failed to send simultaneous decoy packet");
-                                } else {
-                                    packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                }
-                            }
-                        }
-                    }
-                    crate::scanner::spoof::DecoyMode::Staggered => {
-                        let mut all_ips: Vec<(Ipv4Addr, u16, u32)> = decoy_ips
-                            .iter()
-                            .take(decoy_count)
-                            .enumerate()
-                            .map(|(i, ip)| {
-                                (
-                                    *ip,
-                                    src_port.wrapping_add(i as u16),
-                                    seq.wrapping_add(i as u32),
-                                )
-                            })
-                            .collect();
-
-                        for i in 0..all_ips.len() {
-                            let j = i + rand::random::<usize>() % (all_ips.len() - i);
-                            all_ips.swap(i, j);
-                        }
-
-                        for (ip, port_offset, seq_offset) in all_ips {
-                            if let Ok(packet) = build_tcp_packet(
-                                ip,
-                                port_offset,
-                                target_ipv4,
-                                port,
-                                seq_offset,
-                                scan_type,
-                                ttl,
-                            ) {
-                                {
-                                    let mut tx_guard = tx.lock();
-                                    let send_result =
-                                        tx_guard.send_to(&packet, Some(interface.clone()));
-                                    if send_result.is_none() {
-                                        tracing::warn!("Failed to send staggered decoy packet");
+                if do_fragment {
+                    match build_fragmented_packets(
+                        src_ip,
+                        src_port,
+                        target_ipv4,
+                        port,
+                        seq,
+                        scan_type,
+                        ttl,
+                    ) {
+                        Ok(packets) => {
+                            // Datalink sends are blocking I/O; run them on the
+                            // blocking pool instead of stalling a worker thread
+                            // while holding the sender mutex.
+                            let tx = Arc::clone(&tx);
+                            let iface = interface.clone();
+                            let sent_packets = sent_packets.clone();
+                            let packets_sent = packets_sent.clone();
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                let mut tx_guard = tx.lock();
+                                for pkt in &packets {
+                                    if tx_guard.send_to(pkt, Some(iface.clone())).is_none() {
+                                        tracing::warn!("Failed to send spoofed packet");
                                     } else {
                                         packets_sent
                                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                     }
                                 }
-                                if use_staggered {
-                                    let stagger_delay = 10 + rand::random::<u64>() % 100;
-                                    tokio::time::sleep(tokio::time::Duration::from_millis(
-                                        stagger_delay,
-                                    ))
+                            })
+                            .await
+                            {
+                                tracing::warn!(error = %e, "fragmented packet send task failed");
+                            }
+                            let src_ip_u32: u32 = u32::from(src_ip);
+                            sent_packets.insert(port, src_ip_u32);
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to build fragmented TCP packets: {}", e);
+                            if let Some(ref pb) = progress {
+                                pb.inc(1);
+                            }
+                            if let Some(ref tx) = progress_tx {
+                                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                                if tx.send((count, total_ports)).await.is_err() {
+                                    tracing::warn!("Progress receiver dropped");
+                                }
+                            }
+                            drop(permit);
+                            return;
+                        }
+                    }
+                } else {
+                    match build_tcp_packet(src_ip, src_port, target_ipv4, port, seq, scan_type, ttl)
+                    {
+                        Ok(packet) => {
+                            // Blocking datalink send → blocking pool.
+                            let tx = Arc::clone(&tx);
+                            let iface = interface.clone();
+                            let sent_packets = sent_packets.clone();
+                            let send_ok = tokio::task::spawn_blocking(move || {
+                                let mut tx_guard = tx.lock();
+                                matches!(tx_guard.send_to(&packet, Some(iface)), Some(Ok(_)))
+                            })
+                            .await;
+                            let sent_ok = match send_ok {
+                                Ok(sent) => sent,
+                                Err(e) => {
+                                    tracing::warn!(error = %e, "TCP packet send task failed");
+                                    false
+                                }
+                            };
+                            if sent_ok {
+                                packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let src_ip_u32: u32 = u32::from(src_ip);
+                                sent_packets.insert(port, src_ip_u32);
+                            } else {
+                                tracing::warn!("Failed to send TCP packet for port {}", port);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to build spoofed TCP packet for port {}: {}",
+                                port,
+                                e
+                            );
+                            if let Some(ref pb) = progress {
+                                pb.inc(1);
+                            }
+                            if let Some(ref tx) = progress_tx {
+                                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                                if tx.send((count, total_ports)).await.is_err() {
+                                    tracing::warn!("Progress receiver dropped");
+                                }
+                            }
+                            drop(permit);
+                            return;
+                        }
+                    }
+                }
+
+                if has_decoys {
+                    let decoy_ips = spoof_config.get_all_source_ips(local_ip);
+                    let decoy_count = decoy_count_for_port(&spoof_config, port);
+
+                    match spoof_config.decoy_mode {
+                        crate::scanner::spoof::DecoyMode::Simultaneous => {
+                            let mut all_ips: Vec<(Ipv4Addr, u16, u32)> = decoy_ips
+                                .iter()
+                                .take(decoy_count)
+                                .enumerate()
+                                .map(|(i, ip)| {
+                                    (
+                                        *ip,
+                                        src_port.wrapping_add(i as u16),
+                                        seq.wrapping_add(i as u32),
+                                    )
+                                })
+                                .collect();
+
+                            for i in 0..all_ips.len() {
+                                let j = i + rand::random::<usize>() % (all_ips.len() - i);
+                                all_ips.swap(i, j);
+                            }
+
+                            // Blocking datalink sends → blocking pool.
+                            let tx = Arc::clone(&tx);
+                            let iface = interface.clone();
+                            let packets_sent = packets_sent.clone();
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                let mut tx_guard = tx.lock();
+                                for (ip, port_offset, seq_offset) in all_ips {
+                                    if let Ok(packet) = build_tcp_packet(
+                                        ip,
+                                        port_offset,
+                                        target_ipv4,
+                                        port,
+                                        seq_offset,
+                                        scan_type,
+                                        ttl,
+                                    ) {
+                                        if tx_guard.send_to(&packet, Some(iface.clone())).is_none()
+                                        {
+                                            tracing::warn!(
+                                                "Failed to send simultaneous decoy packet"
+                                            );
+                                        } else {
+                                            packets_sent
+                                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                        }
+                                    }
+                                }
+                            })
+                            .await
+                            {
+                                tracing::warn!(error = %e, "simultaneous decoy send task failed");
+                            }
+                        }
+                        crate::scanner::spoof::DecoyMode::Staggered => {
+                            let mut all_ips: Vec<(Ipv4Addr, u16, u32)> = decoy_ips
+                                .iter()
+                                .take(decoy_count)
+                                .enumerate()
+                                .map(|(i, ip)| {
+                                    (
+                                        *ip,
+                                        src_port.wrapping_add(i as u16),
+                                        seq.wrapping_add(i as u32),
+                                    )
+                                })
+                                .collect();
+
+                            for i in 0..all_ips.len() {
+                                let j = i + rand::random::<usize>() % (all_ips.len() - i);
+                                all_ips.swap(i, j);
+                            }
+
+                            for (ip, port_offset, seq_offset) in all_ips {
+                                if let Ok(packet) = build_tcp_packet(
+                                    ip,
+                                    port_offset,
+                                    target_ipv4,
+                                    port,
+                                    seq_offset,
+                                    scan_type,
+                                    ttl,
+                                ) {
+                                    // Blocking datalink send → blocking pool.
+                                    let tx = Arc::clone(&tx);
+                                    let iface = interface.clone();
+                                    let send_result = tokio::task::spawn_blocking(move || {
+                                        let mut tx_guard = tx.lock();
+                                        tx_guard.send_to(&packet, Some(iface))
+                                    })
                                     .await;
+                                    match send_result {
+                                        Ok(Some(Ok(_))) => {
+                                            packets_sent
+                                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                        }
+                                        Ok(_) => {
+                                            tracing::warn!("Failed to send staggered decoy packet");
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                error = %e,
+                                                "staggered decoy send task failed"
+                                            );
+                                        }
+                                    }
+                                    if use_staggered {
+                                        let stagger_delay = 10 + rand::random::<u64>() % 100;
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                                            stagger_delay,
+                                        ))
+                                        .await;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            let status = {
-                let wait_start = std::time::Instant::now();
-                let timeout_ms = timeout_duration.as_millis() as u64;
-                let mut status = "filtered".to_string();
-                let mut backoff_ms = 1u64;
-                let max_backoff_ms = 50u64;
+                let status = {
+                    let wait_start = std::time::Instant::now();
+                    let timeout_ms = timeout_duration.as_millis() as u64;
+                    let mut status = "filtered".to_string();
+                    let mut backoff_ms = 1u64;
+                    let max_backoff_ms = 50u64;
 
-                while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+                    while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
 
-                    if let Some(resp) = responses.get(&port) {
-                        status = resp.clone();
-                        break;
+                        if let Some(resp) = responses.get(&port) {
+                            status = resp.clone();
+                            break;
+                        }
+
+                        // Exponential backoff: double the delay each time
+                        backoff_ms = std::cmp::min(backoff_ms * 2, max_backoff_ms);
                     }
 
-                    // Exponential backoff: double the delay each time
-                    backoff_ms = std::cmp::min(backoff_ms * 2, max_backoff_ms);
+                    status
+                };
+
+                if packet_trace.is_some() {
+                    log_packet_trace(
+                        &src_ip.to_string(),
+                        src_port,
+                        &target_ipv4.to_string(),
+                        port,
+                        &format!("{:?}", scan_type),
+                    );
                 }
 
-                status
-            };
-
-            if packet_trace.is_some() {
-                log_packet_trace(
-                    &src_ip.to_string(),
-                    src_port,
-                    &target_ipv4.to_string(),
+                results.insert(
                     port,
-                    &format!("{:?}", scan_type),
+                    PortResult {
+                        port,
+                        status: status.to_string(),
+                        service: get_service_name(port).to_string(),
+                    },
                 );
-            }
 
-            results.insert(
-                port,
-                PortResult {
-                    port,
-                    status: status.to_string(),
-                    service: get_service_name(port).to_string(),
-                },
-            );
-
-            if let Some(ref pb) = progress {
-                pb.inc(1);
-            }
-            if let Some(ref tx) = progress_tx {
-                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                if tx.send((count, total_ports)).await.is_err() {
-                    tracing::warn!("Progress receiver dropped");
+                if let Some(ref pb) = progress {
+                    pb.inc(1);
                 }
-            }
-            drop(permit);
-        });
+                if let Some(ref tx) = progress_tx {
+                    let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    if tx.send((count, total_ports)).await.is_err() {
+                        tracing::warn!("Progress receiver dropped");
+                    }
+                }
+                drop(permit);
+            },
+        ));
 
         handles.push(handle);
     }
@@ -548,7 +603,7 @@ pub(crate) async fn scan_ports_spoofed(
     let total_open = results.len();
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: ports_count as u32,
+        ports_scanned: u32::try_from(ports_count).unwrap_or(u32::MAX),
         open_ports: results,
         total_open_ports: total_open,
         duration_ms: start.elapsed().as_millis() as u64,

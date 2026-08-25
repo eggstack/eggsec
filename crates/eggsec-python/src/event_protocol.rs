@@ -16,7 +16,7 @@ static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 /// Allocate a new monotonic sequence number.
 fn next_sequence() -> u64 {
-    EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    EVENT_SEQUENCE.fetch_add(1, Ordering::SeqCst)
 }
 
 /// Base event envelope with version metadata.

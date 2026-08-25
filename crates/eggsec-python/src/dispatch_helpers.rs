@@ -285,7 +285,13 @@ pub(crate) fn check_cancel(
                     "operation.cancelled".to_string(),
                     CancellationEvent::new(reason, "operator".to_string())
                         .into_py_any(py)
-                        .unwrap(),
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                ?error,
+                                "event payload conversion failed; emitting None payload"
+                            );
+                            py.None()
+                        }),
                     None,
                     None,
                     Some(target.to_string()),
@@ -356,7 +362,13 @@ pub(crate) fn emit_finding_event(
         let finding = FindingEvent::new(finding_id, severity, message, actionable);
         state.emit_event(EventEnvelope::create(
             "operation.finding".to_string(),
-            finding.into_py_any(py).unwrap(),
+            finding.into_py_any(py).unwrap_or_else(|error| {
+                tracing::warn!(
+                    ?error,
+                    "event payload conversion failed; emitting None payload"
+                );
+                py.None()
+            }),
             None,
             None,
             Some(target),
@@ -392,7 +404,13 @@ pub(crate) fn pre_dispatch_lifecycle(
         "operation.planning".to_string(),
         PlanningEvent::new(op_id.to_string(), target.to_string(), String::new())
             .into_py_any(py)
-            .unwrap(),
+            .unwrap_or_else(|error| {
+                tracing::warn!(
+                    ?error,
+                    "event payload conversion failed; emitting None payload"
+                );
+                py.None()
+            }),
         None,
         None,
         Some(target.to_string()),
@@ -410,7 +428,13 @@ pub(crate) fn pre_dispatch_lifecycle(
         "operation.preflight".to_string(),
         PreflightEvent::new("approved".to_string(), Vec::new(), Vec::new())
             .into_py_any(py)
-            .unwrap(),
+            .unwrap_or_else(|error| {
+                tracing::warn!(
+                    ?error,
+                    "event payload conversion failed; emitting None payload"
+                );
+                py.None()
+            }),
         None,
         None,
         Some(target.to_string()),

@@ -6,7 +6,7 @@
 //! filtering capabilities.
 
 use crate::fuzzer::engine::FuzzResult;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 /// A filter that can be applied to fuzz results
 #[derive(Debug, Clone)]
@@ -87,8 +87,17 @@ impl FilterChain {
 
     /// Add a regex filter
     pub fn add_regex_filter(&mut self, pattern: String) {
-        if let Ok(regex) = Regex::new(&pattern) {
-            self.filters.push(PayloadFilter::Regex(regex));
+        match RegexBuilder::new(&pattern)
+            .size_limit(100_000)
+            .dfa_size_limit(100_000)
+            .build()
+        {
+            Ok(regex) => self.filters.push(PayloadFilter::Regex(regex)),
+            Err(e) => tracing::warn!(
+                pattern = %pattern,
+                error = %e,
+                "invalid regex filter ignored"
+            ),
         }
     }
 

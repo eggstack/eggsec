@@ -44,6 +44,13 @@ pub struct StageToolResult {
 impl Orchestrator {
     /// **Enforcement note:** Callers must ensure policy enforcement has been applied
     /// before constructing an Orchestrator for strict programmatic surfaces.
+    ///
+    /// This type stores a bare [`ToolDispatcher`] and dispatches without
+    /// binding validation — it is an internal orchestration helper, not an
+    /// enforcement boundary. Strict surfaces must use
+    /// `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation`
+    /// token; do not route strict-surface traffic through this type.
+    #[doc(hidden)]
     pub fn new(dispatcher: ToolDispatcher) -> Self {
         Self {
             dispatcher,

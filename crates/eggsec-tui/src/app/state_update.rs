@@ -462,10 +462,10 @@ impl super::App {
                             .vuln
                             .display_prioritized(assessment.prioritized_findings.clone());
                     }
-                    if let Some(ref result) = assessment.triage_results.first() {
+                    if let Some(result) = assessment.triage_results.first() {
                         self.tabs.vuln.display_triage(result.clone());
                     }
-                    if let Some(ref rem) = assessment.remediation_plans.first() {
+                    if let Some(rem) = assessment.remediation_plans.first() {
                         self.tabs.vuln.display_remediation(rem.clone());
                     }
                 }

@@ -567,6 +567,7 @@ impl SettingsTab {
             alert_channels: eggsec::config::AlertChannelsConfig::default(),
             execution_policy: eggsec::config::ExecutionPolicy::default(),
             #[cfg(feature = "external-integrations")]
+            #[cfg(feature = "external-integrations")]
             integrations: eggsec::integrations::IntegrationConfig::default(),
             auto_save_interval_secs: 30,
         });
@@ -1606,6 +1607,8 @@ mod tests {
             search: None,
             alert_channels: eggsec::config::AlertChannelsConfig::default(),
             execution_policy: eggsec::config::ExecutionPolicy::default(),
+            #[cfg(feature = "external-integrations")]
+            integrations: eggsec::integrations::IntegrationConfig::default(),
             auto_save_interval_secs: 30,
         };
 
@@ -1684,6 +1687,8 @@ mod tests {
             search: None,
             alert_channels: eggsec::config::AlertChannelsConfig::default(),
             execution_policy: eggsec::config::ExecutionPolicy::default(),
+            #[cfg(feature = "external-integrations")]
+            integrations: eggsec::integrations::IntegrationConfig::default(),
             auto_save_interval_secs: 30,
         };
 

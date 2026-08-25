@@ -248,14 +248,73 @@ impl TabRender for BrowserTab {
 }
 
 impl TabInput for BrowserTab {
-    tab_input_3area!(
-        BrowserTab,
-        core: core,
-        focus: focus_area,
-        Inputs: StandardFocusArea::Inputs,
-        Options: StandardFocusArea::Options,
-        Results: StandardFocusArea::Results
-    );
+    // This tab overrides most focus/navigation methods (checkbox-aware
+    // Options area), so only the non-overridden delegations are generated
+    // here; the rest are implemented manually below.
+    fn handle_char(&mut self, c: char) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        crate::tabs::core::tab_input_char(&mut self.core, c, running, inputs);
+    }
+
+    fn handle_backspace(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        crate::tabs::core::tab_input_backspace(&mut self.core, running, inputs);
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        crate::tabs::core::tab_input_paste(&mut self.core, text, running, inputs);
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        let results = self.focus_area == StandardFocusArea::Results;
+        crate::tabs::core::tab_input_copy(&self.core, running, inputs, results)
+    }
+
+    fn handle_word_forward(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        crate::tabs::core::tab_input_word_forward(&mut self.core, running, inputs);
+    }
+
+    fn handle_word_backward(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        crate::tabs::core::tab_input_word_backward(&mut self.core, running, inputs);
+    }
+
+    fn handle_home(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        let results = self.focus_area == StandardFocusArea::Results;
+        crate::tabs::core::tab_input_home(&mut self.core, running, inputs, results);
+    }
+
+    fn handle_end(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea::Inputs;
+        let results = self.focus_area == StandardFocusArea::Results;
+        crate::tabs::core::tab_input_end(&mut self.core, running, inputs, results);
+    }
+
+    fn handle_top(&mut self) {
+        let running = self.is_running();
+        crate::tabs::core::tab_input_top(&mut self.core, running);
+    }
+
+    fn handle_bottom(&mut self) {
+        let running = self.is_running();
+        crate::tabs::core::tab_input_bottom(&mut self.core, running);
+    }
+
+    fn stop(&mut self) {
+        self.core.stop();
+    }
 
     fn handle_focus_next(&mut self) {
         if self.is_running() {

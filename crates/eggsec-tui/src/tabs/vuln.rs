@@ -301,10 +301,6 @@ impl Default for VulnTab {
 impl TabState for VulnTab {
     tab_state_boilerplate!(VulnTab, core: core);
 
-    fn progress(&self) -> f64 {
-        0.0
-    }
-
     fn has_selector_open(&self) -> bool {
         self.mode_selector.is_open()
     }
@@ -534,28 +530,6 @@ impl TabInput for VulnTab {
             VulnFocusArea::Mode => self.mode_selector.handle_down(),
             VulnFocusArea::Inputs => self.core.inputs.focus_next(),
             VulnFocusArea::Results => self.core.results_view.scroll_down(1),
-        }
-    }
-
-    fn is_at_left_edge(&self) -> bool {
-        match self.focus_area {
-            VulnFocusArea::Mode => {
-                self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
-            }
-            VulnFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
-            _ => true,
-        }
-    }
-
-    fn is_at_right_edge(&self) -> bool {
-        match self.focus_area {
-            VulnFocusArea::Mode => {
-                self.mode_selector.items.is_empty()
-                    || self.mode_selector.selected
-                        >= self.mode_selector.items.len().saturating_sub(1)
-            }
-            VulnFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
-            _ => true,
         }
     }
 }

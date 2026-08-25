@@ -112,48 +112,13 @@ impl FuzzEngine {
             let user_agent = self.user_agent.clone();
             let auth_context_entry = self.auth_context_entry.clone();
 
-            let handle = tokio::spawn(async move {
-                let Ok(_permit) = semaphore.acquire_owned().await else {
-                    tracing::warn!("Semaphore closed before request dispatch");
-                    results.insert(
-                        idx,
-                        FuzzResult {
-                            payload: payload_clone.clone(),
-                            status_code: 0,
-                            response_time_ms: 0,
-                            response_length: None,
-                            response_body: None,
-                            is_waf_blocked: false,
-                            is_anomaly: false,
-                            is_redos_suspected: false,
-                            leaks_found: vec![],
-                            error: Some("semaphore closed before request dispatch".to_string()),
-                            owasp_category: Some(payload_clone.payload_type.to_string()),
-                            detected_severity: Severity::Info,
-                        },
-                    );
-                    return;
-                };
-                let result = send_payload_async(
-                    client,
-                    &url,
-                    &method,
-                    param.as_deref(),
-                    &payload_clone,
-                    timing_analyzer,
-                    pattern_matcher,
-                    &user_agent,
-                    auth_context_entry.as_ref(),
-                )
-                .await;
-
-                match result {
-                    Ok(r) => {
-                        // Preserve payload order for deterministic output.
-                        results.insert(idx, r);
-                    }
-                    Err(e) => {
-                        tracing::warn!("Fuzz request failed: {:?}", e);
+            // Project invariant: every spawned tokio task carries a timeout
+            // wrapper (30-300s); this also bounds semaphore acquisition.
+            let handle = tokio::spawn(tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                async move {
+                    let Ok(_permit) = semaphore.acquire_owned().await else {
+                        tracing::warn!("Semaphore closed before request dispatch");
                         results.insert(
                             idx,
                             FuzzResult {
@@ -166,18 +131,58 @@ impl FuzzEngine {
                                 is_anomaly: false,
                                 is_redos_suspected: false,
                                 leaks_found: vec![],
-                                error: Some(e.to_string()),
+                                error: Some("semaphore closed before request dispatch".to_string()),
                                 owasp_category: Some(payload_clone.payload_type.to_string()),
                                 detected_severity: Severity::Info,
                             },
                         );
-                    }
-                }
+                        return;
+                    };
+                    let result = send_payload_async(
+                        client,
+                        &url,
+                        &method,
+                        param.as_deref(),
+                        &payload_clone,
+                        timing_analyzer,
+                        pattern_matcher,
+                        &user_agent,
+                        auth_context_entry.as_ref(),
+                    )
+                    .await;
 
-                if let Some(ref pb) = progress {
-                    pb.inc(1);
-                }
-            });
+                    match result {
+                        Ok(r) => {
+                            // Preserve payload order for deterministic output.
+                            results.insert(idx, r);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Fuzz request failed: {:?}", e);
+                            results.insert(
+                                idx,
+                                FuzzResult {
+                                    payload: payload_clone.clone(),
+                                    status_code: 0,
+                                    response_time_ms: 0,
+                                    response_length: None,
+                                    response_body: None,
+                                    is_waf_blocked: false,
+                                    is_anomaly: false,
+                                    is_redos_suspected: false,
+                                    leaks_found: vec![],
+                                    error: Some(e.to_string()),
+                                    owasp_category: Some(payload_clone.payload_type.to_string()),
+                                    detected_severity: Severity::Info,
+                                },
+                            );
+                        }
+                    }
+
+                    if let Some(ref pb) = progress {
+                        pb.inc(1);
+                    }
+                },
+            ));
 
             handles.push(handle);
         }
