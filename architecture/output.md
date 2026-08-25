@@ -1,343 +1,337 @@
 # Output & Reporting Module
 
-The Output module handles the formatting, deduplication, and export of security findings and scan data into various standardized formats.
+## Purpose
 
-## Supported Formats (`crates/eggsec-output/src/`)
+The Output module handles formatting, deduplication, trend analysis, baseline comparison, session persistence, and export of security findings into standardized formats. It is split across two crate boundaries: `eggsec-output` (19 source files, dependency-light, no engine/runtime deps) and the engine crate `eggsec`'s `output/` (8 source files, depends on engine-internal types). Guard-enforced invariant: `eggsec-output` depends only on `eggsec-core` — no engine or runtime dependencies.
 
-Most output code now lives in the `eggsec-output` crate (`crates/eggsec-output/src/`). Modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `crates/eggsec/src/output/`. Eggsec supports a wide range of output formats to integrate with different tools and workflows:
+## Role & Responsibilities
 
-| Format | File | Purpose |
-|--------|------|---------|
-| Pretty | `report.rs` | Formatted console output (default) |
-| JSON | `convert.rs` | Pretty-printed JSON |
-| Compact | `convert.rs` | Compact single-line JSON |
-| HTML | `html.rs` | Human-readable, interactive reports with charts |
-| Markdown | `markdown.rs` | Easy copy-pasting into documentation |
-| CSV | `csv.rs` | Spreadsheet-based analysis |
-| SARIF | `sarif.rs` | Static Analysis Results Interchange Format |
-| JUnit XML | `junit.rs` | CI/CD pipeline integration |
+- **Format conversion**: JSON canonical, CSV, HTML, SARIF (SarifBuilder), JUnit (JUnitBuilder), Markdown, PDF (engine-only, `pdf` feature)
+- **Envelope wrapping**: `ReportEnvelope` provides protocol-neutral report container with evidence manifests and redaction policy
+- **Deduplication**: `DedupEngine` with strict/fuzzy/disabled strategies
+- **Trend analysis**: LRU-cached historical comparison with sliding-window delta computation
+- **Baseline comparison**: Finding-level new/resolved/unchanged classification
+- **Diff summary**: Numeric envelope (`DiffSummary`) for pipeline run manifests
+- **Session persistence**: TUI session save/load via JSON
+- **Scheduling**: Cron-based scan scheduling with priority queue
+- **AI output schema**: Typed AI-consumable finding output with risk score
+- **Policy/audit summaries**: Aggregated enforcement decision statistics
 
-## Core Features
+## Location & Feature Gating
 
-### Deduplication (`dedup.rs`)
+### `crates/eggsec-output/src/` (19 files)
 
-Automatically identifies and groups duplicate findings:
+Always compiled. Dependencies: `eggsec-core`, `serde`, `serde_json`, `chrono`, `rustc-hash`, `quick-xml`, `unicode-normalization`, `lru`, `uuid`, `hostname`, `tokio`.
 
-```rust
-pub enum DedupStrategy {
-    Strict,      // severity:title:target
-    Fuzzy,       // severity:title only
-    Disabled,
-}
+| File | Lines | Tests | Purpose |
+|------|-------|-------|---------|
+| `lib.rs` | 71 | 0 | Module root and re-exports |
+| `agent.rs` | 481 | 2 | `AgentFinding`, `Confidence` (4 variants), `Evidence`, `Remediation`, `FindingSummary`, `AttackSurface` (10 variants), `FindingStatus` (5 variants: New/Confirmed/FalsePositive/Ignored/Remediated) |
+| `ai_schema.rs` | 237 | 9 | `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` — typed AI consumption output |
+| `audit_summary.rs` | 82 | 2 | `AuditSummary` — aggregated enforcement decision counts from JSON audit events |
+| `baseline.rs` | 192 | 10 | `BaselineComparison` — finding-level new/resolved/unchanged classification by `id` matching |
+| `convert.rs` | 367 | 3 | `ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData`; conversion functions `load_scan_report`, `convert_to_*` |
+| `csv.rs` | 163 | 0 | `CsvExporter` — finding/port/endpoint CSV export; streaming async variant |
+| `dedup.rs` | 163 | 6 | `DedupEngine`, `DedupStrategy` (Strict/Fuzzy/Disabled) |
+| `diff.rs` | 27 | 1 | `DiffSummary` — numeric diff envelope for `RunManifest` |
+| `envelope.rs` | 770 | 11 | `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` |
+| `escape.rs` | 81 | 4 | `escape_html()`, `escape_csv()` (NFKC + formula injection protection), `escape_xml()` |
+| `html.rs` | 325 | 0 | `HtmlReport` — styled HTML with dark/light themes, Chart.js doughnut |
+| `junit.rs` | 407 | 2 | `JUnitBuilder`, `JUnitReport` — JUnit XML via `quick_xml::Writer` (write-only, XXE-safe) |
+| `markdown.rs` | 141 | 0 | `MarkdownReport` — markdown-formatted report generation |
+| `policy_summary.rs` | 54 | 2 | `PolicySummary` — policy decision metadata for report envelopes |
+| `sarif.rs` | 276 | 1 | `SarifBuilder`, `SarifReport` — SARIF 2.1.0 JSON via `serde_json` (no XML parsing, XXE-safe) |
+| `schedule.rs` | 516 | 8 | `CronScheduler`, `CronExpression`, `ScanQueue`, `RateLimiter`, `ScheduledScan` |
+| `session.rs` | 102 | 0 | `ScanSession`, `TabSessionState`, `InputFieldState`, `SessionInfo` — TUI session persistence |
+| `trend.rs` | 539 | 15 | `TrendAnalyzer`, `ResultComparator`, `TrendAnalysis`, `TrendDirection`, `ComparisonResult`, `ScanResult` |
+
+**Test-bearing files**: 14 of 19 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, junit, policy_summary, sarif, schedule, trend).
+
+### `crates/eggsec/src/output/` (8 files, engine crate)
+
+Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionBudget`). Feature-gated where noted.
+
+| File | Lines | Tests | Feature Gate | Purpose |
+|------|-------|-------|-------------|---------|
+| `mod.rs` | 178 | 0 | — | Re-exports `eggsec_output::*` + local modules; `SarifBuilderExt`/`JUnitBuilderExt` extension traits |
+| `attack_graph.rs` | 211 | 3 | `advanced-hunting` | `AttackGraph`, `AttackGraphBuilder`, `GraphNode`, `GraphEdge`, `GraphCluster`; `from_chains()` requires `AttackChain` from `hunt::chain`; `to_html()` is NOT feature-gated |
+| `lab_report.rs` | 176 | 2 | — | `LabDefenseReportSection`, `ScopeSummary`, `BudgetSummary`, `TargetResolutionSummary`, `SkippedOperation` |
+| `pdf.rs` | 239 | 3 | `pdf` | `PdfGenerator`, `PdfConfig` — single-page PDF via `printpdf`; truncates to 30 findings; `#[cfg(not(feature = "pdf"))]` stub returns error |
+| `report.rs` | 77 | 0 | — | `Report` trait, `ReportTemplate` (4 variants: Executive/Technical/Developer/Compliance), `ReportMetadata`, `SeverityCounts` |
+| `report_summary.rs` | 286 | 10 | — | `ReportSummary`, `AssetCount` — aggregated statistics from canonical `Finding` with risk narrative generation |
+| `run_manifest.rs` | 269 | 4 | — | `RunManifest` — run-level metadata envelope for regression workflows, carries `DiffSummary` |
+
+**Test-bearing files**: 4 of 8 (attack_graph, lab_report, pdf, report_summary, run_manifest = 5).
+
+**Combined test-bearing files**: 19 of 27 total source files.
+
+## Architecture
+
+### Format Writer Summary
+
+| Format | Writer Type | Entry Function | Output | Notable Options |
+|--------|------------|----------------|--------|-----------------|
+| JSON | `serde_json` | `convert_to_json()` (`convert.rs:236`) | Pretty-printed JSON string | `ScanReportData` → JSON |
+| CSV | `CsvExporter` | `export_findings()` (`csv.rs:25`) | String | Streaming async variant; NFKC-normalized escaping |
+| HTML | `HtmlReport` | `generate()` (`html.rs:44`) | HTML string | Dark/light themes; Chart.js doughnut; `escape_html()` on all user content |
+| Markdown | `MarkdownReport` | `generate()` (`markdown.rs:61`) | `Result<String>` | Pipe-character escaping in wireless tables via closure |
+| SARIF | `SarifBuilder` | `build()` → `to_json()` (`sarif.rs:214`) | SARIF 2.1.0 JSON | `serde_json` (no XML); invocations with timestamps |
+| JUnit | `JUnitBuilder` | `build()` → `to_xml()` (`junit.rs:185`) | JUnit XML | `quick_xml::Writer` write-only (XXE-safe) |
+| PDF | `PdfGenerator` | `generate_report()` (`pdf.rs:26`) | `Result<Vec<u8>>` | Feature-gated `pdf`; `printpdf`; max 30 findings per page |
+| AI | `AiOutput` | `from_findings()` (`ai_schema.rs:11`) | `AiOutput` | Risk score 0–10; executive summary string |
+
+### Conversion Pipeline
+
+`convert.rs` provides the bridge from `ScanReportData` to all formats:
+
+```
+ScanReportData → convert_to_json()   → JSON string
+              → convert_to_csv()    → CSV string
+              → convert_to_html()   → HTML string (via markdown::ScanSummary)
+              → convert_to_markdown() → Markdown string
+              → convert_to_junit()  → JUnit XML string
+              → convert_to_sarif()  → SARIF JSON string
 ```
 
-### Templates (`template.rs`)
+`load_scan_report()` (`convert.rs:70`) loads a JSON file into `ScanReportData`.
 
-Handlebars-based templating with built-in templates:
-- `executive` - High-level summary for management
-- `technical` - Detailed technical findings
-- `developer` - Actionable items for developers
-- `compliance` - PCI-DSS, SOC2, HIPAA, GDPR, OWASP, NIST
+### Envelope Wrapping Pipeline
 
-### Attack Graphs (`attack_graph.rs`)
+`ReportEnvelope` (`envelope.rs:436`) is the top-level normalized container:
 
-Visualizes relationships between findings to show potential attack paths.
+1. Domain crates produce `ReportEnvelope` from their domain-specific types
+2. `FindingRecord` (11 fields) holds normalized finding data
+3. `EvidenceItem` (7 fields) with `EvidenceKind` (20 variants), `EvidenceSource`, `RedactionState`
+4. `EvidenceManifest` aggregates all evidence items with `RedactionPolicy` (5 variants)
+5. Optional `PolicySummary`, `BaselineSummary`, `ToolMetadata`
+6. `refresh_evidence_manifest()` rebuilds the manifest from findings
+7. `to_json()` / `from_json()` for serialization
 
-```rust
-pub struct AttackGraph {
-    pub nodes: Vec<GraphNode>,
-    pub edges: Vec<GraphEdge>,
-    pub clusters: Vec<GraphCluster>,
-}
-```
+### Dedup Engine
 
-`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures. `AttackChain` is imported from `hunt::chain` (not re-exported from the output module), so `from_chains()` is only available when the `advanced-hunting` feature is enabled. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
+`DedupEngine` (`dedup.rs:24`) uses `FxHashSet<String>` for seen-key tracking:
 
-### Trend Analysis (`trend.rs`)
+| Strategy | Key | Behavior |
+|----------|-----|----------|
+| `Strict` | `"{severity}:{title}:{target}"` | Deduplicates on all three fields |
+| `Fuzzy` | `"{severity}:{title}"` | Ignores target — same title+severity across hosts collapses |
+| `Disabled` | — | Returns all findings unchanged |
 
-Compares current results with historical data using LRU cache storage:
+### Baseline Comparison
 
-```rust
-pub struct TrendAnalyzer {
-    results: LruCache<String, ScanResult>,  // capacity: 1000 (NonZeroUsize)
-}
-pub enum TrendDirection { Improving, Stable, Worsening }
-```
+`BaselineComparison::compare()` (`baseline.rs:12`) classifies findings by `AgentFinding.id`:
 
-`TrendAnalyzer` stores up to 1000 `ScanResult` entries in an `lru::LruCache` keyed by result ID. When the cache is full, the least-recently-used entry is evicted. `get_trend()` sorts results by timestamp and computes sliding-window deltas for critical, high, and medium finding counts across consecutive scans. The overall `TrendDirection` is determined by the critical trend only: any increase yields `Worsening`, any decrease yields `Improving`, otherwise `Stable`. `ResultComparator` provides lower-level comparison with composite deduplication keys `(title, category, cve)`.
+- **New**: IDs in current but not in baseline
+- **Resolved**: IDs in baseline but not in current
+- **Unchanged**: IDs present in both
 
-### Baseline Comparison (`baseline.rs`)
+No fingerprint-based matching or severity escalation/de-escalation tracking.
 
-Detects regressions by comparing current findings against a baseline.
+### Trend Computation
 
-### Session Persistence (`session.rs`)
+`TrendAnalyzer` (`trend.rs:147`) stores up to 1000 `ScanResult` entries in an `lru::LruCache` keyed by result ID. `get_trend()` (`trend.rs:165`):
 
-Persists scan state across TUI sessions:
+1. Sorts results by timestamp
+2. Computes sliding-window deltas for critical/high/medium finding counts across consecutive scans via `.windows(2)`
+3. Direction determined by critical trend only: any increase → `Worsening`, any decrease → `Improving`, otherwise `Stable`
+4. `average_scan_time_ms` computed from all cached results
 
-**Note on standalone commands**: Not all CLI surfaces route through `ScanReportData` or the `eggsec-output` converters.
+`ResultComparator::compare()` (`trend.rs:68`) uses composite key `(title, category, cve)` for finding-level comparison between two `ScanResult`s.
 
-- `auth-test` (CredentialTesting risk) builds and emits `AuthTestReport`/`AuthFinding` (local types defined in `auth/mod.rs`) directly from its handler as pretty text or `--json` (see `commands/handlers/auth_test.rs:274-285`). These results are not loadable via `load_scan_report` or convertible to SARIF/JUnit/CSV/etc. via the output crate. `ScanProfile::Auth` is a separate pipeline profile (JWT/OAuth/IDOR fuzzing) that does not invoke the `auth/` testers. See `architecture/auth.md` and `architecture/cli_commands.md` (Special Cases section) for details. (This is the adopted model; no `AuthFinding` → canonical conversion was implemented.)
-- `wireless` and `mobile` (defense-lab standalone surfaces): emit local types directly (`WirelessScanResult` / `MobileScanReport`) for CLI/TUI/human/JSON use. They provide an **optional** `to_scan_report_data()` bridge (`wireless/mod.rs`, `mobile/mod.rs`) that produces `ScanReportData` (with `wireless_networks` for wireless) for unified consumers. The report handler (`commands/handlers/report.rs`) includes an auto-bridge so native `--json` from these commands (when their feature is enabled) is accepted directly by `eggsec report convert` / trend. See `architecture/{wireless,mobile,cli_commands,defense_lab}.md`, docs/WIRELESS.md and docs/MOBILE.md (Integration sections), and the integration work close-out. No pipeline stages for either. Active wireless extends the bridge with `wireless-active-*` categories (`to_active_scan_report_data()` in `wireless/active/mod.rs`, auto-bridged for `wireless-advanced` builds; completed). Dynamic mobile bridge evolution completed.
+### Diff Summary
 
-- `db-pentest` (defense-lab standalone surface with TUI tab + pipeline): emits `DbPentestReport`/`DbFinding` directly (CLI/TUI/human/JSON). Provides `to_scan_report_data_db()` bridge producing `ScanReportData` with `db-postgres-*`, `db-mysql-*`, `db-mssql-*`, `db-mongodb-*`, `db-redis-*` finding categories plus info metadata. Auto-bridged in `report convert` when `db-pentest` feature is enabled. Native `Stage::DbPentest` pipeline stage integrates into `ScanProfile::DbRegression`. Compliance mapping results (`ComplianceResult`) are included in `DbPentestReport` when available. See `architecture/database_pentest.md`, `architecture/defense_lab.md`, `architecture/pipeline.md`, and `docs/USAGE.md` (Output Models).
+`DiffSummary` (`diff.rs:4`) — 5 fields: `total_new`, `total_resolved`, `total_escalated`, `total_deescalated`, `net_change`. Used in `RunManifest` (`run_manifest.rs:56`) via `with_baseline()` (`run_manifest.rs:93`). This is a numeric metadata envelope, not a comparison engine. The actual comparison logic lives in `BaselineComparison` above.
 
-The converters (`load_scan_report`, `convert_to_*`) and `ScanReportData` shape are otherwise general.
+## Data Model
 
-For a concise cross-module view of the three output models (full pipeline `ScanReportData`; wireless/mobile optional `to_scan_report_data` bridge + auto-bridge; `auth-test` local `Auth*` only with no bridge), see the "Output Models (standalone defense-lab surfaces vs. pipeline)" block in `docs/USAGE.md` (Report Management section). That is the canonical short reference; the per-module architecture docs and WIRELESS/MOBILE/AUTH_LAB.md provide the detailed rationale.
+### `ScanReportData` (`convert.rs:9`)
 
-`ScanSession` saves/loads tab input state and results to JSON files:
+| Field | Type |
+|-------|------|
+| `target` | `String` |
+| `scan_type` | `String` |
+| `timestamp` | `String` |
+| `findings` | `Vec<FindingData>` |
+| `open_ports` | `Vec<PortData>` |
+| `services` | `Vec<ServiceData>` |
+| `duration_ms` | `u64` |
+| `wireless_networks` | `Vec<WirelessNetworkReportData>` |
+| `policy_summary` | `Option<PolicySummary>` |
 
-```rust
-pub struct ScanSession {
-    pub version: String,
-    pub created_at: String,
-    pub last_modified: String,
-    pub tab_states: FxHashMap<String, TabSessionState>,
-    pub results: FxHashMap<String, serde_json::Value>,
-}
-```
+### `ReportEnvelope` (`envelope.rs:436`)
 
-`TabSessionState` tracks per-tab input fields and options via `FxHashMap`.
+| Field | Type |
+|-------|------|
+| `report_id` | `String` |
+| `operation_id` | `String` |
+| `domain_id` | `Option<String>` |
+| `target` | `Option<String>` |
+| `generated_at` | `DateTime<Utc>` |
+| `findings` | `Vec<FindingRecord>` |
+| `evidence_manifest` | `EvidenceManifest` |
+| `policy_summary` | `Option<PolicySummary>` |
+| `baseline` | `Option<BaselineSummary>` |
+| `tool_metadata` | `Option<ToolMetadata>` |
 
-### AI Output Schema (`ai_schema.rs`)
+### `EvidenceKind` (Envelope) — 20 variants (`envelope.rs:32`)
 
-Typed output for AI consumption:
+`HttpRequest`, `HttpResponse`, `Header`, `BodySnippet`, `Timing`, `Diff`, `Banner`, `DnsRecord`, `Certificate`, `PortState`, `Screenshot`, `FileMetadata`, `LogLine`, `DatabaseFinding`, `MobileManifest`, `TrafficCapture`, `StaticAnalysis`, `RuntimeInstrumentation`, `Correlation`, `Generic`
 
-```rust
-pub struct AiOutput {
-    pub findings: Vec<AiFinding>,
-    pub summary: AiSummary,
-}
-```
+**Note**: This is a *separate* enum from `EvidenceKind` in `findings/mod.rs` (13 variants). They serve different abstraction levels: the findings module defines the canonical evidence schema, while the envelope defines a broader protocol-neutral evidence taxonomy for cross-domain reports.
 
-`AiOutput::from_findings()` computes a risk score (0-10) weighted by severity and confidence, and generates an executive summary string.
+### `FindingStatus` Divergence
 
-### PDF Report (`pdf.rs`)
+There are **two separate `FindingStatus` enums** in the output crate:
 
-Feature-gated (`pdf` feature) PDF generation using `printpdf`. `PdfGenerator::generate_report()` renders findings with severity-colored markers and metadata headers.
+| Module | Variants | Location |
+|--------|----------|----------|
+| `agent.rs` | `New`, `Confirmed`, `FalsePositive`, `Ignored`, `Remediated` (5) | `agent.rs:93-101` |
+| `findings/lifecycle.rs` | `New`, `Confirmed`, `AcceptedRisk`, `FalsePositive`, `Remediated`, `Reopened` (6) | `lifecycle.rs:6-13` |
 
-### Escape Utilities (`escape.rs`)
+The `agent.rs` version lacks `AcceptedRisk` and `Reopened` but adds `Ignored`. This is a known divergence — the findings module defines the target canonical schema.
 
-Shared escaping functions used across output formats:
-- `escape_html()` - HTML entity encoding
-- `escape_csv()` - NFKC normalization + quoting for formula injection protection
-- `escape_xml()` - XML entity encoding
+### `Confidence` Divergence
 
-### Scheduling (`schedule.rs`)
+There are **three separate `Confidence` enums** in the codebase:
 
-Provides cron-based scan scheduling with queue management:
-- `CronScheduler` - Parses cron expressions and manages scheduled scans
-- `ScanQueue` - Priority queue for scan scheduling with status tracking
-
-### Diff Summary (`diff.rs`)
-
-Provides a summary struct for diff results used by `RunManifest`:
-
-```rust
-pub struct DiffSummary {
-    pub total_new: usize,
-    pub total_resolved: usize,
-    pub total_escalated: usize,
-    pub total_deescalated: usize,
-    pub net_change: i32,
-}
-```
-
-`DiffSummary` is a lightweight metadata envelope used by `RunManifest` to record the delta between two assessment runs.
-
-### Report Summary (`report_summary.rs`)
-
-Aggregated statistics and risk narrative generation from findings:
-
-```rust
-pub struct ReportSummary {
-    pub total_findings: usize,
-    pub by_severity: HashMap<String, usize>,
-    pub by_confidence: HashMap<String, usize>,
-    pub by_type: HashMap<String, usize>,
-    pub top_affected_assets: Vec<AssetCount>,
-    pub risk_narrative: String,
-    pub remediation_summary: Vec<String>,
-}
-
-pub struct AssetCount {
-    pub asset: String,
-    pub count: usize,
-}
-```
-
-`ReportSummary::from_findings()` builds a summary from a slice of `Finding` values. It aggregates counts by severity, confidence, and type; identifies the top 10 most-affected assets; deduplicates remediation suggestions; and generates a `risk_narrative` string.
-
-The risk narrative (`generate_risk_narrative()`) produces a severity-annotated text summary: critical findings trigger a "CRITICAL" prefix, high findings a "HIGH" prefix, and so on. If no findings exist, it returns `"No findings detected."`.
-
-### Scheduling (`schedule.rs`)
-
-Cron-based scan scheduling with priority queuing and rate limiting:
-
-```rust
-pub struct CronScheduler {
-    expressions: Vec<CronExpression>,
-}
-
-pub struct CronExpression {
-    pub second: u8,
-    pub minute: u8,
-    pub hour: u8,
-    pub day_of_month: u8,
-    pub month: u8,
-    pub day_of_week: u8,
-    // internal matchers for each field
-}
-
-pub struct ScanQueue {
-    queue: VecDeque<ScheduledScan>,
-    max_size: usize,
-    running: Option<ScheduledScan>,
-}
-
-pub struct RateLimiter {
-    requests_per_second: u32,
-    burst_size: u32,
-    tokens: u32,
-    last_refill: Instant,
-}
-```
-
-`CronScheduler` parses 5- or 6-field cron expressions (with optional seconds field) and evaluates them against `DateTime<Utc>`. It supports wildcards (`*`), exact values, and step expressions (`*/15`). `next_run()` performs a linear scan up to 7 days ahead.
-
-`ScanQueue` is a priority-based queue (max size 100 by default) that inserts scans in priority order (`Low < Normal < High < Critical`). Only one scan runs at a time via `start_next()`.
-
-`RateLimiter` implements a token bucket algorithm with configurable requests-per-second and burst size (2x rate).
-
-## Run Manifest (`run_manifest.rs`)
-
-The `RunManifest` provides a structured summary of a single assessment run. It is designed for regression-oriented workflows where runs must be comparable, reproducible, and diffable against a baseline.
-
-```rust
-pub struct RunManifest {
-    pub schema_version: String,
-    pub run_id: String,
-    pub started_at: DateTime<Utc>,
-    pub ended_at: DateTime<Utc>,
-    pub eggsec_version: String,
-    pub target_scope: String,
-    pub profile: String,
-    pub probe_intents: Vec<ProbeIntent>,
-    pub risk_budget: ProbeRisk,
-    pub feature_flags: Vec<String>,
-    pub observations: Vec<serde_json::Value>,
-    pub findings: Vec<serde_json::Value>,
-    pub artifacts: Vec<String>,
-    pub baseline_id: Option<String>,
-    pub diff_summary: Option<DiffSummary>,
-}
-```
-
-The manifest is a metadata envelope — it does not replace existing finding or diff types. Instead it wraps them with provenance (run identity, scope, profile, feature flags) so that two manifests can be meaningfully compared.
-
-For defense-lab regression workflows, a baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline via `baseline_id` and populate `diff_summary` with the delta. See `architecture/defense_lab.md` for the full workflow.
-
-The manifest is integrated into the pipeline output path: `PipelineReport` carries an optional `RunManifest` that is auto-generated after each run. The manifest is serialized alongside the report when output is written to disk.
-
-### `RunManifest::from_report()` (`run_manifest.rs:103-179`)
-
-Constructs a `RunManifest` from a completed `PipelineReport`. The conversion logic:
-
-- **`started_at`**: Computed as `now - report.total_duration_ms` (derived from the report's measured duration).
-- **`ended_at`**: Set to `Utc::now()`.
-- **`run_id`**: Generated via `uuid::Uuid::new_v4()`.
-- **`observations`**: Built by chaining three iterators:
-  1. Open ports → `{"type": "port", "port", "status", "service"}`
-  2. Services → `{"type": "service", "port", "service", "product", "version"}`
-  3. Interesting endpoints → `{"type": "endpoint", "path", "status_code", "content_length"}`
-- **`probe_intents`**: `ProbeIntent` values derived from successful `stage_results` via `stage.to_probe_intent()`.
-- **`feature_flags`**: All stage results formatted as `"stage:{name}"` (success) or `"stage:{name}:failed"` (failure).
-- **`findings`**: Left empty; populated separately via `populate_findings_from_report()`.
-
-`populate_findings_from_report()` (`run_manifest.rs:179-194`) generates a finding for each interesting endpoint with severity `Info`, category `"endpoint_discovery"`, and a description including the status code.
-
-## Key Types
-
-| Type | Location | Purpose |
-|------|----------|---------|
-| `RunManifest` | `run_manifest.rs` | Run-level metadata envelope for regression workflows |
-| `AgentFinding` | `agent.rs` | Core finding with evidence, remediation, confidence |
-| `FindingSummary` | `agent.rs` | Aggregated statistics by severity/confidence/type |
-| `ScanReportData` | `convert.rs` | Intermediate format for conversions |
-| `SeverityCounts` | `report.rs` | Severity breakdown with risk scoring (`risk_score()` method) |
-| `DiffSummary` | `diff.rs` | Lightweight diff envelope for run manifests |
-| `ReportSummary` | `report_summary.rs` | Aggregated statistics and risk narrative |
-| `TrendAnalysis` | `trend.rs` | Historical trend data |
-| `CronScheduler` | `schedule.rs` | Cron-based scan scheduling |
-| `ScanQueue` | `schedule.rs` | Priority-based scan queue |
-| `ScanSession` | `session.rs` | TUI session persistence |
-| `AiOutput` | `ai_schema.rs` | AI-consumable finding output with risk score |
-| `PdfGenerator` | `pdf.rs` | PDF report generation (feature-gated) |
-| `BaselineComparison` | `baseline.rs` | Regression detection against baseline |
-
-### Error Handling
-
-**Important**: Methods that perform I/O or serialization return `Result` types:
-- `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
-- `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
-- `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
-- `AttackGraphBuilder::to_html()` returns `Result<String, serde_json::Error>`
-
-Avoid using `unwrap_or_default()` on serialization - use explicit error handling instead.
-
-## Performance Notes
-
-**Hash Collections**: Use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for performance in:
-- `trend.rs` - `ResultComparator`, `TrendAnalyzer`
-- `agent.rs` - `FindingSummary`
-- `dedup.rs` - `DedupEngine::seen`
-- `diff.rs` - DiffEngine compare function
-- `baseline.rs` - BaselineComparison compare function
-- `session.rs` - `ScanSession::tab_states`, `ScanSession::results`, `TabSessionState::options`
-- `template.rs` - `ReportTemplateEngine::custom_templates`, `TemplateRenderContext::custom_data`
-- `attack_graph.rs` - `GraphNode::properties`
-- `sarif.rs` - `SarifResult::properties`
-- `junit.rs` - `JUnitBuilder::test_suites`
-- `report_summary.rs` - `ReportSummary::from_findings` (by_severity, by_confidence, by_type, asset_counts)
-
-All `HashMap` usage in the output module has been migrated to `FxHashMap`, including `report_summary.rs` (`by_severity`, `by_confidence`, `by_type`, `asset_counts`).
-
-## Lab Report Types (`lab_report.rs`)
-
-| Type | Purpose |
-|------|---------|
-| `LabDefenseReportSection` | Defense lab report section |
-| `ScopeSummary` | Scope summary for lab reports |
-| `BudgetSummary` | Resource budget summary |
-| `TargetResolutionSummary` | Target resolution summary |
-| `SkippedOperation` | Skipped operation record |
-
-## Extensions Module
-
-| Trait | Purpose |
-|-------|---------|
-| `SarifBuilderExt` | Extension trait for SARIF builder |
-| `JUnitBuilderExt` | Extension trait for JUnit builder |
+| Module | Variants | Score Mapping |
+|--------|----------|---------------|
+| `findings/mod.rs:37` | `Confirmed`, `High`, `Medium`, `Low`, `Informational` (5) | 1.0, 0.75, 0.5, 0.25, 0.0 |
+| `output/agent.rs:8` | `Confirmed`, `Likely`, `Possible`, `Unlikely` (4) | 1.0, 0.75, 0.5, 0.25 |
+| `recon/secrets.rs` | `High`, `Medium`, `Low` (3) | Similar |
+
+The `findings` module includes an `Informational` variant (score 0.0) that the other modules lack. Naming diverges (`High`/`Medium`/`Low` vs `Likely`/`Possible`/`Unlikely`).
+
+### `SeverityCounts` (`report.rs:56`)
+
+| Field | Type |
+|-------|------|
+| `critical` | `usize` |
+| `high` | `usize` |
+| `medium` | `usize` |
+| `low` | `usize` |
+| `info` | `usize` |
+
+Method `risk_score()` returns weighted sum capped at 100.0.
+
+## Integration Points
+
+### Producers of ScanReportData
+
+- **Dispatch workers**: Route `TaskResult`s through the output pipeline
+- **CLI handlers**: `handle_report` (`commands/handlers/report.rs`) loads/saves `ScanReportData`
+- **Wireless/mobile/db-pentest bridges**: Optional `to_scan_report_data()` methods produce `ScanReportData` from domain-specific types
+- **TUI report tab**: Consumes `ScanReportData` for display
+
+### Producers of AgentFinding
+
+- **convert.rs**: `From<&FindingData> for AgentFinding` (`convert.rs:282`)
+- **AgentFinding::from_scan_result()** (`agent.rs:185`): Parses JSON scan results into `Vec<AgentFinding>`
+- **Various module handlers**: Construct `AgentFinding` via builder pattern
+
+### ReportEnvelope Consumers
+
+- **Domain crates** (db-pentest, mobile, wireless): Convert domain-specific report types to `ReportEnvelope`
+- **Pipeline report**: `PipelineReport` carries an optional `RunManifest` that can include a `DiffSummary`
+
+## Testing
+
+### Test Counts by File (output crate)
+
+| File | Tests | Key Test Coverage |
+|------|-------|-------------------|
+| `agent.rs` | 2 | Finding creation, summary aggregation |
+| `ai_schema.rs` | 9 | Empty/critical/high/mixed findings, risk score cap, serialization roundtrip |
+| `audit_summary.rs` | 2 | Empty summary, multi-event aggregation |
+| `baseline.rs` | 10 | No changes, new, resolved, mixed, empty both sides, count helpers |
+| `convert.rs` | 3 | Mixed-case severity parsing for JUnit/SARIF, summary counts |
+| `dedup.rs` | 6 | FromStr parsing, default strategy, disabled/strict/fuzzy dedup, empty input |
+| `diff.rs` | 1 | Struct construction |
+| `envelope.rs` | 11 | EvidenceItem/FindingRecord/EvidenceManifest creation, redaction, serialization roundtrip, refresh manifest |
+| `escape.rs` | 4 | Fullwidth bypass detection, tab/CR quoting |
+| `junit.rs` | 2 | Builder construction, XML output validation |
+| `policy_summary.rs` | 2 | Default values, serialization |
+| `sarif.rs` | 1 | Builder construction, version/schema validation |
+| `schedule.rs` | 8 | Cron parsing, seconds, wildcard, step, next_run, queue complete/fail |
+| `trend.rs` | 15 | Comparator added/removed/no-change/same-title-different-category, risk trend, analyzer single/worsening/improving, average time, category counts, most common, default |
+
+**Total output crate tests**: 66 (verified by grep).
+
+### Test Counts by File (engine output + findings)
+
+| File | Tests |
+|------|-------|
+| `attack_graph.rs` | 3 |
+| `lab_report.rs` | 2 |
+| `pdf.rs` | 3 |
+| `report_summary.rs` | 10 |
+| `run_manifest.rs` | 4 |
+| `findings/mod.rs` | 13 |
+| `findings/store.rs` | 4 |
+| `findings/lifecycle.rs` | 7 |
+
+**Total engine output + findings tests**: 46.
+
+**Grand total**: 112 tests across output and findings modules.
+
+## Invariants & Gotchas
+
+1. **`eggsec-output` must not depend on `eggsec` or `eggsec-runtime`** — enforced by `scripts/check-architecture-guards.sh`
+2. **PDF lives in the engine crate**, not in `eggsec-output` — behind `pdf` feature gate
+3. **Two separate `EvidenceKind` enums** — `findings/mod.rs` (13 variants) vs `envelope.rs` (20 variants); different abstraction levels
+4. **Two separate `FindingStatus` enums** — `agent.rs` (5 variants) vs `findings/lifecycle.rs` (6 variants); not yet unified
+5. **Three separate `Confidence` enums** — known divergence documented in `findings.md`
+6. **Baseline comparison uses `AgentFinding.id`**, not fingerprint — fingerprint-based diff is not implemented
+7. **`DedupEngine` uses unbounded `FxHashSet`** — no capacity limit; could grow without bound across long sessions
+8. **`ScanSession` is NOT atomic** — writes the full JSON file; partial write on crash leaves corrupted state
+9. **`TrendAnalyzer` LRU cache** — max 1000 entries; eviction is LRU, not time-based
+10. **SARIF is JSON-based** (RFC 8259), not XML — XXE does not apply
+11. **JUnit uses `quick_xml::Writer`** in write-only mode — no entity expansion, XXE-safe
+12. **HTML escaping** applied consistently via `escape_html()` on all user content in `html.rs`
+13. **CSV escaping** uses NFKC normalization + formula injection protection (leading `=`, `+`, `-`, `@`, `\t`, `\r`)
+14. **Markdown** does NOT escape pipe characters in finding fields — tables could break with `|` in content
+15. **PDF truncates to 30 findings** per page with a warning; no multi-page support
+16. **`ScanQueue` max size** defaults to 100; priority-based insertion
+17. **`CronScheduler::next_run()`** does linear scan up to 7 days ahead — O(7*86400) worst case
 
 ## Security Notes
 
 ### XXE Safety
 
-Both SARIF and JUnit modules are immune to XXE attacks:
-- **SARIF**: Uses `serde_json` (JSON format), no XML parsing
-- **JUnit**: Uses `quick_xml::Writer` in write-only mode without entity expansion
+- **SARIF**: Uses `serde_json` (JSON format), no XML parsing — immune to XXE
+- **JUnit**: Uses `quick_xml::Writer` in write-only mode without entity expansion — immune to XXE
 
 ### CSV Formula Injection Protection
 
-`escape_csv()` in `escape.rs` uses NFKC normalization and quoting to prevent formula injection attacks.
+`escape_csv()` (`escape.rs:16`) uses NFKC normalization and quoting to prevent formula injection. Detects leading formula characters (`=`, `+`, `-`, `@`, `\t`, `\r`) and wraps in double-quoted field with internal double-quote escaping.
 
-## Integration
+### HTML Injection Prevention
 
-The Output module is typically the final stage in any Eggsec operation. It can also be used independently to convert or merge existing Eggsec result files.
+`escape_html()` (`escape.rs:1`) encodes `&`, `<`, `>`, `"`, `'` — all user content passed through before HTML template insertion.
 
-```rust
-use eggsec::output::{convert_to_csv, load_scan_report};
+## Performance Notes
 
-let report = load_scan_report("scan.json")?;
-let csv = convert_to_csv(&report);
-```
+**Hash Collections**: Use `rustc_hash::FxHashMap`/`FxHashSet` instead of `std::collections::HashMap` in:
+- `trend.rs` — `ResultComparator`, `TrendAnalyzer`
+- `agent.rs` — `FindingSummary`
+- `dedup.rs` — `DedupEngine::seen`
+- `baseline.rs` — `BaselineComparison::compare()`
+- `session.rs` — `ScanSession::tab_states`, `ScanSession::results`, `TabSessionState::options`
+- `sarif.rs` — `SarifResult::properties`
+- `junit.rs` — `JUnitBuilder::test_suites`
+- `report_summary.rs` — `ReportSummary::from_findings()` (all maps)
+- `envelope.rs` — Notable: `BaselineSummary::severity_deltas` uses `std::collections::HashMap`, not FxHashMap (minor inconsistency)
+
+## Bug Sweep (Report Only)
+
+| Location | Issue | Severity |
+|----------|-------|----------|
+| `dedup.rs:26` | `DedupEngine::seen: FxHashSet<String>` has **no capacity bound**. Long-running sessions with many findings could grow this set without limit. | Low |
+| `markdown.rs:196` | `escape_pipe` closure only escapes `\|` but markdown tables can also break on newlines in content. Not a security issue but could produce malformed output. | Informational |
+| `session.rs:38-44` | `ScanSession::save()` writes the full JSON file non-atomically. A crash during write leaves corrupted state. No temp-file-and-rename pattern. | Low |
+| `pdf.rs:142-205` | `generate_html()` is `#[cfg(test)]`-only test helper — its HTML output does NOT escape finding content. Safe because it's test-only, but if accidentally used in production would be an injection vector. | Informational |
+| `envelope.rs:377` | `BaselineSummary::severity_deltas` uses `std::collections::HashMap` while the rest of the output crate uses `FxHashMap`. Minor performance inconsistency. | Informational |
+
+---
+
+*Last verified against source: 2026-08-25*

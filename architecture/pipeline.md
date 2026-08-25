@@ -1,153 +1,204 @@
 # Pipeline Module
 
-The Pipeline module allows for the orchestration of complex security assessment workflows by chaining multiple Eggsec tasks together.
+Orchestrates multi-stage security assessments by chaining scanner, fuzzer, WAF, recon, load-test, and vulnerability stages into a single pipeline with context sharing, session persistence, and risk-budget enforcement.
 
-## Core Concepts (`src/pipeline/`)
+## Role & Responsibilities
 
-### Stage (`stage.rs`)
+The pipeline module provides a deterministic, repeatable execution harness that:
 
-A `Stage` represents a single discrete task in the pipeline, such as a port scan, a tech detection run, or a targeted fuzzer execution.
+1. Resolves a `ScanProfile` into an ordered list of `Stage` values.
+2. Executes stages sequentially (or concurrently by dependency wave), passing inter-stage results through a shared `PipelineContext`.
+3. Enforces per-stage risk budgets against the profile's maximum, skipping stages that exceed the budget.
+4. Persists session checkpoints after each stage so interrupted runs can be resumed.
+5. Aggregates all stage outputs into a `PipelineReport` and writes it in the requested format.
 
-**Available Stages:**
-- `PortScan` - TCP port scanning
-- `Fingerprint` - Service identification (banner grabbing, HTTP fingerprinting)
-- `EndpointScan` - HTTP endpoint discovery (admin panels, API paths, config files)
-- `Fuzz` - Security payload fuzzing (SQLi, XSS, SSRF, etc.)
-- `LoadTest` - HTTP load testing and benchmarking
-- `Waf` - WAF detection and bypass testing
-- `Recon` - Passive reconnaissance (DNS, WHOIS, SSL, subdomains)
-- `Vuln` - Vulnerability assessment with CVSS scoring and asset criticality
-- `DbPentest` - Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; feature-gated behind `db-pentest`)
-- `WebProxy` - Web proxy intercept and traffic analysis (feature-gated behind `web-proxy`)
+## Location & Feature Gating
 
-**Selection**: Stages are selected from a profile (for example `quick`, `web`, `full`) or from an explicit comma-separated list via `--stages`.
+| Item | Path | Feature gate |
+|------|------|--------------|
+| Module root | `crates/eggsec/src/pipeline/mod.rs` | None (always compiled) |
+| Stage definitions | `crates/eggsec/src/pipeline/stage.rs` | None |
+| Executor | `crates/eggsec/src/pipeline/executor.rs` | None |
+| Context | `crates/eggsec/src/pipeline/context.rs` | None |
+| Session persistence | `crates/eggsec/src/pipeline/session.rs` | None |
+| Report generation | `crates/eggsec/src/pipeline/report.rs` | None |
+| PipelineTool (tool registry) | `crates/eggsec/src/tool/implementations/pipeline.rs` | `tool-api` |
+| CLI entry points (`run_cli`, `resume_cli`) | `crates/eggsec/src/pipeline/mod.rs:248-312` | `cli` |
+| Callback entry points (`run_with_callback`, `run_with_callback_for_profile`) | `crates/eggsec/src/pipeline/mod.rs:137-184` | `tool-api` |
+| CLI args (`ScanArgs`, `ResumeArgs`) | `crates/eggsec/src/cli/` | `cli` |
+| `DbPentest` stage variant | `crates/eggsec/src/pipeline/stage.rs:17` | `db-pentest` |
+| `WebProxy` stage variant | `crates/eggsec/src/pipeline/stage.rs:19` | `web-proxy` |
 
-**Profiles** (`Stage::from_profile()`):
-| Profile | Stages |
-|---------|--------|
-| `quick` | PortScan → Fingerprint |
-| `endpoint` | PortScan → Fingerprint → EndpointScan |
-| `web` | PortScan → Fingerprint → EndpointScan → Fuzz |
-| `full` | PortScan → Fingerprint → EndpointScan → Fuzz → LoadTest |
-| `waf` | PortScan → Fingerprint → EndpointScan → Waf |
-| `api` | PortScan → Fingerprint → EndpointScan → Fuzz |
-| `recon` | PortScan → Fingerprint → EndpointScan → Recon → Fuzz |
-| `stealth` | PortScan → Fingerprint → EndpointScan → Fuzz |
-| `deep` | PortScan → Fingerprint → EndpointScan → Fuzz |
-| `vuln` | PortScan → Fingerprint → Vuln → EndpointScan → Recon → Fuzz |
-| `auth` | PortScan → Fingerprint → EndpointScan → Fuzz | (JWT/OAuth/IDOR-focused fuzzing via fuzzer payloads; distinct from CLI `auth-test` which uses `auth/` module for credential/brute/MFA control validation) |
-| `defense-lab` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz |
-| `synvoid-local` | PortScan → Fingerprint → EndpointScan → Waf |
-| `waf-regression` | PortScan → Fingerprint → Waf |
-| `protocol-edge` | PortScan → Fingerprint |
-| `nse-safe` | PortScan → Fingerprint → EndpointScan |
-| `web-proxy` | PortScan → Fingerprint → EndpointScan → Fuzz | (Web proxy interception via `Stage::WebProxy`; requires `web-proxy` feature) |
-| `db-regression` | `Stage::DbPentest` (when `db-pentest` feature enabled); falls back to `PortScan → Fingerprint → EndpointScan → Waf → Fuzz` when feature absent |
+**No module-level feature gate**: the pipeline module compiles unconditionally. The `cli` feature gates only the `ScanArgs`/`ResumeArgs` constructors (`from_args`, `from_args_with_config`, `from_args_with_tui_mode`); the canonical constructors `Pipeline::new()` and `Pipeline::from_profile()` are always available.
 
-**Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, `jwt`, `fuzzing`, `fuzzer`, `loadtest`, `load-test`, `vulnerability`, `vuln-assess`, `proxy`, `webproxy`, `intercept` are normalized into canonical stages via `Stage::from_string()`.
+## Architecture
 
-**Methods**:
-- `to_probe_intent()` — Maps stage to `ProbeIntent` category (Discovery, Fingerprint, ServiceValidation, EvasionResistance, LoadBearing, WafEvaluation)
-- `to_probe_risk()` — Maps stage to minimum required `ProbeRisk` level (Passive, SafeActive, Intrusive, Stress)
+### Stage Enum (`pipeline/stage.rs:6-20`)
 
-**Constants**:
-- `DEFAULT_SCAN_PORTS` — `"80,443"`
-- `EXTENDED_SCAN_PORTS` — `"21,22,23,25,53,80,110,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,27017,9092,9200,5672,2181,2375,2376,6443,10250,3000,5000,8000,9000,4200,5601,9090"`
+10 variants, 8 unconditional + 2 feature-gated:
 
-**Functions**:
-- `profile_from_str(s)` — Parse a profile name string into `ScanProfile` variant
-- `parse_stages(s)` — Parse comma-separated stage names into `Vec<Stage>`
+| Variant | Display | ProbeIntent | ProbeRisk | Feature gate |
+|---------|---------|-------------|-----------|--------------|
+| `PortScan` | "Port Scan" | Discovery | SafeActive | — |
+| `Fingerprint` | "Fingerprint" | Fingerprint | Passive | — |
+| `EndpointScan` | "Endpoint Scan" | ServiceValidation | SafeActive | — |
+| `Fuzz` | "Fuzzing" | EvasionResistance | Intrusive | — |
+| `LoadTest` | "Load Test" | LoadBearing | Stress | — |
+| `Waf` | "WAF Test" | WafEvaluation | Intrusive | — |
+| `Recon` | "Recon" | Discovery | Passive | — |
+| `Vuln` | "Vulnerability Assessment" | ServiceValidation | SafeActive | — |
+| `DbPentest` | "DB Pentest" | ServiceValidation | Intrusive | `db-pentest` |
+| `WebProxy` | "Web Proxy Intercept" | WafEvaluation | Intrusive | `web-proxy` |
 
-### Executor (`executor.rs`)
+### Stage Aliases (`stage.rs:145-180`)
 
-The `executor.rs` file is responsible for running the pipeline from start to finish.
+`Stage::from_string()` normalizes user-facing aliases (case-insensitive):
 
-- **Sequential Execution**: Stages run in linear order (`for stage in &self.stages`).
-- **Concurrent Execution**: `run_concurrent()` method at `executor.rs:380-474` runs stages in dependency waves using `futures::future::join_all()` within each wave.
-- **Result Passing**: Output from one stage (for example open ports and detected HTTP services) is persisted into `PipelineContext` and consumed by later stages.
-- **Failure Recording**: Stage errors are recorded per stage in `StageResult` and surfaced in the report. CLI entrypoints return `ScanFailed` if any stage failed.
-- **Tool Integration**: `PipelineTool` implements `SecurityTool` for AI agent tool registry.
+| Alias group | Maps to |
+|-------------|---------|
+| `port`, `portscan`, `port-scan` | `PortScan` |
+| `fingerprint`, `fp` | `Fingerprint` |
+| `endpoint`, `endpoints`, `endpoint-scan` | `EndpointScan` |
+| `fuzz`, `fuzzer`, `fuzzing`, `graphql`, `oauth`, `jwt` | `Fuzz` |
+| `load`, `loadtest`, `load-test` | `LoadTest` |
+| `waf` | `Waf` |
+| `recon` | `Recon` |
+| `vuln`, `vulnerability`, `vuln-assess` | `Vuln` |
+| `db`, `dbpentest`, `db-pentest` | `DbPentest` (returns `None` without `db-pentest`) |
+| `proxy`, `webproxy`, `web-proxy`, `intercept` | `WebProxy` (returns `None` without `web-proxy`) |
 
-#### Pipeline Struct Fields (`executor.rs:39-52`)
+### ScanProfile Enum (`types.rs:121-142`)
 
-```rust
-pub struct Pipeline {
-    target: String,
-    stages: Vec<Stage>,
-    profile: ScanProfile,
-    risk_budget: ProbeRisk,
-    concurrency: usize,
-    concurrent_stages: bool,
-    common: CommonHttpArgs,
-    spoof_config: SpoofConfig,        // IP spoofing, decoy, fragment, scan type options
-    context: Arc<Mutex<PipelineContext>>,
-    session_path: Option<String>,     // Path for session checkpoint persistence (*.session/*.session.json)
-    tui_mode: bool,
-    config: Option<EggsecConfig>,    // Optional config for TLS, concurrency, default settings
-}
+Exactly 18 variants:
+
+```
+Quick, Endpoint, Web, Waf, Full, Api, Recon, Stealth, Deep, Vuln,
+Auth, DefenseLab, SynvoidLocal, WafRegression, ProtocolEdge, NseSafe,
+DbRegression, WebProxy
 ```
 
-#### PipelineProxyFinding (`executor.rs:19-28`)
+### Profile → Stage Mapping (`stage.rs:42-143`)
 
-Feature-gated on `web-proxy`. Simple finding type for pipeline proxy stage results:
-- `title: String`
-- `description: String`
-- `severity: String`
-- `category: String`
-- `location: String`
+| # | Profile | Stages | Stage count |
+|---|---------|--------|:-----------:|
+| 1 | `Quick` | PortScan → Fingerprint | 2 |
+| 2 | `Endpoint` | PortScan → Fingerprint → EndpointScan | 3 |
+| 3 | `Web` | PortScan → Fingerprint → EndpointScan → Fuzz | 4 |
+| 4 | `Waf` | PortScan → Fingerprint → EndpointScan → Waf | 4 |
+| 5 | `Full` | PortScan → Fingerprint → EndpointScan → Fuzz → LoadTest | 5 |
+| 6 | `Api` | PortScan → Fingerprint → EndpointScan → Fuzz | 4 |
+| 7 | `Recon` | PortScan → Fingerprint → EndpointScan → Recon → Fuzz | 5 |
+| 8 | `Stealth` | PortScan → Fingerprint → EndpointScan → Fuzz | 4 |
+| 9 | `Deep` | PortScan → Fingerprint → EndpointScan → Fuzz | 4 |
+| 10 | `Vuln` | PortScan → Fingerprint → EndpointScan → Recon → Vuln → Fuzz | 6 |
+| 11 | `Auth` | PortScan → Fingerprint → EndpointScan → Fuzz | 4 |
+| 12 | `DefenseLab` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz | 5 |
+| 13 | `SynvoidLocal` | PortScan → Fingerprint → EndpointScan → Waf | 4 |
+| 14 | `WafRegression` | PortScan → Fingerprint → Waf | 3 |
+| 15 | `ProtocolEdge` | PortScan → Fingerprint | 2 |
+| 16 | `NseSafe` | PortScan → Fingerprint → EndpointScan | 3 |
+| 17 | `DbRegression` | `DbPentest` (with `db-pentest`); else PortScan → Fingerprint → EndpointScan → Waf → Fuzz | 1 or 5 |
+| 18 | `WebProxy` | `WebProxy` (with `web-proxy`); else PortScan → Fingerprint → EndpointScan → Waf → Fuzz | 1 or 5 |
 
-- `spoof_config` (`SpoofConfig`): Configures source IP spoofing, decoy addresses, fragmentation, scan type, packet trace, max rate, and TTL. Built from CLI args via `SpoofConfig::from_args()`.
-- `config` (`Option<EggsecConfig>`): Optional loaded config file. Used to read `http.verify_tls`, `http.timeout_secs`, `scan.default_concurrency`, and other settings. When `None`, defaults are used.
-- `session_path` (`Option<String>`): Extracted from `--output` arg when the path ends with `.session` or `.session.json`. When set, a `PipelineSession` checkpoint is written after each stage completes.
+### Profile Metadata (`types.rs:260-385`)
 
-#### Pipeline Methods
+Each profile carries additional policy metadata:
 
-- `new(target)` — Construct an empty manual pipeline (stages added via `add_stage`)
-- `from_profile(target, profile)` — Construct a pipeline from a predefined [`ScanProfile`] with canonical stage selection, risk budget, and profile state; parser-independent
-- `from_session(session)` — Reconstruct pipeline from a `PipelineSession` checkpoint
-- `with_spoof_config(spoof_config)` — Set IP spoofing/decoy/fragment configuration
-- `with_config(config)` — Set `EggsecConfig` for TLS, concurrency, defaults
-- `add_stage(stage)` — Append a stage to the pipeline
-- `with_concurrency(concurrency)` — Set concurrent request count
-- `with_concurrent_stages(enabled)` — Enable/disable concurrent stage execution
-- `has_stages()` — Returns `true` if pipeline has stages
-- `get_stages()` — Returns `&[Stage]`
-- `dependency_waves()` — Partition stages into dependency waves for concurrent execution
-- `validate_defense_lab_scope()` — Validate defense-lab profiles target private/loopback only
-- `validate_feature_gates()` — Validate required compile-time features are enabled
-- `validate_stage_risk(stage)` — Check if a stage's risk level fits within the profile's budget
+| Method | Purpose | Values used in pipeline |
+|--------|---------|------------------------|
+| `max_risk_budget()` | Maximum `ProbeRisk` allowed | Quick/ProtocolEdge/NseSafe → SafeActive; Stealth → Passive; DefenseLab/SynvoidLocal/WafRegression/DbRegression/WebProxy/Endpoint/Web/Waf/Recon/Vuln/Auth → Intrusive; Full/Api/Deep → Stress |
+| `requires_private_scope()` | Defense-lab gating | DefenseLab, SynvoidLocal, DbRegression, WafRegression, ProtocolEdge, NseSafe, WebProxy → true |
+| `requires_packet_inspection()` | Feature gate | ProtocolEdge → true |
+| `requires_nse()` | Feature gate | NseSafe → true |
+| `operation_mode()` | StandardAssessment vs DefenseLab | Standard: Quick…Auth; DefenseLab: DefenseLab…WebProxy |
+| `intended_uses()` | Policy categories | Maps to `WebAssessment`, `ApiAssessment`, `WafRegression`, `SynvoidRegression`, `ProtocolEdgeValidation`, `CodingAgentVerification` |
 
-### Pipeline Context (`context.rs`)
+### Dependency Waves for Concurrent Execution (`executor.rs:233-268`)
 
-Maintains the state of a running pipeline, including intermediate results, shared variables, and the overall status.
+When `concurrent_stages = true`, `Pipeline::run_concurrent()` partitions stages into waves:
 
-```rust
-pub struct PipelineContext {
-    pub target: String,
-    pub open_ports: Vec<u16>,
-    pub services: FxHashMap<u16, ServiceFingerprint>,
-    pub endpoints: Vec<EndpointResult>,
-    pub port_results: Vec<PortResult>,
-    pub http_ports: Vec<u16>,
-    pub vuln_assessment: Option<VulnAssessment>,
-    pub load_test_results: Option<LoadTestResults>,
-    #[cfg(feature = "web-proxy")]
-    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
-}
+| Wave | Stages | Dependency |
+|:----:|--------|------------|
+| 0 | PortScan, Recon | Independent |
+| 1 | Fingerprint | Needs open_ports from PortScan |
+| 2 | EndpointScan | Needs http_ports from Fingerprint |
+| 3 | Fuzz, Waf, LoadTest, Vuln, DbPentest, WebProxy | Needs base_url from EndpointScan |
+
+Stages within a wave execute via `futures::future::join_all()`. Waves execute sequentially.
+
+### Constants
+
+| Constant | Value | Location |
+|----------|-------|----------|
+| `DEFAULT_SCAN_PORTS` | `"80,443"` | `stage.rs:229` |
+| `EXTENDED_SCAN_PORTS` | 37 ports (21–9090) | `stage.rs:231` |
+| Stage timeout | 300 seconds | `executor.rs:387` |
+| Default concurrency | 10 | `executor.rs:64,92,126` |
+| Load test requests | 100 | `executor.rs:1110` |
+| Load test timeout | 10 seconds | `executor.rs:1112` |
+| Endpoint scan timeout | 10 seconds | `executor.rs:1028` |
+| Fingerprint timeout | 5 seconds | `executor.rs:986` |
+| Port scan timeout | 2 seconds | `executor.rs:959` |
+| WAF timeout | 15 seconds | `executor.rs:1151` |
+
+## Behavior / Flow
+
+### Pipeline Execution Lifecycle
+
+```
+Pipeline::run()
+  ├─ validate_defense_lab_scope()       // reject public targets for defense-lab profiles
+  ├─ validate_feature_gates()           // check packet-inspection/nse requirements
+  ├─ if concurrent_stages → run_concurrent()
+  │     └─ dependency_waves() → join_all per wave
+  └─ else sequential loop:
+       for stage in self.stages:
+         ├─ validate_stage_risk()       // skip if exceeds budget
+         ├─ tokio::time::timeout(300s, execute_stage(stage))
+         ├─ record StageResult { stage, duration_ms, success, error }
+         └─ if session_path → save PipelineSession checkpoint
+       └─ build PipelineReport + RunManifest
 ```
 
-Data flow:
-1. `run_port_scan()` → `context.update_ports()` → populates `open_ports`, `port_results`
-2. `run_fingerprint()` → `context.update_services()` → populates `services`, `http_ports`
-3. `run_endpoint_scan()` → `context.update_endpoints()` → populates `endpoints`
-4. Subsequent stages use `context.get_base_url()` to construct target URLs
+### Stage Dispatch (`executor.rs:595-610`)
 
-### Session (`session.rs`)
+`execute_stage()` routes to type-specific runners:
 
-Manages persistence for resumable pipeline runs via JSON snapshots (`PipelineSession`).
-Session checkpoints are written only when output path is explicitly a session-like file name (`*.session` or `*.session.json`) to avoid colliding with report outputs.
+| Stage | Engine call | Config type |
+|-------|-------------|-------------|
+| PortScan | `scanner::ports::scan_ports()` | `PortScanConfig` |
+| Fingerprint | `scanner::fingerprint::fingerprint_services()` | Positional args |
+| EndpointScan | `scanner::endpoints::scan_endpoints()` | `EndpointScanConfig` |
+| Fuzz | `fuzzer::engine::FuzzEngine::new_with_tui_mode().run()` | `FuzzConfig` |
+| LoadTest | `loadtest::LoadTestRunner::from_config_with_engine().run()` | `LoadTestRunConfig` |
+| Waf | `waf::WafEngine::new().run()` | `WafConfig` |
+| Recon | `recon::runner::run_full_recon_from_request()` | `ReconRequest` |
+| Vuln | Internal `run_vuln()` | Collects findings from context |
+| DbPentest | `db_pentest::run_db_pentest_cli()` | `DbPentestRunArgs` |
+| WebProxy | Internal `run_web_proxy_stage()` | Dry-run proxy analysis |
 
-#### PipelineSession Fields
+### Context Data Flow (`context.rs:27-85`)
+
+```
+PipelineContext::new(target)
+  → PortScan::run_port_scan()      → update_ports()      → open_ports, port_results
+  → Fingerprint::run_fingerprint() → update_services()   → services (FxHashMap), http_ports
+  → EndpointScan::run_endpoint_scan() → update_endpoints() → endpoints
+  → Fuzz/Waf/LoadTest use context.get_base_url() → "https://{target}" or "http://{target}:{port}"
+  → Vuln::run_vuln()               → update_vuln_assessment()
+  → LoadTest::run_load_test()      → update_load_test_results()
+  → WebProxy::run_web_proxy_stage() → update_web_proxy_report()
+```
+
+### Session Persistence (`session.rs`)
+
+- **Trigger**: `session_path` is set when `--output` ends with `.session` or `.session.json`.
+- **Format**: Single JSON file, written atomically via `OpenOptions` with `truncate(true)` + `write(true)`.
+- **Unix permissions**: `0o600` (owner read/write only) on Unix systems (`session.rs:31`).
+- **Checkpoint timing**: After each stage completes (sequential), or once after all waves complete (concurrent).
+- **Resume**: `Pipeline::from_session(session)` restores remaining stages, context, spoof config, concurrency, and config.
+
+### PipelineSession Fields (`session.rs:9-23`)
 
 ```rust
 pub struct PipelineSession {
@@ -163,107 +214,121 @@ pub struct PipelineSession {
 }
 ```
 
-### Report (`report.rs`)
+### Report Generation (`report.rs`)
 
-`PipelineReport` aggregates results from all stages. Output formats:
-- `Display` - Human-readable console output
-- `generate_html()` - Styled HTML report (**free function**, not a method)
-- `generate_csv()` - CSV report (**free function**, not a method)
-- `generate_markdown()` - Markdown report (**free function**, not a method)
-- SARIF/JUnit via `output/` module
+`PipelineReport` aggregates all stage results plus collected data. Output formats:
 
-#### PipelineReport Struct (`report.rs:13-31`)
+| Format | Function | Location |
+|--------|----------|----------|
+| Display (console) | `impl Display` | `report.rs:34-147` |
+| HTML | `report::generate_html()` (free fn) | `report.rs:172` |
+| CSV | `report::generate_csv()` (free fn) | `report.rs:304` |
+| Markdown | `report::generate_markdown()` (free fn) | `report.rs:373` |
+| JSON | `serde_json::to_string_pretty()` | `mod.rs:78-92` |
+| SARIF | `SarifBuilder::with_report()` | `mod.rs:98-101` |
+| JUnit | `JUnitBuilder::with_report()` | `mod.rs:104-107` |
 
-```rust
-pub struct PipelineReport {
-    pub target: String,
-    pub total_duration_ms: u64,
-    pub stage_results: Vec<StageResult>,
-    pub open_ports: Vec<PortResult>,
-    pub services: Vec<ServiceFingerprint>,
-    pub endpoints: Vec<EndpointResult>,
-    #[serde(skip)]
-    pub checkpoint_error: Option<String>,   // Session save error, if any
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manifest: Option<RunManifest>,      // Run manifest for regression workflows
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vuln_assessment: Option<VulnAssessment>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub load_test_results: Option<LoadTestResults>,
-    #[cfg(feature = "web-proxy")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
-}
+A `RunManifest` is populated after execution for regression workflows (`executor.rs:462-465`).
+
+## Security Model
+
+The pipeline itself is a **policy-free executor**. All authorization and scope enforcement happens upstream:
+
+- **CLI**: `handle_scan()` (`commands/handlers/scan.rs:176`) calls `pipeline::run_cli()` after scope validation.
+- **Tool API**: `PipelineTool::execute()` (`tool/implementations/pipeline.rs:48`) runs through the `SecurityTool` trait, which is invoked by `EnforcedDispatcher::dispatch_checked()`.
+- **Dispatch**: The runtime bridge converts `TaskKind::Pipeline` → `OperationDescriptor` and issues an `ApprovedOperation` before invoking the pipeline.
+
+Within the pipeline, the only security-relevant checks are:
+1. **Defense-lab scope validation** (`executor.rs:271-312`): rejects public targets for defense-lab profiles.
+2. **Feature-gate validation** (`executor.rs:314-333`): rejects profiles requiring `packet-inspection` or `nse` when those features are absent.
+3. **Risk-budget enforcement** (`executor.rs:339-351`): skips stages whose `ProbeRisk` exceeds the profile's budget.
+
+## Public API
+
+### Pipeline Struct (`executor.rs:41-54`)
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new` | `new(target: &str) -> Self` | Empty manual builder; profile defaults to Quick |
+| `from_profile` | `from_profile(target: &str, profile: ScanProfile) -> Self` | Canonical profile constructor |
+| `from_args` | `from_args(args: ScanArgs) -> Self` | CLI constructor (`cli` feature) |
+| `from_args_with_config` | `from_args_with_config(args, config) -> Self` | CLI + config (`cli` feature) |
+| `from_args_with_tui_mode` | `from_args_with_tui_mode(args, config, tui_mode) -> Self` | CLI + TUI mode (`cli` feature) |
+| `from_session` | `from_session(session: PipelineSession) -> Self` | Resume from checkpoint |
+| `with_spoof_config` | `with_spoof_config(self, spoof_config) -> Self` | Set IP spoofing config |
+| `with_config` | `with_config(self, config) -> Self` | Set EggsecConfig |
+| `add_stage` | `add_stage(self, stage) -> Self` | Append a stage |
+| `with_concurrency` | `with_concurrency(self, concurrency) -> Self` | Set request concurrency |
+| `with_concurrent_stages` | `with_concurrent_stages(self, enabled) -> Self` | Enable concurrent execution |
+| `has_stages` | `has_stages(&self) -> bool` | Check if stages are present |
+| `get_stages` | `get_stages(&self) -> &[Stage]` | Get stage list |
+| `run` | `run(&self) -> Result<PipelineReport>` | Execute pipeline |
+
+### CLI Entry Points (`mod.rs`)
+
+| Function | Feature gate | Description |
+|----------|-------------|-------------|
+| `run_cli(args, config)` | `cli` | Standard CLI execution |
+| `run_cli_with_callback(args, config, callback)` | `cli` + `tool-api` | CLI + finding callback |
+| `run_with_callback(target, config, callback)` | `tool-api` | Parser-independent; defaults to Quick |
+| `run_with_callback_for_profile(target, profile, config, callback)` | `tool-api` | Profile-aware callback entry |
+| `resume_cli(args, config)` | `cli` | Resume from session file |
+
+### PipelineTool (`tool/implementations/pipeline.rs`)
+
+Implements `SecurityTool` trait:
+- `id()` → `"scan"`
+- `name()` → `"Security Assessment Pipeline"`
+- `category()` → `ToolCategory::Pipeline`
+- Accepts `profile` parameter (defaults to `"quick"`)
+- Wraps `run_with_callback_for_profile()` with a `tokio::time::timeout` of `stage_count * 120` seconds (clamped 60–600s)
+
+## Integration Points
+
+| Surface | Entry point | Flow |
+|---------|-------------|------|
+| CLI `scan` command | `handle_scan()` → `pipeline::run_cli()` | `ScanArgs` → `Pipeline::from_args_with_config()` → `run()` |
+| CLI `resume` command | `handle_resume()` → `pipeline::resume_cli()` | `ResumeArgs` → `session::load()` → `Pipeline::from_session()` → `run()` |
+| CLI `plan` / `ci` commands | Use pipeline indirectly via `TaskKind::Pipeline` | Dispatch → `dispatch_inner()` → pipeline |
+| Tool registry | `PipelineTool::execute()` | `ToolRequest` → `run_with_callback_for_profile()` |
+| Dispatch (TaskKind::Pipeline) | `dispatch::executors` | `TaskKind::Pipeline` → pipeline entry |
+
+## Testing
+
+| Test suite | Path | What it covers |
+|------------|------|----------------|
+| Unit tests | `crates/eggsec/src/pipeline/stage.rs:259-458` | Stage parsing, aliases, profile mapping, probe intent/risk, defense-lab profile stage counts |
+| Unit tests | `crates/eggsec/src/pipeline/executor.rs:1275-1513` | Profile constructor state, risk budget regression, defense-lab scope validation, concurrent wave assignment |
+| Integration tests | `crates/eggsec/tests/pipeline_stage_tests.rs` | Display, from_string aliases, case insensitivity, profile stage invariants |
+| Integration tests | `crates/eggsec/tests/pipeline_tests.rs` | Context, profile mapping, builder, report failure helpers |
+| Integration tests | `crates/eggsec/tests/pipeline_e2e_tests.rs` | Port parsing, config defaults, scope rules |
+
+```bash
+cargo test --lib -p eggsec pipeline::
+cargo test -p eggsec --test pipeline_stage_tests
+cargo test -p eggsec --test pipeline_tests
+cargo test -p eggsec --test pipeline_e2e_tests
 ```
 
-**Note**: `generate_html(report: &PipelineReport)` at `report.rs:127` and `generate_csv(report: &PipelineReport)` at `report.rs:259` are free functions that take `&PipelineReport` as a parameter, NOT methods on the struct. Call them as `report::generate_html(&report)`.
+## Invariants & Gotchas
 
-**Key Field:** `checkpoint_error: Option<String>` at `report.rs:22` - captures any error from session checkpoint saves during pipeline execution. Logged at warn level when set. Skipped during serialization.
+1. **Stage timeout is 300s per stage** (`executor.rs:387`), not per-pipeline. A pipeline with 6 stages may run up to 30 minutes.
+2. **Session checkpointing is not atomic across stages**: if the process crashes mid-stage, the stage's results are lost but earlier checkpoints survive.
+3. **Concurrent mode does not checkpoint between waves**: the session is saved only once after all waves complete (`executor.rs:550-570`).
+4. **`run_concurrent()` does not check feature gates or defense-lab scope**: those are checked in `run()` before dispatching to `run_concurrent()`.
+5. **`StageResult.duration_ms` is `#[serde(skip)]`**: it is not serialized to JSON output.
+6. **`generate_html()` and `generate_csv()` are free functions**, not methods on `PipelineReport`. Call as `report::generate_html(&report)`.
+7. **The `DbRegression` and `WebProxy` profiles have conditional stage lists**: they map to a single feature-gated stage when the feature is enabled, or fall back to a defense-lab-like stage sequence when disabled.
+8. **Fuzz stage adapts payload types by profile**: Api → `"graphql,jwt,oauth"`, Stealth → `"all"` (no mutation), Deep → `"all"` with mutation, Auth → `"jwt,oauth,idor"`, others → `"all"` (`executor.rs:1055-1062`).
+9. **Defense-lab scope validation** (`executor.rs:271-312`) only checks the target string — it does not resolve DNS, so domain names that resolve to public IPs may bypass this check.
 
-## CLI Entry Points (`mod.rs`)
+## Links
 
-- `run_cli(args, config)` - Standard CLI pipeline execution
-- `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction); feature-gated on `tool-api`
-- `run_with_callback(target, config, callback)` - Parser-independent callback entry point; defaults to Quick profile; feature-gated on `tool-api`
-- `run_with_callback_for_profile(target, profile, config, callback)` - Profile-aware callback entry point using `Pipeline::from_profile`; feature-gated on `tool-api`
-- `resume_cli(args, config)` - Resume from session checkpoint
+- [overview.md](overview.md)
+- [cli_commands.md](cli_commands.md)
+- [dispatch.md](dispatch.md)
+- [config.md](config.md)
 
-#### `write_output(report, output_path, format)` (`mod.rs:64-119`)
+---
 
-Writes pipeline report to the specified path in the given format (HTML, JSON, CSV, Markdown, SARIF, JUnit). Handles manifest file writing for regression workflows.
-
-## Implemented Defense-Lab Profiles
-
-Five defense-lab profiles are implemented in `cli/mod.rs:262-266` and mapped to stages in `pipeline/stage.rs:92-107`. See `architecture/defense_lab.md` for full semantics.
-
-| Profile | Purpose | Key Constraint |
-|---------|---------|----------------|
-| `defense-lab` | Comprehensive local/private-scope probe suite | Explicit scope required, no stress/packet defaults |
-| `synvoid-local` | Synvoid validation on localhost/container | Loopback or private CIDR only |
-| `waf-regression` | WAF evasion-resistance regression testing | Payload classification focus |
-| `protocol-edge` | Malformed protocol and edge behavior | Requires `packet-inspection` feature |
-| `nse-safe` | Sandboxed NSE scripts (safe/default/version/discovery) | Requires `nse` + `nse-sandbox` features |
-| `db-regression` | Defense-lab family for db-pentest regression; native `Stage::DbPentest` (Phase 4) when `db-pentest` feature enabled (falls back to defense-lab stages) | `db-pentest` feature |
-
-## Benefits
-
-- **Automation**: Automate standard pentesting methodologies.
-- **Repeatability**: Ensure that complex scans are performed consistently every time.
-- **Efficiency**: Reduce manual intervention by automatically triggering the next logical step in a scan.
-
-## Recent Bug Fixes (2026-06-03)
-
-| Issue | Fix |
-|-------|-----|
-| `Stage::Vuln` was a no-op (`Ok(())`) | Implemented `run_vuln()` with CVSS scoring, asset criticality, and finding prioritization |
-| `run_concurrent()` skipped session checkpointing | Added session save after concurrent execution completion |
-| `PipelineContext` lacked `vuln_assessment` field | Added `vuln_assessment: Option<VulnAssessment>` for inter-stage data sharing |
-
-## Recent Bug Fixes (2026-05-22)
-
-| Issue | Fix |
-|-------|-----|
-| `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |
-| `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
-| `PipelineContext.services` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
-
-## Recent Bug Fixes (2026-05-27)
-
-| Issue | Fix |
-|-------|-----|
-| `run_cli()` and `run_cli_with_callback()` had duplicated output writing code | Extracted to `write_output()` helper function in `mod.rs:63-95` |
-| `StageResult.duration_ms` was serialized to JSON (unnecessary, causes bloat) | Added `#[serde(skip)]` to `duration_ms` field in `executor.rs:21` |
-| `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor in `executor.rs:27-35` |
-| Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` in `executor.rs:157` |
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/pipeline/mod.rs` | Module entry, public re-exports, CLI entry points |
-| `src/pipeline/stage.rs` | `Stage` enum, profiles, aliases, parsing |
-| `src/pipeline/executor.rs` | `Pipeline` struct, sequential execution, stage dispatch |
-| `src/pipeline/context.rs` | `PipelineContext` for inter-stage data sharing |
-| `src/pipeline/session.rs` | `PipelineSession` for pause/resume |
-| `src/pipeline/report.rs` | `PipelineReport`, HTML/CSV generation |
-| `src/tool/implementations/pipeline.rs` | `PipelineTool` implementing `SecurityTool` |
+*Last verified against source: 2026-08-25*

@@ -1,38 +1,256 @@
-# Daemon Persistence & Transport
+# Daemon & Daemon Protocol
 
-The `eggsec-daemon` crate provides durable session persistence via a SQLite-backed store, enabling recovery across daemon restarts and historical session inspection. It also provides a transport abstraction layer with pluggable client connectivity.
+Two crates provide the persistent session host and its IPC wire format: `eggsec-daemon-protocol` (shared types, RBAC) and `eggsec-daemon` (server, persistence, optional HTTP transport). Together they enable multi-client session management, background task execution, and durable state across restarts.
 
-## Persistence Layer
+## Role & Responsibilities
 
-### `DaemonStore` Trait (`store/mod.rs`)
+| Concern | Crate |
+|---------|-------|
+| Wire-format types (`ClientCommand`, `ServerMessage`, `ErrorCode`) | `eggsec-daemon-protocol` |
+| RBAC client registry (`ClientRegistry`, `ClientKind`, `ClientRole`, `CommandPermission`) | `eggsec-daemon-protocol` |
+| Unix socket server, command dispatch, event fan-out | `eggsec-daemon` |
+| SQLite persistence, schema migration, startup recovery | `eggsec-daemon` |
+| Optional HTTP/SSE transport | `eggsec-daemon` (`http-api` feature) |
+| Optional full engine executor | `eggsec-daemon` (`full-executor` feature) |
 
-Async trait defining the persistence contract:
+## Location & Feature Gating
 
-| Method | Purpose |
-|--------|---------|
-| `save_session_snapshot()` | Upsert a session snapshot (replaces existing) |
-| `load_session_snapshot()` | Load a single session by ID |
-| `load_all_sessions()` | Load all persisted snapshots (for recovery) |
-| `record_audit_event()` | Append an audit event |
-| `delete_session()` | Remove a session snapshot |
-| `blocking_list_sessions()` | Synchronous summary listing (for `spawn_blocking`) |
-| `blocking_get_snapshot()` | Synchronous snapshot retrieval |
+| Crate | Path | Dependencies | Features |
+|-------|------|-------------|----------|
+| `eggsec-daemon-protocol` | `crates/eggsec-daemon-protocol/` | `eggsec-runtime` only (no persistence, transport, or TUI deps) | None |
+| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.31 (bundled)`, `tokio`, `tracing`, `serde_json`, `anyhow`, `clap` | `http-api` (axum + async-stream + futures), `full-executor` (engine crate) |
 
-### Implementations
+Architecture guards enforce:
+- `eggsec-daemon` has no TUI dependencies (`ratatui`/`crossterm`)
+- Transport deps (`axum`, `async-stream`, `futures`) are optional behind `http-api`
+- Engine dep (`eggsec`) is optional behind `full-executor`
+- Default dependencies: `eggsec-runtime` + `eggsec-daemon-protocol` only
 
-| Store | Description |
-|-------|-------------|
-| `SqliteStore` | Production implementation. WAL mode, foreign keys enabled. Schema version tracked in `schema_meta` table. |
-| `NoopStore` | Test stub. All writes are no-ops, all reads return empty. |
+## Architecture
 
-### SQLite Schema (`store/sqlite.rs`)
+### eggsec-daemon-protocol (3 source files)
 
-Three tables:
+| Module | File | Contents |
+|--------|------|----------|
+| `lib` | `src/lib.rs` | Re-exports `client_registry` and `protocol` modules |
+| `protocol` | `src/protocol.rs` | `ClientCommand` (14 variants), `ServerMessage` (13 variants), `ErrorCode` (11 variants), `TransportKind` (4 variants), `DaemonCapabilities`, `TransportCapability`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` (= 1) |
+| `client_registry` | `src/client_registry.rs` | `ClientKind` (7 variants), `ClientRole` (4 variants), `CommandPermission` (6 variants), `ClientInfo`, `ClientAccessRule`, `SessionAccess`, `ClientRegistry`, `check_permission()`, `command_permission()` |
+
+#### ClientCommand — 14 variants (`protocol.rs:71-134`)
+
+| # | Variant | Fields | Permission |
+|---|---------|--------|-----------|
+| 1 | `Health` | `request_id` | Public |
+| 2 | `Capabilities` | `request_id` | Public |
+| 3 | `DeclareClient` | `request_id`, `kind: ClientKind`, `label: Option<String>` | DeclaredClient |
+| 4 | `CreateSession` | `request_id`, `surface: RuntimeSurface`, `scope: Option<SessionScope>`, `labels: Vec<String>` | DeclaredClient |
+| 5 | `ListSessions` | `request_id` | DeclaredClient |
+| 6 | `GetSnapshot` | `request_id`, `session_id: SessionId` | Observer |
+| 7 | `SubmitTask` | `request_id`, `session_id: SessionId`, `request: RunRequest` | Controller |
+| 8 | `CancelTask` | `request_id`, `session_id: SessionId`, `task_id: TaskId` | Controller |
+| 9 | `CancelActive` | `request_id`, `session_id: SessionId` | Controller |
+| 10 | `Subscribe` | `request_id`, `session_id: SessionId` | Observer |
+| 11 | `CloseSession` | `request_id`, `session_id: SessionId` | Owner |
+| 12 | `ApprovePolicy` | `request_id`, `session_id: SessionId`, `task_id: TaskId`, `approved: bool`, `reason: Option<String>` | Approver |
+| 13 | `ListPersistedSessions` | `request_id` | DeclaredClient |
+| 14 | `GetPersistedSnapshot` | `request_id`, `session_id: SessionId` | DeclaredClient |
+
+#### ServerMessage — 13 variants (`protocol.rs:196-252`)
+
+| # | Variant | Fields |
+|---|---------|--------|
+| 1 | `Ok` | `request_id` |
+| 2 | `Error` | `request_id`, `code: ErrorCode`, `message: String` |
+| 3 | `ClientDeclared` | `request_id`, `client_id: ClientId` |
+| 4 | `SessionCreated` | `request_id`, `session_id: SessionId` |
+| 5 | `Sessions` | `request_id`, `sessions: Vec<SessionSummary>` |
+| 6 | `Snapshot` | `request_id`, `snapshot: SessionSnapshot` |
+| 7 | `TaskSubmitted` | `request_id`, `task_id: TaskId` |
+| 8 | `Capabilities` | `request_id`, `capabilities: DaemonCapabilities` |
+| 9 | `Health` | `request_id`, `status: String`, `version: String`, `protocol_version: u32` |
+| 10 | `RuntimeEvent` | `session_id: SessionId`, `event: RuntimeEvent` |
+| 11 | `SessionClosed` | `request_id` |
+| 12 | `PersistedSessions` | `request_id`, `sessions: Vec<SessionSummary>` |
+| 13 | `PersistedSnapshot` | `request_id`, `snapshot: Option<SessionSnapshot>` |
+
+#### ErrorCode — 11 variants (`protocol.rs:51-66`)
+
+| # | Variant | Meaning |
+|---|---------|---------|
+| 1 | `InvalidRequest` | Malformed command or invalid field |
+| 2 | `SessionNotFound` | Session ID does not exist |
+| 3 | `TaskNotFound` | Task ID does not exist |
+| 4 | `TaskAlreadyCompleted` | Cannot cancel a terminal task |
+| 5 | `UnsupportedCommand` | Command not recognized |
+| 6 | `Internal` | Unrecoverable server error |
+| 7 | `PermissionDenied` | RBAC check failed |
+| 8 | `InvalidSurface` | Surface mismatch |
+| 9 | `ClientNotDeclared` | Client must call DeclareClient first |
+| 10 | `Unsupported` | Operation not wired yet (e.g. ApprovePolicy) |
+| 11 | `InvalidState` | Operation cannot proceed in current state |
+
+#### ClientKind — 7 variants (`client_registry.rs:11-19`)
+
+`Cli`, `Tui`, `DaemonInternal`, `Mcp`, `Rest`, `Agent`, `Unknown` (default)
+
+#### ClientRole — 4 variants (`client_registry.rs:25-30`)
+
+`Owner`, `Controller`, `Observer`, `Approver`
+
+#### CommandPermission — 6 variants (`client_registry.rs:37-50`)
+
+`Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`
+
+### eggsec-daemon (11 source files)
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `main` | `src/main.rs` | Binary entry point: CLI args (clap), store setup, host creation, shutdown signal, event persistence loop |
+| `lib` | `src/lib.rs` | Library root: re-exports `protocol` and `client_registry` from daemon-protocol; declares `host`, `server`, `config`, `error`, `store`, `client`; `http` behind `http-api` |
+| `host` | `src/host.rs` | `DaemonHost`: command dispatch, RBAC enforcement, persistence fan-out, recovery |
+| `server` | `src/server.rs` | Unix socket server: JSON-line protocol, client handler loop, subscribe streaming, bounded read |
+| `client` | `src/client.rs` | `DaemonClient`: typed client library for Unix socket communication |
+| `config` | `src/config.rs` | `DaemonConfig`: socket path, max clients, default surface, data dir, persistence toggle |
+| `error` | `src/error.rs` | `DaemonError`: Io, Serialization, Protocol, Runtime |
+| `store/mod` | `src/store/mod.rs` | `DaemonStore` trait, `PersistedAuditEvent`, `noop_store()` |
+| `store/sqlite` | `src/store/sqlite.rs` | `SqliteStore` (WAL, foreign keys, schema version 2), `NoopStore` |
+| `protocol` | `src/protocol.rs` | Re-exports from daemon-protocol (backward compat) |
+| `client_registry` | `src/client_registry.rs` | Re-exports from daemon-protocol (backward compat) |
+| `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum routes, SSE streaming, auth header, bind validation |
+
+## Behavior & Flows
+
+### Client Connect → Register → Auth → Command Loop → SSE Fan-out
+
+```
+Client connects to Unix socket
+  └─► handle_client() accepts connection, acquires semaphore permit
+       └─► JSON-line read loop
+            ├─► DeclareClient → returns ClientId, captured for connection
+            ├─► Subscribe → ack Ok, enter streaming loop:
+            │     ├─► receiver.recv() → filter by session_id → write RuntimeEvent
+            │     └─► read_bounded_line() → dispatch further commands inline
+            └─► Other commands → handle_command() → write response
+```
+
+Key behaviors:
+- **Idle timeout**: 300s read timeout per connection (`server.rs:193`)
+- **Max line**: 1 MiB per JSON frame (`server.rs:17`)
+- **Max clients**: semaphore-limited (default 10)
+- **Socket permissions**: 0o600 after bind (`server.rs:95`)
+- **Subscribe**: long-lived; receives broadcast events filtered by session ID; further commands handled inline during streaming
+
+### Startup Recovery
+
+```
+main.rs → host.recover_persisted_state()
+  ├─► store.load_all_sessions()
+  ├─► For each snapshot:
+  │     ├─► Mark non-terminal tasks as Cancelled ("interrupted by daemon restart")
+  │     ├─► Reconstruct SessionAccess from owner_client_id
+  │     └─► runtime.hydrate_session(snapshot)
+  └─► Record "daemon-recovery" audit event
+```
+
+### Persistence Fan-out
+
+Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSession) fire-and-forget persistence via `tokio::spawn(persistence_with_timeout(...))` with a 30s upper bound. A background event-listener task in `main.rs` persists snapshots on terminal events (TaskCompleted, TaskFailed, TaskCancelled) plus a periodic 5s sweep for broadcast overflow recovery.
+
+### HTTP/SSE Transport (feature: `http-api`)
+
+| Route | Method | Maps to |
+|-------|--------|---------|
+| `/health` | GET | `Health` |
+| `/capabilities` | GET | `Capabilities` |
+| `/clients/declare` | POST | `DeclareClient` |
+| `/sessions` | GET | `ListSessions` |
+| `/sessions` | POST | `CreateSession` |
+| `/sessions/{id}/snapshot` | GET | `GetSnapshot` |
+| `/sessions/{id}/tasks` | POST | `SubmitTask` |
+| `/sessions/{id}/tasks/{tid}/cancel` | POST | `CancelTask` |
+| `/sessions/{id}/cancel-active` | POST | `CancelActive` |
+| `/sessions/{id}/events` | GET | Subscribe (SSE) |
+| `/sessions/{id}/policy/approve` | POST | `ApprovePolicy` |
+| `/sessions/{id}` | DELETE | `CloseSession` |
+| `/sessions/persisted` | GET | `ListPersistedSessions` |
+| `/sessions/persisted/{id}` | GET | `GetPersistedSnapshot` |
+
+- Auth via `X-Eggsec-Client-Id` header (`http.rs:20`)
+- Default bind: `127.0.0.1:9876` (loopback enforced unless `allow_public_bind`)
+- SSE: `async-stream` + `futures::Stream`, `KeepAlive` default
+- `CancellationToken` leaked via `Box::leak` for axum graceful shutdown (one per process)
+
+## RBAC Model
+
+### Permission Matrix
+
+| Command | Public | DeclaredClient | Observer | Controller | Owner | Approver |
+|---------|:------:|:--------------:|:--------:|:----------:|:-----:|:--------:|
+| `Health`, `Capabilities` | ✓ | — | — | — | — | — |
+| `DeclareClient`, `CreateSession`, `ListSessions`, `ListPersistedSessions`, `GetPersistedSnapshot` | — | ✓ | — | — | — | — |
+| `GetSnapshot`, `Subscribe` | — | — | ✓ | ✓ | ✓ | ✓ |
+| `SubmitTask`, `CancelTask`, `CancelActive` | — | — | ✗ | ✓ | ✓ | ✗ |
+| `CloseSession` | — | — | ✗ | ✓ | ✓ | ✗ |
+| `ApprovePolicy` (manual surface) | — | — | ✗ | ✓ | ✓ | ✓ |
+| `ApprovePolicy` (strict surface) | — | — | ✗ | ✗ | ✓ | ✗ |
+
+### Session Access Control
+
+Three-tier resolution for `GetPersistedSnapshot` (`host.rs:814-882`):
+1. In `session_access` + authorized (owner or allow-listed) → allow
+2. In `session_access` + NOT authorized → deny immediately
+3. NOT in `session_access` (recovered session) → check `snapshot.owner_client_id`:
+   - Owner matches → allow
+   - Owner present, doesn't match → deny
+   - No owner (legacy) → allow
+
+### Persisted Session Listing Policy
+
+`ListPersistedSessions` (`host.rs:762-811`):
+- `DaemonInternal` clients: see all sessions
+- CLI/TUI clients: see only own sessions (owner match) + legacy sessions without owner
+
+## Public API
+
+### RuntimeCoreTypes
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| `DaemonHost` | `host.rs` | Command dispatch, RBAC, persistence |
+| `DaemonClient` | `client.rs` | Unix socket client library |
+| `DaemonConfig` | `config.rs` | Socket path, max clients, data dir, persistence |
+| `DaemonStore` | `store/mod.rs` | Persistence trait (7 methods) |
+| `SqliteStore` | `store/sqlite.rs` | SQLite implementation (WAL, schema version 2) |
+| `NoopStore` | `store/sqlite.rs` | Test/disabled stub |
+| `DaemonError` | `error.rs` | Io, Serialization, Protocol, Runtime |
+| `run_server` | `server.rs` | Unix socket accept loop |
+| `run_http_server` | `http.rs` | HTTP/SSE transport (feature-gated) |
+
+### DaemonStore Trait Methods (`store/mod.rs:25-52`)
+
+| Method | Async | Blocking | Purpose |
+|--------|:-----:|:--------:|---------|
+| `save_session_snapshot()` | ✓ | | Upsert snapshot |
+| `load_session_snapshot()` | ✓ | | Load by ID |
+| `load_all_sessions()` | ✓ | | Load all (recovery) |
+| `record_audit_event()` | ✓ | | Append audit |
+| `delete_session()` | ✓ | | Remove snapshot |
+| `blocking_list_sessions()` | | ✓ | Summary listing |
+| `blocking_get_snapshot()` | | ✓ | Snapshot retrieval |
+
+## Integration Points
+
+- **TUI attach mode**: `eggsec-tui` connects as a daemon client via `DaemonClient`, creates sessions, submits tasks, and streams events
+- **CLI daemon commands**: `eggsec daemon history` and `eggsec daemon show <id>` use `ListPersistedSessions`/`GetPersistedSnapshot` via `DaemonClient`
+- **Engine runtime_bridge**: `EggsecRuntimeExecutor` (behind `full-executor`) bridges runtime DTOs to engine dispatch
+- **Python daemon-client**: provisional `eggsec.daemon` module uses `eggsec-daemon-protocol` types
+
+## SQLite Schema (`store/sqlite.rs:10-31`)
 
 ```sql
 session_snapshots (
     session_id TEXT PRIMARY KEY,
-    snapshot_json TEXT NOT NULL,       -- serialized SessionSnapshot
+    snapshot_json TEXT NOT NULL,
     created_at_secs INTEGER NOT NULL
 );
 
@@ -48,291 +266,50 @@ audit_events (
 
 schema_meta (
     key TEXT PRIMARY KEY,
-    value TEXT NOT NULL                -- tracks schema_version
+    value TEXT NOT NULL
 );
 ```
 
-Snapshots are stored as JSON via `serde_json`. The `SessionSnapshot` type (from `eggsec-runtime`) includes a `generation` field for optimistic concurrency tracking.
+Schema version: `2` (stored in `schema_meta`). Migration refuses to load when stored version > current.
 
-## Lifecycle Persistence
-
-Snapshots are written at these `DaemonHost` command handler points (fire-and-forget via `tokio::spawn`):
-
-| Command | Audit Action | Snapshot Saved |
-|---------|-------------|----------------|
-| `CreateSession` | `create-session` | Yes |
-| `SubmitTask` | `submit-task` | Yes |
-| `CancelTask` | `cancel-task` | Yes |
-| `CancelActive` | `cancel-active` | Yes |
-| `CloseSession` | `close-session` | Yes (final snapshot with closed=true + cancelled tasks; preserves history — does NOT delete the session) |
-| `DeclareClient` | `declare-client` | No (audit only) |
-| `ApprovePolicy` | `approve-policy` | No (audit only, unsupported) |
-| Permission denied | `command-denied:{discriminant}` | No (audit only) |
-
-All persistence operations are guarded by `DaemonConfig::enable_persistence`. When disabled, writes are skipped silently.
-
-## Startup Recovery
-
-`DaemonHost::recover_persisted_state()` runs at daemon startup:
-
-1. Loads all snapshots from `DaemonStore::load_all_sessions()`
-2. Marks any non-terminal tasks (`Running`, `Queued`) as `Cancelled` with reason `"interrupted by daemon restart"`
-3. Hydrates each snapshot into the runtime via `Runtime::hydrate_session()`
-4. Populates `session_access` from `snapshot.owner_client_id` for recovered sessions
-5. Records a `daemon-recovery` audit event with recovery counts
-
-Failed session recoveries are logged at warn level and skipped. Active tasks are **never auto-resumed** — they are interrupted and must be resubmitted by clients. The `Cancelled` rewrite is informational only: the runtime's `hydrate_session` preserves only completed task records, so the rewrite is not strictly required for correctness but documents the recovery semantics for downstream consumers.
-
-## Session Ownership & Access Control
-
-### Owner Persistence
-
-Each `SessionSnapshot` and `SessionSummary` includes an optional `owner_client_id: Option<ClientId>` field, set at session creation time via `Runtime::set_session_owner()`. This field is persisted to disk as part of the snapshot JSON and survives daemon restarts.
-
-On `CreateSession`, the daemon stores `SessionAccess` in memory AND calls `set_session_owner()` so the owner is included in the persisted snapshot. On recovery, `session_access` is reconstructed from `snapshot.owner_client_id`.
-
-### Access Control Model
-
-Three-tier access control for `GetPersistedSnapshot`:
-
-1. **In `session_access` + authorized** (owner or allow-listed) → allow
-2. **In `session_access` + NOT authorized** → deny immediately (no fallback)
-3. **NOT in `session_access`** (recovered session) → check `snapshot.owner_client_id`:
-   - Owner matches → allow
-   - Owner present but doesn't match → deny
-   - No owner (legacy) → allow
-
-For `ListPersistedSessions`, elevated client kinds (`Cli`, `Tui`, `DaemonInternal`) see all sessions. Non-elevated clients see only sessions where `owner_client_id` matches their own. Sessions without owner info are included (legacy compatibility).
-
-### Backward Compatibility
-
-The `owner_client_id` field uses `#[serde(default)]` for deserialization, ensuring existing persisted snapshots that lack the field are loaded without error (owner defaults to `None`).
-
-### Persisted-Session Listing Policy
-
-`ListPersistedSessions` applies different visibility rules based on client kind:
-
-- **CLI/TUI clients** (`Cli`, `Tui`): See only sessions where `owner_client_id` matches their own client ID. Sessions without owner info are included for backward compatibility.
-- **DaemonInternal clients**: See all sessions regardless of owner. This enables daemon-level history inspection and administrative tooling.
-
-## Schema Migration
-
-`SqliteStore::migrate()` (`store/sqlite.rs`) is version-aware:
-
-- Reads the stored `schema_version` from `schema_meta` if present.
-- Compares against the compile-time `SCHEMA_VERSION` (current: `2`).
-- **Refuses** to load when the stored version is newer than the current version, returning an error from `SqliteStore::new`. This prevents silent data corruption on downgrade.
-- Logs a warning when migrating an older stored version.
-- Always rewrites the stored `schema_version` to the current value after the migration step.
-
-When `create_dir_all` for the data directory fails, or `SqliteStore::new` fails for any reason (locked file, invalid path, schema version mismatch), `main.rs` falls back to `NoopStore` and logs a `tracing::warn!`. The daemon continues running with persistence disabled; this degradation is observable in logs but not in `DaemonCapabilities` (operators must consult logs to confirm persistence mode).
-
-## Configuration
-
-`DaemonConfig` (`config.rs`):
+## Configuration (`config.rs:5-17`)
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `data_dir` | `Option<String>` | `None` (implies `~/.local/share/eggsec/daemon/`) | Directory for SQLite database |
+| `socket_path` | `String` | `/tmp/eggsec-daemon.sock` | Unix socket path |
+| `max_clients` | `usize` | `10` | Concurrent connection limit |
+| `default_surface` | `RuntimeSurface` | `Unknown` | Fallback for sessions without explicit surface |
+| `data_dir` | `Option<String>` | `None` (→ `~/.local/share/eggsec/daemon/`) | SQLite database directory |
 | `enable_persistence` | `bool` | `true` | Enable/disable snapshot persistence |
 
-When `enable_persistence` is `false`, the daemon uses `NoopStore` behavior and recovery is a no-op.
+## Testing
 
-## Capabilities
+- `daemon-protocol`: serialization round-trips for all `ClientCommand`, `ServerMessage`, `ErrorCode` variants; `command_permission_mapping_covers_all_variants` exhaustive check
+- `daemon/host.rs`: command dispatch tests (health, capabilities, create/list/submit/snapshot/close); permission denial tests
+- `daemon/server.rs`: Unix socket round-trips, subscribe event delivery, multi-subscriber fan-out, shutdown signal, invalid JSON handling
+- `daemon/client.rs`: client library round-trips (health, create session, declare, close)
+- `daemon/http.rs`: HTTP route tests, SSE delivery, auth enforcement, bind validation
+- Local smoke test: `scripts/smoke-daemon-local.sh`
 
-`RuntimeCapabilities` reflects the daemon's actual execution capacity:
+## Invariants & Gotchas
 
-| Executor Mode | Capabilities | Task Kinds |
-|---------------|-------------|------------|
-| Real (`--full-executor`) | `RuntimeCapabilities::full()` | All 29 task kinds |
-| Conservative (default) | `RuntimeCapabilities::conservative()` | Safe subset only — excludes hazardous task families (stress, packet, wireless-deauth, postex, c2, evasion) unless lab mode is configured |
-| No-op (no `full-executor`) | `RuntimeCapabilities::noop()` | Empty (no task kinds advertised) |
+1. **No TUI deps in daemon**: architecture guard enforces zero `ratatity`/`crossterm` imports
+2. **Transport/engine deps stay feature-gated**: `http-api` and `full-executor` are opt-in
+3. **Persistence timeout**: all fire-and-forget persistence tasks bounded by `PERSISTENCE_TASK_TIMEOUT` (30s)
+4. **ApprovePolicy is unsupported**: returns `ErrorCode::Unsupported` with audit trail
+5. **Socket file cleanup**: `run_server` removes socket on exit; `main.rs` removes on startup
+6. **CancellationToken leak in HTTP**: `Box::leak` for axum `&'static` requirement — one per process
+7. **Subscribe handled at transport level**: `handle_command` returns error for Subscribe; actual streaming is in `server.rs` and `http.rs`
+8. **Schema version mismatch**: refuses to load when stored > current; logs warning on downgrade migration
+9. **Client ID tracking per connection**: Unix socket handler captures `client_id` from `DeclareClient` response; subsequent commands on same connection carry that ID
 
-Capabilities are set per-session at creation time via `RuntimeConfig`. Clients can discover capabilities via the `Capabilities` command or `GET /capabilities` HTTP endpoint. The daemon does not advertise task kinds it cannot execute.
+## See Also
 
-Strict daemon execution (automated surfaces such as REST, MCP, gRPC, agent) currently requires resolvable explicit scope metadata — `LoadedScope::is_explicit_manifest()` must be true. Permissive manual surfaces allow `LoadedScope::default_empty()`.
+- [runtime.md](runtime.md) — Runtime orchestrator that `DaemonHost` wraps
+- [ui_model.md](ui_model.md) — View DTOs for daemon session/task state
+- [overview.md](overview.md) — System-wide architecture, dependency map
+- [runtime_bridge.md](runtime_bridge.md) — Engine-side surface conversion and approval
+- [tui.md](tui.md) — TUI daemon attach mode
+- [cli_commands.md](cli_commands.md) — CLI daemon/session/task commands
 
-## Protocol Extensions
-
-Two `ClientCommand` variants and corresponding `ServerMessage` responses support persisted state queries:
-
-| Command | Permission | Response | Purpose |
-|---------|-----------|----------|---------|
-| `ListPersistedSessions` | `DeclaredClient` | `PersistedSessions { sessions: Vec<SessionSummary> }` | List all stored session summaries |
-| `GetPersistedSnapshot { session_id }` | `DeclaredClient` | `PersistedSnapshot { snapshot: Option<SessionSnapshot> }` | Retrieve full snapshot by ID |
-
-Both use `spawn_blocking` to avoid blocking the async runtime on SQLite I/O.
-
-## CLI Commands
-
-Two `daemon` subcommands expose persisted state inspection:
-
-| Command | Description |
-|---------|-------------|
-| `eggsec daemon history [--json]` | Lists all persisted sessions with surface, active task count, and completed task count |
-| `eggsec daemon show <session-id> [--json]` | Shows full snapshot details: surface, scope, generation, task list with statuses |
-
-Both connect to the daemon via Unix socket and use `ListPersistedSessions` / `GetPersistedSnapshot` protocol commands.
-
-## Local Smoke Test
-
-`scripts/smoke-daemon-local.sh` is the canonical local-only lifecycle test for the daemon. It:
-
-- Uses an ephemeral socket path and a temporary workspace (`mktemp -d`); no public network exposure.
-- Pre-builds the daemon and CLI binaries into the temp workspace to avoid `cargo run` recompile noise leaking into assertions.
-- Verifies daemon start, health, client declaration, session create/list/snapshot, observer-deny + owner-allow posture, persisted history/show, event stream subscription, and graceful SIGTERM shutdown.
-
-Run with:
-
-```bash
-bash scripts/smoke-daemon-local.sh                 # default ephemeral socket
-bash scripts/smoke-daemon-local.sh /path/to/socket # custom socket path
-```
-
-## Dependencies
-
-- `rusqlite = "0.31"` (bundled SQLite) in `eggsec-daemon/Cargo.toml`
-- `serde_json` for snapshot serialization
-- `async_trait` for the `DaemonStore` trait
-
-## Transport Abstraction
-
-The noop daemon mode operates at the protocol/session level only — it handles session creation, task queuing, and cancellation without executing any tasks. The real executor mode (`--full-executor` / `full-executor` feature) adds actual task dispatch via `EggsecRuntimeExecutor`.
-
-The daemon supports multiple transport layers for client connectivity, declared via `TransportKind` and advertised through `DaemonCapabilities`.
-
-### Transport Types (`protocol.rs`)
-
-| Type | Description | Status |
-|------|-------------|--------|
-| `TransportKind::UnixSocket` | Unix domain socket (JSON-line protocol) | Default, built-in |
-| `TransportKind::LoopbackHttp` | HTTP REST + SSE via `axum` | Feature-gated (`http-api`) |
-| `TransportKind::WebSocket` | WebSocket transport | Deferred (not implemented) |
-| `TransportKind::Grpc` | gRPC transport | Deferred (not implemented) |
-
-### Request Context
-
-`DaemonRequestContext` carries per-request metadata through the handler pipeline:
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| `client_id` | `ClientId` | Identifying the calling client |
-| `peer` | `Option<String>` | Peer address (for TCP/HTTP transports) |
-| `transport` | `TransportKind` | Which transport the request arrived on |
-
-`DaemonHost::handle_command()` accepts `DaemonRequestContext` instead of a bare client ID, ensuring transport provenance is available for audit and policy decisions.
-
-### ErrorCode Enum
-
-```rust
-pub enum ErrorCode {
-    InvalidRequest,
-    SessionNotFound,
-    TaskNotFound,
-    TaskAlreadyCompleted,
-    UnsupportedCommand,
-    Internal,
-    PermissionDenied,
-    InvalidSurface,
-    ClientNotDeclared,
-    Unsupported,
-    InvalidState,
-}
-```
-
-### DAEMON_PROTOCOL_VERSION
-
-```rust
-pub const DAEMON_PROTOCOL_VERSION: u32 = 1;
-```
-
-### Capabilities Advertisement
-
-`DaemonCapabilities` is returned in `ServerMessage::Capabilities`:
-
-```rust
-pub struct DaemonCapabilities {
-    pub runtime: RuntimeCapabilities,
-    pub transports: Vec<TransportCapability>,
-}
-```
-
-`TransportCapability` describes a single available transport (kind, address, supported features). Clients use this to discover which transports the daemon supports.
-
-### HTTP/SSE Transport (`http.rs`, feature-gated `http-api`)
-
-| Property | Value |
-|----------|-------|
-| Feature flag | `http-api` (on `eggsec-daemon`) |
-| Optional deps | `axum`, `async-stream`, `futures` |
-| Bind default | Loopback only (`127.0.0.1`) |
-| Public bind | Requires explicit config; emits warning |
-| Enforcement profile | `McpStrict` (noninteractive, no manual overrides) |
-| Routes | 12 HTTP routes mapping 1:1 to `ClientCommand` variants |
-| SSE endpoint | Real-time session event streaming |
-
-The HTTP server validates that bind addresses are loopback by default. Explicit non-loopback binds (e.g., `0.0.0.0`) require configuration and produce a startup warning. This prevents accidental exposure of the daemon on public interfaces.
-
-```bash
-# Build daemon with HTTP transport
-cargo build --release -p eggsec-daemon --features http-api
-```
-
-### `HttpConfig`
-
-Configuration for the HTTP/SSE server:
-
-| Field | Type | Default | Purpose |
-|-------|------|---------|---------|
-| `bind_addr` | `String` | `127.0.0.1:9876` | Bind address (loopback enforced unless overridden) |
-| `require_auth` | `bool` | `false` | Require `X-Eggsec-Client-Id` header on every request |
-| `allow_public_bind` | `bool` | `false` | Allow non-loopback bind addresses (emits warning) |
-
-## Audit Events
-
-`PersistedAuditEvent` records security-relevant daemon actions with:
-
-| Field | Description |
-|-------|-------------|
-| `action` | Event type (e.g., `create-session`, `submit-task`, `command-denied:submit-task`) |
-| `surface` | Execution surface (`daemon`) |
-| `outcome` | Result (`allow`, `denied`, `unsupported`, `recovered`) |
-| `client_id` | Initiating client (if applicable) |
-| `session_id` | Target session (if applicable) |
-| `timestamp_secs` | Unix timestamp |
-
-Audit events are appended to the `audit_events` table and are not pruned.
-
-## Signal Handling
-
-The daemon handles `SIGINT` and `SIGTERM` for graceful shutdown (`main.rs` installs both via `tokio::signal::unix::signal(SignalKind::terminate())` plus `tokio::signal::ctrl_c()`):
-
-- `SIGINT` (Ctrl+C) and `SIGTERM` both trigger `CancellationToken::cancel()`.
-- The server loop exits cleanly and `run_server` removes the socket file before returning.
-- Both signals are tested by the local smoke script (`scripts/smoke-daemon-local.sh`).
-
-## Daemon Protocol Crate (`eggsec-daemon-protocol`)
-
-The `eggsec-daemon-protocol` crate contains the wire-format types shared between daemon clients and the server:
-
-| Module | Contents |
-|--------|----------|
-| `protocol` | `ClientCommand`, `ServerMessage`, `ErrorCode`, `DaemonCapabilities`, `TransportKind`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` |
-| `client_registry` | `ClientKind`, `ClientRole`, `CommandPermission`, `ClientInfo`, `ClientRegistry`, `check_permission()` |
-
-### Purpose
-
-- **Dependency isolation**: TUI and CLI daemon clients depend on `eggsec-daemon-protocol` for protocol types without pulling in `rusqlite`, `axum`, or server persistence code.
-- **Backward compatibility**: `eggsec-daemon` re-exports both modules (`pub use eggsec_daemon_protocol::{protocol, client_registry};`), so existing code using `eggsec_daemon::protocol::*` continues to work.
-- **Lightweight client graph**: The standard TUI/CLI artifact graph no longer includes SQLite or server internals solely for daemon client connectivity.
-
-### Dependency Graph
-
-```
-eggsec-daemon-protocol (protocol types, client registry)
-  ↑
-  ├── eggsec-daemon (re-exports; adds server, persistence, client)
-  ├── eggsec-tui (daemon mode client)
-  ├── eggsec-cli (daemon-client feature)
-  └── eggsec-python (daemon-client feature)
-```
+*Last verified against source: 2026-08-25*

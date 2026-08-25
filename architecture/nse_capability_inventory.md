@@ -8,7 +8,7 @@
 
 The `eggsec-nse` crate provides Lua 5.4 script execution via `mlua`. Lua execution hooks can interrupt Lua bytecode, but once a Lua script enters Rust helper code, blocking filesystem, network, DNS, process, crypto, compression, time, or randomness work must enforce limits and cancellation cooperatively inside the helper path.
 
-This inventory classifies every side-effecting helper operation across the 167 library implementation files in `crates/eggsec-nse/src/libraries/`, plus the executor core, to guide Milestone 3 wrapper migration.
+This inventory classifies every side-effecting helper operation across the 166 library implementation files in `crates/eggsec-nse/src/libraries/` (167 `.rs` files total; `mod.rs` is module declarations only), plus the executor core, to guide Milestone 3 wrapper migration.
 
 ### Capability Classes
 
@@ -229,6 +229,8 @@ These libraries perform pure computation with no I/O side effects. They require 
 | `tls.rs` | TLS connection setup, cipher suite operations | `check_crypto` | Phase 05 |
 | `sslcert.rs` | SSL certificate parsing and validation | `check_crypto` | Phase 05 |
 | `zlib.rs` | `zlib.compress()`, `zlib.decompress()` | `nse_compress`, `nse_decompress`, `check_compression` | Phase 05 |
+| `http.rs` | `http.get()`, `http.post()`, `http.put()`, `http.delete()`, `http.head()`, `http.options()`, `http.request()`, `http.post_host()`, `http.put_data()`, async variants | `check_network_tcp()` (advisory); denied requests never reach reqwest | Phase 05 |
+| `unpwdb.rs` | `unpwdb.*` credential file reads | `nse_fs_read_to_string()` | Phase 05 |
 
 ### NOT Sandboxed (remaining)
 
@@ -334,19 +336,20 @@ All network protocol libraries (smtp, ssh2, mysql, postgres, etc.) and the `nmap
 
 ## Accounting & Report Data Inventory
 
-### Current NseRunReport Fields (Milestone 2)
+### Current NseRunReport Fields (Milestone 3+)
 
 | Report Field | Current Coverage | Gap |
 |--------------|------------------|-----|
-| `stats.network_operations` | Socket connect/resolve only | Protocol libs, http, comm, nmap.socket_* not counted |
+| `stats.network_operations` | Socket connect/resolve, dns, http (Phase 04–05) | Protocol libs, nmap.socket_* not counted |
 | `stats.network_bytes_read` | Socket receive only | Protocol libs, http, comm not counted |
 | `stats.network_bytes_written` | Socket send only | Protocol libs, http, comm not counted |
-| `stats.filesystem_operations` | io.open, lfs.* operations | Not counted for reads outside sandbox |
-| `stats.filesystem_bytes_read` | Not tracked | io.read, io.lines, unpwdb, creds, datafiles |
-| `stats.filesystem_bytes_written` | Not tracked | io.write, io.tmpfile |
-| `stats.limit_violation` | Wall-clock, instruction budget | No FS/network byte limits currently |
+| `stats.filesystem_operations` | io.open, lfs.* operations | Partial coverage |
+| `stats.filesystem_bytes_read` | Wrapped helpers (io.read, io.lines, nse_fs_read_to_string) | unpwdb, creds, datafiles byte counts not tracked |
+| `stats.filesystem_bytes_written` | Wrapped helpers (io.write, nse_fs_write) | Partial coverage |
+| `stats.limit_violation` | Wall-clock, instruction budget, network/filesystem ops | No FS/network byte limits currently |
 | `libraries` | Per-run require() activity | Not a capability snapshot (correct) |
 | `rules` | Rule evaluation results | Complete |
+| `capability_events` | Per-operation events (denials, warnings, allowed) | Complete for migrated helpers |
 
 ### Accounting Needs by Helper
 

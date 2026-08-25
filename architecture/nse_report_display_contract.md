@@ -27,7 +27,20 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 | Status | `NseRunReport.compatibility.status` | UPPERCASE label (Compatible, Partial, Failed, etc.) |
 | Fidelity | `NseRunReport.compatibility.fidelity` | `~` prefix for non-Full (e.g. `~approximate`) |
 
-### 2. Rule Panel
+### 2. Compatibility Panel
+
+**Source**: `NseRunReport.compatibility: NseCompatibilitySummary`
+
+| Field | Source | Display |
+|-------|--------|---------|
+| Status | `.status` | UPPERCASE label (Compatible, Partial, Failed, etc.) |
+| Fidelity | `.fidelity` | `~` prefix for non-Full (e.g. `~approximate`) |
+| Unsupported | `.unsupported_features` | List with `[*]` prefix |
+| Approximations | `.approximations` | List with `[*]` prefix |
+
+**Empty state**: If no unsupported features or approximations, display "Fully compatible." with status label.
+
+### 3. Rule Panel
 
 **Source**: `NseRunReport.rules: Vec<NseRuleEvaluationReport>`
 
@@ -39,12 +52,12 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 | Exactness | `.exactness` | "exact" or "unsupported" |
 | Summary | `.summary` | Free text description |
 | Unsupported | `.unsupported` | Optional unsupported return type info |
-| Context Source | `.host_port_context_source` | Provenance: Scan, Fixture, Synthetic, Unknown |
+| Context Source | `.host_context_source` / `.port_context_source` | Provenance: Scan, Fixture, Synthetic, Unknown |
 | Fidelity Reason | `.fidelity_reason` | Why fidelity was downgraded (if applicable) |
 
 **Empty state**: If `rules` is empty, display "No rules evaluated."
 
-### 3. Libraries Panel
+### 4. Libraries Panel
 
 **Source**: `NseRunReport.libraries: Vec<NseLibraryUseReport>`
 
@@ -60,7 +73,7 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 
 **Empty state**: If `libraries` is empty, display "No libraries loaded."
 
-### 4. Capability Denials Panel
+### 5. Capability Denials Panel
 
 **Source**: `NseRunReport.capability_events: Vec<NseCapabilityEventSummary>`, filtered to `allowed == false`
 
@@ -76,7 +89,7 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 
 **Empty state**: If no denials, display "No capability denials."
 
-### 5. Evidence Panel
+### 6. Evidence Panel
 
 **Source**: `NseRunReport.evidence: Vec<NseEvidenceItem>`
 
@@ -96,21 +109,22 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 
 **Visual treatment**: Confidence-based coloring (confirmed > likely > possible > low). CapabilityDenial evidence items are informational, not vulnerabilities.
 
+**Evidence generation**: `NseRunReport.evidence` is populated by `extract_evidence()` in `report.rs:844`, which conservatively produces evidence from capability denials (CapabilityDenial), unsupported features/approximations (CompatibilityWarning), rule evaluation errors (CompatibilityWarning), and non-empty script output (ScriptOutput). Direct `NseEvidenceItem` construction outside `extract_evidence()` is flagged by architecture guard Check 45.
+
 **Empty state**: If `evidence` is empty, display "No structured evidence."
 
-### 6. Raw Output Panel
+### 7. Raw Output Panel
 
 **Source**: `NseRunReport.output.content`
 
 | Field | Source | Display |
 |-------|--------|---------|
 | Content | `.content` | Full script stdout/stderr |
-| Truncated | `.truncated` | Whether output was truncated |
-| Truncation Reason | `.truncation_reason` | Why output was truncated (if applicable) |
+| Truncated | `.truncated` | Whether output was truncated (constant `MAX_RAW_OUTPUT_LINES = 200` in `nse_report_view.rs`) |
 
 **Rendering**: Full content in scrollable panel. Truncation indicator when `.truncated == true`.
 
-### 7. Diagnostics Panel
+### 8. Diagnostics Panel
 
 **Source**: Multiple `NseRunReport` fields
 
@@ -180,11 +194,12 @@ run_script_with_rules() → NseExecutor::build_report() → NseRunReport
 
 ### View Model
 
-`render_report()` maps all 7 display sections defined in this contract to styled `ratatui::text::Line` values:
+`render_report()` maps all 8 display sections defined in this contract to styled `ratatui::text::Line` values:
 
 | Section | Mapping |
 |---------|---------|
 | Summary | Target, script, source, profile, elapsed, status, fidelity |
+| Compatibility | Status, unsupported features, approximations |
 | Rule Evaluation | Per-rule kind/matched/exactness/summary with context source |
 | Libraries | Per-library name/category/status/side-effects/warnings |
 | Capability Denials | Filtered `capability_events` where `allowed == false`, prefixed `[!]` |
@@ -202,7 +217,7 @@ run_script_with_rules() → NseExecutor::build_report() → NseRunReport
 
 Tests in `crates/eggsec-tui/src/tabs/nse_report_view.rs` cover:
 
-- **Compatible report**: All 7 sections populated, full display.
+- **Compatible report**: All 8 sections populated, full display.
 - **Denied report**: Capability denials present, denials panel populated with `[!]` prefixed lines.
 - **Empty report**: All optional sections empty, empty-state text rendered.
 - **Partial report**: Some sections present (e.g. rules + evidence), others absent — only populated sections rendered.

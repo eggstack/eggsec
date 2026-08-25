@@ -1,74 +1,240 @@
 # Wireless Module
 
-## Purpose
+## Role & Responsibilities
 
-Standalone-complete passive WiFi network reconnaissance and basic security posture assessment (defense validation / lab use). Linux `iwlist`-based scanning, security type parsing (Open/WEP/WPA/WPA2/WPA3/Enterprise/Unknown), WPS/hidden/transition detection, vulnerability analysis (weak/legacy/rogue heuristics), recommendations, and structured output. Feature-gated behind `wireless`. Exposed as the standalone CLI (`eggsec wireless <iface>`), TUI tab, and report integration. Passive scanning is the base surface; active deauth/disassoc is available under `wireless-advanced`, and handshake capture remains future work.
+Standalone-complete passive WiFi network reconnaissance and active defense-validation attack primitives (lab-only). The module provides:
 
-## CLI Behavior
+- **Passive scanning** (`wireless` feature): Linux `iwlist`-based scanning, security type parsing (7 types), WPS/hidden/transition detection, rogue-AP/evil-twin heuristics, known-good suppression, temporal scan diffing, and structured output.
+- **Active attacks** (`wireless-advanced` feature): 802.11 deauthentication and disassociation frame crafting and injection via raw sockets. Broadcast and targeted modes. Dry-run safe.
 
-- Build with `--features wireless` (or `--features full`).
-- Real scans require Linux `iwlist` from `wireless-tools`, root or `CAP_NET_ADMIN`, and a wireless interface in managed mode and up.
-- Default human output summarizes rogue/suspicious candidates by count and hint; use `--detect-suspicious` to print the full findings list and recommendations.
-- `--known-good` suppresses rogue candidates that match the allowlist in human output and repeat-scan summaries.
-- `--repeat` adds per-scan diffs plus a temporal summary; `--dry-run` emits planning output without calling `iwlist`.
+**Safety posture**: Passive scanning is the base surface. Active attacks are opt-in (`wireless-advanced`), require root or `CAP_NET_ADMIN`, monitor-mode interface, and explicit `--allow-active-wireless` flag (or policy confirmation for non-dry-run). MCP/agent tool exposure is intentionally absent — wireless is a standalone defense-lab surface only.
 
-## Key Types
+## Location & Feature Gating
+
+| Component | Feature gate | `cfg` line |
+|-----------|-------------|------------|
+| Passive scan (`WirelessScanner::scan`) | `wireless` | `wireless/mod.rs:86` |
+| Active attacks module | `wireless-advanced` | `wireless/mod.rs:9` (`#[cfg(feature = "wireless-advanced")] pub mod active;`) |
+| CLI handler scan path | `cli` | `commands/handlers/wireless.rs:11` |
+| CLI handler deauth path | `wireless-advanced` | `commands/handlers/wireless.rs:7` (`#[cfg(feature = "wireless-advanced")]`) |
+| TUI integration | `wireless` (passive) + `wireless-advanced` (active) | `eggsec-tui/src/tabs/wireless.rs` |
+
+## Architecture
+
+### Key Types
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `WirelessScanner` | `wireless/mod.rs` | Main wireless scanning engine (scan, parse, analyze) |
-| `WirelessNetwork` | `wireless/mod.rs` | Discovered network (SSID, BSSID, channel, security, signal, wps_enabled, is_hidden, transition_mode) |
-| `SecurityType` | `wireless/mod.rs` | Enum: Open, WEP, WPA, WPA2, WPA3, Enterprise, Unknown |
-| `WirelessScanResult` | `wireless/mod.rs` | Interface + networks + duration + recommendations |
-| `WirelessVulnerability` | `wireless/mod.rs` | Finding from analyze_networks (type, severity, desc, rec) |
+| `WirelessScanner` | `wireless/mod.rs:72` | Main scanning engine. `new()`, `with_interface()`, `scan()` (async, iwlist), `parse_scan_output()`, `analyze_networks()`, `generate_recommendations()` |
+| `WirelessNetwork` | `wireless/mod.rs:17` | Discovered network: `ssid`, `bssid`, `channel`, `security_type`, `signal_strength`, `last_seen`, `wps_enabled`, `is_hidden`, `transition_mode` (9 fields) |
+| `SecurityType` | `wireless/mod.rs:30` | Enum: `Open`, `WEP`, `WPA`, `WPA2`, `WPA3`, `Enterprise`, `Unknown` — **7 variants** |
+| `WirelessScanResult` | `wireless/mod.rs:54` | Scan output: `interface`, `networks`, `scan_duration_secs`, `recommendations` |
+| `WirelessVulnerability` | `wireless/mod.rs:62` | Finding from `analyze_networks`: `ssid`, `bssid`, `vulnerability_type`, `severity`, `description`, `recommendation` |
+| `ActiveAttackConfig` | `wireless/active/mod.rs:68` | Attack configuration: `interface`, `bssid` (`Option<[u8; 6]>`), `client`, `reason_code`, `max_frames`, `frames_per_second`, `dry_run` |
+| `ActiveWirelessAttackResult` | `wireless/active/mod.rs:29` | Attack result: `interface`, `attack_type`, `target_bssid`, `target_client`, `frames_sent`, `duration_secs`, `dry_run`, `findings`, `raw_output`, `recommendations` |
+| `ActiveWirelessFinding` | `wireless/active/mod.rs:53` | Finding from active attack: `attack_type`, `severity`, `description`, `evidence`, `remediation` |
 
-## Files
+### Files
 
 | File | Description |
 |------|-------------|
-| `mod.rs` | Core: scanner, models, parse_scan_output (iwlist), analyze_networks (incl. rogue heuristic), generate_recommendations, run_cli, to_scan_report_data |
-| `cli/wireless.rs` | WirelessArgs + WIRELESS_ABOUT (repeat, detect-suspicious, warnings) |
-| `commands/handlers/wireless.rs` | handle_wireless with EnforcementContext (SafeActive + wireless feature) |
-| `active/mod.rs` | ActiveWirelessAttackResult, ActiveWirelessFinding, ActiveAttackConfig, re-exports attacks |
-| `active/attacks/mod.rs` | attacks submodule |
-| `active/attacks/deauth.rs` | Deauth/disassoc frame builders (build_deauth_frame, build_disassoc_frame), inject_frames, run_deauth, run_disassoc |
-| `active/mod.rs` (+bridge) | `to_active_scan_report_data` bridge: converts `ActiveWirelessAttackResult` → `ScanReportData` for SARIF/JUnit/HTML/Markdown/etc. |
-| `eggsec-tui/.../tabs/wireless.rs` | WirelessTab (inputs, results view, task integration) |
-| `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
-| `eggsec-output/.../convert.rs` | WirelessNetworkReportData + ScanReportData integration (HTML/MD/JSON) |
+| `wireless/mod.rs` | Core: `WirelessScanner`, models, `parse_scan_output` (iwlist parser), `analyze_networks` (incl. rogue heuristic), `generate_recommendations`, `run_cli`, `to_scan_report_data`, `compute_changes_since`, `build_temporal_summary`, `load_known_good`, `is_known_good`, `wireless_category_for` |
+| `wireless/active/mod.rs` | Active types: `ActiveAttackConfig`, `ActiveWirelessAttackResult`, `ActiveWirelessFinding`, `to_active_scan_report_data` bridge; MAC parse/format helpers |
+| `wireless/active/attacks/mod.rs` | Attacks submodule re-exports |
+| `wireless/active/attacks/deauth.rs` | 802.11 deauth/disassoc frame crafting (`build_deauth_frame`, `build_disassoc_frame`), raw socket injection (`inject_frames`), attack runners (`run_deauth`, `run_disassoc`), `reason_codes` module (9 constants), `RawSocketFd` RAII wrapper |
+| `cli/wireless.rs` | `WirelessArgs`, `WirelessScanArgs`, `DeauthArgs`, `WirelessSubcommand` enum, `WIRELESS_ABOUT` help text |
+| `commands/handlers/wireless.rs` | `handle_wireless`, `handle_scan`, `handle_deauth` with `EnforcementContext` |
+| `eggsec-tui/.../tabs/wireless.rs` | `WirelessTab` (passive + active mode, input fields, results view) |
+| `eggsec-tui/.../workers/security.rs` | `run_wireless_task`, `run_wireless_active_task` (TUI workers) |
+| `eggsec-output/.../convert.rs` | `WirelessNetworkReportData` + `ScanReportData` integration (HTML/MD/JSON/SARIF/JUnit) |
 
-## Status
+## Behavior / Flow
 
-**Phase 0 (passive) complete (2026-06-11)**. **Phase 1 (active attacks, wireless-advanced) implemented; active reporting bridge complete (CLI + TUI integration)**. This doc reflects passive + Phase 1 active state: passive uses summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines; active adds `eggsec wireless <iface> deauth` for deauth/disassoc frame injection (lab-only, requires `--allow-active-wireless`) and the TUI active mode with the same task/confirmation flow. Active results are auto-bridged for SARIF/JUnit/HTML/Markdown reporting via `report convert`. Active attacks under `wireless-advanced` feature follow the same standalone defense-lab rule: MCP/agent tool exposure intentionally absent (per plan recommendation). See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 loadout). (Resolution cross-ref: `plans/wireless-active-tui-final-wiring-and-polish-plan.md` closed 2026-06-12 after doc verification + cleanup pass.)
+### Passive Scan Lifecycle
 
-## MCP / Agentic / Tool Integration Status (post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note)
+1. **Invoke**: `eggsec wireless <iface>` → `handle_wireless()` → `handle_scan()`
+2. **Policy gate**: `EnforcementContext::evaluate()` with `OperationRisk::SafeActive`, `required_features: ["wireless"]`; no `requires_explicit_scope` (target is local interface name)
+3. **Scan**: `WirelessScanner::scan()` spawns `iwlist <iface> scan` via `tokio::process::Command` (`mod.rs:87`)
+4. **Parse**: `parse_scan_output()` (`mod.rs:152`) iterates iwlist line-by-line. State resets per `Cell` line. Handles:
+   - `Address:` → BSSID
+   - `ESSID:"..."` → SSID (empty/`<hidden>`/`""` normalized to `<hidden>`)
+   - `Channel:` → channel
+   - `Signal level=` or `Signal level:` → signal strength (dBm)
+   - `WPS` / `Wi-Fi Protected Setup` → WPS enabled
+   - `WPA2/WPA3` / `transition` → transition mode
+   - `Encryption key:off` → Open; `WPA3`/`WPA2`/`WPA`/`WEP` → security type
+   - `Authentication Suites: 802.1X` → Enterprise
+   - State also tracks `saw_wpa2`/`saw_wpa3` for transition detection (both present → `transition_mode = true`)
+   - Incomplete cells (missing SSID or BSSID) are skipped with a warning
+5. **Analyze**: `analyze_networks()` (`mod.rs:324`) generates `WirelessVulnerability` findings:
+   - Signal ≤ -80 dBm → "Weak Signal Strength" (Low if ≤ -90, else Medium)
+   - WPS enabled → "WPS Enabled" (Medium)
+   - Hidden SSID → "Hidden SSID" (Low)
+   - Transition mode → "WPA2/WPA3 Transition Mode" (Low)
+   - Security type findings: Open (Medium), WEP (High), WPA (Medium), Enterprise (Low), Unknown (Medium)
+   - **Rogue AP / Evil Twin heuristic** (`mod.rs:456-511`): Groups networks by SSID; if ≥2 distinct BSSIDs or ≥2 distinct security configs, emits a rogue candidate. Severity: Medium if security diff, Low otherwise. Description includes BSSID list and explicit "passive heuristic" caveat. Suppressed if any network in the group matches `known_good` (by SSID, BSSID, or `"SSID,BSSID"` format)
+6. **Recommendations**: `generate_recommendations()` (`mod.rs:516`) deduplicates by security type and per-BSSID for WPS/transition/hidden/weak, using `FxHashSet`
+7. **Output**: Human (default: rogue candidates summarized by count; `--detect-suspicious` for full list) or JSON
 
-Wireless is a **standalone defense-lab surface** (CLI primary + optional TUI tab under the `wireless` feature). It is **not registered** as a `SecurityTool` in the tool registry (`tool/mod.rs`, `tool/registry.rs`) and is therefore **not listed or callable** via the MCP `tools/list` / `tools/call` surface (or agentic dispatch).
+### Temporal Analysis (Repeat Scans)
 
-- Policy enforcement for the CLI command (`commands/handlers/wireless.rs`) uses the central `CommandContext::evaluate_and_enforce_operation` with `OperationRisk::SafeActive` + `required_features: ["wireless"]` (no `requires_explicit_scope` because the "target" is a local interface name, not a network host).
-- The TUI tab participates in the same enforcement model via `TabSpec` (risk_group SafeActive, feature="wireless", direct_launch=true, operation="wireless") + `App::build_current_operation_descriptor` (which now propagates `spec.feature` into `required_features` for parity with CLI descriptors) + pre-dispatch policy eval in handle_enter + shared `EnforcementContext` / `PendingPolicyConfirmation` / preflight.
-- **TUI integration (Phase 0 + Phase 1 complete)**: The Wireless tab in the TUI supports both passive scanning (`wireless` feature) and active attacks — deauth/disassoc (`wireless-advanced` feature). Active mode toggles via `a` key; input fields for BSSID, Client MAC, Frame Count, and Rate Limit; dry-run toggled via `d` (on by default). Pressing Enter in `ActiveConfig` focus with a valid `active_attack_config()` launches the attack via the shared task system (`TaskConfig::WirelessActive` → `run_wireless_active_task` worker → `TaskResult::WirelessActive` → `set_active_results`). Active attacks (live, non-dry-run) trigger the policy confirmation overlay (`OperationRisk::Intrusive` + `OperationMode::DefenseLab` + explicit operator confirmation required); dry-run attacks (default) execute without a confirmation prompt. Results display findings, evidence, and recommendations for both scan and attack results.
-- In strict profiles (`McpStrict`, `AgentStrict`, `CiStrict`) the feature gate + explicit LoadedScope provenance rules apply if ever invoked; currently the only supported invocation path is the CLI handler (or direct library use under the same `EnforcementContext`).
-- This mirrors the consolidated "standalone defense-lab surfaces" pattern (wireless + mobile + auth-test). Wireless and mobile emit local types directly with an optional `to_scan_report_data` bridge (and CLI auto-bridge in `report convert`); auth-test is local-only with no bridge. None participate in `ScanProfile` pipelines or dedicated profiles/stages in this round. See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), `architecture/output.md`, `docs/USAGE.md` (Output Models block), AGENTS.md (standalone defense-lab surfaces note), and the handoff plan resolution note.
-- If future work adds a `WirelessTool` impl + registry entry, it would also need updates in `tool/protocol/mcp/policy.rs` (classify_tool_risk, required_capabilities_for_tool_call, infer_tool_category, CodingAgent allowlist consideration) + special target handling for interface names, plus MCP handler tests. No such registration is planned in the current round (design decision: keep wireless as a focused passive defense-lab CLI/TUI capability; MCP/agent tool exposure intentionally absent).
-- Active attacks (implemented under `wireless-advanced`) follow the same standalone defense-lab rule: **MCP/agent tool exposure intentionally absent** (per plan recommendation; no `SecurityTool` registration). See `plans/wireless-active-attacks-loadout-design-plan.md` (non-goals + open questions).
+`compute_changes_since()` (`mod.rs:916-998`) and `build_temporal_summary()` (`mod.rs:1001-1066`) implement repeated-scan diffing:
 
-The optional `to_scan_report_data` bridge (and CLI `report convert` auto-bridge) works for any consumer that obtains a native JSON `WirelessScanResult` (or repeat-wrapped form), regardless of invocation surface.
+- **New networks**: SSID+BSSID not in previous scan
+- **Security changes**: Same BSSID, different `SecurityType`
+- **Signal drifts**: Same BSSID, signal delta > 5 dBm
+- **New rogue candidates**: Re-analyze both scans with known-good suppression; compare rogue SSID sets
 
-See `docs/WIRELESS.md` for usage/safety/examples/best-practices.
+`build_temporal_summary()` tracks across all scans: unique SSIDs, scans with new networks, total security changes, total signal drifts, total rogue candidates.
 
-## Integration with Reporting Pipeline
+### Active Attack Frame Construction (Deauth/Disassoc)
 
-Produces local `WirelessScanResult` + findings directly (human/JSON via CLI + TUI). Optional `to_scan_report_data()` bridge (`wireless/mod.rs`, wired via `eggsec-output/convert.rs` for `WirelessNetworkReportData` + `ScanReportData`) converts to canonical `ScanReportData` (findings + full `wireless_networks` list) for SARIF/JUnit/HTML/etc. consumers.
+`deauth.rs` constructs raw 802.11 management frames:
 
-The CLI `report convert` handler includes an auto-bridge: native `--json` output (direct `WirelessScanResult` or `--repeat` wrapped `{last_scan, ...}`) is accepted directly and converted on the fly when the `wireless` feature is enabled. This makes documented flows like `eggsec wireless wlan0 --json -o w.json ; eggsec report convert w.json -f sarif` work without manual pre-processing. TUI-generated results follow the same bridge path when exported to JSON.
+**Frame byte layout** (34 bytes total):
+```
+[0..8]    Radiotap header (8 bytes minimal: version=0x00, length=0x08, padding, no present flags)
+[8..10]   Frame Control (2 bytes LE): 0xC000 (deauth, subtype 12) or 0xA000 (disassoc, subtype 10)
+[10..12]  Duration (2 bytes LE, always 0)
+[12..18]  Address 1 (6 bytes): destination (client MAC or broadcast FF:FF:FF:FF:FF:FF)
+[18..24]  Address 2 (6 bytes): source/BSSID
+[24..30]  Address 3 (6 bytes): BSSID
+[30..32]  Sequence Control (2 bytes LE, always 0)
+[32..34]  Reason Code (2 bytes LE)
+```
 
-Active attack results (`ActiveWirelessAttackResult` from `eggsec wireless <iface> deauth --json`) are also auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled. The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings, enabling SARIF/JUnit/HTML/Markdown/CSV reporting for active results. Both CLI and TUI active attack output use this same reporting path.
+**9 IEEE 802.11 Reason Codes** (`deauth.rs:26-45`):
+1. `UNSPECIFIED` (1)
+2. `AUTH_INVALID` (2)
+3. `STA_LEAVING` (3)
+4. `INACTIVITY` (4)
+5. `AP_BUSY` (5)
+6. `CLASS2_FROM_UNAUTH` (6)
+7. `CLASS3_FROM_UNASSOC` (7)
+8. `BSS_LEAVING` (8)
+9. `STA_NOT_AUTH` (9)
 
-Bridged findings use `wireless-*` categories (e.g. `wireless-rogue`, `wireless-security`, `wireless-wps`, `wireless-hidden`, `wireless-signal`, `wireless-transition`, `wireless-other`); evidence is populated as `network=<ssid> bssid=<bssid> ch=... sig=...dBm sec=...` (richer than bare id while keeping prefix for compatibility); remediation from recs. Bridge is per-result (on last_scan for repeat-wrapped native JSON). Always analyzes with None for known_good (suppression is native UX only). Timestamp in bridged `ScanReportData` is report generation time; per-net `last_seen` carries scan time.
+**Injection**: `inject_frames()` (`deauth.rs:162-264`) opens `AF_PACKET/SOCK_RAW/ETH_P_ALL` raw socket via FFI, constructs `sockaddr_ll` with interface index, and sends frames via `sendto()`. Rate-limited by tokio interval. Linux-only; other platforms bail with error. Socket is RAII-closed via `RawSocketFd::drop()`.
 
-**Design decision (standalone completion 2026-06-11)**: Wireless is intentionally a standalone defense-lab capability (CLI primary + TUI tab). Passive scanning lives under `wireless`, active deauth/disassoc lives under `wireless-advanced`, and neither participates in `ScanProfile` pipeline stages or dedicated wireless profiles (aspirational only; see `architecture/defense_lab.md` Future Integration and `cli_commands.md` Special Cases). Report integration is an optional lightweight bridge, not mandatory participation in chained pipelines. The bridge always runs rogue analysis (known-good suppression is UX-only for human/repeat output).
+**Attack runners**: `run_deauth()` (`deauth.rs:270`) and `run_disassoc()` (`deauth.rs:381`) build N frames (from `max_frames`), optionally inject them, and return `ActiveWirelessAttackResult` with findings and remediation advice (WIDS/WIPS verification, 802.11w PMF recommendation).
 
-See docs/WIRELESS.md (Integration section), CAPABILITIES.md (Lab Defense row), and `crates/eggsec/src/commands/handlers/report.rs`.
+**Safety constraints** (enforced in `commands/handlers/wireless.rs:90-96`):
+- Non-dry-run requires `--allow-active-wireless` flag
+- `max_frames` hard-capped to 1000, `frames_per_second` capped to 100
+- Policy gate: `OperationRisk::Intrusive` + `OperationMode::DefenseLab`
+- Dry-run is default; no frames transmitted
 
-Post passive standalone + integration (2026-06-11): CLI help polished (MODE prefix, more practical examples, --detect-suspicious canonical flag form), TUI descriptor now carries feature for policy parity, worker failure path made explicit. Active deauth/disassoc is available in both CLI and TUI active mode; MCP exposure remains intentionally absent (standalone defense-lab). All changes preserve the standalone defense-lab identity and policy model. Active phases are implemented under `wireless-advanced` (MCP exposure remains absent).
+## Public API
+
+### Library (`wireless/mod.rs`)
+
+- `WirelessScanner::new() -> Self`
+- `WirelessScanner::with_interface(self, String) -> Self`
+- `WirelessScanner::scan(&self, duration_secs: u64) -> Result<WirelessScanResult>` (feature `wireless`)
+- `WirelessScanner::analyze_networks(networks, known_good) -> Vec<WirelessVulnerability>` (public, static)
+- `to_scan_report_data(result: &WirelessScanResult) -> ScanReportData` (report bridge)
+- `SecurityType::as_str(&self) -> &str`
+
+### Active (`wireless/active/mod.rs`)
+
+- `ActiveAttackConfig::parse_mac(&str) -> Option<[u8; 6]>`
+- `ActiveAttackConfig::format_mac(&[u8; 6]) -> String`
+- `to_active_scan_report_data(result) -> ScanReportData` (active report bridge)
+
+### Active Attacks (`wireless/active/attacks/deauth.rs`)
+
+- `build_deauth_frame(bssid, client, reason_code) -> Vec<u8>`
+- `build_disassoc_frame(bssid, client, reason_code) -> Vec<u8>`
+- `inject_frames(interface, frames, frames_per_second) -> Result<u64>`
+- `run_deauth(config, broadcast) -> Result<ActiveWirelessAttackResult>`
+- `run_disassoc(config, broadcast) -> Result<ActiveWirelessAttackResult>`
+
+## Integration Points
+
+### CLI
+
+- `eggsec wireless <iface>` → scan (default)
+- `eggsec wireless <iface> scan` → explicit scan
+- `eggsec wireless <iface> deauth --bssid <MAC>` → active deauth (requires `wireless-advanced`)
+- Scan args: `--json`, `--repeat N`, `--duration SECS`, `--detect-suspicious`, `--known-good FILE`, `--dry-run`, `--output FILE`, `--quiet`
+- Deauth args: `--bssid`, `--client`, `--count`, `--reason-code`, `--broadcast`, `--max-frames`, `--fps`, `--dry-run`, `--allow-active-wireless`, `--json`, `--output`
+
+### TUI
+
+- WirelessTab supports passive scan and active deauth/disassoc via `a` key toggle
+- Active mode: input fields for BSSID, Client MAC, Frame Count, Rate Limit; dry-run via `d` (default on)
+- Policy confirmation overlay for live (non-dry-run) active attacks
+- Task system integration: `TaskConfig::WirelessActive` → `run_wireless_active_task` → `TaskResult::WirelessActive`
+
+### Enforcement Gating
+
+| Path | Risk | Features | Overrides |
+|------|------|----------|-----------|
+| CLI scan | `SafeActive` | `["wireless"]` | ManualPermissive allows |
+| CLI deauth | `Intrusive` | `["wireless-advanced"]` | ManualPermissive, but non-dry-run requires `--allow-active-wireless` |
+| TUI passive | `SafeActive` | `["wireless"]` | Via `TabSpec` |
+| TUI active | `Intrusive` | `["wireless-advanced"]` | Via `TabSpec` + `PendingPolicyConfirmation` |
+
+### Reporting Pipeline
+
+- Passive: `to_scan_report_data()` converts `WirelessScanResult` → `ScanReportData` (findings + `wireless_networks`). Bridge categories: `wireless-rogue`, `wireless-security`, `wireless-wps`, `wireless-hidden`, `wireless-signal`, `wireless-transition`, `wireless-other`
+- Active: `to_active_scan_report_data()` converts `ActiveWirelessAttackResult` → `ScanReportData` with `wireless-active-*` categories
+- CLI `report convert` auto-bridges native JSON output for both passive and active
+- Bridge always runs rogue analysis with `known_good=None` (suppression is UX-only for human/repeat output)
+- Evidence format: `network=<ssid> bssid=<bssid> ch=<n> sig=<n>dBm sec=<type>`
+
+### ProbeIntent / ProbeRisk
+
+Wireless does not use `ProbeIntent`/`ProbeRisk` — it is a standalone defense-lab surface outside the `ScanProfile` pipeline. Risk classification is handled directly via `OperationRisk` in the `OperationDescriptor`.
+
+## Platform Requirements
+
+| Requirement | Passive | Active |
+|-------------|---------|--------|
+| OS | Linux (iwlist) | Linux (raw socket AF_PACKET) |
+| Privileges | root or `CAP_NET_ADMIN` | root or `CAP_NET_ADMIN` |
+| External tool | `iwlist` from `wireless-tools` | None (pure-Rust frame construction) |
+| Interface mode | Managed mode, up | Monitor mode |
+| Build flag | `--features wireless` | `--features wireless-advanced` |
+
+## Testing
+
+### Unit Tests (`wireless/mod.rs:1068-1568`)
+
+14 tests covering:
+- `SecurityType::as_str()` round-trip
+- `WirelessScanner` creation
+- `analyze_networks` with open/WPA3 networks
+- `parse_scan_output` per-cell state reset, open/enterprise/WPS/hidden/transition/mixed-WPA2-WPA3
+- Weak signal detection
+- Rogue candidate detection (multi-BSSID + security diff)
+- Known-good suppression (by SSID, BSSID, and "SSID,BSSID" format)
+- Empty known-good set (rogue not suppressed)
+- `to_scan_report_data` bridge validation (evidence format, categories, serde roundtrip)
+
+### Active Tests (`wireless/active/mod.rs:168-297`)
+
+7 tests: MAC parse/format, serde roundtrips for `ActiveWirelessAttackResult` and `ActiveWirelessFinding`, `to_active_scan_report_data` bridge with and without BSSID.
+
+### Deauth Tests (`wireless/active/attacks/deauth.rs:475-555`)
+
+11 tests: frame length (34 bytes), broadcast vs targeted addresses, frame control fields (0xC000 deauth, 0xA000 disassoc), radiotap header, reason code encoding, multi-frame batch building.
+
+## Invariants & Gotchas
+
+1. **Standalone defense-lab**: Wireless is intentionally not a `SecurityTool` — no MCP/agent registration, no `ScanProfile` pipeline participation.
+2. **Known-good suppression is UX-only**: The report bridge always analyzes with `None` for `known_good` — suppression only affects human output and repeat-scan summaries.
+3. **Hidden SSID normalization**: Empty ESSID, `"<hidden>"`, and `'""'` all normalize to `"<hidden>"` with `is_hidden=true`.
+4. **Transition mode dual detection**: Set if iwlist line contains `"WPA2/WPA3"` or `"transition"`, OR if both `saw_wpa2` and `saw_wpa3` are true within a single Cell block.
+5. **Malformed cell skipping**: If a `Cell` line appears while previous SSID or BSSID is present but the pair is incomplete, the entry is skipped with a warning.
+6. **Frame injection is Linux-only**: Non-Linux platforms get `anyhow::bail!` from `inject_frames()`.
+7. **Budget caps**: CLI handler enforces `max_frames.min(1000)` and `fps.min(100)` regardless of user input.
+8. **Dry-run default**: Active attacks default to dry-run; `--allow-active-wireless` only required for live execution.
+9. **Signal drift threshold**: Temporal diffing uses 5 dBm absolute delta — configurable in logic but not exposed as CLI flag.
+10. **`FxHashSet` in recommendations**: Deduplication uses `rustc_hash::FxHashSet` for performance.
+
+---
+
+See also: [overview.md](overview.md), [probe.md](probe.md), [stress.md](stress.md), [defense_lab.md](defense_lab.md)
+
+*Last verified against source: 2026-08-25*

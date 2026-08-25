@@ -386,7 +386,7 @@ Milestone 3 should not:
 
 ### Partially Wrapped
 
-- Protocol-specific libraries (smb, ssh, ftp, http, etc.) use socket.rs/comm.rs for network I/O but may have unmigrated helper calls within their protocol logic
+- Protocol-specific libraries (smb, ssh, ftp, etc.) use socket.rs/comm.rs for network I/O but may have unmigrated helper calls within their protocol logic. `http` was promoted to Wrapped in Milestone 5 Phase 04 (all network operations gated via `check_network_tcp()`).
 
 ### Deferred (not yet migrated)
 

@@ -1,322 +1,515 @@
-# Python API execution contract
+# Python API Deep Dive
 
 `eggsec-python` is a host-language binding over the Rust engine. Its scoped
 pre-1.0 stable core is intentionally smaller than the importable package.
 
-## Stable dispatch
+## Role & Responsibilities
 
-The twenty-two stable engine operations are represented by the Rust
-`StableOperation` enum in `crates/eggsec-python/src/operation_registry.rs`.
-`Engine.run()` and `AsyncEngine.run()` parse the same enum before dispatch, so
-unknown IDs cannot silently reach a domain executor. Historical aliases are
-accepted only as compatibility inputs and resolve to the same enum variant.
+The crate bridges the Rust engine to Python via PyO3/maturin, exposing:
 
-## Mandatory gate
+- **Engine/AsyncEngine**: primary dispatch surface for all 22 stable operations
+- **Client/AsyncClient**: convenience wrappers over Engine
+- **OperationExecutorRegistry**: canonical registry driving dispatch, feature
+  gating, and daemon mapping
+- **StableOperation enum**: exactly 22 variants enforced by exhaustiveness
+  tests
+- **Tool abstraction layer**: `eggsec-tool-core` types bound to Python with
+  deterministic `ToolDescriptor` entries per operation
+- **Event protocol**: versioned `EventEnvelope` with monotonic sequences,
+  backpressure channels, and structured delivery stats
+- **Provisional/experimental domains**: network primitives, sessions,
+  repositories, proxy, NSE, database, mobile, browser, wireless, evasion,
+  postex, C2, AI integration, stress testing
 
-Every stable engine operation evaluates an `eggsec::config::EnforcementContext`
-before entering a domain executor. The gate evaluates scope, risk, required
-features, capabilities, and execution profile. It records an allow, warning,
-confirmation, or deny decision in the engine’s structured audit sink. Tracing
-is supplemental and is not the audit contract.
+The Python package reorganizes symbols into intentional submodules by
+capability ownership (Phase C), with backward-compatible top-level re-exports.
 
-Successful results include `policy_decision=allow` and the policy schema
-version in metadata. Failed results carry `OperationError`, which includes a
-schema version, kind, code, operation ID, retryability, denial class, source,
-details, and causes. `error_message` is a compatibility view.
+## Build & Install
 
-## Event delivery
+### Maturin build
 
-`EventEnvelope.sequence` is monotonic for events produced by one stream.
-`BackpressureChannel` has a bounded best-effort queue for progress and a
-reliable queue for planning, preflight, stage lifecycle, finding, artifact,
-cancellation, failure, and completion events. `EventDeliveryStats` reports
-emission, delivery, drops by event kind, maximum depth, consumer lag, and
-terminal delivery failures. The guarantee is exactly-once within the in-process
-queue model. Daemon replay is deliberately outside the first-release stable
-contract.
+```bash
+# Development build (installs into active venv)
+cd crates/eggsec-python
+maturin develop
 
-## Release boundary and daemon deferral
-
-The first public `0.x` release guarantees the twenty-two stable operations through
-local `Engine` and `AsyncEngine` execution. The optional `daemon-client`
-feature remains provisional. Its APIs are available for integration testing,
-but no release documentation should describe daemon execution as stable until
-the follow-up daemon parity milestone closes request normalization, stable
-operation identity, policy/audit parity, structured errors, payload schemas,
-cancellation, timeouts, reconnect/result retrieval, event replay, and artifact
-metadata.
-
-## Checkpoint contract
-
-Stable-core pipeline checkpoints use schema version 3. A checkpoint records
-the operation schema, target-set hash, scope hash, execution profile, enabled
-feature-set hash, pipeline-definition hash, and artifact-store identity. A
-resume rejects any mismatch with a structured `checkpoint_incompatible` error.
-Persisted checkpoints are written to a sibling temporary file, flushed, and
-atomically renamed. Sensitive-key fields are redacted before in-memory or
-on-disk serialization; secrets are never required to resume a pipeline.
-
-## Secret handling
-
-The stable-core request DTOs do not accept credentials. Secret-bearing
-provisional domains must use `SensitiveString` at their public boundary and
-must not place raw values in repr, event envelopes, reports, or checkpoints.
-Checkpoint redaction recursively covers keys such as `authorization`,
-`password`, `token`, `secret`, `client_secret`, and `api_key`; release tests
-assert that unique sentinels are absent from serialized JSON and reloaded
-checkpoints. `SensitiveString.expose_secret()` is an explicit manual escape
-hatch and is not used by stable-core dispatch.
-
-## Domain boundary
-
-Use Python `domain_maturity()` for whole-domain state and `api_surface()` for
-individual symbol state. A Cargo feature only controls compilation. It does
-not promote a domain to stable-core. See
-[`docs/python/domain-maturity.md`](../docs/python/domain-maturity.md).
-
-## Validation and Evidence Infrastructure
-
-Release 1-4 closure introduced a profile-based validation system that provides
-structured evidence for maturity classifications. The 20 validation profiles
-(each defined in `crates/eggsec-python/validation/profiles.json`) produce
-evidence JSON with test counts, skip budgets, wheel metadata, platform info,
-and toolchain versions.
-
-Maturity classifications are now derived from profile evidence rather than
-hand-maintained checklists. Skip budget enforcement prevents silent test suite
-erosion: each profile declares minimum test counts, maximum allowed
-skips/xfails, and per-reason skip budgets (e.g., `feature_gate`,
-`network_error`).
-
-Key scripts:
-- `scripts/run_python_profile.py` — runs a single profile end-to-end
-- `scripts/validate_python_profiles.py` — validates the profile manifest
-- `scripts/check-python.sh` — unified CI check (one build, all checks)
-
-## Release 4: Common Session Contract and Daemon Parity
-
-Release 4 establishes a common managed-session contract for mobile and browser
-subsystems, advances daemon parity, and introduces repository and artifact
-storage abstractions.
-
-### Common session contract
-
-Mobile and browser subsystems share a unified `SessionState` lifecycle and
-`SessionIdentity` metadata model. `MobileSession` and `BrowserSession` both
-implement the common contract, providing consistent state transitions, event
-delivery, and cleanup semantics.
-
-### Daemon parity protocol
-
-Release 4 closes gaps between local and daemon execution:
-
-- **Idempotent request submission** with deduplication keys for safe retries.
-- **Reconnect and replay** semantics for sessions interrupted by transport
-  failures.
-- **Cancellation propagation** across transport boundaries with structured
-  cancellation events.
-
-### Repository abstraction
-
-`SessionRepository` provides a content-addressed storage interface for session
-state. Implementations include `SQLiteSessionRepository` (persistent) and
-`InMemorySessionRepository` (ephemeral). The repository abstraction decouples
-session lifecycle from transport and storage backends.
-
-### Content-addressed artifact stores
-
-`ArtifactStore` and `DirectoryArtifactStore` provide content-addressed storage
-for scan artifacts. Artifacts are addressed by content hash, enabling
-deduplication and integrity verification.
-
-### Streaming reporting
-
-`StreamingReporter` supports incremental report generation during long-running
-sessions. `ReportDiff` compares report snapshots for delta reporting and
-trend analysis.
-
-### Stability classification
-
-All Release 4 types are **provisional**. They follow engine conventions but
-do not yet satisfy the graduation checklist in
-`docs/python/domain-maturity.md` for stable-core promotion. Releases 1-3
-stable-core guarantees remain intact.
-
-## Shared Async Runtime Ownership
-
-All async Python operations share a single process-global Tokio runtime
-(`OnceLock<Runtime>` in `runtime_async.rs`) with a 2-worker-thread pool.
-This replaces the previous per-`PyFuture` runtime pattern where each
-`spawn_async` call created and destroyed its own `new_current_thread()`
-runtime on a dedicated thread.
-
-### Guarantees
-
-- Stateful resources created in one awaited call remain valid for subsequent calls.
-- `connect()` → `write()` → `read()` → `close()` chains work on the same session.
-- Dropping a `PyFuture` does not drop the session runtime (shared).
-- Concurrent sessions share the runtime without global serialization.
-- Sync wrappers (`block_on`) use the separate `OnceLock` runtime in
-  `runtime_sync.rs` and release the GIL during I/O.
-
-### Affected APIs
-
-`AsyncTcpSession`, `AsyncUdpSocket`, `AsyncHttpClient`, `AsyncWebSocketSession`,
-`AsyncCaptureSession`, `AsyncMobileSession`, `AsyncBrowserSession`, daemon-backed
-`AsyncEngine`, async proxy and database sessions, and all one-shot async
-functions (recon, scanning, WAF, etc.) returning `PyFuture`.
-
-## Release 5 Phase A: Tool Integration
-
-Release 5 Phase A bridges `eggsec-tool-core` types to Python, establishing a
-deterministic tool abstraction layer for all 22 stable operations.
-
-### eggsec-tool-core exposure
-
-`eggsec-tool-core` is a standalone crate with no engine dependencies. Its
-types are pure data DTOs (request, response, finding, error, rate-limit,
-scope, target). Release 5 Phase A binds all public types to Python via
-`crates/eggsec-python/src/tool_core.rs`.
-
-The binding follows existing conventions: `#[pyclass(frozen)]`, `to_dict()`,
-`to_json()`, `__repr__`, `__str__`, `__hash__`. Credentials in `AuthConfig`
-are redacted in all repr and serialization paths.
-
-### Tool descriptor generation from OperationMetadata
-
-Each of the 22 stable operations has a `ToolDescriptor` generated from
-`OperationMetadata`. The descriptor captures:
-
-- Canonical tool ID and human-readable label
-- Supported target types (IP, domain, URL, CIDR, file)
-- Parameter and result JSON Schema (generated from Rust types)
-- Risk classification (from `OperationMetadata.default_risk`)
-- Required features and supported execution surfaces
-
-`ToolRegistry` provides static lookup: `find(tool_id)`,
-`find_by_operation(operation_id)`, `all_tools()`.
-
-### invoke_tool dispatch flow
-
-```
-Python: Engine.invoke_tool(ToolRequest)
-  → ToolRegistry.find(request.tool)
-  → EnforcementContext.evaluate(descriptor)
-  → ToolRequest → OperationDescriptor conversion
-  → eggsec::dispatch::dispatch_inner()
-  → ToolResponse construction from OperationResult
+# Release wheel
+maturin build --release
 ```
 
-The `invoke_tool` path is identical for all operations. The tool ID resolves
-to an operation via `ToolRegistry`, and the engine dispatches through the
-standard `EnforcementContext` → `EnforcedDispatcher` path. The response is
-wrapped in `ToolResponse` with status, findings, errors, and metadata.
+### extension-module nuance
 
-### Schema generation architecture
+The `extension-module` Cargo feature (configured in `pyproject.toml`
+`[tool.maturin] features = ["pyo3/extension-module"]`) enables PyO3's
+`extension-module` flag, which disables libpython linkage. This is **required**
+when building the Python extension via maturin, but **must stay off** for
+`cargo test -p eggsec-python` — the test harness is a standalone executable
+that needs libpython linked. The feature is therefore not in the `default`
+Cargo features; maturin activates it at build time.
 
-`SchemaGenerator` produces JSON Schema from Rust type metadata. Request
-schemas describe the parameter structure; response schemas describe the
-result payload. The full manifest covers all 22 stable operations and is
-useful for API documentation, validation, and code generation tools.
+### Wheel profiles
 
-Schema generation uses `schemars` (or equivalent) at compile time or
-runtime to derive schemas from the Rust struct definitions.
+| Profile | Command | Features |
+|---------|---------|----------|
+| `core` | `maturin build --release` | None (no optional features) |
+| `full` | `maturin build --release --features full-no-system` | websocket, git-secrets, sbom, container |
+| `full-with-system` | `maturin build --release --features websocket,git-secrets,sbom,container,...` | All non-system + system-dependent |
 
-## Release 5 Phase F: Compatibility Enforcement
+`full-no-system` = all features buildable without system library dependencies.
 
-Phase F introduces automated compatibility enforcement, maturity-aware
-severity rules, resource budget controls, and enhanced evidence bundles.
+## Module Layout & Maturity Tiers
 
-### Compatibility Enforcement Model
+### Rust source (104 files in `crates/eggsec-python/src/`)
 
-The compatibility checker (`scripts/check_python_compatibility.py`) compares the
-current build against a baseline manifest (`validation/compatibility/`)
-and reports violations categorized by severity:
+```
+src/
+  lib.rs                     # PyO3 #[pymodule] _core — exports 500+ symbols
+  engine.rs                  # Engine (sync dispatch)
+  async_engine.rs            # AsyncEngine (async dispatch)
+  client.rs / async_client.rs# Client/AsyncClient convenience wrappers
+  operation_registry.rs      # StableOperation enum (22 variants), registry, descriptors
+  operation_executors.rs     # Executor trait wiring
+  operation_metadata.rs      # OperationMetadataView, OperationRegistry pyclass
+  dispatch_helpers.rs        # pre_dispatch_lifecycle, post_dispatch_hooks, result builders
+  engine_state.rs            # Shared EngineState (scope, registry, events, audit)
+  runtime_async.rs           # Process-global OnceLock<Runtime>, PyFuture
+  runtime_sync.rs            # Separate OnceLock<Runtime>, block_on with GIL release
+  error.rs                   # Exception hierarchy (11 types)
+  dto.rs, endpoint.rs, fingerprint.rs, recon.rs, waf.rs, ...  # Typed result DTOs
+  requests.rs                # OperationRequest and per-op request types
+  status.rs                  # OperationResult, OperationError, ExecutionStats
+  event_protocol.rs          # EventEnvelope, typed event variants
+  event_stream.rs            # EventStream, legacy bridge
+  backpressure.rs            # PyBackpressureChannel, EventDeliveryStats
+  callbacks.rs               # AuditSink, FindingSink, ArtifactSink, ProgressSink
+  async_support.rs           # AsyncCallback, CallbackScheduler
+  cancellation.rs            # CancellationToken
+  tool_core.rs               # eggsec-tool-core Python bindings
+  tool_descriptor.rs         # ToolDescriptorPy, ToolRegistryPy, SchemaGeneratorPy
+  domains.rs                 # DomainDescriptor, domain_maturity()
+  scope.rs, scope_eval.rs    # Scope, LoadedScope, scope validation
+  config_model.rs            # PyEggsecConfig and sub-configs
+  execution_context.rs       # EnforcementContext, ApprovedOperation
+  authorization.rs           # ExecutionPolicy, ManualOverride
+  preflight.rs               # preflight_operation
+  audit.rs                   # AuditOutcome, EnforcementAuditEvent
+  pipeline.rs                # Pipeline, AsyncPipeline, PipelineStep
+  planning.rs                # ScanPlan, PlanStep
+  checkpoint.rs, checkpoint_store.rs  # Checkpoint contract
+  # Feature-gated modules:
+  nse.rs                     # NSE runtime (feature: nse)
+  db_pentest.rs              # Database assessment (feature: db-pentest)
+  proxy.rs                   # Interception proxy (feature: web-proxy)
+  mobile.rs, mobile_session.rs, mobile_convergence.rs  # Mobile (feature: mobile)
+  browser_assess.rs, browser_session.rs, browser_events.rs  # Browser (feature: headless-browser)
+  container.rs               # Container security (feature: container)
+  wireless.rs                # Wireless scanning (feature: wireless)
+  evasion.rs, postex.rs, c2.rs  # Post-exploitation (feature-gated)
+  packet_inspection.rs       # Packet capture (feature: packet-inspection)
+  stress.rs                  # Stress testing (feature: stress-testing)
+  websocket.rs               # WebSocket sessions (feature: websocket)
+  git_secrets.rs             # Git secrets (feature: git-secrets)
+  sbom.rs                    # SBOM generation (feature: sbom)
+  ai_postprocess.rs          # AI integration (feature: ai-integration)
+  hunt.rs                    # Advanced hunting (feature: advanced-hunting)
+  compliance.rs              # Compliance mapping (feature: compliance)
+  daemon.rs                  # Daemon client (feature: daemon-client)
+```
 
-| Severity | Meaning | Example |
-|----------|---------|---------|
-| `breaking` | API surface removal or incompatible change | Removed type, changed function signature |
-| `warning` | Stability regression or schema drift | Stable type moved to provisional |
-| `info` | Audit coverage gap or documentation drift | Missing test for a public type |
+### Python package layout
 
-Baseline manifests record the full stable-core API surface, type
-signatures, and schema versions for a given commit. Generated manually
-via `generate_python_compatibility_baseline.py` when needed for release
-validation.
+```
+python/eggsec/
+  __init__.py        # Top-level re-exports, feature guard, deprecation aliases
+  __init__.pyi       # Type stubs
+  _core.cpython-*.so # Compiled native extension
+  _feature_guard.py  # Feature introspection
+  py.typed           # PEP 561 marker
+  *.pyi              # Per-module type stubs (one per Rust source file)
+  net/               # Provisional: network types, transport, probes, HTTP client, WebSocket
+  sessions/          # Provisional: browser, mobile, database, proxy session types
+  storage/           # Provisional: finding/assessment repositories, artifact stores
+  reporting/         # Provisional: reporters, streaming output, baselines
+  daemon/            # Provisional: daemon client and parity contracts
+  experimental/      # Experimental: wireless, evasion, postex, C2, hunt, AI, stress
+```
 
-### Maturity-Aware Severity Rules
+### Maturity tier table
 
-`STABILITY_CLASSIFICATIONS.md` now encodes maturity-aware severity
-escalation. Types at lower stability levels inherit higher default
-severity in findings and audit events. A `provisional` type emitting
-a finding is classified `medium` by default; an `experimental` type
-emits at `high`. Stable-core types follow the explicit `ToolSeverity`
-from the operation descriptor.
+| Tier | Submodule | Contents |
+|------|-----------|----------|
+| **stable** | `eggsec` (top-level) | Engine, 22 operations, config, events, scope, core DTOs |
+| **provisional** | `eggsec.net` | Network types, transport, probes, HTTP client, WebSocket |
+| **provisional** | `eggsec.sessions` | Browser, mobile, database, proxy session types |
+| **provisional** | `eggsec.storage` | Finding/assessment repositories, artifact stores |
+| **provisional** | `eggsec.reporting` | Reporters, streaming output, baselines |
+| **provisional** | `eggsec.daemon` | Daemon client and parity contracts |
+| **experimental** | `eggsec.experimental` | Wireless, evasion, postex, C2, hunt, AI, stress |
 
-### Resource Budget Enforcement
+A Cargo feature only controls compilation. It does not promote a domain to
+stable-core. See [`domain-maturity.md`](../docs/python/domain-maturity.md).
 
-`crates/eggsec-python/tests/test_resource_budgets.py` enforces hard limits on:
-- Module count (prevents submodule proliferation)
-- Exported symbol count (prevents surface bloat)
-- Dependency tree depth (prevents transitive coupling)
-- Wheel size (prevents unbounded binary growth)
+## Stable Core Contract
 
-Budgets are defined as constants in the test file and checked on every
-CI run. Violations fail the build.
+### The 22 stable operations
 
-### Evidence Bundle Structure (Release Validation)
+The `StableOperation` enum in `crates/eggsec-python/src/operation_registry.rs`
+defines exactly 22 variants. The exhaustive list, with engine ID mapping and
+feature requirements:
 
-Release evidence can be generated manually for release validation:
+| # | Python ID | Engine ID | Python method(s) | Feature | Confirmation |
+|---|-----------|-----------|-------------------|---------|--------------|
+| 1 | `scan_ports` | `scan-ports` | `scan_ports()` / `async_scan_ports()` | — | no |
+| 2 | `scan_endpoints` | `scan-endpoints` | `scan_endpoints()` / `async_scan_endpoints()` | — | no |
+| 3 | `fingerprint_services` | `fingerprint` | `fingerprint_services()` / `async_fingerprint_services()` | — | no |
+| 4 | `recon_dns` | `recon` | `recon_dns()` / `async_recon_dns()` | — | no |
+| 5 | `inspect_tls` | `inspect-tls` | `inspect_tls()` / `async_inspect_tls()` | — | no |
+| 6 | `detect_technology` | `detect-technology` | `detect_technology()` / `async_detect_technology()` | — | no |
+| 7 | `detect_waf` | `waf-detect` | `detect_waf()` / `async_detect_waf()` | — | no |
+| 8 | `validate_waf` | `validate-waf` | `validate_waf()` / `async_validate_waf()` | — | no |
+| 9 | `fuzz_http` | `fuzz` | `fuzz_http()` / `async_fuzz_http()` | — | yes |
+| 10 | `load_test` | `load-test` | `load_test_http()` / `async_load_test_http()` | — | yes |
+| 11 | `scan_git_secrets` | `scan-git-secrets` | `scan_git_secrets()` / `async_scan_git_secrets()` | `git-secrets` | no |
+| 12 | `generate_sbom` | `generate-sbom` | `generate_sbom()` / `async_generate_sbom()` | `sbom` | no |
+| 13 | `run_consolidated_recon` | `run-consolidated-recon` | `run_consolidated_recon()` / `async_run_consolidated_recon()` | — | no |
+| 14 | `graphql_test` | `graphql` | `graphql_test()` / `async_graphql_test()` | — | no |
+| 15 | `oauth_test` | `oauth` | `oauth_test()` / `async_oauth_test()` | — | no |
+| 16 | `auth_test` | `auth-test` | `auth_test()` / `async_auth_test()` | — | no |
+| 17 | `db_probe` | `db-pentest` | `db_probe()` / `async_db_probe()` | `db-pentest` | yes |
+| 18 | `nse_run` | `nse` | `nse_run()` / `async_nse_run()` | `nse` | yes |
+| 19 | `scan_docker_image` | `scan-docker-image` | `scan_docker_image()` / `async_scan_docker_image()` | `container` | no |
+| 20 | `scan_kubernetes` | `scan-kubernetes` | `scan_kubernetes()` / `async_scan_kubernetes()` | `container` | no |
+| 21 | `analyze_apk` | `mobile-static` | `analyze_apk()` / `async_analyze_apk()` | `mobile` | no |
+| 22 | `analyze_ipa` | `mobile-static` | `analyze_ipa()` / `async_analyze_ipa()` | `mobile` | no |
 
-| Artifact | Source | Contents |
-|----------|--------|----------|
-| `compatibility-baseline.json` | `generate_python_compatibility_baseline.py` | API surface, type signatures, schema versions |
-| `compatibility-diff.json` | `check_python_compatibility.py` | Added/removed/changed symbols, severity |
-| `resource-budgets.json` | `crates/eggsec-python/tests/test_resource_budgets.py` | Budget name, limit, actual, pass/fail |
-| `redaction-coverage.json` | `crates/eggsec-python/tests/test_redaction_comprehensive.py` | Paths tested, pass/fail, coverage percentage |
-| `graduation-status.json` | `GRADUATION_REVIEW.md` | Per-domain checklist progress |
+Source: `StableOperation::ALL` at `operation_registry.rs:402-425`.
 
-These artifacts are aggregated into the evidence bundle and used for
-release gating. A `breaking` compatibility violation or resource budget
-failure blocks publication.
+**Every operation has both sync and async paths.** This is enforced by the
+descriptor contract: `OperationExecutorDescriptor` sets `sync_available: true`
+and `async_available: true` for all 22 variants (`operation_registry.rs:296-297`),
+and the `sync_and_async_callbacks_both_present` test (`operation_registry.rs:1217-1224`)
+asserts both flags are true for every operation.
 
-## Release 2: Network Programmability
+**Historical aliases** are accepted by `StableOperation::parse()` for backward
+compatibility: `fingerprint`, `recon`, `tls_inspect`, `tech_detect`,
+`waf_detect`, `waf_validate`, `http_fuzz`, `load_test_http`,
+`consolidated_recon` (`operation_registry.rs:535-561`).
 
-Release 2 introduces Python bindings for low-level network primitives. These
-types live in `eggsec.network`, `eggsec.transport`, `eggsec.probes`,
-`eggsec.http_client`, and `eggsec.websocket`.
+## Execution Pipeline
 
-### Enforcement posture
+### Engine construction
 
-All Release 2 network operations pass through the engine's enforcement model:
+```
+Engine(scope, mode="manual", concurrency=100, timeout_ms=5000)
+  → EngineState::from_params(scope, mode, concurrency, timeout_ms)
+  → Arc<EngineState> (shared with AsyncEngine)
+```
 
-- **Low-level network primitives** (`TargetPy`, `ConnectionConfigPy`,
-  `RetryPolicyPy`, etc.) are scope-checked at construction time. Target
-  resolution validates against `LoadedScope` before DNS or TCP contact.
-- **TCP/UDP sessions** (`TcpSessionPy`, `UdpSocketPy`) use the existing
-  `EnforcementContext` via the transport layer. Session creation evaluates
-  scope and risk; connection attempts to out-of-scope targets raise
-  `EnforcementError`.
-- **HTTP client requests** (`HttpClientPy`, `AsyncHttpClientPy`) pass through
-  the policy gate for each request. The client enforces scope on the target
-  authority, records TLS metadata for audit, and redacts sensitive headers
-  from transcripts and reports.
-- **WebSocket assessments** (`websocket_assess()`) are canonical operations
-  with a policy check, structured events, and cooperative cancellation. They
-  follow the same dispatch contract as stable-core operations but are
-  classified provisional until graduation criteria are met.
-- **Raw packet injection** remains experimental (feature: `packet-inspection`).
-  It is not exposed through the Python bindings in the default wheel and
-  requires an explicit feature flag and elevated scope.
+`EngineState` holds the shared `OperationExecutorRegistry`, scope, concurrency,
+timeout, event channel, and audit log. Both `Engine` and `AsyncEngine` hold
+`Arc<EngineState>`.
 
-### Stability classification
+### Three-phase dispatch lifecycle
 
-Release 2 network types are **provisional**. The public API shape is useful
-and follows engine conventions (frozen pyclasses, `to_dict`/`to_json`,
-context managers for sessions), but they do not yet satisfy the graduation
-checklist in `docs/python/domain-maturity.md` for stable-core promotion.
-The 2026-07-14 release closure pass (1977 passed, 89 skipped) verified that
-all Release 2 network/transport/probe configuration types are properly
-registered in the API surface with provisional stability. Use
-`api_surface()` to verify stability before relying on these types in
-compatibility-sensitive automation.
+```
+Engine::run(request)
+  → OperationExecutorRegistry::execute(py, id, request, engine)
+    → StableOperation::parse(id)         # reject unknown ops
+    → feature_required() check           # reject if feature not compiled
+  → Engine::dispatch(py, request, cancel_token)
+    Phase 1: pre_dispatch_lifecycle      # planning, validation, preflight, cancel, deadline
+    Phase 2: execute_operation           # exhaustive match on StableOperation
+    Phase 3: post_dispatch_hooks         # finding/artifact events
+  → OperationResult
+```
+
+Source: `engine.rs:601-637`.
+
+The async path (`AsyncEngine::dispatch_async`) follows the same three phases
+but spawns the operation-specific work onto the shared Tokio runtime via
+`runtime_async::spawn_async()`, returning a `PyFuture` that Python can `await`.
+
+### Async runtime bridging (tokio ↔ asyncio)
+
+Two separate process-global Tokio runtimes exist:
+
+- **Async runtime** (`runtime_async.rs`): `OnceLock<Runtime>` with 2 worker
+  threads. All `PyFuture` instances share this runtime. Converting results back
+  to Python objects acquires the GIL via `Python::attach()` from the worker
+  thread (`runtime_async.rs:98`).
+
+- **Sync runtime** (`runtime_sync.rs`): Separate `OnceLock<Runtime>` with 2
+  worker threads. `block_on()` uses `py.detach()` to release the GIL during I/O
+  (`runtime_sync.rs:28`), preventing deadlock when sync wrappers call async
+  engine internals.
+
+### Result envelope
+
+Every operation returns `OperationResult`:
+
+```python
+OperationResult {
+    status: ExecutionStatus,     # Completed() or Failed { error }
+    stats: ExecutionStats?,      # elapsed_ms, items_scanned, items_filtered, errors
+    artifacts: list[Artifact],
+    error: OperationError?,      # kind, code, operation_id, retryable, denial_class, ...
+    metadata: dict[str, str],    # includes "policy_decision" and "policy_schema_version"
+    payload: Any?,               # typed result DTO (PortScanResult, etc.)
+    payload_type: str?,          # type discriminator for payload
+    schema_version: str,         # "1.0"
+}
+```
+
+Successful results include `policy_decision=allow` in metadata. Failed results
+carry a structured `OperationError` with kind, code, and retryability.
+
+## Error Handling Conventions
+
+### Exception hierarchy
+
+Defined in `error.rs:3-13`, registered in `lib.rs:145-161`:
+
+```
+PyException
+  └── EggsecError
+        ├── ConfigError          (validation, configuration)
+        ├── ScopeError           (scope denial)
+        ├── EnforcementError     (policy denial, capability unavailable, privilege missing)
+        ├── NetworkError         (network, daemon transport)
+        ├── ScanError            (scan failures)
+        ├── TimeoutError         (timeouts)
+        ├── FeatureUnavailableError (feature not compiled)
+        ├── SerializationError   (serialization, parsing)
+        ├── InternalError        (fallback)
+        └── CancellationError    (cancellation)
+```
+
+### Exception mapping
+
+`operation_error_to_pyerr()` (`error.rs:17-32`) maps `OperationError.kind`
+to the appropriate Python exception. `engine_error_to_pyerr()` (`error.rs:37-71`)
+maps engine `EggsecError` variants to Python exceptions.
+
+### Enum ValueError convention
+
+All public enums raise `ValueError` on unknown strings. `StableOperation::parse()`
+returns `None` for unknown IDs, and the registry provides Levenshtein-distance
+suggestions (`operation_registry.rs:783-803`):
+
+```
+"Unknown operation: scan_port. Did you mean: scan_ports?"
+```
+
+### Context-manager convention
+
+All sink/callback classes and session types implement `__enter__`/`__exit__`
+(or `__aenter__`/`__aexit__` for async variants) for automatic cleanup. `Engine`
+and `AsyncEngine` also implement context managers (`engine.rs:511-524`,
+`async_engine.rs:514-527`).
+
+## Type Stubs & DTOs
+
+### Round-trip contract
+
+All DTO classes implement `to_dict()` and `to_json()` for serialization. The
+`from_dict()` and `from_json()` methods support deserialization round-trip.
+Type stubs (`.pyi` files) are generated for every Rust source file and included
+in the wheel via `pyproject.toml` `include`.
+
+### Key DTO families
+
+| Family | Examples | Stability |
+|--------|----------|-----------|
+| Scan results | `PortScanResult`, `EndpointScanResult`, `FingerprintScanResult` | stable |
+| Recon types | `DnsRecordSet`, `TlsInspectionResult`, `TechDetectionResult` | stable |
+| Request types | `PortScanRequest`, `FuzzRequest`, `OperationRequest` | stable |
+| Common protocol | `OperationResult`, `OperationError`, `ExecutionStats` | stable |
+| Finding schema | `VersionedFinding`, `VersionedEvidence` | provisional |
+| Event protocol | `EventEnvelope`, `ProgressEvent`, `FindingEvent` | stable |
+| Tool-core | `ToolRequest`, `ToolResponse`, `ToolDescriptor` | stable |
+
+## Feature Gating & Extras
+
+### Cargo features (21 features in `Cargo.toml`)
+
+| Feature | Engine passthrough | System deps | Notes |
+|---------|-------------------|-------------|-------|
+| `extension-module` | `pyo3/extension-module` | — | Required for maturin builds |
+| `websocket` | `eggsec/websocket` | — | WebSocket sessions |
+| `git-secrets` | `eggsec/git-secrets` | — | Git secrets scanning |
+| `sbom` | `eggsec/sbom` | — | SBOM generation |
+| `db-pentest` | `eggsec/db-pentest` | drivers | Database assessment |
+| `web-proxy` | `eggsec/web-proxy` | — | MITM proxy |
+| `mobile` | `eggsec/mobile` | — | APK/IPA static analysis |
+| `mobile-dynamic` | `eggsec/mobile-dynamic` | ADB | Android runtime testing |
+| `packet-inspection` | `eggsec/packet-inspection` | libpcap-dev | Packet capture |
+| `stress-testing` | `eggsec/stress-testing` | — | Raw socket stress |
+| `nse` | `eggsec/nse` | libssl-dev | NSE script execution |
+| `container` | `eggsec/container` | — | Docker/K8s scanning |
+| `daemon-client` | — | — | Daemon IPC (eggsec-daemon, eggsec-runtime) |
+| `headless-browser` | `eggsec/headless-browser` | Chromium | Browser testing |
+| `advanced-hunting` | `eggsec/advanced-hunting` | — | Attack chain detection |
+| `compliance` | — | — | Compliance mapping (no engine passthrough) |
+| `wireless` | `eggsec/wireless` | wireless-tools | WiFi scanning |
+| `evasion` | `eggsec/evasion` | — | Evasion detection |
+| `postex` | `eggsec/postex` | — | Post-exploitation |
+| `c2` | `eggsec/c2` | — | C2 simulation |
+| `ai-integration` | `eggsec/ai-integration` | — | LLM integration |
+| `full-no-system` | — | — | Aggregate: websocket + git-secrets + sbom + container |
+
+### Python extras (`pyproject.toml [project.optional-dependencies]`)
+
+| Extra | Features |
+|-------|----------|
+| `db-pentest` | db-pentest |
+| `web-proxy` | web-proxy |
+| `mobile` | mobile |
+| `mobile-dynamic` | mobile + mobile-dynamic |
+| `packet-inspection` | packet-inspection |
+| `stress-testing` | stress-testing |
+| `nse` | nse |
+| `wireless` | wireless |
+| `headless-browser` | headless-browser |
+| `full-no-system` | websocket + git-secrets + sbom + container |
+
+### Feature introspection
+
+`eggsec._feature_guard` and `eggsec.features()` / `eggsec.has_feature()` /
+`eggsec.feature_matrix()` provide runtime introspection of compiled features.
+The `__init__.py` feature guard registers unavailable symbols with structured
+error messages including maturity level, install hint, and platform prerequisites.
+
+## Daemon Client (Provisional)
+
+The optional `daemon-client` feature enables routing through `eggsec-daemon`
+over a Unix socket. Both `Engine` and `AsyncEngine` support daemon-backed
+construction via `Engine.daemon(socket_path, ...)` / `AsyncEngine.daemon(...)`.
+
+When daemon-backed, `Engine::run()` delegates to `run_via_daemon()` which:
+1. Creates a session on first dispatch (if none provided)
+2. Converts `OperationRequest` to `TaskKind` JSON via registry-driven
+   `operation_request_to_daemon_task()` (uses `OperationExecutorDescriptor.daemon_task_kind`)
+3. Submits to daemon and converts response to `OperationResult`
+
+The daemon client remains **provisional**. No release documentation should
+describe daemon execution as stable until the daemon parity milestone closes:
+request normalization, stable operation identity, policy/audit parity,
+structured errors, payload schemas, cancellation, timeouts, reconnect/result
+retrieval, event replay, and artifact metadata.
+
+## Validation & Testing
+
+### Rust-side tests (`operation_registry.rs`)
+
+~30 architecture guard and contract tests including:
+
+- `canonical_registry_is_exhaustive` (line 837): asserts `StableOperation::ALL.len() == 22`
+- `operation_ids_are_unique_and_ordered` (line 847)
+- `legacy_aliases_preserve_dispatch_identity` (line 858)
+- `test_all_operations_have_descriptors` (line 879)
+- `test_all_operations_have_feature_requirements` (line 888)
+- `test_feature_gate_consistency` (line 925): verifies feature-gated ops match expected features
+- `sync_and_async_callbacks_both_present` (line 1217): every op has both paths
+- `test_confirmation_required_operations` (line 979): NseRun, DbProbe, FuzzHttp, LoadTest
+- `feature_gated_executors_agree_with_cargo_features` (line 1203)
+- `every_stable_operation_has_exactly_one_executor` (line 1132)
+- `aliases_do_not_collide` (line 1161)
+- `engine_ids_are_kebab_case` / `python_ids_are_snake_case` (line 1315/1330)
+- `generated_metadata_is_current` (line 1237): cross-checks `generated_inventories.rs`
+
+### Python-side testing
+
+```bash
+pytest crates/eggsec-python/tests/ crates/eggsec-python/python/tests/
+```
+
+- Pytest excludes `network`-marked tests by default (`-m 'not network'`)
+- Feature-specific tests gated by `maturin develop --features ...`
+- 20 validation profiles in `crates/eggsec-python/validation/profiles.json`
+- Skip budget enforcement prevents silent test suite erosion
+
+### Validation scripts
+
+| Script | Purpose |
+|--------|---------|
+| [`scripts/validate_python_profiles.py`](../scripts/validate_python_profiles.py) | Validates profile manifest |
+| [`scripts/run_python_profile.py`](../scripts/run_python_profile.py) | Runs a specific profile end-to-end |
+| [`scripts/check_python_compatibility.py`](../scripts/check_python_compatibility.py) | Semantic compatibility checker against baseline |
+| [`scripts/check-python.sh`](../scripts/check-python.sh) | Unified CI check (one build, all checks) |
+| `make check-python` | Builds into `.venv-ci/`, runs all Python CI checks |
+
+## Release Features
+
+### Release 5 Phase A: Tool Integration
+
+All 22 stable operations have `ToolDescriptor` entries in `ToolRegistry`
+generated from `OperationMetadata`. `Engine.invoke_tool()` and
+`AsyncEngine.async_invoke_tool()` dispatch through the standard
+`EnforcementContext` → `EnforcedDispatcher` path.
+
+`SchemaGenerator` produces JSON Schema for request/response types.
+
+### Release 5 Phase F: Compatibility Enforcement
+
+Automated compatibility enforcement via `check_python_compatibility.py`
+against a baseline manifest. Severity levels: `breaking`, `warning`, `info`.
+Resource budget enforcement prevents module/export/dependency/size bloat.
+
+### Release 4: Common Session Contract
+
+`SessionState`, `SessionIdentity`, `MobileSession`, `BrowserSession` share
+a unified lifecycle contract. Daemon parity protocol with idempotent
+submission, reconnect/replay, and cancellation propagation.
+
+### Release 2: Network Programmability
+
+Low-level network primitives (`Target`, `TcpSession`, `UdpSocket`,
+`HttpClient`, WebSocket) with enforcement posture. All provisional.
+
+## Invariants & Gotchas
+
+1. **Unknown ops raise `ValueError`** (sync) or return `None` from `parse()`.
+   Levenshtein suggestions are provided for close matches.
+
+2. **Feature-gated ops raise `FeatureUnavailableError`** when the Cargo feature
+   is not compiled. The Python feature guard registers structured error messages.
+
+3. **Confirmation required** for: `NseRun`, `DbProbe`, `FuzzHttp`, `LoadTest`
+   (`operation_registry.rs:92-98`).
+
+4. **Sync `block_on()` releases the GIL** via `py.detach()` (`runtime_sync.rs:28`).
+   Async `spawn_async()` acquires the GIL from worker threads via `Python::attach()`
+   for result conversion (`runtime_async.rs:98`).
+
+5. **Engine and AsyncEngine share `Arc<EngineState>`** — scope, registry, events,
+   and audit log are consistent across sync and async paths.
+
+6. **Historical aliases** (`fingerprint`, `recon`, `tls_inspect`, etc.) resolve
+   to the same `StableOperation` variant. They are accepted by `Engine.run()`
+   for backward compatibility but new code should use canonical IDs.
+
+7. **Python snake_case ↔ Engine kebab-case**: every operation has different
+   naming conventions between Python and Rust. The mapping is in
+   `StableOperation::to_engine_id()` (`operation_registry.rs:367-391`).
+
+8. **`EGGSEC_ALLOW_LOOPBACK_FIXTURE=1`** enables release fixture tests using
+   loopback addresses. Required for deterministic CI testing.
+
+9. **`api_surface()` stability labels** are the source of truth for individual
+   symbol stability. `domain_maturity()` describes whole-domain state.
+
+10. **Checkpoint schema version 3**: checkpoints record operation schema,
+    target-set hash, scope hash, execution profile, feature-set hash,
+    pipeline-definition hash, and artifact-store identity. Resume rejects
+    any mismatch.
+
+## Cross-References
+
+- [overview.md](overview.md) — workspace crate index, system architecture
+- [ai_agents.md](ai_agents.md) — AI/LLM integration architecture
+- [daemon.md](daemon.md) — daemon persistence, session lifecycle, transport
+- [dispatch.md](dispatch.md) — engine dispatch mechanics
+- [config.md](config.md) — enforcement model, LoadedScope, policy system
+- [docs/python/domain-maturity.md](../docs/python/domain-maturity.md) — domain maturity classifications and graduation checklist
+
+*Last verified against source: 2026-08-25*

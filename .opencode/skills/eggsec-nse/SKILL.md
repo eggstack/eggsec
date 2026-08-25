@@ -36,7 +36,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Milestone 4 Phase 03 (context fidelity) complete.** Structured context types (`NseHostContext`, `NsePortContext`, `NseServiceContext`, `NseContextSource`) provide typed Lua table construction with provenance tracking. `hostrule(host)` receives structured host table (not raw nmap global). `portrule(host, port)` receives (host, port) pair matching Nmap signature. `NseRuleEvaluationReport` extended with context fidelity fields. 402 tests pass, 8 new context fidelity tests. See [Milestone 4 Phase 03](../../architecture/nse_integration.md#milestone-4-phase-03-host-port-and-service-context-fidelity).
 
-> **Milestone 4 complete.** Structured evidence reports (`NseEvidenceKind`, `NseEvidenceItem`, `extract_evidence()`), bridge to `ReportEnvelope` (`bridge.rs`), CLI human-readable output (`print_human_report()`), upstream-style corpus (16 fixtures), context fidelity fixtures (3), compatibility matrix (`docs/NSE_COMPATIBILITY.md`), 44 library registry entries, 40 corpus fixtures total.
+> **Milestone 4 complete.** Structured evidence reports (`NseEvidenceKind`, `NseEvidenceItem`, `extract_evidence()`), bridge to `ReportEnvelope` (`bridge.rs`), CLI human-readable output (`print_human_report()`), upstream-style corpus (16 fixtures), context fidelity fixtures (3), compatibility matrix (`docs/NSE_COMPATIBILITY.md`), 43 library registry entries, 40 corpus fixtures total.
 
 > **Milestone 4 closure pass (2026-07-06, runtime harness).** The compatibility corpus is now verified by two structurally separated harnesses. The static harness (`compatibility_corpus_tests.rs` `mod corpus_manifest`) is resolver-only; the runtime harness (`runtime_corpus_tests.rs`) drives every fixture through `NseExecutor::with_profile()` with synthetic host/port context and asserts manifest expectations against observed rule/library/capability reports. Smoke tests (`runtime_smoke_tests.rs`) exercise the full pipeline (profile → context → execution → report → `ReportEnvelope` bridge). Architecture guards 42/43/44 enforce the separation. 432 tests pass (1 ignored), 44 architecture guard checks pass. See [Milestone 4 Closure Verification](../../architecture/nse_integration.md#milestone-4-closure-verification).
 >
@@ -170,7 +170,7 @@ nse-ssh2 = ["nse", "dep:ssh2"]
 nse-sandbox = []  # Enables SandboxConfig enforcement
 ```
 
-## Libraries (166 implementations, 44 registry descriptors)
+## Libraries (166 implementations, 43 registry descriptors)
 
 Located in `src/libraries/`:
 - **socket.rs** (703 lines) - TCP/UDP/SCTP sockets with sandbox enforcement

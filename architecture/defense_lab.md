@@ -41,6 +41,54 @@ Defense-lab mode is distinct from general assessment mode. It assumes a local or
 5. **Compare against baseline** to identify changes or regressions
 6. **Convert regressions into test cases** for CI or future runs
 
+## Category Taxonomy
+
+The `DomainCategory` enum (`crates/eggsec/src/domain/mod.rs:27-38`) classifies domains into five categories:
+
+| Category | Label | Semantics |
+|----------|-------|-----------|
+| `StandardAssessment` | "standard assessment" | Scoped recon, scanning, fuzzing, API testing, WAF detection, and reporting |
+| `DefenseLab` | "defense lab" | Local/private defense validation and regression testing |
+| `HazardousLab` | "hazardous lab" | High-risk operations requiring explicit authorization |
+| `FrontendAdapter` | "frontend adapter" | Bridges external protocols (REST, MCP, gRPC) |
+| `OutputAdapter` | "output adapter" | Produces output formats (reports, exports) |
+
+### DefenseLab vs. HazardousLab Semantics
+
+`DefenseLab` (`OperationMode::DefenseLab`, `policy.rs:184`) provides a local/private/scope-constrained environment for WAF and distributed-system validation. Its `default_max_risk()` is `OperationRisk::Intrusive` (`policy.rs:205`), meaning Intrusive operations are allowed by default without explicit policy approval.
+
+`HazardousLab` (`OperationMode::HazardousLab`, `policy.rs:188`) covers raw packet operations, flood-style stress tests, proxy rotation, low-level protocol edge cases, and other aggressive tests. Its `default_max_risk()` is `OperationRisk::AgentAutonomous` (`policy.rs:206`), the highest risk tier.
+
+Both modes require explicit scope and are distinct from `StandardAssessment` (which defaults to `SafeActive`). The enforcement engine (`policy_decision.rs:1171`) treats them differently: DefenseLab operations can proceed with `Intrusive` risk under default policy, while HazardousLab operations require explicit `allow_*` flags in `ExecutionPolicy`.
+
+## Lab-Gated Module Inventory
+
+| Module | Gate Feature | Operation Mode | Risk Tier | Dry-Run? | Confirmation Required? |
+|--------|-------------|----------------|-----------|----------|----------------------|
+| db-pentest | `db-pentest` | DefenseLab | DbPentest (real) / SafeActive (dry) | Always safe | `--allow-db-pentest` for real |
+| wireless-active | `wireless-advanced` | DefenseLab | Intrusive (live) / SafeActive (dry) | `-d` flag | `--allow-wireless-advanced` |
+| mobile-dynamic | `mobile-dynamic` | DefenseLab | Intrusive (real) / SafeActive (dry) | Always safe | `--allow-frida` for Frida |
+| auth-test | (always compiled) | StandardAssessment | CredentialTesting | N/A (no dry-run mode) | No |
+| web-proxy | `web-proxy` | StandardAssessment | TrafficInterception (real) / SafeActive (dry) | Always safe | `--allow-web-proxy` for real |
+| evasion | `evasion` | DefenseLab | EvasionTesting | Dry-run-only handler | `--allow-evasion-testing` |
+| postex | `postex` | DefenseLab | PostExploitation | Dry-run-only handler | `--allow-postex` |
+| c2 | `c2` | StandardAssessment | C2Operation | Dry-run-only handler | `--allow-c2` |
+| stress | `stress-testing` | HazardousLab | StressTest | No | `--allow-stress-testing` |
+| packet-inspection | `packet-inspection` | HazardousLab | RawPacket | No | `--allow-raw-packets` |
+
+### Module Details
+
+- **db-pentest**: Direct database security checks (Postgres/MySQL/MSSQL/MongoDB/Redis). Phase 1-6 delivered. TUI tab `Tab::DbPentest` + native `Stage::DbPentest` pipeline. Advanced gated checks behind `--allow-db-pentest-advanced`. Cross-DB correlation, compliance mapping, optional MCP via `db-pentest-mcp`. See `architecture/database_pentest.md`.
+- **wireless-active**: Active deauth/disassoc frame injection (lab-only). Risk `Intrusive` (live) / `SafeActive` (dry-run via `-d`). No MCP/agent exposure (design decision).
+- **mobile-dynamic**: Android runtime testing via ADB, logcat, proxy, and Frida. Phase 2a (proxy + permissions) + Phase 3 (Frida) delivered. Standalone defense-lab (no pipeline/TUI/MCP).
+- **auth-test**: Credential control validation (brute, lockout, MFA, timing). Local `Auth*` types only (no bridge). Risk `CredentialTesting`. Distinct from pipeline `ScanProfile::Auth`.
+- **web-proxy**: Interactive MITM proxy for HTTP/HTTPS traffic interception. Phase 1 delivers dry-run mode with complete `WebProxySessionReport`. Standalone defense-lab (no MCP/agent/TUI/pipeline).
+- **evasion**: Evasion technique detection for defense validation. 16 techniques across 6 categories. Feature-gated: `evasion`. Dry-run-only handler behavior.
+- **postex**: Post-exploitation and LOTL simulation. Feature-gated: `postex`. Dry-run-only handler behavior.
+- **c2**: C2 simulation (beaconing, tasking, campaign orchestration). Feature-gated: `c2`. Depends on postex+evasion. Dry-run-only handler behavior.
+- **stress**: Network stress testing (SYN/UDP/HTTP/TCP/ICMP floods, IP spoofing). Feature-gated: `stress-testing`. HazardousLab mode.
+- **packet-inspection**: Packet capture, crafting, parsing. Feature-gated: `packet-inspection`. HazardousLab mode.
+
 ## Probe Categories
 
 Defense-lab profiles target these categories:
@@ -56,39 +104,126 @@ Defense-lab profiles target these categories:
 | **Rate-limit/tarpit behavior** | Rate detection, slowloris patterns, connection exhaustion |
 | **Load-bearing validation** | Concurrency scaling, connection pool behavior, timeout thresholds |
 
-### Dedicated Lab Loadouts (Standalone Defense-Lab Surfaces)
+## Preset System
 
-In addition to the core probe categories above, Eggsec provides several dedicated standalone defense-lab surfaces that follow the same policy + dry-run + optional reporting bridge pattern (all under `DefenseLab` mode, MCP/agent exposure intentionally absent in the current phase, no `ScanProfile` pipeline participation):
+`DefenseLabPreset` (`crates/eggsec/src/config/presets.rs:7`) defines constraints for specific lab workflows. 7 built-in presets:
 
-- **db-pentest** (`eggsec db pentest ...`, feature `db-pentest`): Direct Postgres/MySQL/MSSQL/MongoDB/Redis lab checks (Phase 1-5). TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` (Phase 3). Advanced gated checks behind `--allow-db-pentest-advanced`. Cross-DB correlation engine, compliance mapping (OWASP/PCI/HIPAA), optional MCP exposure via `db-pentest-mcp` marker (Phase 5). Risk tier `DbPentest` (real) / `SafeActive` (dry-run). Requires `--allow-db-pentest` for non-dry runs. Native `DbPentestReport` + `to_scan_report_data_db` bridge (auto in `report convert`). See `architecture/database_pentest.md`.
-- **wireless-active** (`eggsec wireless <iface> deauth ...`, feature `wireless-advanced`): Active deauth/disassoc frame injection (lab-only). Risk `Intrusive` (live) / `SafeActive` (dry-run via `-d`). Native results + `to_active_scan_report_data` bridge (auto in `report convert`). See `architecture/wireless.md`.
-- **mobile-dynamic** (`eggsec mobile dynamic ...`, feature `mobile-dynamic`): Android runtime testing (ADB + logs + Phase 2 proxy/permissions/correlation + Phase 3 Frida). Risk `SafeActive` (dry) / `Intrusive` (real + `--allow-frida`). Native `DynamicMobileReport` + `to_scan_report_data_dynamic` bridge (auto in `report convert`). See `architecture/mobile.md`.
-- **auth-test** (`eggsec auth-test ...`): Credential control validation (brute, lockout, MFA, timing). Local `Auth*` types only (no bridge, distinct from pipeline `ScanProfile::Auth`). Risk `CredentialTesting`. See `architecture/auth.md`.
-- **web-proxy** (`eggsec proxy-intercept ...`, feature `web-proxy`): Interactive MITM proxy for HTTP/HTTPS traffic interception and logging. Phase 1 delivers dry-run mode with complete `WebProxySessionReport`; real interception is Phase 2. Risk tier `TrafficInterception` (real) / `SafeActive` (dry-run). Requires `--allow-web-proxy` for non-dry runs. Native `WebProxySessionReport` + `to_scan_report_data_proxy` bridge (auto in `report convert`). Standalone defense-lab; no MCP/agent/TUI/pipeline. See `architecture/web_proxy.md` and `docs/WEB_PROXY.md`.
+| Preset | Mode | Max Risk | Intended Uses | Concurrency | Max Duration | Max Requests | Raw Sockets |
+|--------|------|----------|---------------|-------------|-------------|-------------|-------------|
+| `synvoid-local` | DefenseLab | Intrusive | SynvoidRegression, WafRegression | 10 | 300s | 10,000 | No |
+| `synvoid-waf-regression` | DefenseLab | Intrusive | WafRegression | 20 | 600s | 50,000 | No |
+| `synvoid-protocol-edge` | DefenseLab | SafeActive | ProtocolEdgeValidation | 5 | 120s | 1,000 | Yes |
+| `distributed-system-smoke` | DefenseLab | LoadTest | DistributedSystemStress | 5 | 60s | 500 | No |
+| `distributed-system-stress` | HazardousLab | StressTest | DistributedSystemStress | 50 | 300s | 100,000 | Yes |
+| `waf-regression-safe` | DefenseLab | SafeActive | WafRegression | 5 | 120s | 5,000 | No |
+| `waf-regression-intrusive` | DefenseLab | Intrusive | WafRegression | 20 | 600s | 50,000 | No |
 
-These are intentionally lightweight, opt-in, standalone CLI surfaces (with optional TUI for some) designed for repeatable lab/regression use on assets you control. All use central `EnforcementContext::evaluate()` + explicit allow flags + dry-run safety. Reporting unification is via optional bridges only (not full pipeline integration), except db-pentest which now has `Tab::DbPentest` (Phase 3) and `ScanProfile::DbRegression` (Phase 3). See AGENTS.md (standalone defense-lab surfaces note), `architecture/cli_commands.md` (Special Cases), `docs/USAGE.md` (Output Models), and the per-module architecture docs.
+All presets enforce `localhost_or_private_required: true` (verified by test at `presets.rs:216`). `distributed-system-stress` is the only HazardousLab preset; it enables `raw_sockets_allowed: true` and `dns_resolution_allowed: true`.
 
-## Safety Model
+### GeneratedPreset ScopeSource
 
-Defense-lab mode enforces strict safety boundaries:
+`ScopeSource::GeneratedPreset` (`config/scope.rs:209`) is one of four scope provenance values. When a scope is generated from a preset, it carries this source tag, enabling strict execution profiles to distinguish it from user-provided config or CLI scope files. `LoadedScope::is_explicit_manifest()` (`scope.rs:226`) returns `true` for `GeneratedPreset`, satisfying the explicit-manifest requirement for automated surfaces.
 
-| Constraint | Default |
-|------------|---------|
-| **Target scope** | Localhost or private-lab ranges only |
-| **Explicit scope** | Required for all defense-lab profiles |
-| **Rate/concurrency budgets** | Required for load-bearing and stress probes |
-| **Feature gates** | Stress and packet features require `--features stress-testing` / `--features packet-inspection` |
-| **No unscoped internet** | Defense-lab profiles reject public targets by default |
+## Approval / Confirmation Flow
 
-Defense-lab profiles should not be run against targets you do not own or control.
+### ConfirmationClass
 
-### Mobile Static Analysis (Phase 1)
+`ConfirmationClass` (`config/policy_decision.rs:402`) defines 8 categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`:
 
-`mobile-static` is currently exposed as the standalone CLI command `eggsec mobile <apk-or-ipa>` (feature `mobile`). It performs pure-Rust static analysis of Android APKs and iOS IPAs on user-supplied lab binaries only (manifest, config, permissions, transport settings, hardcoded secrets, signing indicators, etc.). No dynamic instrumentation, Frida, or network activity. Policy gate uses `SafeActive` via `EnforcementContext`. Outputs local `MobileScanReport`/`MobileFinding` types directly (with optional `to_scan_report_data` bridge for unified report consumers). Not yet integrated with `ScanProfile` pipelines; `mobile-static`/`mobile-regression` profiles are aspirational per the handoff plan. See `architecture/mobile.md`, `architecture/cli_commands.md` (Special Cases), and `crates/eggsec/src/mobile/`.
+| Class | CLI Flag | Semantics |
+|-------|----------|-----------|
+| `OutOfScope` | `--allow-out-of-scope` | Target not in declared scope (positive rules present) |
+| `ExplicitExclusion` | `--allow-excluded-target` | Target explicitly excluded from scope |
+| `HighRisk` | `--allow-high-risk` | Intrusive/LoadTest/StressTest/RawPacket/CredentialTesting/DbPentest/ExploitAdjacent/RemoteExecution |
+| `NonBaselineCapability` | `--allow-nonbaseline-capability` | Required capability not in baseline allowlist |
+| `PrivateResolution` | `--allow-private-resolution` | Public input resolved to private/loopback (DNS rebinding signal) |
+| `CrossHostRedirect` | `--allow-cross-host-redirect` | Redirect to different host detected |
+| `TargetExpansion` | `--allow-out-of-scope` | New targets discovered outside original input |
+| `TrafficInterception` | `--allow-web-proxy` | MITM proxy / traffic interception |
 
-Wireless passive recon (`eggsec wireless <iface>`) is part of the consolidated "standalone defense-lab surfaces" pattern (wireless + mobile + auth-test + db-pentest; 2026-06-11). `auth-test`: local `Auth*` only, direct emit, no bridge/conversion, no pipeline (distinct from `ScanProfile::Auth`). `wireless` + `mobile`: local types direct (CLI + optional TUI tab for wireless; CLI for mobile) + optional `to_scan_report_data` bridge (wired to eggsec-output; native --json auto-bridged in `report convert` handler when feature present). `db-pentest`: local `DbPentestReport`/`DbFinding` types + optional `to_scan_report_data_db` bridge + TUI tab `Tab::DbPentest` (Phase 3) + pipeline `ScanProfile::DbRegression` (Phase 3). db-pentest now participates in `ScanProfile` pipelines via `DbRegression`; other standalone surfaces remain aspirational for pipeline integration (see `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, docs/WIRELESS.md + docs/MOBILE.md "Integration with Reporting Pipeline" sections, CAPABILITIES.md Lab Defense, and AGENTS.md standalone note). MCP/agent tool surface exposure is intentionally absent for wireless (design decision; not a SecurityTool; see `architecture/wireless.md` MCP/Agentic section) and follows the same pattern for the group. Passive wireless = Phase 0 (2026-06-11); active design completed (same standalone + MCP-absent pattern). Dynamic mobile design completed (same standalone + MCP-absent pattern). **mobile-dynamic Phase 2a (proxy config + permission testing) complete 2026-06-12** (Level 1: device global http_proxy + --traffic-capture summary + grant/revoke/list; still standalone, auto-bridge, no TUI/pipeline/MCP; see architecture/mobile.md). Final polish (F2 correlation helper, F3 parser robustness, F5 report surface, F6 docs) and close-out polish (final code hygiene + doc consistency) executed 2026-06-12; Phase 2 closed. (Phase 4b TUI reviewed 2026-06-12 and deferred (absent from TUI; wireless/auth are wired precedents); reporting polish delivered for human output.)
+### How Lab Ops Map to ConfirmationClass
 
-Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
+- **db-pentest** (real, `OperationRisk::DbPentest`): triggers `HighRisk` confirmation (`policy_decision.rs:1422`). `ManualOverride.allow_db_pentest` permits `HighRisk` (`policy_decision.rs:460`).
+- **wireless-active** (live, `OperationRisk::Intrusive`): triggers `HighRisk`.
+- **mobile-dynamic** (real + Frida, `OperationRisk::Intrusive`): triggers `HighRisk`.
+- **web-proxy** (real interception, `OperationRisk::TrafficInterception`): triggers `TrafficInterception` confirmation.
+- **evasion/postex/c2** (real execution): triggers `HighRisk` for their respective risk tiers.
+- **stress** (HazardousLab, `OperationRisk::StressTest`): triggers `HighRisk`.
+
+### ManualOverride
+
+`ManualOverride` (`policy_decision.rs:433`) is honored only for `ExecutionProfile::ManualPermissive`. Key behaviors:
+
+- `assume_yes` only permits `OutOfScope` and `TargetExpansion` (low-risk scope confirmations). It does NOT authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects (`policy_decision.rs:449-452`).
+- `allow_db_pentest` specifically permits `HighRisk` confirmation class (`policy_decision.rs:460`).
+- `allow_web_proxy` specifically permits `TrafficInterception` (`policy_decision.rs:461`).
+- Strict profiles (McpStrict, AgentStrict, CiStrict) never honor manual overrides — `RequireConfirmation` becomes a hard `Deny`.
+
+### EnforcementOutcome Flow
+
+`evaluate_enforcement()` (`policy_decision.rs:1171`) produces one of four outcomes:
+
+1. **Allow**: operation proceeds (no warnings, no confirmations needed).
+2. **Warn**: operation proceeds with recorded warnings (ManualPermissive only, for safe ambiguity cases).
+3. **RequireConfirmation**: operator must provide matching `--allow-*` flags (ManualPermissive only). Automated profiles treat as `Deny`.
+4. **Deny**: operation must not proceed (hard denial).
+
+For DefenseLab operations, the flow is:
+- `evaluate_operation_policy()` checks features, scope, risk against `ExecutionPolicy`.
+- `evaluate_enforcement()` maps the decision to an outcome based on the `ExecutionProfile`.
+- `confirmation_classes_for()` (`policy_decision.rs:1365`) determines which `ConfirmationClass` values apply.
+- `approve_manual()` or `approve()` produces an `ApprovedOperation` token if the outcome permits dispatch.
+
+## Dry-Run Support Contract
+
+Defense-lab modules implement dry-run with varying completeness:
+
+| Module | Dry-Run Behavior | Zero Network? | Complete Report? |
+|--------|-----------------|:------------:|:---------------:|
+| db-pentest | Synthesizes representative findings per check type and db_type | Yes | Yes |
+| web-proxy | Produces complete `WebProxySessionReport` | Yes | Yes |
+| mobile-dynamic | Produces complete `DynamicMobileReport` | Yes | Yes |
+| wireless-active | Produces synthetic findings via `-d` flag | Yes | Yes |
+| evasion | Dry-run-only handler (real requires feature) | Yes | Yes |
+| postex | Dry-run-only handler (real requires feature) | Yes | Yes |
+| c2 | Dry-run-only handler (real requires feature) | Yes | Yes |
+
+The db-pentest dry-run (`utils::populate_dry_run_findings` + `simulate_advanced_test_vector`) exercises 100% of report generation paths including correlation, compliance, and baseline operations — always producing a valid, serializable `DbPentestReport` with zero DB/network interaction.
+
+## Scope Requirements
+
+All DefenseLab operations require explicit scope for strict automated surfaces (MCP, Agent, CI). The `DomainDescriptor` for db-pentest (`domain/mod.rs:465`) sets `requires_explicit_scope: true`.
+
+`DefenseLabPreset` enforces `localhost_or_private_required: true` for all built-in presets (`presets.rs:216-223`). The scope system (`scope.rs`) classifies addresses via `classify_address()` into `AddressClass` variants (Loopback, Private, Public, etc.) and evaluates targets against `Scope` rules (allowed/excluded CIDR patterns).
+
+For ManualPermissive profiles, missing scope for safe low-risk operations may downgrade to `Warn` (`policy_decision.rs:1214-1262`). For DefenseLab operations (Intrusive+ risk), scope misses produce `RequireConfirmation` or `Deny`.
+
+## Invariants
+
+1. **DefenseLab is local/private**: All DefenseLab profiles reject public targets by default. `DefenseLabPreset.localhost_or_private_required` is always `true` (verified by test `presets.rs:216`).
+2. **Dry-run is safe**: Every lab-gated module produces a complete report without network interaction when dry-run is active.
+3. **Explicit scope required**: Strict surfaces (MCP/Agent/CI) always require explicit scope for DefenseLab operations (`requires_explicit_scope: true` in `DomainDescriptor`).
+4. **Confirmation required for high-risk**: `HighRisk` confirmation class is triggered for Intrusive/DbPentest/StressTest/CredentialTesting/ExploitAdjacent/RemoteExecution risk tiers under ManualPermissive (`policy_decision.rs:1415-1432`).
+5. **Manual overrides are narrow**: `--yes` only covers low-risk scope confirmations (OutOfScope, TargetExpansion). High-risk and capability confirmations require dedicated `--allow-*` flags.
+6. **HazardousLab is strictly gated**: Only `distributed-system-stress` uses HazardousLab mode. It requires explicit feature flags (`stress-testing`), raw sockets, and policy approval.
+7. **No dangerous defaults**: No profile enables raw sockets, IP spoofing, or SYN flood by default (except `distributed-system-stress` and `synvoid-protocol-edge`).
+8. **Engine modules are policy-free**: Security modules (scanner, fuzzer, etc.) are policy-free executors. All authorization happens upstream via `EnforcementContext::evaluate()`.
+9. **PolicyDecision is the single source of truth**: Operation policy checks use `OperationMetadata` and `evaluate_operation_policy()`, not inline checks.
+10. **Dry-run-only handlers**: Evasion, postex, and c2 modules have dry-run-only handler behavior — real execution requires feature-gated code paths behind explicit `--allow-*` flags.
+
+## Integration with Policy System
+
+Defense-lab profiles integrate with the unified operation taxonomy:
+
+- Each profile declares an `OperationMode` (DefenseLab or HazardousLab)
+- Each profile declares `IntendedUse` values (WafRegression, SynvoidRegression, etc.)
+- Policy decisions are emitted for every operation with structured metadata
+- Budgets enforce finite limits on all defense-lab runs
+
+See `config/policy.rs` for `OperationMode`, `OperationRisk`, and `IntendedUse`.
+See `config/policy_decision.rs` for `PolicyDecision` and `ConfirmationClass`.
+See `config/budget.rs` for `ExecutionBudget`.
+See `config/presets.rs` for built-in defense-lab presets.
 
 ## Output Model
 
@@ -149,16 +284,29 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 - **Mobile static/regression profiles**: `mobile-static`, `mobile-dynamic`, and `mobile-regression` pipeline profiles (aspirational; Phase 1 + Phase 2a + final polish + close-out polish are standalone CLI `eggsec mobile ...` under `SafeActive`/`DefenseLab` only, suitable for defense-lab use on lab-provided APKs/IPAs and controlled lab devices). See `architecture/mobile.md`. Dynamic loadout completed. Phase 2 closed (proxy + permissions + correlation; 2026-06-12) + final polish + close-out + Phase 3/4a (Frida + CorrelationEngine) delivered 2026-06-12 all remain standalone defense-lab (no pipeline/TUI/MCP).
 - **Wireless stages**: Similarly aspirational (`WirelessAnalysis` or `wireless-defense` profile). See `architecture/wireless.md`. Decision from integration work: Defer.
 
-## Integration with Policy System
+## Integration with Reporting Pipeline
 
-Defense-lab profiles integrate with the unified operation taxonomy:
+A defense-lab run produces structured output suitable for regression analysis. The canonical envelope for this is `RunManifest` defined in `crates/eggsec/src/output/run_manifest.rs` and documented in `architecture/output.md`.
 
-- Each profile declares an `OperationMode` (DefenseLab or HazardousLab)
-- Each profile declares `IntendedUse` values (WafRegression, SynvoidRegression, etc.)
-- Policy decisions are emitted for every operation with structured metadata
-- Budgets enforce finite limits on all defense-lab runs
+| Field | Description |
+|-------|-------------|
+| `schema_version` | Manifest schema version for forward compatibility |
+| `run_id` | Unique identifier for this run |
+| `started_at` / `ended_at` | Timestamps |
+| `eggsec_version` | Version used |
+| `target_scope` | Target specification |
+| `profile` | Defense-lab profile name |
+| `probe_intents` | Categorized probe metadata (uses `ProbeIntent` enum from `probe.rs`) |
+| `risk_budget` | Allowed risk tier (uses `ProbeRisk` enum from `probe.rs`) |
+| `feature_flags` | Enabled features |
+| `observations` | Raw probe results (response codes, latencies, payloads) |
+| `findings` | Interpreted findings |
+| `artifacts` | Paths to output files (JSON, HTML, CSV, etc.) |
+| `baseline_id` | Reference to baseline run, if comparing |
+| `diff_summary` | Summary of differences against baseline (uses `DiffSummary` from `output::diff`) |
 
-See `config/policy.rs` for `OperationMode`, `OperationRisk`, and `IntendedUse`.
-See `config/policy_decision.rs` for `PolicyDecision`.
-See `config/budget.rs` for `ExecutionBudget`.
-See `config/presets.rs` for built-in defense-lab presets.
+The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type in `crates/eggsec-output/src/diff.rs` and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
+
+Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
+
+*Last verified against source: 2026-08-25*

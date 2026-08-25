@@ -71,6 +71,8 @@ cargo check -p eggsec-cli --features stress-testing
 - Output modules with engine coupling remain in `eggsec` to avoid cycles
 - The `eggsec` crate re-exports `eggsec_output` as `output` for backward compatibility
 
+*Last verified against source: 2026-08-25*
+
 ## Notes
 
 Pre-first-pass and pre-second-pass timing data are not available.

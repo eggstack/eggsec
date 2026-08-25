@@ -61,12 +61,12 @@ nor hosted CI publishes a package.
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
-| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 166 library implementations / 44 registered descriptors, sandbox, ScriptResolver. Optional. |
+| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 166 library implementations / 43 registered descriptors, sandbox, ScriptResolver. Optional. |
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
 | `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.31 bundled); optional `http-api` SSE transport, optional `full-executor`. |
-| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (14), `ServerMessage` (11), `ErrorCode` (11), RBAC client registry. Depends only on `eggsec-runtime`. |
+| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (14), `ServerMessage` (13), `ErrorCode` (11), RBAC client registry. Depends only on `eggsec-runtime`. |
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
@@ -156,7 +156,7 @@ Active vulnerability discovery modules. Each sends crafted input to targets and 
 | Auth | `crates/eggsec/src/auth/` | Brute force, credential stuffing, lockout detection, MFA bypass, rate-limit analysis, session tests, timing attacks, password policy; multi-protocol (FTP/SSH/SMTP) under `nse-ssh2` | [auth.md](auth.md) |
 | Hunt | `crates/eggsec/src/hunt/` | Authorization bypass, business logic, race conditions, attack chains, session issues (`run_hunt()`); feature-gated: `advanced-hunting` | [hunt.md](hunt.md) |
 | Browser | `crates/eggsec/src/browser/` | Headless browser: DOM XSS, SPA route discovery, client-side security checks, corpus; real impl behind `headless-browser`, error stub otherwise | [browser.md](browser.md) |
-| WebSocket | `crates/eggsec/src/websocket/` | Connection handling, message fuzzing, injection, origin checks; live tests behind `websocket` feature (report types always available) | [websocket.md](websocket.md) |
+| WebSocket | `crates/eggsec/src/websocket/` | Connection handling, message fuzzing (14 payloads / 6 categories), injection, origin checks; **entire module** behind `websocket` feature (`lib.rs:153`) | [websocket.md](websocket.md) |
 | Evasion | `crates/eggsec/src/evasion/` | Evasion technique **detection** for defense validation: 16 techniques across 6 categories, each MITRE ATT&CK mapped (test-enforced); feature-gated: `evasion` | [evasion.md](evasion.md) |
 | API Schema | `crates/eggsec/src/api_schema/` | Standalone OpenAPI 3.0 (JSON/YAML) parser → fuzz-target generation, independent type hierarchy from `fuzzer/api_schema/`; feature-gated: `api-schema` | [api_schema.md](api_schema.md) |
 
@@ -166,7 +166,7 @@ Modules for testing system resilience, throughput, and behavior under load.
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Load Test | `crates/eggsec/src/loadtest/` | HTTP load testing with hdrhistogram p50/p90/p95/p99, concurrency control, rate limiting, warm-up | [loadtest.md](loadtest.md) |
+| Load Test | `crates/eggsec/src/loadtest/` | HTTP load testing with hdrhistogram p50/p90/p95/p99 (precision 3), concurrency control, rate limiting | [loadtest.md](loadtest.md) |
 | Stress | `crates/eggsec/src/stress/` | Network stress testing: SYN, UDP, HTTP, ICMP floods implemented; **TCP flood is declared but not implemented** (`stress/mod.rs:140` returns an error). Raw sockets + IP spoofing; feature-gated: `stress-testing` (authorization/metrics/warning always compiled) | [stress.md](stress.md) |
 | Packet | `crates/eggsec/src/packet/` | Packet capture, crafting, parsing (pnet-based), hexdump, traceroute; feature-gated: `packet-inspection` (CLI surface needs `cli` too) | [networking.md](networking.md) |
 
@@ -194,7 +194,7 @@ Configuration, persistence, reporting, and supporting infrastructure.
 | Web Proxy | `crates/eggsec-web-proxy/` | MITM web proxy domain: HTTP/HTTPS/WebSocket/HTTP2/gRPC interception, on-the-fly TLS cert generation (`CertGenerator`), evidence bundles, RBAC rules; feature-gated: `web-proxy` | [web_proxy.md](web_proxy.md) |
 | Storage | `crates/eggsec/src/storage/` | SQLx PostgreSQL persistence for findings/scan history (`PgPool`); feature-gated: `database` | [storage.md](storage.md) |
 | Workflow | `crates/eggsec/src/workflow/` | Finding lifecycle: assignment, comments, SLA tracking, status transitions; feature-gated: `finding-workflow` | [workflow.md](workflow.md) |
-| Findings | `crates/eggsec/src/findings/` | Canonical `Finding` schema (17 fields), `FindingStore` (JSONL persistence), lifecycle states, fingerprints for dedup; `FindingType` (9), `Confidence` (5), `EvidenceKind` (13) | [findings.md](findings.md) |
+| Findings | `crates/eggsec/src/findings/` | Canonical `Finding` schema (19 fields), `FindingStore` (JSONL persistence), lifecycle states, fingerprints for dedup; `FindingType` (9), `Confidence` (5), `EvidenceKind` (13) | [findings.md](findings.md) |
 | Diff | (in `eggsec-output` + engine) | Scan result diffing, baseline comparison, regression detection | [diff.md](diff.md) |
 | Domain Contract | `crates/eggsec/src/domain/` | Static `DomainDescriptor` metadata (3 domains today: `db-pentest`, `mobile-static`, `mobile-dynamic`, all DefenseLab category); declares capability without authorizing it; `required_feature` gates availability | [domain_contract.md](domain_contract.md) |
 
@@ -205,7 +205,7 @@ The daemon architecture enables persistent sessions, background task execution, 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Daemon | `crates/eggsec-daemon/` | Long-running host: session persistence (SQLite via rusqlite, bundled), client registry, Unix socket IPC, optional HTTP/SSE transport (`http-api`), optional full engine executor (`full-executor`) | [daemon.md](daemon.md) |
-| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (14), `ServerMessage` (11), `ErrorCode` (11), `ClientRegistry` with roles/permissions; no persistence/TLS deps | [daemon.md](daemon.md) |
+| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (14), `ServerMessage` (13), `ErrorCode` (11), `ClientRegistry` with roles/permissions; no persistence/TLS deps | [daemon.md](daemon.md) |
 | Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, sessions, event broadcasting; zero workspace deps | [runtime.md](runtime.md) |
 | Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `RuntimeSurface`→`ExecutionSurface` (1:1 except `Unknown`→error), `RunRequest`/`TaskKind`→`OperationDescriptor`; `preflight_run_request()` preview, `approve_run_request()` issues `ApprovedOperation`; manual overrides honored only on ManualPermissive surfaces | [runtime_bridge.md](runtime_bridge.md) |
 | UI Model | `crates/eggsec-ui-model/` | View DTOs (`SessionView`, `TaskView`, `ResultEnvelopeView`, `DashboardSummaryView`, event/artifact/permission/policy-prompt views) + renderer registry (23 entries) keyed by task kind | [ui_model.md](ui_model.md) |
@@ -248,7 +248,7 @@ Modules that connect to external platforms and AI services.
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | AI/LLM | `crates/eggsec/src/ai/` | Multi-provider client (OpenAI, Anthropic, Azure, OpenAI-compatible), response cache, adaptive planner + script generation behind `ai-integration`; WAF-bypass suggestions, payload suggestion | [ai_agents.md](ai_agents.md) |
-| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **166 library implementation files** exposing the NSE stdlib, **44 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
+| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **166 library implementation files** exposing the NSE stdlib, **43 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
 | Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab connectors behind a common `IssueTracker` trait; feature-gated: `external-integrations` | [integrations.md](integrations.md) |
 | Notifications | `crates/eggsec/src/notify/` | Webhook delivery plus Slack/Discord/MS Teams channels via `NotifyManager`; always compiled | [notify.md](notify.md) |
 
@@ -422,7 +422,7 @@ Marker features (gate code without adding dependencies) include `tool-api`, `api
 | `PayloadType` | `fuzzer/payloads/mod.rs:49` | Exactly 40 payload categories |
 | `ScanProfile` | `types.rs:123` | 18 pipeline profile variants |
 | `EggsecError` | `error/mod.rs:44` | Canonical error type, 23 variants |
-| `Finding` | `findings/mod.rs` | Canonical finding structure (17 fields) |
+| `Finding` | `findings/mod.rs` | Canonical finding structure (19 fields) |
 | `DomainDescriptor` | `domain/mod.rs` | Static metadata descriptor for capability domains |
 | `TaskKind` | `eggsec-runtime/src/request.rs:53` | 29 frontend-neutral task variants |
 
@@ -599,4 +599,4 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-08-25 — Full verification pass against source. Corrections: EggsecError 23 variants (was 18), PayloadType exactly 40 (was "42+"), utils 20 sub-modules (was 22), TaskKind 29 (was "27+"), stress TCP flood documented as unimplemented, postex techniques described as 16 across 4 categories, NSE 166 implementations vs 44 registered descriptors distinguished, PDF attributed to engine crate not eggsec-output, ScanProfile path corrected to src/types.rs. Added How-an-Operation-Flows section, dispatch.md and api_schema.md deep dives. Same-day addendum: See Also now links AGENTS.md Module Index (override + skill mapping); scanner endpoint count re-verified at 347.*
+*Last updated: 2026-08-25 — Full verification pass against source. Corrections: EggsecError 23 variants (was 18), PayloadType exactly 40 (was "42+"), utils 20 sub-modules (was 22), TaskKind 29 (was "27+"), stress TCP flood documented as unimplemented, postex techniques described as 16 across 4 categories, NSE 166 implementations vs 43 registered descriptors distinguished, PDF attributed to engine crate not eggsec-output, ScanProfile path corrected to src/types.rs. Added How-an-Operation-Flows section, dispatch.md and api_schema.md deep dives. Same-day addendum: See Also now links AGENTS.md Module Index (override + skill mapping); scanner endpoint count re-verified at 347.*

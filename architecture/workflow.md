@@ -1,51 +1,370 @@
 # Workflow Module
 
-## Purpose
+Finding lifecycle management including status transitions, assignment, comments, and SLA tracking. Feature-gated behind `finding-workflow`.
 
-Finding lifecycle management including status transitions, assignment, comments, and SLA tracking. Manages the operational workflow of security findings from discovery to resolution.
+See also: [overview.md](overview.md), [findings.md](findings.md), [output.md](output.md), [tui.md](tui.md).
 
-## Key Types
+## Role & Responsibilities
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `WorkflowReport` | `workflow/mod.rs` | Workflow metrics (open/in-progress/resolved counts, SLA violations) |
-| `Finding` | `workflow/finding.rs` | Finding record with status transitions |
-| `FindingStatus` | `workflow/finding.rs` | Status enum: Open, InProgress, Resolved, Verified, FalsePositive |
-| `StatusWorkflow` | `workflow/status.rs` | State machine enforcing valid status transitions |
-| `Assignment` | `workflow/assignment.rs` | Finding assignment record (`notes: Option<String>`) |
-| `Comment` | `workflow/comments.rs` | Finding comment (`is_internal: bool`) |
-| `SlaPolicy` | `workflow/sla.rs` | SLA policy definition (severity→hours) |
-| `SlaStatus` | `workflow/sla.rs` | SLA tracking and violation detection |
+- Enforce valid finding status transitions via a state machine (`StatusWorkflow`)
+- Track finding assignments to team members with audit metadata
+- Support comment threads (internal and external) on findings
+- Compute SLA compliance per finding based on severity-based policies
+- Aggregate workflow metrics (open/in-progress/resolved counts, SLA violations)
 
-## Status Transitions
+## Location & Feature Gating
 
-```
-Open → InProgress, FalsePositive
-InProgress → Resolved, Open
-Resolved → Verified, Open
-Verified → Open
-FalsePositive → Open
-```
+| Item | Location | Feature |
+|------|----------|---------|
+| Module declaration | `lib.rs:155-159` | `finding-workflow` |
+| Public module | `lib.rs:155` (`pub mod workflow`) | `finding-workflow` |
+| Stub module | `lib.rs:157` (`mod workflow`) | `not(finding-workflow)` |
+| Feature flag | `Cargo.toml` `finding-workflow` | Marker feature (no extra dependencies) |
+
+When `finding-workflow` is disabled, the module compiles with empty/stub types. The TUI workflow tab and dispatch worker are feature-gated on the same flag.
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `mod.rs` | Module root: `WorkflowReport` with metrics calculation |
-| `finding.rs` | Finding management with validated status transitions |
-| `status.rs` | Status workflow transitions (Open, InProgress, Resolved, etc.) |
-| `assignment.rs` | Finding assignment to team members |
-| `comments.rs` | Comment thread management on findings |
-| `sla.rs` | SLA tracking and violation detection |
+| File | Lines | Purpose |
+|------|-------|---------|
+| `workflow/mod.rs` | 251 | `WorkflowReport` struct, `calculate_metrics()` with SLA evaluation, 6 test functions |
+| `workflow/finding.rs` | 184 | `Finding` struct (workflow-local), `FindingStatus` enum (5 variants), `update_status()` with state machine validation |
+| `workflow/status.rs` | 138 | `StatusWorkflow` with `can_transition()` / `validate_transition()` — the canonical transition table |
+| `workflow/assignment.rs` | 91 | `Assignment`, `AssignmentRequest`, `assign_finding()` free function |
+| `workflow/comments.rs` | 82 | `Comment`, `CommentRequest`, `add_comment()` free function |
+| `workflow/sla.rs` | 136 | `SlaPolicy`, `SlaStatus`, `calculate_sla()`, `SlaPolicy::default_policies()` (5 severity tiers) |
 
-## Design Notes
+**Important**: The workflow module defines its own `Finding` and `FindingStatus` types, distinct from the canonical `findings::Finding` and `findings::lifecycle::FindingStatus`. The workflow `FindingStatus` has 5 variants (`Open`, `InProgress`, `Resolved`, `Verified`, `FalsePositive`). The findings lifecycle `FindingStatus` has 6 variants (`New`, `Confirmed`, `AcceptedRisk`, `FalsePositive`, `Remediated`, `Reopened`). These are separate state machines serving different purposes — see [findings.md](findings.md) for the canonical lifecycle.
 
-- `Finding::update_status()` validates transitions via `StatusWorkflow` before applying
-- `WorkflowReport::calculate_metrics()` computes all fields from the findings list
-- `assign_finding()` and `add_comment()` return their types directly (no Result wrapper)
-- SLA defaults: Critical=24h, High=168h, Medium=720h, Low=2160h, Info=8760h
-- Feature-gated on `finding-workflow`
+## Architecture
 
-## Implementation Status
+### FindingStatus Enum — Workflow (`workflow/finding.rs:19-28`)
 
-Fully implemented. Status transitions, assignment, comments, and SLA tracking are all functional.
+5 variants (default: `Open`):
+
+| Variant | Display | Description |
+|---------|---------|-------------|
+| `Open` | `"open"` | Initial state, awaiting triage |
+| `InProgress` | `"in_progress"` | Actively being worked |
+| `Resolved` | `"resolved"` | Fix applied, pending verification |
+| `Verified` | `"verified"` | Confirmed fixed |
+| `FalsePositive` | `"false_positive"` | Determined to be a false alarm |
+
+Derives `Default` (→ `Open`), `PartialEq`, `Eq`, `Clone`, `Serialize`, `Deserialize` (snake_case).
+
+### Status Transition Table (`workflow/status.rs:7-19`)
+
+8 valid transitions enforced by `StatusWorkflow::can_transition()`:
+
+| From | To | Line |
+|------|----|------|
+| `Open` | `InProgress` | `status.rs:10` |
+| `Open` | `FalsePositive` | `status.rs:11` |
+| `InProgress` | `Resolved` | `status.rs:12` |
+| `InProgress` | `Open` | `status.rs:13` |
+| `Resolved` | `Verified` | `status.rs:14` |
+| `Resolved` | `Open` | `status.rs:15` |
+| `Verified` | `Open` | `status.rs:16` |
+| `FalsePositive` | `Open` | `status.rs:17` |
+
+All other transitions are invalid and return `Err(EggsecError::Validation(...))` from `Finding::update_status()` (`finding.rs:62-71`).
+
+### State Machine Diagram
+
+```
+                    ┌──────────────┐
+                    │     Open     │◄──────────────────┐
+                    └──────┬───────┘                    │
+                           │                            │
+              ┌────────────┼────────────┐               │
+              │            │            │               │
+              ▼            ▼            │               │
+      ┌──────────────┐  ┌──────────┐   │               │
+      │  InProgress  │  │FalsePos. │   │               │
+      └──────┬───────┘  └────┬─────┘   │               │
+             │                │         │               │
+             ▼                └─────────┘               │
+      ┌──────────────┐                                  │
+      │   Resolved   │──────────────────────────────────┘
+      └──────┬───────┘
+             │
+             ▼
+      ┌──────────────┐
+      │   Verified   │──────────────────────────────────┘
+      └──────────────┘
+```
+
+### Finding Struct — Workflow (`workflow/finding.rs:8-17`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` | UUID v4, generated by `Finding::new()` |
+| `title` | `String` | Human-readable title |
+| `description` | `String` | Detailed description |
+| `severity` | `Severity` | Canonical `crate::types::Severity` |
+| `status` | `FindingStatus` | 5-variant workflow status |
+| `assignee` | `Option<String>` | Set by `assign()` |
+| `created_at` | `DateTime<Utc>` | Set on creation |
+| `updated_at` | `DateTime<Utc>` | Updated on `assign()` and `update_status()` |
+
+`Finding::new()` (`finding.rs:43-55`) creates with `status: Open`, `assignee: None`, timestamps set to `Utc::now()`.
+
+`Finding::assign()` (`finding.rs:57-60`) sets `assignee` and bumps `updated_at`.
+
+`Finding::update_status()` (`finding.rs:62-72`) validates via `StatusWorkflow::can_transition()` before applying. Returns `Err` on invalid transition.
+
+### WorkflowReport (`workflow/mod.rs:24-31`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_findings` | `usize` | Count of all findings |
+| `open_findings` | `usize` | Count of `Open` findings |
+| `in_progress_findings` | `usize` | Count of `InProgress` findings |
+| `resolved_findings` | `usize` | Count of `Resolved` + `Verified` findings |
+| `sla_violations` | `usize` | Count of `Open` findings past their SLA deadline |
+| `findings` | `Vec<Finding>` | All findings |
+
+`calculate_metrics()` (`workflow/mod.rs:38-63`):
+1. Iterates all findings
+2. Counts `Open` (with SLA check), `InProgress`, `Resolved`+`Verified`
+3. SLA violations counted only for `Open` findings — `Resolved`/`Verified`/`InProgress`/`FalsePositive` are excluded even if overdue
+
+### Assignment (`workflow/assignment.rs:5-12`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` | UUID v4 |
+| `finding_id` | `String` | FK to workflow Finding |
+| `user_id` | `String` | Assignee identifier |
+| `assigned_at` | `DateTime<Utc>` | Timestamp |
+| `assigned_by` | `String` | Who made the assignment |
+| `notes` | `Option<String>` | Optional context |
+
+`assign_finding()` (`assignment.rs:34-41`) is a free function that creates an `Assignment` from an `AssignmentRequest`. Returns `Assignment` directly (no `Result` wrapper).
+
+### Comment (`workflow/comments.rs:5-12`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` | UUID v4 |
+| `finding_id` | `String` | FK to workflow Finding |
+| `user_id` | `String` | Comment author |
+| `content` | `String` | Comment text |
+| `created_at` | `DateTime<Utc>` | Timestamp |
+| `is_internal` | `bool` | Internal notes vs. external-facing |
+
+`add_comment()` (`comments.rs:34-41`) is a free function that creates a `Comment` from a `CommentRequest`. Returns `Comment` directly (no `Result` wrapper).
+
+### SLA System (`workflow/sla.rs`)
+
+#### SlaPolicy (`sla.rs:5-8`)
+
+| Field | Type |
+|-------|------|
+| `severity` | `Severity` |
+| `target_hours` | `u32` |
+
+`SlaPolicy::default_policies()` (`sla.rs:11-34`) returns 5 entries:
+
+| Severity | Target Hours | Calendar Equivalent |
+|----------|:------------:|---------------------|
+| Critical | 24 | 1 day |
+| High | 168 | 1 week |
+| Medium | 720 | 30 days |
+| Low | 2160 | 90 days |
+| Info | 8760 | 1 year |
+
+#### SlaStatus (`sla.rs:51-59`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `finding_id` | `String` | |
+| `severity` | `Severity` | |
+| `created_at` | `DateTime<Utc>` | Finding creation time |
+| `due_at` | `DateTime<Utc>` | Computed: `created_at + target_hours` |
+| `is_violated` | `bool` | `hours_remaining < 0` |
+| `hours_remaining` | `i64` | Negative when overdue |
+
+`calculate_sla()` (`sla.rs:61-79`):
+1. Looks up `SlaPolicy` for the severity
+2. Computes `due_at = created_at + Duration::hours(target_hours)`
+3. Computes `hours_remaining = (due_at - now).num_hours()`
+4. `is_violated = hours_remaining < 0`
+
+**Note**: SLA is computed relative to `Utc::now()` — it is a point-in-time calculation, not a cached value. Each call to `calculate_sla()` or `calculate_metrics()` re-evaluates against the current time.
+
+## Behavior / Flow
+
+### Status Transition Lifecycle
+
+1. Finding created → `Open` (default)
+2. Triaged → `InProgress` (analyst begins work)
+3. Fix applied → `Resolved` (pending verification)
+4. Verification passed → `Verified` (confirmed fixed)
+5. At any point, can return to `Open` (reopened)
+6. Alternatively: `Open` → `FalsePositive` → `Open` (if re-triaged)
+
+Invalid transitions (e.g., `Open` → `Verified` directly) are rejected by `StatusWorkflow::can_transition()` with `Err(Validation(...))`.
+
+### SLA Breach Computation
+
+`WorkflowReport::calculate_metrics()` evaluates SLA violations only for `Open` findings:
+1. For each `Open` finding, call `calculate_sla(finding.id, finding.severity, finding.created_at)`
+2. If `sla.is_violated` is true, increment `sla_violations`
+3. `InProgress`, `Resolved`, `Verified`, and `FalsePositive` findings are never checked for SLA
+
+This means a finding that transitions to `InProgress` after the SLA deadline is no longer counted as a violation — the clock stops when work begins.
+
+### Assignment Flow
+
+1. Caller creates `AssignmentRequest` with `finding_id`, `user_id`, optional `notes`
+2. `assign_finding(&request, assigned_by)` returns an `Assignment` with UUID, timestamp, and audit metadata
+3. Assignment is not persisted by this module — persistence is the caller's responsibility
+
+### Comment Flow
+
+1. Caller creates `CommentRequest` with `finding_id`, `content`, `is_internal`
+2. `add_comment(&request, user_id)` returns a `Comment` with UUID and timestamp
+3. Comments are not persisted by this module
+
+## Data Model
+
+### FindingStatus — Workflow (5 variants)
+
+| Variant | Display | Valid Targets |
+|---------|---------|---------------|
+| `Open` | `"open"` | `InProgress`, `FalsePositive` |
+| `InProgress` | `"in_progress"` | `Resolved`, `Open` |
+| `Resolved` | `"resolved"` | `Verified`, `Open` |
+| `Verified` | `"verified"` | `Open` |
+| `FalsePositive` | `"false_positive"` | `Open` |
+
+### FindingStatus — Lifecycle (6 variants, for comparison)
+
+| Variant | Display | Valid Targets |
+|---------|---------|---------------|
+| `New` | `"new"` | `Confirmed`, `FalsePositive`, `AcceptedRisk` |
+| `Confirmed` | `"confirmed"` | `Remediated`, `AcceptedRisk`, `FalsePositive` |
+| `AcceptedRisk` | `"accepted_risk"` | `Reopened`, `FalsePositive` |
+| `FalsePositive` | `"false_positive"` | `Reopened` |
+| `Remediated` | `"remediated"` | `Reopened` |
+| `Reopened` | `"reopened"` | `Confirmed`, `FalsePositive`, `AcceptedRisk` |
+
+These are independent state machines — the workflow module's `FindingStatus` is used for the workflow tab's operational tracking, while the lifecycle `FindingStatus` is used for the database-persisted `StoredFinding`.
+
+## Public API
+
+| Function/Method | Signature | Feature Gate |
+|-----------------|-----------|:---:|
+| `WorkflowReport::new()` | `fn new() -> Self` | `finding-workflow` |
+| `WorkflowReport::calculate_metrics()` | `fn calculate_metrics(&mut self)` | `finding-workflow` |
+| `Finding::new()` | `fn new(title: &str, severity: Severity) -> Self` | `finding-workflow` |
+| `Finding::assign()` | `fn assign(&mut self, user: &str)` | `finding-workflow` |
+| `Finding::update_status()` | `fn update_status(&mut self, new_status: FindingStatus) -> Result<()>` | `finding-workflow` |
+| `StatusWorkflow::can_transition()` | `fn can_transition(from: &FindingStatus, to: &FindingStatus) -> bool` | `finding-workflow` |
+| `StatusWorkflow::validate_transition()` | `fn validate_transition(from: &FindingStatus, to: &FindingStatus) -> Result<()>` | `finding-workflow` |
+| `assign_finding()` | `fn assign_finding(request: &AssignmentRequest, assigned_by: &str) -> Assignment` | `finding-workflow` |
+| `add_comment()` | `fn add_comment(request: &CommentRequest, user_id: &str) -> Comment` | `finding-workflow` |
+| `SlaPolicy::default_policies()` | `fn default_policies() -> Vec<SlaPolicy>` | `finding-workflow` |
+| `SlaPolicy::get_policy()` | `fn get_policy(severity: Severity) -> Self` | `finding-workflow` |
+| `calculate_sla()` | `fn calculate_sla(finding_id: &str, severity: Severity, created_at: DateTime<Utc>) -> SlaStatus` | `finding-workflow` |
+
+## Integration Points
+
+### Dispatch
+
+- `TaskKind::Workflow(WorkflowParams)` → `dispatch/security.rs:440-456` `run_workflow_task()`
+- `TaskResult::Workflow(WorkflowReport)` (`dispatch/types.rs:140-141`)
+- Currently only supports `"list"` mode — creates an empty `WorkflowReport` with `calculate_metrics()`
+
+### TUI
+
+- Workflow tab: feature-gated `finding-workflow` (`tui.md` tab #26, `stable_id: "workflow"`, operation: `"workflow"`)
+- Builds `RunRequest` via `TaskBuilder`, produces `TaskKind::Workflow`
+
+### Findings Store Relationship
+
+- The workflow module's `Finding` is **not** the same as `findings::Finding` (the 17-field canonical type)
+- Workflow `Finding` is a lightweight operational record (8 fields) focused on triage/assignment/SLA
+- `StoredFinding` (in `findings::lifecycle`) uses the lifecycle `FindingStatus` (6 variants), not the workflow `FindingStatus` (5 variants)
+- These two systems are independent — no automatic synchronization between workflow findings and stored findings
+
+## Testing
+
+### WorkflowReport Tests (`mod.rs:66-251`)
+
+| Test | Lines | What It Verifies |
+|------|-------|------------------|
+| `test_workflow_report_default` | 91-95 | Empty report defaults |
+| `test_sla_violations_count_only_open_findings` | 98-133 | SLA violations counted for Open only; Resolved/InProgress excluded |
+| `test_sla_violations_zero_when_all_within_sla` | 136-155 | No violations when all findings within SLA |
+| `test_sla_violations_mixed_statuses` | 158-199 | Correct counting with Open/Resolved/FalsePositive/Verified mix |
+| `test_sla_violations_empty_findings` | 202-207 | Zero violations on empty report |
+| `test_calculate_metrics_computes_all_fields` | 210-250 | All 5 status variants counted correctly |
+
+### Finding Tests (`finding.rs:75-183`)
+
+| Test | Lines | What It Verifies |
+|------|-------|------------------|
+| `test_finding_creation` | 80-83 | Default Open status, no assignee |
+| `test_finding_assignment` | 87-90 | Assignee set correctly |
+| `test_update_status_valid` | 94-98 | Valid transition succeeds |
+| `test_update_status_invalid` | 101-106 | Invalid transition rejected, status unchanged |
+| `test_finding_status_display` | 109-115 | All 5 Display outputs |
+| `test_finding_status_default` | 118-120 | Default is Open |
+| `test_finding_has_uuid` | 123-128 | UUIDs are unique |
+| `test_finding_timestamps` | 131-137 | Timestamps within creation window |
+| `test_finding_assign_updates_timestamp` | 140-146 | `assign()` bumps `updated_at` |
+| `test_finding_update_status_updates_timestamp` | 149-155 | `update_status()` bumps `updated_at` |
+| `test_full_status_workflow` | 158-173 | Open→InProgress→Resolved→Verified→Open round-trip |
+| `test_false_positive_workflow` | 176-183 | Open→FalsePositive→Open round-trip |
+
+### Status Tests (`status.rs:33-137`)
+
+| Test | Lines | What It Verifies |
+|------|-------|------------------|
+| `test_valid_transitions` | 38-55 | 4 key valid transitions |
+| `test_invalid_transitions` | 58-71 | 3 key invalid transitions |
+| `test_validate_transition_ok` | 74-79 | Ok result for valid |
+| `test_validate_transition_error` | 83-87 | Err result for invalid |
+| `test_all_invalid_transitions` | 90-114 | 12 invalid transitions verified |
+| `test_all_valid_transitions` | 117-137 | 8 valid transitions verified |
+
+### SLA Tests (`sla.rs:81-135`)
+
+| Test | Lines | What It Verifies |
+|------|-------|------------------|
+| `test_sla_policy` | 86-89 | Critical = 24h |
+| `test_sla_calculation` | 92-96 | 200h-old High finding is violated |
+| `test_sla_policy_all_severities` | 99-105 | All 5 severity→hours mappings |
+| `test_sla_not_violated_when_just_created` | 108-113 | Fresh finding not violated |
+| `test_sla_violated_when_past_due` | 116-121 | 25h-old Critical is violated |
+| `test_sla_hours_remaining_calculation` | 124-129 | Remaining hours within expected range |
+| `test_default_policies_count` | 132-135 | 5 default policies |
+
+### Assignment Tests (`assignment.rs:43-91`)
+
+4 tests: creation, with notes, UUID uniqueness.
+
+### Comment Tests (`comments.rs:43-82`)
+
+4 tests: creation, internal flag, via free function, UUID uniqueness.
+
+## Invariants & Gotchas
+
+1. **Two `FindingStatus` enums**: The workflow module's `FindingStatus` (5 variants: `Open/InProgress/Resolved/Verified/FalsePositive`) is distinct from `findings::lifecycle::FindingStatus` (6 variants: `New/Confirmed/AcceptedRisk/FalsePositive/Remediated/Reopened`). These serve different state machines and are not interchangeable.
+2. **SLA only checks `Open`**: Findings in `InProgress`, `Resolved`, `Verified`, or `FalsePositive` are never SLA-violated. A finding that goes overdue while `Open`, then moves to `InProgress`, loses its violation status.
+3. **No persistence**: `Assignment`, `Comment`, and `Finding` are in-memory structs. This module provides no database persistence — callers must implement storage.
+4. **`assign_finding()` and `add_comment()` return bare types**: No `Result` wrapper — these are pure constructors that cannot fail.
+5. **`calculate_metrics()` mutates self**: The method resets all counters to 0 before recomputing, so it is idempotent but requires `&mut self`.
+6. **SLA is point-in-time**: `calculate_sla()` computes against `Utc::now()`. A finding's SLA status can change between calls without any state mutation.
+
+## Bug Sweep
+
+| Finding | File:Line | Severity | Description |
+|---------|-----------|----------|-------------|
+| No persistence layer | All | Info | `Assignment`, `Comment`, and `Finding` are ephemeral — no DB/file persistence in this module. This is by design but limits standalone utility. |
+| `calculate_metrics()` is `&mut self` | `mod.rs:38` | Low | Requires mutable access to recalculate, but all fields are simple counters. Could be `&self` with interior mutability or returning a new struct. |
+| SLA violations disappear on status change | `mod.rs:46-62` | Info | SLA violation count is computed from current status, not historical. A finding that was `Open` and violated, then moved to `InProgress`, will no longer be counted. This is intentional but may surprise users expecting historical violation tracking. |
+
+*Last verified against source: 2026-08-25*

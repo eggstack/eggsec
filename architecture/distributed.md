@@ -1,68 +1,173 @@
 # Distributed Module
 
-Eggsec can be deployed in a distributed architecture to perform large-scale security assessments by distributing tasks across multiple worker nodes.
+Provides a coordinator/worker cluster architecture for distributing security scanning tasks across multiple nodes, with PSK-authenticated TLS connections, a pull-based task queue, heartbeat monitoring, and result aggregation.
 
-## Cluster Architecture (`src/distributed/`)
+## Role & Responsibilities
 
-### Coordinator
+The distributed module enables horizontal scaling of security assessments:
 
-The central node that manages the cluster, assigns tasks, and aggregates results.
+1. **Coordinator** (`RemoteListener`): Accepts worker connections, authenticates via PSK, manages a shared `TaskQueue`, dispatches tasks on pull request, aggregates results, and tracks worker liveness.
+2. **Worker** (`Worker`): Self-registers with the coordinator, periodically requests tasks, processes them locally through the Eggsec engine, and reports results back.
+3. **Communication** (`RemoteClient`/`RemoteListener`): Line-based JSON over TCP with optional TLS, including rate limiting, connection limits, and IP allowlisting.
 
-- **Queue Management (`queue.rs`)**: A reliable task queue that ensures each task is assigned and completed successfully.
-- **Worker Management**: Tracks the health and capacity of all registered worker nodes.
-- **Command Dispatch (`command.rs`)**: Sends high-level instructions to workers.
+## Location & Feature Gating
 
-### Worker (`worker.rs`)
+| Item | Path | Feature gate |
+|------|------|--------------|
+| Module root | `crates/eggsec/src/distributed/mod.rs` | None (always compiled) |
+| Protocol messages | `crates/eggsec/src/distributed/command.rs` | None |
+| Task queue | `crates/eggsec/src/distributed/queue.rs` | None |
+| Coordinator server | `crates/eggsec/src/distributed/remote.rs` | None |
+| I/O (TLS, line protocol) | `crates/eggsec/src/distributed/io.rs` | None |
+| Worker node | `crates/eggsec/src/distributed/worker.rs` | None |
+| CLI cluster command | `crates/eggsec/src/commands/handlers/cluster.rs` | `cli` |
 
-Independent nodes that perform the actual scanning and fuzzing tasks.
+**No feature gate**: the entire distributed module compiles unconditionally. Task processing in `worker.rs` uses `EnforcementContext` and `EnforcedDispatcher` only when `tool-api`, `rest-api`, or `grpc-api` is enabled; without those features, `process_task()` returns an error (`worker.rs:517-523`).
 
-- **Self-Registration**: Workers automatically register with the coordinator on startup.
-- **Resource Monitoring**: Workers report their current load and availability to the coordinator.
-- **Task Execution**: Workers receive tasks, execute them locally using the core Eggsec engine, and report results back.
+## Architecture
 
-#### `Worker::start()` Flow
+### Protocol Message Inventory
 
-1. `register_with_coordinator()` — sends `CommandMessage::Register` with worker_id, hostname, capabilities
-2. `start_heartbeat_loop()` — periodic heartbeat via `RemoteClient::send_heartbeat()`
-3. `start_task_request_loop()` — periodic task requests via `RemoteClient::request_tasks()` (max `MAX_TASKS_PER_REQUEST` = 5 per request)
-4. `start_task_processing_loop()` — receives tasks from channel, spawns per-task processing
+#### CommandMessage Variants (`command.rs:28-70`)
 
-#### `Worker::shutdown()` and `Drop`
+8 variants (tagged union via `#[serde(tag = "type")]`):
 
-`shutdown()` sends a shutdown signal via `watch::Sender<bool>`, then aborts all spawned task handles (heartbeat, task request, task processor). `Drop` impl performs the same cleanup defensively if `shutdown()` was not called.
+| # | Variant | Direction | Fields |
+|---|---------|-----------|--------|
+| 1 | `Execute` | Coordinator → Worker | `id`, `command: Vec<String>`, `timeout: Option<u64>`, `env: Option<FxHashMap>` |
+| 2 | `Register` | Worker → Coordinator | `id`, `hostname`, `capabilities: Vec<String>` |
+| 3 | `Heartbeat` | Worker → Coordinator | `id`, `status: String` |
+| 4 | `Result` | Worker → Coordinator | `id`, `result: TaskResult` |
+| 5 | `RequestTasks` | Worker → Coordinator | `id`, `worker_id`, `max_tasks: usize` |
+| 6 | `AssignTasks` | Coordinator → Worker | `id`, `tasks: Vec<Task>` |
+| 7 | `EnqueueTask` | Client → Coordinator | `id`, `task: Task` |
+| 8 | `StatusRequest` | Client → Coordinator | `id` |
 
-#### `process_task()` Dispatch
+#### ResponseMessage (`command.rs:72-125`)
 
-Routes tasks to type-specific processors via `TaskType`:
+8 `msg_type` values:
 
-| TaskType | Processor | Description |
-|----------|-----------|-------------|
-| `PortScan` | `process_port_scan()` | Scans ports using `scanner::ports::scan_ports()` |
-| `ServiceFingerprint` | `process_fingerprint()` | Fingerprints services via `scanner::fingerprint::fingerprint_services()` |
-| `EndpointDiscovery` | `process_endpoints()` | Discovers endpoints via `scanner::endpoints::scan_endpoints()` |
-| `Fuzz` | `process_fuzz()` | Runs fuzzing engine via `fuzzer::engine::FuzzEngine` |
-| `WafTest` | `process_waf()` | Tests WAF bypass via `waf::run_cli()` |
-| `LoadTest` | `process_load_test()` | HTTP load testing via `loadtest::run_cli()` |
-| `Recon` | `process_recon()` | Reconnaissance via `recon::run_cli()` |
+| msg_type | Set by | Context |
+|----------|--------|---------|
+| `"response"` | `success()` / `error()` | Generic success/error |
+| `"authenticated"` | `handle_connection()` | Welcome after PSK auth |
+| `"registered"` | `registration()` | Worker registration confirmation |
+| `"heartbeat_ack"` | Heartbeat handler | Heartbeat acknowledgment |
+| `"result_ack"` | Result handler | Task result acknowledgment |
+| `"tasks_assigned"` | RequestTasks handler | Task assignment response |
+| `"enqueue_ack"` | EnqueueTask handler | Task enqueue confirmation |
+| `"status"` | StatusRequest handler | Status query response |
 
-#### Worker Helpers
+### Component Inventory
 
-- **`parse_coordinator_url(url: &str)`** (`worker.rs:11-31`): Parses `host:port` URLs, stripping `http://`/`https://` prefixes. Returns `Result<(&str, u16)>`.
-- **`worker_capabilities()`** (`worker.rs:33-35`): Returns `CAPABILITIES` as `Vec<String>` for registration messages.
-
-### Worker Status (`mod.rs:104-109`)
+#### RemoteListener (`remote.rs:27-39`)
 
 ```rust
-pub enum WorkerStatus {
-    Idle,
-    Busy,
-    Disconnected,
+pub struct RemoteListener {
+    psk: String,
+    shutdown_tx: broadcast::Sender<()>,
+    connections: Arc<RwLock<FxHashSet<String>>>,
+    rate_limits: Arc<RwLock<FxHashMap<String, Vec<Instant>>>>,
+    max_connections: usize,
+    rate_limit: u32,
+    ip_allowlist: Option<Vec<String>>,
+    tls_server: Option<Arc<TlsServer>>,
+    plaintext_allowed: bool,
+    task_queue: Arc<TaskQueue>,
+    workers: Arc<RwLock<FxHashMap<String, WorkerRegistration>>>,
 }
 ```
 
-Used in `WorkerRegistration.status` and `Heartbeat.status` to report worker state to the coordinator.
+| Method | Description |
+|--------|-------------|
+| `new(psk)` | Default: 100 max connections, 60/min rate limit |
+| `with_config(psk, max_connections, rate_limit)` | Custom limits |
+| `with_allowlist(psk, allowlist)` | IP allowlist (individual IPs + CIDR) |
+| `with_tls(psk, tls_config)` | TLS from PEM cert/key |
+| `new_plaintext(psk)` | Plaintext with warning log |
+| `start(port)` | Blocking accept loop |
+| `shutdown()` | Graceful shutdown via broadcast |
+| `get_workers()` | All registered workers |
+| `get_queue_counts()` | `(pending, in_progress, completed)` |
+| `connection_count()` | Current active connections |
+| `is_tls()` | Whether TLS is enabled |
 
-### Heartbeat (`mod.rs:111-120`)
+#### RemoteClient (`remote.rs:650-1206`)
+
+```rust
+pub struct RemoteClient {
+    psk: String,
+    tls: Option<TlsClient>,
+    cached_addr: Option<(SocketAddr, Instant)>,
+    plaintext_allowed: bool,
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `new(psk)` | Plaintext client |
+| `with_tls(psk, domain)` | TLS client (insecure-tls feature for NoVerifier) |
+| `new_plaintext(psk)` | Plaintext with warning |
+| `register_worker(host, port, worker_id, hostname, capabilities)` | Register with coordinator |
+| `send_heartbeat(host, port, worker_id, status)` | Send heartbeat |
+| `send_result(host, port, result)` | Submit task result |
+| `request_tasks(host, port, worker_id, max_tasks)` | Pull tasks from queue |
+| `execute(host, port, command, timeout)` | Remote command execution |
+| `request_status(host, port)` | Query coordinator status |
+| `enqueue_task(host, port, task)` | Push task to queue |
+
+#### Worker (`worker.rs:77-91`)
+
+```rust
+pub struct Worker {
+    config: WorkerConfig,
+    stats: Arc<Mutex<WorkerStats>>,
+    sender: Option<mpsc::Sender<Task>>,
+    receiver: Option<mpsc::Receiver<Task>>,
+    heartbeat_handle: Option<JoinHandle<()>>,
+    task_request_handle: Option<JoinHandle<()>>,
+    task_processor_handle: Option<JoinHandle<()>>,
+    psk: String,
+    enforcement: Arc<EnforcementContext>,          // tool-api/rest-api/grpc-api
+    dispatcher: EnforcedDispatcher,                // tool-api/rest-api/grpc-api
+    shutdown_tx: watch::Sender<bool>,
+}
+```
+
+#### WorkerConfig (`worker.rs:46-54`)
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `worker_id` | Random UUID | Unique worker identifier |
+| `coordinator_url` | `"http://localhost:8080"` | Coordinator address |
+| `max_concurrency` | 10 | Max concurrent tasks |
+| `heartbeat_interval_secs` | 30 | Heartbeat interval |
+| `tls_domain` | `Some("localhost")` | TLS domain for verification |
+
+#### WorkerStats (`worker.rs:68-75`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `worker_id` | `String` | Worker identifier |
+| `tasks_completed` | `u64` | Successfully completed tasks |
+| `tasks_failed` | `u64` | Failed tasks |
+| `tasks_in_progress` | `usize` | Currently processing |
+| `last_heartbeat_secs` | `i64` | Last heartbeat timestamp |
+
+#### WorkerRegistration (`mod.rs:99-108`)
+
+```rust
+pub struct WorkerRegistration {
+    pub worker_id: String,
+    pub hostname: String,
+    pub capabilities: Vec<TaskType>,
+    pub max_concurrency: usize,
+    pub status: WorkerStatus,
+    pub last_heartbeat_secs: Option<i64>,
+}
+```
+
+#### Heartbeat (`mod.rs:117-126`)
 
 ```rust
 pub struct Heartbeat {
@@ -76,251 +181,374 @@ pub struct Heartbeat {
 }
 ```
 
-Workers send periodic heartbeats to the coordinator reporting their current load. The coordinator uses this data for task assignment decisions.
+Note: The `Heartbeat` struct is defined but not directly serialized for the wire protocol. Workers send heartbeat data as a JSON string in `CommandMessage::Heartbeat.status`, containing `worker_id`, `status` (idle/busy), `current_jobs`, `completed_jobs`, and `failed_jobs` (`worker.rs:222-228`).
 
-### WorkerConfig (`worker.rs:37-54`)
+#### WorkerStatus (`mod.rs:110-115`)
 
-```rust
-pub struct WorkerConfig {
-    pub worker_id: String,            // Default: random UUID
-    pub coordinator_url: String,      // Default: "http://localhost:8080"
-    pub max_concurrency: usize,       // Default: 10
-    pub heartbeat_interval_secs: u64, // Default: 30
-}
-```
+3 variants: `Idle`, `Busy`, `Disconnected`.
 
-Configuration for a worker node. Uses `Default` trait for sensible defaults.
+#### TaskType (`mod.rs:64-73`)
 
-### WorkerStats (`worker.rs:56-63`)
+7 variants: `PortScan`, `ServiceFingerprint`, `EndpointDiscovery`, `Fuzz`, `WafTest`, `LoadTest`, `Recon`.
 
-```rust
-pub struct WorkerStats {
-    pub worker_id: String,
-    pub tasks_completed: u64,
-    pub tasks_failed: u64,
-    pub tasks_in_progress: usize,
-    pub last_heartbeat_secs: i64,
-}
-```
-
-Runtime statistics tracked by the worker and included in heartbeat messages.
-
-### Communication (`remote.rs`, `io.rs`)
-
-Secure and efficient communication between nodes using line-based JSON over TCP (not gRPC or HTTP).
-
-- **Authentication**: PSK-based authentication ensures only authorized workers can join the cluster. `AuthMessage` struct at `remote.rs:632` contains `psk: String` and is sent as the first message after TCP connection.
-- **Encryption**: TLS encryption support (with `insecure-tls` feature for testing).
-- **Line-based Protocol**: Messages are newline-delimited JSON for simple, efficient communication.
-- **Real-time Updates**: Status updates and findings are streamed back to the coordinator as they happen.
-
-#### IP Allowlist (`remote.rs:34,70-83`)
-
-`RemoteListener` supports an optional IP allowlist (`ip_allowlist: Option<Vec<String>>`). When set via `with_allowlist()`, only connections from IPs matching the allowlist are accepted. Supports both individual IP addresses and CIDR ranges (via `ipnetwork::IpNetwork`). Non-matching connections are rejected with a warning log before the connection is fully established.
-
-#### Connection Limits (`remote.rs:17,209-213`)
-
-Default max connections: `MAX_CONNECTIONS = 100` (`remote.rs:17`). Configurable via `with_config()`. When the current connection count reaches `max_connections`, new connections are rejected with a warning log. Connections are tracked in `Arc<RwLock<FxHashSet<String>>>` and cleaned up on disconnect via `FxHashSet::remove()`.
-
-#### Rate Limiting (`remote.rs:18-19,121-140`)
-
-Default rate limit: `RATE_LIMIT_PER_MINUTE = 60` per IP (`remote.rs:18`). Window: `RATE_LIMIT_WINDOW_SECS = 60` seconds (`remote.rs:19`). Implemented via `check_rate_limit()` which maintains per-IP timestamp vectors in `FxHashMap<String, Vec<Instant>>`. A periodic cleanup task removes stale entries every 60 seconds (`remote.rs:180-193`).
-
-#### DNS Caching (`remote.rs:514-532`)
-
-`RemoteClient` caches DNS resolutions for 60 seconds (`cached_addr: Option<(SocketAddr, Instant)>`). The `resolve_cached()` method returns a cached address if within TTL, avoiding repeated DNS lookups. Cached addresses are not re-validated for reachability — connection failures are handled by the caller, which falls back to fresh resolution on the next attempt.
-
-### ResponseMessage Type (`command.rs:74-86`)
-
-```rust
-pub struct ResponseMessage {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub msg_type: String,          // see table below
-    pub success: bool,
-    pub output: Option<String>,
-    pub error: Option<String>,
-    #[serde(rename = "duration_ms")]
-    pub duration_ms: Option<u64>,
-    pub hostname: Option<String>,
-    pub capabilities: Option<Vec<String>>,
-}
-```
-
-**msg_type values:**
-
-| Value | Context | Set by |
-|-------|---------|--------|
-| `"response"` | Generic success/error response | `success()` and `error()` constructors |
-| `"authenticated"` | Welcome after PSK auth | `handle_connection()` |
-| `"registered"` | Confirmation after worker registration | `registration()` constructor |
-| `"heartbeat_ack"` | Heartbeat acknowledgment | Heartbeat handler |
-| `"result_ack"` | Task result acknowledgment | Result handler |
-| `"tasks_assigned"` | Task assignment response | RequestTasks handler |
-| `"enqueue_ack"` | Task enqueue confirmation | EnqueueTask handler |
-| `"status"` | Status query response | StatusRequest handler |
-
-Constructors: `success(id, output, duration_ms)`, `error(id, error, duration_ms)`, `registration(id, hostname, capabilities)`.
-
-## Worker Capabilities (`mod.rs:83-91`)
-
-The `CAPABILITIES` constant defines the set of task types that distributed workers can advertise support for:
+#### CAPABILITIES (`mod.rs:89-97`)
 
 ```rust
 pub const CAPABILITIES: &[&str] = &[
-    "PortScan",
-    "ServiceFingerprint",
-    "EndpointDiscovery",
-    "Fuzz",
-    "WafTest",
-    "LoadTest",
-    "Recon",
+    "PortScan", "ServiceFingerprint", "EndpointDiscovery",
+    "Fuzz", "WafTest", "LoadTest", "Recon",
 ];
 ```
+
+#### Task (`queue.rs:7-18`)
+
+```rust
+pub struct Task {
+    pub id: String,
+    pub job_id: String,
+    pub task_type: TaskType,
+    pub target: String,
+    pub payload: FxHashMap<String, serde_json::Value>,
+    pub worker_id: Option<String>,         // set by dequeue()
+    pub assigned_at_secs: Option<i64>,     // set by dequeue()
+}
+```
+
+#### TaskResult (`queue.rs:20-27`)
+
+```rust
+pub struct TaskResult {
+    pub task_id: String,
+    pub success: bool,
+    pub output: String,
+    pub error: Option<String>,
+    pub duration_millis: u64,
+}
+```
+
+#### TaskQueue (`queue.rs:29-153`)
+
+```rust
+pub struct TaskQueue {
+    pending: Arc<RwLock<VecDeque<Task>>>,
+    in_progress: Arc<RwLock<FxHashMap<String, Task>>>,
+    completed: Arc<RwLock<VecDeque<TaskResult>>>,
+    max_size: usize,
+}
+```
+
+#### QueueError (`queue.rs:155-169`)
+
+2 variants: `QueueFull`, `TaskNotFound`.
+
+### I/O Layer (`io.rs`)
+
+#### StreamWrapper (`io.rs:19-108`)
+
+Enum wrapping TCP/TLS streams:
+- `Plain(TcpStream)` — unencrypted
+- `TlsClient(tokio_rustls::client::TlsStream<TcpStream>)` — client TLS
+- `TlsServer(ServerTlsStream<TcpStream>)` — server TLS
+
+Implements `AsyncRead` + `AsyncWrite` by delegating to the inner stream.
+
+#### TlsServer (`io.rs:110-161`)
+
+`TlsServer::from_pem(cert_path, key_path)` loads PEM files, extracts certificates and private key (supports PKCS#8 and PKCS#1), builds a `rustls::ServerConfig` with `with_no_client_auth()`.
+
+#### TlsClient (`io.rs:163-313`)
+
+- With `insecure-tls` feature: `NoVerifier` accepts all certificates (for lab use only).
+- Without `insecure-tls`: Uses `webpki_roots::TLS_SERVER_ROOTS` for proper certificate verification.
+- Tracks `insecure_connection_count` when using `NoVerifier`.
+
+#### LineWriter (`io.rs:315-349`)
+
+Wraps a `StreamWrapper` with newline-delimited JSON framing:
+- `write_line(line)`: writes `line + "\n"`, flushes.
+- `read_line()`: reads until `\n`, returns `Option<String>`.
 
 ### Security Constants (`command.rs:7-26`)
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:9`) |
 | `ALLOWED_COMMANDS` | `["eggsec"]` | Only `eggsec` executable permitted |
-| `MAX_OUTPUT_SIZE` | 10 MB | Max command output size |
+| `MAX_OUTPUT_SIZE` | 10 MB (10,485,760) | Max command output size |
 | `MAX_ARGS` | 50 | Max command arguments |
 | `MAX_ARG_LENGTH` | 1000 | Max characters per argument |
-| `FORBIDDEN_PATTERNS` | 12 patterns | Blocked path patterns (`../`, `/etc/`, `/root/`, `/proc/`, `/sys/`, `~/.ssh/`, `~/.aws/`, `.pem`, `.key`, `--config`, `--config-file`, `--credentials`) |
+| `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:18`) |
+| `FORBIDDEN_PATTERNS` | 13 patterns | `../`, `..\`, `/etc/`, `/root/`, `/proc/`, `/sys/`, `~/.ssh/`, `~/.aws/`, `.pem`, `.key`, `--config`, `--config-file`, `--credentials` |
 
-When workers register with the coordinator via `CommandMessage::Register`, they include their capabilities. The coordinator uses these capabilities to assign appropriate tasks to each worker based on what the worker is capable of performing. The `WorkerRegistration` struct at `mod.rs:93-102` stores the worker's reported capabilities alongside its `worker_id`, `hostname`, `max_concurrency`, `status`, and `last_heartbeat_secs`.
+### Infrastructure Constants (`remote.rs:17-19`, `eggsec-core/src/constants.rs:27-28`)
+
+| Constant | Value | Location |
+|----------|-------|----------|
+| `MAX_CONNECTIONS` | 100 | `remote.rs:17` |
+| `RATE_LIMIT_PER_MINUTE` | 60 | `remote.rs:18` |
+| `RATE_LIMIT_WINDOW_SECS` | 60 seconds | `remote.rs:19` |
+| `DEFAULT_TASK_QUEUE_CAPACITY` | 10,000 | `eggsec-core/src/constants.rs:27` |
+| `WORKER_STALE_TIMEOUT_SECS` | 90 seconds | `eggsec-core/src/constants.rs:28` |
+| DNS cache TTL | 60 seconds | `remote.rs:705` |
+| Connect timeout | 5 seconds | `remote.rs:742` |
+| Auth response timeout | 10 seconds | `remote.rs:788` |
+| Heartbeat response timeout | 5 seconds | `remote.rs:883` |
+| Result response timeout | 10 seconds | `remote.rs:928` |
+| Task request response timeout | 10 seconds | `remote.rs:975` |
+| Worker task processing timeout | 300 seconds | `worker.rs:409-410` |
+| Task request polling interval | 5 seconds | `worker.rs:269` |
+| Heartbeat interval | 30 seconds (configurable) | `worker.rs:62,198` |
+| Stale task reassignment interval | 30 seconds | `remote.rs:237` |
+
+## Behavior / Flow
+
+### Coordinator↔Worker Handshake
+
+```
+Worker                                          Coordinator
+  │                                                │
+  │──── TCP connect ──────────────────────────────→│
+  │                                                │ check IP allowlist
+  │                                                │ check connection limit (100)
+  │                                                │ check rate limit (60/min)
+  │                                                │
+  │──── TLS handshake (if TLS) ──────────────────→│
+  │                                                │
+  │──── AuthMessage { psk } ─────────────────────→│
+  │                                                │ constant-time PSK compare
+  │                                                │
+  │←─── ResponseMessage { type: "authenticated" } ─│
+  │                                                │
+  │──── CommandMessage::Register { ... } ─────────→│
+  │                                                │ filter capabilities against CAPABILITIES
+  │                                                │ store WorkerRegistration
+  │←─── ResponseMessage { type: "registered" } ───│
+  │                                                │
+  │   [connection stays open for command loop]     │
+```
+
+### PSK Authentication (`remote.rs:340-355`)
+
+The PSK comparison uses `subtle::ConstantTimeEq`:
+
+```rust
+if !bool::from(auth.psk.as_bytes().ct_eq(psk.as_bytes())) {
+    // send error response, return Err
+}
+```
+
+This prevents timing side-channel attacks on the PSK comparison. The PSK is generated via `generate_psk()` (`command.rs:279-287`): 32 random bytes from `OsRng` encoded as 64-character hex.
+
+### Task Lease Lifecycle
+
+```
+1. ENQUEUE:    Client sends EnqueueTask → TaskQueue::enqueue()
+2. REQUEST:    Worker sends RequestTasks (every 5s when idle)
+3. ASSIGN:     Coordinator calls TaskQueue::dequeue(worker_id) up to MAX_TASKS_PER_REQUEST (5)
+               → sets task.worker_id and task.assigned_at_secs
+               → responds with AssignTasks containing the tasks
+4. PROCESS:    Worker feeds tasks into mpsc channel → spawns per-task processing
+               → tokio::time::timeout(300s, process_task())
+5. COMPLETE:   Worker sends Result → TaskQueue::complete(result)
+               → removes from in_progress, pushes to completed
+6. REASSIGN:   Background task runs every 30s
+               → TaskQueue::reassign_stale_tasks(90)
+               → tasks assigned > 90s ago return to pending with cleared worker_id/assigned_at
+```
+
+### Worker Start Flow (`worker.rs:140-152`)
+
+```rust
+worker.start().await?;
+  ├─ register_with_coordinator()      // TLS + Register message
+  ├─ mpsc::channel(100)               // internal task channel
+  ├─ start_heartbeat_loop()           // tokio::spawn, periodic heartbeat
+  ├─ start_task_request_loop()        // tokio::spawn, periodic task pull
+  └─ start_task_processing_loop()     // tokio::spawn, per-task dispatch
+```
+
+### Worker Shutdown (`worker.rs:434-464`)
+
+`shutdown()` sends `true` via `watch::Sender<bool>`, then aborts all three `JoinHandle`s (heartbeat, task request, task processor). `Drop` performs the same cleanup defensively.
+
+### Worker Task Processing (`worker.rs:332-427`)
+
+Each task is spawned as an independent tokio task with a 300-second timeout:
+
+```rust
+tokio::spawn(async move {
+    let process = async move {
+        let result = process_task(task, enforcement, dispatcher).await;
+        // send result back via RemoteClient::send_result()
+    };
+    tokio::time::timeout(300s, process).await;
+});
+```
+
+With `tool-api`/`rest-api`/`grpc-api`, `process_task()` (`worker.rs:468-515`) routes through `EnforcedDispatcher::dispatch_checked()` with an `AgentStrict` enforcement context. Without those features, it returns an error.
+
+### Background Tasks
+
+| Task | Interval | Location | Purpose |
+|------|----------|----------|---------|
+| Rate limit cleanup | 60s | `remote.rs:219-232` | Remove stale per-IP timestamp vectors |
+| Stale task reassignment | 30s | `remote.rs:236-250` | Return timed-out tasks to pending queue |
 
 ### Capability Matching
 
-| Capability | TaskType | Description |
-|------------|----------|-------------|
-| `PortScan` | `PortScan` | TCP/UDP port scanning |
-| `ServiceFingerprint` | `ServiceFingerprint` | Service/version detection |
-| `EndpointDiscovery` | `EndpointDiscovery` | HTTP endpoint discovery |
-| `Fuzz` | `Fuzz` | Fuzzing engine |
-| `WafTest` | `WafTest` | WAF detection and bypass |
-| `LoadTest` | `LoadTest` | HTTP load testing |
-| `Recon` | `Recon` | Reconnaissance |
+When a worker registers, the coordinator filters its claimed capabilities against `CAPABILITIES` (`remote.rs:440-444`). Unknown capabilities are logged and discarded. The coordinator stores only validated capabilities in `WorkerRegistration`.
 
-## Key Components
+## Security Model
 
-| Component | File | Lines | Key Function/Type |
-|-----------|------|-------|-------------------|
-| TaskType enum | mod.rs | 58-67 | 7 task types |
-| CAPABILITIES constant | mod.rs | 83-91 | 7 capability strings |
-| WorkerRegistration | mod.rs | 93-102 | Worker metadata with capabilities |
-| WorkerStatus enum | mod.rs | 104-109 | Idle, Busy, Disconnected |
-| Heartbeat | mod.rs | 111-120 | Worker liveness and load report |
-| Task struct | queue.rs | 7-18 | Core task representation |
-| TaskResult struct | queue.rs | 20-27 | Task execution result |
-| TaskQueue | queue.rs | 29-152 | Thread-safe task queue |
-| QueueError | queue.rs | 154-169 | Queue error types |
-| RemoteListener | remote.rs | 27-615 | Coordinator server |
-| RemoteClient | remote.rs | 622-1166 | Worker client |
-| CommandExecutor | command.rs | 129-252 | Sandboxed command execution |
-| CommandMessage | command.rs | 28-72 | Protocol messages (8 variants) |
-| ResponseMessage | command.rs | 74-127 | Coordinator responses |
-| RemoteResult | command.rs | 254-279 | Typed remote execution result |
-| Worker | worker.rs | 65-338 | Worker node with task processing |
-| WorkerConfig | worker.rs | 37-54 | Worker configuration with defaults |
-| WorkerStats | worker.rs | 56-63 | Runtime statistics |
-| parse_coordinator_url | worker.rs | 11-31 | URL parsing helper |
-| worker_capabilities | worker.rs | 33-35 | Returns CAPABILITIES as Vec<String> |
-| TlsServer | io.rs | 110-161 | TLS server from PEM |
-| TlsClient | io.rs | 163-225 | TLS client (insecure-tls feature) |
-| StreamWrapper | io.rs | 19-108 | Unified stream enum |
-| LineWriter | io.rs | 306-340 | Line I/O wrapper |
-| generate_psk | command.rs | 281-286 | 32-byte hex PSK generation |
+### PSK + TLS
 
-### CommandMessage Variants
+- **PSK**: 32-byte random hex string (`generate_psk()` at `command.rs:279-287`). Generated via `OsRng` (getrandom), not a fork-reproducible PRNG.
+- **Constant-time compare**: `subtle::ConstantTimeEq` prevents timing attacks on PSK validation (`remote.rs:346`).
+- **TLS**: Optional, using `rustls`. Server loads PEM cert/key. Client uses `NoVerifier` (insecure-tls feature) or webpki_roots for proper verification.
+- **Plaintext fallback**: `new_plaintext()` methods exist but log warnings. Both `start()` and `connect_to_coordinator_with_addr()` reject plaintext unless explicitly opted in.
 
-| Variant | Fields | Direction | Purpose |
-|---------|--------|-----------|---------|
-| `Execute` | `id`, `command`, `timeout`, `env` | Coordinator → Worker | Execute a eggsec command on the worker |
-| `Register` | `id`, `hostname`, `capabilities` | Worker → Coordinator | Worker self-registration on startup |
-| `Heartbeat` | `id`, `status` | Worker → Coordinator | Periodic liveness and status report |
-| `Result` | `id`, `result` | Worker → Coordinator | Task execution result with output/error |
-| `RequestTasks` | `id`, `worker_id`, `max_tasks` | Worker → Coordinator | Worker requests tasks from the queue |
-| `AssignTasks` | `id`, `tasks` | Coordinator → Worker | Coordinator assigns tasks to the worker |
-| `EnqueueTask` | `id`, `task` | Client → Coordinator | Push a task into the coordinator's queue |
-| `StatusRequest` | `id` | Client → Coordinator | Query worker registry and queue status |
+### What Prevents Rogue Workers
+
+1. **PSK authentication**: Only workers knowing the PSK can connect. The constant-time comparison prevents brute-force timing attacks.
+2. **IP allowlist** (optional): `RemoteListener::with_allowlist()` restricts connections to specific IPs/CIDRs.
+3. **Rate limiting**: 60 connections/minute per IP prevents rapid brute-force attempts.
+4. **Connection limits**: Max 100 concurrent connections prevents resource exhaustion.
+5. **Command executor sandboxing** (`command.rs:129-249`): Only `eggsec` binary allowed; forbidden path patterns; max 50 args, 1000 chars each; 10MB output limit; no custom environment variables.
+6. **Enforcement context**: When `tool-api` is enabled, workers wrap task processing in `EnforcementContext::agent_strict()`, which validates scope and policy for every dispatched task (`worker.rs:490-498`).
+
+### Command Executor Security (`command.rs:129-249`)
+
+| Check | Value |
+|-------|-------|
+| Allowed executables | `["eggsec"]` only |
+| Max arguments | 50 |
+| Max argument length | 1000 chars |
+| Max output size | 10 MB |
+| Custom environment | Rejected (security: prevents PATH/LD_PRELOAD injection) |
+| Forbidden patterns | 13 patterns including `../`, `/etc/`, `~/.ssh/`, `.pem`, `.key`, `--config`, `--credentials` |
+
+## Public API
+
+### Module Re-exports (`mod.rs:58-60`)
+
+```rust
+pub use command::{generate_psk, RemoteResult};
+pub use queue::{Task, TaskResult};
+pub use remote::{RemoteClient, RemoteListener, TlsConfig};
+```
 
 ### RemoteListener Public Methods
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `new` | `new(psk: String) -> Self` | Create with default settings (100 max conn, 60/min rate limit) |
-| `with_config` | `with_config(psk, max_connections, rate_limit) -> Self` | Create with custom connection/rate limits |
-| `with_allowlist` | `with_allowlist(psk, allowlist: Vec<String>) -> Self` | Create with IP allowlist |
-| `with_tls` | `with_tls(psk, tls_config: TlsConfig) -> Result<Self>` | Create with TLS support |
-| `new_plaintext` | `new_plaintext(psk) -> Self` | Alias for `new()` |
-| `start` | `start(port: u16) -> Result<()>` | Start listening on port (blocking) |
-| `shutdown` | `shutdown(&self)` | Signal graceful shutdown |
-| `get_workers` | `get_workers() -> Vec<WorkerRegistration>` | Get all registered workers |
-| `get_queue_counts` | `get_queue_counts() -> (usize, usize, usize)` | Returns (pending, in_progress, completed) |
-| `connection_count` | `connection_count() -> usize` | Current active connections |
-| `is_tls` | `is_tls() -> bool` | Whether TLS is enabled |
+| Method | Signature |
+|--------|-----------|
+| `new` | `new(psk: String) -> Self` |
+| `with_config` | `with_config(psk, max_connections, rate_limit) -> Self` |
+| `with_allowlist` | `with_allowlist(psk, allowlist: Vec<String>) -> Self` |
+| `with_tls` | `with_tls(psk, tls_config: TlsConfig) -> Result<Self>` |
+| `new_plaintext` | `new_plaintext(psk) -> Self` |
+| `start` | `start(port: u16) -> Result<()>` |
+| `shutdown` | `shutdown(&self)` |
+| `get_workers` | `get_workers() -> Vec<WorkerRegistration>` |
+| `get_queue_counts` | `get_queue_counts() -> (usize, usize, usize)` |
+| `connection_count` | `connection_count() -> usize` |
+| `is_tls` | `is_tls() -> bool` |
 
 ### RemoteClient Public Methods
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `new` | `new(psk: String) -> Self` | Create plaintext client |
-| `with_tls` | `with_tls(psk, domain: &str) -> Result<Self>` | Create TLS client (insecure-tls feature) |
-| `new_plaintext` | `new_plaintext(psk) -> Self` | Alias for `new()` |
-| `register_worker` | `register_worker(host, port, worker_id, hostname, capabilities) -> Result<()>` | Register with coordinator |
-| `send_heartbeat` | `send_heartbeat(host, port, worker_id, status) -> Result<()>` | Send heartbeat to coordinator |
-| `send_result` | `send_result(host, port, result: TaskResult) -> Result<()>` | Submit task result |
-| `request_tasks` | `request_tasks(host, port, worker_id, max_tasks) -> Result<Vec<Task>>` | Request tasks from queue |
-| `execute` | `execute(host, port, command, timeout) -> Result<RemoteResult>` | Remote command execution |
-| `request_status` | `request_status(host, port) -> Result<serde_json::Value>` | Query coordinator status |
-| `enqueue_task` | `enqueue_task(host, port, task: Task) -> Result<()>` | Push task to coordinator queue |
+| Method | Signature |
+|--------|-----------|
+| `new` | `new(psk: String) -> Self` |
+| `with_tls` | `with_tls(psk, domain: &str) -> Result<Self>` |
+| `new_plaintext` | `new_plaintext(psk) -> Self` |
+| `register_worker` | `register_worker(host, port, worker_id, hostname, capabilities) -> Result<()>` |
+| `send_heartbeat` | `send_heartbeat(host, port, worker_id, status) -> Result<()>` |
+| `send_result` | `send_result(host, port, result: TaskResult) -> Result<()>` |
+| `request_tasks` | `request_tasks(host, port, worker_id, max_tasks) -> Result<Vec<Task>>` |
+| `execute` | `execute(host, port, command, timeout) -> Result<RemoteResult>` |
+| `request_status` | `request_status(host, port) -> Result<serde_json::Value>` |
+| `enqueue_task` | `enqueue_task(host, port, task: Task) -> Result<()>` |
 
-### Worker Task Processors (`worker.rs:340-753`)
+### Worker Public Methods
 
-The worker dispatches tasks to type-specific processors via `process_task()`:
+| Method | Signature |
+|--------|-----------|
+| `new` | `new(config: WorkerConfig, psk: String) -> Self` |
+| `with_enforcement` | `with_enforcement(config, psk, enforcement) -> Self` |
+| `start` | `start(&mut self) -> Result<()>` |
+| `get_stats` | `get_stats(&self) -> WorkerStats` |
+| `shutdown` | `shutdown(&mut self)` |
 
-| Processor | Function | Description |
+### TaskQueue Public Methods
+
+| Method | Signature |
+|--------|-----------|
+| `new` | `new(max_size: usize) -> Self` |
+| `enqueue` | `enqueue(&self, task: Task) -> Result<(), QueueError>` |
+| `dequeue` | `dequeue(&self, worker_id: &str) -> Result<Option<Task>, QueueError>` |
+| `reassign_stale_tasks` | `reassign_stale_tasks(&self, timeout_secs: i64) -> Vec<Task>` |
+| `complete` | `complete(&self, result: TaskResult)` |
+| `get_pending_count` | `get_pending_count(&self) -> usize` |
+| `get_in_progress_count` | `get_in_progress_count(&self) -> usize` |
+| `get_completed_count` | `get_completed_count(&self) -> usize` |
+| `get_results` | `get_results(&self) -> Vec<TaskResult>` |
+| `clear` | `clear(&self)` |
+
+## Integration Points
+
+| Surface | Entry point | Flow |
+|---------|-------------|------|
+| CLI `cluster coordinator` | `handle_cluster()` | Generates PSK, creates `RemoteListener`, calls `start(port)` |
+| CLI `cluster worker` | `handle_cluster()` | Creates `WorkerConfig`, calls `Worker::with_enforcement()` + `start()` |
+| CLI `cluster status` | `handle_cluster()` | Creates `RemoteClient`, calls `request_status()` |
+| CLI `cluster enqueue` | `handle_cluster()` | Creates `RemoteClient`, calls `enqueue_task()` |
+| CLI `cluster execute` | `handle_cluster()` | Creates `RemoteClient`, calls `execute()` |
+| CLI `cluster generate-psk` | `handle_cluster()` | Calls `generate_psk()` |
+
+### Worker Task Processors (`worker.rs:525-870`)
+
+| Processor | Function | Engine call |
 |-----------|----------|-------------|
-| PortScan | `process_port_scan()` | Scans ports using `scanner::ports::scan_ports()` |
-| ServiceFingerprint | `process_fingerprint()` | Fingerprints services via `scanner::fingerprint::fingerprint_services()` |
-| EndpointDiscovery | `process_endpoints()` | Discovers endpoints via `scanner::endpoints::scan_endpoints()` |
-| Fuzz | `process_fuzz()` | Runs fuzzing engine via `fuzzer::engine::FuzzEngine` |
-| WafTest | `process_waf()` | Tests WAF bypass via `waf::run_cli()` |
-| LoadTest | `process_load_test()` | HTTP load testing via `loadtest::run_cli()` |
-| Recon | `process_recon()` | Reconnaissance via `recon::run_cli()` |
+| PortScan | `process_port_scan()` | `scanner::ports::scan_ports()` |
+| ServiceFingerprint | `process_fingerprint()` | `scanner::fingerprint::fingerprint_services()` |
+| EndpointDiscovery | `process_endpoints()` | `scanner::endpoints::scan_endpoints()` |
+| Fuzz | `process_fuzz()` | `fuzzer::engine::FuzzEngine::new().run_return_session()` |
+| WafTest | `process_waf()` | `waf::WafEngine::new().run()` |
+| LoadTest | `process_load_test()` | `loadtest::LoadTestRunner::from_config_with_engine().run()` |
+| Recon | `process_recon()` | `recon::runner::run_full_recon_from_request()` |
 
-Each processor extracts parameters from `Task.payload` (an `FxHashMap<String, serde_json::Value>`) and invokes the corresponding Eggsec engine module.
+Note: The standalone `process_*` functions (`worker.rs:525-870`) are marked `#[allow(dead_code)]`. When `tool-api`/`rest-api`/`grpc-api` is enabled, `process_task()` routes through `EnforcedDispatcher` instead of calling these functions directly.
 
-## Task Lifecycle
+## Testing
 
-1. **Enqueue**: Tasks are added via `TaskQueue::enqueue(task)`
-2. **Dequeue**: Workers claim tasks via `TaskQueue::dequeue(worker_id)` which sets `worker_id` and `assigned_at_secs`
-3. **Execute**: Workers execute tasks locally
-4. **Complete**: Results are submitted via `TaskQueue::complete(result)`
-5. **Reassign**: Stale tasks (timeout exceeded) are returned to pending via `TaskQueue::reassign_stale_tasks(timeout_secs)`
+| Test suite | Path | What it covers |
+|------------|------|----------------|
+| Unit tests | `crates/eggsec/src/distributed/command.rs:289-305` | PSK generation length and uniqueness |
+| Unit tests | `crates/eggsec/src/distributed/io.rs:351-459` | StreamWrapper variants, LineWriter roundtrip, TCP plaintext e2e, TLS server invalid PEM |
+| Unit tests | `crates/eggsec/src/distributed/worker.rs:876-901` | Worker rejects tasks without explicit scope (requires tool-api) |
+| Integration tests | `crates/eggsec/tests/distributed_tests.rs` | Queue operations, FIFO ordering, full queue, complete, evict, serde roundtrip, listener auth (success + invalid PSK), task assignment cycle, heartbeat, connection count, enqueue command, status request, disconnect cleanup, stale task reassignment |
 
-## Benefits
+```bash
+cargo test --lib -p eggsec distributed::
+cargo test -p eggsec --test distributed_tests
+```
 
-- **Scalability**: Easily handle thousands of targets by adding more worker nodes.
-- **Resilience**: If a worker fails, its tasks are automatically reassigned to other nodes.
-- **Geographic Distribution**: Deploy workers in different regions to test from multiple perspectives.
+## Invariants & Gotchas
 
-## Bugs Fixed (2026-05-22)
+1. **Each RemoteClient method creates a new TCP connection**: `register_worker`, `send_heartbeat`, `send_result`, `request_tasks`, `execute`, `request_status`, and `enqueue_task` each open a fresh connection, authenticate, send one message, wait for response, and drop the connection. There is no persistent connection pooling.
+2. **DNS caching**: `RemoteClient` caches DNS resolution for 60 seconds (`remote.rs:702-715`). Cached addresses are not re-validated for reachability.
+3. **Worker registration requires TLS domain**: `WorkerConfig::default()` sets `tls_domain: Some("localhost")`. If `tls_domain` is `None`, registration, heartbeat, and task processing all fail (`worker.rs:159-161,208-211,394-397`).
+4. **Completed results eviction**: `TaskQueue::complete()` evicts the oldest results when completed count exceeds `max_size` (`queue.rs:117-119`).
+5. **No task cancellation**: Once a task is spawned for processing, there is no mechanism to cancel it. The 300-second timeout is the only abort path.
+6. **`process_task()` returns error without `tool-api`**: Without `tool-api`, `rest-api`, or `grpc-api`, the worker's task processor always fails (`worker.rs:517-523`).
+7. **Rate limit cleanup is background-only**: The periodic cleanup task (`remote.rs:219-232`) runs every 60 seconds. Burst connections within a window may not be cleaned until the next tick.
+8. **`env` field in `CommandMessage::Execute` is accepted but rejected**: The protocol accepts the field for backward compatibility, but `CommandExecutor::execute()` always rejects it with an error (`command.rs:169-178`).
 
-| File | Issue | Fix |
-|------|-------|-----|
-| `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when |
-| `queue.rs:57` | `dequeue()` returned `Option<Task>` silently dropped errors | Changed to return `Result<Option<Task>, QueueError>` for explicit error handling |
-| `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP |
+## Links
 
-## Performance Improvements (2026-05-22)
+- [overview.md](overview.md)
+- [cli_commands.md](cli_commands.md)
+- [dispatch.md](dispatch.md)
+- [config.md](config.md)
 
-| File | HashMap Type | Reason |
-|------|-------------|--------|
-| `queue.rs:13` | `Task.payload` | Changed from `std::collections::HashMap` to `FxHashMap` for performance |
-| `command.rs:36` | `CommandMessage::Execute.env` | Changed from `HashMap` to `FxHashMap` for performance |
-| `remote.rs:30` | `RemoteListener.rate_limits` | Changed from `HashMap` to `FxHashMap` for performance |
+---
 
-Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with serialized data.
+*Last verified against source: 2026-08-25*

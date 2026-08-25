@@ -1,106 +1,254 @@
-# Configuration System
+# Configuration & Enforcement System
 
-The configuration system handles loading settings from files, environment variables, and defaults, while also enforcing scanning scopes to prevent accidental testing of out-of-scope targets.
+Deep-dive into the configuration, scope enforcement, and policy evaluation system.
 
-> See [../../docs/ENFORCEMENT_MODES.md](../../docs/ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract.
+> Parent: [overview.md](overview.md)
+> Related: [runtime_bridge.md](runtime_bridge.md), [dispatch.md](dispatch.md), [audit.md](audit.md)
 
-## Core Components (`src/config/`)
+## Role & Responsibilities
 
-### `EggsecConfig` (`settings.rs`)
+The `config` module owns all configuration loading/validation and the **mandatory pre-dispatch enforcement gate** that every execution surface must pass before running an operation.
 
-The main configuration struct that holds all tool settings. It is typically loaded from `eggsec.toml` or `eggsec.yaml`.
+**Responsibilities:**
 
-**Sub-configs:**
-- `HttpConfig` - HTTP client settings (timeout, retries, proxy, TLS, `retry_delay_ms`)
-- `ScanConfig` - Scanning settings (concurrency, timing, stealth, `port_timeout_secs`)
-- `OutputConfig` - Output formatting
-- `NotificationConfig` - Webhook/email notifications
-- `PathsConfig` - Directory paths (flattened via `#[serde(flatten)]`)
-- `ProxyConfigEntry` - Proxy list entries
-- `AiConfig` - AI provider settings
-- `SearchConfig` - SearXNG search integration
-- `AlertChannelsConfig` - Alert routing
-- `ReconConfig` - Reconnaissance settings (`dns_concurrency`, `apis` for API configuration)
-- `RemoteConfig` - Remote worker settings (`psk`, `default_port`, `allowed_workers`)
-- `ExecutionPolicy` - Operation policy controls (scope requirements, risk levels, allowed operations); includes `allow_exploit_adjacent` field for near-exploitation testing
+- Load, parse, and validate `EggsecConfig` from TOML/YAML files
+- Load, parse, and validate `Scope` manifests (allowed/excluded targets, port rules)
+- Track scope provenance via `LoadedScope` (source of scope for strict-profile enforcement)
+- Resolve hostnames to IP addresses via the `HostResolver` trait
+- Classify IP addresses into typed address classes
+- Produce typed `PolicyDecision` records with denial/warning classification
+- Enforce per-operation risk, feature, capability, and scope policy via `EnforcementContext::evaluate()`
+- Gate strict automated surfaces with the `ApprovedOperation` token
+- Provide preflight policy preview without dispatching
+- Define `ExecutionBudget` constraints for stress/load/packet operations
+- Define defense-lab `DefenseLabPreset` presets
+- Maintain the canonical `ALL_OPERATION_METADATA` registry (31 operations, 42 aliases)
+- Maintain the authoritative compile-time feature registry
 
-**Additional fields on `EggsecConfig`:**
-- `auto_save_interval_secs: u64` - Auto-save interval for session state (default: 30)
-- `schedule: Vec<ScheduledScan>` - Scheduled scan entries (cron-based)
-- `integrations: IntegrationConfig` - External integration settings (feature-gated: `external-integrations`)
+**Non-responsibilities:**
 
-### `Scope` (`scope.rs`)
+- Dispatching operations to tool implementations (owned by `tool/`, `commands/handlers/`)
+- TUI rendering (owned by `eggsec-tui`)
+- Report formatting (owned by `eggsec-output`)
+- Task lifecycle management (owned by `eggsec-runtime`)
+- Session persistence (owned by `eggsec-daemon`)
 
-The `Scope` struct is critical for security and compliance. It defines which targets are "in-scope" and which are explicitly excluded.
+## Location & Feature Gating
 
-**Key Methods:**
-- `is_target_allowed(target)` - Returns `Result<bool, ScopeError>`, checks if target is allowed
-- `validate_url(url)` - Returns `Result<bool, ScopeError>`, validates URL's host via `is_target_allowed`
-- `is_port_allowed(port)` - Returns `bool`, checks port allowlist/blocklist
-- `validate()` - Validates scope configuration: `allowed_targets` must not be empty when `require_explicit_scope` is true; duplicate ports in `allowed_ports` are rejected; `max_requests_per_second` must be greater than 0 if set
-- `has_ip_based_rules()` - Returns `true` if any rule uses CIDR notation
+All source files live under `crates/eggsec/src/config/`:
 
-**ScopeRule Construction:**
-- `ScopeRule::new(pattern)` - Creates a scope rule from a glob/regex pattern string
-- `ScopeRule::with_cidr(cidr)` - Creates a scope rule from CIDR notation (e.g., `10.0.0.0/8`). Parses via `IpNetwork::from_str()` and stores the CIDR for IP-range matching
-- `ScopeRule::matches(target)` - Checks if a TargetScope matches this rule (hostname patterns + CIDR)
-- `ScopeRule::matches_address(addr)` - Checks if a single IP address matches this rule's CIDR
+| File | Lines | Feature Gate | Purpose |
+|------|-------|:---:|---------|
+| `mod.rs` | 127 | — | Re-exports, `ENV_PREFIX`, default config template |
+| `policy.rs` | 2394 | — | `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor`, `OperationMetadata`, `ALL_OPERATION_METADATA` (31), `ALL_OPERATION_METADATA_ALIASES` (42) |
+| `policy_decision.rs` | 3759 | — | `PolicyDecision`, `EnforcementOutcome`, `EnforcementContext`, `ApprovedOperation`, `ConfirmationClass` (8), `ManualOverride`, `PreflightResult`, `EnforcementError`, `classify_denial_reasons()`, `evaluate_enforcement()`, `evaluate_operation_policy()`, `confirmation_classes_for()` |
+| `scope.rs` | ~1570 | — | `Scope`, `ScopeRule`, `ScopeSource` (4), `LoadedScope`, `AddressClass` (7), `HostResolver` trait, `SystemResolver`, `TargetScope`, `classify_address()`, `is_private_ip()` |
+| `settings.rs` | 744 | — | `EggsecConfig`, `ScanConfig`, `HttpConfig`, `OutputConfig`, `NotificationConfig`, `AiConfig`, `ReconConfig`, `RemoteConfig`, `SearchConfig`, `AlertChannelsConfig`, `ProxyConfigEntry`, `ConfigError`, validation impls |
+| `loader.rs` | 478 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
+| `scan.rs` | 267 | — | `ScanConfig`, `ScanProfile`, `FuzzProfile`, `OutputConfig`, `NotificationConfig`, `WebhookConfig`, `WebhookEvent` |
+| `http.rs` | 75 | — | `HttpConfig`, `Verbosity` (4 variants) |
+| `api.rs` | 76 | — | `ApiConfig`, `ApiKeyConfig`, `IpApiConfig`, `MaxMindConfig`, `NvdConfig`, `WaybackConfig` |
+| `budget.rs` | 217 | — | `ExecutionBudget`, `BudgetError` (3 variants) |
+| `discovery.rs` | 70 | — | `DiscoveredTargetStatus` (4 variants) |
+| `feature_registry.rs` | 531 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (~48 entries), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
+| `presets.rs` | 233 | — | `DefenseLabPreset` (7 built-in presets) |
 
-### `LoadedScope` and `ScopeSource` (`scope.rs`)
+**Feature gating:** The config module itself requires no feature gates. Individual `OperationMetadata` entries declare `required_features` that are checked at evaluation time via `feature_registry::is_feature_enabled()`.
 
-`LoadedScope` wraps a `Scope` with provenance metadata indicating where the scope was loaded from:
+## Architecture
 
-```rust
-pub enum ScopeSource {
-    DefaultEmpty,       // No scope provided by user
-    ConfigFile,         // Loaded from eggsec.toml
-    CliScopeFile,       // Loaded from --scope CLI flag
-    GeneratedPreset,    // Generated from a profile or preset
-}
-```
+### Key Types — Enum Variant Counts
 
-**Fields on `LoadedScope`:**
-- `scope: Scope` - The underlying scope (accessed directly, not via methods)
-- `source: ScopeSource` - The provenance (accessed directly, not via methods)
-- `path: Option<String>` - Optional file path
+| Type | File:Line | Variants | Purpose |
+|------|-----------|----------|---------|
+| `OperationRisk` | `policy.rs:9` | 15 | Risk tier ordering (Passive → AgentAutonomous) |
+| `ExecutionSurface` | `policy.rs:357` | 9 | Caller origin identity |
+| `ExecutionProfile` | `policy.rs:461` | 5 | Trust boundary for enforcement |
+| `OperationMode` | `policy.rs:179` | 3 | Session safety boundary |
+| `Capability` | `policy.rs:507` | 19 | Operation capability declarations |
+| `IntendedUse` | `policy.rs:227` | 8 | Operation use-case classification |
+| `DenialClass` | `policy.rs:573` | 8 | Typed denial classification |
+| `ConfirmationClass` | `policy_decision.rs:402` | 8 | Manual discretion trigger categories |
+| `EnforcementOutcome` | `policy_decision.rs:236` | 4 | Profile-aware enforcement result |
+| `AddressClass` | `scope.rs:14` | 7 | IP address classification |
+| `ScopeSource` | `scope.rs:201` | 4 | Scope provenance |
+| `DescriptorError` | `policy.rs:1175` | 2 | Target-policy violation errors |
+| `DiscoveredTargetStatus` | `discovery.rs:10` | 4 | Discovery promotion model |
+| `BudgetError` | `budget.rs:107` | 3 | Budget validation errors |
+| `ConfigError` | `settings.rs:708` | 4 | Config loading/parsing errors |
+| `ScopeError` | `scope.rs:931` | 7 | Scope validation/loading errors |
 
-**Key methods on `LoadedScope`:**
-- `is_explicit_manifest()` - Returns `true` if the scope was provided via `--scope` or config file (not default empty)
-- `default_empty()` - Creates a default empty scope with `DefaultEmpty` source
-- `explicit(scope, source, path)` - Creates from an explicit scope with provenance
+### Key Types — Structs
 
-**Note:** Fields are public and accessed directly (e.g. `loaded_scope.source`, `loaded_scope.scope`). There are no `source()` or `scope()` accessor methods.
+| Type | File:Line | Purpose |
+|------|-----------|---------|
+| `EggsecConfig` | `settings.rs:92` | Main configuration struct |
+| `ExecutionPolicy` | `policy.rs:33` | Operation policy controls (14 boolean flags + risk + capabilities) |
+| `OperationDescriptor` | `policy.rs:279` | Unit of policy evaluation |
+| `OperationMetadata` | `policy.rs:1202` | Static metadata for one operation (17 fields) |
+| `PolicyDecision` | `policy_decision.rs:11` | Fully-populated enforcement decision record (17 fields) |
+| `EnforcementContext` | `policy_decision.rs:472` | Bundles profile + policy + scope for shared evaluation |
+| `ApprovedOperation` | `policy_decision.rs:331` | Proof-of-enforcement token (private fields) |
+| `ManualOverride` | `policy_decision.rs:432` | Manual override flags (10 fields) |
+| `PreflightResult` | `policy_decision.rs:733` | Read-only pre-dispatch policy preview |
+| `Scope` | `scope.rs:274` | Allowed/excluded targets + port rules |
+| `ScopeRule` | `scope.rs:554` | Single scope rule (pattern or CIDR) |
+| `LoadedScope` | `scope.rs:217` | Scope + provenance metadata |
+| `TargetScope` | `scope.rs:677` | Parsed target with resolved addresses |
+| `ExecutionBudget` | `budget.rs:8` | Execution constraints (10 fields) |
+| `DefenseLabPreset` | `presets.rs:7` | Preset lab constraints (15 fields) |
+| `HttpConfig` | `http.rs:19` | HTTP client settings (10 fields) |
+| `ScanConfig` | `scan.rs:17` | Scanning settings (9 fields) |
 
-**Security enforcement:**
-- Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `is_explicit_manifest() == true` for networked operations
-- `DefaultEmpty` scope blocks all networked operations in strict profiles
-- Private IP blocking: Direct IP addresses (e.g., `127.0.0.1`, `169.254.169.254`) are blocked via `TargetScope::parse()` and `parse_hostname_only()` - they now properly go through private IP checks
-- Included Targets: IP ranges (CIDR), domains, or specific URLs
-- Excluded Targets: Blacklisted IPs or domains that should never be touched
-- Enforcement: Most scanning and fuzzing operations check the `Scope` before initiating a connection
+### Static Registries
 
-### `AddressClass` and `classify_address()` (`scope.rs`)
+| Registry | File:Line | Count | Purpose |
+|----------|-----------|-------|---------|
+| `ALL_OPERATION_METADATA` | `policy.rs:1494` | 31 | Canonical operation definitions |
+| `ALL_OPERATION_METADATA_ALIASES` | `policy.rs:2027` | 42 | Tool-ID → canonical-ID mappings |
+| `ALL_FEATURES` | `feature_registry.rs:110` (generated) | ~48 | Compile-time feature registry |
 
-Phase B introduced typed address classification:
+### ExecutionSurface → ExecutionProfile Mapping
 
-```rust
-pub enum AddressClass {
-    Public,             // 8.8.8.8, 2001:4860:4860::8888
-    Loopback,           // 127.0.0.0/8, ::1
-    Private,            // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7
-    LinkLocal,          // 169.254.0.0/16, fe80::/10
-    IPv4MappedLoopback, // ::ffff:127.0.0.1
-    Unspecified,        // 0.0.0.0, ::
-    Multicast,          // 224.0.0.0/4, ff00::/8
-}
-```
+| Surface | Profile | Manual Override | File:Line |
+|---------|---------|:---:|-----------|
+| `CliManual` | `ManualPermissive` | Yes | `policy.rs:382` |
+| `TuiManual` | `ManualPermissive` | Yes | `policy.rs:382` |
+| `CliManualStrict` | `ManualGuarded` | No | `policy.rs:383` |
+| `TuiManualStrict` | `ManualGuarded` | No | `policy.rs:383` |
+| `McpServer` | `McpStrict` | No | `policy.rs:384` |
+| `SecurityAgent` | `AgentStrict` | No | `policy.rs:385` |
+| `Ci` | `CiStrict` | No | `policy.rs:386` |
+| `RestApi` | `McpStrict` | No | `policy.rs:387` |
+| `GrpcApi` | `McpStrict` | No | `policy.rs:388` |
 
-- `classify_address(ip)` - Reports facts only; does not authorize or reject
-- `AddressClass::as_str()` - Stable kebab-case string for audit/JSON
+### Capability Classification
 
-### `HostResolver` trait and `SystemResolver` (`scope.rs`)
+Baseline capabilities allowed by default for strict profiles (no explicit allow needed):
+- `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`
 
-Phase B decoupled DNS resolution from policy evaluation:
+Defined by `baseline_allowed_capability()` at `policy.rs:557`. All other capabilities require explicit listing in `ExecutionPolicy::allowed_capabilities` for strict automated profiles.
+
+## Enforcement Flow
+
+### `EnforcementContext::evaluate()` — Central Entry Point
+
+`EnforcementContext::evaluate()` at `policy_decision.rs:561` is the **mandatory pre-dispatch gate** for all surfaces. The step-by-step flow:
+
+1. **Inner evaluation**: Calls `evaluate_enforcement(descriptor, policy, Some(&scope), profile)` at `policy_decision.rs:562`.
+
+2. **Provenance gate** (`policy_decision.rs:569`): For automated profiles (`CiStrict`, `McpStrict`, `AgentStrict`) with target-bearing operations that set `requires_explicit_scope`:
+   - If `loaded_scope.is_explicit_manifest() == false` (i.e. `DefaultEmpty`):
+     - Returns `EnforcementOutcome::Deny` with `DenialClass::ScopeMissing`
+
+3. **Feature checks** (`evaluate_operation_policy` at `policy_decision.rs:935`): For each `required_feature` in the descriptor:
+   - If `is_feature_enabled(feature) == false`: pushes `DenialClass::FeatureMissing`, sets `allowed = false`
+
+4. **Scope evaluation** (`policy_decision.rs:947`): If target and scope are provided:
+   - Resolves target to addresses via `TargetScope`
+   - Checks exclusion rules first (exclusion wins)
+   - Checks allowed rules via `evaluate_addresses()` for all-resolved-address evaluation
+   - Returns `DenialClass::ExplicitExclusion`, `DenialClass::TargetOutOfScope`, or `DenialClass::InvalidTarget` as appropriate
+   - If scope is missing and operation requires it: `DenialClass::ScopeMissing`
+
+5. **Risk check** (`policy_decision.rs:1017`): If `descriptor.risk.is_allowed_by(policy) == false`:
+   - Returns `DenialClass::RiskPolicyDenied`
+
+6. **Policy flag checks** (`policy_decision.rs:1029`): For each `required_policy_flags` entry.
+
+7. **Capability checks** (`evaluate_enforcement` at `policy_decision.rs:1180`):
+   - Denied capabilities always deny (hard)
+   - Strict profiles: non-baseline capabilities require explicit allow; missing = `DenialClass::CapabilityDenied`
+
+8. **ManualPermissive downgrade logic** (`policy_decision.rs:1214`):
+   - For safe (Passive/SafeActive), StandardAssessment ops with only ScopeMissing/TargetOutOfScope:
+     - If no positive scope rules declared: **downgrade to `Warn`** (allowed with warnings)
+     - If positive rules declared but target missed: **`RequireConfirmation`** (operator discretion)
+   - For explicit exclusion, high-risk, non-baseline capability: **`RequireConfirmation`**
+   - Hard denials (feature missing, invalid target, capability denied, risk-policy denied) **stay Deny**
+
+9. **Strict profiles** (`policy_decision.rs:1323`):
+   - Missing scope for networked ops → `Deny`
+   - Scope ambiguity (target present, no matched rules) → `Deny`
+   - Any warnings → `Deny`
+   - Otherwise → `Allow`
+
+### EnforcementOutcome Variants
+
+| Variant | Meaning | Proceed? |
+|---------|---------|:---:|
+| `Allow(PolicyDecision)` | Operation authorized | Yes |
+| `Warn(PolicyDecision)` | Authorized with warnings | Yes (surface-dependent) |
+| `RequireConfirmation(PolicyDecision)` | Manual-only; needs override flags | ManualPermissive only |
+| `Deny(PolicyDecision)` | Operation blocked | No |
+
+### Approval Methods
+
+| Method | Accepts | Rejects | Use Case |
+|--------|---------|---------|----------|
+| `approve(surface, descriptor)` | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | REST, MCP, Agent, CI |
+| `approve_manual(surface, descriptor, override)` | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | CLI, TUI |
+
+Both methods verify that the caller-provided `surface` derives the same profile as the context was constructed with. Mismatches return `EnforcementError::SurfaceProfileMismatch`.
+
+### ConfirmationClass Mapping
+
+Under `ManualPermissive`, `RequireConfirmation` is produced for these operator-discretion cases:
+
+| ConfirmationClass | Trigger | CLI Override Flag |
+|-------------------|---------|-------------------|
+| `OutOfScope` | Positive rules exist, target misses | `--allow-out-of-scope` or `--yes` |
+| `TargetExpansion` | Discovered target outside original | `--allow-out-of-scope` or `--yes` |
+| `ExplicitExclusion` | Target matches exclusion rule | `--allow-excluded-target` |
+| `HighRisk` | Intrusive/LoadTest/StressTest/etc. | `--allow-high-risk` or `--allow-db-pentest` |
+| `NonBaselineCapability` | Non-baseline capability required | `--allow-nonbaseline-capability` |
+| `PrivateResolution` | Public input resolved to private | `--allow-private-resolution` |
+| `CrossHostRedirect` | Cross-host redirect detected | `--allow-cross-host-redirect` |
+| `TrafficInterception` | MITM proxy interception | `--allow-web-proxy` |
+
+`--yes` (`assume_yes`) is **narrow**: it only covers `OutOfScope` and `TargetExpansion`. Dedicated `--allow-*` flags are required for all other classes. Automated profiles never honor overrides.
+
+## Scope Model
+
+### Scope vs LoadedScope
+
+- **`Scope`** (`scope.rs:274`): The raw scope rules — `allowed_targets`, `excluded_targets`, `allowed_ports`, `excluded_ports`, `max_requests_per_second`, `require_explicit_scope`.
+
+- **`LoadedScope`** (`scope.rs:217`): Wraps `Scope` with provenance metadata:
+  - `scope: Scope` — the underlying rules (public field, accessed directly)
+  - `source: ScopeSource` — where the scope came from (public field)
+  - `path: Option<String>` — optional file path
+
+- **`is_explicit_manifest()`** (`scope.rs:226`): Returns `true` if source is `ConfigFile`, `CliScopeFile`, or `GeneratedPreset`. Returns `false` for `DefaultEmpty`. This is the critical check for strict-profile enforcement.
+
+### ScopeSource Variants
+
+| Variant | Meaning | is_explicit |
+|---------|---------|:---:|
+| `DefaultEmpty` | No scope provided | No |
+| `ConfigFile` | Loaded from `eggsec.toml` or `scope.toml` | Yes |
+| `CliScopeFile` | Loaded from `--scope` CLI flag | Yes |
+| `GeneratedPreset` | Generated from a preset | Yes |
+
+### Address Classification
+
+`classify_address(ip)` at `scope.rs:65` reports facts only; policy decides authorization.
+
+| Class | IPv4 | IPv6 | is_non_public |
+|-------|------|------|:---:|
+| `Public` | 8.8.8.8 | 2001:4860:4860::8888 | No |
+| `Loopback` | 127.0.0.0/8 | ::1 | Yes |
+| `Private` | 10/8, 172.16/12, 192.168/16 | fc00::/7 | Yes |
+| `LinkLocal` | 169.254/16 | fe80::/10 | Yes |
+| `IPv4MappedLoopback` | — | ::ffff:127.0.0.1 | Yes |
+| `Unspecified` | 0.0.0.0 | :: | Yes |
+| `Multicast` | 224/4 | ff00::/8 | Yes |
+
+`is_non_public()` at `scope.rs:50` returns `true` for all classes except `Public`. Loopback is exempted from scope blocking when no scope rules are defined (`scope.rs:411`).
+
+### HostResolver Trait and SystemResolver
+
+The `HostResolver` trait (`scope.rs:142`) decouples DNS resolution from policy:
 
 ```rust
 pub trait HostResolver: Send + Sync {
@@ -108,261 +256,139 @@ pub trait HostResolver: Send + Sync {
 }
 ```
 
-- `SystemResolver` - Default resolver using `std::net::ToSocketAddrs`, returns all unique addresses sorted
-- `ResolutionResult` - Contains `hostname`, `addresses: Vec<IpAddr>`, `error: Option<String>`
-- `default_resolver()` - Factory returning `Arc<dyn HostResolver>`
-- Resolver does NOT reject loopback/private/policy-violating addresses — policy decides
+- **`SystemResolver`** (`scope.rs:156`): Default implementation using `std::net::ToSocketAddrs`. Collects unique addresses, returns sorted for deterministic ordering. Does **not** reject any address classes — policy decides authorization.
+- **`ResolutionResult`** (`scope.rs:117`): Contains `hostname`, `addresses: Vec<IpAddr>`, `error: Option<String>`.
+- **`default_resolver()`** (`scope.rs:190`): Factory returning `Arc<dyn HostResolver>`.
 
-### `TargetScope` (`scope.rs`)
+### TargetScope Resolution
 
-Extended with all-address resolution:
+`TargetScope` (`scope.rs:677`) holds the parsed target with all resolved addresses:
 
 ```rust
 pub struct TargetScope {
     pub host: String,
     pub ip: Option<IpAddr>,
-    pub resolved_addresses: Vec<IpAddr>,  // NEW: all unique resolved addresses
+    pub resolved_addresses: Vec<IpAddr>,
 }
 ```
 
 Key methods:
-- `parse_with_resolver(target, resolver)` - Full DNS resolution using custom resolver
-- `parse_hostname_only_with_resolver(target, resolver)` - Hostname-only matching
-- `evaluate_addresses(allowed, excluded)` - Returns `(all_allowed, any_excluded, classes)`
+- `parse_with_resolver(target, resolver)` at `scope.rs:695`: Full DNS resolution. Literal IPs skip resolution; URLs extract host; bare hostnames resolve via the resolver.
+- `parse_hostname_only_with_resolver(target, resolver)` at `scope.rs:788`: Hostname-only matching; resolution failures are non-fatal.
+- `evaluate_addresses(allowed, excluded)` at `scope.rs:849`: Returns `(all_allowed, any_excluded, classes)`. Every resolved address must match at least one allowed rule; no address may match an exclusion.
 
-### Connection Point Inventory (Workstream 1)
+### Scope Evaluation — `is_target_allowed()`
 
-Phase B documented where DNS resolution and connection creation occur:
+`Scope::is_target_allowed()` at `scope.rs:368` delegates to `is_target_allowed_with_resolver()`:
 
-**DNS Resolution Points:**
-| Location | Mechanism | Notes |
-|----------|-----------|-------|
-| `config/scope.rs` | `SystemResolver` via `HostResolver` trait | Canonical resolver for scope evaluation |
-| `reqwest` (HTTP client) | Internal `ToSocketAddrs` | Resolves on each request unless pinned |
-| `std::net::TcpStream` | `ToSocketAddrs` | Direct TCP connections resolve independently |
-| `tokio::net::TcpStream` | Async DNS via tokio | Async resolution for non-blocking paths |
-| `headless-browser` | Browser DNS | Chromium/Firefox resolve via system DNS |
+1. If scope has CIDR rules: use full `TargetScope::parse_with_resolver()` (requires DNS)
+2. Otherwise: use `TargetScope::parse_hostname_only_with_resolver()` (DNS failures non-fatal)
+3. Check exclusions first (exclusion always wins)
+4. If no allowed targets: block non-public addresses (except loopback); allow public
+5. If allowed targets exist: use `evaluate_addresses()` for all-address evaluation
+6. Returns `Result<bool, ScopeError>`
 
-**Connection Creation Points:**
-| Location | Type | Scope Check |
-|----------|------|-------------|
-| `reqwest::Client` | HTTP/HTTPS | Pre-dispatch via `EnforcementContext` |
-| `scanner/port_scan` | TCP connect | Pre-dispatch via `EnforcementContext` |
-| `tool/protocol/mcp` | HTTP to MCP server | Pre-dispatch via `EnforcementContext` |
-| `proxy/` | MITM proxy connections | Pre-dispatch via `EnforcementContext` |
-| `stress/` | Raw socket creation | Feature-gated, pre-dispatch |
+### Scope Loading
 
-**Redirect Handling:**
-- `reqwest` follows redirects by default (`follow_redirects: true`)
-- Cross-host redirects trigger `CrossHostRedirect` confirmation in ManualPermissive
-- Redirect targets are re-authorized via `Scope::is_target_allowed()` in the redirect hook
+- `load_config()` at `loader.rs:14`: Searches 5 locations in order: `--config` arg → `./eggsec.toml` → `./.eggsec/eggsec.toml` → `./config/eggsec.toml` → `~/.config/eggsec/eggsec.toml`
+- `load_scope()` at `loader.rs:58`: Loads scope without provenance
+- `load_scope_with_source()` at `loader.rs:102`: Loads scope with `ScopeSource` tracking. `--scope` → `CliScopeFile`; found file → `ConfigFile`; not found → `DefaultEmpty`
+- Config format: TOML (primary), YAML (`.yaml`/`.yml`)
+- Permissions: `check_config_file_permissions()` warns about world/group-readable files
 
-**TOCTOU Considerations:**
-- Scope checks occur at dispatch time, not per-connection
-- `reqwest` may re-resolve DNS between scope check and connection
-- Strict automated surfaces should pin connections to approved addresses when possible
-- Manual surfaces accept the residual TOCTOU risk with operator oversight
+## Integration Points
 
-**Scope loading:**
-- `load_scope_with_source()` loads a scope from a file and tags it with the appropriate `ScopeSource`
-- When `--scope` is provided, the result has `ScopeSource::CliScopeFile`
-- When loaded from config, the result has `ScopeSource::ConfigFile`
-- When no scope is provided, the result has `ScopeSource::DefaultEmpty`
-- **FxHashMap**: All HashMap usages use `rustc_hash::FxHashMap` for performance:
-  - `AlertChannelsConfig.channels` (`settings.rs:21`)
-  - `WebhookConfigEntry.headers` (`settings.rs:38`)
-  - `HttpConfig.default_headers` (`http.rs:39`)
-  - `EggsecConfig.profiles` (`settings.rs:109`)
-  - `WebhookConfig.headers` (`scan.rs:132`)
+### Upstream Consumers
 
-### `ExecutionProfile` and `EnforcementOutcome` (`policy.rs`, `policy_decision.rs`)
+| Consumer | How it uses config |
+|----------|-------------------|
+| CLI (`eggsec-cli`) | `load_config()`, `load_scope_with_source()`, constructs `EnforcementContext::manual_permissive()` or `manual_guarded()` |
+| TUI (`eggsec-tui`) | Reads `EggsecConfig` for settings tab; constructs `EnforcementContext` for operation dispatch |
+| REST API | Forces `McpStrict` profile; `McpServer::with_enforcement()` receives `EnforcementContext` |
+| MCP server | Forces `McpStrict` profile; `self.enforcement.evaluate()` called before every tool dispatch |
+| Agent | Forces `AgentStrict` profile; handler defensively rebuilds `AgentStrict` enforcement |
+| gRPC API | Forces `McpStrict` profile |
+| `eggsec-runtime` | `runtime_bridge` converts `RuntimeSurface` → `ExecutionSurface` → `EnforcementContext` |
+| Preflight | `preflight_operation()` at `policy_decision.rs:776` provides read-only policy preview |
 
-- `ExecutionProfile` - Caller trust boundary: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`
-- `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `RequireConfirmation(PolicyDecision)`, `Deny(PolicyDecision)`
-- `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
-- `Capability` - Operation capability declarations for tool metadata
+### OperationMetadata → OperationDescriptor Flow
 
-**Typed Denial Classes (Phase B):**
+1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `policy.rs:2078`
+2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy.rs:2027` map alternative IDs to canonical operation IDs
+3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `policy.rs:1283` (validated) or `metadata.descriptor_for_target(target)` at `policy.rs:1226` (unchecked)
+4. Policy evaluation: `enforcement.evaluate(&descriptor)` or `enforcement.approve(surface, descriptor)`
 
-`PolicyDecision` now includes `denial_classes: Vec<DenialClass>` populated during evaluation:
-- `DenialClass::ScopeMissing` - No scope manifest provided
-- `DenialClass::TargetOutOfScope` - Target not in allowed scope
-- `DenialClass::ExplicitExclusion` - Target matches exclusion rule
-- `DenialClass::FeatureMissing` - Required feature not enabled
-- `DenialClass::RiskPolicyDenied` - Operation risk exceeds policy
-- `DenialClass::CapabilityDenied` - Capability denied by policy
-- `DenialClass::InvalidTarget` - Target is invalid/unresolvable
-- `DenialClass::Unknown` - Catch-all for unclassified denials
+### EnforcedDispatcher
 
-`classify_denial_reasons()` returns typed classes directly when `denial_classes` is populated; falls back to string inspection of `denied_reasons` for legacy compatibility.
+REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control — strict programmatic surfaces cannot accidentally bypass policy.
 
-- `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes with variants:
-  - `Candidate` - Newly discovered, not yet evaluated
-  - `PendingApproval` - Awaiting operator approval
-  - `ApprovedInScope` - Approved and confirmed in scope
-  - `RejectedOutOfScope` - Rejected as out-of-scope
-  - `is_scannable()` - Returns `true` only for `ApprovedInScope`
-- `ManualOverride` and `ConfirmationClass` (policy_decision.rs) - Manual discretion overrides (see below)
+## Testing
 
-### Manual discretion mode (plan 2026-06-10)
+### Unit Tests by File
 
-Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), non-baseline capability (`NonBaselineCapability`), private resolution (`PrivateResolution`), cross-host redirect (`CrossHostRedirect`), target expansion (`TargetExpansion`), or traffic interception (`TrafficInterception`).
+| File | Test Module | Count | Key Coverage |
+|------|-------------|-------|--------------|
+| `policy.rs` | `tests` | 15 | Risk ordering, profile display, capability display, serialization roundtrips |
+| `policy.rs` | `operation_metadata_tests` | 13 | Metadata uniqueness, alias resolution, descriptor generation, feature-gated ops |
+| `policy_decision.rs` | `tests` | 48 | Manual-mode invariants, downgrade logic, confirmation classes, approval tokens, preflight |
+| `scope.rs` | `tests` | ~40 | Scope rules, CIDR matching, address classification, resolver tests, loaded scope provenance |
+| `settings.rs` | `tests` | 1 | Config default path |
+| `loader.rs` | `tests` | 12 | Config/scope loading, format support, source tracking |
+| `budget.rs` | `tests` | 8 | Budget validation, defaults, serialization |
+| `discovery.rs` | `tests` | 3 | Status display, scannability, serialization |
+| `feature_registry.rs` | `tests` | 4 | Registry coverage, category matching |
+| `presets.rs` | `tests` | 4 | Built-in count, find by name, serialization |
 
-`ManualGuarded`, `CiStrict`, `McpStrict`, and `AgentStrict` treat `RequireConfirmation` as `Deny` (no proceed path).
+### Integration Tests
 
-`CommandContext::evaluate_and_enforce_operation` (in commands/handlers/mod.rs) matches on `RequireConfirmation` only for `ManualPermissive`: if the `CommandContext`'s `manual_override: ManualOverride` has flags permitting the required classes (e.g. `allow_out_of_scope`, `allow_explicit_exclusion`, `allow_high_risk`, `allow_nonbaseline_capability`, `assume_yes`, `allow_private_resolution`, `allow_cross_host_redirect`), it proceeds and records the override (`manual_override_used`, `manual_override_reason`, `manual_override_classes` on the decision for audit, using stable kebab strings from `ConfirmationClass::as_str()`). `--yes` / `assume_yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. are required for their classes. Without matching flags it bails with a precise message listing the required override flag(s). Automated profiles never reach a proceed path for `RequireConfirmation`. `confirmation_class_strings` dedups classes for audit/JSON/warnings while preserving first-seen order.
+- `crates/eggsec/tests/enforcement_matrix.rs`: 105+ tests providing systematic cross-surface coverage for the dual-mode enforcement contract
+- Tests cover: all execution surfaces, manual permissive/guarded/strict behavior, capability matrix, override isolation, scope state matrix
 
-`ManualOverride` (with `permits(class: ConfirmationClass)`) and `ConfirmationClass` live in `policy_decision.rs`; they are not part of MCP/agent schemas or automated paths. Override flags are CLI-only (global, manual-only; ignored/rejected under `--strict-scope` or strict profiles). Strict profiles/MCP/agent never honor overrides.
+### Running Tests
 
-This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/archive/2026-06-10-manual-discretion-mode-plan.md`.
+```bash
+cargo test -p eggsec --lib config::              # config module unit tests
+cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
+```
 
-**Phase 4 regression coverage**: 96 tests across `config::policy_decision::tests` (48) and `commands::handlers::tests` (48) lock all manual-mode invariants. **Phase 8 enforcement matrix**: 169 tests in `crates/eggsec/tests/enforcement_matrix.rs` provide systematic cross-surface coverage for the dual-mode contract. See `docs/ENFORCEMENT_MODES.md` Phase 4 and Phase 8 sections for the full invariant-to-test mapping.
+## Invariants & Gotchas
 
-### `EnforcementContext` (`policy_decision.rs`)
+### Invariants
 
-`EnforcementContext` bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` into a single struct for shared enforcement across all execution paths. This eliminates the need to pass profile/policy/scope separately through the call stack. `EnforcementContext::evaluate(descriptor)` is the mandatory central boundary: it performs LoadedScope provenance checks (strict profiles deny `DefaultEmpty` for `requires_explicit_scope` target-bearing ops), applies `DenialClass` downgrade logic (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules declared and no exclusions/feature/risk/capability/hazard denials), performs positive-capability allow checks for strict profiles, and runs full risk/feature/policy enforcement. Per-scan re-evaluation occurs for agents in `execute_scan_with_depth`.
+1. **`EnforcementContext::evaluate()` is mandatory.** Every execution surface (CLI, TUI, REST, MCP, agent, gRPC) must pass through it. Never bypass it. (`policy_decision.rs:561`)
 
-> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
+2. **`ApprovedOperation` is the only valid dispatch token.** Strict programmatic surfaces (REST, MCP, Agent, CI) require it before `dispatch_checked()`. (`policy_decision.rs:331`)
 
-**Baseline capabilities** for strict automated profiles: `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`. Non-baseline capabilities require explicit `allowed_capabilities`.
+3. **Scope provenance matters.** Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `LoadedScope::is_explicit_manifest() == true` for networked operations with `requires_explicit_scope`. `DefaultEmpty` blocks these. (`policy_decision.rs:569`)
 
-### ExecutionSurface
+4. **OperationMetadata is the single source of truth.** All surfaces use `metadata_for_tool_id()` to look up canonical operation definitions. Don't build policy checks inline. (`policy.rs:1494`)
 
-`ExecutionSurface` (defined in `config/policy.rs`) describes where an operation originates and derives the correct `ExecutionProfile`. Entry points should select an `ExecutionSurface` variant rather than hand-picking profiles.
+5. **ManualOverride is CLI-only.** Never part of MCP/agent schemas or automated paths. Automated profiles never honor overrides. (`policy_decision.rs:432`)
 
-| Surface | Profile | Manual Override |
-|---------|---------|-----------------|
-| `CliManual` | `ManualPermissive` | Yes |
-| `TuiManual` | `ManualPermissive` | Yes |
-| `CliManualStrict` | `ManualGuarded` | No |
-| `TuiManualStrict` | `ManualGuarded` | No |
-| `McpServer` | `McpStrict` | No |
-| `SecurityAgent` | `AgentStrict` | No |
-| `Ci` | `CiStrict` | No |
-| `RestApi` | `McpStrict` | No |
-| `GrpcApi` | `McpStrict` | No |
+6. **`--yes` is narrow.** Only covers `OutOfScope` and `TargetExpansion`. Dedicated `--allow-*` flags required for all other confirmation classes. (`policy_decision.rs:453`)
 
-Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for centralized construction.
+7. **Feature registry is fail-closed.** Unknown feature names return `false` from `is_feature_enabled()`. (`feature_registry.rs:141`)
 
-**Preferred constructors:** `EnforcementContext::manual_permissive`, `manual_guarded`, `ci_strict`, `mcp_strict`, `agent_strict` (no `cli(...)` helper; callers construct the appropriate profile).
+8. **Resolver reports facts; policy decides.** `HostResolver` never rejects addresses. `classify_address()` never authorizes. (`scope.rs:62`)
 
-**Construction per execution path:**
-- CLI commands: `EnforcementContext::manual_permissive(...)` (default) or `manual_guarded(...)` (when `--strict-scope` is used)
-- MCP server: Forces `McpStrict` profile; preferred production constructor is `McpServer::with_enforcement(registry, api_key, profile, enforcement)` (passes pre-built `EnforcementContext`)
-- Agent: Forces `AgentStrict` profile; `EnforcementContext::agent_strict` is passed to `AgentConfig`. Handler defensively rebuilds `AgentStrict` from policy/scope (defense-in-depth). `Agent::new()` validates profile at runtime.
-- CI mode: Uses `CiStrict` profile when detected
+### Gotchas
 
-**Key methods:**
-- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally. (RequireConfirmation is produced only for ManualPermissive discretion cases per 2026-06-10 plan with narrow `--yes` + dedicated `--allow-*` semantics; automated profiles treat it as denial.)
-- `approve(surface, descriptor)` - Strict approval: returns `ApprovedOperation` only for `Allow` outcomes. `Warn`, `RequireConfirmation`, and `Deny` fail with `EnforcementError`. Use for REST, MCP, Agent, CI.
-- `approve_manual(surface, descriptor, manual_override)` - Manual approval: supports `Warn` (approved with warning) and `RequireConfirmation` with matching override on `ManualPermissive` surfaces. Strict/automated surfaces reject overrides. Use for CLI/TUI.
-- `requires_explicit_manifest_for(descriptor)` / `require_explicit_scope_for_networked()` - Provenance helpers used by `evaluate`.
-- `profile()` - Returns the `ExecutionProfile`
-- `scope()` - Returns the `LoadedScope`
+- **TOCTOU on scope checks.** Scope checks occur at dispatch time, not per-connection. `reqwest` may re-resolve DNS between scope check and connection. Strict surfaces should pin connections when possible.
 
-**Security enforcement:**
-- **Operation metadata is the source of truth**: `OperationMetadata` in `config::policy` is the single source of truth for `OperationDescriptor` generation. All surfaces (REST, MCP, gRPC, TUI, agent) use `metadata_for_tool_id()` or `operation_metadata()` to look up canonical operation definitions. Descriptors are generated via `metadata.descriptor_for_target()`. Missing metadata for an externally executable tool triggers a runtime error or conservative fallback.
-- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; `EnforcementContext` is the sole policy/scope authority. Legacy helpers (`policy_decision_for_mcp_call`, `denial_from_violation`, `with_scope`, `with_scope_and_profile`) have been removed.
-- REST, MCP, gRPC, and Agent dispatch paths use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control so strict programmatic surfaces cannot accidentally bypass policy.
-- Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.approve()` immediately before dispatch.
-- Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
+- **`is_explicitly_excluded()` checks all resolved addresses.** A hostname that resolves to multiple IPs, where one IP matches an exclusion rule, will be excluded. (`scope.rs:500`)
 
-### Preflight System (`preflight_operation()`)
+- **Empty scope with positive rules + target miss = `RequireConfirmation` in ManualPermissive** (not a silent warn). This was a deliberate 2026-06-10 hardening decision. (`policy_decision.rs:1230`)
 
-`PreflightResult` (`config/policy_decision.rs`) and `preflight_operation()` provide a read-only policy check that surfaces enforcement decisions *before* dispatching an operation. Every execution surface (CLI `eggsec preflight`, TUI wrapper, REST `POST /api/preflight`, MCP tool, agent scan logger) calls `preflight_operation(surface, enforcement, descriptor, manual_override)` which delegates to `EnforcementContext::evaluate()` — the same enforcement path used at dispatch time. The result includes the outcome kind (Allow/Warn/RequireConfirmation/Deny), required confirmation classes, suggested CLI flags for manual surfaces, and scope provenance. The TUI wraps this as `TuiPreflightResult` for status-bar display; REST returns it as JSON; the agent logs it before each scan.
+- **Strict profiles deny on warnings.** If `evaluate_operation_policy` produces warnings for a strict profile, the outcome is `Deny`. (`policy_decision.rs:1345`)
 
-### `ExecutionBudget` (`budget.rs`)
+- **`classify_denial_reasons()` dual path.** When `denial_classes` is populated (new code path), returns typed classes directly. Falls back to string inspection for legacy. (`policy_decision.rs:1058`)
 
-Budget constraints for execution runs. Ensures stress, load, and raw-packet operations always have finite limits.
+- **`ExecutionBudget::from_preset()` doesn't propagate `max_bytes`.** The `from_preset()` constructor at `budget.rs:90` sets `max_bytes: None` regardless of the preset's potential byte limits.
 
-**Fields:** `max_duration_secs`, `max_requests`, `max_packets`, `max_bytes`, `max_concurrency`, `max_targets`, `max_resolved_addresses_per_host`, `max_payloads`, `cooldown_secs`, `per_target_rate_limit`
+### Bug Sweep — Confirmed Findings
 
-**Constructors:**
-- `ExecutionBudget::default()` - Conservative default (300s, 10k requests, concurrency 10)
-- `ExecutionBudget::defense_lab_default()` - Conservative budget for defense-lab operations
-- `ExecutionBudget::hazardous_lab_default()` - Stricter budget with packet/byte limits and rate limiting (120s, 5k requests, 10k packets, 10MB bytes, concurrency 5)
-- `ExecutionBudget::from_preset(&DefenseLabPreset)` - Creates a budget from a defense-lab preset
+| Location | Finding | Severity |
+|----------|---------|----------|
+| `policy_decision.rs:727` | `expect("ExecutionPolicy is JSON-serializable")` in `policy_hash()` — will panic on serialization failure | Low (in practice, always serializable) |
 
-**Validation:** `validate()` checks that duration > 0, at least one finite bound (requests, packets, bytes, or payloads) exists, and concurrency > 0.
-
-### `DefenseLabPreset` (`presets.rs`)
-
-A defense-lab preset that defines constraints for a specific lab workflow.
-
-**Fields:** `name`, `description`, `operation_mode`, `max_risk`, `intended_uses`, `default_concurrency`, `max_duration_secs`, `max_requests`, `max_packets`, `max_payloads`, `dns_resolution_allowed`, `raw_sockets_allowed`, `external_targets_allowed`, `localhost_or_private_required`, `output_format`
-
-**7 Built-in Presets:**
-- `synvoid_local()` - Local Synvoid WAF and protocol validation (concurrency 10, 300s, 10k requests)
-- `synvoid_waf_regression()` - WAF payload and evasion-resistance regression (concurrency 20, 600s, 50k requests)
-- `synvoid_protocol_edge()` - Malformed protocol and edge behavior validation (concurrency 5, 120s, 1k requests, raw sockets)
-- `distributed_system_smoke()` - Lightweight distributed system resilience smoke test (concurrency 5, 60s, 500 requests)
-- `distributed_system_stress()` - Distributed system stress with controlled load (HazardousLab mode, concurrency 50, 300s, 100k requests)
-- `waf_regression_safe()` - Safe WAF regression with conservative budgets (concurrency 5, 120s, 5k requests)
-- `waf_regression_intrusive()` - Intrusive WAF regression with full payload families (concurrency 20, 600s, 50k requests)
-
-**Helpers:** `built_in()` returns all 7 presets; `find(name)` looks up by name; `list_names()` returns all preset name strings.
-
-### `Loader` (`loader.rs`)
-
-Handles the mechanics of finding and parsing configuration files.
-
-- Supports TOML (primary) and YAML (`.yaml`/`.yml`) formats
-- Merges file-based config with command-line overrides
-- Provides default values for all settings
-
-## TUI Settings Tab
-
-The TUI settings editor in `tui/tabs/settings/main.rs` applies exposed fields on top of an existing config instead of rebuilding from defaults. Non-exposed sections are preserved, including:
-- `profiles`
-- `schedule`
-- `remote`
-- `ai`
-- `search`
-- `alert_channels`
-- Other fields not shown in the UI
-
-The editor is still a quick-settings surface, but saving it is no longer destructive for untouched config sections.
-
-## Configuration Files
-
-Eggsec looks for config in this order:
-1. `--config` / `-c` command-line argument
-2. `./eggsec.toml`
-3. `./.eggsec/eggsec.toml`
-4. `./config/eggsec.toml`
-5. `~/.config/eggsec/eggsec.toml` (via `ProjectDirs`)
-
-## Validation
-
-`EggsecConfig::validate()` orchestrates all sub-validations. Config files with secrets should be `chmod 600` - `check_config_file_permissions()` warns about world/group-readable permissions but does not enforce.
-
-## Error Handling
-
-`ConfigError` enum has four variants:
-- `Io` - File read/write errors
-- `Parse` - TOML/YAML parsing errors
-- `Serialize` - Serialization errors
-- `Validation` - Validation failures (field out of range, etc.)
-
-Use `?` propagation instead of `unwrap_or_default()` to avoid silent failures in async contexts.
-
-### ScopeError Enum
-
-`ScopeError` enum at `scope.rs:400-422` has 7 variants:
-- `Validation(String)` - General validation error
-- `FileRead(String, String)` - Failed to read scope file
-- `Parse(String, String)` - Failed to parse scope file
-- `InvalidUrl(String, String)` - Invalid URL
-- `InvalidCidr(String, String)` - Invalid CIDR notation
-- `InvalidTarget(String)` - Invalid target
-- `DnsResolution(String, String)` - DNS resolution failed
-
-## Key Security Fixes (2026-05-22)
-
-- **Private IP bypass fixed**: Direct IP addresses now properly blocked in `TargetScope::parse()` and `parse_hostname_only()`
-- **Project qualifier fixed**: `api.rs` now uses `PROJECT_QUALIFIER` consistently with other modules
-- **Error propagation**: Config module uses proper error propagation rather than silent fallback to defaults
-
-## Normalized Audit Events
-
-`audit.rs` provides `EnforcementAuditEvent` for consistent audit records across all surfaces. See `docs/ENFORCEMENT_MODES.md` for the full audit trail specification.
+*Last verified against source: 2026-08-25*

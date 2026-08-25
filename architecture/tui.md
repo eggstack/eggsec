@@ -1,595 +1,207 @@
 # TUI (Terminal User Interface)
 
-Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 33 different tabs.
-
-## Action Hints System (`app/action_hints.rs`)
-
-Context-aware action hints replace the static help text in the status bar. The `ActionHint` model contains a `key` and `label` pair (e.g. `"C:stop"`). Hints are computed by `get_action_hints(app)` with this priority order:
-
-1. **Running task hints** — `C:stop` + `Z:pause` (or `Y:resume` when paused); detected via `app.has_active_task()` (checks all task state fields, not just `task_state.task_id`)
-2. **Overlay-specific hints** — PolicyConfirm: `Enter:confirm Esc:cancel`, ConfirmPopup: `y:yes n:no`, CommandPalette: `Enter:run ↑↓:select Esc:close`, QuickSwitch: `Enter:go ↑↓:select Esc:close`, Search: `Enter:search Bksp:edit Esc:close`, Help: `Esc:close j/k:scroll g/G:top/end`, HttpOptions: `h:close`
-3. **Insert-mode hints** — `Esc:normal Tab:next Enter:confirm`
-4. **Tab-specific normal-mode hints** — History: `↑↓:nav d:delete r:clear`, Dashboard: `Enter:open n/p:tabs`, default (with target): `Enter:run n/p:tabs /:search`, default (no target): `Enter:focus n/p:tabs /:search`
-5. **Settings section-aware hints** — The Settings tab adapts hints based on the current section:
-   - **Theme section (selector closed)**: `r:reload Enter:themes Tab:next`
-   - **Theme section (selector open)**: `Enter:select ↑↓:theme Esc:cancel`
-   - **Other sections**: `s:save r:reset Tab:next`
-
-`format_hints()` renders the compact string (e.g. `"C:stop Z:pause"`). The status bar (`draw_status_bar` in `ui/shell.rs`) calls `get_action_hints` + `format_hints` instead of static help text. 16 unit tests cover task/overlay/insert/tab hints and priority precedence.
-
-**Note**: `tabs/input_accessibility.rs` is a `#[cfg(test)]` module with tests that verify unique input labels and focus traversal across all tab input groups.
-
-## Recent Improvements (2026-06-18)
-
-- **handle_enter() reachable in graphql/oauth**: The `start()` call was unreachable after an exhaustive match; refactored to follow the `fuzz.rs` pattern (Inputs with `is_focused() == false` triggers `start()` after tabbing past the last field). Users can now actually start GraphQL and OAuth scans from the TUI.
-- **Popup::content overflow guard**: `content.len() + 5` would overflow in release builds on huge content. Changed to `content.len().saturating_add(5)` to match the project-wide pattern.
-- **scope label fix**: identical if/else in `ui/shell.rs` now correctly returns "out-of-scope" (was just "out") in non-compact mode, matching the "in-scope" pattern.
-- **Theme notification uses display name**: `toggle_theme` notification now says `"Theme: Catppuccin Mocha"` instead of `"Theme: catppuccin-mocha"`.
-- **Settings save hint footer**: persistent `[s] Save [Esc] Back [Tab] Next field [↑↓] Section` hint at the bottom of the Settings tab (the `s` key was previously undiscoverable).
-- **Theme hint expanded**: Settings > Theme now describes the full theme story (`~/.config/eggsec/themes/` dir, bundled install, Ctrl+T).
-- **Selector::set_items_with_extra dedup**: now deduplicates by value to prevent unbounded growth if called multiple times.
-- **luminance() warns on unknown names**: logs a `tracing::warn!` when a non-standard color name is encountered in a theme file (deduplicated per unique name).
-- **Theme selector placeholder improved**: `set_available_themes` early-returns on empty list (avoids silent stale state) and uses clearer placeholder prefix `[! id] (not installed)` to distinguish placeholders from real themes.
-- **Dead code removed**: 16 dead-code warnings → 0. Forward-compat fields and reserved enum variants now have `#[allow(dead_code)]` annotations with explanatory comments.
-- **Code health**: TUI crate has 0 clippy warnings (lib build). All tests pass.
-- **gg normal-mode sequence fixed**: `UiAction::BeginGgSequence` wires first `g` through decode→apply to set `pending_key`; second `g` correctly triggers `MoveTop`. 3 regression tests added.
-- **Ctrl-Space autocomplete fixed**: `UiAction::Autocomplete` wires Ctrl-Space in insert mode through decode→apply to call `handle_autocomplete()`. 2 tests added.
-- **Settings theme selector feedback**: Theme changes from Settings selector now show the same `Notification("Theme: ...")` as Ctrl+T; failed changes show a warning.
-- **New unit tests**: 5 regression tests for gg/autocomplete; all TUI tests pass.
-
-## Core Components (`crates/eggsec-tui/src/`)
-
-### App & UI (`app/`)
-
-Manages the overall application state, event loop, and rendering.
-
-| File | Purpose |
-|------|---------|
-| `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
-| `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
-| `tab_store.rs` | `TabStore` - owns all 33 tab instances (21 always-present + 12 feature-gated; History tab shares Dashboard instance) |
-| `runner.rs` | Main event loop using crossterm/ratatui |
-| `key_handler.rs` | Priority-based key processing: `decode_global_shortcuts`, `decode_mode_specific_input`, `decode_topmost_overlay` (all return `Vec<UiAction>`); `handle_key_event` orchestrates decode + apply |
-| `state_update.rs` | Async task result handling and routing |
-| `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
-| `task_dispatcher.rs` | `TuiTaskDispatcher` — `TaskDispatcher` impl, returns `TaskOutcome::Result(TaskResultEnvelope)` |
-| `runtime_adapter/` | `TuiRuntimeAdapter` — runtime event reducer, maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()` |
-| `runtime_client/` | `TuiRuntimeClient` trait + `EmbeddedRuntimeClient` / `DaemonRuntimeClient` (Phase 8: remote attach mode) |
-| `enforcement.rs` | `TuiEnforcementState`, `TuiPreflightResult` — TUI-local enforcement posture model |
-| `enforcement_facade.rs` | `EnforcementFacade` — extracted enforcement evaluation/approval logic (Phase 8) |
-| `action_spec.rs` | `TuiActionSpec`, `TuiTabSpec` — metadata-backed TUI action/tab registry (Phase 8) |
-| `theme_runtime.rs` | Theme loader lifecycle helpers and deferred restore handling |
-| `input.rs` | `InputMode` enum: `Normal`, `Insert` |
-| `navigation.rs` | Tab navigation helpers (next/prev tab, edge detection) |
-| `bookmarks.rs` | Tab bookmark toggle, query, and persistence |
-| `command.rs` | Command palette dispatch and execution |
-| `confirmation.rs` | `PendingAction` enum for deferred destructive actions |
-| `error.rs` | Friendly error message formatting for TUI display |
-| `export.rs` | Result export to file (JSON, CSV, HTML, SARIF, etc.) |
-| `help_config.rs` | Static help data and help overlay configuration |
-| `notifications.rs` | `Notification` and `NotificationSeverity` types for toast messages |
-| `options.rs` | `GlobalHttpOptions` struct (auth, proxy, TLS, rate-limit, user-agent) |
-| `tab_error.rs` | `TabError` enum with 5 categories (Network, Config, Resource, Target, Unknown) and `is_recoverable()` |
-
-### UI Model Integration (`eggsec-ui-model`)
-
-The TUI depends on `eggsec-ui-model` for frontend-neutral view DTOs used in daemon-facing rendering. Key integrations:
-
-- **`runtime_adapter/mod.rs`**: Uses `OutcomeView::from(&outcome)` to normalize `TaskOutcome` into a structured view with `outcome_type`, `summary`, `envelope`, and `artifact_ref`. Uses `renderer_for_kind()` to look up `ResultRendererDescriptor` for kind labels instead of hardcoded strings.
-- **Daemon attach mode**: When connected to a daemon, the TUI receives `TaskOutcome::Result(TaskResultEnvelope)` with only `kind`/`summary`/`payload` (no typed `TaskResult`). `OutcomeView` and `ResultEnvelopeView` provide normalized summaries for `TabCompletedEnvelope` actions.
-- **Renderer registry**: `renderer_for_kind(kind)` returns `Option<&'static ResultRendererDescriptor>` with `title`, `summary_fields`, `artifact_kinds`, `supports_rich_tui`, `supports_json_detail`. Used by the runtime adapter for kind labels and by CLI for consistent output.
-
-The TUI does NOT yet consume `SessionView`, `TaskView`, `EventView`, or `DashboardSummaryView` directly — these are available for future wiring into dashboard/history tabs.
-
-### UiAction Enum
-
-The `UiAction` enum (`app/action.rs`) models operator intent with ~50 variants across these categories:
-
-- **Session/task lifecycle**: `Quit`, `StopActiveTask`
-- **Overlay/mode toggles**: `ToggleHelp`, `ToggleCommandPalette`, `ToggleQuickSwitch`, `ToggleSearch`, `ToggleTheme`, `TogglePause`, `Resume`
-- **Focus/navigation**: `FocusNext`, `FocusPrev`, `PageUp`, `PageDown`, `MoveUp`/`Down`/`Left`/`Right`/`Top`/`Bottom`
-- **Normal-mode sequences**: `BeginGgSequence`, `MoveWordForward`, `MoveWordBackward`, `Home`, `End`
-- **Commit/cancel**: `Enter`, `Escape`, `EnterInsertMode`
-- **Insert-mode editing**: `InputChar`, `Backspace`, `Delete`, `Autocomplete`, `Paste`, `Copy`, `RequestPaste`, `RequestCopy`
-- **Tab navigation**: `SelectTab`, `NextTab`, `PrevTab`, `ToggleBookmark`
-- **Export**: `CycleExportFormat`, `ExportResults`
-- **Destructive actions**: `ResetCurrent`, `ReloadThemes`, `SaveSettings`, `DeleteHistoryEntry`
-- **Confirmation dialogs**: `ConfirmPendingAction`, `CancelPendingAction`, `ConfirmButtonToggle`
-- **Policy enforcement**: `ConfirmPolicyAction`, `CancelPolicyAction`, `PolicyReasonChar`, `PolicyReasonBackspace`
-- **Overlay input**: `CommandPaletteInput(CommandPaletteInput)`, `QuickSwitchInput(QuickSwitchInput)`
-- **Search**: `SearchQueryChar`, `SearchQueryBackspace`, `SearchQueryClear`, `SearchPerform`
-- **Help scrolling**: `HelpScrollUp`/`Down`/`Top`/`Bottom`/`PageUp`/`PageDown`
-- **HTTP options**: `HttpOptionsClose`
-- **Enforcement**: `ToggleEnforcementPosture`
-
-### CommandPaletteInput and QuickSwitchInput Enums
-
-`CommandPaletteInput`: `Char`, `Backspace`, `Enter`, `Up`, `Down`, `Tab`, `BackTab`, `Esc`, `Close`
-
-`QuickSwitchInput`: `Char`, `Backspace`, `Enter`, `Up`, `Down`, `PageUp`, `PageDown`, `Home`, `End`, `Esc`, `Close`
-
-### TabWindow and TabSpan Structs
-
-`TabWindow` represents a windowed view over a tab collection with `offset` and `visible_count`. `TabSpan` represents a contiguous span of tabs within a window. Both are used for pagination of the 33-tab tab bar.
-
-### Macro System
-
-- **`tab_dispatch!`** (`tabs/mod.rs:457`): Dispatches method calls across all tab variants in the `Tab` enum
-- **`cfg_push_tabs!`** (`tabs/mod.rs:126`): Conditionally pushes tab instances into the `TabStore` based on feature flags
-- **`tab_input_boilerplate!`**, **`tab_input_2area!`**, **`tab_input_3area!`**, **`tab_input_narea!`** (`tabs/macros.rs`): Generate common `TabInput` trait implementations for tabs with 2+ focus areas
-
-### RuntimeBinding and TuiRuntimeClient
-
-`RuntimeBinding` (`app/mod.rs`) wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait, providing a unified interface for session management.
-
-`TuiRuntimeClient` trait methods (8 methods): `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`
-
-### Tabs (`tabs/`)
-
-33 specialized tabs for different security testing functions:
-
-| Tab | File | Purpose |
-|-----|------|---------|
-| Recon | `recon.rs` | Domain/IP reconnaissance (DNS, WHOIS, SSL, tech detection) |
-| Scan | `scan.rs` | Multi-stage security assessment pipeline |
-| Scan Ports | `scan_ports.rs` | TCP port scanning |
-| Scan Endpoints | `scan_endpoints.rs` | Sensitive endpoint discovery |
-| Fingerprint | `fingerprint.rs` | Service fingerprinting (AMAP-style) |
-| Fuzz | `fuzz.rs` | Security fuzzing with 40 payload types |
-| WAF | `waf.rs` | WAF detection and bypass |
-| WAF Stress | `waf_stress.rs` | Comprehensive WAF stress testing |
-| Load | `load.rs` | HTTP load testing |
-| Stress | `stress.rs` | Stress/load testing |
-| Packet | `packet.rs` | Packet capture, send, traceroute |
-| GraphQL | `graphql.rs` | GraphQL security testing |
-| OAuth | `oauth.rs` | OAuth/OIDC vulnerability testing |
-| Auth Test | `auth.rs` | Authentication control validation (defense-lab only) |
-| Cluster | `cluster.rs` | Distributed scanning cluster management |
-| Proxy | `proxy.rs` | Proxy pool management |
-| NSE | `nse.rs` | Nmap NSE script execution |
-| Hunt | `hunt.rs` | Intelligent vulnerability hunting |
-| Browser | `browser.rs` | Headless browser security testing |
-| Wireless | `wireless.rs` | WiFi scanning plus active deauth/disassoc (`wireless` passive; `wireless-advanced` active mode with dry-run default and live confirmation) |
-| Intercept | `intercept.rs` | Interactive web proxy traffic interception — flow inspection, header/body editing, manipulation audit trail, session save/load, HAR export, protocol detail panes (HTTP/WS/HTTP2/gRPC) (`web-proxy` feature) |
-| Compliance | `compliance.rs` | Compliance report generation (OWASP, PCI, HIPAA, SOC2) |
-| Storage | `storage.rs` | Database storage and query management |
-| Integrations | `integrations.rs` | Issue tracker integration (Jira, GitHub, GitLab) |
-| Workflow | `workflow.rs` | Finding management and SLA tracking |
-| Vuln | `vuln.rs` | Vulnerability prioritization and risk scoring |
-| Report | `report.rs` | Report conversion, trends, schedules |
-| Resume | `resume.rs` | Resume previous scan from session |
-| History | `history.rs` | Scan history browser |
-| Dashboard | `dashboard.rs` | Security assessment dashboard |
-| Settings | `settings/main.rs` | Application configuration |
-| Db Pentest | `db_pentest.rs` | Direct database security assessment (Phase 3-5: Postgres/MySQL/MSSQL/MongoDB/Redis, correlation engine, compliance mapping, evidence bundles) |
-| C2 | `c2.rs` | C2 (Command & Control) framework simulation for defense validation (depends on `c2` feature) |
-
-#### Per-Tab Metadata Inventory
-
-Each row below captures the tab's stable ID, operation ID (for descriptor building), feature gate, whether it uses the direct-launch pre-dispatch policy gate, whether it produces a task config, and whether it spawns side effects. Tabs without an operation ID do not participate in enforcement evaluation.
-
-| # | Tab | stable_id | operation | feature | direct_launch | TaskBuilder | Descriptor | Spawns |
-|---|-----|-----------|-----------|---------|---------------|-------------|------------|--------|
-| 0 | Recon | `recon` | `recon` | — | no | yes | yes | yes |
-| 1 | Load | `load` | `load-test` | — | no | yes | yes | yes |
-| 2 | Scan Ports | `scan_ports` | `scan-ports` | — | no | yes | yes | yes |
-| 3 | Scan Endpoints | `scan_endpoints` | `scan-endpoints` | — | no | yes | yes | yes |
-| 4 | Fingerprint | `fingerprint` | `fingerprint` | — | no | yes | yes | yes |
-| 5 | Fuzz | `fuzz` | `fuzz` | — | no | yes | yes | yes |
-| 6 | WAF | `waf` | `waf` | — | no | yes | yes | yes |
-| 7 | WAF Stress | `waf_stress` | `waf-stress` | — | no | yes | yes | yes |
-| 8 | Scan (Pipeline) | `scan` | `scan-pipeline` | — | no | yes | yes | yes |
-| 9 | Resume | `resume` | — | — | no | no | no | no |
-| 10 | Proxy | `proxy` | — | — | no | no | no | no |
-| 11 | Packet | `packet` | `packet` | — | **yes** | yes | yes | yes |
-| 12 | GraphQL | `graphql` | `graphql` | — | no | yes | yes | yes |
-| 13 | OAuth | `oauth` | `oauth` | — | **yes** | yes | yes | yes |
-| 14 | Cluster | `cluster` | — | — | **yes** | no¹ | no | no |
-| 15 | Stress | `stress` | `stress-test` | — | **yes** | no² | yes | no² |
-| 16 | Report | `report` | — | — | no | no | no | no |
-| 17 | NSE | `nse` | `nse` | `nse` | **yes** | no³ | yes | no³ |
-| 18 | Settings | `settings` | — | — | no | no | no | no |
-| 19 | History | `history` | — | — | no | no | no | no |
-| 20 | Dashboard | `dashboard` | — | — | no | no | no | no |
-| 21 | Hunt | `hunt` | `hunt` | `advanced-hunting` | **yes** | yes | yes | yes |
-| 22 | Browser | `browser` | `browser` | `headless-browser` | **yes** | yes | yes | yes |
-| 23 | Compliance | `compliance` | `compliance` | `compliance` | no | yes | yes | yes |
-| 24 | Storage | `storage` | `storage` | `database` | no | yes | yes | yes |
-| 25 | Integrations | `integrations` | `integrations` | `external-integrations` | no | yes | yes | yes |
-| 26 | Workflow | `workflow` | `workflow` | `finding-workflow` | no | yes | yes | yes |
-| 27 | Vuln | `vuln` | `vuln` | `vuln-management` | no | yes | yes | yes |
-| 28 | Wireless | `wireless` | `wireless` | `wireless` | **yes** | yes | yes | yes |
-| 29 | Auth Test | `auth` | `auth-test` | — | **yes** | yes | yes | yes |
-| 30 | Db Pentest | `db_pentest` | `db-pentest` | `db-pentest` | **yes** | yes | yes | yes |
-| 31 | Intercept | `intercept` | `proxy-intercept` | `web-proxy` | **yes** | yes | yes | yes |
-| 32 | C2 | `c2` | `c2` | `c2` | **yes** | yes | yes | yes |
-
-**Notes:**
-- ¹ Cluster's `build_run_request()` always returns `None` — handle_enter() handles UI actions locally.
-- ² Stress has `direct_launch: true` (pre-dispatch gate fires), but `build_current_task()` returns `None` — the tab manages its own start/stop state without spawning a tokio task.
-- ³ NSE has `direct_launch: true` and produces a descriptor, but has no `TaskBuilder` impl — `build_current_task()` returns `None`.
-
-**Summary counts:**
-- 33 total tabs (21 base + 12 feature-gated)
-- 26 have operation IDs (participate in enforcement evaluation)
-- 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`)
-- 24 produce tasks that spawn side effects
-- 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard)
-
-**Tab Traits** (`tabs/mod.rs`):
-- `TabState` - State: `state()`, `progress()`, `reset()`, `set_error()`
-- `TabInput` - Input: `handle_focus_next()`, `handle_char()`, `handle_enter()`, etc.
-- `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
-
-**Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskKind::AuthTest via TaskBuilder + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
-
-**C2 tab** (`tabs/c2.rs`, under `c2` feature): `C2Tab` is fully integrated as `Tab::C2` (TabSpec with Intrusive risk_group, direct_launch: true). Simulates C2 operations for defense validation and purple teaming. Always runs dry-run in TUI. Depends on `c2` feature (which requires `postex` + `evasion`). MITRE ATT&CK profiles: APT29, Carbanak.
-
-**Intercept tab** (`tabs/intercept.rs`, under `web-proxy` feature): `InterceptTab` is fully integrated as `Tab::Intercept` (TabSpec with Intrusive risk_group, direct_launch: true, `TabCategory::Traffic`, `operation: "proxy-intercept"`). Provides interactive web proxy traffic interception for defense-lab use. Three focus areas (`FlowList`, `DetailView`, `ActionBar`) with 7 detail sub-panes (Headers, Body, Manipulations, Rules, WebSocket, Http2, Grpc). Supports session save/load, HAR export, request/response editing via modal, manipulation audit trail, performance mode for large sessions (>5000 flows), and virtual scrolling. Task runner (`intercept_worker.rs`) creates `InterceptSession` with configured listen address and dry-run flag. The real MITM proxy server runs via CLI (`eggsec proxy-intercept`); the TUI tab focuses on interactive flow inspection, session management, and manipulation editing. Worker dispatch: `TaskKind::Intercept` → `TaskResult::Intercept(InterceptSession)`.
-
-**Wireless tab Active Mode** (`tabs/wireless.rs`, under `wireless-advanced`): the wireless tab supports both passive scanning (default) and an opt-in **Active Mode** for deauth/disassoc. Keymap:
-
-- `a` — toggle Active Mode (re-renders to show BSSID, Client MAC, Frame Count, Rate Limit input fields plus the dry-run toggle).
-- `d` — toggle Dry Run (on by default; live mode requires explicit opt-out).
-- `Enter` in the ActiveConfig focus area — launch the configured attack.
-
-Execution flow (mirrors Auth/Stress/Packet):
-
-1. `WirelessTab::build_run_request()` returns `RunRequest { task_kind: TaskKind::WirelessActive(...) }` (gated on `active_mode == true` and valid `active_attack_config()`).
-2. `App::build_current_operation_descriptor()` (`app/mod.rs:436-471`) special-cases wireless active attacks: the operation is `wireless-deauth` or `wireless-disassoc`, the mode is `OperationMode::DefenseLab`, the risk is `SafeActive` (dry-run) or `Intrusive` (live), and `required_features: ["wireless-advanced"]` is set.
-3. Central `EnforcementContext::evaluate()`:
-   - Dry-run → `Allow` / `Warn` → `spawn_task(...)` immediately.
-   - Live → `RequireConfirmation` under `ManualPermissive` → `request_policy_confirmation()` captures the `RunRequest` and opens the policy overlay; on confirm, `confirm_policy_action()` replays the captured task.
-4. The worker `run_wireless_active_task` (`workers/security.rs:865-927`) parses MACs, builds an `ActiveAttackConfig` with hard budgets (`max_frames ≤ 1000`, `frames_per_second ≤ 100`), and dispatches `run_deauth` (default) or `run_disassoc`.
-5. Result returns via `TaskResult::WirelessActive(result)` → `WirelessTab::set_active_results()` (`app/state_update.rs:418-422`), which transitions the tab to `AppState::Completed` and renders the findings, evidence, and recommendations.
-
-TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group: TabRiskGroup::SafeActive` (overridden at descriptor construction time to `Intrusive` for live attacks). 12 unit tests under `tabs/wireless::tests` (under `wireless-advanced`) cover mode toggling, dry-run flipping, config validation, task-config construction, `set_active_results`, and `handle_enter` flows. (See also resolution of `plans/wireless-active-tui-final-wiring-and-polish-plan.md` (2026-06-12) for E2E test addition and removed-artifact cleanup.)
-
-### TabSpec Capability Flags (`tabs/spec.rs`)
-
-`TabSpec` carries four capability booleans beyond the existing metadata (category, risk_group, feature, operation, direct_launch):
-
-| Flag | Meaning |
-|------|---------|
-| `supports_run` | Tab has inputs that can start a task (all Assessment tabs + Packet + Stress + Resume) |
-| `supports_export` | Tab appears in the export menu (Recon, Load, ScanPorts, ScanEndpoints, Fingerprint, Fuzz, Waf, WafStress, Scan, Hunt, History, DbPentest) |
-| `supports_help` | Tab has a help section (all 29 tabs) |
-| `has_settings` | Tab has configurable settings (shown in Settings tab or inline) |
-
-Helper methods: `can_start_task()` returns `supports_run && !direct_launch`, `shows_in_export()` returns `supports_export`. 10 unit tests verify registry integrity: all tabs have specs, all tabs have help, stable_id roundtrips, direct_launch categories match, `can_start_task`/`shows_in_export` consistency, assessment tabs support run, and tab count matches discriminant range.
-
-### TabInput Interface (28 methods)
-
-All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):
-
-| Method | Required | Signature |
-|--------|----------|-----------|
-| `handle_focus_next` | Yes | `fn handle_focus_next(&mut self)` |
-| `handle_focus_prev` | Yes | `fn handle_focus_prev(&mut self)` |
-| `handle_char` | Yes | `fn handle_char(&mut self, c: char)` |
-| `handle_backspace` | Yes | `fn handle_backspace(&mut self)` |
-| `handle_delete` | No | `fn handle_delete(&mut self)` - defaults to `handle_backspace()` |
-| `handle_enter` | Yes | `fn handle_enter(&mut self)` |
-| `handle_escape` | Yes | `fn handle_escape(&mut self)` |
-| `handle_up` | Yes | `fn handle_up(&mut self)` |
-| `handle_down` | Yes | `fn handle_down(&mut self)` |
-| `handle_left` | Yes | `fn handle_left(&mut self) -> bool` |
-| `handle_right` | Yes | `fn handle_right(&mut self) -> bool` |
-| `handle_paste` | No | `fn handle_paste(&mut self, text: &str)` |
-| `handle_copy` | No | `fn handle_copy(&mut self) -> Option<String>` - defaults to `None` |
-| `handle_word_forward` | No | `fn handle_word_forward(&mut self)` |
-| `handle_word_backward` | No | `fn handle_word_backward(&mut self)` |
-| `handle_home` | No | `fn handle_home(&mut self)` |
-| `handle_end` | No | `fn handle_end(&mut self)` |
-| `handle_top` | No | `fn handle_top(&mut self)` |
-| `handle_bottom` | No | `fn handle_bottom(&mut self)` |
-| `handle_autocomplete` | No | `fn handle_autocomplete(&mut self) -> bool` - defaults to `false` |
-| `handle_search` | No | `fn handle_search(&mut self, query: &str)` |
-| `is_input_focused` | Yes | `fn is_input_focused(&self) -> bool` |
-| `is_at_left_edge` | No | `fn is_at_left_edge(&self) -> bool` - defaults to `true` |
-| `is_at_right_edge` | No | `fn is_at_right_edge(&self) -> bool` - defaults to `true` |
-| `stop` | No | `fn stop(&mut self)` |
-| `page_up` | No | `fn page_up(&mut self, page_size: usize)` |
-| `page_down` | No | `fn page_down(&mut self, page_size: usize)` |
-| `primary_target` | No | `fn primary_target(&self) -> Option<String>` - returns the primary target string for the tab |
-
-Inherits from `TabState` (4 methods): `state()`, `progress()`, `reset()`, `set_error()`.
-
-### AppState Enum (`tabs/mod.rs:821-827`)
-
-```rust
-pub enum AppState {
-    Idle,
-    Running,
-    Completed,
-    Error(String),
-}
-```
-
-### InputMode Enum (`app/input.rs:1-6`)
-
-```rust
-pub enum InputMode {
-    Normal,  // vim-like navigation mode
-    Insert,  // text input mode
-}
-```
-
-### OverlayType Enum (`app/mod.rs:732-739`)
-
-Overlay precedence (highest first; PolicyConfirm for enforcement `RequireConfirmation` + narrow manual overrides is top):
-
-```rust
-pub enum OverlayType {
-    PolicyConfirm,  // Highest: enforcement confirmation (PendingPolicyConfirmation, reason input, narrow ManualOverride)
-    ConfirmPopup,   // PendingAction confirmation dialog (destructive UI actions)
-    CommandPalette, // Ctrl+P command palette
-    QuickSwitch,    // Ctrl+X tab search/switch
-    Search,         // Ctrl+F global search
-    HttpOptions,    // h key HTTP options
-    Help,           // Space key help overlay
-}
-```
-
-(See also the "TUI Architecture and Usability Pass (2026-06-11)" section at the end of this file for the 10-phase summary.)
-
-### No-Result States
-
-Empty-state messages are rendered by overlay and popup layers when no results are available:
-
-| Context | Message |
-|---------|---------|
-| Command palette (query matches nothing) | `"No matching commands"` |
-| Command palette (no commands available) | `"No commands available"` |
-| Quick switch (query matches nothing) | `"No matching tabs"` |
-| Search (query matches nothing) | `"No results for '{query}'"` |
-| Tab empty results | `"No results yet. Run a test to see findings."` (or similar) |
-
-These are rendered via `empty_state_paragraph()` in `components/empty_state.rs` and inline checks in `ui/popups.rs` and `search.rs`. 6 unit tests verify the empty-state text renders correctly for each overlay context.
-
-### PendingAction Enum (`app/confirmation.rs:3-9`)
-
-```rust
-pub enum PendingAction {
-    ResetTab,           // Reset current tab state
-    SaveSettings,       // Save settings to config file
-    DeleteHistoryEntry, // Delete selected history entry
-    ClearHistory,       // Clear all history
-}
-```
-
-Each variant has a `message()` method returning a `(title, details)` tuple and an `execute()` method that performs the action on the `App`.
-
-### NotificationSeverity Enum (`app/notifications.rs`)
-
-```rust
-pub enum NotificationSeverity {
-    Info,
-    Success,
-    Warning,
-    Error,
-}
-```
-
-### ui/ Module (`ui/`)
-
-The UI rendering layer is split into a module with focused submodules:
-
-| File | Purpose |
-|------|---------|
-| `mod.rs` | `draw()` top-level render, `LAYOUT_MARGIN`, `TAB_BAR_HEIGHT` constants |
-| `shell.rs` | Shell rendering helpers: `draw_tabs()`, `draw_breadcrumb()`, `draw_content()`, `draw_status_bar()`, `get_tab_status()`, `get_normal_status()`, `get_help_text()` |
-| `popups.rs` | Popup overlays: `draw_http_options_popup()`, `draw_command_palette()`, `draw_search_popup()`, `draw_quick_switch()` |
-| `tests.rs` | UI rendering tests |
-
-### Components (`components/`)
-
-Reusable UI primitives (6 files):
+The TUI is a ratatui-based interactive terminal frontend for Eggsec. It provides real-time security scan monitoring and control across 33 feature-gated tabs, with a vim-like input model, themeable UI, daemon attach mode, and enforcement facade that mirrors CLI semantics.
+
+See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md) for frontend-neutral DTOs, [cli_commands.md](cli_commands.md) for CLI command dispatch, [dispatch.md](dispatch.md) for task dispatch architecture, and [runtime.md](runtime.md) for the runtime lifecycle.
+
+## Role & Responsibilities
+
+- Render the shell (tab bar, breadcrumb, content area, status bar) and all overlays.
+- Route keyboard/mouse input through a three-layer decode pipeline (overlay → global → mode-specific).
+- Spawn tasks via `eggsec::dispatch::dispatch_inner()` and receive results through typed channels and a runtime event reducer.
+- Enforce policy via `TuiManual` / `TuiManualStrict` surfaces before any target-bearing dispatch.
+- Persist sessions (auto-save + quick-save on exit) and restore theme, tab position, bookmarks.
+- Connect to an external `eggsec-daemon` via Unix socket for remote-attach mode.
+
+## Architecture
+
+### Tab Inventory (33 variants)
+
+The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `tabs/mod.rs:191-220` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:67-662` has exactly 33 entries; the test `tab_specs_order_matches_enum_discriminants` (line 899) asserts `len == 33`.
+
+| # | Variant | stable_id | Feature Gate | Category | Risk | Operation | direct_launch | Source Module |
+|---|---------|-----------|-------------|----------|------|-----------|--------------|---------------|
+| 0 | Recon | `recon` | — | Assessment | SafeActive | `recon` | no | `recon.rs` |
+| 1 | Load | `load` | — | Traffic | SafeActive | `load-test` | no | `load.rs` |
+| 2 | ScanPorts | `scan_ports` | — | Assessment | SafeActive | `scan-ports` | no | `scan_ports.rs` |
+| 3 | ScanEndpoints | `scan_endpoints` | — | Assessment | SafeActive | `scan-endpoints` | no | `scan_endpoints.rs` |
+| 4 | Fingerprint | `fingerprint` | — | Assessment | Passive | `fingerprint` | no | `fingerprint.rs` |
+| 5 | Fuzz | `fuzz` | — | Assessment | Intrusive | `fuzz` | no | `fuzz.rs` |
+| 6 | Waf | `waf` | — | Assessment | SafeActive | `waf` | no | `waf.rs` |
+| 7 | WafStress | `waf_stress` | — | Assessment | Intrusive | `waf-stress` | no | `waf_stress.rs` |
+| 8 | Scan | `scan` | — | Assessment | SafeActive | `scan-pipeline` | no | `scan.rs` |
+| 9 | Resume | `resume` | — | History | SafeActive | — | no | `resume.rs` |
+| 10 | Proxy | `proxy` | — | Traffic | Administrative | — | no | `proxy.rs` |
+| 11 | Packet | `packet` | — | Traffic | Administrative | `packet` | **yes** | `packet.rs` |
+| 12 | GraphQl | `graphql` | — | Assessment | Intrusive | `graphql` | no | `graphql.rs` |
+| 13 | OAuth | `oauth` | — | Assessment | Intrusive | `oauth` | **yes** | `oauth.rs` |
+| 14 | Cluster | `cluster` | — | Configuration | Administrative | — | **yes** | `cluster.rs` |
+| 15 | Stress | `stress` | — | Assessment | Intrusive | `stress-test` | **yes** | `stress.rs` |
+| 16 | Report | `report` | — | Reporting | Passive | — | no | `report.rs` |
+| 17 | Settings | `settings` | — | Configuration | Administrative | — | no | `settings/main.rs` |
+| 18 | History | `history` | — | History | Passive | — | no | `history.rs` |
+| 19 | Dashboard | `dashboard` | — | Dashboard | Passive | — | no | `dashboard.rs` |
+| 20 | Auth | `auth` | — | Assessment | Intrusive | `auth-test` | **yes** | `auth.rs` |
+| 21 | Hunt | `hunt` | `advanced-hunting` | Assessment | Intrusive | `hunt` | **yes** | `hunt.rs` |
+| 22 | Browser | `browser` | `headless-browser` | Assessment | Intrusive | `browser` | **yes** | `browser.rs` |
+| 23 | Compliance | `compliance` | `compliance` | Reporting | SafeActive | `compliance` | no | `compliance.rs` |
+| 24 | Storage | `storage` | `database` | Workflow | Administrative | `storage` | no | `storage.rs` |
+| 25 | Integrations | `integrations` | `external-integrations` | Workflow | Administrative | `integrations` | no | `integrations.rs` |
+| 26 | Workflow | `workflow` | `finding-workflow` | Workflow | Administrative | `workflow` | no | `workflow.rs` |
+| 27 | Vuln | `vuln` | `vuln-management` | Workflow | SafeActive | `vuln` | no | `vuln.rs` |
+| 28 | Wireless | `wireless` | `wireless` | Assessment | SafeActive | `wireless` | **yes** | `wireless.rs` |
+| 29 | DbPentest | `db_pentest` | `db-pentest` | Assessment | Intrusive | `db-pentest` | **yes** | `db_pentest.rs` |
+| 30 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept.rs` |
+| 31 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
+
+**Summary**: 21 base + 12 gated = 33 total. 26 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard).
+
+Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:500-546`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
+
+### TabStore (`app/tab_store.rs`)
+
+`TabStore` owns all tab instances as named fields (one per variant). When a feature is disabled, the gated field still exists but is only accessible through the `dashboard` fallback in the dispatch macro.
+
+### Tab Traits (`tabs/mod.rs:563-627`)
+
+| Trait | Methods | Purpose |
+|-------|---------|---------|
+| `TabState` | `state()`, `progress()`, `is_running()`, `has_selector_open()`, `reset()`, `set_error()`, `set_completed_message()` | State inspection and mutation |
+| `TabRender` | `render()`, `render_overlays()`, `breadcrumb()` | Rendering |
+| `TabInput` | 28 methods (see below) | Input handling |
+
+`TabInput` provides: `handle_focus_next`, `handle_focus_prev`, `handle_char`, `handle_backspace`, `handle_delete`, `handle_enter`, `handle_escape`, `handle_up`, `handle_down`, `handle_left`, `handle_right`, `handle_paste`, `handle_copy`, `handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_top`, `handle_bottom`, `handle_autocomplete`, `handle_search`, `is_input_focused`, `is_at_left_edge`, `is_at_right_edge`, `stop`, `page_up`, `page_down`, `primary_target`.
+
+### Theme System
+
+50 packaged Halloy-format `.toml` themes are LZMA-compressed and embedded at compile time (`theme/packaged.rs:4`: `PACKAGED_THEMES_FILE_COUNT = 50`). Three built-in themes (`cyber-red`, `dark`, `light`) serve as defaults via `theme/builtin.rs`.
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `theme/palette.rs` | `ThemeMode`, `Theme` (37 color fields), `ThemeColors` | Theme data model |
+| `theme/manager.rs` | `ThemeManager` | Registration, lookup, switching, metadata tracking (`FxHashMap<String, ThemeInfo>`) |
+| `theme/loader.rs` | Parses Halloy `.toml` → `Theme`; `named_color()` for 27 CSS colors | File loading |
+| `theme/install.rs` | Idempotent installer: packaged → `~/.config/eggsec/themes/` | Startup install |
+| `theme/archive.rs` | LZMA decode for packaged blob | Decode |
+| `theme/contrast.rs` | WCAG relative luminance, contrast ratio (min 4.5:1) | Validation |
+| `theme/style.rs` | Semantic helpers: `safe`, `danger`, `muted`, `active_task`, `scope_match`, etc. | Render helpers |
+| `theme/legacy.rs` | `tc!()` thread-local macro for backward compat | Legacy access |
+
+**Background loading**: `load_and_install_themes()` runs in `std::thread::spawn`. The receiver, join handle, deferred restore request, and `ThemeLoadReason` (Startup or ManualReload) live in `ThemeLoadState`. Manual reload shows "Loading themes..." immediately; startup loads are silent. `App::update()` polls the channel. Regenerate via `python3 scripts/package_themes.py`.
+
+**Theme preview/apply/cancel**: Opening the theme selector enters preview mode. Up/Down refreshes preview via `update_settings_theme_selector()`. Enter applies and quick-saves. Escape reverts to `applied_theme_id`. `ThemeManager.current_id()` provides the accessor.
+
+### Component Library (`components/`)
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `InputField` | `input.rs` | Text input with cursor, validation, UTF-8 handling |
-| `InputGroup` | `input.rs` | Group of inputs with focus navigation |
-| `FormBuilder` | `input.rs` | Declarative form layout builder from input fields |
-| `ValidationResult` | `input.rs` | Field validation result type |
-| `Selector` | `selector.rs` | Dropdown selector with keyboard navigation |
-| `SelectorItem` | `selector.rs` | Item in a selector (label + value) |
+| `InputField` | `input.rs` | Text input with cursor, validation, UTF-8 byte-index invariant |
+| `InputGroup` | `input.rs` | Focus-managed field group; `valid_focused_index()` stale-focus guard |
+| `FormBuilder` | `input.rs` | Declarative form layout with `collect_dropdowns()` for overlay rendering |
+| `Selector` | `selector.rs` | Dropdown with keyboard nav; `open()`/`close()`/`confirm()`/`cancel()` |
 | `Checkbox` | `selector.rs` | Toggle checkbox |
 | `RadioGroup` | `selector.rs` | Radio button group |
 | `ProgressGauge` | `progress.rs` | Animated progress bar with spinner |
-| `ScrollableText` | `scrollable.rs` | Scrollable text with scrollbar |
+| `ScrollableText` | `scrollable.rs` | Scrollable text with scrollbar; empty-lines guard in scroll methods |
 | `Popup` | `popup.rs` | Modal dialogs (confirm, help, info) |
-| `centered_rect` | `popup.rs` | Centered rectangle helper for popups |
 | `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
-**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are in `ui/popups.rs`, not in separate `components/` files. Previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`) were removed as dead code.
 
-**InputGroup stale-focus guard**: `InputGroup` provides `valid_focused_index()` and `valid_focused_index_ref()` methods that return `Option<usize>` instead of raw `self.focused`. Always use these instead of direct `self.focused` indexing to protect against stale focus indices after fields are removed or the group is cleared. Pattern:
-```rust
-// WRONG - stale focus can panic
-let field = &mut self.fields[self.focused.unwrap()];
+### Overlay System (`app/overlay.rs`)
 
-// CORRECT - valid_focused_index guards against stale focus
-if let Some(idx) = self.valid_focused_index() {
-    let field = &mut self.fields[idx];
-}
-```
+`OverlayController` routes input through `topmost_overlay()`. Precedence (highest first):
 
-### Dispatch (`eggsec::dispatch`)
+1. `PolicyConfirm` — enforcement `RequireConfirmation` + manual override
+2. `ConfirmPopup` — `PendingAction` confirmation (destructive UI actions)
+3. `CommandPalette` — `Ctrl+P`
+4. `QuickSwitch` — `Ctrl+X`
+5. `Search` — `Ctrl+F`
+6. `HttpOptions` — `h` key
+7. `Help` — `Space`
 
-Worker dispatch has been moved from the TUI crate to `eggsec::dispatch`. The TUI no longer owns the canonical execution match over task kinds.
+Non-topmost overlays never receive input; overlay-local keys never leak.
 
-| Module | File | Task Types |
-|--------|------|------------|
-| `dispatch::scanner` | `scanner.rs` | Port scan, endpoint scan, fingerprint |
-| `dispatch::network` | `network.rs` | Load test, stress test, packet operations |
-| `dispatch::fuzzer` | `fuzzer.rs` | Fuzz, WAF, WAF stress operations |
-| `dispatch::recon` | `recon.rs` | Recon operations (DNS, WHOIS, SSL, etc.) |
-| `dispatch::api` | `api.rs` | GraphQL, OAuth, NSE operations |
-| `dispatch::auth` | `auth.rs` | Authentication testing |
-| `dispatch::security` | `security.rs` | Hunt, browser, compliance, storage, integrations, wireless |
-| `dispatch::db_pentest` | `db_pentest.rs` | Database pentesting (feature-gated) |
-| `dispatch::intercept` | `intercept.rs` | Web proxy interception (feature-gated) |
-| `dispatch::c2` | `c2.rs` | C2 simulation (feature-gated) |
+### Search System (`search.rs`)
 
-**Types**: `TaskResult`, `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions` are all defined in `eggsec::dispatch::types`.
+Global search (`Ctrl+F`) overlays a search popup. The search query is applied to the current tab's results via `TabInput::handle_search()`. Empty-state text: `"No results for '{query}'"` or `"Type to search..."`.
 
-**Communication Flow (Phase 4 — runtime event reducer)**:
-```
-Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner()
-                                  ↓                    ↓
-                          TaskOutcome::Result    RuntimeEventReceiver
-                          (TaskResultEnvelope)        ↓
-                                  ↓            TuiRuntimeAdapter::drain_and_reduce()
-                          progress_tx / result_tx           ↓
-                          (typed channels)         Vec<TuiAction> → apply_actions() → tab state
-```
+## Event Loop & Input Handling
 
-**Dual-path result bridge**: `dispatch_inner()` returns `TaskResult` directly (workers return values, not channel sends). `TuiTaskDispatcher::dispatch()` routes results through two paths:
+### Event Loop (`app/runner.rs:64-177`)
 
-1. **Typed channel path** (primary for TUI rendering): `result_tx.send(task_result)` → `result_rx.try_recv()` in `state_update.rs` → `handle_result()` → tab-specific rendering. This carries the full `TaskResult` enum for domain-specific display.
+`run_with_mode()` sets up crossterm raw mode, alternate screen, and mouse capture. The core loop (`run_app()`) follows `update() → draw() → input-check`:
 
-2. **Envelope path** (for non-TUI frontends): `task_result_to_envelope(&task_result)` converts each `TaskResult` variant to a `TaskResultEnvelope` with `kind`, `summary`, and `artifacts`. The runtime tracks this via `TaskOutcome::Result(envelope)` in lifecycle events. Non-TUI frontends (daemon, REST, MCP) consume the envelope; TUI ignores it in favor of the typed channel.
+1. `app.update()` drains runtime events via `TuiRuntimeAdapter::drain_and_reduce()`, then typed results from `progress_rx`/`result_rx`.
+2. `app.auto_save_if_due()`.
+3. `terminal.draw(|f| ui::draw(f, app))` only if `needs_redraw` or `pending_redraw`.
+4. Input via non-blocking `EventStream::next().now_or_never()`. If no events, sleeps 10ms.
 
-Workers no longer send through channels — they return `TaskResult` directly. `dispatch_inner()` and `dispatch_task()` handle channel plumbing.
+Exit calls `session_manager.save_quick()`.
 
-**Remote Attach Mode (Phase 8)**: The TUI can connect to an external `eggsec-daemon` process via Unix socket instead of running an embedded runtime. The `TuiRuntimeClient` trait abstracts both paths:
+### Key Processing Pipeline (`app/key_handler.rs`)
 
-```
-Embedded (default)              Daemon (remote)
-┌──────────────────┐            ┌──────────────────┐
-│ Runtime (in-proc) │            │ DaemonRuntimeClient│
-│  ↓ submit()       │            │  ↓ socket JSON    │
-│ TuiExecutor       │            │  ↓ ServerMessage  │
-│  ↓ dispatch()     │            │  ↓ RuntimeEvent   │
-└──────────────────┘            └──────────────────┘
-       ↓                               ↓
-  result_rx (typed)            daemon_event_handle (reduced)
-       ↓                               ↓
-  handle_result()              apply_actions() envelope fallback
-```
+Three-layer decode, each returning `Vec<UiAction>`:
 
-CLI args: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
+1. **Overlay decode** (`decode_topmost_overlay` → `OverlayController::decode`) — PolicyConfirm, ConfirmPopup, CommandPalette, QuickSwitch, Search, HttpOptions, Help.
+2. **Global shortcuts** (`decode_global_shortcuts`) — `Ctrl+C`, `Ctrl+P`, `Ctrl+X`, `Ctrl+F`, `Ctrl+T`, `Ctrl+B`, `Ctrl+Z`, `Ctrl+Y`, `Shift+E`, `Space`, digit keys `1-9`/`0`, `gg` pending.
+3. **Mode-specific** (`decode_mode_specific_input`) — Normal mode: hjkl, i, q, n/p, e, s, r, g/G. Insert mode: char input, backspace, delete, autocomplete, paste, Esc → Normal.
 
-`EmbeddedRuntimeClient` wraps `Arc<Runtime>` and calls runtime methods directly. `DaemonRuntimeClient` connects via Unix socket using `ClientCommand`/`ServerMessage` JSON-line protocol from `eggsec-daemon`. On connect, it sends `DeclareClient { kind: ClientKind::Tui, label: "eggsec-tui" }` — the daemon registers the client and assigns a `ClientId`. Session attach hydrates state from `SessionSnapshot` and registers completed tasks in the adapter.
+`App::apply_action()` / `apply_actions()` is the single mutation point for all key-driven UI changes.
 
-**Multi-client semantics**: Multiple TUI instances can observe the same daemon session simultaneously. The daemon assigns roles: `Owner` for session creators, `Controller` for attachers with submit permissions, `Observer` for read-only attachers. Permission checks enforce: observers cannot submit/cancel tasks, only owners/controllers/approvers can approve policies, and strict-surface sessions reject manual approvals from unrelated clients. Events are fanned out to all subscribers with slow-client tolerance (stale senders are cleaned up automatically).
-
-**Daemon authorization model**: The daemon uses a `CommandPermission` enum (not stringly-typed names) for per-command RBAC. Every `ClientCommand` variant maps to a permission level (`Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`) via `command_permission()`. Session access stores the session `RuntimeSurface` and `owner_client_kind` at creation time. On strict-surface sessions (McpServer, RestApi, etc.), only the session Owner can approve policies — unrelated Controllers, Approvers, and Observers are denied. `ApprovePolicy` currently returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding. Protocol error codes include `ClientNotDeclared` for session-scoped commands without prior declaration, and `PermissionDenied` for RBAC violations.
-
-**Runtime dependency boundary**: The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`, `TaskKind`, `TaskOutcome`, and `TaskResultEnvelope` types. This is intentional — the engine uses runtime protocol types to submit work. However, `eggsec-runtime` must never depend on `eggsec` (no reverse dependency). Architecture guard `check-architecture-guards.sh` enforces this. `eggsec-runtime` has zero TUI or transport dependencies.
-
-### State Management (`state/`)
+### Input Modes (`app/input.rs`)
 
 ```rust
-pub type SharedHistory = Arc<Mutex<HistoryTab>>;
+pub enum InputMode { Normal, Insert }
 ```
 
-History is shared via `Arc<Mutex<HistoryTab>>` for thread-safe access.
+Normal mode: vim-like navigation. Insert mode: text input in focused field.
 
-### Theme (`theme/`)
+### The `is_running()` Guard Convention
 
-The theme system supports 50+ packaged Halloy-format themes plus 3 built-in themes:
+Every input handler (`handle_up`, `handle_down`, `handle_left`, `handle_right`, `page_up`, `page_down`, `handle_focus_next`, `handle_focus_prev`, `handle_enter`, `handle_escape`, `handle_copy`, etc.) must check `!self.is_running()` before processing navigation or editing. This prevents state mutations during active scans. Violation has been a recurring class of bug across many tabs; all 33 tab implementations have been audited and fixed.
 
-| File | Purpose |
-|------|---------|
-| `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
-| `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
-| `manager.rs` | `ThemeManager` - holds registered themes + metadata (`theme_info: FxHashMap<String, ThemeInfo>`), private `current`, canonical ID lookup, theme switching |
-| `style.rs` | Theme style methods for rendering: `border_style`, semantic helpers (`safe`, `danger`, `muted`, `active_task`, `paused_task`, `scope_match`, `scope_miss`, `policy_required`, `policy_denied`), composite helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state`) |
-| `contrast.rs` | Theme contrast validation: `relative_luminance()`, `contrast_ratio()`, `check_contrast()` (min 4.5:1); low contrast triggers fallback with warning |
-| `legacy.rs` | Thread-local macros (`tc!`) for backward compatibility |
-| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; shared `named_color()` for 27 named colors; missing fields use defaults from built-in themes; validates text/background and selected_text/selected contrast |
-| `install.rs` | Idempotent installer: writes packaged themes to `~/.config/eggsec/themes`, never overwrites existing files |
-| `archive.rs` | LZMA decode for packaged theme data |
-| `packaged.rs` | Auto-generated LZMA-compressed blob of 50 Halloy themes (regenerated via `scripts/package_themes.py`) |
+### The `reset()` Completeness Convention
 
-**Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
+`reset()` must restore ALL mutable state to defaults: `focus_area`, `selectors` (`.cancel()`), `inputs` (`.blur()`, `.clear()`), `checkboxes` (`.reset()`), `progress` counters, `results_view`, error strings, and mode flags. Missing resets cause stale state to leak across sessions.
 
-**Theme metadata tracking**: `ThemeManager` stores a `theme_info: FxHashMap<String, ThemeInfo>` alongside the theme data. `ThemeInfo` carries `id`, `display_name`, `mode` (Dark/Light), `source` (`ThemeSource::BuiltIn | Packaged | Custom`), and `status` (`ThemeLoadStatus::Loaded | FallbackAdjusted | Invalid(String) | Missing`). Source attribution is determined by checking if the file stem is in the packaged theme set (from the archive), not by counting installed themes — this correctly labels re-launched packaged themes as `Packaged` instead of `Custom`. `register_theme_with_source()` records metadata at registration time; `register_theme_invalid()` inserts metadata for themes that fail to load so Settings shows them with `Invalid` status. Contrast validation can set `FallbackAdjusted` or `Invalid` status. Query methods: `get_info(id)`, `theme_info_list()`, `get_all_info()`, `themes_with_status(status)`, `invalid_themes()`.
+## Daemon/Runtime Integration
 
-**Theme preview/apply/cancel semantics**: Opening the theme selector enters preview mode — the UI shows what the selected theme will look like without committing. Up/Down changes the selected preview (triggering `needs_theme_preview_refresh` to update `resolved_theme_colors`). Enter applies the selected theme immediately via `set_theme()` and performs a best-effort quick-save (`session_manager.save_quick()`) so the choice persists across restarts without requiring `[s] Save`. Escape cancels and restores the selector to the applied theme via `select_by_value(applied_theme_id)`, reverting the preview. The `[s] Save` key saves non-theme config only — theme changes are already persisted by the Enter action.
+### Runtime Binding (`app/mod.rs:139-137`)
 
-**Selector dropdown rendering**: Embedded selectors in `FormBuilder` render visible dropdown overlays via `collect_dropdowns()` (`components/input.rs`). The method computes dropdown position and height with viewport-aware clamping (fits below anchor when space is available, flips above when no room below, clamps height to viewport). Dropdowns are rendered as overlays on top of the form body in `tabs/settings/render.rs`. The `Selector` component tracks open/closed state independently of focus — focus does not automatically open the dropdown, Enter on a closed selector opens it, Enter on an open selector commits and closes, and Escape closes without committing.
+`RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
 
-**Selected vs Applied theme distinction**: `SettingsTab.applied_theme_id` tracks the theme that was active when the Settings tab was opened (the "applied" theme). The theme selector's current selection represents the "selected" theme, which may differ from the applied theme until the user saves. This distinction lets the preview show what the selected theme will look like while preserving the ability to revert on Escape.
+### Attach Mode (`app/runner.rs:179-272`)
 
-**ThemeManager.current_id() accessor**: `ThemeManager` exposes a `current_id()` method returning the canonical ID of the currently active theme. This is used by `SettingsTab` to initialize `applied_theme_id` and by session persistence to save/restore the selected theme.
+CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
 
-**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`); the receiver, join handle, deferred restore request, and `ThemeLoadReason` (Startup or ManualReload) live in `ThemeLoadState`. `App::update()` polls the channel, and the lifecycle helpers in `app/theme_runtime.rs` clean up the thread once the final report arrives or the loader disconnects. Manual reload (`ThemeLoadReason::ManualReload`) shows a "Loading themes..." notification immediately on dispatch, then success/no-op feedback when the loader completes. Startup loads (`ThemeLoadReason::Startup`) do not show a notification. Failures are logged as warnings and do not block the UI.
+`attach_daemon_session()` sends `DeclareClient { kind: ClientKind::Tui, label: "eggsec-tui" }`, creates or lists sessions, hydrates from `SessionSnapshot`, registers completed tasks in the adapter, and subscribes to events.
 
-**ThemeLoadOutcome**: The background theme loader returns a `ThemeLoadOutcome` that carries pre-adjustment contrast warnings captured during parsing. This allows `FallbackAdjusted` status to accurately reflect the contrast warnings that triggered the fallback, rather than re-validating after fallback (which would lose the original warnings). The `ThemeLoadOutcome` is consumed by `handle_theme_install_report()` to populate `SettingsTab.theme_contrast_cache` per theme.
+### Runtime Event Reducer (`app/runtime_adapter/mod.rs`)
 
-**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles all themes alphabetically (`list_theme_ids_owned()`), wrapping at the end. Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
+Two-phase reduce/apply pattern:
 
-**Theme reload** (Settings > Theme section): Normal-mode `r` in the Theme section (selector closed) emits `UiAction::ReloadThemes` directly, which calls `spawn_theme_loader_with_reason(ManualReload)`. This immediately shows a "Loading themes..." notification (via `ThemeLoadReason::ManualReload`) and spawns the background loader. The insert-mode `r` path via `pending_theme_reload` on `SettingsTab` still works for backward compatibility. The selector also shows a hint: `"Press [r] to reload themes   [Ctrl+T] to cycle"`.
+1. `drain_and_reduce(rx)` borrows only the adapter and receiver → `Vec<TuiAction>`.
+2. `apply_actions(actions, app)` is a free function taking `(Vec<TuiAction>, &mut App)`.
 
-**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying. The preview uses the selected theme's resolved colors (from `ThemeManager`), not the thread-local applied theme from `tc!()`, so it accurately reflects what the selected theme will look like before the user commits. The preview refreshes live as the selector moves — `update_settings_theme_selector()` resolves the newly selected theme's colors and stores them in `SettingsTab.resolved_theme_colors`, which the render path reads on each frame.
+| RuntimeEvent | TuiAction(s) |
+|---|---|
+| `TaskStarted` | `TabStarted(tab, task_id)` |
+| `TaskProgress` | `UpdateProgress(tab, completed, total)` |
+| `TaskCompleted` | `TabCompleted(tab, outcome)` |
+| `TaskFailed` | `TabError(tab, message)` |
+| `TaskCancelled` | `TabCancelled(tab, reason)` |
+| `TaskQueued`, `TaskLog`, `PolicyDecisionRequired`, `Audit` | No action (ignored) |
 
-**Settings layout split** (Settings tab render): The Settings content area is split into `body`, optional `status`, and `footer` rows before rendering any section content. `FormBuilder` renders into `body` only. The status message uses severity-aware styling (error/warning/success) and prevents overlap with form content. Layout tests validate at 80x24, 60x20 (small terminal), and status-collision edge cases.
+### TaskView Rendering
 
-**Settings data parity**: `rate_limit_per_second` (Scan section, field index 1) and `port_timeout_secs` (Scan section, field index 2) are now loaded from config on tab open and validated on save. `rate_limit_per_second` accepts `Option<u32>` — empty string means no limit, 0 is rejected. `port_timeout_secs` requires a value > 0. Both fields have dedicated validation tests (14 total for the validate method) covering valid, invalid, zero, empty, and case-insensitive cases.
+The TUI receives `TaskOutcome::Result(TaskResultEnvelope)` with `kind`/`summary`/`payload`. `OutcomeView::from(&outcome)` normalizes into a structured view. `renderer_for_kind(kind)` from `eggsec-ui-model` provides `ResultRendererDescriptor` with `title`, `summary_fields`, `artifact_kinds`, `supports_rich_tui`, `supports_json_detail`.
 
-**Contrast validation**: `theme/contrast.rs` implements WCAG 2.x relative luminance and contrast ratio. `check_contrast(fg, bg, min_ratio)` returns whether a color pair meets the minimum ratio (4.5:1 for normal text). Both `theme/loader.rs` (on theme parse) and `theme/manager.rs` (on registration) validate text/background and selected_text/selected contrast. `ThemeManager::validate_contrast(id)` returns per-theme contrast warnings for use in the Settings Theme details pane. Low contrast triggers fallback to the base theme with a warning (non-fatal). 7 unit tests cover luminance boundaries, ratio calculation, and pass/fail cases.
+## Enforcement Facade
 
-`ThemeManager` holds registered themes with 37 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
+### TUI Surfaces
 
-The main shell and popup layers use explicit `&Theme` parameters. Tab renderers and components still use the `tc!` macro for theme colors:
+TUI uses `ExecutionSurface::TuiManual` (default, `ManualPermissive`) or `TuiManualStrict` (`ManualGuarded`). Toggle via `Ctrl+G`.
 
-```rust
-use crate::tc;
-let style = Style::default().fg(tc!(text));
-```
-
-New rendering code should prefer explicit `&Theme` parameters (via `App::current_theme()` or direct `theme` param) over the `tc!` macro.
-
-### Session Management (`session.rs`)
-
-`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/eggsec/sessions/` on Linux via `directories::ProjectDirs`, with `~/.eggsec/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request in `ThemeLoadState` until the background loader registers it.
-
-### Enforcement Context in TUI
-
-TUI uses `EnforcementContext` directly (via `App.enforcement`, `manual_permissive` in runner.rs:82) for all target-bearing launches. Central gate in `App::update()` (mod.rs:322) before `spawn_task` (for handle_enter paths via `build_current_task`/`build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` now evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts. The old post-dispatch retroactive policy gate has been removed. `RequireConfirmation` surfaces via highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095, key_handler.rs:205) backed by `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input field. On confirm (mod.rs:787) it builds narrow `ManualOverride`, re-evaluates via the central `enforcement.evaluate`, and records via `decision.with_manual_override_record(mo.reason, confirmation_class_strings(...))` using stable kebab strings from `ConfirmationClass::as_str()`. `PendingAction` (confirmation.rs:4 for reset/save/etc.) remains separate and lower-precedence (`ConfirmPopup` overlay). `--strict-scope` affects profile selection for both CLI and TUI.
-
-### OperationMetadata as Descriptor Source of Truth
-
-TUI descriptor generation is driven by the canonical `OperationMetadata` registry (`config::policy::ALL_OPERATION_METADATA`). Each `TabSpec` declares an `operation: Option<&'static str>` field that maps to a metadata entry. `App::build_current_operation_descriptor()` (`app/operation.rs`) calls `eggsec::config::operation_metadata(op_id)` to look up the metadata and generates the `OperationDescriptor` via `metadata.descriptor_for_target(target)`.
-
-Tab-specific overrides are limited to runtime details that metadata cannot know (e.g., dry-run mode changing `Intrusive` to `SafeActive`). Such overrides are explicit and tested. Tabs without an `operation` field return `None` from `build_current_operation_descriptor()` and are not subject to target-bearing enforcement.
-
-### Enforcement Posture Model (Phase 5)
-
-The TUI has a local enforcement posture model in `app/enforcement.rs` (`TuiEnforcementState`) that wraps `EnforcementContext` + `LoadedScope` for TUI-specific posture management.
-
-**Structure:**
-
-```rust
-pub struct TuiEnforcementState {
-    surface: ExecutionSurface,       // TuiManual or TuiManualStrict
-    loaded_scope: LoadedScope,
-    enforcement: EnforcementContext,
-    manual_override: ManualOverride,
-    last_preflight: Option<TuiPreflightResult>,
-}
-```
-
-**Modes:**
-
-- **Manual** (`TuiManual` / `ManualPermissive`): Default TUI posture. Warnings for safe scope ambiguity/missing scope; `RequireConfirmation` with confirm/override for discretion cases. Manual override flags honored and audited.
-- **Guarded** (`TuiManualStrict` / `ManualGuarded`): Hard enforcement. No discretion path, no manual overrides. Scope ambiguity is denied.
-
-**Toggle:** `Ctrl+G` switches between Manual and Guarded postures. `TuiEnforcementState::toggle_posture()` switches the `surface` field. Guarded mode does NOT honor manual overrides (unlike Manual mode).
-
-**Preflight evaluation:** `TuiPreflightResult` is an advisory evaluation of a target against the current posture, displayed in the status bar. `preflight(target)` returns a `TuiPreflightResult` with outcome (`TuiPreflightOutcomeKind`) indicating whether the target will be allowed, warned, confirmed, or denied. Preflight is advisory only and does not gate execution.
-
-**Status bar display:** The status bar renders the current mode label (`mode_label()`), scope provenance and rule counts (`scope_label()`), and the advisory preflight outcome (`status_string()`). The mode indicator shows "Manual" or "Guarded" with appropriate styling.
-
-**CLI-equivalent preview:** The confirmation overlay includes a CLI-equivalent flag preview so users can see what flags would reproduce the current posture on the command line.
-
-**App integration:** `App.enforcement_state: EnforcementFacade` wraps `TuiEnforcementState` and provides focused evaluation/approval methods. The facade owns the enforcement context, loaded scope, preflight cache, and cached approval token.
-
-### EnforcementFacade (Phase 8)
-
-`EnforcementFacade` (`app/enforcement_facade.rs`) extracts enforcement evaluation and approval logic from `App` into a focused struct:
+### EnforcementFacade (`app/enforcement_facade.rs`)
 
 ```rust
 pub struct EnforcementFacade {
@@ -598,141 +210,95 @@ pub struct EnforcementFacade {
 }
 ```
 
-**Responsibilities:**
-- `try_approve(desc)` — evaluate + audit + approve/reject
-- `evaluate_and_try_approve(desc)` — consume cached approval or re-evaluate
-- `take_cached_approval(desc)` — consume matching cached token
-- `confirm_override(descriptor, classes, reason)` — build ManualOverride + approve
-- `audit_confirmed_override(...)` — emit audit event for confirmed override
-- Delegation methods: `toggle_posture()`, `mode_label()`, `status_string()`, `scope_label()`, `preflight()`, `enforcement()`, `loaded_scope()`
+Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation: `toggle_posture()`, `mode_label()`, `status_string()`, `preflight()`, `enforcement()`, `loaded_scope()`.
 
-App retains UI-level flows (`request_policy_confirmation`, `confirm_policy_action`, `cancel_policy_action`) because they touch overlay state. The facade handles the policy evaluation core.
+### Pre-Dispatch Gate
 
-### TUI Action/Tab Metadata Registry (Phase 8)
+Central gate in `App::update()` before `spawn_task`. For direct-launch tabs, `handle_enter()` evaluates policy BEFORE calling the dispatcher — `Deny`/`RequireConfirmation` blocks before any side effect starts. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` with `PendingPolicyConfirmation` and reason input. On confirm, builds narrow `ManualOverride`, re-evaluates, records via `with_manual_override_record`.
 
-`TuiActionSpec` and `TuiTabSpec` (`app/action_spec.rs`) provide metadata-backed descriptors that point to canonical `OperationMetadata` entries:
+### OperationMetadata as Source of Truth
 
-```rust
-pub struct TuiActionSpec {
-    pub action_id: &'static str,
-    pub operation_id: &'static str,  // maps to OperationMetadata
-    pub tab_id: &'static str,
-    pub feature: Option<&'static str>,
-    pub manual_only: bool,
-}
-```
+Each `TabSpec` declares `operation: Option<&'static str>` mapping to a canonical `OperationMetadata` entry. `App::build_current_operation_descriptor()` (`app/operation.rs`) calls `eggsec::config::operation_metadata(op_id)` and generates the `OperationDescriptor` via `metadata.descriptor_for_target(target)`.
 
-Pilot coverage: recon, scan-ports, fuzz, db-pentest. Tests verify:
-- Every pilot action resolves to `OperationMetadata`
-- Every pilot tab ID maps to a valid `TabSpec`
-- Feature strings are non-empty when present
-- Intrusive actions are manual-only
-- Domain references resolve to known `DomainDescriptor` entries
+## Theming
 
-Other tabs continue to use `TabSpec` + `build_current_operation_descriptor()` and can be migrated incrementally.
+### Packaged Themes Pipeline
 
-### Adding a New Tab
+`scripts/package_themes.py` compresses 50 `.toml` files into an LZMA blob embedded in `theme/packaged.rs` as `PACKAGED_THEMES_LZMA_BASE64`. On startup, `load_and_install_themes()` decodes the blob, installs missing themes to `~/.config/eggsec/themes/`, and loads all `.toml` files.
 
-Adding a new tab requires changes in **7-9 locations**. Each new tab must be added to:
+### Custom Theme Loading
 
-1. `Tab` enum (`tabs/mod.rs`) — variant + `title()`, `description()`, `cli_command()`, `stable_id()`, `from_stable_id()`, `all()` (feature-gated)
-2. `TabStore` (`app/tab_store.rs`) — new field for the tab instance (TabStore owns all tab instances)
-3. `Tab::as_tab_state()`, `as_tab_state_mut()`, `as_tab_render()`, `as_tab_input()` — 33-variant exhaustive match each
-4. `App::get_current_help()` (`app/navigation.rs`) — 33-variant match
-5. `command_to_tab()` + `execute_command()` (`app/command.rs`) — 33-variant match each
-6. `export_results()` + `export_json()` (`app/export.rs`) — per-tab export logic
-7. `App::build_current_task()` (`app/task_management.rs`) — trait dispatch
-8. `help_config.rs` — static help section data
+Theme files are parsed by `theme/loader.rs` which maps Halloy TOML format to `Theme` with 37 color fields. Missing fields use defaults from built-in themes. Contrast validation (`theme/contrast.rs`) checks text/background and selected_text/selected pairs at 4.5:1 minimum. Low-contrast themes fall back to base theme with `FallbackAdjusted` status (non-fatal).
 
-This duplication is a known architectural debt. A future refactor should move these to trait-based dispatch (e.g., `TabState::is_running()` instead of the exhaustive match).
+### Theme Metadata
+
+`ThemeManager` stores `theme_info: FxHashMap<String, ThemeInfo>` with `id`, `display_name`, `mode` (Dark/Light), `source` (`BuiltIn | Packaged | Custom`), and `status` (`Loaded | FallbackAdjusted | Invalid(String) | Missing`). Query: `theme_info_list()`, `themes_with_status()`, `invalid_themes()`.
 
 ## Testing
 
+### TestBackend Pattern
+
+Visual regression uses `ratatui::backend::TestBackend` to render into an in-memory buffer, then `buffer_to_text()` (from `test_utils.rs`) converts to a string for assertion. This avoids snapshot files and allows `contains()` checks.
+
+```rust
+use ratatui::{backend::TestBackend, Terminal};
+use crate::test_utils::buffer_to_text;
+
+let mut app = create_test_app();
+app.current_tab = Tab::Recon;
+let backend = TestBackend::new(100, 24);
+let mut terminal = Terminal::new(backend).unwrap();
+terminal.draw(|f| draw(f, &mut app)).unwrap();
+let text = buffer_to_text(terminal.backend().buffer());
+assert!(text.contains("Mode:"));
+```
+
+### Test Counts
+
+- `ui/tests.rs`: 14 tests (shell rendering, overlays, preflight indicators, empty states)
+- `ui/shell.rs`: 8 tests (status bar, tab bar, breadcrumb)
+- `tabs/core.rs`: 9 tests (field helpers, start/render patterns)
+- `app/navigation.rs`: 16 tests (tab switching, edge detection)
+- `tabs/handle_enter_regression.rs`: 40 table-driven tests across 12 tabs
+- `tabs/input_accessibility.rs`: `#[cfg(test)]` module verifying unique input labels and focus traversal
+- Total TUI crate: ~479 tests
+
 ### Regression Test Harness (`tabs/handle_enter_regression.rs`)
 
-A dedicated test module with 40 table-driven tests validates `handle_enter()` behavior across all focus areas for 12 tabs (GraphQl, OAuth, Recon, Load, ScanPorts, Stress, Packet, Waf, Cluster, Dashboard, Settings, History). Each test verifies that:
-- Focused input blurs without starting a task
-- Unfocused input with a valid target starts the task
-- Options toggle checkbox without starting
-- Results area is a no-op
+40 table-driven tests validate `handle_enter()` across all focus areas for 12 tabs: focused input blurs without starting, unfocused input with valid target starts, options toggle without starting, results area is no-op.
 
-A combined cross-tab test (`all_tabs_blur_on_enter_when_focused`) validates all 12 tabs in a single test.
+## Invariants & Gotchas
 
-### Visual Regression Tests (`ui/tests.rs`)
+### Architecture Invariants
 
-`TestBackend`-based tests verify rendered output at specific terminal sizes and overlay states:
+1. **No dispatch in TUI**: Worker dispatch lives in `eggsec::dispatch`. TUI submits via `spawn_task()` and receives results.
+2. **Enforcement is central**: `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. TUI never bypasses it.
+3. **Decode/apply split**: `KeyHandler` decodes to `Vec<UiAction>`; `App::apply_action()` applies. Testable independently.
+4. **TabSpec is metadata source**: `TabSpec` carries title, stable_id, cli_command, category, risk_group, feature, operation, direct_launch. `Tab` methods delegate to `TabSpec`.
+5. **Runtime dependency boundary**: `eggsec-runtime` must never depend on `eggsec`. Architecture guard enforces this.
+6. **`eggsec-output` independence**: Must not depend on `eggsec` (engine) or `eggsec-runtime`.
 
-| Test | Size | Verifies |
-|------|------|----------|
-| `render_at_60x20_is_usable_no_garble` | 60×20 | Core shell renders, no "Terminal too small" |
-| `render_at_40x12_shows_too_small_fallback` | 40×12 | Fallback message renders instead of garbled UI |
-| `render_at_120x40_unchanged_from_large` | 120×40 | Large viewport renders normally |
-| `render_policy_confirm_on_small_terminal_still_readable` | 40×12 | Policy confirm popup renders readably even on tiny terminal |
-| `command_palette_empty_state_no_matches` | 80×24 | "No matching commands" renders for empty query |
-| `command_palette_empty_state_no_commands` | 80×24 | "No commands available" renders when results empty |
-| `quick_switch_empty_state_no_matches` | 80×24 | "No matching tabs" renders for empty query |
-| `search_empty_state_no_results` | 80×24 | "No results for '...'" renders for empty search |
-| `quick_switch_renders_selected_tail_item_in_viewport` | 80×24 | Last quick-switch item visible in popup |
-| `render_status_bar_contains_preflight_indicators` | 100×24 | Mode/Scope indicators render in status bar |
-| `search_empty_state_not_performed` | 80×24 | "Type to search..." placeholder renders |
-| `search_popup_empty_state_placeholder` | 80×24 | Placeholder text renders for empty query |
+### Conventions (from AGENTS.override.md)
 
-### Selector Dropdown Viewport Clamping (`components/selector.rs`)
+1. **`is_running()` guards**: All input/navigation handlers must check `!self.is_running()` before processing.
+2. **`reset()` completeness**: Must reset ALL state — focus_area, selectors (`.cancel()`), inputs (`.blur()`, `.clear()`), checkboxes, progress, results, error strings, mode flags.
+3. **Bounds safety**: Use `.get(i)` not `chunks[i]`. Use `InputGroup::valid_focused_index()` not `self.focused` directly. Use `.first()` not `.get(0)`.
+4. **No silent error suppression**: Never `let _ =` or `filter_map(|e| e.ok())`. Always `tracing::warn!`.
+5. **FxHashMap/FxHashSet**: Use `rustc_hash::FxHashMap`/`FxHashSet` in performance paths, not std collections.
+6. **Explicit `&Theme` params**: New rendering code should prefer explicit `&Theme` parameters over `tc!()` macro.
+7. **TabWindow/TabSpan**: Use `TabWindow` for pagination, not raw tab count division. Never use `tab as usize` for indexing.
+8. **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
+9. **Stale-focus guard**: Always use `InputGroup::valid_focused_index()` instead of direct `self.focused` indexing.
 
-`dropdown_info(anchor_area, viewport_height)` computes dropdown position and height with viewport-aware clamping: fits below anchor when space is available, flips above when no room below, clamps height to viewport, never exceeds viewport bounds, never goes above y=0. 6 unit tests verify each behavior.
+### Overlay Selector Containment
 
-## Maintenance Notes
+When an embedded Settings selector is open, normal-mode shortcuts are blocked via `has_settings_selector_open()` in `decode_normal_mode_input`. Only Up/Down, Enter, Escape, modifier keys, and Left/Right pass through.
 
-**2026-06-02 dead code cleanup**: Removed the following dead code (all verified via grep with zero callers):
-- 5 backup files in `tabs/` (`*.orig`, `*.bak`)
-- 5 dead component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`)
-- `TabError::Internal`, `TabError::Auth` variants
-- 5 `HelpContext` variants (`Configuration`, `Scanning`, `Fuzzing`, `Advanced`, `CommandDiscovery`)
-- `HelpOverlay` struct + `App.help_overlay` field
-- `GlobalSearch::search`, `move_up`, `move_down`, `selected`, `update_active_tab`
-- `CommandPalette::with_popup_size`, `visible_results_height_for_area`, `max_scroll_offset_for_height`
-- `SessionManager::restore_session` + 7 tests (logic was inlined in `App::new_inner`)
-- `state/history.rs::add_fuzz_result`
-- `InputState` enum
-- 6 dead `App` methods (`pause`, `set_dark_mode`, `set_accent_color`, `set_notification`, `clear_notification`, `get_notification`)
-- `App.spinner_tick` field
-- `ThemeManager::set_accent_color`
-- 3 tautology tests in `app/mod.rs`
-- Dead `h` handler in `key_handler.rs` (unreachable due to overlay precedence)
+### Entry Point
 
-Net result: ~700 lines of dead code removed, 10 fewer tests (3 tautologies + 7 session tests), 0 new warnings.
+TUI launches automatically via `handle_no_command()` in `commands/handlers/mod.rs` when no subcommand is provided and stdout is a terminal.
 
-## Entry Point
-
-The TUI launches automatically when:
-1. No subcommand is provided
-2. stdout is a terminal (interactive)
-
-This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which calls `tui::run()`.
-
-**Not via `--tui` flag** - that flag does not exist.
-
-## Embedded Selector Key Containment
-
-When an embedded Settings selector is open (theme, proxy rotation, or severity), normal-mode shortcuts are blocked via `has_settings_selector_open()` in `decode_normal_mode_input` (`app/key_handler.rs:223`). This guard returns `UiAction::Noop` for all normal-mode keys (`q`, `r`, `s`, `n`, `p`, `h/j/k/l`, `1-9`, etc.) while a selector dropdown is visible.
-
-**Why this is needed**: Selectors are not overlays (`topmost_overlay()` returns `None` when only a selector is open), so without this guard, normal-mode shortcuts fire their actions while the user navigates a dropdown.
-
-**Allowed keys** (handled by global shortcuts before the normal-mode guard):
-- `Up/Down` — navigate selector items
-- `Enter` — confirm selection (open→commit or closed→open)
-- `Escape` — close selector without committing
-- `Left/Right` — not consumed by selectors; fall through to normal navigation
-- All modifier keys (`Ctrl+C`, `Ctrl+P`, `Ctrl+X`, etc.)
-
-**Blocked keys** (return `Noop` when selector is open):
-- `q` (quit), `r` (reset/reload), `s` (save), `n/p` (next/prev tab)
-- `h/j/k/l` (navigation), `1-9/0` (tab jump), `g/G` (top/bottom)
-- `Space` (help toggle), `/` (search), `e` (export)
-
-The guard checks `theme_selector.is_open()`, `proxy_rotation_selector.is_open()`, and `severity_selector.is_open()` — the three embedded selectors in the Settings tab.
-
-## Key Bindings
+### Key Bindings Summary
 
 | Key | Action |
 |-----|--------|
@@ -740,1957 +306,26 @@ The guard checks `theme_selector.is_open()`, `proxy_rotation_selector.is_open()`
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
 | `Ctrl+F` | Global search |
-| `Ctrl+T` | Cycle all themes alphabetically (wraps at end) |
-| `Ctrl+B` | Bookmark current tab (shows "Bookmarked: <tab>" notification) |
+| `Ctrl+T` | Cycle all themes alphabetically |
+| `Ctrl+B` | Bookmark current tab |
+| `Ctrl+G` | Toggle Manual/Guarded enforcement posture |
 | `Ctrl+Z` | Pause/resume active task updates |
-| `Ctrl+Y` | Resume when paused, otherwise copy |
-| `Shift+E` | Export with format selection (shows "Export format: <format>" notification) |
-| `Space` | Toggle help |
-| `1-9` / `0` | Jump to tab by visible index (`1`=visible index 0=Recon, `2`=visible index 1=Load, ..., `9`=visible index 8; `0`=visible index 9=10th visible tab) |
-| `y` / `n` | Confirm/cancel in confirmation dialog (alongside Enter/Esc) |
-| `hjkl` / Arrows | Navigation |
+| `Shift+E` | Export with format selection |
+| `Space` | Toggle help overlay |
+| `1-9`/`0` | Jump to tab by visible index |
+| `gg`/`G` | Go to top/bottom |
+| `n`/`p` | Next/prev tab |
+| `hjkl`/arrows | Navigation |
 | `i` | Enter insert mode |
-| `Esc` | Return to normal mode / close overlay |
-| `q` | Quit (when no active task) |
-| `b/B` | Word backward in input fields |
-| `g/G` | Go to top/bottom (also `g` in help overlay scrolls to top, `G` to bottom) |
-| `n/N` | Next/prev tab |
-| `p` | Previous tab |
+| `Esc` | Return to normal / close overlay |
+| `q` | Quit (no active task) |
 | `e` | Export results |
 | `s` | Save settings |
 
-## Architecture
+## Action Hints System (`app/action_hints.rs`)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Main Loop (runner.rs)                                      │
-│  ┌───────────────┐  ┌──────────────────┐  ┌────────────────┐ │
-│  │ EventStream   │→ │ KeyHandler       │→ │ App method     │ │
-│  │ (crossterm)   │  │ handle_key_event │  │ handle_*()     │ │
-│  └───────────────┘  └──────────────────┘  └───────┬────────┘ │
-│                                                     ↓        │
-│  ┌──────────────────────────────────────────────────────────┤
-│  │ TabDispatcher routes to current tab's TabInput           │
-│  ├──────────────────────────────────────────────────────────┤
-│  │ TabInput.handle_enter() → spawn_task()                   │
-│  │                                                          │
-│  │ ┌────────────────────────────────────────────────────┐  │
-│  │ │ eggsec::dispatch::dispatch_inner() async         │  │
-│  │ │ - Runs scan/fuzz/recon/etc                        │  │
-│  │ │ - Sends progress via progress_tx                  │  │
-│  │ │ - Sends result via result_tx                      │  │
-│  │ └────────────────────────────────────────────────────┘  │
-│  │                                                          │
-│  │ ┌────────────────────────────────────────────────────┐  │
-│  │ │ App::update()                                      │  │
-│  │ │ - update_progress() → tab.update_progress()       │  │
-│  │ │ - handle_result() → tab.set_results()            │  │
-│  │ └────────────────────────────────────────────────────┘  │
-│  │                                                          │
-│  │ needs_redraw = true                                     │
-└──┼───────────────────────────────────────────────────────────┘
-   ↓
-┌─────────────────────────────────────────────────────────────┐
-│  Terminal.draw() → ui::draw()                                │
-│  - draw_tabs() - tab bar                                    │
-│  - draw_breadcrumb() - navigation path                      │
-│  - draw_content() → tab.render()                            │
-│  - draw_status_bar() - mode, state, help text               │
-│  - Overlays: help, search, confirm popup, quick switch      │
-└─────────────────────────────────────────────────────────────┘
-```
+Context-aware hints replace static help text. `ActionHint` contains `key` + `label` (e.g. `"C:stop"`). `get_action_hints(app)` computes hints with priority: running task → overlay-specific → insert-mode → tab-specific → settings section-aware. `format_hints()` renders the compact string. 16 unit tests cover all priority levels.
 
-## Bug Patterns to Avoid
+---
 
-### Division by Zero in Progress
-
-```rust
-// WRONG
-fn progress(&self) -> f64 {
-    (completed as f64 / self.stages.len() as f64) * 100.0
-}
-
-// CORRECT
-fn progress(&self) -> f64 {
-    if self.stages.is_empty() {
-        return 0.0;
-    }
-    (completed as f64 / self.stages.len() as f64) * 100.0
-}
-```
-
-### ScrollableText Scroll Offset with Empty Lines
-
-```rust
-// WRONG - usize::MAX when lines is empty
-let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
-
-// CORRECT
-let scroll_offset = if self.lines.is_empty() {
-    0
-} else {
-    self.scroll_offset.min(self.lines.len() - 1)
-};
-```
-
-### Silent Error Suppression in Workers
-
-```rust
-// WRONG
-let response_text = response.text().await.unwrap_or_default();
-
-// CORRECT
-let response_text = match response.text().await {
-    Ok(text) => text,
-    Err(e) => {
-        tracing::debug!("Failed to read response body: {}", e);
-        String::new()
-    }
-};
-```
-
-### TaskResult Handling with Multiple Handlers
-
-```rust
-// WRONG - result moved before debug log
-let Some(result) = self.handle_security_result(result) else { return };
-tracing::debug!("Unhandled: {:?}", result); // ERROR: moved
-
-// CORRECT
-let result = match self.handle_security_result(result) {
-    Some(r) => r,
-    None => return,
-};
-if self.handle_feature_result(result).is_none() {
-    tracing::debug!("Unhandled TaskResult variant");
-}
-```
-
-### FxHashMap/FxHashSet Usage
-
-For performance consistency, use `rustc_hash::FxHashMap` and `FxHashSet` instead of standard collections:
-
-```rust
-// WRONG
-pub tabs: std::collections::HashMap<Tab, Box<dyn TabInput>>,
-pub bookmarks: std::collections::HashSet<String>,
-
-// CORRECT
-use rustc_hash::{FxHashMap, FxHashSet};
-pub bookmarks: FxHashSet<String>,
-```
-
-**Note**: Tab dispatch is done via exhaustive enum match in `Tab::as_tab_input()`, etc., NOT via HashMap lookup. The `Tab` enum provides stable IDs for session persistence. See `tabs/mod.rs` for the dispatch pattern.
-
-Files using FxHashMap/FxHashSet in TUI module:
-- `app/mod.rs` - App.bookmarks (FxHashSet)
-- `app/bookmarks.rs` - Bookmark functions
-- `app/help_config.rs` - StaticHelpData.sections
-- `help.rs` - HelpManager.sections
-- `theme/manager.rs` - ThemeManager.themes
-- `tabs/dashboard.rs` - PortfolioSnapshot.findings_by_severity
-
-### Key Binding Conflict Prevention
-
-When adding key bindings in `key_handler.rs`, avoid duplicate patterns in the same match arm:
-
-```rust
-// WRONG - 'e' appears twice, second arm is unreachable
-(KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
-(KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
-(KeyModifiers::NONE, KeyCode::Char('e')) => app.handle_word_forward(), // unreachable!
-
-// CORRECT - unique bindings
-(KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
-(KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
-```
-
-### Bounds Check for Array Access
-
-When accessing arrays/vectors via index, always validate bounds:
-
-```rust
-// WRONG - could panic if index >= len
-self.option_checkboxes[self.focused_checkbox_index].toggle();
-
-// CORRECT - bounds check prevents panic
-if self.focused_checkbox_index < self.option_checkboxes.len() {
-    self.option_checkboxes[self.focused_checkbox_index].toggle();
-}
-```
-
-Similarly for InputGroup field access:
-
-```rust
-// WRONG - assumes at least 2 fields
-self.inputs.fields[1].value = "report.json".to_string();
-
-// CORRECT - check length first
-if self.inputs.fields.len() > 1 {
-    self.inputs.fields[1].value = "report.json".to_string();
-}
-```
-
-For slicing InputGroup.fields (e.g., accessing a range of fields), use bounds-checked patterns:
-
-```rust
-// WRONG - panics if fewer than 4 fields
-let fields = &self.issue_inputs.fields[..4];
-
-// CORRECT - safe slicing with .get()
-let fields = self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields);
-```
-
-For option checkbox arrays (like ReconOptions), use `.get()` with fallback:
-
-```rust
-// WRONG - panics if index out of bounds
-no_tech: self.option_checkboxes[0].checked,
-
-// CORRECT - returns false if index invalid
-no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
-```
-
-### ScrollableText scroll_to_bottom
-
-When implementing or modifying `scroll_to_bottom()`, always handle empty lines:
-
-```rust
-// WRONG - scroll_offset becomes incorrect when lines is empty
-self.scroll_offset = self.lines.len().saturating_sub(1);
-
-// CORRECT - explicit empty check
-if self.lines.is_empty() {
-    self.scroll_offset = 0;
-} else {
-    self.scroll_offset = self.lines.len() - 1;
-}
-```
-
-### ScrollableText scroll_down
-
-When implementing `scroll_down()`, handle empty lines to prevent `usize::MAX`:
-
-```rust
-// WRONG - max_scroll becomes usize::MAX when lines is empty
-pub fn scroll_down(&mut self, amount: usize) {
-    let max_scroll = self.lines.len().saturating_sub(1);
-    self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
-}
-
-// CORRECT - explicit empty check
-pub fn scroll_down(&mut self, amount: usize) {
-    if self.lines.is_empty() {
-        self.scroll_offset = 0;
-    } else {
-        let max_scroll = self.lines.len() - 1;
-        self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
-    }
-}
-```
-
-### InputGroup Field Access in Edge Detection
-
-When accessing InputGroup fields in `is_at_left_edge()` or `is_at_right_edge()`, use safe accessors:
-
-```rust
-// WRONG - direct indexing can panic if fields is empty
-fn is_at_left_edge(&self) -> bool {
-    match self.focus_area {
-        VulnFocusArea::Inputs => self.inputs.fields[0].cursor_pos == 0,
-        _ => true,
-    }
-}
-
-// CORRECT - use first() with map and unwrap_or
-fn is_at_left_edge(&self) -> bool {
-    match self.focus_area {
-        VulnFocusArea::Inputs => self
-            .inputs
-            .fields
-            .first()
-            .map(|f| f.cursor_pos == 0)
-            .unwrap_or(true),
-        _ => true,
-    }
-}
-```
-
-### InputGroup can_move_left/can_move_right Empty Guard
-
-The `can_move_left()` and `can_move_right()` methods should also guard against empty fields for consistency:
-
-```rust
-// WRONG - no empty guard
-pub fn can_move_left(&self) -> bool {
-    if let Some(idx) = self.focused {
-        idx < self.fields.len() && self.fields[idx].cursor_pos > 0
-    } else {
-        false
-    }
-}
-
-// CORRECT - explicit empty check
-pub fn can_move_left(&self) -> bool {
-    if !self.fields.is_empty() {
-        if let Some(idx) = self.focused {
-            idx < self.fields.len() && self.fields[idx].cursor_pos > 0
-        } else {
-            false
-        }
-    } else {
-        false
-    }
-}
-```
-
-### Selector Edge Detection Empty Guard
-
-Tabs with `Selector` or similar selectors must guard against empty selector items:
-
-```rust
-// WRONG - items could be empty causing incorrect edge detection
-FocusArea::Selector => self.selector.selected == 0,
-
-// CORRECT - guard against empty selector
-FocusArea::Selector => {
-    self.selector.items.is_empty()
-        || self.selector.selected == 0
-}
-```
-
-### Worker Error Logging Levels
-
-Workers should use `tracing::warn!` for expected failure cases, not `debug!`:
-
-```rust
-// WRONG - errors at debug level may be missed in production
-Err(e) => {
-    tracing::debug!("GraphQL introspection request failed: {}", e);
-    errors += 1;
-}
-
-// CORRECT - use warn for operational errors that may indicate issues
-Err(e) => {
-    tracing::warn!("GraphQL introspection request failed: {}", e);
-    errors += 1;
-}
-```
-
-### Vec::remove vs Vec::swap_remove
-
-When removing elements from a Vec in a loop where order doesn't matter, use `swap_remove` instead of `remove`:
-
-```rust
-// WRONG - O(n) shift for each removal
-while sessions.len() > max_sessions {
-    sessions.remove(0);
-}
-
-// CORRECT - O(1) swap and pop
-while sessions.len() > max_sessions {
-    sessions.swap_remove(0);
-}
-```
-
-**Exception**: VecDeque does not have `swap_remove`. Use `remove` for VecDeque or when the collection type is not Vec.
-
-### Tokio Spawn Error Handling
-
-When awaiting `tokio::spawn` JoinHandle results, use proper pattern matching to detect panics:
-
-```rust
-// WRONG - double unwrap can panic
-let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
-if let Err(e) = handle_result {
-    tracing::warn!("Handle timed out: {}", e);
-} else if let Err(e) = handle_result.unwrap() {  // double unwrap!
-    // ...
-}
-
-// CORRECT - proper nested match
-let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
-match handle_result {
-    Err(e) => {
-        tracing::warn!("Handle timed out: {}", e);
-    }
-    Ok(Err(e)) => {
-        if e.is_panic() {
-            tracing::warn!("Task panicked: {:?}", e);
-        } else {
-            tracing::warn!("Task failed: {}", e);
-        }
-    }
-    Ok(Ok(())) => {
-        tracing::debug!("Task completed successfully");
-    }
-}
-```
-
-For progress tracking tasks that are aborted on completion, also check the join result:
-
-```rust
-if let Err(e) = progress_handle.await {
-    if e.is_panic() {
-        tracing::warn!("Progress tracking task panicked: {:?}", e);
-    }
-}
-```
-
-### Worker Channel Send Error Handling
-
-Workers send progress and results via channels. Always handle send errors properly:
-
-```rust
-// WRONG - silent error suppression
-let _ = result_tx.send(TaskResult::LoadTest(results)).await;
-let _ = progress_tx.send((requests, requests)).await;
-
-// CORRECT - proper error handling with warn logging
-if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
-    tracing::warn!("Failed to send load test results: {}", e);
-}
-if let Err(e) = progress_tx.send((requests, requests)).await {
-    tracing::warn!("Failed to send progress: {}", e);
-}
-```
-
-This pattern was fixed across all 7 worker files (94 total occurrences) in the 2026-05-31 session:
-- `api.rs` (15), `security.rs` (27), `recon.rs` (12), `network.rs` (13)
-- `scanner.rs` (9), `fuzzer.rs` (8)
-
-### Selector confirm() Return Value
-
-Selector's `confirm()` returns `Option<&SelectorItem>`, not `Result`. Handle appropriately:
-
-```rust
-// WRONG - treating Option as Result
-if let Err(e) = self.profile_selector.confirm() {
-    tracing::warn!("Confirm failed: {}", e);
-}
-
-// CORRECT - handle Option properly
-if self.profile_selector.confirm().is_none() {
-    tracing::warn!("Confirm failed: selector returned None");
-}
-```
-
-### ScrollableText render() scroll_offset
-
-In ScrollableText render(), ensure the bounded scroll_offset is used:
-
-```rust
-// WRONG - uses unbounded self.scroll_offset instead of bounded value
-let scroll_offset = if self.lines.is_empty() {
-    0
-} else {
-    self.scroll_offset.min(self.lines.len() - 1)
-};
-// ... later ...
-f.render_stateful_widget(paragraph, area);  // Uses self.scroll_offset, not bounded value
-
-// CORRECT - pass bounded scroll_offset to scroll
-let scroll_offset = if self.lines.is_empty() {
-    0
-} else {
-    self.scroll_offset.min(self.lines.len() - 1)
-};
-f.render_stateful_widget(
-    Paragraph::new(self.lines.clone())
-        .block(block)
-        .scroll((scroll_offset as u16, self.horizontal_offset as u16)),
-    area,
-);
-```
-
-### Selector handle_left() Empty Items Guard
-
-Always add `is_empty()` guard to `handle_left()` for consistency with `handle_right()`:
-
-```rust
-// WRONG - doesn't check if items is empty
-pub fn handle_left(&mut self) {
-    if self.expanded && self.selected > 0 {
-        self.selected -= 1;
-    }
-}
-
-// CORRECT - guards against empty items
-pub fn handle_left(&mut self) {
-    if self.expanded && !self.items.is_empty() && self.selected > 0 {
-        self.selected -= 1;
-    }
-}
-```
-
-### FormBuilder render() Bounds Check
-
-FormBuilder's render loop must use `.get()` for safe array access:
-
-```rust
-// WRONG - direct indexing can panic
-for (i, field) in self.fields.iter().enumerate() {
-    match field {
-        FieldVariant::Input(input) => input.render(f, chunks[i], insert_mode),
-        // ...
-    }
-}
-
-// CORRECT - bounds-checked access
-for (i, field) in self.fields.iter().enumerate() {
-    if let Some(chunk) = chunks.get(i) {
-        match field {
-            FieldVariant::Input(input) => input.render(f, *chunk, insert_mode),
-            // ...
-        }
-    }
-}
-```
-
-### to_lowercase() Caching in Search Methods
-
-Cache lowercase values before filter closures to avoid repeated allocation:
-
-```rust
-// WRONG - to_lowercase() called 4+ times per entry in filter
-.filter(|e| {
-    e.target.to_lowercase()
-    || e.scan_type.to_lowercase()
-    || e.summary.to_lowercase()
-    || e.details.iter().any(|d| d.to_lowercase().contains(&query_lower))
-})
-
-// CORRECT - pre-compute all lowercased values
-.filter(|e| {
-    let target_lower = e.target.to_lowercase();
-    let scan_type_lower = e.scan_type.to_lowercase();
-    let summary_lower = e.summary.to_lowercase();
-    let details_lower: Vec<String> = e.details.iter().map(|d| d.to_lowercase()).collect();
-    target_lower.contains(&query_lower)
-        || scan_type_lower.contains(&query_lower)
-        || summary_lower.contains(&query_lower)
-        || details_lower.iter().any(|d| d.contains(&query_lower))
-})
-```
-
-### is_at_left_edge/is_at_right_edge Checkbox Array Guards
-
-Always guard checkbox array access with `is_empty()` checks:
-
-```rust
-// WRONG - doesn't guard against empty checkboxes
-fn is_at_left_edge(&self) -> bool {
-    self.focused_checkbox_index == 0
-}
-
-// CORRECT - guards against empty array
-fn is_at_left_edge(&self) -> bool {
-    self.checkbox_array.is_empty() || self.focused_checkbox_index == 0
-}
-
-fn is_at_right_edge(&self) -> bool {
-    self.checkbox_array.is_empty()
-        || self.focused_checkbox_index >= self.checkbox_array.len().saturating_sub(1)
-}
-```
-
-This pattern applies to all tabs with checkbox arrays: `hunt.rs`, `browser.rs`, `compliance.rs`, `graphql.rs`, `oauth.rs`.
-
-### Selector confirm() Return Value
-
-Selector's `confirm()` returns `Option<&SelectorItem>`, not `Result`. Handle appropriately:
-
-```rust
-// WRONG - treating Option as Result
-if let Err(e) = self.profile_selector.confirm() {
-    tracing::warn!("Confirm failed: {}", e);
-}
-
-// CORRECT - handle Option properly
-if self.profile_selector.confirm().is_none() {
-    tracing::warn!("Confirm failed: selector returned None");
-}
-```
-
-### Session Error Handling
-
-When loading sessions or cleaning up old sessions, avoid silent error suppression:
-
-```rust
-// WRONG - silently ignores read errors
-.filter_map(|e| e.ok())
-
-// CORRECT - log errors at debug level
-.filter_map(|e| match e {
-    Ok(entry) => Some(entry),
-    Err(e) => {
-        tracing::debug!("Skipping unreadable directory entry: {:?}", e);
-        None
-    }
-})
-
-// WRONG - silently ignores removal errors
-let _ = fs::remove_file(oldest.path());
-
-// CORRECT - log errors at warn level
-if let Err(e) = fs::remove_file(oldest.path()) {
-    tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
-}
-```
-
-### Quick Switch Selection Clamping
-
-When filtering quick switch results, the clamping function must re-fetch fresh results:
-
-```rust
-// WRONG - uses stale results passed as parameter
-fn clamp_quick_switch_selection(&self, app: &mut App, results: &[&Tab]) {
-    app.quick_switch_selected = app.quick_switch_selected.min(results.len().saturating_sub(1));
-}
-
-// CORRECT - re-fetches fresh results after query change
-fn clamp_quick_switch_selection(&self, app: &mut App) {
-    let results = app.get_quick_switch_results();
-    app.quick_switch_selected = if results.is_empty() {
-        0
-    } else {
-        app.quick_switch_selected.min(results.len() - 1)
-    };
-}
-```
-
-## Additional Fixes (2026-06-01 Session)
-
-### Edge Detection for Checkbox Arrays
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `graphql.rs` | 490-502 | Options checkbox bounds missing | Added explicit `GraphQlFocusArea::Options` case |
-| `oauth.rs` | 534-546 | Options checkbox bounds missing | Added explicit `OAuthFocusArea::Options` case |
-| `vuln.rs` | 618-619 | `is_at_right_edge()` missing `is_empty()` guard | Added `self.mode_selector.items.is_empty() \|\|` guard |
-
-### handle_enter() is_running() Guards
-
-| File | Line | Status |
-|------|-------|--------|
-| `report.rs` | 457-460 | `handle_enter()` guarded | ✅ Fixed |
-| `nse.rs` | 312-314 | `handle_enter()` guarded | ✅ Fixed |
-
-### Other Tab-Specific Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `workflow.rs` | 411 | `handle_copy()` missing guard | Added `!self.is_running()` guard |
-| `workflow.rs` | 257 | `reset()` doesn't clear `current_mode` | Set `current_mode = WorkflowMode::ListFindings` |
-| `integrations.rs` | 280 | `reset()` doesn't clear selector | Added `self.tracker_selector.selected = 0;` |
-| `storage.rs` | 250-251 | `reset()` doesn't clear `query_inputs.fields` | Added fields.clear() loop |
-
-### Components Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `selector.rs` | 228 | Silent `let _ =` on confirm() | `if .is_none() { warn }` |
-| `palette.rs` | 60 | Direct array access | `.get()` with bounds check |
-| `session.rs` | 113 | `debug!` vs `warn!` | Changed to `tracing::warn!` |
-| `session.rs` | 174 | Silent `filter_map(\|e\| e.ok())` | Explicit match with warn |
-
-### FxHashMap Performance Updates
-
-| File | Lines | Change |
-|------|-------|--------|
-| `orchestrator/mod.rs` | 21, 50, 84, 89, 302 | HashMap/HashSet → FxHashMap/FxHashSet |
-| `tool/session.rs` | 232, 288, 316, 461, 465, 1076 | HashMap → FxHashMap |
-| `tool/state.rs` | 124, 136 | HashMap → FxHashMap |
-| `recon/mod.rs` | 222, 254 | HashMap → FxHashMap |
-
-## Bug Fixes (2026-06-01 Session - Additional)
-
-### settings/main.rs Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `settings/main.rs` | 311-347 | `apply_to_config()` unsafe direct field access | Changed to safe `.get()` pattern with bounds checks |
-| `settings/main.rs` | 400,523,595 | Silent file write errors | Added `if let Err(e) = ...` with status_message |
-
-### Tab handle_enter() Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `report.rs` | 457-487 | `handle_enter()` returns early when not running | Restructured to allow selector interaction when idle |
-| `nse.rs` | 311-340 | `handle_enter()` logic issue with Results + is_running | Restructured to properly handle blur/selector |
-| `graphql.rs` | 415-432 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
-| `oauth.rs` | 459-476 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
-| `recon.rs` | 591-596 | Missing `is_running()` guard on Options toggle | Added `!self.is_running()` guard |
-
-### Edge Detection Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `recon.rs` | 670-671 | Missing `is_empty()` guard on `is_at_left_edge()` | Added `self.option_checkboxes.is_empty() \|\|` |
-| `scrollable.rs` | 99-106 | `is_at_left_edge/is_at_right_edge` inconsistent | Added `is_empty()` guards to both methods |
-
-### Input/Render Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `stress.rs` | 263-267 | Direct array access `input_chunks[i]` | Changed to `.get(i)` pattern |
-| `stress.rs` | 390-404 | `handle_enter()` result not captured | Changed to `confirm().is_none()` pattern |
-| `storage.rs` | 339 | Direct array access `query_chunks[0]` | Changed to `.get(0)` pattern |
-| `integrations.rs` | 335 | Suspicious fallback `&[]` in slice access | Changed to `&self.issue_inputs.fields` |
-
-### Other Tab Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `vuln.rs` | 495-505 | `handle_copy()` missing `is_running()` guard | Added `!self.is_running()` guard |
-| `history.rs` | 441,443 | Empty handlers missing `is_running()` guards | Added `!self.is_running()` guards |
-| `auth.rs` | 227-229 | `fields.len() - 1` underflow risk | Added `!self.inputs.fields.is_empty()` guard |
-
-### Worker/App Fixes
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `task_runtime.rs` | 72-76 | Silent error suppression `Err(_e)` | Changed to `if let Err(e) = ...` using actual error |
-| `session.rs` | 525, 1016 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
-| `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
-| `cache.rs` | 278 | `debug!` instead of `warn!` for cache dir creation | Changed to `tracing::warn!`
-
-## Session Fixes (2026-06-02)
-
-### TUI Tab Fixes - Missing is_running() Guards
-
-All navigation handlers (`handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_up`, `handle_down`, `handle_left`, `handle_right`) now properly guard with `!self.is_running()` in these tabs:
-
-| Tab | Issue |
-|-----|-------|
-| `compliance.rs` | Missing guards on 8 handlers - all fixed |
-| `vuln.rs` | Missing guards on 8 handlers - all fixed |
-| `storage.rs` | Missing guards + incorrect `true` fallback in handle_left/right - fixed |
-| `integrations.rs` | Missing guards + incorrect `true` fallback - fixed |
-| `workflow.rs` | Missing guards + incorrect `true` fallback - fixed |
-| `graphql.rs` | Missing guards on handle_left/right + field name fix |
-| `oauth.rs` | Missing guards on handle_left/right - fixed |
-
-### TUI Tab Fixes - Empty Checkbox Array Underflow
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `hunt.rs` | handle_up/down could underflow when `option_checkboxes` is empty | Added `is_empty()` guard before manipulation |
-| `browser.rs` | Same issue | Added `is_empty()` guard before manipulation |
-
-### TUI Tab Fixes - Edge Detection
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `report.rs` | ViewSelector edge detection missing `is_empty()` guard | Added `view_selector.items.is_empty()` check |
-| `stress.rs` | TypeSelector edge detection missing `is_open()` guard | Added `if self.type_selector.is_open()` check |
-
-### TUI Component Fixes
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `palette.rs` | Direct array access on layout chunks could panic with small terminal | Added `chunks.len() < 3` guard and `.get()` pattern |
-
-### Worker Fixes
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `network.rs` | JoinHandle abandoned without abort on timeout | Added `handle.abort()` in timeout case |
-| `api.rs` | Missing `is_panic()` check on spawned task result | Added explicit match to detect panic
-
-## Session Fixes (2026-06-03)
-
-### TUI Tab Fixes - Navigation Handlers (~97 handlers across 17 tabs)
-
-All `!self.is_running()` guards added to navigation handlers:
-
-| Group | Tabs Fixed |
-|-------|-----------|
-| Group 1 | recon.rs (word_forward/backward), scan.rs (6 handlers), scan_ports.rs (4), scan_endpoints.rs (4), fingerprint.rs (6) |
-| Group 2 | load.rs (6), stress.rs (6), cluster.rs (handle_enter), proxy.rs (handle_enter) |
-| Group 3 | hunt.rs (3), browser.rs (3), compliance.rs (4), vuln.rs (2) |
-| Group 4 | dashboard.rs (17), resume.rs (11), history.rs (10) |
-
-### reset() Methods Fixed (17 tabs)
-
-| Tab | Added Reset |
-|-----|------------|
-| `packet.rs` | view_selector.select(0) |
-| `graphql.rs`, `oauth.rs` | checkbox reset, focused_checkbox_index |
-| `cluster.rs` | view_selector, worker/coordinator/status_inputs |
-| `proxy.rs` | view_selector |
-| `nse.rs` | input fields |
-| `hunt.rs`, `browser.rs` | checkbox reset, focused_checkbox_index, focus_area |
-| `compliance.rs` | framework_selector.select(0), focus_area |
-| `storage.rs` | mode_selector, query_inputs, focus_area, current_mode |
-| `integrations.rs` | config_inputs, issue_inputs |
-| `workflow.rs` | focus_area |
-| `vuln.rs` | mode_selector, focus_area, current_mode |
-| `report.rs` | view_selector, format_selector, current_view |
-| `settings/main.rs` | proxy_rotation_selector, severity_selector, accent_color |
-| `auth.rs` | results.clear() |
-
-### App Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `app/mod.rs` | 452, 459 | Silent `let _ =` on dispatcher | Changed to `if !bool { warn }` |
-| `key_handler.rs` | 407-414 | Stale quick switch results | Re-fetch fresh results on Enter |
-| `task_runtime.rs` | 68-80 | No timeout on spawn | Added `tokio::time::timeout(300s, ...)` |
-
-### Other Module Fixes
-
-| Module | File | Line | Issue | Fix |
-|--------|------|------|-------|-----|
-| Workers | `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
-| Config | `loader.rs` | 18 instances | Silent file operations | `if let Err(e) = ...` with warn |
-| Output | `markdown.rs` | 87 | to_lowercase() in loop | Cached before loop |
-| Output | `dedup.rs` | 16 | to_lowercase() in parse | eq_ignore_ascii_case |
-| Tool | `script/*.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
-| Tool | `routes.rs` | 28, 118 | unwrap_or_default | Added warn logging |
-| Tool | `implementations/*.rs` | Various | load_config unwrap | Added inspect_err with warn |
-| Scanner | `matcher.rs` | 262, 268 | Silent socket ops | Added warn logging |
-| Scanner | `fingerprint.rs` | 432 | Silent probe write | Added warn logging |
-| Recon | `whois.rs` | 171 | Silent timeout | Added warn logging |
-
-
-## Session Fixes (2026-06-04)
-
-### App Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `task_runtime.rs` | 83-91 | Timeout case did not abort JoinHandle | Added `handle.abort()` after timeout error |
-| `state_update.rs` | 68 | Unhandled TaskResult warning missing context | Changed to `tracing::warn!("Unhandled TaskResult variant: {:?}", result);` |
-
-### TUI Deep Dive Audit (2026-06-04)
-
-Completed comprehensive audit of all 28 TUI tabs across 6 groups. Fixed ~100+ issues:
-
-| Group | Tabs | Fixes |
-|-------|------|-------|
-| Group 1 | recon, scan, scan_ports, scan_endpoints, fingerprint | 21 navigation guards + handle_enter logic + reset() |
-| Group 2 | fuzz, waf, waf_stress, load, stress | 40 navigation guards |
-| Group 3 | packet, graphql, oauth, cluster, proxy | 13 fixes (bounds, guards, logic) |
-| Group 4 | nse, hunt, browser, compliance | 15+ fixes |
-| Group 5 | storage, integrations, workflow, vuln, report | 8 major fixes |
-| Group 6 | history, settings | 18 navigation guards + reset fields |
-
-Key patterns fixed:
-- **handle_enter() logic**: 8 tabs where blur happened BEFORE stop (should be stop → blur → start)
-- **Navigation handlers**: ~97 missing `!self.is_running()` guards across 17 tabs
-- **reset() methods**: 11 tabs now properly reset checkbox/selector state
-- **Edge detection**: 5 tabs added missing `is_empty()` guards
-
-## Session Fixes (2026-06-05)
-
-### TUI Tab Fixes (Additional Audit)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `scan.rs` | 278 | reset() incomplete | Added `current_stage_output.clear()` |
-| `graphql.rs` | 510-524 | Options edge detection missing is_empty guard | Added `is_empty()` guard |
-
-### Workers Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
-| `recon.rs` | 127-168 | progress_handle spawn no timeout | Added 300s timeout |
-| `network.rs` | 168-170 | capture.start() no timeout | Added 300s timeout |
-
-### Tool/AI/App/Scanner/Config Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `ai/cache.rs` | 171 | Cache merge logic inverted | Changed to prefer old entries |
-| `ai/planner.rs` | 456 | to_lowercase in loop | Pre-compute before filter |
-| `tool/session.rs` | 511 | HTTP no timeout | Added 30s timeout |
-| `tool/finding.rs` | Multiple | HashMap performance | FxHashMap |
-| `tool/aggregator.rs` | Multiple | HashMap performance | FxHashMap |
-| `scanner/spoofed.rs` | 281-304 | Silent send failures | Warn logging + only increment on success |
-| `scanner/spoofed.rs` | 454-458 | Mutex vs AtomicU64 | Changed to AtomicU64 |
-| `config/scope.rs` | 45 | HashSet performance | FxHashSet |
-| `app/task_runtime.rs` | 83-91 | No abort on timeout | handle.abort() added |
-| `scrollable.rs` | 104 | is_at_right_edge inconsistency | Returns horizontal_offset == 0 when empty |
-| `palette.rs` | 39 | Direct chunks[2] access | .get() pattern |
-| `popup.rs` | 39 | Direct chunks[2] access | .get() pattern |
-
-(End of file - total 1020 lines)
-
-
-## Session Fixes (2026-06-08)
-
-### App Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `state_update.rs` | 67 | Duplicate `handle_protocol_result` call | Fixed to call `handle_feature_result` |
-
-### Workers Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fuzzer.rs` | 200 | Silent timeout with `let _ =` | Proper match with warn logging |
-
-### Scanner Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `ports/mod.rs` | 589-591 | Silent `catch_unwind` without comment | Added comment explaining why + warn logging |
-
-### Tool Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `session.rs` | 655,675,698,1007 | HashMap in function signatures | Changed to `FxHashMap` |
-| `session.rs` | 636 | Dead code `let _ = step` | Added placeholder comment |
-
-### TUI Tab Fixes (Deep Dive Audit 2026-06-08)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `workflow.rs` | 313-318 | Hardcoded field indices without bounds | Added `idx < fields.len()` guards |
-| `settings/main.rs` | 458-499 | `reset()` incomplete | Added focus_area, current_section, detail_focus_index resets |
-| `load.rs` | 649-672 | handle_left/right missing guard | Added `is_running()` guard |
-| `hunt.rs` | 507-535 | handle_left/right missing guard | Added `is_running()` guard |
-| `browser.rs` | 470-498 | handle_left/right missing guard | Added `is_running()` guard |
-| `scan_ports.rs` | 507-512 | handle_left/right missing guard | Added `is_running()` guard |
-| `scan_ports.rs` | 364-370 | handle_focus_next/prev missing guard | Added `is_running()` guard |
-| `scan_endpoints.rs` | 471-476 | handle_left/right missing guard | Added `is_running()` guard |
-| `fingerprint.rs` | 411-416 | handle_left/right missing guard | Added `is_running()` guard |
-| `recon.rs` | 680 | Underflow risk `len() - 1` | Added `is_empty()` check |
-| `scan.rs` | 469 | handle_copy missing guard | Added `is_running()` guard |
-| `waf.rs` | 530 | ModeRadio case missing guard | Added `!self.is_running()` |
-| `report.rs` | 337-379 | handle_focus_next/prev missing guard | Added `is_running()` guard |
-| `report.rs` | 518-531 | handle_escape has unusual guard | Removed inappropriate guard |
-| `integrations.rs` | 334 | Suspicious `&[]` fallback | Added warn logging on fallback |
-| `auth.rs` | 50-56 | reset() missing focus_area | Added `focus_area` reset |
-| `history.rs` | 167-187 | to_lowercase() in loops | Pre-compute before filter |
-
-
-## Session Fixes (2026-06-11)
-
-### Theme System Fixes
-- **Ctrl+T cycles ALL themes**: Iterates `list_theme_ids_owned()` alphabetically, wrapping at end (was limited to built-in trio)
-- **Theme::default() returns cyber-red**: Was `dark_theme`, which disagreed with `ThemeManager::default`
-- **set_theme() logs at debug level** when a theme is not found (was silent)
-- **ThemeInstallReport::Clone**: Documents that `loaded_themes` is dropped because `ThemeLoadError` is not Clone
-- **set_items_with_extra on Selector**: Adds a missing theme to the dropdown without silently replacing with index 0
-- **Theme install failure notifications**: Surfaced via the notification system (no longer silent)
-- **Style.rs methods**: Annotated `#[allow(dead_code)]` with comment explaining they are for future adoption
-- **Content_len cap in archive.rs**: Prevents pathological allocation (1 MiB cap)
-
-### Key Binding Changes
-- `Ctrl+T` now cycles ALL themes (not just built-ins)
-- `Ctrl+B` shows "Bookmarked: <tab>" notification
-- `Shift+E` shows "Export format: <format>" notification
-- `1-9` / `0` jump to tab by index (new)
-- `y` / `n` confirm/cancel in confirmation dialog (new shortcuts alongside Enter/Esc)
-- `pending_key` is now cleared on overlay open (fixes stale `gg` after opening quick switch)
-
-### Session Management Hardening
-- `.json.tmp` orphans cleaned up on both save paths
-- `load_latest_session` quarantines corrupt files (`.json.bad`) and tries next
-- `auto_save_if_due` skips during active tasks
-- `SessionConfig` fallback uses `$HOME/.eggsec/sessions` (was bare `~/.eggsec/sessions`)
-- `auto_save_interval` clamped to min 1 second
-- `load_latest_session` filters out `quick_save.json` from snapshot candidates
-
-## Session Fixes (2026-06-09)
-
-### AI Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `cache.rs` | 158-180 | Cache merge logic broken | Fixed merge to preserve existing entries |
-| `cache.rs` | 158-180 | Unnecessary complexity | Simplified to direct iteration |
-
-### App Module Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `task_runtime.rs` | 103 | Misleading timeout message | Changed to "aborting task" |
-| `mod.rs` | 452-463 | Misleading warn logs | Changed to debug level |
-
-
-
-## Session Fixes (2026-06-10)
-
-### TUI Deep Dive Audit - All 28 Tabs
-
-#### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 606 | Missing `is_running()` guard before `inputs.blur()` | Added `!self.is_running()` guard |
-| `recon.rs` | 633-634 | Empty array underflow risk on checkbox index | Added `!self.option_checkboxes.is_empty()` check |
-| `scan.rs` | 537 | Missing `is_running()` guard before `inputs.blur()` | Added `!self.is_running()` guard |
-| `scan.rs` | 278 | reset() missing focus_area clear | Added `self.focus_area = ScanFocusArea::Inputs` |
-| `scan_ports.rs` | 497 | Missing `is_running()` guard before `inputs.blur()` | Restructured with guard |
-| `scan_ports.rs` | 172 | Direct array access without bounds | Changed to safe `.get()` pattern |
-| `scan_endpoints.rs` | 435 | Missing `is_running()` guard before `inputs.blur()` | Restructured with guard |
-| `scan_endpoints.rs` | 263 | reset() missing focus_area clear | Added focus_area reset |
-| `fingerprint.rs` | - | No bugs found | - |
-
-#### Group 2 (fuzz, waf, waf_stress, load, stress)
-
-All 5 tabs passed audit - no bugs found.
-
-#### Group 3 (packet, graphql, oauth, cluster, proxy)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `graphql.rs` | 461 | `handle_enter()` missing `!is_running()` guard | Changed to `if !self.is_running()` |
-| `oauth.rs` | 505 | `handle_enter()` missing `!is_running()` guard | Changed to `if !self.is_running()` |
-| `cluster.rs` | 463-465 | Inverted guard logic (stopped when should allow) | Changed to `if !self.is_running()` |
-| `proxy.rs` | 598-599 | Non-standard guard pattern | Changed to `if !self.is_running()` |
-
-#### Group 4 (nse, hunt, browser, compliance)
-
-All 4 tabs passed audit - no bugs found.
-
-#### Group 5 (storage, integrations, workflow, vuln, report)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `report.rs` | 338 | handle_focus_next() inverted guard | Changed `!is_running()` to `is_running()` |
-| `report.rs` | 363 | handle_focus_prev() inverted guard | Changed `!is_running()` to `is_running()` |
-| `storage.rs` | 526 | handle_top() missing guard | Added `!self.is_running()` guard |
-| `storage.rs` | 531 | handle_bottom() missing guard | Added `!self.is_running()` guard |
-| `storage.rs` | 259 | reset() missing current_mode | Added `self.current_mode = StorageMode::Connect` |
-| `integrations.rs` | - | No bugs found | - |
-| `workflow.rs` | - | No bugs found | - |
-| `vuln.rs` | - | No bugs found | - |
-
-#### Group 6 (resume, history, dashboard, settings, auth)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `resume.rs` | 191 | handle_copy() missing guard | Added `if self.is_running()` guard |
-| `history.rs` | 315-318 | reset() missing focus_area | Added `self.focus_area = HistoryFocusArea::List` |
-| `settings/main.rs` | 458-501 | reset() incomplete | Added scope/report/schedule/notify field clears |
-| `dashboard.rs` | - | No bugs found | - |
-| `auth.rs` | - | No bugs found | - |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total tabs audited | 28 |
-| Tabs with bugs | 14 |
-| Tabs clean | 14 |
-| Total bugs fixed | 24 |
-
-(End of file)
-
-## Session Fixes (2026-06-10)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-#### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 657 | `handle_down` missing `is_empty()` guard on checkbox index | Added `option_checkboxes.is_empty() ||` guard |
-| `scan.rs` | 531-536 | `handle_bottom` goes to Inputs instead of Results | Changed to `ScanFocusArea::Results` |
-| `scan_ports.rs` | 370-386 | Options focus area unreachable via keyboard | Added Options to `handle_focus_next`/`handle_focus_prev` cycle |
-| `scan_ports.rs` | 506-516 | `handle_enter` doesn't toggle checkbox in Options | Added checkbox toggle when `focus_area == Options` |
-| `scan_ports.rs` | 388-416 | `handle_up`/`handle_down` wrong behavior in Options | Made Options branch a no-op |
-| `scan_endpoints.rs` | 330-346 | Options focus area unreachable via keyboard | Added Options to focus cycle |
-| `scan_endpoints.rs` | 433-443 | `handle_enter` doesn't toggle checkbox in Options | Added checkbox toggle |
-| `scan_endpoints.rs` | 449-476 | `handle_up`/`handle_down` wrong behavior in Options | Made Options branch a no-op |
-| `fingerprint.rs` | - | No bugs found | - |
-
-#### Group 2 (fuzz, waf, waf_stress, load, stress)
-
-All 5 tabs passed audit - no bugs found.
-
-#### Group 3 (packet, graphql, oauth, cluster, proxy)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `graphql.rs` | 394 | `handle_copy()` missing `is_running()` guard | Added guard returning None |
-| `oauth.rs` | 529 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
-| `cluster.rs` | 494 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
-| `packet.rs` | - | No bugs found | - |
-| `proxy.rs` | 731-783 | Duplicate inherent methods shadow trait methods | Noted as structural issue (no runtime impact) |
-
-#### Group 4 (nse, hunt, browser, compliance)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `nse.rs` | 335-351 | `handle_enter` starts scan from Inputs when not focused | Restructured: only Results triggers start |
-| `nse.rs` | 353 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
-| `compliance.rs` | 367-386 | `handle_enter` unconditionally calls `start()` | Restructured: only Results triggers start |
-| `compliance.rs` | 388 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
-| `hunt.rs` | - | No bugs found | - |
-| `browser.rs` | - | No bugs found | - |
-
-#### Group 5 (storage, integrations, workflow, vuln, report)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `report.rs` | 670-673 | `start()` conditional guard blocks restart | Removed conditional, now unconditional |
-| `report.rs` | 524-527 | `handle_enter` starts scan from Results | Added `return;` in Results arm |
-| `report.rs` | 676-679 | `stop()` unnecessary guard | Made unconditional |
-| `report.rs` | 276, 308 | Direct `chunks[i]` indexing | Changed to `.get()` pattern |
-| `workflow.rs` | 315-340 | severity/status selectors never rendered | Added explicit rendering after field loop |
-| `vuln.rs` | 564-589 | `handle_enter` restarts from Results | Added `return;` in Results arm |
-| `storage.rs` | - | No bugs found | - |
-| `integrations.rs` | - | No bugs found | - |
-
-#### Group 6 (resume, history, dashboard, settings, auth)
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `settings/main.rs` | 458-513 | `reset()` missing config clear | Added `self.config = None;` |
-| `auth.rs` | 224 | `handle_enter` compares non-existent `AuthFocusArea::Inputs` | Replaced with `self.is_input_focused()` |
-| `auth.rs` | 231-233 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `auth.rs` | 334 | `sync_input_focus` tautological guard | Removed redundant `i < fields.len()` check |
-| `resume.rs` | - | No bugs found | - |
-| `history.rs` | - | No bugs found | - |
-| `dashboard.rs` | - | No bugs found | - |
-
-#### App/Core Modules
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `runner.rs` | 184 | `Event::Paste(_)` silently dropped | Added paste routing in Insert mode |
-| `runner.rs` | 164-167 | Auto-save timer double-reset | Removed redundant reset |
-| `key_handler.rs` | 399, 407-414 | Stale quick-switch results on Enter | Re-fetch fresh results in Enter arm |
-| `state_update.rs` | 37-39 | `task_tab` cleared before results processed | Moved clear to after results loop |
-| `session.rs` | 188-199 | `swap_remove(0)` breaks sort order | Changed to `remove(0)` |
-
-#### Components
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `popup.rs` | 192 | `centered_rect` fallback uses wrong area | Store chunk in variable before split |
-| `scrollable.rs` | 70-76 | Potential `usize` overflow in `scroll_right` | Changed to `saturating_add` |
-| `palette.rs` | 55-57 | `scroll_offset` not clamped to result count | Added `.min(total.saturating_sub(1).max(0))` |
-| `input.rs` | 98 | `to_lowercase()` per candidate in filter | Noted as performance issue (minor) |
-| `selector.rs` | 437 | `options_per_line` uses byte length | Noted as Unicode issue (minor) |
-| `progress.rs` | 116 | `current > total` shows misleading display | Noted as edge case (minor) |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total files audited | 42 |
-| Total bugs found | 39 |
-| Total bugs fixed | 33 |
-| Bugs noted (minor/edge cases) | 6 |
-
-## Session Fixes (2026-05-30)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components.
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `proxy.rs` | 273, 357 | State left as Running on HealthChecker::new() early return -- tab permanently unresponsive | Added `self.state = AppState::Idle;` before return |
-| `fuzz.rs` | 763 | `handle_enter()` missing `is_running()` guard -- blur runs instead of stop | Added `if self.is_running() { self.stop(); return; }` |
-| `waf.rs` | 548 | `handle_enter()` missing `is_running()` guard -- blur runs instead of stop | Added `if self.is_running() { self.stop(); return; }` |
-| `load.rs` | 641 | `handle_enter()` missing `is_running()` guard on selector + blur paths | Added `if self.is_running() { self.stop(); return; }` |
-| `storage.rs` | 409 | `handle_focus_next()` Mode→Query missing `query_inputs.focus(0)` -- typing silently no-op | Added `self.query_inputs.focus(0)` |
-| `integrations.rs` | 416-445 | `handle_focus_next/prev()` missing focus(0)/blur() on 3 transitions | Added `focus(0)` and `blur()` calls |
-| `workflow.rs` | 401, 419 | `handle_focus_next/prev()` missing blur/focus on Inputs↔Results transitions | Added `blur()` and `focus(0)` calls |
-| `vuln.rs` | 481 | `handle_focus_next()` Inputs→Results missing `inputs.blur()` | Added `self.inputs.blur()` |
-| `report.rs` | 356 | `handle_focus_next()` ViewSelector→Inputs missing `focus(0)` on active input group | Added `focus(0)` based on `current_view` |
-| `settings/input.rs` | 408-482 | Session section unreachable via keyboard + missing match arms for left/right/edge detection | Added Session to all match arms + navigation arrays |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 408 | `reset()` missing `progress.total = 0` | Added reset |
-| `scan.rs` | 276 | `reset()` missing `progress.total = 0` | Added reset |
-| `scan_ports.rs` | 290 | `reset()` missing `progress.total = 0` | Added reset |
-| `scan_endpoints.rs` | 249 | `reset()` missing `progress.total = 0` | Added reset |
-| `fingerprint.rs` | 206 | `reset()` missing `progress.total = 0` | Added reset |
-| `fuzz.rs` | 400 | `reset()` missing `progress.total = 0` | Added reset |
-| `waf.rs` | 301 | `reset()` missing `progress.total = 0` | Added reset |
-| `load.rs` | 366 | `reset()` missing `progress.total = 0` | Added reset |
-| `recon.rs` | 718 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `scan.rs` | 621 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `scan_ports.rs` | 570 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `scan_endpoints.rs` | 488 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `fingerprint.rs` | 411 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `waf_stress.rs` | 357 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `integrations.rs` | 580 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `workflow.rs` | 524 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `report.rs` | 548 | `handle_escape()` missing `is_running()` guard | Added guard |
-| `nse.rs` | 459 | `start()` missing `target().is_empty()` validation | Added guard |
-| `hunt.rs` | 489 | `handle_enter()` missing `is_running()` guard | Added guard |
-| `browser.rs` | 448 | `handle_enter()` missing `is_running()` guard | Added guard |
-| `waf_stress.rs` | 407 | `is_input_focused()` missing `focus_area` check | Added `self.focus_area == WafStressFocusArea::Inputs &&` |
-| `cluster.rs` | 205-221 | `reset()` doesn't restore default field values | Restored "localhost:9000", "4", "9000" defaults |
-| `settings/main.rs` | 538-549 | `reset()` loses defaults for report/schedule/session inputs | Restored "html", "./exports", "quick", "30" defaults |
-| `settings/main.rs` | 563 | `reset()` missing `sync_component_focus()` | Added call |
-| `history.rs` | 439 | UTF-8 slice `&entry.target[..27]` panic on multi-byte chars | Changed to `char_indices()` safe split |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `scrollable.rs` | 62 | `scroll_down()` missing `saturating_add` -- debug panic on overflow | Changed to `saturating_add` |
-| `scan.rs` | 589 | Redundant `is_running()` check in `handle_enter()` | Removed dead branch |
-| `scan_endpoints.rs` | 481 | Redundant `is_running()` check in `handle_enter()` | Removed dead branch |
-| `auth.rs` | 50 | `reset()` not clearing stale `results` text | Added `self.results = "Ready for authentication testing".to_string()` |
-| `report.rs` | 338-346 | Missing progress gauge during Running state | Added `Gauge` widget render when `state == AppState::Running` |
-| `dashboard.rs` | 568-574 | `page_up/page_down()` missing `is_running()` guard | Added guard |
-| `dashboard.rs` | 100-101 | Silent `.ok()` on I/O and deserialization | Added `tracing::debug!` error logging |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 41 |
-| Total bugs fixed | 41 |
-| Files modified | 27 |
-| HIGH priority fixes | 10 |
-| MEDIUM priority fixes | 22 |
-| LOW priority fixes | 9 |
-
-## Session Fixes (2026-05-30 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Components + Core
-
-Comprehensive audit using 7 parallel subagents across all tabs, components, and core modules.
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 720 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `scan.rs` | 621 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `scan_ports.rs` | 572 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `scan_endpoints.rs` | 490 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `fingerprint.rs` | 413 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `fuzz.rs` | 820 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `waf.rs` | 586 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `waf_stress.rs` | 358 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `load.rs` | 667 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `stress.rs` | 445 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `packet.rs` | 773 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `graphql.rs` | 455 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `oauth.rs` | 502 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `cluster.rs` | 538 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `proxy.rs` | 652 | `handle_escape()` does nothing when running | Rewrote to use early-return pattern with `self.stop();` |
-| `nse.rs` | 370 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `hunt.rs` | 517 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `browser.rs` | 476 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `compliance.rs` | 412 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
-| `resume.rs` | 300 | `handle_escape()` missing `is_running()` guard entirely | Added `is_running()` check with `self.stop();` |
-| `storage.rs` | 594 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
-| `integrations.rs` | 581 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
-| `workflow.rs` | 523 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
-| `nse.rs` | 363 | `handle_enter()` Results area calls `self.start()` | Changed to `return;` |
-| `hunt.rs` | 507 | `handle_enter()` fallthrough triggers `self.start()` from Results | Added `if focus_area == Results { return; }` guard |
-| `browser.rs` | 466 | `handle_enter()` fallthrough triggers `self.start()` from Results | Added `if focus_area == Results { return; }` guard |
-| `compliance.rs` | 403 | `handle_enter()` Results area calls `self.start()` | Changed to `return;` |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fuzz.rs` | 647, 671 | Redundant `self.inputs.blur()` in handle_focus_next/prev | Removed blur calls from MutationCheckbox↔Results transitions |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 56 |
-| Total bugs fixed | 28 |
-| Files modified | 22 |
-| HIGH priority fixes | 27 |
-| LOW priority fixes | 1 |
-| Already fixed (MEDIUM/LOW) | 28 |
-
-**Key systemic bug fixed**: `handle_escape()` was unable to stop running tasks across all 20 tabs. Users had no keyboard shortcut to cancel an in-progress scan. All tabs now properly call `self.stop()` before returning when `is_running()` is true.
-
-## Session Fixes (2026-05-31 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 40 bugs total (1 HIGH, 13 MEDIUM, 26 LOW).
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `key_handler.rs` | 320-324 | Command palette `selected_index` not clamped after backspace — out-of-bounds access on Enter | Added clamping after `update_command_palette_query` in both Backspace and Char handlers |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 363-368 | `page_up`/`page_down` defined as inherent methods, unreachable via trait dispatch | Moved into `impl TabInput` block |
-| `scan.rs` | 240-245 | Same — inherent methods unreachable | Moved into `impl TabInput` block |
-| `scan_ports.rs` | 241-246 | Same | Moved into `impl TabInput` block |
-| `scan_endpoints.rs` | 228-233 | Same | Moved into `impl TabInput` block |
-| `fingerprint.rs` | 185-190 | Same | Moved into `impl TabInput` block |
-| `load.rs` | 686-718 | `handle_up`/`handle_down` missing Results scroll branch | Added `LoadFocusArea::Results` branches |
-| `load.rs` | 636-641 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
-| `stress.rs` | 432-446 | `handle_enter` auto-starts after TypeSelector confirm | Added `return;` after confirm |
-| `workflow.rs` | 507-516 | `handle_enter` mode update before `was_open` guard | Moved mode update after guard |
-| `settings/main.rs` | 578 | `reset()` sets `dark_mode.checked = false` instead of `true` | Changed to `true` to match `new()` default |
-| `browser.rs` | 584-590 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
-| `nse.rs` | 345-370 | `handle_enter` blur falls through to `start()` | Added `return;` after blur |
-| `compliance.rs` | 380-407 | `handle_enter` blur falls through to `start()` | Added `return;` after blur |
-| `packet.rs` | 481-494 | `reset()` doesn't close dropdown or reset InputGroup.focused | Added `cancel()`, `blur()` calls |
-| `cluster.rs` | 205-230 | `reset()` incomplete — no selector/inputs reset | Added `cancel()`, `blur()` for all inputs |
-| `proxy.rs` | 391-403 | `reset()` incomplete | Added `cancel()`, `blur()` calls |
-| `history.rs` | impl TabInput | `stop()` is no-op trait default | Added explicit `stop()` override |
-| `dashboard.rs` | impl TabInput | `stop()` is no-op trait default | Added explicit `stop()` resetting state |
-| `key_handler.rs` | 80 | `Clipboard::set` result silently discarded | Added `if !Clipboard::set(&text) { warn }` |
-| `selector.rs` | 116 | `selected` stale after items shrink externally | Added `set_items()` method with clamping |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fingerprint.rs` | 333-335 | `handle_focus_prev` doesn't cycle Inputs→Results | Changed to blur + switch to Results |
-| `fingerprint.rs` | (missing) | `handle_copy` not overridden | Added override returning results content |
-| `waf.rs` | 546-549 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
-| `waf_stress.rs` | 339-342 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
-| `load.rs` | 664 | Dead code — unreachable `else if self.is_running()` branch | Removed dead branch |
-| `cluster.rs` | 514-518 | `handle_bottom` doesn't blur current inputs | Added blur based on current_view |
-| `nse.rs` | 360-363 | `handle_enter` ScriptSelector falls through to `start()` | Added `return;` |
-| `compliance.rs` | 396-399 | `handle_enter` Framework falls through to `start()` | Added `return;` |
-| `storage.rs` | 684-689 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
-| `integrations.rs` | 671-676 | Same | Added guard |
-| `workflow.rs` | 600-605 | Same | Added guard |
-| `vuln.rs` | 705-710 | Same | Added guard |
-| `report.rs` | 713-718 | Same | Added guard |
-| `popup.rs` | 176-178 | `centered_rect` underflow on tiny areas | Added `r.width < 3 \|\| r.height < 3` guard |
-| `auth.rs` | 162-210 | Direct `fields[idx]` indexing | Changed to `.get_mut(idx)` pattern |
-| `settings/input.rs` | 282-285 | `handle_escape` missing `stop()` call | Added `self.stop()` |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 40 |
-| Total bugs fixed | 40 |
-| Files modified | 26 |
-| HIGH priority fixes | 1 |
-| MEDIUM priority fixes | 20 |
-| LOW priority fixes | 19 |
-
-**Key systemic bug fixed**: `page_up`/`page_down` methods were defined as inherent `pub fn` outside `impl TabInput` in 5 tabs, making them unreachable through the trait dispatcher. PageUp/PageDown keys were completely non-functional for those tabs.
-
-## Session Fixes (2026-05-31 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 31 bugs total (3 HIGH, 16 MEDIUM, 12 LOW).
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `stress.rs` | 433-458 | `handle_enter()` has no path to `start()` — user can never start a stress test by pressing Enter | Restructured: Inputs opens TypeSelector, TypeSelector confirms, Results returns early |
-| `stress.rs` | 433-437 | `handle_enter()` guard order inverted — `is_running()` checked before Results guard | Added Results early-return before is_running check |
-| `auth.rs` | 66-74 | `TabState` impl missing `set_error()` override — errors dispatched via trait silently swallowed | Added `set_error()` delegation to inherent method |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `scan.rs` | 477,499 | `handle_focus_next/prev` doesn't collapse stale dropdowns when transitioning between ProfileSelector↔OutputSelector | Added `.cancel()` calls on source selector during transitions |
-| `packet.rs` | 429,438 | `execute()` calls `run_dump()`/`run_interfaces()` without setting `self.state = AppState::Running` — UI shows no running indicator | Added `self.state = AppState::Running` before both calls |
-| `proxy.rs` | 453-455 | Duplicate dropdown render in `render()` and `render_overlays()` — visual artifacts | Removed dropdown render from `render()`, kept in `render_overlays()` |
-| `storage.rs` | 400-402 | `handle_focus_next` Config→Mode missing `mode_selector.focus()` — selector not keyboard-accessible | Added `self.mode_selector.focus()` call |
-| `storage.rs` | 443-451 | `handle_focus_prev` from Results always goes to Query — in non-Connect mode navigates to invisible area | Added mode-based branching to go to Mode when not in Connect |
-| `workflow.rs` | 247-261 | `reset()` missing blur calls on mode/severity/status selectors and inputs | Added `.blur()` calls for all selectors and inputs |
-| `workflow.rs` | 485-489 | `handle_top()` goes to Inputs, skipping Mode selector — inconsistent with other tabs | Changed to go to Mode selector first |
-| `vuln.rs` | 344-353 | `reset()` missing blur calls on mode selector and inputs | Added `.blur()` calls |
-| `vuln.rs` | 568-572 | `handle_top()` goes to Inputs, skipping Mode selector — inconsistent with other tabs | Changed to go to Mode selector first |
-| `report.rs` | 232-248 | `reset()` missing blur calls on view/format selectors and convert/trend/schedule inputs | Added `.blur()` calls for all selectors and input groups |
-| `settings/render.rs` | 150-154 | Hardcoded `y: inner.y + 6` for theme hint text — overlaps content if layout changes | Changed to compute offset from form height (checkbox=2 + selector=3 + borders=2 = 7) |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fuzz.rs` | 364 | `update_progress` is a no-op — progress bar never updates during fuzzing | Implemented to set `progress.current` and `progress.total` |
-| `integrations.rs` | 270 | `reset()` sets `tracker_selector.selected = 0` directly instead of `.select(0)` — bypasses internal state | Changed to `.select(0)` |
-| `integrations.rs` | 335-339 | `render()` uses `input_area.height - 3` — u16 underflow on small terminals | Changed to `.saturating_sub(3)` |
-| `workflow.rs` | 318-322 | Same u16 underflow in render | Changed to `.saturating_sub(3)` |
-| `vuln.rs` | 410-414 | Same u16 underflow in render | Changed to `.saturating_sub(3)` |
-| `storage.rs` | 556-561 | `handle_top()` always goes to Config — in non-Connect mode Config fields aren't rendered | Added mode-based branching |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 31 |
-| Total bugs fixed | 26 |
-| Files modified | 12 |
-| HIGH priority fixes | 3 |
-| MEDIUM priority fixes | 11 |
-| LOW priority fixes | 6 |
-| Noted (design/edge cases) | 5 |
-
-**Key systemic bugs fixed**:
-1. `stress.rs` `handle_enter()` had no path to `start()` — users could never start a stress test via keyboard
-2. `auth.rs` `TabState` impl missing `set_error()` — errors dispatched via trait were silently swallowed
-3. `scan.rs` stale dropdowns on focus transitions — dropdown stayed open and intercepted keyboard input in wrong focus area
-
-## Session Fixes (2026-05-31 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 61 bugs total (5 HIGH, 28 MEDIUM, 28 LOW).
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `nse.rs` | 190 | Render: `input_chunks` split from `chunks[0]` instead of `input_block.inner(chunks[0])` — input fields render on top of block border | Changed to split from `input_block.inner(chunks[0])`, reduced constraints from 4 to 3, changed to `.get()` pattern |
-| `resume.rs` | 69-81 | `page_up`/`page_down` defined as inherent methods, unreachable via `TabInput` trait dispatch | Moved into `impl TabInput for ResumeTab` block |
-| `history.rs` | 303-315 | Same — inherent methods unreachable | Moved into `impl TabInput for HistoryTab` block |
-| `dashboard.rs` | 602-616 | Same — inherent methods unreachable | Moved into `impl TabInput for DashboardTab` block |
-
-#### MEDIUM Priority Fixes
-
-**handle_top/handle_bottom missing blur (13 fixes across 10 tabs):**
-
-| File | Function | Fix |
-|------|----------|-----|
-| `packet.rs` | `handle_top` | Added `self.inputs.blur()` before `view_selector.focus()` |
-| `cluster.rs` | `handle_top` | Added blur for current view's inputs before `view_selector.focus()` |
-| `proxy.rs` | `handle_top` | Added `self.inputs.blur()` before `view_selector.focus()` |
-| `storage.rs` | `handle_top` | Added focus_area-based blur before re-focusing |
-| `storage.rs` | `handle_bottom` | Added focus_area-based blur before Results |
-| `integrations.rs` | `handle_top` | Added focus_area-based blur before re-focusing |
-| `integrations.rs` | `handle_bottom` | Added focus_area-based blur before Results |
-| `workflow.rs` | `handle_bottom` | Added `mode_selector.blur()` + `inputs.blur()` before Results |
-| `vuln.rs` | `handle_bottom` | Added `mode_selector.blur()` + `inputs.blur()` before Results |
-| `report.rs` | `handle_top` | Added focus_area-based blur before ViewSelector |
-| `report.rs` | `handle_bottom` | Added focus_area-based blur before Results |
-| `stress.rs` | `handle_bottom` | Added `self.inputs.blur()` before Results |
-| `nse.rs` | `handle_bottom` | Added `self.inputs.blur()` before Results |
-
-**Other MEDIUM fixes:**
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fuzz.rs` | 394-437 | `reset()` missing 7 checkbox resets (graphql_introspection, graphql_depth_bypass, etc.) | Added `.reset()` calls for all checkboxes |
-| `fuzz.rs` | 1001-1007 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
-| `waf.rs` | 588-594 | `handle_escape()` doesn't reset `focused_checkbox_index` when leaving Techniques | Added index and focus_area reset |
-| `load.rs` | 726-760 | `handle_left`/`handle_right` call move_left/move_right when inputs not focused | Added `&& self.inputs.is_focused()` guard |
-| `nse.rs` | 257-259 | `handle_focus_prev` from ScriptSelector missing blur | Added `self.script_selector.blur()` |
-| `integrations.rs` | 441-443 | `handle_focus_prev` Config→Tracker missing `config_inputs.blur()` | Added blur call |
-| `workflow.rs` | 422-424 | `handle_focus_prev` Inputs→Mode missing `inputs.blur()` | Added blur call |
-| `vuln.rs` | 507-509 | `handle_focus_prev` Inputs→Mode missing `inputs.blur()` | Added blur call |
-| `report.rs` | 413-415 | `handle_focus_prev` Inputs→ViewSelector missing blur | Added `current_inputs.blur()` |
-| `resume.rs` | 296-301 | `handle_bottom` missing `inputs.blur()` | Added blur call |
-| `scan.rs` | 582-593 | `handle_top`/`handle_bottom` missing selector collapse | Added `profile_selector.cancel()` + `output_selector.cancel()` |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `state_update.rs` | 70 | Unhandled TaskResult warning lacks variant context | Changed to `tracing::warn!("Unhandled TaskResult variant: {:?}", result)` |
-| `progress.rs` | 130 | `render_status_line` hides numbers when `current > total` | Removed `current <= total` condition |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 61 |
-| Total bugs fixed | 37 |
-| Files modified | 22 |
-| HIGH priority fixes | 4 |
-| MEDIUM priority fixes | 26 |
-| LOW priority fixes | 2 |
-| Noted (minor/edge cases) | 5 |
-| Tabs audited | 29 |
-| Tests passing | 215 TUI tests |
-
-**Key systemic bugs fixed**:
-1. `nse.rs` render bug — input fields rendered on top of block border due to wrong split origin
-2. `resume.rs`/`history.rs`/`dashboard.rs` — PageUp/PageDown keys completely non-functional due to methods in wrong impl block
-3. Dual-focus state across 10 tabs — handle_top/handle_bottom focused selectors without blurring inputs
-4. `fuzz.rs` reset() leaked state across sessions — 7 checkboxes never reset
-5. `load.rs` left/right arrow keys were no-ops when selector had focus
-
-## Session Fixes (2026-05-31 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 30 bugs total (3 HIGH, 20 MEDIUM, 7 LOW).
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `stress.rs` | 452 | `handle_enter()` has no code path to `self.start()` — stress test can never be started from TUI | Added `self.start()` after `type_selector.close()` in TypeSelector confirm arm |
-| `packet.rs` | 113-115 | `stop()` defined as inherent method, invisible to `dyn TabInput` dispatch — tab permanently stuck as Running | Moved to `impl TabInput` block with `AppState::Running` guard |
-| `graphql.rs` | 202-206 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
-| `oauth.rs` | 237-241 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
-| `proxy.rs` | 210-212 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
-| `browser.rs` | 240,278 | Checkbox area overlaps 3rd input field — renders on top of Timeout input | Added 4th constraint, increased block height from 10 to 14 |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `recon.rs` | 832-838 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
-| `scan.rs` | 747-753 | Same | Added guard |
-| `scan_ports.rs` | 624-630 | Same | Added guard |
-| `scan_endpoints.rs` | 587-593 | Same | Added guard |
-| `fingerprint.rs` | 509-515 | Same | Added guard |
-| `waf.rs` | 704-712 | Same | Added guard |
-| `waf_stress.rs` | 436-442 | Same | Added guard |
-| `load.rs` | 796-802 | Same | Added guard |
-| `stress.rs` | 559-565 | Same | Added guard |
-| `scan.rs` | 504-506 | `handle_focus_prev` from ProfileSelector does not cancel dropdown | Added `profile_selector.cancel()` |
-| `scan.rs` | 283-284 | `reset()` calls `select()` but not `cancel()` on dropdowns | Changed to `cancel()` |
-| `fuzz.rs` | 427-433 | `reset()` sets 7 checkboxes to unchecked instead of restoring initial checked state | Added `.checked = true` after each `.reset()` |
-| `waf.rs` | 311 | `reset()` missing `inputs.blur()` | Added blur call |
-| `stress.rs` | 211 | `reset()` missing `inputs.blur()` | Added blur call |
-| `graphql.rs` | 342-345 | `handle_focus_prev` Options→Inputs: `inputs.blur()` no-op, user can't type | Changed to `inputs.focus(0)` |
-| `oauth.rs` | 391-394 | Same | Changed to `inputs.focus(0)` |
-| `proxy.rs` | 651-659 | `handle_escape` missing `is_open()` check, dropdown+unfocus in one step | Added `is_open()` check with early return |
-| `storage.rs` | 259 | `reset()` missing `mode_selector.blur()` | Added blur call |
-| `storage.rs` | 458-465 | `handle_focus_prev` Results skips Query in non-Connect mode | Changed to go to Query |
-| `history.rs` | 711-723 | `page_up`/`page_down` always scroll Details, ignoring focus area | Added focus_area dispatch |
-| `hunt.rs` | — | Missing `handle_copy` implementation | Added override |
-| `compliance.rs` | — | Missing `handle_copy` implementation | Added override |
-| `recon.rs` | 575 | `handle_focus_next` Options→Results doesn't reset `focused_checkbox_index` | Added reset |
-| `recon.rs` | 721-727 | `handle_escape` no-op when focus is in Options or Results | Added focus_area match returning to Inputs |
-| `scan_ports.rs` | 574-580 | Same | Added focus_area match |
-| `scan_endpoints.rs` | 503-509 | Same | Added focus_area match |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `settings/render.rs` | 31-32 | Direct `chunks[0]`/`chunks[1]` indexing without `.get()` | Changed to `.get().copied().unwrap_or(area)` |
-| `app/mod.rs` | 132 | Silent `.ok()` on session load errors | Added `match` with `tracing::warn!` |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 30 |
-| Total bugs fixed | 30 |
-| Files modified | 20 |
-| HIGH priority fixes | 6 |
-| MEDIUM priority fixes | 22 |
-| LOW priority fixes | 2 |
-| Tabs audited | 29 |
-| Tests passing | 215 TUI tests |
-
-**Key systemic bugs fixed**:
-1. `stress.rs` `handle_enter()` had no path to `start()` — users could never start a stress test via keyboard
-2. `stop()` was inherent method on 4 tabs (packet/graphql/oauth/proxy) — invisible to `dyn TabInput` dispatch, tabs permanently stuck as Running
-3. `browser.rs` checkbox area rendered on top of 3rd input field — visual collision
-4. `page_up`/`page_down` lacked `is_running()` guards across 9 tabs — inconsistent with all other navigation handlers
-5. `recon.rs`/`scan_ports.rs`/`scan_endpoints.rs` `handle_escape` was a no-op when focus was in Options/Results — user trapped with no keyboard path back to Inputs
-
-## Session Fixes (2026-05-31 - Deep Dive Audit)
-
-### TUI Deep Dive Audit - All 28 Tabs + Core + Components
-
-Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 16 bugs total (6 HIGH, 7 MEDIUM, 3 LOW).
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `scan.rs` | 470 | Missing `stop()` in `impl TabInput` — TUI cannot stop running tasks via trait dispatch | Added `fn stop(&mut self) { ScanTab::stop(self); }` |
-| `scan_ports.rs` | 391 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { ScanPortsTab::stop(self); }` |
-| `scan_endpoints.rs` | 357 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { ScanEndpointsTab::stop(self); }` |
-| `fingerprint.rs` | 302 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { FingerprintTab::stop(self); }` |
-| `resume.rs` | 170 | `stop()` is inherent method, shadows trait default — would break trait dispatch | Added `fn stop(&mut self) { ResumeTab::stop(self); }` in `impl TabInput` |
-| `auth.rs` | 138 | `stop()` is inherent method, shadows trait default — same | Added `fn stop(&mut self) { AuthTab::stop(self); }` in `impl TabInput` |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `scan.rs` | 641 | `handle_escape()` doesn't transition focus back to Inputs | Added match on focus_area with proper transitions |
-| `fingerprint.rs` | 412 | `handle_escape()` doesn't transition focus back to Inputs | Added match on focus_area with proper transitions |
-| `proxy.rs` | 499 | Missing `page_up`/`page_down` — results view cannot be scrolled | Added page_up/page_down delegating to results_view |
-| `proxy.rs` | 633 | `handle_enter` doesn't verify selector confirmation state | Added `is_open()` check before `confirm()` |
-| `integrations.rs` | 446 | `handle_focus_prev` Issue→Config missing `self.issue_inputs.blur()` | Added blur call before focusing config_inputs |
-| `key_handler.rs` | 69 | Ctrl+V clipboard read failure silently dropped | Added `tracing::debug!` for empty/unavailable clipboard |
-| `selector.rs` | 448 | `self.label.len()` uses byte length, not display width — Unicode miscalculation | Changed to `self.label.chars().count()` |
-
-#### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `progress.rs` | 67,130 | `current/total` displayed raw when `current > total` — misleading | Clamped display with `self.current.min(self.total)` |
-| `runner.rs` | 54 | Misleading `warn` log for expected config load failure | Changed to `tracing::debug!("No config file found...")` |
-| `history.rs` | 311 | `stop()` inherent shadow (both are no-ops, latent only) | Noted — no functional impact |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 16 |
-| Total bugs fixed | 15 |
-| Files modified | 12 |
-| HIGH priority fixes | 6 |
-| MEDIUM priority fixes | 7 |
-| LOW priority fixes | 2 |
-| Tabs audited | 29 |
-
-**Key systemic bugs fixed**:
-1. `stop()` was missing from `impl TabInput` on 4 scan tabs — TUI could not stop running tasks via trait dispatch
-2. `stop()` was inherent method on resume/auth tabs — would break trait-object dispatch
-3. `handle_escape` didn't transition focus area back to Inputs on scan/fingerprint tabs
-4. `proxy.rs` had no page navigation for results view
-5. Unicode width miscalculation in selector radio rendering
-
-## Session Fixes (2026-06-07)
-
-### TUI Deep Dive Audit - All 28 Tabs + Components
-
-Comprehensive audit using 4 parallel subagents across all tabs and components.
-
-#### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `wireless.rs` | 229 | Direct `self.inputs.fields[0]` access without bounds check — panics if fields empty | Changed to `if let (Some(chunk), Some(field)) = (input_chunks.first(), self.inputs.fields.first())` |
-| `wireless.rs` | 334-337 | `handle_up()` missing `is_running()` guard — scrolls during running state | Added `!self.is_running()` guard |
-| `wireless.rs` | 340-343 | `handle_down()` missing `is_running()` guard — same | Added guard |
-| `wireless.rs` | 358-363 | `page_up()` missing `is_running()` guard | Added guard |
-| `wireless.rs` | 366-372 | `page_down()` missing `is_running()` guard | Added guard |
-| `wireless.rs` | 262-373 | Missing trait implementations for handle_word_forward/backward/home/end/top/bottom/copy | Added full implementations matching other tabs |
-| `components/input.rs` | 149-168 | `move_left()`/`move_right()` return `true` even when cursor doesn't move (on multi-byte char boundary) | Moved `true` inside `if let Some` block — only returns true on actual movement |
-
-#### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `fuzz.rs` | 1109-1171 | 6 orphaned test functions defined outside `mod tests` block | Moved all tests inside `mod tests` block; fixed direct `fields[0]` access to use `.first()` |
-
-#### LOW Priority Fixes (clippy .get(0) → .first())
-
-| File | Lines | Fix |
-|------|-------|-----|
-| `fuzz.rs` | 509 | `config_chunks.get(0)` → `config_chunks.first()` |
-| `graphql.rs` | 279 | `options_chunks.get(0)` → `options_chunks.first()` |
-| `load.rs` | 426, 513 | `chunks.get(0)` → `chunks.first()` |
-| `oauth.rs` | 325 | `options_chunks.get(0)` → `options_chunks.first()` |
-| `packet.rs` | 543, 615 | `chunks.get(0)` → `chunks.first()` |
-| `proxy.rs` | 444, 492 | `chunks.get(0)` → `chunks.first()` |
-| `report.rs` | 287 | `chunks.get(0)` → `chunks.first()` |
-| `resume.rs` | 115 | `chunks.get(0)` → `chunks.first()` |
-| `scan.rs` | 330, 355 | `.fields.get(0)` and `main_chunks.get(0)` → `.first()` |
-| `settings/render.rs` | 31 | `chunks.get(0)` → `chunks.first()` |
-| `stress.rs` | 256, 268 | `chunks.get(0)` → `chunks.first()` |
-| `waf.rs` | 348, 395 | `chunks.get(0)` and `results_chunks.get(0)` → `.first()` |
-| `waf_stress.rs` | 164 | `chunks.get(0)` → `chunks.first()` |
-
-#### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 9 |
-| Total bugs fixed | 9 |
-| Files modified | 16 |
-| HIGH priority fixes | 7 |
-| MEDIUM priority fixes | 1 |
-| LOW priority fixes | 1 (19 clippy occurrences) |
-| Tabs audited | 28 + components |
-
-**Key systemic bugs fixed**:
- 1. `wireless.rs` had no `is_running()` guards on navigation handlers — user could scroll during running scan
- 2. `wireless.rs` had direct `fields[0]` access without bounds check — potential panic
- 3. `input.rs` `move_left()`/`move_right()` returned `true` on no-op — callers incorrectly consumed keypresses without cursor movement
- 4. `fuzz.rs` had 6 orphaned tests outside `mod tests` — structurally misplaced, some using direct `fields[0]` access
-
-### TUI Architecture and Usability Pass (2026-06-11)
-Completed the 10-phase plan in `docs/plans/archive/tui-architecture-usability-pass.md` (using subagents for isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 479 tests green. Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass).
-
-Key new modules / surfaces (per phase):
-- `app/action.rs`: `UiAction`, `CommandPaletteInput`, `QuickSwitchInput`. Decode in KeyHandler; `App::apply_action` is the mutation point for global UI actions.
-- `app/overlay.rs`: `OverlayController` with single `decode(...)` routing fn that asks `topmost_overlay()` and owns all per-overlay input rules (PolicyConfirm/ConfirmPopup/CommandPalette/QuickSwitch/Search/Http/Help). Emits UiActions only; no mutations.
-- `tabs/spec.rs`: `TabSpec` / `TabCategory` / `TabRiskGroup` (later extended with operation/direct_launch). Single source for title/stable/cli/desc/category/risk/feature/breadcrumb. `Tab` methods delegate. `visible_tab_specs()` mirrors `Tab::all()` construction.
-- Delegated descriptors: `TabInput::primary_target` (default + impls), `Tab::operation_name`/`is_direct_launch`, `risk_from_group`, thin delegation in `build_current_operation_descriptor`/`current_tab_target`/`is_direct_launch_tab`. Enforcement stays central.
-- Visibility (shell.rs + preflight helpers): status bar now shows enforcement mode, scope provenance (LoadedScope source), risk badge (from spec), per-target preflight (target/scope-match/risk/op/"will: run|warn|confirm|deny" via live `EnforcementContext::evaluate`). Advisory only.
-- Global task strip: `TaskState.started_at`; status + help show active task tab/state/elapsed/hints even after nav away; pause/resume visible; quit-block not surprising.
-- Palette complete (command.rs + help_config.rs): all keybound actions + required list (run-current, stop/pause/resume/jump-active, quick-switch, help-current, search/global, theme, cycle/export, copy-cli, settings, reload-scope stub, save contextual, clear/delete contextual). Disabled-with-reason for no-task / wrong-tab cases.
-- Copy CLI (app/mod.rs + command.rs + utils): `copy_cli_equivalent` (cli_command + primary_target + safe options + --format + explicit --scope only); shell_escape; palette action; graceful clipboard fail; no broad bypass flags; tests for recon/scan-ports/intrusive/non-exec.
-- Small-terminal (shell.rs + mod.rs + popups.rs + tests): breadcrumb tab bar on narrow, too-small (<~40x10) clear fallback (input/quit still work), popups clamped, policy confirm preserved, low-pri status dropped first; 60x20 usable; layout tests added.
-- Semantic tokens (theme/palette.rs + builtin.rs + loader.rs + style.rs): 10 roles (safe/danger/muted/active_task/paused_task/scope_match/miss/policy_required/denied) + helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state` etc.); adopted in preflight/status/task/policy paths; all themes + loader + cyber-red fallback + non-blocking load unchanged.
-
-Overlay precedence (topmost_overlay + controller) is now PolicyConfirm > ConfirmPopup > CommandPalette > QuickSwitch > Search > HttpOptions > Help. Non-topmost never receive input; overlay-local keys never leak.
-
-All acceptance criteria from the plan are met (decode/apply split testable; one overlay routing fn; single metadata truth + feature gating + stable_id roundtrips; descriptors delegated + risk from spec; manual visibility + preflight advisory; task strip visible after nav; palette action-complete with context; CLI copy with safe escape + no bypasses; small-terminal degraded + "too small" fallback + policy readable; semantic helpers used for scope/risk/task/policy).
-
-Validation (run after substantial phases and at end):
-```
-cargo fmt --all
-cargo check -p eggsec-tui
-cargo test -p eggsec-tui
-cargo check --workspace --all-features
-cargo test --workspace --all-features
-```
-
-Update any future TUI changes to preserve the decode/apply split, delegate through TabSpec where metadata/risk/operation are needed, keep enforcement central, and surface manual posture/preflight/task state via the status paths.
-
-## Session Fixes (2026-06-17)
-
-### Theme System Improvements
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `theme/loader.rs` | 116-132 | `luminance()` returned 0.5 for 3-char hex (#FFF) instead of expanding to 6-char | Expanded 3-char shorthand to 6-char before parsing |
-| `theme/style.rs` | 6-38 | Dead methods `style_for_tab`, `style_for_mode`, `style_for_status` never called | Removed (3 methods, ~33 lines) |
-| `theme/manager.rs` | 67 | `toggle()` discarded `set_theme` result via `let _ =` | Changed to `if !self.set_theme(...) { tracing::debug!(...) }` |
-| `theme/manager.rs` | 98-119 | Dead methods `register_theme_if_absent` (deprecated) and `set_current_by_name` (tests only) | Removed both methods + 4 associated tests |
-
-### Worker Error Handling Fixes
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `workers/security.rs` | 5x `let _ =` on channel sends in wireless active task | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
-| `workers/c2_worker.rs` | 2x `let _ =` on error result sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
-| `workers/intercept_worker.rs` | 2x `let _ =` on progress sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
-| `workers/db_pentest.rs` | 3x `let _ =` on progress and result sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
-
-### Dead Code Removal
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `app/key_handler.rs` | 20 dead shim methods (handle_global_shortcuts, handle_mode_specific_input, handle_normal_mode_input, handle_insert_mode_input, handle_topmost_overlay, handle_ctrl_c, handle_ctrl_f, handle_escape, handle_enter_insert_mode, handle_quit, handle_reset, handle_save_settings, handle_delete_entry, handle_enter, decode_command_palette, handle_command_palette, decode_overlay_input, handle_overlay_input, decode_quick_switch, handle_quick_switch) | Removed all dead shim methods (~180 lines) |
-| `app/overlay.rs` | 3 dead shim methods (decode_command_palette_for_shim, decode_quick_switch_for_shim, decode_overlay_input_for_shim) | Removed dead transition shims (~25 lines) |
-| `tabs/settings/main.rs` | Dead methods `sync_with_theme` and `sync_theme_selector` never called | Removed both methods |
-| `app/key_handler.rs` | Unused import `CommandPaletteInput` in test module | Removed from test imports |
-
-### Session Management Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `session.rs` | 166 | Quarantine rename failure silently discarded | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
-| `session.rs` | 188 | Orphan temp file removal failure silently discarded | Changed to `if let Err(e) = ... { tracing::debug!(...) }` |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Files modified | 10 |
-| Dead code removed | ~240 lines |
-| Silent error suppressions fixed | 15 |
-| Theme bugs fixed | 1 (luminance 3-char hex) |
-| Tests passing | 301 |
-
-## Session Fixes (2026-06-17)
-
-### Theme System Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `theme/legacy.rs` | 16-21 | Dead `theme!()` macro never used anywhere | Removed |
-| `ui/shell.rs` | 354 | `style_for_risk()` result discarded via `let _risk_style` | Removed dead call |
-| `ui/shell.rs` | 438 | `scope_match`/`scope_miss()` result discarded via `let _scope_style` | Removed dead call |
-
-### Hardcoded Color Fixes (Theme Bypass)
-
-| File | Lines | Issue | Fix |
-|------|-------|-------|-----|
-| `tabs/wireless.rs` | 157-241 | 15 hardcoded `Color::Red/Gray/Yellow/DarkGray/Cyan` bypassing theme | Replaced with `tc!()` calls (danger, text_dim, warning, muted, info) |
-| `tabs/intercept.rs` | 917 | Hardcoded `Color::Magenta` for "Modify" label | Replaced with `tc!(accent)` |
-| `tabs/intercept.rs` | 1854 | Hardcoded `Color::Red` for destructive actions | Replaced with `tc!(danger)` |
-
-### Tab Handle Enter Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `tabs/graphql.rs` | 471 | `handle_enter()` can start scan from Results area (no-op then fallthrough) | Added `return;` in Results arm |
-| `tabs/oauth.rs` | 520 | Same pattern as GraphQlTab | Added `return;` in Results arm |
-| `tabs/db_pentest.rs` | 307-313 | `handle_enter()` starts unconditionally when not running — no Results check | Added `is_running()` + `Results` focus area guards |
-
-### Navigation Guard Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `tabs/cluster.rs` | 732-738 | `page_up()`/`page_down()` missing `is_running()` guard — can scroll while running | Added `!self.is_running()` guard |
-
-### Performance Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `session.rs` | 248 | `sessions.remove(0)` O(n) in cleanup loop | Changed to `swap_remove(0)` O(1) |
-
-### Dead Code / Cleanup
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `app/mod.rs` | 485-487 | Empty `if is_advanced {}` block (dead logic) | Removed |
-| `app/mod.rs` | 973 | `let _ = d;` discards PolicyDecision without audit | Removed dead binding |
-| `workers/recon.rs` | 5 | Stale `#[allow(unused_variables)]` — variables are used | Removed annotation |
-| `app/export.rs` | 47-90 | Redundant `#[cfg(feature)]`/`#[cfg(not(feature))]` pairs returning identical values | Collapsed to single arms |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 12 |
-| Total bugs fixed | 12 |
-| Files modified | 9 |
-| HIGH priority fixes | 5 |
-| MEDIUM priority fixes | 3 |
-| LOW priority fixes | 4 |
-
-## Session Fixes (2026-06-17) - Deep Audit
-
-### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `ui/shell.rs` | 201 | Status bar truncation uses byte-offset slicing `&status_text[..42]` — panics on multi-byte UTF-8 | Changed to `status_text.chars().take(42).collect::<String>()` |
-| `ui/shell.rs` | 341 | Target truncation uses byte-offset slicing `&target[..25]` — same panic risk | Changed to `target.chars().take(25).collect::<String>()` |
-| `tabs/graphql.rs` | 459 | `handle_enter()` starts scan from focused input (Inputs arm blurs without returning) | Added `return;` after `self.inputs.blur()` |
-| `tabs/oauth.rs` | 508 | Same — starts scan from focused input | Added `return;` after `self.inputs.blur()` |
-| `tabs/cluster.rs` | 573 | Same — starts scan from focused input | Added `return;` after `current_inputs.blur()` |
-| `tabs/wireless.rs` | 690 | Missing Results focus area early return in `handle_enter()` | Added `if self.focus_area == Results { return; }` guard |
-
-### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `theme/loader.rs` | 116-132 | `luminance()` misclassifies named-color backgrounds (e.g. "black" → Light mode) | Extended to handle named colors ("black"→0.0, "white"→1.0, etc.) |
-| `theme/loader.rs` | 169 | `has_any_color` check omits `buttons` section | Added `|| halloy.buttons.is_some()` |
-| `tabs/db_pentest.rs` | 336-352 | `handle_left()`/`handle_right()` missing `is_running()` guard | Added `if self.is_running() { return false; }` |
-| `tabs/proxy.rs` | 762-772 | `page_up()`/`page_down()` ignore `page_size` param, hardcode 20 | Changed to use `page_size` parameter |
-| `tabs/graphql.rs` | 451-464 | Missing `page_up()`/`page_down()` overrides — PageUp/PageDown non-functional | Added overrides delegating to `results_view` |
-| `tabs/oauth.rs` | 500-513 | Same — PageUp/PageDown non-functional | Added overrides |
-| `tabs/auth.rs` | 314 | `handle_escape()` transitions to Results instead of Target | Changed to `AuthFocusArea::Target` |
-| `app/runner.rs` | 46 | Config parse errors silently swallowed via `.ok()` | Changed to `match` with `tracing::warn!` |
-| `workers/auth.rs` | 30-32 | Dead `if let Some(ref cred_file)` block does nothing | Removed dead code |
-| `app/help_config.rs` | 593 | Stale Ctrl+T help says "Cycle built-in theme" | Updated to "Cycle theme" |
-
-### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `components/input.rs` | 18 | Stale `#[allow(dead_code)]` on `label` field (is used) | Removed annotation |
-| `components/popup.rs` | 32 | Blanket `#[allow(dead_code)]` on impl block hides dead methods | Removed blanket; added per-method on 8 dead methods |
-| `components/popup.rs` | 11-14 | `PopupKind::Info`/`Warning` variants never constructed | Added `#[allow(dead_code)]` on those variants |
-| `help.rs` | 7-10 | `HelpContext` single variant placeholder | Added doc comment noting reserved for future use |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 20 |
-| Total bugs fixed | 20 |
-| Files modified | 14 |
-| HIGH priority fixes | 6 |
-| MEDIUM priority fixes | 10 |
-| LOW priority fixes | 4 |
-| Tests passing | 301 |
-
-**Key systemic bugs fixed**:
-1. UTF-8 panics from byte-offset string slicing in status bar — any non-ASCII text could crash the TUI
-2. `handle_enter()` started scans from focused input fields on 4 tabs — users couldn't press Enter to confirm input without starting a scan
-3. `luminance()` misclassified named-color backgrounds — themes using `"black"` were incorrectly detected as Light mode
-
-## Session Fixes (2026-06-18) - TUI Audit
-
-### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `tabs/graphql.rs` | 476-485 | `handle_enter()` Options arm falls through to `self.start()` — toggling checkbox silently starts scan | Added `return;` after checkbox toggle |
-| `tabs/oauth.rs` | 525-534 | Same pattern as graphql.rs — Options arm falls through to `self.start()` | Added `return;` after checkbox toggle |
-| `theme/install.rs` | 30-44 | `ThemeInstallReport` lossy `Clone` impl silently drops `loaded_themes` Vec | Removed `Clone` impl (never cloned; consumed via channels) |
-
-### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `tabs/intercept.rs` | 2580-2586 | `truncate_str()` uses byte-offset slicing — panics on multi-byte UTF-8 (CJK, emoji) | Changed to character-aware truncation via `.chars().take()` |
-| `tabs/settings/main.rs` | 158 | `max_focus_index()` returns 1 for Session but `session_inputs` has only 1 field (index 0) | Changed to return 0 |
-| `theme/loader.rs` | 142-155 | `luminance()` misclassifies named colors — `lightblue`/`lightred` map to Dark (0.3), `darkgreen` maps to Light (0.5) | Fixed to use distinct values: light* → 0.7-0.8, dark* → 0.2-0.4 |
-| `components/popup.rs` | 160 | `scroll_offset as u16` silently truncates values > 65535 | Added `.min(u16::MAX as usize)` clamp |
-| `components/popup.rs` | 169-171 | Button width sum can overflow u16; individual widths can wrap | Changed to `saturating_add` and `.min(u16::MAX)` |
-| `session.rs` | 248 | `swap_remove(0)` breaks sorted order during old-session cleanup | Changed to `remove(0)` |
-| `workers/db_pentest.rs` | 32 | `allow_db_pentest: true` hardcoded — bypasses lib safety gate | Changed to pass `dry_run` value |
-
-### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `components/selector.rs` | 179 | Dropdown height calculation could overflow on extreme item counts | Added `.min(u16::MAX as usize - 2)` clamp |
-| `app/mod.rs` | 1769 | `HelpScrollBottom` sets offset to `usize::MAX` — extreme sentinel | Changed to `u16::MAX as usize` |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 12 |
-| Total bugs fixed | 12 |
-| Files modified | 9 |
-| HIGH priority fixes | 3 |
-| MEDIUM priority fixes | 7 |
-| LOW priority fixes | 2 |
-| Tests passing | 301 |
-
-**Key systemic bugs fixed**:
-1. `handle_enter()` Options arm fell through to `start()` on graphql/oauth tabs — toggling a checkbox silently started a scan
-2. `truncate_str()` panicked on multi-byte UTF-8 — any non-ASCII text in intercepted flows could crash the TUI
-3. `luminance()` misclassified named colors with light/dark qualifiers — themes using `"lightblue"` or `"darkgreen"` got inverted light/dark defaults
-
-## Session Fixes (2026-06-18) - TUI Audit
-
-### HIGH Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `workers/db_pentest.rs` | 45 | `run_db_pentest_cli()` called with no `tokio::time::timeout` — database hangs block TUI permanently | Wrapped in 60s timeout with three-arm match (Ok(Ok), Ok(Err), Err(timeout)) |
-| `session.rs` | 119-127 | `load_quick()` propagates corrupt `quick_save.json` errors — hard failure, no quarantine, session lost | Added quarantine logic: read/parse errors rename to `.json.bad`, log warning, return `Ok(None)` |
-
-### MEDIUM Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `tabs/intercept.rs` | 2519-2542 | `page_up`/`page_down` accept `page_size` parameter but hardcode `20` | Changed `_page_size` to `page_size` and used the parameter |
-| `tabs/intercept.rs` | 2084-2115 | `reset()` doesn't clear `edit_modal` — stale modal state persists after reset | Added `self.close_edit_modal()` at end of `reset()` |
-| `tabs/packet.rs` | impl TabInput | Missing `page_up`/`page_down` — PageUp/PageDown keys are no-ops | Added both methods delegating to `self.results_view` with `is_running()` guard |
-| `tabs/load.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Inputs and Results focus areas |
-| `tabs/report.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Inputs and Results focus areas |
-| `tabs/auth.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Results and input focus areas |
-| `tabs/c2.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Results and input focus areas |
-| `tabs/db_pentest.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` for input focus areas |
-
-### LOW Priority Fixes
-
-| File | Line | Issue | Fix |
-|------|------|-------|-----|
-| `app/runner.rs` | 76 | Redundant `.map(\|ls\| ls)` identity transform | Removed no-op `.map()` call |
-| `app/command.rs` | 149 | `let _ = self.set_current_tab_if_available(t)` silently discards failure | Changed to `if !... { tracing::debug!(...) }` |
-| `workers/security.rs` | 91-96 | HTTP request error silently discarded in compliance task | Added `tracing::debug!` in else branch |
-| `session.rs` | 192 | Metadata errors silently swallowed via double `.ok()` in tmp cleanup | Changed to explicit `match` with `tracing::debug!` and `continue` |
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| Total bugs found | 14 |
-| Total bugs fixed | 14 |
-| Files modified | 10 |
-| HIGH priority fixes | 2 |
-| MEDIUM priority fixes | 9 |
-| LOW priority fixes | 3 |
-| Tests passing | 301 |
-
-**Key systemic bugs fixed**:
-1. `db_pentest` worker had no timeout — a hung database connection would block the TUI permanently
-2. `load_quick()` didn't quarantine corrupt files — session restoration hard-failed with no recovery
-3. `packet.rs` PageUp/PageDown keys were completely non-functional (missing from `impl TabInput`)
-4. 5 tabs silently ignored Ctrl+C copy (missing `handle_copy()` implementations)
+*Last verified against source: 2026-08-25*

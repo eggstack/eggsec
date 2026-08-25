@@ -10,19 +10,21 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 | Metric | Count |
 |--------|-------|
-| Total features | 42 |
-| Features with deps | 20 |
-| Marker-only features | 22 |
-| In `full` | 23 |
+| Total features | 50 |
+| Features with deps | 31 |
+| Marker-only features | 19 |
+| In `full` | 28 |
 
 ## Feature Table
 
 | Feature | Declared | Has deps | In `full` | Primary module | Stability |
 |---------|----------|----------|-----------|----------------|-----------|
 | `default` | yes | no | - | (core) | Stable |
+| `test-helpers` | yes | no | - | (test support) | Testing-only |
 | `tool-api` | yes | no | - | `tool/` | Stable |
 | `insecure-tls` | yes | no | - | `utils/` | Testing-only |
 | `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable |
+| `config-watch` | yes | yes | yes | (config hot-reload) | Stable |
 | `ws-api` | yes | yes | - | (WebSocket API) | Beta |
 | `grpc-api` | yes | yes | - | `tool/` | Stable |
 | `stress-testing` | yes | yes | yes | `stress/`, `packet/` | Stable |
@@ -40,6 +42,8 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `advanced-hunting` | yes | no | yes | `hunt/` | Stable |
 | `compliance` | yes | no | yes | `compliance/` | Stable |
 | `external-integrations` | yes | no | yes | `integrations/` | Stable |
+| `email-notifications` | yes | yes | yes | `agent/alerts/` | Stable |
+| `logging-subscriber` | yes | yes | yes | (tracing setup) | Stable |
 | `finding-workflow` | yes | no | yes | `workflow/` | Stable |
 | `vuln-management` | yes | no | yes | `vuln/` | Stable |
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable |
@@ -62,6 +66,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `dynamic-plugins` | yes | yes (`web-proxy`) | - | `proxy/intercept/` | Stable |
 | `api-schema` | yes | no | - | `api_schema/` | Stable |
 | `pdf` | yes | yes | - | `output/` | Stable |
+| `daemon-client` | yes | no | - | (daemon CLI) | Stable |
 | `full` | yes | yes | - | (all) | Deprecated |
 
 ## Stability Levels
@@ -77,7 +82,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ### `full` feature
 
-The `full` feature enables 21 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
+The `full` feature enables 28 sub-features. It does not include `grpc-api`, `ws-api`, `pdf`, `test-helpers`, `daemon-client`, `nse-ssh2`, `nse-sandbox`, or the `db-pentest-*` marker features.
 
 Note: The `container` feature pulls in `k8s-openapi` which requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This must be provided by the final binary crate.
 
@@ -100,8 +105,8 @@ full WebSocket pub/sub support.
 Features like `advanced-hunting`, `compliance`, `external-integrations`,
 `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `evasion`,
 `postex`, `api-schema`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`,
-`db-pentest-redis`, `transparent-proxy`, and `dynamic-plugins` have no extra runtime
-dependencies beyond optional crates. They gate module compilation via
+`db-pentest-redis`, `transparent-proxy`, `dynamic-plugins`, `test-helpers`, and
+`daemon-client` have no extra runtime dependencies beyond optional crates. They gate module compilation via
 `#[cfg(feature = "...")]` in `lib.rs`.
 
 `wireless-advanced` is a dependent feature on `wireless` and pulls in the
@@ -136,3 +141,5 @@ mod example;
 
 This ensures the module always compiles (for internal use) but is only publicly
 exposed when the feature is enabled.
+
+*Last verified against source: 2026-08-25*

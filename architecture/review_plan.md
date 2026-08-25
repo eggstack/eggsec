@@ -2,6 +2,8 @@
 
 > **HISTORICAL ARTIFACT** — This document is a completed plan from 2026-06-02. Statistics and findings below are outdated. For current architecture documentation, see [overview.md](overview.md).
 
+*Last verified against source: 2026-08-25*
+
 **Status:** COMPLETED
 **Created:** 2026-06-02
 **Completed:** 2026-06-02

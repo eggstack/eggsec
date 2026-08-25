@@ -11,8 +11,8 @@ API/agent modules are split across crates:
 - `crates/eggsec/src/nse_tool.rs` - NSE tool implementation (in `eggsec`)
 
 Feature gates:
-- `rest-api` = `["tool-api", "axum", "tower", "tower-http", "async-stream"]`
-- `grpc-api` = `["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "tonic-prost-build", "async-stream", "tokio-stream"]`
+- `rest-api` = `["tool-api", "axum", "tower", "tower-http", "async-stream", "email-notifications", "config-watch"]`
+- `grpc-api` = `["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "async-stream", "tokio-stream"]`
 - `ai-integration` = `["tool-api", "eventsource-stream", "semver"]`
 - `ws-api` = `["axum/ws"]`
 
@@ -166,6 +166,8 @@ To enable extraction of the server adapters into `eggsec-api`:
 6. **Constants** - `crate::constants::*` is used by agent_routes and agents. Move shared constants to eggsec-core.
 
 ---
+
+*Last verified against source: 2026-08-25*
 
 ## Known blockers
 

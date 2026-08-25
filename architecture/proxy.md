@@ -1,257 +1,232 @@
 # Proxy Module
 
-## Purpose
+## Role & Responsibilities
 
-Proxy pool management (SOCKS4/5, HTTP CONNECT, HTTPS, Tor) with health checking, rotation strategies, chain proxying, and a full MITM intercepting proxy for security testing.
+Outbound upstream-proxy pooling for engine modules. Provides connection routing through SOCKS4/5, HTTP CONNECT, HTTPS CONNECT, and Tor proxies with health checking, rotation strategies, chain proxying, and private-IP blocking. The MITM intercepting proxy is in the `eggsec-web-proxy` domain crate (see [web_proxy.md](web_proxy.md)).
 
-## Dual-Mode Architecture
-
-The proxy module spans two crates with a clean separation:
+The module spans two crates with a clean adapter/domain separation:
 
 ```
 crates/eggsec/src/proxy/mod.rs          ← adapter layer (re-exports + stubs)
 crates/eggsec-web-proxy/src/            ← domain crate (full implementation)
 ```
 
-### Adapter Layer (`crates/eggsec/src/proxy/mod.rs`)
+## Location & Feature Gating
 
-When `feature = "web-proxy"` is **enabled**: re-exports everything from `eggsec-web-proxy` — `pub use eggsec_web_proxy::*`.
+| Component | Crate | Path | Feature Gate |
+|-----------|-------|------|-------------|
+| Adapter layer | `eggsec` | `crates/eggsec/src/proxy/mod.rs` | always (stubs without `web-proxy`) |
+| Domain crate root | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/lib.rs` | `web-proxy` |
+| Proxy pool | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/pool.rs` | `web-proxy` |
+| Rotation strategies | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/rotator.rs` | `web-proxy` |
+| Health checking | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/health.rs` | `web-proxy` |
+| SOCKS4/5 impl | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/socks.rs` | `web-proxy` |
+| HTTP CONNECT impl | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/http_connect.rs` | `web-proxy` |
+| Config types | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/config.rs` | `web-proxy` |
+| Error types | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/error.rs` | `web-proxy` |
+| Utilities | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/utils.rs` | `web-proxy` |
+| Intercept submodule | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/intercept/` | `web-proxy` |
+| MCP tool types | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/mcp.rs` | `web-proxy-mcp` |
+
+When `feature = "web-proxy"` is **enabled**: the adapter re-exports everything from `eggsec-web-proxy` — `pub use eggsec_web_proxy::*` plus named re-exports (`mod.rs:7-15`).
 
 When `feature = "web-proxy"` is **disabled**: provides stub/no-op types so downstream code compiles without the feature. Stubs return empty results or errors indicating the feature is unavailable.
 
-Key adapter behavior:
-- `ProxyType` always has the `Tor` variant (even in stub mode)
-- `ProxyEntry` stubs include all fields (`name`, `weight`, `priority`, `timeout_ms`, `enabled`, `tags`)
-- `HealthCheckConfig` stubs include all fields (`enabled`, `interval_secs`, `timeout_ms`, `test_url`, `max_failures`)
-- `ProxyManager` stubs return `None` / empty `Vec` / default errors
-- `intercept` module stubs provide minimal types (`WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `CorrelationId`, `ProtocolDetection`)
+## Architecture
 
-### Domain Crate (`crates/eggsec-web-proxy/src/`)
+### Adapter Layer (`crates/eggsec/src/proxy/mod.rs`, 288 lines)
+
+When `web-proxy` is disabled, the adapter provides minimal stubs:
+
+| Stub Type | Location | Behavior |
+|-----------|----------|----------|
+| `ProxyType` (5 variants) | `mod.rs:71-84` | Always has `Socks4`, `Socks5`, `Http`, `Https`, `Tor` variants |
+| `ProxyEntry` | `mod.rs:118-184` | All fields present; `load_from_file()` returns `Ok(Vec::new())` |
+| `HealthCheckConfig` | `mod.rs:206-228` | All fields present; `test_url` defaults to `""` |
+| `ProxyManager` | `mod.rs:187-203` | `new()` returns `Ok(Self)`; `get_random_proxy()` returns `None`; `get_all_healthy_proxies()` returns empty `Vec` |
+| `HealthChecker` | `mod.rs:231-254` | `check()` always returns `is_healthy: false` with error message; `check_all()` returns zero counts |
+| `ProxyPool`, `ProxyRotator`, `ProxiedConnection`, `ProxyConfig` | `mod.rs:275-288` | Empty structs |
+| `intercept::types` stubs | `mod.rs:19-68` | `WebProxySessionReport`, `ProxyFlow`, `ProxyFlowDirection`, `BudgetUsage` with minimal fields; `to_scan_report_data_proxy()` returns `serde_json::json!({})` |
+| `intercept::correlation::CorrelationId` | `mod.rs:58-60` | Empty struct |
+| `intercept::protocols::ProtocolDetection` | `mod.rs:61-63` | Empty struct |
+
+### Domain Crate (`crates/eggsec-web-proxy/src/`, 24 Rust source files)
 
 Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool management, and MITM security testing. Owns all domain logic, types, and tests but does NOT decide whether an operation is allowed — enforcement stays in the main `eggsec` crate.
 
-## Files
+#### Root files (10 files)
 
-### Domain Crate (`crates/eggsec-web-proxy/src/`)
+| File | Lines | Description |
+|------|-------|-------------|
+| `lib.rs` | 376 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
+| `config.rs` | 626 | `ProxyConfig`, `ProxyEntry`, `ProxyType`, `RotationStrategy`, `HealthCheckConfig`, file loading (JSON/YAML/plaintext) |
+| `error.rs` | 93 | `WebProxyError` enum (9 variants: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout`) and `Result<T>` type alias |
+| `pool.rs` | 595 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
+| `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
+| `health.rs` | 382 | `HealthChecker`, `HealthCheckResult`, `ProxyHealth` |
+| `socks.rs` | 584 | `SocksProxy`, SOCKS4/4a/5 connection impl, `chain_connect()` for multi-hop |
+| `http_connect.rs` | 336 | `HttpConnectProxy`, HTTP CONNECT tunnel implementation |
+| `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
+| `mcp.rs` | — | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
 
-| File | Description |
-|------|-------------|
-| `lib.rs` | Crate root: `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking |
-| `config.rs` | `ProxyConfig`, `ProxyEntry`, `ProxyType`, `RotationStrategy`, file loading (JSON/YAML/plaintext) |
-| `error.rs` | `WebProxyError` enum and `Result<T>` type alias |
-| `pool.rs` | `ProxyPool` — thread-safe proxy pool with stats tracking and health filtering |
-| `rotator.rs` | `ProxyRotator` — rotation strategies (round-robin, random, weighted, least-used, lowest-latency) |
-| `health.rs` | `HealthChecker` — async health checking with concurrent checks |
-| `socks.rs` | SOCKS4/5 connection implementation (including `chain_connect` for multi-hop) |
-| `http_connect.rs` | HTTP CONNECT tunnel implementation |
-| `utils.rs` | Utility functions (insecure HTTP client builder, TCP connect with nodelay) |
-| `mcp.rs` | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
+#### Intercept submodule (`crates/eggsec-web-proxy/src/intercept/`, 14 files)
 
-### Intercept Submodule (`crates/eggsec-web-proxy/src/intercept/`)
+| File | Lines | Description |
+|------|-------|-------------|
+| `mod.rs` | 1272 | `ProxyServer` TCP listener, `handle_connection()`, CONNECT/HTTP dispatch, TLS termination, WebSocket/HTTP2 dispatch, private IP validation |
+| `cert.rs` | 180 | `CertGenerator` (per-host cache, 24h validity), `CertMaterial` (cert_der, key_der), rcgen on-the-fly CA generation |
+| `interceptor.rs` | 251 | `InterceptProxy`, `InterceptConfig`, `InterceptMode` (Monitor/Intercept/Allow), request/response modification with CRLF validation |
+| `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule`, `EnhancedRuleSet`, `RuleCondition` (And/Or/Not/HostMatches/PathMatches/BodyContains etc.), `RuleAction` (8 variants), `InjectResponseConfig`, indexed prefix evaluation, async evaluation |
+| `types.rs` | 1040 | `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `RedactionPattern`, `ManipulationRecord`, `FlowAction`, `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR export types |
+| `protocols.rs` | 1868 | `WebSocketSession`, `WebSocketMessage`, `Http2Session`, `Http2Stream`, `GrpcSession`, `GrpcCall`, `GrpcStreamFrame`, `GrpcStreamingState`, `GrpcReflectionInfo`, `ProtocolDetection`, `detect_grpc_security_issues()` |
+| `bridge.rs` | 493 | `to_scan_report_data_proxy()` — converts `WebProxySessionReport` to `ScanReportData` |
+| `correlation.rs` | — | `CorrelationEngine`, `CorrelationContext`, `CorrelationReference`, `CorrelationSource`, `ConfidenceScorer`, `BehavioralPattern`, `TemporalCorrelation` |
+| `bundle.rs` | 779 | `EvidenceBundle`, `BundleManifest`, gzip JSON archive, HMAC-SHA256 signing/verification, `compare_bundles()` diff |
+| `narrative.rs` | — | `AttackNarrative`, `NarrativeEvent`, `build_narrative()` |
+| `plugins.rs` | — | `PluginRegistry`, `PluginSandbox`, `ProtocolHandler` trait, `PluginCapability`, capability-based sandbox |
+| `dynamic_plugins.rs` | — | `DynamicPluginRegistry` — shared-library plugin loading (gated behind `dynamic-plugins` feature) |
+| `transparent.rs` | — | `TransparentProxyConfig` — iptables/nftables REDIRECT mode (gated behind `transparent-proxy`, Linux only) |
+| `redteam.rs` | — | Adversarial security tests for proxy inputs (CRLF injection, header smuggling, etc.) |
 
-HTTP/HTTPS intercepting proxy with dynamic SSL certificate generation, protocol support, and evidence packaging.
+## Behavior / Flow
 
-| File | Description |
-|------|-------------|
-| `mod.rs` | `ProxyServer` — TCP listener, CONNECT/HTTP handling, TLS termination, WebSocket/HTTP2 dispatch |
-| `cert.rs` | `CertGenerator`, `CertMaterial` — on-the-fly per-host SSL certificates via `rcgen` |
-| `interceptor.rs` | `InterceptProxy`, `InterceptConfig`, `InterceptMode` — request/response interception with pause/modify/continue |
-| `rules.rs` | `InterceptRule`, `RuleAction`, `RuleSet`, `EnhancedRule`, `EnhancedRuleSet`, `RuleCondition` — configurable interception rules |
-| `types.rs` | `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `ManipulationRecord`, `InterceptSession`, `FlowAction` |
-| `bridge.rs` | `to_scan_report_data_proxy()` — converts session report to `ScanReportData` for unified reporting |
-| `correlation.rs` | Cross-loadout correlation hooks (`CorrelationEngine`, `CorrelationContext`, `CorrelationReference`, `CorrelationSource`, `ConfidenceScorer`, `BehavioralPattern`) |
-| `protocols.rs` | WebSocket/HTTP2/gRPC protocol backends (`WebSocketSession`, `Http2Session`, `Http2Stream`, `GrpcSession`, `GrpcCall`, `ProtocolDetection`, `ProxyProtocol`) |
-| `bundle.rs` | `EvidenceBundle`, `BundleManifest` — compressed JSON archive for session packaging (gzip, import/export/signed) |
-| `narrative.rs` | `AttackNarrative`, `NarrativeEvent` — human-readable attack narrative generation |
-| `plugins.rs` | `PluginRegistry`, `PluginSandbox`, `ProtocolHandler`, `PluginCapability` — extensible protocol handling with capability-based sandbox |
-| `dynamic_plugins.rs` | `DynamicPluginRegistry` — shared-library plugin loading (gated behind `dynamic-plugins` feature) |
-| `transparent.rs` | `TransparentProxyConfig` — iptables/nftables REDIRECT mode (gated behind `transparent-proxy` feature, Linux only) |
-| `redteam.rs` | Adversarial security tests for proxy inputs (CRLF injection, header smuggling, etc.) |
+### Health Checking / Rotation / Failover Cycle
 
-## Key Types
+1. **Background health check** (`lib.rs:244-286`): `start_background_health_check(interval_secs)` spawns a `tokio::spawn` loop that calls `check_concurrent()` with semaphore-bounded concurrency (default 10).
+2. **Concurrent checks** (`health.rs:127-182`): `check_concurrent()` uses `tokio::sync::Semaphore` to bound concurrent HTTP requests to the test URL. Each proxy gets an independent reqwest client with the proxy's auth credentials.
+3. **Result processing** (`lib.rs:269-278`): Healthy proxies call `pool.mark_healthy()` (resets `consecutive_failures` to 0); unhealthy call `pool.mark_unhealthy()`.
+4. **Automatic demotion** (`pool.rs:177-194`): `record_failure()` increments `consecutive_failures`; when it reaches `config.max_failures_before_disable` (default 3), `is_healthy` is set to `false`.
+5. **Selection** (`lib.rs:81-97`): `get_next_proxy()` and `get_healthy_proxy()` use `ProxyRotator::select_with_stats()` which queries pool stats for `LeastUsed` and `LowestLatency` strategies.
+6. **Priority fallback** (`lib.rs:104-116`): `get_highest_priority_proxy(min_priority)` selects from highest-priority proxies; if none match, falls back to `get_healthy_proxy()`.
 
-### Proxy Pool
+### Connection Establishment
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `ProxyManager` | `lib.rs` | Central orchestrator: pool + rotator + health checker |
-| `ProxiedConnection` | `lib.rs` | Connection routed through proxy chain (chain, local_addr, target_addr) |
-| `ProxyPool` | `pool.rs` | Thread-safe proxy pool with stats tracking and health filtering |
-| `ProxyRotator` | `rotator.rs` | Rotation strategy selector |
-| `HealthChecker` | `health.rs` | Async health checking for proxy endpoints |
-| `ProxyHealth` | `health.rs` | Aggregate health status (total, healthy, unhealthy, results) |
+**Single-hop** (`lib.rs:123-139`):
+- `create_connection(target)` resolves target (private-IP blocked), selects healthy proxy, dispatches to SOCKS or HTTP CONNECT based on `proxy_type`.
+- SOCKS4: `socks.rs:67-103` — 8-byte CONNECT request, checks `0x5A` response.
+- SOCKS5: `socks.rs:139-161` — handshake + auth (method 0x02) + CONNECT with IPv4/IPv6/domain.
+- HTTP CONNECT: `http_connect.rs:43-56` — `CONNECT host:port HTTP/1.1` with optional Basic auth, response capped at 64KB.
 
-### Configuration
+**Chain proxying** (`lib.rs:176-238`):
+- `create_chained_connection(target, chain_length)` selects `chain_length` healthy proxies via `rotator.select_chain()`.
+- Chains > 1 hop require all SOCKS5/Tor entries (`lib.rs:203-213`); `chain_connect()` (`socks.rs:417-459`) builds multi-hop tunnel by sending SOCKS5 CONNECT to each intermediate proxy targeting the next.
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `ProxyConfig` | `config.rs` | Pool configuration (rotation strategy, health check settings, chain settings) |
-| `ProxyEntry` | `config.rs` | Individual proxy definition |
-| `ProxyType` | `config.rs` | Enum: `Socks4`, `Socks5` (default), `Http`, `Https`, `Tor` |
-| `RotationStrategy` | `config.rs` | Enum: `RoundRobin` (default), `Random`, `Weighted`, `LeastUsed`, `LowestLatency` |
-| `HealthCheckConfig` | `config.rs` | Health check parameters |
+### CONNECT Tunnel Establishment (Intercept)
 
-### Intercept
+`handle_connect_request()` (`intercept/mod.rs:742-864`):
+1. Parse host:port from CONNECT line.
+2. Validate target via `validate_target()` (private-IP blocking).
+3. Evaluate `RuleSet` — `Block` returns `403 Forbidden`.
+4. Connect to upstream with 30s timeout.
+5. Generate per-host TLS certificate via `CertGenerator`.
+6. Create TLS acceptor with ALPN `[h2, http/1.1]`.
+7. Accept TLS from client (30s timeout).
+8. If ALPN negotiated `h2` and `proxy_http2_live` is true → `handle_http2_interception()`.
+9. Read initial request from TLS stream; if WebSocket upgrade → `handle_websocket_interception()`.
+10. Otherwise, forward raw bytes bidirectionally via `tokio::io::copy()`.
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `ProxyServer` | `intercept/mod.rs` | TCP listener with CONNECT tunneling and TLS termination |
-| `CertGenerator` | `intercept/cert.rs` | Per-host SSL certificate generation with 24-hour cache |
-| `InterceptProxy` | `intercept/interceptor.rs` | Higher-level proxy with mode and channel-based modification |
-| `InterceptMode` | `intercept/interceptor.rs` | Enum: `Monitor`, `Intercept`, `Allow` |
-| `RuleSet` | `intercept/rules.rs` | Host/path pattern matcher with action evaluation |
-| `EnhancedRuleSet` | `intercept/rules.rs` | Complex rule conditions (And, Or, HostMatches, BodyContains, etc.) |
-| `RuleAction` | `intercept/rules.rs` | Enum: `Allow`, `Block`, `Intercept`, `Monitor`, `Modify`, `InjectResponse`, `Delay`, `Tag` |
+### CA / Certificate Generation
 
-### Reporting & Evidence
+`CertGenerator` (`cert.rs:14-149`):
+- Self-signed CA: `params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0))` (`cert.rs:65`).
+- Key usages: `DigitalSignature` + `KeyEncipherment` (`cert.rs:67-70`).
+- Extended key usages: `ServerAuth` + `ClientAuth` (`cert.rs:72-75`).
+- Cert generation: `rcgen::KeyPair::generate()` → `params.self_signed(&key_pair)` → DER output (`cert.rs:77-85`).
+- Cache: `Arc<RwLock<HashMap<String, CachedCert>>>`, keyed by hostname, default 24h validity (`cert.rs:36`).
+- No trust anchor injection required — the CA is ephemeral and per-session.
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `WebProxySessionReport` | `intercept/types.rs` | Complete session report with flows, manipulations, protocol sessions |
-| `EvidenceBundle` | `intercept/bundle.rs` | Compressed JSON archive for session packaging |
-| `BundleManifest` | `intercept/bundle.rs` | Session metadata for bundle header |
-| `AttackNarrative` | `intercept/narrative.rs` | Chronological attack story from session data |
+### Protocol Upgrade Detection
 
-### Correlation & Plugins
+- **WebSocket**: `is_websocket_upgrade()` (`intercept/mod.rs:191-195`) checks for `Upgrade: websocket` header (case-insensitive).
+- **HTTP/2**: ALPN protocol `h2` in TLS negotiation (`intercept/mod.rs:819-827`).
+- **gRPC**: `detect_protocol()` (`protocols.rs:1255-1300`) checks `Content-Type: application/grpc*` (confidence 0.95).
+- `detect_grpc_method_type()` (`protocols.rs:1303-1321`) infers streaming from `TE: trailers` or `grpc-encoding` headers.
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `CorrelationEngine` | `intercept/correlation.rs` | Cross-loadout correlation analysis |
-| `CorrelationReference` | `intercept/correlation.rs` | Link between proxy flow and other loadout findings |
-| `CorrelationSource` | `intercept/correlation.rs` | Enum: `DbPentest`, `AuthTest`, `MobileDynamic`, `Wireless`, `ProxyFlow`, `External` |
-| `PluginRegistry` | `intercept/plugins.rs` | Extensible protocol handler registration |
-| `PluginSandbox` | `intercept/plugins.rs` | Capability-based plugin isolation |
+### Request / Response Capture into Evidence Bundles
 
-### Error Handling
+1. Each connection produces a `ProxyFlow` (`types.rs:18-57`) with method, URL, headers, body, timing, and redaction info.
+2. `WebProxySessionReport` (`types.rs:101-153`) accumulates flows, protocol sessions, manipulations, correlation refs.
+3. `EvidenceBundle::from_report()` (`bundle.rs:81-117`) packages everything into a versioned structure.
+4. `bundle.to_bytes()` (`bundle.rs:120-131`) serializes to JSON then gzips via flate2.
+5. `bundle.sign()` (`bundle.rs:182-199`) computes HMAC-SHA256 over canonical manifest string for integrity.
+6. `compare_bundles()` (`bundle.rs:397-472`) diffs two bundles by flow index, producing `BundleDiff`.
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `WebProxyError` | `error.rs` | Domain error enum: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout` |
-| `Result<T>` | `error.rs` | `std::result::Result<T, WebProxyError>` alias |
+## Security Model
 
-## ProxyEntry Fields
+- **Private-IP blocking**: `is_private_ip()` in both `lib.rs:336-356` (outbound connections) and `intercept/mod.rs:157-174` (inbound interception) rejects RFC 1918, loopback, multicast, broadcast, link-local addresses.
+- **SensitiveString for credentials**: `ProxyEntry.password` is `Option<SensitiveString>` (`config.rs:67`); `to_log_key()` masks password with `***` (`config.rs:149-157`); `to_url()` exposes via `pass.expose_secret()` only for actual connection (`config.rs:132-147`).
+- **CRLF injection prevention**: `validate_header_value()` (`interceptor.rs:204-206`) rejects header values containing `\r`, `\n`, or `\0`.
+- **Bundle integrity**: HMAC-SHA256 signing (`bundle.rs:182-199`) with canonical string representation; verification via `verify()` (`bundle.rs:205-226`).
+- **In-memory only**: Certificate cache is in-memory (`cert.rs:15`), proxy pool stats are in-memory (`pool.rs:52-56`), no persistent state across restarts.
+- **Health check auth**: `pass.expose_secret()` is called only within reqwest proxy setup (`health.rs:91`), not in logs.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `Option<String>` | `None` | Optional human-readable identifier |
-| `proxy_type` | `ProxyType` | — | Protocol variant |
-| `address` | `String` | — | Proxy host address |
-| `port` | `u16` | `0` | Proxy port |
-| `username` | `Option<String>` | `None` | Optional auth username |
-| `password` | `Option<SensitiveString>` | `None` | Optional auth password (redacted in logs) |
-| `weight` | `u32` | `1` | Weighted rotation priority |
-| `priority` | `u8` | `0` | Higher-priority proxies selected first |
-| `timeout_ms` | `u64` | `DEFAULT_PROXY_TIMEOUT_MS` | Connection timeout |
-| `enabled` | `bool` | `true` | Whether proxy is active in pool |
-| `tags` | `Vec<String>` | `[]` | User-defined tags for filtering |
+## Public API
 
-## ProxyType Variants
+### `ProxyManager` methods (`lib.rs:50-286`)
 
-| Variant | Serde | Description |
-|---------|-------|-------------|
-| `Socks4` | `"socks4"` | SOCKS4/4a |
-| `Socks5` | `"socks5"` | SOCKS5 (default) |
-| `Http` | `"http"` | HTTP CONNECT |
-| `Https` | `"https"` | HTTPS CONNECT |
-| `Tor` | `"tor"` | Tor via SOCKS5 |
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new()` | `(config: ProxyConfig) -> Result<Self>` | Creates manager with pool, rotator, and health checker |
+| `add_proxy()` | `async (proxy: ProxyEntry) -> Result<()>` | Adds a single proxy to the pool |
+| `add_proxies_from_file()` | `async (path: &str) -> Result<usize>` | Loads proxies from JSON/YAML/plaintext file |
+| `get_next_proxy()` | `async () -> Option<ProxyEntry>` | Selects next proxy via rotator (all proxies) |
+| `get_healthy_proxy()` | `async () -> Option<ProxyEntry>` | Selects next proxy from healthy subset only |
+| `get_highest_priority_proxy()` | `async (min_priority: u8) -> Option<ProxyEntry>` | Selects from highest-priority proxies, falls back to healthy |
+| `get_all_healthy_proxies()` | `async () -> Vec<ProxyEntry>` | Returns all healthy proxies |
+| `check_health()` | `async () -> Result<ProxyHealth>` | Runs health check on all proxies |
+| `create_connection()` | `async (target: &str) -> Result<ProxiedConnection>` | Creates single-proxy connection (auto-selects SOCKS/HTTP based on type) |
+| `create_connection_to_domain()` | `async (domain: &str, port: u16) -> Result<ProxiedConnection>` | Creates connection using SOCKS5 domain resolution |
+| `create_chained_connection()` | `async (target: &str, chain_length: usize) -> Result<ProxiedConnection>` | Creates multi-hop chain (SOCKS5/Tor only for chains > 1) |
+| `pool_size()` | `async () -> usize` | Returns current pool size |
+| `start_background_health_check()` | `async (interval_secs: u64) -> JoinHandle<()>` | Spawns periodic health check task |
 
-`FromStr` also accepts `"socks4a"` → `Socks4`, `"socks"` → `Socks5`.
+### Intercept public API (re-exported from `intercept/mod.rs:25-55`)
 
-## HealthCheckConfig Fields
+`to_scan_report_data_proxy`, `EvidenceBundle`, `BundleManifest`, `CertGenerator`, `CertMaterial`, `InterceptConfig`, `InterceptMode`, `InterceptProxy`, `RuleSet`, `EnhancedRuleSet`, `InterceptRule`, `EnhancedRule`, `RuleAction`, `RuleCondition`, `WebSocketSession`, `Http2Session`, `GrpcSession`, `CorrelationEngine`, `AttackNarrative`, `PluginRegistry`, `ProtocolHandler`.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Whether health checking is active |
-| `interval_secs` | `u64` | `60` | Seconds between health check runs |
-| `timeout_ms` | `u64` | `5000` | Timeout per individual proxy check |
-| `test_url` | `String` | `"https://api.ipify.org"` | URL to request during health check |
-| `max_failures` | `u32` | `3` | Consecutive failures before marking unhealthy |
+## Integration Points
 
-## Key Methods on `ProxyManager`
+- **Engine proxy facade**: `crates/eggsec/src/proxy/mod.rs` re-exports all types. Engine modules (scanner, recon) use `ProxyManager` for upstream proxy routing.
+- **CLI `proxy-intercept`**: `crates/eggsec/src/commands/handlers/web_proxy.rs` uses `handle_proxy_intercept` which delegates to the intercept submodule.
+- **MCP exposure**: `mcp.rs` gated behind `web-proxy-mcp` marker feature; registers 12 tools via `WebProxyToolSchema`.
+- **Defense-lab framing**: All interception requires `EnforcementContext` + `OperationRisk::TrafficInterception` under `DefenseLab` mode; dry-run is always safe.
+- **Reporting bridge**: `to_scan_report_data_proxy()` converts to `ScanReportData` for unified output consumers; auto-bridged in `report convert`.
 
-| Method | Description |
-|--------|-------------|
-| `new(config)` | Creates manager with pool, rotator, and health checker |
-| `add_proxy(proxy)` | Adds a single proxy to the pool |
-| `add_proxies_from_file(path)` | Loads proxies from JSON/YAML/plaintext file |
-| `get_next_proxy()` | Selects next proxy via rotator (all proxies) |
-| `get_healthy_proxy()` | Selects next proxy from healthy subset only |
-| `get_highest_priority_proxy(min_priority)` | Selects from highest-priority proxies, falls back to healthy |
-| `get_all_healthy_proxies()` | Returns all healthy proxies |
-| `check_health()` | Runs health check on all proxies |
-| `create_connection(target)` | Creates single-proxy connection (auto-selects SOCKS/HTTP based on type) |
-| `create_connection_to_domain(domain, port)` | Creates connection using SOCKS5 domain resolution |
-| `create_chained_connection(target, chain_length)` | Creates multi-hop chain (SOCKS5/Tor only for chains > 1) |
-| `pool_size()` | Returns current pool size |
-| `start_background_health_check(interval_secs)` | Spawns periodic health check task |
+## Testing
 
-## Intercept Submodule
+22 test-bearing files in the `eggsec-web-proxy` crate (every source file except `utils.rs` and `lib.rs` has tests, plus `lib.rs` has `test_proxy_type_parsing`). Test density is the highest in the workspace.
 
-### Architecture
+Key test categories:
+- **Pool**: 18 tests in `pool.rs` covering add/remove, health filtering, stats tracking, consecutive failures, builder pattern.
+- **Rotator**: 15 tests in `rotator.rs` covering all 5 strategies, chain selection, edge cases.
+- **Health**: 12 tests in `health.rs` covering result fields, percentage calculation, disabled-proxy skipping, concurrent checks.
+- **SOCKS**: 10 tests in `socks.rs` covering builder, auth, timeout, error mapping, wrong proxy type, invalid addresses.
+- **HTTP CONNECT**: 13 tests in `http_connect.rs` covering request building, auth encoding, response parsing (200/201/403/500/empty/invalid).
+- **Intercept rules**: 30+ tests in `rules.rs` covering all condition types, nesting (And/Or/Not), enhanced rules, indexed evaluation, file persistence, performance benchmarks (1000 rules <1ms/eval).
+- **Protocols**: 40+ tests in `protocols.rs` covering WebSocket opcodes, HTTP/2 streams, gRPC calls, streaming state, security detection, reflection parsing.
+- **Bundle**: 10 tests in `bundle.rs` covering roundtrip, export/import, signing/verification, diff comparison.
+- **Bridge**: 9 tests in `bridge.rs` covering all finding categories, protocol session inclusion, correlation summary.
 
-```
-Client → ProxyServer (TCP listener)
-         ├─ CONNECT request → TLS termination → cert generation → client stream
-         ├─ WebSocket upgrade → tokio-tungstenite bidirectional proxy
-         ├─ HTTP/2 ALPN → h2 bidirectional proxy
-         └─ HTTP/1.1 → request/response forwarding
+## Invariants & Gotchas
 
-Rule evaluation happens at each stage:
-  RuleSet.evaluate(host, path) → RuleAction
-  EnhancedRuleSet.evaluate_first(ctx) → EnhancedRule (with delay_ms)
-```
-
-### Protocol Support
-
-| Protocol | Handler | Feature Gate |
-|----------|---------|--------------|
-| HTTP/1.1 | `handle_http_request` | always |
-| HTTP/2 | `handle_http2_interception` | `web-proxy` |
-| WebSocket | `handle_websocket_interception` | `web-proxy` |
-| gRPC | via `protocols.rs` types | always (types) |
-| Transparent | `transparent.rs` | `transparent-proxy` (Linux) |
-
-### Evidence Bundles
-
-`EvidenceBundle` packages a complete session into a `.json.gz` archive containing:
-- All proxy flows
-- WebSocket/HTTP2/gRPC session records
-- Enhanced rule set snapshot
-- Manipulation audit trail
-- Cross-loadout correlation references
-
-Supports import, export, signed export, and diff comparison.
-
-### MCP Integration
-
-Gated behind `web-proxy-mcp` marker feature. Registers `WebProxyToolSchema` with 12 actions:
-`start`, `stop`, `status`, `list_flows`, `inspect_flow`, `forward_flow`, `drop_flow`, `replay_flow`, `add_rule`, `list_rules`, `remove_rule`, `export_session`.
-
-Real runs require `EnforcementContext` + policy confirmation. Dry-run is always safe.
-
-## Enforcement Boundary
-
-The `eggsec-web-proxy` domain crate does not own enforcement decisions. The main-crate adapter (`crates/eggsec/src/tool/protocol/`) constructs `EnforcementContext` and verifies `ApprovedOperation` before calling domain crate functions. The domain crate receives pre-validated configuration and returns results.
-
-## Feature Flags
-
-| Feature | Effect |
-|---------|--------|
-| `web-proxy` | Full proxy implementation + intercept submodule + protocol backends |
-| `web-proxy-mcp` | MCP tool registration for agent/REST surfaces |
-| `dynamic-plugins` | Shared-library plugin loading at runtime |
-| `transparent-proxy` | iptables/nftables REDIRECT mode (Linux only) |
-
-Without `web-proxy`, the adapter stubs compile but provide no functional behavior.
-
-## Implementation Status
-
-Fully implemented. Complete proxy management with pool, rotation, health checking, SOCKS/HTTP CONNECT, proxy chaining, background health checks, MITM intercepting proxy with dynamic TLS, WebSocket/HTTP2/gRPC protocol support, evidence bundles, cross-loadout correlation, MCP integration, and transparent proxy mode. Includes an `AGENTS.override.md` for specialized guidance.
+1. **Adapter stubs return errors/empty results**: Without `web-proxy`, `HealthChecker::check()` always returns `is_healthy: false` with error message. Code that depends on healthy proxies must handle the feature-gated case.
+2. **Chain proxying limited to SOCKS5/Tor**: `create_chained_connection()` rejects chains with HTTP or SOCKS4 entries (`lib.rs:203-213`, `socks.rs:422-428`).
+3. **`connect_through()` only accepts SOCKS types**: `socks.rs:345-350` returns error for `ProxyType::Http` or `ProxyType::Https`.
+4. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
+5. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
+6. **Background health check never terminates**: `start_background_health_check()` returns a `JoinHandle` but the loop has no break condition (`lib.rs:248-285`).
+7. **`FlowBuffer::flows()` returns empty slice**: Due to `VecDeque` non-contiguity, `flows()` always returns `&[]`; callers must use `flows_vec()` or `iter()` (`types.rs:623-641`).
+8. **`is_private_ip` differs between layers**: The outbound `is_private_ip` (`lib.rs:336-356`) also blocks multicast and broadcast; the intercept `is_private_ip` (`intercept/mod.rs:157-174`) only blocks RFC 1918, loopback, link-local, and unspecified.
 
 ## References
 
+- [overview.md](overview.md) — workspace ownership and module index
+- [defense_lab.md](defense_lab.md) — defense-lab surface patterns
+- [dispatch.md](dispatch.md) — runtime dispatch flow
+- [websocket.md](websocket.md) — WebSocket protocol support
 - `architecture/web_proxy.md` — full web proxy feature details
-- `docs/WEB_PROXY.md` — user-facing web proxy documentation
 - `crates/eggsec-web-proxy/` — domain crate source
 - `crates/eggsec/src/proxy/` — adapter layer source
 - `crates/eggsec/src/proxy/AGENTS.override.md` — module-specific agent guidance
+
+*Last verified against source: 2026-08-25*

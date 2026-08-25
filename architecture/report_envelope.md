@@ -6,7 +6,7 @@ The normalized report/evidence envelope (`eggsec_output::envelope`) provides a p
 
 ## Key Types
 
-- `ReportEnvelope` - Top-level container with report_id, operation_id, domain_id, target, findings, evidence_manifest, policy_summary, baseline, tool_metadata
+- `ReportEnvelope` - Top-level container with report_id, operation_id, domain_id, target, generated_at, findings, evidence_manifest, policy_summary, baseline, tool_metadata
 - `FindingRecord` - Normalized finding with id, domain, operation_id, severity, title, description, evidence items, remediation, references, category, location
 - `EvidenceItem` - Single evidence entry with id, kind, source, summary, data_ref, redaction state
 - `EvidenceManifest` - Manifest tracking all evidence items with total/redacted counts and redaction policy
@@ -42,3 +42,5 @@ Existing `to_scan_report_data()` bridges are preserved for backward compatibilit
 - `crates/eggsec-output/src/envelope.rs` - Core types
 - `crates/eggsec-output/tests/report_envelope.rs` - Integration tests
 - `docs/REPORT_EVIDENCE_MODEL.md` - Full inventory and design doc
+
+*Last verified against source: 2026-08-25*
