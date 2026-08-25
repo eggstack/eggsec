@@ -66,8 +66,8 @@ nor hosted CI publishes a package.
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing. |
 | `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite persistence. |
 | `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | Session/task DTOs, client registry. No persistence/TLS deps. |
-| `eggsec-tui` | Terminal UI | No | 33 tabs, ratatui/crossterm. Depends on engine + runtime + daemon. |
-| `eggsec-cli` | CLI binary | Yes | Thin wrapper: `eggsec` + `eggsec-tui` (optional) + `eggsec-daemon` (optional). |
+| `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm. Depends on engine + runtime + daemon-protocol + ui-model. |
+| `eggsec-cli` | CLI binary | Yes | Thin binary shell: `eggsec` (with `cli` feature) + optional `eggsec-tui` + optional daemon client; also uses runtime + ui-model. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations. |
 
 **Dependency direction**: Leaf crates have no internal workspace dependencies. The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends that depend on `eggsec`.
@@ -125,7 +125,7 @@ The discovery layer gathers intelligence about a target before active testing. T
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Recon | `crates/eggsec/src/recon/` | 30+ sub-modules: DNS enumeration, WHOIS, SSL/TLS analysis, subdomain discovery, technology detection, CVE mapping, cloud asset discovery, email/security analysis, secrets detection | [recon.md](recon.md) |
-| Scanner | `crates/eggsec/src/scanner/` | TCP/UDP port scanning (connect + SYN), endpoint discovery (223 built-in paths), service fingerprinting with confidence scoring, IP spoofing, Nmap-style T0-T5 timing presets | [scanner.md](scanner.md) |
+| Scanner | `crates/eggsec/src/scanner/` | TCP/UDP port scanning (connect + SYN), endpoint discovery (347 built-in paths), service fingerprinting with confidence scoring, IP spoofing, Nmap-style T0-T5 timing presets | [scanner.md](scanner.md) |
 | Probe | `crates/eggsec/src/probe.rs` | ICMP host discovery, probe intent classification (`ProbeIntent`), risk assessment (`ProbeRisk`) shared across scan profiles | [probe.md](probe.md) |
 | Wireless | `crates/eggsec/src/wireless/` | WiFi passive recon + security analysis + rogue AP heuristic; active deauth/disassoc under `wireless-advanced` (lab-only) | [wireless.md](wireless.md) |
 
@@ -135,13 +135,14 @@ Active vulnerability discovery modules. Each sends crafted input to targets and 
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine with 42+ payload types (SQLi, XSS, SSRF, SSTI, IDOR, OAuth, JWT, GraphQL, gRPC, etc.), Aho-Corasick leak detection, timing analysis, response diffing, grammar fuzzer | [fuzzer.md](fuzzer.md) |
+| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine with 40 payload types (SQLi, XSS, SSRF, SSTI, IDOR, OAuth, JWT, GraphQL, gRPC, etc.), Aho-Corasick leak detection, timing analysis, response diffing, grammar fuzzer | [fuzzer.md](fuzzer.md) |
 | WAF | `crates/eggsec/src/waf/` | WAF detection (34 products) via fingerprinting, bypass technique library, evasion-resistance regression testing | [waf.md](waf.md) |
 | Auth | `crates/eggsec/src/auth/` | Authentication testing: brute force, credential stuffing, MFA bypass, lockout detection, rate-limit analysis, timing attacks | [auth.md](auth.md) |
 | Hunt | `crates/eggsec/src/hunt/` | Advanced threat hunting: authorization bypass, race conditions, advanced injection patterns (feature-gated: `advanced-hunting`) | [hunt.md](hunt.md) |
 | Browser | `crates/eggsec/src/browser/` | Headless browser for DOM XSS detection, SPA route discovery, client-side security checks (feature-gated: `headless-browser`) | [browser.md](browser.md) |
 | WebSocket | `crates/eggsec/src/websocket/` | WebSocket security testing: protocol upgrade, message fuzzing, cross-site WebSocket hijacking (feature-gated: `websocket`) | [websocket.md](websocket.md) |
 | Evasion | `crates/eggsec/src/evasion/` | Evasion technique detection for defense validation, MITRE ATT&CK mapped (feature-gated: `evasion`) | [evasion.md](evasion.md) |
+| API Schema | `crates/eggsec/src/api_schema/` | Standalone OpenAPI 3.0 (JSON/YAML) parsing and schema-driven test generation, independent of the fuzzer-internal schema module (feature-gated: `api-schema`) | [fuzzer.md](fuzzer.md), [feature_matrix.md](feature_matrix.md) |
 
 ### Performance & Stress
 
@@ -160,6 +161,7 @@ Modules that coordinate, schedule, and chain other modules into complete assessm
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Pipeline | `crates/eggsec/src/pipeline/` | Chained security assessment profiles: 18 built-in profiles (Quick, Endpoint, Web, WAF, Full, API, Recon, Stealth, Deep, etc.) | [pipeline.md](pipeline.md) |
+| Dispatch | `crates/eggsec/src/dispatch/` | Frontend-neutral task execution: `dispatch_task()` maps `RunRequest` → engine functions, returning typed `TaskResult`s via channels; per-domain executors (scanner, fuzzer, recon, network, auth, nse, c2, db-pentest, intercept) | [runtime_bridge.md](runtime_bridge.md), [cli_commands.md](cli_commands.md) |
 | Tool Registry | `crates/eggsec/src/tool/` | Unified tool registry, execution framework, MCP/REST/gRPC/agent protocol integration (feature-gated: `tool-api`/`rest-api`/`grpc-api`) | [ai_agents.md](ai_agents.md) |
 | Agent | `crates/eggsec/src/agent/` | Autonomous security agent: event-driven scheduling, longitudinal memory, portfolio management, alert routing (feature-gated: `rest-api`) | [ai_agents.md](ai_agents.md) |
 | Distributed | `crates/eggsec/src/distributed/` | Worker/coordinator cluster architecture: PSK-authenticated, TLS, task distribution, result aggregation | [distributed.md](distributed.md) |
@@ -246,6 +248,7 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Utils | `crates/eggsec/src/utils/` | 22 utility sub-modules: HTTP client, caching, circuit breaker, rate limiting, formatting, stealth, rate-limited clients | [utils.md](utils.md) |
 | Auth Context | `crates/eggsec/src/auth_context/` | Auth context YAML parsing with environment variable interpolation for credential management | [auth_context.md](auth_context.md) |
 | Constants | `crates/eggsec/src/constants.rs` | Compatibility facade over `eggsec-core` constants + engine-local constants (WAF count validation, timing defaults) | [constants.md](constants.md) |
+| Audit | `crates/eggsec/src/audit.rs` | `EnforcementAuditEvent` normalized audit records for every enforcement decision across all surfaces | [audit.md](audit.md) |
 | Generated | `crates/eggsec/src/generated/` | Auto-generated protobuf/gRPC code (checked-in, regenerated via `build.rs`) | [generated.md](generated.md) |
 | Python | `crates/eggsec-python/` | Python bindings via PyO3/maturin: 22 stable-core operations, sync/async clients, feature-gated provisional domains | [python_api.md](python_api.md) |
 
@@ -379,6 +382,9 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities.
 | `web-proxy` | `proxy/intercept/` | MITM web proxy. Defense-lab only. |
 | `web-proxy-mcp` | `proxy/mcp.rs` | MCP tool exposure for web proxy |
 | `pdf` | `output/pdf` | PDF report generation |
+| `email-notifications` | `rest-api` email transport | SMTP email via lettre |
+| `logging-subscriber` | frontends (CLI, daemon) | tracing subscriber/appender setup for process hosts |
+| `config-watch` | config hot-reload | File watching (notify + debouncer) for TUI/daemon |
 | `full` | All | All features combined |
 
 See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and [../docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical feature inventory.
@@ -509,7 +515,7 @@ Within the `eggsec` crate:
 
 ### Operation Metadata
 
-`OperationMetadata` is the single source of truth for all externally invokable operations. 32 operations + 33 aliases. Every `OperationDescriptor` is generated from metadata via `descriptor_for_target()`. Alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs all resolve to the same canonical metadata.
+`OperationMetadata` is the single source of truth for all externally invokable operations. 31 canonical operations + 42 aliases. Every `OperationDescriptor` is generated from metadata via `descriptor_for_target()`. Alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs all resolve to the same canonical metadata.
 
 ### Audit Trail
 
@@ -529,7 +535,7 @@ Within the `eggsec` crate:
 | Architecture guards | `bash scripts/check-architecture-guards.sh` |
 | Full CI | `make check` |
 
-- ~5098 tests (including `#[test]` + `#[tokio::test]`)
+- ~6,400 `#[test]` / `#[tokio::test]` attributes across the workspace
 - Visual regression: `TestBackend` + `Terminal::new()` for TUI
 
 ---
@@ -554,4 +560,4 @@ Within the `eggsec` crate:
 
 ---
 
-*Last updated: 2026-08-15 — Enhanced module index with capability summaries, quick-nav, and Python deep-dive link*
+*Last updated: 2026-08-25 — Verified counts against source (347 endpoints, 40 payload types, 31 ops + 42 aliases, ~6.4k test attrs); added dispatch, api_schema, and audit index entries; added email-notifications/logging-subscriber/config-watch features*
