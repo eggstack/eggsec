@@ -1,5 +1,9 @@
 # Python API Milestone F — Specialized and Lab-Oriented Domains
 
+## Status
+
+Status: Executed.
+
 ## Goal
 
 Expose Eggsec’s specialized, privileged, distributed, remote, and simulation-oriented domains only after the shared engine, policy, audit, lifecycle, and persistence layers are mature.

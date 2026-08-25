@@ -1,5 +1,9 @@
 # Python API Release 5 Phase A — Tool-Core and Schema Integration
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Expose Eggsec's protocol-neutral tool abstraction to Python without duplicating the existing operation API or importing framework-specific agent behavior into the stable package. The result must let Python callers inspect, validate, serialize, and invoke Eggsec capabilities through durable tool descriptors while preserving Eggsec scope, policy, audit, cancellation, and rate-limit semantics.

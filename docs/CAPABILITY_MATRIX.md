@@ -26,6 +26,9 @@
 
 These operations are registered in `ALL_OPERATION_METADATA` and are not part of a specific domain.
 They are available across all surfaces where their exposure flags permit.
+(31 canonical metadata entries total: the 28 standalone rows below plus the
+3 domain operations `db-pentest`, `mobile-static`, and `mobile-dynamic`
+listed under Domain Operations.)
 
 | Operation | Display Name | Risk | Capabilities | Feature | CLI | TUI | MCP/API | REST | Agent | Dry-Run | Baseline | Strict | Scope |
 |-----------|-------------|------|-------------|---------|-----|-----|---------|------|-------|---------|----------|--------|-------|
@@ -44,7 +47,6 @@ They are available across all surfaces where their exposure flags permit.
 | `oauth` | OAuth Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `auth-test` | Authentication Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `nse` | NSE Scripts | SafeActive | NseSafe | `nse` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `db-pentest` | Database Pentesting | DbPentest | DatabaseAssessment | `db-pentest` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `c2` | C2 Simulation | C2Operation | C2Simulation | `c2` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `proxy-intercept` | Traffic Interception | TrafficInterception | TrafficInterception | `web-proxy` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `wireless` | Wireless Scanning | SafeActive | PassiveFingerprint | `wireless` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
@@ -56,9 +58,11 @@ They are available across all surfaces where their exposure flags permit.
 | `workflow` | Finding Workflow | SafeActive | ActiveProbe | `finding-workflow` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `vuln` | Vulnerability Management | SafeActive | ActiveProbe | `vuln-management` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `pipeline` | Security Pipeline | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `proxy` | Proxy Management | SafeActive | — | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `remote` | Remote Execution | RemoteExecution | RemoteExecution | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `search` | Web Search | Passive | — | — | Y | Y | Y | Y | Y | — | — | — | no target |
+
+> `proxy-intercept` is also reachable via the `proxy` alias; aliases are not
+> separate metadata entries and are therefore not repeated here.
 
 ## Domain Operations
 

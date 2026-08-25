@@ -1,5 +1,9 @@
 # Eggsec Python API Release 4 — Stateful and Remote Execution
 
+## Status
+
+Status: Executed.
+
 ## Handoff objective
 
 Release 4 completes the Python API for long-lived assessment sessions, remote execution, persistence, comparison, and reporting.

@@ -1,5 +1,9 @@
 # Eggsec Python API Release 5 Roadmap
 
+## Status
+
+Status: Executed.
+
 ## Purpose
 
 Release 5 turns the broad Releases 1–4 binding surface into a governed public Python platform. The repository already exposes the main assessment engine, twenty-two canonical operations, reusable network primitives, subsystem-specific NSE/proxy/database APIs, managed mobile and browser contracts, daemon parity types, repositories, artifacts, and streaming reporters. The remaining problem is coherence: tool schemas are not yet first-class Python objects, operation dispatch is duplicated, experimental capabilities share the top-level namespace, typing and Python protocols remain uneven, wheel profiles are not yet a durable compatibility promise, and release evidence is still being tightened.

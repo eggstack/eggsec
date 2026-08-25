@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Executed (partial). Phase F workstream 4 (logging subscriber), workstream 5
 (notifications/integrations), and workstream 6 (config watching) completed.
 Workstream 2 (CLI definitions) partially completed: `clap` and `clap_complete`

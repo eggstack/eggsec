@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Completed. All acceptance criteria met. Linux designated as the supported release host.
 
 ## Objective

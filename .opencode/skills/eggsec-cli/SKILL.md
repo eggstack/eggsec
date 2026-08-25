@@ -30,7 +30,8 @@ src/commands/      # Handler dispatch and implementations
 - `cluster.rs` - `ClusterArgs`, `ClusterCommand`
 - `storage.rs` - `StorageArgs`, `StorageCommand`
 - `vuln.rs` - `VulnArgs`, `VulnCommand`
-- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`, `PolicyExplainArgs`, `ScopeExplainArgs`
+- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`, `ServeArgs`, `McpServeArgs`
+- `explain.rs` - `PolicyExplainArgs`, `ScopeExplainArgs`
 - `agent.rs` - `AgentArgs`, agent management commands
 - `ai_analyze.rs` - `AiAnalyzeArgs`, AI analysis commands
 - `browser.rs` - `BrowserArgs`, headless browser commands

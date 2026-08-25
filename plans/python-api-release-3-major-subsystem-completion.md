@@ -1,5 +1,9 @@
 # Eggsec Python API Release 3 — Major Subsystem Completion
 
+## Status
+
+Status: Executed.
+
 ## Handoff objective
 
 Release 3 completes the programmable Python surfaces for three major Eggsec subsystems that currently expose partial, one-shot, or CLI-shaped bindings:

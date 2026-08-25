@@ -61,13 +61,13 @@ crates/eggsec-python/
 │   ├── hunt.rs              # HuntTestConfig, HuntReport, hunt_test (feature-gated)
 │   ├── finding_schema.rs    # Confidence, FindingType, VersionedFinding, VersionedEvidence (Milestone E)
 │   ├── artifact.rs          # MilestoneArtifact, ArtifactReference, ArtifactStore (Milestone E)
-│   ├── vuln_record.rs       # CvssScore, VulnerabilityRecord, RemediationRecord (Milestone E)
-│   ├── workflow.rs          # FindingState, WorkflowTransition, Suppression, FindingWorkflow (Milestone E)
+│   ├── cvss.rs              # CvssScore, VulnerabilityRecord, RemediationRecord (Milestone E)
+│   ├── finding_workflow.rs  # FindingState, WorkflowTransition, Suppression, FindingWorkflow (Milestone E)
 │   ├── repository.rs        # FindingRepository, Assessment, AssessmentRepository (Milestone E)
-│   ├── correlation.rs       # FindingCorrelation, FindingDiff, AssessmentDiff, BaselineComparator (Milestone E)
-│   ├── reporting.rs         # FindingReporter, SeveritySummary, ReportEnvelope (Milestone E)
+│   ├── baseline.rs          # FindingCorrelation, FindingDiff, AssessmentDiff, BaselineComparator (Milestone E)
+│   ├── reporters.rs         # FindingReporter, SeveritySummary, ReportEnvelope (Milestone E)
 │   ├── compliance.rs        # ComplianceFramework, ComplianceControl, ComplianceMapper (feature-gated, Milestone E)
-│   ├── integration.rs       # IntegrationType, PublicationRecord, ExternalIntegration (Milestone E)
+│   ├── integrations.rs      # IntegrationType, PublicationRecord, ExternalIntegration (Milestone E)
 │   └── migration.rs         # SchemaVersion, MigrationResult, FindingMigration (Milestone E)
 ├── python/
 │   └── eggsec/
@@ -129,26 +129,36 @@ maturin develop --features mobile
 maturin develop --features full-no-system
 ```
 
-| Python Feature | Engine Feature | System Dep | Notes |
-|----------------|----------------|------------|-------|
-| `websocket` | `websocket` | none | WebSocket security testing |
-| `git-secrets` | `git-secrets` | none | Git secret detection |
-| `sbom` | `sbom` | none | SBOM generation |
-| `db-pentest` | `db-pentest` | none (drivers) | Database pentest (requires `eggsec-db-lab`) |
-| `db-pentest-mongodb` | `db-pentest-mongodb` | none | MongoDB pentest |
-| `db-pentest-redis` | `db-pentest-redis` | none | Redis pentest |
-| `web-proxy` | `web-proxy` | none | Web proxy MITM (requires `eggsec-web-proxy`) |
-| `mobile` | `mobile` | none | APK/IPA static analysis |
-| `mobile-dynamic` | `mobile-dynamic` | ADB + device | Android dynamic testing |
-| `packet-inspection` | `packet-inspection` | `libpcap-dev` | Packet capture |
-| `stress-testing` | `stress-testing` | none | Stress testing (raw sockets) |
-| `nse` | `nse` | `libssl-dev` | Nmap NSE scripts (requires `eggsec-nse`) |
-| `container` | `container` | none | K8s/Docker scanning |
-| `headless-browser` | `headless-browser` | `headless-chrome` | Headless browser testing (DOM XSS, SPA routes) |
-| `advanced-hunting` | `advanced-hunting` | none | Advanced vulnerability hunting (attack chains, business logic, race conditions) |
-| `compliance` | `compliance` | none | Compliance mapping and reporting (OWASP, HIPAA, PCI, SOC2) |
+Cargo features on `eggsec-python` mirror engine features. A subset is also
+exposed as pip extras in `[project.optional-dependencies]`
+(`crates/eggsec-python/pyproject.toml`) — that file is the authoritative
+extras list; the others are build-time-only (`maturin develop --features ...`).
+
+| Cargo Feature | Pip Extra | System Dep | Notes |
+|----------------|------------|-------|-------|
+| `websocket` | — (via `full-no-system`) | none | WebSocket security testing |
+| `git-secrets` | — (via `full-no-system`) | none | Git secret detection |
+| `sbom` | — (via `full-no-system`) | none | SBOM generation |
+| `db-pentest` | yes | none (drivers) | Database pentest (requires `eggsec-db-lab`) |
+| `db-pentest-mongodb` | — | none | MongoDB pentest |
+| `db-pentest-redis` | — | none | Redis pentest |
+| `web-proxy` | yes | none | Web proxy MITM (requires `eggsec-web-proxy`) |
+| `mobile` | yes | none | APK/IPA static analysis |
+| `mobile-dynamic` | yes | ADB + device | Android dynamic testing |
+| `packet-inspection` | yes | `libpcap-dev` | Packet capture |
+| `stress-testing` | yes | none | Stress testing (raw sockets) |
+| `nse` | yes | `libssl-dev` | Nmap NSE scripts (requires `eggsec-nse`) |
+| `wireless` | yes | `wireless-tools` | WiFi recon |
+| `container` | — (via `full-no-system`) | none | K8s/Docker scanning |
+| `headless-browser` | yes | Chromium at runtime | Headless browser testing (DOM XSS, SPA routes) |
+| `evasion` | — | none | Evasion technique detection |
+| `postex` | — | none | Post-exploitation simulation |
+| `c2` | — | none | C2 simulation |
+| `ai-integration` | — | none | AI/LLM integration types |
+| `advanced-hunting` | — | none | Advanced vulnerability hunting (attack chains, business logic, race conditions) |
+| `compliance` | — | none | Compliance mapping and reporting (OWASP, HIPAA, PCI, SOC2) |
 | `daemon-client` | — | none | Daemon session access |
-| `full-no-system` | — | none | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` |
+| `full-no-system` | yes (aggregate) | none | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` |
 
 ## Test Commands
 
@@ -270,7 +280,7 @@ Negative tests: formerly in `tests/test_evidence_failclosed.py` (removed with ev
 | `CvssScore` | CVSS v3.1: `base_score`, `temporal_score`, `environmental_score`, `vector_string`. |
 | `VulnerabilityRecord` | Vuln record: `cve_id`, `cvss`, `description`, `references`, `published_at`. |
 | `RemediationRecord` | Remediation: `finding_id`, `summary`, `steps`, `references`, `effort`. |
-| `FindingState` | Enum: `Open`, `Triaged`, `InProgress`, `Resolved`, `Dismissed`, `Reopened`. |
+| `FindingState` | Enum: `New`, `Triaged`, `Confirmed`, `InProgress`, `AcceptedRisk`, `FalsePositive`, `Remediated`, `Reopened`. |
 | `WorkflowTransition` | Transition: `from_state`, `to_state`, `actor`, `timestamp`, `reason`. |
 | `Suppression` | Suppression: `finding_id`, `reason`, `expires_at`, `suppressed_by`. |
 | `FindingWorkflow` | Workflow: `transition(finding_id, to_state, ...)`, `history(finding_id)`. |
@@ -1173,13 +1183,13 @@ canonical `make check-python` target alongside Rust tests.
 | `src/hunt.rs` | `HuntTestConfig`, `HuntReport`, `hunt_test()` (feature-gated) |
 | `src/finding_schema.rs` | `Confidence`, `FindingType`, `VersionedFinding`, `VersionedEvidence` (Milestone E) |
 | `src/artifact.rs` | `MilestoneArtifact`, `ArtifactReference`, `ArtifactStore` (Milestone E) |
-| `src/vuln_record.rs` | `CvssScore`, `VulnerabilityRecord`, `RemediationRecord` (Milestone E) |
-| `src/workflow.rs` | `FindingState`, `WorkflowTransition`, `Suppression`, `FindingWorkflow` (Milestone E) |
+| `src/cvss.rs` | `CvssScore`, `VulnerabilityRecord`, `RemediationRecord` (Milestone E) |
+| `src/finding_workflow.rs` | `FindingState`, `WorkflowTransition`, `Suppression`, `FindingWorkflow` (Milestone E) |
 | `src/repository.rs` | `FindingRepository`, `Assessment`, `AssessmentRepository` (Milestone E) |
-| `src/correlation.rs` | `FindingCorrelation`, `FindingDiff`, `AssessmentDiff`, `BaselineComparator` (Milestone E) |
-| `src/reporting.rs` | `FindingReporter`, `SeveritySummary`, `ReportEnvelope` (Milestone E) |
+| `src/baseline.rs` | `FindingCorrelation`, `FindingDiff`, `AssessmentDiff`, `BaselineComparator` (Milestone E) |
+| `src/reporters.rs` | `FindingReporter`, `SeveritySummary`, `ReportEnvelope` (Milestone E) |
 | `src/compliance.rs` | `ComplianceFramework`, `ComplianceControl`, `ComplianceMapper` (feature-gated, Milestone E) |
-| `src/integration.rs` | `IntegrationType`, `PublicationRecord`, `ExternalIntegration` (Milestone E) |
+| `src/integrations.rs` | `IntegrationType`, `PublicationRecord`, `ExternalIntegration` (Milestone E) |
 | `src/migration.rs` | `SchemaVersion`, `MigrationResult`, `FindingMigration` (Milestone E) |
 | `src/network.rs` | `TargetPy`, `ConnectionConfigPy`, `TimeoutConfigPy`, `RetryPolicyPy`, timing/evidence/transcript types (Release 2) |
 | `src/transport.rs` | `TcpSessionPy`, `UdpSocketPy` managed sessions (Release 2) |
@@ -1296,13 +1306,13 @@ Core abstractions for stateful, resumable assessment sessions.
 
 | Type | Purpose |
 |------|---------|
-| `SessionState` | Enum: `Created`, `Running`, `Paused`, `Completed`, `Failed`, `Cancelled` |
+| `SessionState` | Enum: `Created`, `Starting`, `Running`, `Pausing`, `Paused`, `Stopping`, `Stopped`, `Failed`, `Cancelled` |
 | `SessionIdentity` | Session ID, name, target, creation time, owner |
 | `SessionStats` | Elapsed time, operations executed, findings collected, bytes transferred |
-| `SessionCloseMode` | Enum: `Graceful`, `Immediate`, `Rollback` |
-| `SessionEvent` | Lifecycle event: `Started`, `Progress`, `Finding`, `Artifact`, `Completed`, `Failed` |
+| `SessionCloseMode` | Enum: `Graceful`, `Forced`, `Immediate` |
+| `SessionEvent` | Struct: `sequence`, `timestamp_ms`, `event_type` (string discriminator), `message` |
 | `SessionEventStream` | Async iterator yielding `SessionEvent` records for a session |
-| `SessionCapabilities` | Declared capabilities: max concurrency, timeout, supported operation kinds |
+| `SessionCapabilities` | Declared capabilities: `supports_cancellation`, `supports_timeout`, `supports_artifacts`, `supports_streaming`, `max_concurrent_operations` |
 
 #### Mobile Session
 
@@ -1519,7 +1529,7 @@ print(f"Added: {len(diff.added)}, Removed: {len(diff.removed)}")
 
 | File | Purpose |
 |------|---------|
-| `src/session.rs` | `SessionState`, `SessionIdentity`, `SessionStats`, `SessionEvent`, `SessionEventStream`, `SessionCapabilities` |
+| `src/session_contract.rs` | `SessionState`, `SessionIdentity`, `SessionStats`, `SessionEvent`, `SessionEventStream`, `SessionCapabilities` |
 | `src/mobile_session.rs` | `MobileSession`, `AsyncMobileSession`, `MobileDeviceDescriptor`, `MobileDeviceCapabilities`, `MobileSessionConfig`, `MobileSessionState`, `MobileSessionStats`, `MobileDeviceRegistry` (feature: `mobile`) |
 | `src/browser_session.rs` | `BrowserSession`, `AsyncBrowserSession`, `BrowserCapabilities`, `BrowserSessionState`, `BrowserSessionConfig`, `BrowserSessionStats`, browser event/snapshot types (feature: `headless-browser`) |
 | `src/daemon_parity.rs` | `DaemonProtocolVersion`, `IdempotencyKey`, `DaemonSubmissionResult`, `ReconnectOptions`, `ReplayCursor`, `ReplayResult`, `CancellationRequest`, `CancellationResult`, `TaskArtifactDescriptor`, `EventReplayInfo`, `DaemonHealthDetail` |
@@ -1972,9 +1982,10 @@ executes all examples, validates output, checks for resource leaks, and verifies
 import resolution. Run in CI against installed wheels.
 
 ### API Reference (E8)
-`scripts/generate_api_reference.py` — auto-generates API reference from
-OperationRegistry, ToolRegistry, and build_info(). Output:
-`docs/python/api-reference-generated.md`.
+`scripts/generate_api_reference.py` — auto-generates a registry-derived API
+summary from OperationRegistry, ToolRegistry, and build_info() via
+`--output <path>`. The checked-in reference is `docs/python/api-reference.md`
+(the generated summary is not committed).
 
 ### Release Automation (E10)
 Release publication is manual and maintainer-controlled. No GitHub Actions
@@ -1999,7 +2010,9 @@ and domain graduation review.
 | `scripts/generate_python_compatibility_baseline.py` | Generates a compatibility baseline manifest from the current build (API surface, type signatures, schema versions) |
 | `scripts/check_python_compatibility.py` | Compares current build against a baseline manifest and reports semantic compatibility violations |
 
-Baseline manifests are stored in `validation/compatibility/` and compared
+Baseline manifests live at
+`crates/eggsec-python/tests/compatibility_baseline.json` (with
+`compatibility_allowlist.json` for accepted deviations) and are compared
 against each build to detect accidental API breaks. The checker detects:
 removed types, changed function signatures, stability regressions, schema
 version drift, and missing audit coverage.

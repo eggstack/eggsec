@@ -1,5 +1,9 @@
 # Python API Milestone A — Unified Engine and Operation Model
 
+## Status
+
+Status: Executed.
+
 ## Goal
 
 Create the common execution architecture that turns the existing Python bindings into a coherent Eggsec library. All current convenience functions and future domain bindings should converge on this model.

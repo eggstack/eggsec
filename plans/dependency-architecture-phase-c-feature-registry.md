@@ -2,6 +2,8 @@
 
 ## Status
 
+Status: Executed.
+
 Executed. Changes landed in main.
 
 Phase C is fully implemented. The `feature_registry!` macro in

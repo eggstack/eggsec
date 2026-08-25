@@ -12,7 +12,7 @@ Tools in Eggsec are registered and filtered through multiple independent sources
 |--------|----------|------|---------|
 | `ToolRegistry` | `tool/registry.rs:23` | `FxHashMap<String, Arc<dyn SecurityTool>>` | Runtime tool storage |
 | `create_default_registry()` | `tool/mod.rs:99` | Imperative builder | Populates `ToolRegistry` with 11 base + 3 feature-gated tools |
-| `ALL_OPERATION_METADATA` | `config/policy.rs:1492` | Static slice (33 entries + 42 aliases) | Risk, capabilities, exposure flags per operation |
+| `ALL_OPERATION_METADATA` | `config/policy.rs:1492` | Static slice (31 entries + 42 aliases) | Risk, capabilities, exposure flags per operation |
 | `metadata_for_tool_id()` | `config/policy.rs:2076` | Lookup function | Resolves tool ID → `OperationMetadata` (alias-aware) |
 | `all_domain_descriptors()` | `domain/mod.rs:276` | Static slice (3 domains) | Domain-level tool integration metadata |
 | `ToolMetadataRegistry` | `tool/metadata.rs:82` | Per-tool risk/policy metadata | Supplementary risk metadata (separate from `OperationMetadata`) |

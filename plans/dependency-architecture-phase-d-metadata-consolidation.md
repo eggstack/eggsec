@@ -2,6 +2,8 @@
 
 ## Status
 
+Status: Executed.
+
 Executed. Changes landed in main.
 
 Phase D is fully implemented. `OperationMetadata` in `ALL_OPERATION_METADATA`

@@ -1,5 +1,9 @@
 # Eggsec Python API Release-Closure Plan
 
+## Status
+
+Status: Executed.
+
 > Status: Local closure pass implemented. The stable-core release contract is
 > local `Engine`/`AsyncEngine` only; daemon parity is deferred. TestPyPI upload,
 > multi-platform CI evidence, and manual publication remain external gates.

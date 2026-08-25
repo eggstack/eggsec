@@ -1,5 +1,9 @@
 # Eggsec Python API Completion Roadmap
 
+## Status
+
+Status: Executed.
+
 ## Purpose
 
 This roadmap begins after closure of the scoped Python stable-core release candidate. `eggsec-python` now has a credible execution kernel: ten stable local operations, typed request and payload models, structured errors, policy and audit enforcement, governed events, cancellation, checkpoints, type stubs, wheel validation, and explicit maturity metadata.

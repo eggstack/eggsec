@@ -41,6 +41,10 @@ eggsec proxy-intercept --listen 127.0.0.1:8080 --dry-run --json \
 # Interactive TUI: launch eggsec-tui, navigate to Intercept tab, configure and press Enter
 ```
 
+> **Playbook**: for guided attack/defense exercise patterns (token tampering,
+> session fixation, header manipulation, and more), see
+> [web-proxy-playbook.md](web-proxy-playbook.md).
+
 ## CLI Reference
 
 | Flag | Default | Description |

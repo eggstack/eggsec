@@ -1,6 +1,8 @@
 # WS 6: Daemon Schema Parity — Implementation Plan
 
-## Status: Planning
+## Status
+
+Status: Executed.
 
 ## Architecture Summary
 

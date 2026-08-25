@@ -2,6 +2,8 @@
 
 ## Status
 
+Status: Executed.
+
 Executed. Changes landed in main.
 
 Phase I is fully implemented. `make check` uses package-level Cargo commands

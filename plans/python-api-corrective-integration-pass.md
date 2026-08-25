@@ -1,5 +1,9 @@
 # Eggsec Python API Corrective and Integration Pass
 
+## Status
+
+Status: Executed.
+
 ## Purpose
 
 This plan defines the next corrective pass for `crates/eggsec-python` after implementation of the Python API roadmap milestones A through G.

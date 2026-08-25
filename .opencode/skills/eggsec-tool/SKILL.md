@@ -39,13 +39,18 @@ The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` o
   - Validates via DNS resolution for hostnames
 
 ### Tool Agents (Scheduler)
-`tool/agents/scheduler.rs` - Task scheduling:
+Agent/task scheduling types live in the `eggsec-agent` crate
+(`crates/eggsec-agent/src/scheduler.rs`, `lifecycle.rs`); `tool/mod.rs`
+re-exports them as `eggsec::tool::agents` behind `rest-api` for backward
+compatibility, and REST routes consume them via `tool/protocol/agent_routes.rs`:
+
+`scheduler.rs` - Task scheduling:
 - `TaskStatus` enum: `Pending`, `Leased`, `Completed`, `Failed`, `Cancelled`
 - `next_task()` returns only `Pending` tasks where `scheduled_for <= now`
 - `lease_task()` - marks task as `Leased` with agent and timeout
 - `submit_result()` - transitions `Leased` task to `Completed` or `Failed`
 
-`tool/agents/lifecycle.rs` - Agent lifecycle management:
+`lifecycle.rs` - Agent lifecycle management:
 - `HealthIssue::CallbackUnhealthy(String)` - tracks callback health separately
 - Uses `saturating_sub` for clock skew safety
 - Health checks probe callback URLs before acquiring lock

@@ -43,7 +43,7 @@ Eggsec is a Rust security testing toolkit organized as a Cargo workspace with 16
 | `eggsec-daemon` | Persistent session host (SQLite, Unix socket, optional HTTP) |
 | `eggsec-daemon-protocol` | Daemon IPC protocol types and client registry |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phase A+B+C+D+E completed) |
+| `eggsec-python` | Python bindings (PyO3/maturin; scoped pre-1.0 stable-core, broader domains provisional/experimental; Release 5 Phases A–F complete) |
 
 ## Build & Test Commands
 
@@ -99,8 +99,9 @@ python scripts/release-package-graph.py version-locations # internal version inv
 python scripts/release-package-graph.py package-workspace <target-dir> # Cargo-native archives + JSONL inventory
 python scripts/release-package-graph.py inspect-archive <crate> # archive checks
 python scripts/release-package-graph.py inspect-inventory <inventory> # exact archive/content/standalone checks
-make test                   # unit tests only (default)
+make test                   # unit tests only (default; alias of test-unit)
 make test-ci                # full package tests with rest-api
+make test-nse               # NSE crate tests (feature nse)
 make clippy                 # lint (-D warnings)
 make fmt                    # format check
 make test-feature-matrix    # feature + metadata validation
@@ -108,6 +109,8 @@ make check-no-default       # no-default-features workspace build
 make check-msrv             # MSRV compile check (requires rustup toolchain install 1.88)
 make check-feature-profiles # representative feature profile checks
 make build                  # release build
+make clean                  # remove build artifacts
+make help                   # authoritative target list
 ```
 
 ### Python bindings
@@ -236,7 +239,16 @@ Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/egg
 
 Provisional subsystems (scope-checked, policy-gated, not stable-core): network types (`eggsec.net`, `eggsec.sessions`, `eggsec.storage`), NSE runtime, interception proxy, database assessment. Experimental: raw packet injection (feature: `packet-inspection`). Package layout: stable core at top-level `eggsec`, provisional under `eggsec.net`/`eggsec.sessions`/`eggsec.storage`/`eggsec.reporting`/`eggsec.daemon`, experimental under `eggsec.experimental`. Feature introspection via `eggsec._feature_guard`.
 
-Python extras map 1:1 to engine features (`websocket`, `git-secrets`, `sbom`, `db-pentest*`, `web-proxy`, `mobile`, `mobile-dynamic` → requires `mobile`, `packet-inspection`, `stress-testing`, `nse`, `container`, `headless-browser`, `daemon-client`). Authoritative list lives in `[project.optional-dependencies]` of `crates/eggsec-python/pyproject.toml`; system-dependent ones need libpcap/libssl/wireless-tools/Chromium at build or run time.
+Python pip extras (installable via `pip install eggsec[extra]`) are the subset
+`db-pentest`, `web-proxy`, `mobile`, `mobile-dynamic` (requires `mobile`),
+`packet-inspection`, `stress-testing`, `nse`, `wireless`, `headless-browser`,
+plus the `full-no-system` aggregate (`websocket`, `git-secrets`, `sbom`,
+`container`). The remaining engine features are compile-time Cargo features on
+the binding crate only (build with `maturin develop --features ...`), e.g.
+`daemon-client`, `advanced-hunting`, `compliance`. Authoritative extras list
+lives in `[project.optional-dependencies]` of
+`crates/eggsec-python/pyproject.toml`; system-dependent ones need
+libpcap/libssl/wireless-tools/Chromium at build or run time.
 
 Aggregate: `full-no-system` = all non-system features. Not conservative/production.
 

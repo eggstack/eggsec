@@ -173,12 +173,12 @@ nse-sandbox = []  # Enables SandboxConfig enforcement
 ## Libraries (166 implementations, 43 registry descriptors)
 
 Located in `src/libraries/`:
-- **socket.rs** (703 lines) - TCP/UDP/SCTP sockets with sandbox enforcement
-- **io.rs** (391 lines) - File I/O with path sandboxing
-- **lfs.rs** (379 lines) - LuaFileSystem with path restrictions
-- **os.rs** (316 lines) - OS operations (getenv, setenv, date, exit, etc.)
-- **http.rs** (803 lines) - HTTP client (blocking + async)
-- **vulns.rs** (571 lines) - CVE database with major vulnerabilities
+- **socket.rs** (907 lines) - TCP/UDP/SCTP sockets with sandbox enforcement
+- **io.rs** (482 lines) - File I/O with path sandboxing
+- **lfs.rs** (470 lines) - LuaFileSystem with path restrictions
+- **os.rs** (369 lines) - OS operations (getenv, setenv, date, exit, etc.)
+- **http.rs** (904 lines) - HTTP client (blocking + async)
+- **vulns.rs** (600 lines) - CVE database with major vulnerabilities
 - **dns.rs**, **ssl.rs**, **ssh.rs**, **mysql.rs**, **redis.rs**, **mongodb.rs**, **ldap.rs**, **snmp.rs**, **smb.rs**, etc.
 
 ### Library Registration
@@ -434,9 +434,9 @@ let result = match executor.run_script(script) {
 
 A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
 
-- **Fixtures**: `tests/fixtures/nse_corpus/` — 50 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
+- **Fixtures**: `tests/fixtures/nse_corpus/` — 71 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
 - **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, gap classification, and Phase 04 profile/evidence metadata
-- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 31 data-driven harness tests
+- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests (plus 8 context-fidelity tests in `tests/context_fidelity_tests.rs`)
 
 ```bash
 # Data-driven harness (all fixtures from manifest)

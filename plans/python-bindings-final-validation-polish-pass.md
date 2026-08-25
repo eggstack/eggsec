@@ -1,5 +1,9 @@
 # Python Bindings Final Validation and Polish Pass
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Run the final validation/polish pass for the `eggsec-python` track after the active API scope-enforcement fix. The current shape is good alpha-quality architecture: Python bindings are separated into `crates/eggsec-python`, active APIs now require scope, feature-gated modules are absent by default, docs are honest about experimental status, and CI workflow shape has improved.

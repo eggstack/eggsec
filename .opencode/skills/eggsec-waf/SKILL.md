@@ -57,6 +57,7 @@ pub fn is_bypass_successful(
     detection: &WafDetectionResult,
     payload: &str,
     response_body: &str,
+    response_diff: Option<&ResponseDiff>,
 ) -> bool
 ```
 

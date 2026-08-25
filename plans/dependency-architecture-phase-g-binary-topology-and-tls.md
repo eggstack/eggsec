@@ -2,6 +2,8 @@
 
 ## Status
 
+Status: Executed.
+
 Executed. Changes landed in main.
 
 Phase G is fully implemented. `eggsec-daemon-protocol` is dependency-light

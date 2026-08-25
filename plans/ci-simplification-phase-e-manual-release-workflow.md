@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Planned. This phase removes all package/release mutation from hosted CI and replaces it with a local maintainer-controlled validation and publication procedure.
 
 ## Objective

@@ -1,5 +1,9 @@
 # Eggsec Python API Release 1 — API Convergence
 
+## Status
+
+Status: Executed.
+
 ## Handoff objective
 
 Release 1 converts mature but isolated Python bindings into canonical Eggsec operations and makes the pipeline layer capable of composing the enlarged operation registry.

@@ -1,5 +1,9 @@
 # Eggsec Python API Release 2 — Network Programmability
 
+## Status
+
+Status: Executed.
+
 ## Handoff objective
 
 Release 2 exposes reusable network and protocol primitives so Python users can build custom scanners, probes, protocol assessments, and traffic-analysis workflows on Eggsec internals.

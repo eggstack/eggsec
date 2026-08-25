@@ -181,8 +181,8 @@ See inline tests in:
 - `config/loader.rs` - Config loading, file discovery, TOML/YAML parsing
 - `config/scope.rs` - Scope rule matching, CIDR, wildcard patterns
 - `config/settings.rs` - Validation, defaults
-- `config/policy_decision.rs` - 48 enforcement policy tests (Phase 4 regression coverage for manual discretion invariants)
-- `tests/enforcement_matrix.rs` - 105 cross-surface enforcement matrix tests (Phase 8 dual-mode contract coverage)
+- `config/policy_decision.rs` - 82 enforcement policy tests (Phase 4 regression coverage for manual discretion invariants)
+- `tests/enforcement_matrix.rs` - 169 cross-surface enforcement matrix tests (Phase 8 dual-mode contract coverage)
 
 ## Security Notes
 

@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Executed 2026-08-07. All 17 stale ignores removed. 7 live exceptions documented
 in `docs/DEPENDENCY_EXCEPTIONS.md` with review-by dates. rand upgraded (patch).
 PyO3 and quick-xml major upgrades deferred to Phase H (MSRV/major-version

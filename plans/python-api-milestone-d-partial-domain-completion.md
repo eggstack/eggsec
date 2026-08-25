@@ -1,5 +1,9 @@
 # Python API Milestone D — Complete Partial Domain Bindings
 
+## Status
+
+Status: Executed.
+
 ## Goal
 
 Bring already-bound domains to meaningful parity with their Rust implementations. This milestone focuses on NSE, packet inspection and network probing, interception proxying, mobile dynamic analysis, daemon task execution, and database extensibility.

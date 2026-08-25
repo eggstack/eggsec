@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 **Executed (Phase H supplement).** Dependency upgrades completed:
 - MSRV raised from 1.80 to 1.85 (required for kube 4.x edition 2024)
 - `native-tls` made optional behind `nse` feature in eggsec-nse

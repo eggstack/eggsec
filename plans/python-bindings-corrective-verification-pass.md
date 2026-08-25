@@ -1,5 +1,9 @@
 # Python Bindings Corrective Verification Pass
 
+## Status
+
+Status: Executed.
+
 **Status: Completed**
 
 ## Objective

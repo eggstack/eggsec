@@ -1,5 +1,9 @@
 # Phase C Plan: Async API, Endpoint Discovery, and Service Fingerprinting
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Extend the Python library from a synchronous port-scan MVP into a practical scripting API with asyncio support, client runtime reuse, endpoint discovery, and service fingerprinting.

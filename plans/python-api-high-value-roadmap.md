@@ -1,5 +1,9 @@
 # Eggsec Python API High-Value Roadmap
 
+## Status
+
+Status: Executed.
+
 ## Purpose
 
 This roadmap moves `eggsec-python` from a broad collection of PyO3 wrappers into a coherent, stable, Python-native security assessment framework. Existing bindings already cover many individual tools; the highest-value remaining work is architectural: orchestration, policy, lifecycle, eventing, persistence, and extensibility.

@@ -207,7 +207,6 @@ Complete class and function reference, semantic versioning policy, and
 migration guidance across releases.
 
 - [API Reference](api-reference.md) -- complete class/function reference
-- [API Reference (generated)](api-reference-generated.md) -- auto-generated from registry and stubs
 - [Versioning](versioning.md) -- semver policy, schema management, stability guarantees
 - [Migration Guide](MIGRATION_GUIDE.md) -- upgrade instructions across releases
 

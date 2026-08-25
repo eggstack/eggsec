@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Ready for implementation.
 
 Corrective Phase I fixed the prior false-success branch, restored Python semantic parity, minimized the lockfile, corrected version-bump guidance, and recorded real hosted CI evidence. Post-implementation review found one remaining release-integrity defect: the default release check constructs handwritten tar archives rather than validating Cargo-generated package archives.

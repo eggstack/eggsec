@@ -690,7 +690,7 @@ Milestone 5 Phase 05 is complete. Future work should not reopen report formattin
 Candidates for future milestones:
 
 - TUI rendering implementation (consume `NseRunReport` or `ReportEnvelope` per `nse_report_display_contract.md`)
-- Additional upstream fixtures (currently 39 fixtures; representative coverage)
+- Additional upstream fixtures (currently 71 `.nse`/`.lua` fixtures; representative coverage)
 - Protocol library wrappers (ssh, smb, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
 

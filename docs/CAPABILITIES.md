@@ -28,7 +28,7 @@ All tool execution passes through scope validation and policy enforcement:
 
 ## Reconnaissance Modules
 
-Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence gathering:
+Eggsec includes 28 reconnaissance modules for comprehensive target intelligence gathering:
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -49,6 +49,16 @@ Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence
 | **Contact Discovery** | `crates/eggsec/src/recon/email.rs` | Extracts emails, phone numbers, social media handles (Facebook, Twitter/X, Instagram, LinkedIn, GitHub, YouTube, TikTok), and physical addresses |
 | **Threat Intelligence** | `crates/eggsec/src/recon/threatintel.rs` | Checks VirusTotal, Shodan, and AlienVault OTX for IP/domain reputation, vulnerabilities, and passive DNS |
 | **DNS Enhanced** | `crates/eggsec/src/recon/dns_enhanced.rs` | Advanced DNS enumeration with additional record types and resolution techniques |
+| **API Schema Discovery** | `crates/eggsec/src/recon/api_schema.rs` | Discovers exposed OpenAPI/schema documents at common paths (`/openapi.json`, etc.) |
+| **Container Recon** | `crates/eggsec/src/recon/containers.rs` | Docker/Kubernetes container and cluster security scanning |
+| **Email Security** | `crates/eggsec/src/recon/email_security.rs` | SPF, DKIM, DMARC policy analysis plus MX and STARTTLS checks |
+| **FTP Auth Testing** | `crates/eggsec/src/recon/ftp_auth.rs` | FTP server banner grabbing and authentication testing |
+| **Git Secrets** | `crates/eggsec/src/recon/git_secrets.rs` | Scans Git repository history and files for committed secrets |
+| **Secret Scanning** | `crates/eggsec/src/recon/secrets.rs` | Pattern-based secret detection (API keys, tokens, credentials) |
+| **SMTP Auth Testing** | `crates/eggsec/src/recon/smtp_auth.rs` | SMTP server banner grabbing and authentication testing |
+| **SSH Auth Testing** | `crates/eggsec/src/recon/ssh_auth.rs` | SSH server banner grabbing and limited authentication probing |
+| **SSL Audit** | `crates/eggsec/src/recon/ssl_audit.rs` | TestSSL-style comprehensive TLS/SSL security auditing |
+| **Subdomain Takeover** | `crates/eggsec/src/recon/takeover.rs` | Detects dangling DNS records vulnerable to subdomain takeover |
 | **CVE Lookup** | `crates/eggsec/src/recon/cve_lookup.rs` | Enhanced CVE lookup with detailed vulnerability information |
 
 ---
@@ -89,7 +99,15 @@ Eggsec supports 40 security fuzzing payload types:
 | **Race Condition** | race | `crates/eggsec/src/fuzzer/payloads/race.rs` | Race condition testing |
 | **Mass Assignment** | massassign | `crates/eggsec/src/fuzzer/payloads/mass_assign.rs` | Mass assignment testing |
 | **Out-of-Band Testing** | oast | `crates/eggsec/src/fuzzer/payloads/oast.rs` | Out-of-band application security testing |
-| **CVE Lookup** | cve | `crates/eggsec/src/recon/cve_lookup.rs` | CVE vulnerability testing based on detected technologies |
+| **SAML** | — | `crates/eggsec/src/fuzzer/payloads/saml.rs` | SAML assertion manipulation, signature wrapping, XML injection |
+
+The remaining 10 payload types (`HtmlInject`, `CssInject`, `Ssi`, `DomClobber`,
+`Xslt`, `Viewstate`, `DepConfusion`, `XsLeak`, `Latex`) live in
+`crates/eggsec/src/fuzzer/payloads/<name>.rs` and cover HTML/CSS/SSI injection,
+DOM clobbering, XSLT injection, ViewState deserialization, dependency
+confusion, XS-Leaks, and LaTeX injection. They are selectable programmatically;
+the CLI payload-type parser in `fuzzer/engine/advanced.rs` currently recognizes
+the first 30 types by alias.
 
 ---
 

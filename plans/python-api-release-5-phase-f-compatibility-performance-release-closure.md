@@ -1,5 +1,9 @@
 # Python API Release 5 Phase F — Compatibility, Performance, and Release Closure
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Close Release 5 with enforceable API compatibility, performance/resource budgets, exact-commit evidence, and a domain-by-domain graduation decision. This phase converts the improved architecture into a supportable public contract and prevents future changes from silently breaking Python consumers.

@@ -1,5 +1,9 @@
 # Phase D Plan: Reporting, Passive Recon, and WAF Detection
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Extend the Python bindings from scanner primitives into usable defensive validation workflows by adding findings/reporting, passive recon, and WAF detection. This phase should let users compose scans and produce structured outputs suitable for Python pipelines, dashboards, CI artifacts, and regression testing.

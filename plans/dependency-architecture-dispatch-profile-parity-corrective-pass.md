@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Ready for implementation.
 
 This is a final narrow follow-up to the dependency/architecture simplification

@@ -1,5 +1,9 @@
 # Python API Milestone C — Core Missing Assessment Domains
 
+## Status
+
+Status: Executed.
+
 ## Goal
 
 Expose the highest-value ordinary assessment domains still absent from Python: consolidated reconnaissance, GraphQL, OAuth/OIDC, authentication testing, headless-browser assessment, and advanced hunting. All implementations must use the Milestone A engine model and Milestone B policy model.

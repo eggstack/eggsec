@@ -2,6 +2,8 @@
 
 ## Status
 
+Status: Executed.
+
 Executed. Changes landed in main.
 
 Phase A is fully implemented. `OperationMetadata::try_descriptor_for_target()`

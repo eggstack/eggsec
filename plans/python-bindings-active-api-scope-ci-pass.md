@@ -1,5 +1,9 @@
 # Python Bindings Active API Scope and CI Verification Pass
 
+## Status
+
+Status: Executed.
+
 ## Objective
 
 Complete the remaining stabilization work for `eggsec-python` after the corrective verification pass. The previous pass improved compilation issues, docs honesty, CI artifact selection, feature-gating tests, and release checklist coverage, but the repo still has two release-blocking issues:

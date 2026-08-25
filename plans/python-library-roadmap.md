@@ -1,5 +1,9 @@
 # Eggsec Python Library Roadmap
 
+## Status
+
+Status: Executed.
+
 ## Purpose
 
 This roadmap defines the path for exposing Eggsec as a Python-native library backed by the existing Rust engine. The goal is to let Python users compose Eggsec scans, probes, recon workflows, WAF checks, load tests, findings, reports, and eventually all major Eggsec tools without shelling out to the CLI.

@@ -136,7 +136,7 @@ so removing the `cli` feature no longer hides any pipeline stage.
    LoadTestRunConfig, ReconRequest) — CLI args convert via `From` impls; non-CLI
    consumers construct the plain type directly
 5. **Hash Collections**: Always use `FxHashMap` from `rustc_hash` instead of `std::collections::HashMap`
-6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:63-95` to avoid code duplication
+6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:67` to avoid code duplication
 
 ## Bug Fixes (2026-05-27)
 

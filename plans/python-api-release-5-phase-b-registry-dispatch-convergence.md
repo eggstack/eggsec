@@ -1,5 +1,9 @@
 # Python API Release 5 Phase B — Registry and Dispatch Convergence
 
+## Status
+
+Status: Executed.
+
 > **Status: Executed** — Phase B completed 2026-07-16
 
 ## Objective

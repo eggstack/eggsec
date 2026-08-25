@@ -2,6 +2,8 @@
 
 ## Status
 
+
+Status: Executed.
 Ready for implementation. This phase reopens the CI/manual-release simplification closure only for the narrow defects identified after Corrective Phases G and H.
 
 Corrective Phase H is accepted as structurally complete. The compact workflow and Make command surface must be preserved. The remaining work is confined to release-validation integrity, one Python parity-test regression, lockfile review, version-bump correctness, and truthful closure evidence.

@@ -32,11 +32,11 @@ The evasion module (`crates/eggsec/src/evasion/`) validates that security contro
 | Component | File | Purpose |
 |-----------|------|---------|
 | `EvasionScanner` | `evasion/mod.rs:122` | Main scanner: `new(dry_run)`, `scan(&target)`, `techniques()` |
-| `EvasionReport` | `evasion/mod.rs:105` | Full report: target, detections, summary, timestamp, dry_run |
-| `EvasionDetection` | `evasion/mod.rs:96` | Per-technique: technique, detected, confidence, evidence, recommendations |
-| `EvasionTechnique` | `evasion/mod.rs:46` | Definition: id, name, mitre_id, category, risk_level, description |
-| `EvasionTarget` | `evasion/mod.rs:17` | Scan input: target_type, path, pid |
-| `to_scan_report_data()` | `evasion/mod.rs:710` | Bridge to unified `ScanReportData` |
+| `EvasionReport` | `evasion/mod.rs:106` | Full report: target, detections, summary, timestamp, dry_run |
+| `EvasionDetection` | `evasion/mod.rs:97` | Per-technique: technique, detected, confidence, evidence, recommendations |
+| `EvasionTechnique` | `evasion/mod.rs:47` | Definition: id, name, mitre_id, category, risk_level, description |
+| `EvasionTarget` | `evasion/mod.rs:18` | Scan input: target_type, path, pid |
+| `to_scan_report_data()` | `evasion/mod.rs:788` | Bridge to unified `ScanReportData` |
 
 ## Features
 

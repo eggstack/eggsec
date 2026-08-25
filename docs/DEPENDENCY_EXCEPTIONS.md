@@ -32,7 +32,7 @@ Every retained advisory ignore must include:
 | API used | No — fxhash is an internal hash map, not exposed |
 | Exploitability | Low — unmaintained, not a vulnerability |
 | Compensating control | None needed; no known security impact |
-| Owner | eggsec-scanner / eggsec-nse |
+| Owner | eggsec (scanner) / eggsec-nse |
 | Created | 2025-07-01 |
 | Review-by | 2026-11-07 |
 | Blocker | scraper v0.22+ must drop fxhash dependency; no alternative available |
