@@ -61,19 +61,19 @@ This enables testing without network access using fake resolvers.
 ### Basic SSRF Test
 
 ```bash
-eggsec fuzz --target https://example.com/fetch?url=test --type ssrf
+eggsec fuzz "https://example.com/fetch?url=test" -t ssrf
 ```
 
 ### Cloud Metadata Test
 
 ```bash
-eggsec fuzz --target https://example.com/proxy?url=http://169.254.169.254 --type ssrf
+eggsec fuzz "https://example.com/proxy?url=http://169.254.169.254" -t ssrf
 ```
 
 ### Internal Service Scan
 
 ```bash
-eggsec fuzz --target https://example.com/url?u=http://localhost: --type ssrf
+eggsec fuzz "https://example.com/url?u=http://localhost:" -t ssrf
 ```
 
 ## Payloads Reference

@@ -85,23 +85,23 @@ After installation, create a configuration file:
 mkdir -p ~/.config/eggsec
 ```
 
-Example `~/.config/eggsec/config.toml`:
+Config discovery order: explicit `-c` path, then `./eggsec.toml`,
+`./.eggsec/eggsec.toml`, `./config/eggsec.toml`, `~/.config/eggsec/eggsec.toml`.
+
+Example `~/.config/eggsec/eggsec.toml` (or generate a template with `eggsec --generate-config`):
 
 ```toml
-[target]
-hosts = ["example.com"]
+[http]
+timeout_secs = 30
+verify_tls = true
 
 [scan]
-timeout = 30
-concurrency = 100
-
-[fuzz]
-rate_limit = 100
-payload_count = 1000
+default_concurrency = 100
+rate_limit_per_second = 100
 
 [output]
 format = "json"
-path = "./reports"
+color = true
 
 # Optional: AI integration
 [ai]
@@ -122,21 +122,22 @@ eggsec --version
 eggsec --help
 
 # Run a basic recon scan
-eggsec recon --target example.com --dns
+eggsec recon example.com
 ```
 
 ## Running Tests
 
+Integration tests live in the engine crate (`eggsec`), not the binary shell:
+
 ```bash
-# Library tests
-cargo test --lib -p eggsec-cli
+# Engine lib tests
+make test   # cargo test --lib -p eggsec
 
-# Integration tests
-cargo test --test scanner_tests -p eggsec-cli
-cargo test --test negative_tests -p eggsec-cli
+# Full package suite (includes integration tests, needs rest-api)
+make test-ci
 
-# All tests
-cargo test -p eggsec-cli
+# Architecture guards + formatting/lint
+make check
 ```
 
 ## Linting
@@ -158,5 +159,5 @@ rustup update stable
 
 The `stress-testing` feature uses raw sockets which require elevated privileges:
 ```bash
-sudo ./target/release/eggsec scan ports --target 192.168.1.1 --spoof
+sudo ./target/release/eggsec scan-ports 192.168.1.1 --source-ip 10.0.0.1
 ```

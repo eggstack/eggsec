@@ -38,19 +38,19 @@ Path traversal testing finds vulnerabilities that allow unauthorized file system
 ### Basic LFI Test
 
 ```bash
-eggsec fuzz --target https://example.com/file?page=1 --type path-traversal
+eggsec fuzz "https://example.com/file?page=1" -t path-traversal
 ```
 
 ### With Known Path
 
 ```bash
-eggsec fuzz --target https://example.com/include?file= --type path-traversal
+eggsec fuzz "https://example.com/include?file=" -t path-traversal
 ```
 
 ### Test Null Byte Injection
 
 ```bash
-eggsec fuzz --target https://example.com/image?img=1.jpg --type path-traversal
+eggsec fuzz "https://example.com/image?img=1.jpg" -t path-traversal
 ```
 
 ## Payloads Reference

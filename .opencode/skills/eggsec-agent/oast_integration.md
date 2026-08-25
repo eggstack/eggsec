@@ -60,17 +60,16 @@ pub struct OastResult {
 
 ## Usage
 
-### CLI Usage
+### Usage
+
+OAST is exposed as a tool implementation (`tool/implementations/oast.rs`),
+not a dedicated CLI subcommand. Blind-callback testing from the CLI uses the
+`oast` payload type, which embeds correlation callbacks into fuzz payloads:
 
 ```bash
-# Start OAST listener
-eggsec oast --server interactsh.com --port 443
-
-# Test for blind SSRF
-eggsec fuzz --target http://example.com --oast --callback-url http://attacker.com
-
-# Test for blind XSS
-eggsec fuzz --target http://example.com --oast --blind-xss
+# Fuzz with OAST-backed payloads (blind SSRF/blind XSS detection)
+eggsec fuzz "http://example.com/fetch?url=" -t oast
+eggsec fuzz "http://example.com/search?q=" -t oast,xss
 ```
 
 ### API Usage

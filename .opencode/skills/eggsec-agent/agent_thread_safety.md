@@ -21,7 +21,7 @@ The autonomous security agent modules require thread-safe interior mutability si
 
 ## AlertRouter Thread Safety
 
-`agent/alerts.rs` uses `Arc<Mutex<>>` for all internal state:
+`agent/alerts/mod.rs` + `agent/alerts/routing.rs` uses `Arc<Mutex<>>` for all internal state:
 
 ```rust
 pub struct AlertRouter {
@@ -111,6 +111,6 @@ Keywords: thread safety, AlertRouter, TargetPortfolio, LongitudinalMemory, Arc<M
 
 ## References
 
-- `crates/eggsec/src/agent/alerts.rs` - AlertRouter implementation
+- `crates/eggsec/src/agent/alerts/` - AlertRouter implementation (`mod.rs`, `routing.rs`)
 - `crates/eggsec/src/agent/portfolio.rs` - TargetPortfolio implementation
 - `crates/eggsec/src/agent/memory.rs` - LongitudinalMemory implementation

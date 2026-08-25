@@ -39,13 +39,13 @@ Command injection testing discovers vulnerabilities where user input is passed t
 ### Basic Command Injection Test
 
 ```bash
-eggsec fuzz --target https://example.com/ping?host=127.0.0.1 --type command-injection
+eggsec fuzz "https://example.com/ping?host=127.0.0.1" -t command-injection
 ```
 
 ### With Specific Payloads
 
 ```bash
-eggsec fuzz --target https://example.com/shell?cmd=ls --type command-injection
+eggsec fuzz "https://example.com/shell?cmd=ls" -t command-injection
 ```
 
 ## Payloads Reference

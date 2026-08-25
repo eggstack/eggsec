@@ -40,26 +40,18 @@ Tab navigation:
 
 ### 1. Reconnaissance
 
-Passive information gathering about targets:
+Passive information gathering about targets (single `recon` command; skip stages with `--no-*` flags):
 
 ```bash
-# DNS enumeration
-eggsec recon dns --target example.com
+# Full recon suite (13 parallel tasks)
+eggsec recon example.com
 
-# Subdomain discovery
-eggsec recon subdomains --target example.com
+# Skip specific stages
+eggsec recon https://example.com --no-tech --no-geo --no-wayback
 
-# SSL/TLS analysis
-eggsec recon ssl --target https://example.com
-
-# WHOIS lookup
-eggsec recon whois --target example.com
-
-# Technology detection
-eggsec recon tech --target https://example.com
-
-# Full recon suite
-eggsec recon --target example.com --all
+# Other useful skips: --no-dns, --no-subdomains, --no-ssl,
+# --no-whois, --no-js, --no-content, --no-cloud, --no-cors,
+# --no-threat, --no-cve, --no-dns-records
 ```
 
 ### 2. Port Scanning
@@ -67,17 +59,14 @@ eggsec recon --target example.com --all
 Network discovery and service fingerprinting:
 
 ```bash
-# Basic port scan
-eggsec scan ports --target 192.168.1.1
+# Basic port scan (default range 1-1024)
+eggsec scan-ports 192.168.1.1
 
-# Full port range scan
-eggsec scan ports --target 192.168.1.1 --ports 1-65535
+# Custom port range
+eggsec scan-ports 192.168.1.1 -p 1-65535
 
-# Service version detection
-eggsec scan ports --target 192.168.1.1 --service-detect
-
-# With IP spoofing (feature-gated)
-eggsec scan ports --target 192.168.1.1 --spoof-ip 10.0.0.1
+# With IP spoofing (stress-testing feature, Unix only)
+eggsec scan-ports 192.168.1.1 --source-ip 10.0.0.1
 ```
 
 ### 3. Endpoint Discovery
@@ -85,89 +74,87 @@ eggsec scan ports --target 192.168.1.1 --spoof-ip 10.0.0.1
 Finding web application endpoints:
 
 ```bash
-# Discover endpoints
-eggsec scan endpoints --target https://example.com
+# Discover endpoints (347 built-in paths)
+eggsec scan-endpoints https://example.com
 
 # With custom wordlist
-eggsec scan endpoints --target https://example.com --wordlist paths.txt
+eggsec scan-endpoints https://example.com --wordlist paths.txt
 ```
 
 ### 4. Fuzzing
 
-Security payload testing across 40 payload types:
+Security payload testing across 40 payload types (URL is positional; `-t` selects types):
 
 ```bash
 # SQL injection fuzzing
-eggsec fuzz --target https://example.com/api --type sqli
+eggsec fuzz "https://example.com/api?id=1" -t sqli
 
 # XSS fuzzing
-eggsec fuzz --target https://example.com/search --type xss
+eggsec fuzz "https://example.com/search?q=test" -t xss
 
-# Path traversal
-eggsec fuzz --target https://example.com/file --type traversal
+# Multiple types
+eggsec fuzz "https://example.com/fetch?url=" -t ssrf,redirect
 
-# SSRF testing
-eggsec fuzz --target https://example.com/fetch --type ssrf
-
-# All payload types
-eggsec fuzz --target https://example.com --type all
+# All payload types (default)
+eggsec fuzz "https://example.com/page?x=1"
 ```
 
-Available payload types: sqli, xss, traversal, ssrf, redirect, redos, headers, compression, graphql, oauth, jwt, idor, ssti, grpc, xxe, ldap, cmd, deser, host, cache, csv, soap, websocket, nosql, xpath, expression, prototype, race, massassign, oast
+All 40 payload types: sqli, xss, traversal, ssrf, redirect, redos, headers, compression, graphql, oauth, jwt, idor, ssti, grpc, xxe, ldap, cmd, deser, host, cache, csv, soap, websocket, nosql, xpath, expression, prototype, race, massassign, oast, saml, htmlinject, cssinject, ssi, domclobber, xslt, viewstate, depconfusion, xsleak, latex
 
-Note: `traversal` is the correct type name for path traversal (not `path-traversal`).
+Note: `traversal` is the correct type name for path traversal (not `path-traversal`). The fuzz URL must contain the parameter(s) to test.
 
 ### 5. WAF Detection & Bypass
 
 ```bash
-# Detect WAF
-eggsec waf detect --target https://example.com
+# Detect WAF only
+eggsec waf https://example.com -d
 
-# Attempt bypass
-eggsec waf bypass --target https://example.com --waf cloudflare
+# Detection + evasion-resistance testing
+eggsec waf https://example.com -b
 ```
 
 ### 6. Load Testing
 
 ```bash
-# HTTP load test
-eggsec load --target https://example.com --requests 10000 --concurrency 100
+# HTTP load test (-n requests, -c concurrency)
+eggsec load https://example.com -n 10000 -c 100
 
-# Rate limit testing
-eggsec load --target https://example.com/api --rate-limit-test
+# Rate limiting
+eggsec load https://example.com/api -n 5000 --rate-limit 50
 ```
 
 ### 7. Pipeline Mode
 
-Run comprehensive security assessments:
+Run comprehensive security assessments with the `scan` command and a profile:
 
 ```bash
-# Full pipeline: recon -> scan -> fuzz -> report
-eggsec pipeline --target https://example.com --output report.json
+# Quick profile: port scan + fingerprint
+eggsec scan example.com --profile quick
 
-# With scope rules
-eggsec pipeline --target https://example.com --scope "*.example.com" --output report.json
+# Full pipeline with output
+eggsec scan example.com --profile full --json -o report.json
+
+# With explicit scope file + hard enforcement
+eggsec scan example.com --profile quick --scope scope.toml --strict-scope
 ```
 
 ## Configuration
 
-Configuration uses TOML format. Default location: `~/.config/eggsec/eggsec.toml`
+Configuration uses TOML format. Discovery order: `./eggsec.toml`, `./.eggsec/eggsec.toml`, `./config/eggsec.toml`, then `~/.config/eggsec/eggsec.toml` (explicit `-c` path wins).
 
 ```toml
-[target]
-hosts = ["example.com"]
+[http]
+timeout_secs = 30
+max_retries = 2
+verify_tls = true
 
 [scan]
-timeout = 30
-concurrency = 100
-
-[fuzz]
-rate_limit = 100
-payload_count = 1000
+default_concurrency = 100
+rate_limit_per_second = 100
 
 [output]
-format = "json"
-path = "./reports"
+format = "json"        # pretty | json | compact | html | sarif | junit | csv | markdown
+color = true
 
 [ai]
 provider = "openai"
@@ -176,49 +163,56 @@ base_url = "https://api.openai.com/v1"
 # api_key = "sk-..."  # Use SensitiveString, zeroized on drop
 max_tokens = 4096
 temperature = 0.7
+
+[remote]
+# psk = "..."         # SensitiveString; required for distributed workers
+default_port = 7890
 ```
+
+Generate a fully commented template with `eggsec --generate-config > eggsec.toml`.
 
 ## Output Formats
 
-Eggsec supports multiple report formats:
+Eggsec supports multiple report formats (`--format`, `-o/--output`):
 
 ```bash
 # Pretty (default, human-readable)
-eggsec pipeline --target https://example.com --format pretty
+eggsec scan example.com --profile quick
 
 # JSON report
-eggsec pipeline --target https://example.com --format json --output report.json
-
-# Compact
-eggsec pipeline --target https://example.com --format compact --output report.txt
+eggsec scan example.com --profile quick --json -o report.json
 
 # HTML report
-eggsec pipeline --target https://example.com --format html --output report.html
+eggsec scan example.com --profile quick --format html -o report.html
 
 # SARIF (for GitHub code scanning)
-eggsec pipeline --target https://example.com --format sarif --output results.sarif
+eggsec scan example.com --profile quick --format sarif -o results.sarif
 
 # JUnit XML (for CI/CD)
-eggsec pipeline --target https://example.com --format junit --output results.xml
+eggsec scan example.com --profile quick --format junit -o results.xml
 ```
 
 ## Severity Levels
 
-Findings are rated using the canonical Severity enum:
+Findings are rated using the canonical Severity enum (`eggsec-core::types`):
 
-- **CRITICAL** - Immediate exploitation possible (as_int: 5)
-- **HIGH** - Significant security impact (as_int: 4)
-- **MEDIUM** - Moderate risk (as_int: 3)
-- **LOW** - Minor security concern (as_int: 2)
-- **INFO** - Informational finding (as_int: 1)
+- **CRITICAL** - Immediate exploitation possible (as_int: 4)
+- **HIGH** - Significant security impact (as_int: 3)
+- **MEDIUM** - Moderate risk (as_int: 2)
+- **LOW** - Minor security concern (as_int: 1)
+- **INFO** - Informational finding, the default (as_int: 0)
 
 ## API Server
 
-When built with `--features rest-api`, Eggsec exposes a REST API:
+When built with `--features rest-api`, Eggsec exposes a REST API (command: `serve`; MCP server: `mcp-serve`):
 
 ```bash
 # Start API server
-eggsec api --port 8080
+eggsec serve --port 8080 --bind 127.0.0.1
+
+# Start MCP server
+eggsec mcp-serve --port 8081
+```
 
 # Available endpoints:
 # GET  /health
@@ -268,20 +262,20 @@ POST /api/v1/ai/validate-config - Validate AI configuration
 
 ## Scope Rules
 
-Always respect scope boundaries:
+Always respect scope boundaries (scope file + CLI target):
 
 ```bash
-# Single target
-eggsec scan --target example.com
+# Single target with explicit scope
+eggsec scan example.com --scope scope.toml
 
-# Wildcard scope (includes apex domain)
-eggsec scan --target "*.example.com"
+# Wildcard scope pattern inside scope.toml (includes apex domain)
+# allowed_targets = [{ pattern = "*.example.com" }]
 
-# Multiple targets
-eggsec scan --target example.com --target api.example.com
+# CIDR scope inside scope.toml
+# allowed_targets = [{ cidr = "192.168.1.0/24" }]
 
-# IP scope
-eggsec scan --target 192.168.1.0/24
+# Hard enforcement (reject instead of warn)
+eggsec scan example.com --scope scope.toml --strict-scope
 ```
 
 ## Best Practices

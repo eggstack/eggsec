@@ -38,19 +38,19 @@ WAF detection identifies protective firewalls and their rules. Bypass techniques
 ### Detect WAF
 
 ```bash
-eggsec waf detect --target https://example.com
+eggsec waf https://example.com -d
 ```
 
 ### Bypass Testing
 
 ```bash
-eggsec waf bypass --target https://example.com --waf cloudflare
+eggsec waf https://example.com -b
 ```
 
 ### Full WAF Assessment
 
 ```bash
-eggsec waf stress --target https://example.com --payload-type sqli
+eggsec waf-stress https://example.com
 ```
 
 ## WAF Fingerprints

@@ -14,13 +14,14 @@ Reconnaissance module workflows and patterns for information gathering.
 The full recon pipeline runs 13 tasks in parallel via `tokio::join!`:
 ```
 reverse_dns, geolocation, threat_intel, ssl, whois, subdomain_enum,
-dns_records, tech_detection, js_analysis, wayback_check, cloud_detection,
-content_analysis, cors_check, email_discovery
+dns_records, tech_detection, js_analysis, wayback_check,
+content_analysis, cors_check, email_security
 ```
 
 Sequential dependencies:
 - Takeover check runs after subdomain enumeration
 - CVE mapping runs after tech detection
+- Cloud asset enumeration (`run_cloud_detection`, `cloud` feature) runs sequentially after the join block
 
 ### Module Structure (src/recon/)
 

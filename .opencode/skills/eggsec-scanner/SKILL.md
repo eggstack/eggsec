@@ -16,7 +16,7 @@ Port scanning and endpoint discovery module workflows and patterns.
 ### Endpoint Discovery (`scanner/endpoints.rs`, `scanner/wordlist.rs`)
 - `EndpointScanConfig`, `EndpointResult`, `EndpointScanResults`
 - `Wordlist` - validated wordlist parsing with normalization and error checking
-- 223 built-in endpoint paths
+- 347 built-in endpoint paths (`DEFAULT_ENDPOINTS`)
 
 ### Fingerprinting (`scanner/fingerprint.rs`, `scanner/udp_fingerprint.rs`)
 - `ServiceFingerprint`, `fingerprint_services()`, `fingerprint_udp_services()`
@@ -34,8 +34,8 @@ Port scanning and endpoint discovery module workflows and patterns.
 
 | Command | Handler | Key Args |
 |---------|---------|----------|
-| `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--spoof-ip`, `--decoy` |
-| `scan-endpoints <url>` | `handle_scan_endpoints()` | `--wordlist`, `--spoof-ip`, `--concurrency` |
+| `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--source-ip`, `--decoy` |
+| `scan-endpoints <url>` | `handle_scan_endpoints()` | `--wordlist`, `--source-ip`, `--concurrency` |
 | `fingerprint <host>` | `handle_fingerprint()` | `--ports`, `--timeout` |
 
 ## Critical Patterns

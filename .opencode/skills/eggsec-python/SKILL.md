@@ -162,8 +162,8 @@ cargo test -p eggsec-python
 # Policy equivalence tests (Milestone B)
 pytest crates/eggsec-python/tests/test_policy_equivalence.py
 
-# Release-closure validation from the workspace root
-bash scripts/validate_python_release_candidate.sh
+# Unified release-closure validation from the workspace root
+make check-python
 ```
 
 The release fixture suite covers all twenty-two stable operations using managed

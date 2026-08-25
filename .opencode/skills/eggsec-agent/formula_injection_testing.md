@@ -62,19 +62,19 @@ Name,Value,Description
 ### Test CSV Export Endpoint
 
 ```bash
-eggsec fuzz --target https://example.com/api/export --type csv --param query
+eggsec fuzz "https://example.com/api/export" -t csv --param query
 ```
 
 ### Test XML Export for XXE
 
 ```bash
-eggsec fuzz --target https://example.com/api/data.xml --type xxe
+eggsec fuzz "https://example.com/api/data.xml" -t xxe
 ```
 
 ### Custom Formula Payloads
 
 ```bash
-eggsec fuzz --target https://example.com/export.csv --payloads ./formula_payloads.txt
+eggsec fuzz "https://example.com/export.csv"
 ```
 
 ## Triggers

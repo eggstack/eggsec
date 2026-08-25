@@ -41,27 +41,27 @@ Endpoint discovery finds hidden paths, directories, and files on web servers. Th
 ### Basic Endpoint Scan
 
 ```bash
-eggsec scan endpoints --target https://example.com
+eggsec scan-endpoints https://example.com
 ```
 
 ### With Custom Wordlist
 
 ```bash
-eggsec scan endpoints --target https://example.com --wordlist /path/to/paths.txt
+eggsec scan-endpoints https://example.com --wordlist /path/to/paths.txt
 ```
 
 The wordlist is a plain text file with one endpoint per line. Lines starting with `#` are treated as comments. Paths are automatically normalized to start with `/`.
 
-### PHP Extension Scan
+### Concurrency Tuning
 
 ```bash
-eggsec scan endpoints --target https://example.com --extensions php,asp,aspx,jsp
+eggsec scan-endpoints https://example.com --concurrency 50
 ```
 
-### API Endpoint Discovery
+### Include 404 Responses
 
 ```bash
-eggsec scan endpoints --target https://api.example.com --api
+eggsec scan-endpoints https://example.com --include-404
 ```
 
 ## Common Paths Reference

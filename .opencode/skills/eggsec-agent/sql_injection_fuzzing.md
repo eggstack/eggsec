@@ -38,25 +38,25 @@ SQL injection testing discovers vulnerabilities where user input is incorporated
 ### Basic SQLi Test
 
 ```bash
-eggsec fuzz --target https://example.com/api/user?id=1 --type sqli
+eggsec fuzz "https://example.com/api/user?id=1" -t sqli
 ```
 
 ### Test All Parameters
 
 ```bash
-eggsec fuzz --target https://example.com/search --type sqli --all-params
+eggsec fuzz "https://example.com/search" -t sqli
 ```
 
 ### With Custom Payloads
 
 ```bash
-eggsec fuzz --target https://example.com/api --type sqli --payloads /path/to/payloads.txt
+eggsec fuzz "https://example.com/api" -t sqli
 ```
 
 ### Blind Boolean Testing
 
 ```bash
-eggsec fuzz --target https://example.com/profile?id=1 --type sqli --blind
+eggsec fuzz "https://example.com/profile?id=1" -t sqli
 ```
 
 ## Payloads Reference
@@ -105,9 +105,7 @@ Keywords: sqli, sql, injection, database, union, select, error, blind, boolean, 
 
 ## Configuration
 
-```toml
-[fuzz]
-sqli_timeout = 30
-sqli_retries = 3
-blind_threshold = 5
-```
+There is no `[fuzz]` config section. Fuzz behavior is controlled per-run via
+CLI flags (`--mode sequential|burst|adaptive`, `--mutate`, `--param <name>`,
+`--concurrency`, `--timeout`) or pipeline profiles. HTTP client settings
+(retries, timeouts) live under `[http]`.

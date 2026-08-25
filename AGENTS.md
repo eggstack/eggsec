@@ -301,37 +301,39 @@ Key checks:
 
 See `docs/CI_ARCHITECTURE_GUARDS.md` for the full inventory.
 
-## Module Override Files
+## Module Index
 
-Each module has specialized guidance in `AGENTS.override.md`. When working in a module, load the relevant override:
+Each engine module has specialized guidance in an `AGENTS.override.md`, a deep-dive doc under `architecture/`, and usually a loadable skill. Load all three when working in a module:
 
-| Module | File |
-|--------|------|
-| `agent/` | `crates/eggsec/src/agent/AGENTS.override.md` |
-| `ai/` | `crates/eggsec/src/ai/AGENTS.override.md` |
-| `fuzzer/` | `crates/eggsec/src/fuzzer/AGENTS.override.md` |
-| `scanner/` | `crates/eggsec/src/scanner/AGENTS.override.md` |
-| `tui/` | `crates/eggsec-tui/src/AGENTS.override.md` |
-| `waf/` | `crates/eggsec/src/waf/AGENTS.override.md` |
-| `recon/` | `crates/eggsec/src/recon/AGENTS.override.md` |
-| `tool/` | `crates/eggsec/src/tool/AGENTS.override.md` |
-| `config/` | `crates/eggsec/src/config/AGENTS.override.md` |
-| `output/` | `crates/eggsec/src/output/AGENTS.override.md` |
-| `proxy/` | `crates/eggsec/src/proxy/AGENTS.override.md` |
-| `stress/` | `crates/eggsec/src/stress/AGENTS.override.md` |
-| `distributed/` | `crates/eggsec/src/distributed/AGENTS.override.md` |
-| `packet/` | `crates/eggsec/src/packet/AGENTS.override.md` |
-| `loadtest/` | `crates/eggsec/src/loadtest/AGENTS.override.md` |
-| `mobile/` | `crates/eggsec/src/mobile/AGENTS.override.md` |
-| `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` |
-| `nse/` | `crates/eggsec-nse/AGENTS.override.md` |
-| `container/` | `crates/eggsec/src/container/AGENTS.override.md` |
-| `db_pentest/` | `crates/eggsec/src/db_pentest/AGENTS.override.md` |
-| `wireless/` | `crates/eggsec/src/wireless/AGENTS.override.md` |
-| `evasion/` | `crates/eggsec/src/evasion/AGENTS.override.md` |
-| `c2/` | `crates/eggsec/src/c2/AGENTS.override.md` |
-| `postex/` | `crates/eggsec/src/postex/AGENTS.override.md` |
-| `eggsec-python/` | `crates/eggsec-python/AGENTS.override.md` |
+| Module | Override file | Architecture doc | Skill |
+|--------|---------------|------------------|-------|
+| `agent/` | `crates/eggsec/src/agent/AGENTS.override.md` | `architecture/ai_agents.md` | `eggsec-agent` |
+| `ai/` | `crates/eggsec/src/ai/AGENTS.override.md` | `architecture/ai_agents.md` | `eggsec-ai` |
+| `fuzzer/` | `crates/eggsec/src/fuzzer/AGENTS.override.md` | `architecture/fuzzer.md` | `eggsec-fuzzer` |
+| `scanner/` | `crates/eggsec/src/scanner/AGENTS.override.md` | `architecture/scanner.md` | `eggsec-scanner` |
+| TUI | `crates/eggsec-tui/src/AGENTS.override.md` | `architecture/tui.md` | `eggsec-tui` |
+| `waf/` | `crates/eggsec/src/waf/AGENTS.override.md` | `architecture/waf.md` | `eggsec-waf` |
+| `recon/` | `crates/eggsec/src/recon/AGENTS.override.md` | `architecture/recon.md` | `eggsec-recon` |
+| `tool/` | `crates/eggsec/src/tool/AGENTS.override.md` | `architecture/dispatch.md`, `docs/TOOL_REGISTRATION.md` | `eggsec-tool` |
+| `config/` | `crates/eggsec/src/config/AGENTS.override.md` | `architecture/config.md` | `eggsec-config` |
+| `output/` | `crates/eggsec/src/output/AGENTS.override.md` | `architecture/output.md` | `eggsec-output` |
+| `proxy/` | `crates/eggsec/src/proxy/AGENTS.override.md` | `architecture/web_proxy.md` | `eggsec-proxy` |
+| `stress/` | `crates/eggsec/src/stress/AGENTS.override.md` | `architecture/stress.md` | `eggsec-stress` |
+| `distributed/` | `crates/eggsec/src/distributed/AGENTS.override.md` | `architecture/distributed.md` | `eggsec-distributed` |
+| `packet/` | `crates/eggsec/src/packet/AGENTS.override.md` | `architecture/networking.md` | `eggsec-packet` |
+| `loadtest/` | `crates/eggsec/src/loadtest/AGENTS.override.md` | `architecture/loadtest.md` | `eggsec-loadtest` |
+| `mobile/` | `crates/eggsec/src/mobile/AGENTS.override.md` | `architecture/mobile.md` | `eggsec-mobile` |
+| `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` | `architecture/pipeline.md` | `eggsec-pipeline` |
+| NSE | `crates/eggsec-nse/AGENTS.override.md` | `architecture/nse_integration.md` | `eggsec-nse` |
+| `container/` | `crates/eggsec/src/container/AGENTS.override.md` | `architecture/container.md` | `eggsec-container` |
+| `db_pentest/` | `crates/eggsec/src/db_pentest/AGENTS.override.md` | `architecture/database_pentest.md` | `eggsec-db-pentest` |
+| `wireless/` | `crates/eggsec/src/wireless/AGENTS.override.md` | `architecture/wireless.md` | `eggsec-wireless` |
+| `evasion/` | `crates/eggsec/src/evasion/AGENTS.override.md` | `architecture/evasion.md` | `eggsec-evasion` |
+| `c2/` | `crates/eggsec/src/c2/AGENTS.override.md` | `architecture/c2.md` | `eggsec-c2` |
+| `postex/` | `crates/eggsec/src/postex/AGENTS.override.md` | `architecture/postex.md` | `eggsec-postex` |
+| `eggsec-python/` | `crates/eggsec-python/AGENTS.override.md` | `architecture/python_api.md` | `eggsec-python` |
+
+Cross-cutting skills without a single owning module: `eggsec-security` (end-user capability tour), `eggsec-cli` (command dispatch patterns), `eggsec-daemon` (daemon/runtime/runtime_bridge crates), `eggsec-architecture-review` (doc-vs-code review methodology), plus per-module testing skills (`eggsec-auth`, `eggsec-browser`, `eggsec-hunt`).
 
 ## Dependency Ownership
 
@@ -363,7 +365,7 @@ Manual grouped updates are acceptable for this repository's size. Dependabot/Ren
 Canonical references live in `docs/` and `architecture/` directories. Key entry points:
 
 - `docs/ARCHITECTURE.md` — workspace ownership, enforcement model, execution flows
-- `docs/ARCHITECTURE_INVARIANTS.md` — 41 normative invariants
+- `docs/ARCHITECTURE_INVARIANTS.md` — 39 normative invariants
 - `docs/FEATURE_MATRIX.md` — feature inventory, naming, build profiles
 - `docs/ENFORCEMENT_MODES.md` — dual-mode enforcement contract
 - `docs/COMMAND_REGISTRY.md` — command registry inventory and dispatch
@@ -381,9 +383,11 @@ Canonical references live in `docs/` and `architecture/` directories. Key entry 
 
 ## Skills
 
-Load relevant skills via the `skill` tool when working in specific domains. Skills are in `.opencode/skills/` (also mirrored in `.skills/`, `.claude/skills/`, `.agents/skills/` for other agent platforms):
+Load relevant skills via the `skill` tool when working in specific domains. The canonical skills directory is `.opencode/skills/`; `.skills/`, `.claude/skills/`, and `.agents/skills/` are symlinks to it (update skills in one place, all platforms see them):
 
-`eggsec-agent`, `eggsec-ai`, `eggsec-architecture-review`, `eggsec-auth`, `eggsec-browser`, `eggsec-cli`, `eggsec-config`, `eggsec-distributed`, `eggsec-evasion`, `eggsec-fuzzer`, `eggsec-hunt`, `eggsec-loadtest`, `eggsec-nse`, `eggsec-output`, `eggsec-packet`, `eggsec-pipeline`, `eggsec-proxy`, `eggsec-python`, `eggsec-recon`, `eggsec-scanner`, `eggsec-security`, `eggsec-stress`, `eggsec-tool`, `eggsec-tui`, `eggsec-waf`
+`eggsec-agent`, `eggsec-ai`, `eggsec-architecture-review`, `eggsec-auth`, `eggsec-browser`, `eggsec-c2`, `eggsec-cli`, `eggsec-config`, `eggsec-container`, `eggsec-daemon`, `eggsec-db-pentest`, `eggsec-distributed`, `eggsec-evasion`, `eggsec-fuzzer`, `eggsec-hunt`, `eggsec-loadtest`, `eggsec-mobile`, `eggsec-nse`, `eggsec-output`, `eggsec-packet`, `eggsec-pipeline`, `eggsec-postex`, `eggsec-proxy`, `eggsec-python`, `eggsec-recon`, `eggsec-scanner`, `eggsec-security`, `eggsec-stress`, `eggsec-tool`, `eggsec-tui`, `eggsec-waf`, `eggsec-wireless`
+
+See the Module Index table above for the module-to-skill mapping.
 
 ## Planning Notes
 

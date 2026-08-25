@@ -32,34 +32,21 @@ Subdomain enumeration reveals hidden attack surfaces that may be less protected 
 
 ## Usage
 
-### Basic Subdomain Enumeration
+Subdomain enumeration is a stage of the single `recon` command (no subcommands,
+no per-stage flags beyond `--no-subdomains` to skip it):
 
 ```bash
-eggsec recon subdomains --target example.com
-```
+# Full pipeline including subdomain enumeration + takeover check
+eggsec recon example.com
 
-### With Custom Wordlist
+# DNS/subdomain-focused run: skip unrelated stages
+eggsec recon example.com \
+  --no-tech --no-geo --no-whois --no-ssl --no-js \
+  --no-content --no-cloud --no-wayback --no-cors \
+  --no-threat --no-cve --no-email-security
 
-```bash
-eggsec recon subdomains --target example.com --wordlist /path/to/subdomains.txt
-```
-
-### Using Certificate Logs
-
-```bash
-eggsec recon subdomains --target example.com --crt-search
-```
-
-### Permutation Mode
-
-```bash
-eggsec recon subdomains --target example.com --permutate
-```
-
-### Find Virtual Hosts
-
-```bash
-eggsec recon subdomains --target 192.168.1.1 --vhost
+# Tune concurrency
+eggsec recon example.com --concurrency 100
 ```
 
 ## Wordlist Sources

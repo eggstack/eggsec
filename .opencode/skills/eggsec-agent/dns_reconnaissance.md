@@ -32,46 +32,49 @@ DNS reconnaissance is a critical first step in security assessments. It reveals 
 
 ## Usage
 
-### Basic DNS Lookup
+DNS reconnaissance runs inside the single `recon` command (positional target; no subcommands):
+
+### Full Recon Pipeline (includes DNS records + subdomain enumeration)
 
 ```bash
-eggsec recon --target example.com --dns
+eggsec recon example.com
 ```
 
-### Subdomain Discovery
+### Skip Non-DNS Stages
 
 ```bash
-eggsec recon subdomains --target example.com
-eggsec recon subdomains --target example.com --wordlist /path/to/wordlist.txt
+# DNS-focused run: keep dns/subdomains, skip the rest
+eggsec recon example.com \
+  --no-tech --no-geo --no-whois --no-ssl --no-js \
+  --no-content --no-cloud --no-wayback --no-cors \
+  --no-threat --no-cve --no-email-security
 ```
 
-### Full DNS Enumeration
+### Custom Subdomain Wordlist
 
-```bash
-eggsec recon --target example.com --all
-```
+Subdomain wordlists are configured via `[recon]` settings or engine defaults, not a per-run CLI flag.
 
 ### Zone Transfer Testing
 
 ```bash
-eggsec recon dns --target example.com --zone-transfer
+# Zone transfer checks run inside the full recon pipeline
+eggsec recon example.com
 ```
 
 ### Reverse DNS Lookup
 
 ```bash
-eggsec recon dns --target 192.168.1.0/24 --reverse-lookup
+# Reverse DNS runs inside the full recon pipeline
+eggsec recon 192.168.1.0/24
 ```
 
 ## Configuration
 
-DNS recon can be configured in `config.toml`:
+DNS recon concurrency is configured in `config.toml` (API keys for passive sources live under `[recon.apis]`):
 
 ```toml
 [recon]
-dns_timeout = 10
 dns_concurrency = 50
-dns_wordlist = "/path/to/subdomains.txt"
 ```
 
 ## Output

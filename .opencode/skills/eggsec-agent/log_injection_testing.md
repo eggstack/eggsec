@@ -56,22 +56,18 @@ test\t\t\t[2026-04-14 INFO] Auth succeeded for admin
 
 ## Usage
 
-### Test Log Generation
+There is no dedicated log-injection payload type; CRLF/newline injection is
+tested via header and command payload types against parameters that end up in logs:
 
 ```bash
-eggsec fuzz --target https://example.com/api/trace --type log-injection --param user
-```
+# Header-value log injection (User-Agent / Referer reach access logs)
+eggsec fuzz "https://example.com/api/trace" -t headers --method get
 
-### Test User-Agent Logging
+# Parameter-borne CRLF payloads (auto-detected parameter injection)
+eggsec fuzz "https://example.com/api/log?user=admin" -t cmd
 
-```bash
-eggsec fuzz --target https://example.com/api/log --type log-injection --header User-Agent
-```
-
-### Custom Log Payloads
-
-```bash
-eggsec fuzz --target https://example.com/debug --payloads ./log_injection.txt
+# Narrow to one parameter
+eggsec fuzz "https://example.com/debug?msg=hello" -t headers --param msg
 ```
 
 ## Triggers

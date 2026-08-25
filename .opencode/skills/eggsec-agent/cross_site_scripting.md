@@ -40,25 +40,29 @@ XSS testing finds vulnerabilities where attacker-controlled data is reflected in
 ### Basic XSS Test
 
 ```bash
-eggsec fuzz --target https://example.com/search?q=test --type xss
+eggsec fuzz "https://example.com/search?q=test" -t xss
 ```
 
 ### Test Multiple Parameters
 
 ```bash
-eggsec fuzz --target https://example.com/ --type xss --all-params
+eggsec fuzz "https://example.com/" -t xss
 ```
 
 ### Stored XSS (Form Fields)
 
 ```bash
-eggsec fuzz --target https://example.com/comment --type xss --method post
+eggsec fuzz "https://example.com/comment" -t xss --method post
 ```
 
 ### DOM XSS Testing
 
+Reflected/DOM payload probing uses the standard fuzz command; dedicated DOM
+source/sink analysis lives in the headless-browser module:
+
 ```bash
-eggsec fuzz --target https://example.com/#test --type xss --dom
+eggsec fuzz "https://example.com/page?q=test" -t xss
+# DOM XSS detection (headless-browser feature): see eggsec-browser skill / docs/BUILD.md
 ```
 
 ## Payloads Reference

@@ -33,22 +33,21 @@ CORS testing identifies misconfigurations in Cross-Origin Resource Sharing that 
 
 ## Usage
 
-### Basic CORS Test
+CORS analysis runs inside the recon pipeline (`CorsAnalyzer`, `recon/cors.rs`);
+there is no `cors` fuzz payload type:
 
 ```bash
-eggsec fuzz --target https://api.example.com --type cors
-```
+# Full pipeline includes the CORS configuration check
+eggsec recon https://api.example.com
 
-### Test with Credentials
+# CORS-focused run: skip unrelated stages
+eggsec recon https://api.example.com \
+  --no-tech --no-geo --no-whois --no-subdomains --no-ssl \
+  --no-dns-records --no-js --no-content --no-cloud \
+  --no-wayback --no-threat --no-cve --no-email-security
 
-```bash
-eggsec fuzz --target https://api.example.com/auth --type cors --credentials
-```
-
-### Test Preflight Handling
-
-```bash
-eggsec fuzz --target https://api.example.com/api --type cors --preflight
+# Header-manipulation probes that exercise origin reflection
+eggsec fuzz "https://api.example.com/api" -t headers
 ```
 
 ## Security Issues

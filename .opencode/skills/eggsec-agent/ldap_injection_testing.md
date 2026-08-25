@@ -34,7 +34,7 @@ LDAP injection testing finds vulnerabilities in applications that interact with 
 ### Basic LDAP Injection Test
 
 ```bash
-eggsec fuzz --target https://example.com/search?user=admin --type ldap-injection
+eggsec fuzz "https://example.com/search?user=admin" -t ldap-injection
 ```
 
 ## Payloads Reference
