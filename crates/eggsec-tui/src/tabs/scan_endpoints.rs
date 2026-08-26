@@ -203,6 +203,7 @@ impl TabState for ScanEndpointsTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
+        self.results = None;
         if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "20".to_string();
             field.cursor_pos = 2;

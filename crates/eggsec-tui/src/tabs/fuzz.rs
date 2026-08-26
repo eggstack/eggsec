@@ -364,6 +364,7 @@ impl TabState for FuzzTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
+        self.session = None;
         self.core.inputs.blur();
         if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "GET".to_string();

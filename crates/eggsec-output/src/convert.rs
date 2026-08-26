@@ -193,7 +193,7 @@ pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::
             "|------|-------|---------|----------|--------|-----------|-----|--------|------------|"
         )?;
         for network in &report.wireless_networks {
-            let escape_pipe = |s: &str| s.replace('|', "\\|");
+            let escape_pipe = |s: &str| s.replace(['\r', '\n'], " ").replace('|', "\\|");
             writeln!(
                 md,
                 "| {} | {} | {} | {} | {} dBm | {} | {} | {} | {} |",
@@ -363,5 +363,41 @@ mod tests {
         let report = sample_report_with_severity("CRITICAL");
         let summary = crate::markdown::ScanSummary::from(&report);
         assert_eq!(summary.critical_count, 1);
+    }
+
+    #[test]
+    fn markdown_wireless_table_escapes_newlines_and_pipes() {
+        let mut report = sample_report_with_severity("Low");
+        report.wireless_networks = vec![WirelessNetworkReportData {
+            ssid: "evil\nssid|injection\r\nrow".to_string(),
+            bssid: "AA:BB:CC:DD:EE:FF".to_string(),
+            channel: 6,
+            security_type: "WPA2".to_string(),
+            signal_strength: -50,
+            last_seen: "2026-01-01T00:00:00Z".to_string(),
+            wps_enabled: false,
+            is_hidden: false,
+            transition_mode: false,
+        }];
+
+        let md = convert_to_markdown(&report).expect("Markdown conversion should succeed");
+
+        // The SSID's embedded newlines must not split the table into extra
+        // rows: exactly header + separator + one escaped data row.
+        let wireless_section = md
+            .split("## Wireless Networks")
+            .nth(1)
+            .expect("wireless section present");
+        let table_lines: Vec<&str> = wireless_section
+            .lines()
+            .filter(|line| line.starts_with('|'))
+            .collect();
+        assert_eq!(table_lines.len(), 3, "rows: {:?}", table_lines);
+
+        let table_row = table_lines[2];
+        // 9 cells => 10 separators, plus 1 escaped pipe inside the SSID.
+        assert_eq!(table_row.matches('|').count(), 11);
+        assert!(table_row.starts_with("| evil ssid"));
+        assert!(table_row.contains("\\|injection"));
     }
 }

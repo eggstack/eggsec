@@ -171,7 +171,7 @@ impl SecurityTool for FuzzerTool {
         let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =
             std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
-        let result = tokio::time::timeout(
+        tokio::time::timeout(
             std::time::Duration::from_secs(60),
             crate::fuzzer::run_cli_with_callback(args, move |finding| {
                 let mut f = findings_clone.lock();
@@ -183,7 +183,7 @@ impl SecurityTool for FuzzerTool {
             timeout_ms: 0,
             operation: format!("Fuzzing timed out after 60s: {}", e),
         })?
-        .map_err(|e| crate::error::EggsecError::Runtime(format!("Fuzzing failed: {}", e)));
+        .map_err(|e| crate::error::EggsecError::Runtime(format!("Fuzzing failed: {}", e)))?;
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {

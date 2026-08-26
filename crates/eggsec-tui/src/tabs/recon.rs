@@ -272,6 +272,7 @@ impl TabState for ReconTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
+        self.results = None;
         self.focus_area = StandardFocusArea::Inputs;
         self.focused_checkbox_index = 0;
         for cb in &mut self.option_checkboxes {

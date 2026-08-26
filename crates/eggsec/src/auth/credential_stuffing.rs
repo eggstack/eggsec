@@ -77,7 +77,26 @@ impl CredentialStuffer {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    let body = resp.text().await.unwrap_or_default();
+
+                    if status == crate::constants::STATUS_RATE_LIMITED {
+                        result.rate_limited = true;
+                    }
+
+                    // A failed body read must not count as a successful login;
+                    // treat the attempt as inconclusive.
+                    let body = match resp.text().await {
+                        Ok(body) => body,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Credential stuffing: failed to read response body for '{}' \
+                                 (HTTP {}); attempt is inconclusive: {}",
+                                cred.username,
+                                status,
+                                e
+                            );
+                            continue;
+                        }
+                    };
 
                     if status == 302
                         || (status == 200 && !body.contains("invalid") && !body.contains("error"))
@@ -91,9 +110,6 @@ impl CredentialStuffer {
                         });
                     }
 
-                    if status == crate::constants::STATUS_RATE_LIMITED {
-                        result.rate_limited = true;
-                    }
                     if status == crate::constants::STATUS_LOCKED || body.contains("locked") {
                         result.lockout_detected = true;
                         if self.engine.stop_on_lockout {

@@ -126,38 +126,24 @@ pub async fn fingerprint_udp_services(
     }
 
     let resolved_ip = resolve_host(host)?;
-    let socket = match UdpSocket::bind("0.0.0.0:0").await {
-        Ok(s) => Arc::new(s),
-        Err(_) => {
-            return Ok(UdpFingerprintResults {
-                host: host.to_string(),
-                ports_scanned: ports_count,
-                services_identified: 0,
-                duration_ms: start.elapsed().as_millis() as u64,
-                results: Vec::new(),
-            });
-        }
-    };
     let semaphore = Arc::new(Semaphore::new(50));
     let rate_limiter = Arc::new(TokenBucket::new(100, Duration::from_millis(10)));
     let mut handles = Vec::new();
 
     for port in ports {
         let ip = resolved_ip;
-        let socket = socket.clone();
         let semaphore = semaphore.clone();
         let rate_limiter = rate_limiter.clone();
         let handle = tokio::spawn(async move {
-            let _permit = match semaphore.acquire_owned().await {
-                Ok(p) => Some(p),
-                Err(_) => {
-                    tracing::warn!("UDP fingerprint semaphore closed while waiting for permit");
-                    None
-                }
-            };
+            // Fail closed: a closed semaphore must not bypass the concurrency limit.
+            if semaphore.acquire_owned().await.is_err() {
+                tracing::warn!("UDP fingerprint semaphore closed while waiting for permit");
+                return None;
+            }
             rate_limiter.acquire().await;
-            let result = fingerprint_udp_port(ip, port, timeout_duration, Some(socket)).await;
-            result
+            // Bind a dedicated socket per task so concurrent probes cannot
+            // consume each other's replies on a shared unconnected socket.
+            fingerprint_udp_port(ip, port, timeout_duration, None).await
         });
         handles.push(handle);
     }
@@ -293,6 +279,7 @@ struct TokenBucket {
     tokens: AtomicU32,
     max_tokens: u32,
     refill_interval: Duration,
+    last_refill: parking_lot::Mutex<std::time::Instant>,
 }
 
 impl TokenBucket {
@@ -301,6 +288,7 @@ impl TokenBucket {
             tokens: AtomicU32::new(rate_per_second),
             max_tokens: rate_per_second,
             refill_interval,
+            last_refill: parking_lot::Mutex::new(std::time::Instant::now()),
         }
     }
 
@@ -322,13 +310,23 @@ impl TokenBucket {
         }
     }
 
+    /// Refill tokens proportionally to elapsed wall-clock time, so the bucket
+    /// sustains ~`max_tokens` tokens per second regardless of how many waiters
+    /// wake up concurrently.
     fn refill(&self) -> bool {
+        let mut last = self.last_refill.lock();
+        let elapsed = last.elapsed();
+        if elapsed < self.refill_interval {
+            return false;
+        }
+        let earned = ((elapsed.as_secs_f64() * self.max_tokens as f64) as u32).max(1);
+        *last = std::time::Instant::now();
         loop {
             let current = self.tokens.load(Ordering::Acquire);
-            let refill = self.max_tokens.min(current + self.max_tokens / 10 + 1);
+            let next = self.max_tokens.min(current.saturating_add(earned));
             if self
                 .tokens
-                .compare_exchange(current, refill, Ordering::AcqRel, Ordering::Acquire)
+                .compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
                 return true;
@@ -498,6 +496,58 @@ mod tests {
         let results = result.unwrap();
         assert_eq!(results.ports_scanned, 0);
         assert_eq!(results.services_identified, 0);
+    }
+
+    #[test]
+    fn test_token_bucket_refill_proportional_to_elapsed() {
+        let bucket = TokenBucket::new(100, Duration::from_millis(10));
+        bucket.tokens.store(0, Ordering::Release);
+        std::thread::sleep(Duration::from_millis(210));
+        assert!(bucket.refill());
+        let tokens = bucket.tokens.load(Ordering::Acquire);
+        // Nominal: ~21 tokens for 210ms at a 100/s rate. Bounds allow generous
+        // scheduler slop while still failing the old flat +11-per-call refill
+        // (which granted ~110 over repeated ticks).
+        assert!(
+            (12..=40).contains(&tokens),
+            "expected ~20 tokens, got {}",
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_token_bucket_refill_respects_interval() {
+        let bucket = TokenBucket::new(100, Duration::from_millis(50));
+        bucket.tokens.store(0, Ordering::Release);
+        assert!(!bucket.refill());
+        assert_eq!(bucket.tokens.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn test_token_bucket_concurrent_waiters_do_not_overfill() {
+        let bucket = Arc::new(TokenBucket::new(100, Duration::from_millis(10)));
+        bucket.tokens.store(0, Ordering::Release);
+        let handles: Vec<_> = (0..10)
+            .map(|_| {
+                let b = Arc::clone(&bucket);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(60));
+                    b.refill()
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        let tokens = bucket.tokens.load(Ordering::Acquire);
+        // Tokens are earned by elapsed time only; concurrent refill calls must
+        // not stack. The old flat +11-per-call refill granted >=55 here (one
+        // grant per waiter); elapsed-time earning stays well below 35.
+        assert!(
+            tokens <= 35,
+            "expected time-proportional refill, got {}",
+            tokens
+        );
     }
 
     #[tokio::test]

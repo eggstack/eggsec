@@ -219,6 +219,7 @@ impl TabState for ScanPortsTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
+        self.results = None;
         self.core.inputs.blur();
         if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "1-1024".to_string();

@@ -60,7 +60,11 @@ impl BruteForceTester {
                     reqwest::header::CONTENT_TYPE,
                     "application/x-www-form-urlencoded",
                 )
-                .body(format!("username={}&password={}", username, password))
+                .body(format!(
+                    "username={}&password={}",
+                    crate::utils::urlencoding::encode(username),
+                    crate::utils::urlencoding::encode(password)
+                ))
                 .send()
                 .await;
 
@@ -69,7 +73,26 @@ impl BruteForceTester {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    let body = resp.text().await.unwrap_or_default();
+
+                    if status == crate::constants::STATUS_RATE_LIMITED {
+                        result.rate_limited = true;
+                    }
+
+                    // A failed body read must not count as a successful login;
+                    // treat the attempt as inconclusive.
+                    let body = match resp.text().await {
+                        Ok(body) => body,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Brute force: failed to read response body for '{}' (HTTP {}); \
+                                 attempt is inconclusive: {}",
+                                username,
+                                status,
+                                e
+                            );
+                            continue;
+                        }
+                    };
 
                     let body_lower = body.to_lowercase();
                     if (status == 302 || status == 200)
@@ -92,9 +115,6 @@ impl BruteForceTester {
                         });
                     }
 
-                    if status == crate::constants::STATUS_RATE_LIMITED {
-                        result.rate_limited = true;
-                    }
                     if status == crate::constants::STATUS_LOCKED
                         || body.contains("locked")
                         || body.contains("too many attempts")

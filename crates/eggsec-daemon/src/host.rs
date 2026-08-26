@@ -858,15 +858,15 @@ impl DaemonHost {
                         let snapshot_owner = tokio::task::spawn_blocking(move || {
                             store
                                 .blocking_get_snapshot(&sid)
-                                .ok()
-                                .flatten()
-                                .and_then(|s| s.owner_client_id)
+                                .map(|snapshot| snapshot.and_then(|s| s.owner_client_id))
                         })
                         .await
-                        .unwrap_or(None);
+                        .unwrap_or_else(|e| Err(anyhow::anyhow!("spawn_blocking failed: {}", e)));
                         match snapshot_owner {
-                            Some(owner) if owner == client_id => { /* owner matches, allow */ }
-                            Some(_) => {
+                            Ok(Some(owner)) if owner == client_id => {
+                                // Owner matches, allow.
+                            }
+                            Ok(Some(_)) => {
                                 return ServerMessage::Error {
                                     request_id,
                                     code: ErrorCode::PermissionDenied,
@@ -876,7 +876,24 @@ impl DaemonHost {
                                     ),
                                 };
                             }
-                            None => { /* no owner info, allow (legacy session) */ }
+                            // No persisted snapshot / no recorded owner → legacy session, allow.
+                            Ok(None) => {}
+                            // Store failure: ownership cannot be determined → fail closed.
+                            Err(e) => {
+                                tracing::warn!(
+                                    "ownership check for session {} failed; denying access: {}",
+                                    session_id,
+                                    e
+                                );
+                                return ServerMessage::Error {
+                                    request_id,
+                                    code: ErrorCode::PermissionDenied,
+                                    message: format!(
+                                        "ownership of session {} could not be verified",
+                                        session_id
+                                    ),
+                                };
+                            }
                         }
                     }
                 }
@@ -2743,6 +2760,90 @@ mod tests {
                 ..
             } => {}
             other => panic!("expected ClientNotDeclared, got {:?}", other),
+        }
+    }
+
+    /// Regression test: a store failure while verifying snapshot ownership
+    /// must fail closed (PermissionDenied), not fall through as a "legacy
+    /// session".
+    #[tokio::test]
+    async fn snapshot_store_error_fails_closed_on_ownership_check() {
+        use async_trait::async_trait;
+
+        struct FailingStore;
+
+        #[async_trait]
+        impl crate::store::DaemonStore for FailingStore {
+            async fn save_session_snapshot(
+                &self,
+                _: &eggsec_runtime::SessionSnapshot,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn load_session_snapshot(
+                &self,
+                _: eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+            async fn load_all_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSnapshot>> {
+                Ok(vec![])
+            }
+            async fn record_audit_event(
+                &self,
+                _: &crate::store::PersistedAuditEvent,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn delete_session(&self, _: eggsec_runtime::SessionId) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn blocking_list_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
+                Ok(vec![])
+            }
+            fn blocking_get_snapshot(
+                &self,
+                _: &eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Err(anyhow::anyhow!("simulated store failure"))
+            }
+        }
+
+        let client_id = eggsec_runtime::ClientId::new();
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            TestExecutor,
+            Arc::new(FailingStore),
+        );
+        host.register_client(ClientInfo {
+            client_id,
+            kind: ClientKind::Tui,
+            surface: eggsec_runtime::RuntimeSurface::Unknown,
+            connected_at_secs: 0,
+            label: Some("test-client".into()),
+        });
+
+        // The session is unknown to the access table; ownership verification
+        // via the store fails → access must be denied.
+        let msg = host
+            .handle_command(
+                ClientCommand::GetPersistedSnapshot {
+                    request_id: "get-1".into(),
+                    session_id: eggsec_runtime::SessionId::new(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        match msg {
+            ServerMessage::Error {
+                code: ErrorCode::PermissionDenied,
+                ..
+            } => {}
+            other => panic!("expected PermissionDenied, got {:?}", other),
         }
     }
 

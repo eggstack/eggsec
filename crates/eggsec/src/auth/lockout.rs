@@ -63,12 +63,25 @@ impl LockoutDetector {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    let body = resp.text().await.unwrap_or_default();
+
+                    // A failed body read is inconclusive; skip this attempt.
+                    let body = match resp.text().await {
+                        Ok(body) => body,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Lockout detection: failed to read response body at attempt {}: {}",
+                                i + 1,
+                                e
+                            );
+                            continue;
+                        }
+                    };
 
                     if let Some(prev) = prev_status {
                         if status != prev || self.is_lockout_response(&body) {
-                            result.lockout_threshold = Some(i);
-                            result.attempts_before_lockout = i;
+                            // Lockout was observed on the (i+1)-th request.
+                            result.lockout_threshold = Some(i + 1);
+                            result.attempts_before_lockout = i + 1;
 
                             result.lockout_type = self.classify_lockout(status, &body);
                             result.indicators = self.extract_indicators(status, &body);
@@ -80,13 +93,19 @@ impl LockoutDetector {
                     }
                     prev_status = Some(status);
                 }
-                Err(_) => {
-                    result.lockout_threshold = Some(i);
-                    result.attempts_before_lockout = i;
-                    result.lockout_type = LockoutType::HardLockout;
-                    result
-                        .indicators
-                        .push("Connection failed after attempts".to_string());
+                Err(e) => {
+                    // A transport error is not evidence of a lockout; record it
+                    // as an interrupted (inconclusive) detection instead of
+                    // fabricating a HardLockout finding.
+                    tracing::warn!(
+                        "Lockout detection: request {} failed; stopping detection: {}",
+                        i + 1,
+                        e
+                    );
+                    result.indicators.push(format!(
+                        "Detection interrupted: connection failed at attempt {}",
+                        i + 1
+                    ));
                     break;
                 }
             }

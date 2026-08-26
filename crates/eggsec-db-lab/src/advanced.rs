@@ -198,6 +198,19 @@ async fn execute_temp_udf(
     mysql_pool: Option<&sqlx::mysql::MySqlPool>,
 ) -> anyhow::Result<()> {
     let func_name = format!("eggsec_test_{}", &utils::uuid_simple());
+    // Defense-in-depth: the name is interpolated into DDL below. It is
+    // generated from hex-only input today, but refuse to interpolate anything
+    // unexpected rather than trust that invariant.
+    if func_name.is_empty()
+        || !func_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        anyhow::bail!(
+            "refusing to interpolate unsafe identifier '{}' into SQL DDL",
+            func_name
+        );
+    }
 
     match target.db_type.as_str() {
         "postgres" => {
@@ -302,12 +315,23 @@ async fn execute_temp_udf(
                 .actions_performed
                 .push(format!("advanced: created temp UDF '{}'", func_name));
 
-            let _ = sqlx::query_scalar::<_, String>(&format!("SELECT {}()", func_name))
+            match sqlx::query_scalar::<_, String>(&format!("SELECT {}()", func_name))
                 .fetch_one(&pool)
-                .await;
-            report
-                .actions_performed
-                .push(format!("advanced: invoked temp UDF '{}'", func_name));
+                .await
+            {
+                Ok(_) => {
+                    report
+                        .actions_performed
+                        .push(format!("advanced: invoked temp UDF '{}'", func_name));
+                }
+                Err(e) => {
+                    tracing::warn!("advanced: UDF invocation failed: {}", e);
+                    report.actions_performed.push(format!(
+                        "advanced: UDF '{}' invocation failed: {}",
+                        func_name, e
+                    ));
+                }
+            }
 
             sqlx::query(&format!("DROP FUNCTION IF EXISTS {}", func_name))
                 .execute(&pool)
