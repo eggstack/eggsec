@@ -1005,7 +1005,14 @@ mod tests {
 
         let mut repo2 = JsonlFindingRepository::new(path.clone());
         repo2.initialize().unwrap();
-        assert_eq!(repo2.findings.lock().unwrap().len(), 1);
+        assert_eq!(
+            repo2
+                .findings
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .len(),
+            1
+        );
         let got = repo2.get_finding("f1").unwrap().unwrap();
         assert!(got.contains("Persisted"));
 
@@ -1026,7 +1033,14 @@ mod tests {
 
         let mut repo2 = JsonlFindingRepository::new(path.clone());
         repo2.initialize().unwrap();
-        assert_eq!(repo2.findings.lock().unwrap().len(), 1);
+        assert_eq!(
+            repo2
+                .findings
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .len(),
+            1
+        );
         assert!(repo2.get_finding("f1").unwrap().is_none());
         assert!(repo2.get_finding("f2").unwrap().is_some());
 
@@ -1158,7 +1172,14 @@ mod tests {
 
         let mut repo2 = JsonlAssessmentRepository::new(path.clone());
         repo2.initialize().unwrap();
-        assert_eq!(repo2.assessments.lock().unwrap().len(), 1);
+        assert_eq!(
+            repo2
+                .assessments
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .len(),
+            1
+        );
         let got = repo2.get_assessment("assess-1").unwrap().unwrap();
         assert!(got.contains("Persistent"));
 

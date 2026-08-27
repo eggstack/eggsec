@@ -1998,6 +1998,7 @@ dependencies = [
  "shellexpand",
  "tokio",
  "tokio-util",
+ "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "uuid",

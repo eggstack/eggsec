@@ -78,12 +78,15 @@ async fn handle_daemon(
             let path = socket.as_deref().unwrap_or(socket_path);
             let mut client = connect(path).await?;
             // Declare client kind
-            let _ = client
+            if let Err(e) = client
                 .declare_client(
                     eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("eggsec-cli".into()),
                 )
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+            }
             let resp = client.health().await?;
             match resp {
                 ServerMessage::Health {
@@ -108,12 +111,15 @@ async fn handle_daemon(
             // For now, just report status.
             match connect(path).await {
                 Ok(mut client) => {
-                    let _ = client
+                    if let Err(e) = client
                         .declare_client(
                             eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                             Some("eggsec-cli".into()),
                         )
-                        .await;
+                        .await
+                    {
+                        tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+                    }
                     match client.health().await {
                         Ok(_) => {
                             if json {
@@ -137,12 +143,15 @@ async fn handle_daemon(
         eggsec::cli::DaemonSubcommand::History { json } => {
             let path = socket_path;
             let mut client = connect(path).await?;
-            let _ = client
+            if let Err(e) = client
                 .declare_client(
                     eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("cli-history".into()),
                 )
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+            }
             let resp = client.list_persisted_sessions().await?;
             match resp {
                 ServerMessage::PersistedSessions { sessions, .. } => {
@@ -179,12 +188,15 @@ async fn handle_daemon(
         eggsec::cli::DaemonSubcommand::Show { session_id, json } => {
             let path = socket_path;
             let mut client = connect(path).await?;
-            let _ = client
+            if let Err(e) = client
                 .declare_client(
                     eggsec_daemon_protocol::client_registry::ClientKind::Cli,
                     Some("cli-show".into()),
                 )
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+            }
             let sid: eggsec_runtime::SessionId = session_id.parse()?;
             let resp = client.get_persisted_snapshot(sid).await?;
             match resp {
@@ -237,12 +249,15 @@ async fn handle_session(
 ) -> Result<()> {
     let mut client = connect(socket_path).await?;
     // Declare client kind
-    let _ = client
+    if let Err(e) = client
         .declare_client(
             eggsec_daemon_protocol::client_registry::ClientKind::Cli,
             Some("eggsec-cli".into()),
         )
-        .await;
+        .await
+    {
+        tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+    }
     match &args.subcommand {
         eggsec::cli::SessionSubcommand::List => {
             let resp = client.list_sessions().await?;
@@ -335,12 +350,15 @@ async fn handle_session(
 async fn handle_task(args: &eggsec::cli::TaskArgs, socket_path: &str, json: bool) -> Result<()> {
     let mut client = connect(socket_path).await?;
     // Declare client kind
-    let _ = client
+    if let Err(e) = client
         .declare_client(
             eggsec_daemon_protocol::client_registry::ClientKind::Cli,
             Some("eggsec-cli".into()),
         )
-        .await;
+        .await
+    {
+        tracing::warn!(error = %e, "Failed to declare client to daemon (continuing)");
+    }
     match &args.subcommand {
         eggsec::cli::TaskSubcommand::Submit {
             session_id,

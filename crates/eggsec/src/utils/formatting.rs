@@ -1,3 +1,9 @@
+/// Strip control chars (keep space) and either pad to `max_len` (for column alignment)
+/// or truncate with "..." suffix if input exceeds `max_len`.
+///
+/// **Note**: Short inputs are right-padded with spaces to exactly `max_len` characters.
+/// This is intentional for column-aligned terminal output (see callers in scanner/fuzzer
+/// Display impls). Use `truncate_only` if you want pure truncation without padding.
 pub fn strip_controls(s: &str, max_len: usize) -> String {
     if max_len == 0 {
         return String::new();
@@ -5,21 +11,34 @@ pub fn strip_controls(s: &str, max_len: usize) -> String {
     let cleaned: String = s.chars().filter(|c| !c.is_control() || *c == ' ').collect();
     let char_count = cleaned.chars().count();
     if char_count > max_len {
-        let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
-        format!("{}...", truncated)
+        if max_len < 3 {
+            cleaned.chars().take(max_len).collect()
+        } else {
+            let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
+            format!("{}...", truncated)
+        }
     } else {
         format!("{:<width$}", cleaned, width = max_len)
     }
 }
 
+/// Preserve all characters (no stripping) and either pad to `max_len` (for column alignment)
+/// or truncate with "..." suffix if input exceeds `max_len`.
+///
+/// **Note**: Short inputs are right-padded with spaces to exactly `max_len` characters.
+/// This is intentional for column-aligned terminal output.
 pub fn preserve_all(s: &str, max_len: usize) -> String {
     if max_len == 0 {
         return String::new();
     }
     let char_count = s.chars().count();
     if char_count > max_len {
-        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
-        format!("{}...", truncated)
+        if max_len < 3 {
+            s.chars().take(max_len).collect()
+        } else {
+            let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+            format!("{}...", truncated)
+        }
     } else {
         format!("{:<width$}", s, width = max_len)
     }
@@ -63,6 +82,32 @@ mod tests {
         let result = strip_controls("héllo wörld", 15);
         assert!(result.contains("héllo"));
         assert!(result.contains("wörld"));
+    }
+
+    #[test]
+    fn test_strip_controls_max_len_1() {
+        let result = strip_controls("hello", 1);
+        assert_eq!(result.len(), 1);
+        assert!(!result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_strip_controls_max_len_2() {
+        let result = strip_controls("hello", 2);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_preserve_all_max_len_1() {
+        let result = preserve_all("hello", 1);
+        assert_eq!(result.len(), 1);
+        assert!(!result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_preserve_all_max_len_2() {
+        let result = preserve_all("hello", 2);
+        assert_eq!(result.len(), 2);
     }
 
     #[test]

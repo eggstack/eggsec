@@ -157,13 +157,20 @@ impl PipelineReport {
     }
 }
 
+/// Truncate to column-aligned table cells: pad short strings, truncate with "..." suffix.
 fn truncate(s: &str, max_len: usize) -> String {
     let cleaned: String = s
         .chars()
         .filter(|c| c.is_ascii_graphic() || *c == ' ')
         .collect();
-    if cleaned.len() > max_len {
-        format!("{}...", &cleaned[..max_len.saturating_sub(3)])
+    let char_count = cleaned.chars().count();
+    if char_count > max_len {
+        if max_len < 3 {
+            cleaned.chars().take(max_len).collect()
+        } else {
+            let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
+            format!("{}...", truncated)
+        }
     } else {
         format!("{:<width$}", cleaned, width = max_len)
     }
@@ -464,4 +471,46 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
     }
 
     Ok(md)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_ascii_short_pads() {
+        let result = truncate("hi", 10);
+        assert_eq!(result, "hi        ");
+    }
+
+    #[test]
+    fn truncate_ascii_long_truncates() {
+        let result = truncate("hello world this is a test", 10);
+        assert_eq!(result, "hello w...");
+    }
+
+    #[test]
+    fn truncate_ascii_exact() {
+        let result = truncate("hello", 5);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn truncate_unicode_no_panic() {
+        let result = truncate(&"\u{1FA63}".repeat(10), 5);
+        assert!(result.chars().count() <= 5);
+    }
+
+    #[test]
+    fn truncate_max_len_2_no_suffix() {
+        let result = truncate("abc", 2);
+        assert_eq!(result.len(), 2);
+        assert!(!result.ends_with("..."));
+    }
+
+    #[test]
+    fn truncate_max_len_1_no_suffix() {
+        let result = truncate("abc", 1);
+        assert_eq!(result.len(), 1);
+    }
 }

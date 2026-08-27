@@ -318,7 +318,10 @@ impl TcpSessionPy {
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_closed
     }
 
     #[getter]
@@ -329,7 +332,7 @@ impl TcpSessionPy {
     /// Return the transcript of all read/write operations.
     #[getter]
     fn transcript(&self) -> NetworkTranscriptPy {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let total_bytes = s.bytes_sent + s.bytes_received;
         NetworkTranscriptPy {
             entries: s.transcript.clone(),
@@ -341,13 +344,19 @@ impl TcpSessionPy {
     /// Return bytes sent counter.
     #[getter]
     fn bytes_sent(&self) -> u64 {
-        self.state.lock().unwrap().bytes_sent
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .bytes_sent
     }
 
     /// Return bytes received counter.
     #[getter]
     fn bytes_received(&self) -> u64 {
-        self.state.lock().unwrap().bytes_received
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .bytes_received
     }
 
     /// Establish a TCP connection to the configured host:port.
@@ -359,7 +368,7 @@ impl TcpSessionPy {
         let state = Arc::clone(&self.state);
 
         {
-            let s = state.lock().unwrap();
+            let s = state.lock().unwrap_or_else(|p| p.into_inner());
             if s.is_closed {
                 return Err(NetworkError::new_err("Session is closed"));
             }
@@ -433,7 +442,7 @@ impl TcpSessionPy {
         };
 
         {
-            let mut s = state.lock().unwrap();
+            let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
             s.stream = Some(result);
         }
 
@@ -452,7 +461,7 @@ impl TcpSessionPy {
         let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state.lock().unwrap_or_else(|p| p.into_inner());
             if s.is_closed || s.stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
@@ -461,12 +470,18 @@ impl TcpSessionPy {
         let start = Instant::now();
         let stream = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .stream
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let (stream, operation) = runtime_sync::block_on(py, async move {
-            let mut stream = stream;
+        let stream_cell = Arc::new(std::sync::Mutex::new(Some(stream)));
+        let cell = Arc::clone(&stream_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let mut stream = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = async {
                 let mut buf = vec![0u8; max_bytes];
                 let n = tokio::time::timeout(read_timeout, stream.read(&mut buf))
@@ -482,8 +497,12 @@ impl TcpSessionPy {
             }
             .await;
             Ok::<_, PyErr>((stream, operation))
-        })?;
-        state.lock().unwrap().stream = Some(stream);
+        });
+        if let Some(s) = stream_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(s);
+        }
+        let (stream, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(stream);
         let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -493,7 +512,7 @@ impl TcpSessionPy {
         let mut data = buf;
         data.truncate(bytes_read);
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_received += bytes_read as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -522,7 +541,7 @@ impl TcpSessionPy {
         let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state.lock().unwrap_or_else(|p| p.into_inner());
             if s.is_closed || s.stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
@@ -531,12 +550,18 @@ impl TcpSessionPy {
         let start = Instant::now();
         let stream = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .stream
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let (stream, operation) = runtime_sync::block_on(py, async move {
-            let mut stream = stream;
+        let stream_cell = Arc::new(std::sync::Mutex::new(Some(stream)));
+        let cell = Arc::clone(&stream_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let mut stream = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = async {
                 let mut buf = vec![0u8; n];
                 tokio::time::timeout(read_timeout, stream.read_exact(&mut buf))
@@ -552,13 +577,17 @@ impl TcpSessionPy {
             }
             .await;
             Ok::<_, PyErr>((stream, operation))
-        })?;
-        state.lock().unwrap().stream = Some(stream);
+        });
+        if let Some(s) = stream_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(s);
+        }
+        let (stream, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(stream);
         let buf = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_received += n as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -595,7 +624,7 @@ impl TcpSessionPy {
         let read_timeout = std::time::Duration::from_millis(self.config.read_timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state.lock().unwrap_or_else(|p| p.into_inner());
             if s.is_closed || s.stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
@@ -604,12 +633,18 @@ impl TcpSessionPy {
         let start = Instant::now();
         let stream = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .stream
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
-        let (stream, operation) = runtime_sync::block_on(py, async move {
-            let mut stream = stream;
+        let stream_cell = Arc::new(std::sync::Mutex::new(Some(stream)));
+        let cell = Arc::clone(&stream_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let mut stream = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = async {
                 let mut buf = vec![0u8; max_len];
                 let total = tokio::time::timeout(read_timeout, async {
@@ -640,8 +675,12 @@ impl TcpSessionPy {
             }
             .await;
             Ok::<_, PyErr>((stream, operation))
-        })?;
-        state.lock().unwrap().stream = Some(stream);
+        });
+        if let Some(s) = stream_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(s);
+        }
+        let (stream, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(stream);
         let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -650,7 +689,7 @@ impl TcpSessionPy {
         let mut data = buf;
         data.truncate(bytes_read);
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_received += bytes_read as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -680,14 +719,20 @@ impl TcpSessionPy {
 
         let stream = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .stream
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (stream, operation) = runtime_sync::block_on(py, async move {
-            let mut stream = stream;
+        let stream_cell = Arc::new(std::sync::Mutex::new(Some(stream)));
+        let cell = Arc::clone(&stream_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let mut stream = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = tokio::time::timeout(write_timeout, stream.write(&data))
                 .await
                 .map_err(|_| {
@@ -695,16 +740,22 @@ impl TcpSessionPy {
                         "TCP write timed out after {}ms",
                         write_timeout.as_millis()
                     ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("TCP write error: {}", e)));
+                })
+                .and_then(|r| {
+                    r.map_err(|e| NetworkError::new_err(format!("TCP write error: {}", e)))
+                });
             Ok::<_, PyErr>((stream, operation))
-        })?;
-        state.lock().unwrap().stream = Some(stream);
+        });
+        if let Some(s) = stream_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(s);
+        }
+        let (stream, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(stream);
         let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_sent += result as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -733,14 +784,20 @@ impl TcpSessionPy {
 
         let stream = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .stream
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (stream, operation) = runtime_sync::block_on(py, async move {
-            let mut stream = stream;
+        let stream_cell = Arc::new(std::sync::Mutex::new(Some(stream)));
+        let cell = Arc::clone(&stream_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let mut stream = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = tokio::time::timeout(write_timeout, stream.write_all(&data))
                 .await
                 .map_err(|_| {
@@ -748,16 +805,22 @@ impl TcpSessionPy {
                         "TCP write_all timed out after {}ms",
                         write_timeout.as_millis()
                     ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("TCP write_all error: {}", e)));
+                })
+                .and_then(|r| {
+                    r.map_err(|e| NetworkError::new_err(format!("TCP write_all error: {}", e)))
+                });
             Ok::<_, PyErr>((stream, operation))
-        })?;
-        state.lock().unwrap().stream = Some(stream);
+        });
+        if let Some(s) = stream_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(s);
+        }
+        let (stream, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).stream = Some(stream);
         operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_sent += len as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -780,7 +843,7 @@ impl TcpSessionPy {
 
     /// Close the TCP session deterministically.
     fn close(&self) -> PyResult<()> {
-        let mut s = self.state.lock().unwrap();
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if s.is_closed {
             return Ok(());
         }
@@ -806,7 +869,7 @@ impl TcpSessionPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         format!(
             "TcpSession(host={}, port={}, closed={}, sent={}, received={})",
             self.config.host, self.config.port, s.is_closed, s.bytes_sent, s.bytes_received
@@ -814,7 +877,7 @@ impl TcpSessionPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if s.is_closed {
             format!(
                 "tcp://{}:{} (closed, {} transcripts)",
@@ -1099,25 +1162,34 @@ impl UdpSocketPy {
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_closed
     }
 
     /// Return bytes sent counter.
     #[getter]
     fn bytes_sent(&self) -> u64 {
-        self.state.lock().unwrap().bytes_sent
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .bytes_sent
     }
 
     /// Return bytes received counter.
     #[getter]
     fn bytes_received(&self) -> u64 {
-        self.state.lock().unwrap().bytes_received
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .bytes_received
     }
 
     /// Return the transcript of all send/recv operations.
     #[getter]
     fn transcript(&self) -> NetworkTranscriptPy {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let total_bytes = s.bytes_sent + s.bytes_received;
         NetworkTranscriptPy {
             entries: s.transcript.clone(),
@@ -1134,7 +1206,7 @@ impl UdpSocketPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state.lock().unwrap_or_else(|p| p.into_inner());
             if s.is_closed {
                 return Err(NetworkError::new_err("Socket is closed"));
             }
@@ -1170,7 +1242,7 @@ impl UdpSocketPy {
             Ok::<_, PyErr>(socket)
         })?;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.socket = Some(socket);
         Ok(())
     }
@@ -1182,13 +1254,20 @@ impl UdpSocketPy {
 
         let socket = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .socket
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (socket, operation) = runtime_sync::block_on(py, async move {
+        let socket_cell = Arc::new(std::sync::Mutex::new(Some(socket)));
+        let cell = Arc::clone(&socket_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let socket = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = tokio::time::timeout(timeout, socket.send(&data))
                 .await
                 .map_err(|_| {
@@ -1196,16 +1275,22 @@ impl UdpSocketPy {
                         "UDP send timed out after {}ms",
                         timeout.as_millis()
                     ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("UDP send error: {}", e)));
+                })
+                .and_then(|r| {
+                    r.map_err(|e| NetworkError::new_err(format!("UDP send error: {}", e)))
+                });
             Ok::<_, PyErr>((socket, operation))
-        })?;
-        state.lock().unwrap().socket = Some(socket);
+        });
+        if let Some(s) = socket_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(s);
+        }
+        let (socket, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(socket);
         let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_sent += result as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -1234,13 +1319,20 @@ impl UdpSocketPy {
 
         let socket = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .socket
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (socket, operation) = runtime_sync::block_on(py, async move {
+        let socket_cell = Arc::new(std::sync::Mutex::new(Some(socket)));
+        let cell = Arc::clone(&socket_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let socket = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = tokio::time::timeout(timeout, socket.send_to(&data, &addr_owned))
                 .await
                 .map_err(|_| {
@@ -1248,16 +1340,22 @@ impl UdpSocketPy {
                         "UDP send_to timed out after {}ms",
                         timeout.as_millis()
                     ))
-                })?
-                .map_err(|e| NetworkError::new_err(format!("UDP send_to error: {}", e)));
+                })
+                .and_then(|r| {
+                    r.map_err(|e| NetworkError::new_err(format!("UDP send_to error: {}", e)))
+                });
             Ok::<_, PyErr>((socket, operation))
-        })?;
-        state.lock().unwrap().socket = Some(socket);
+        });
+        if let Some(s) = socket_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(s);
+        }
+        let (socket, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(socket);
         let result = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_sent += result as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -1286,14 +1384,20 @@ impl UdpSocketPy {
 
         let socket = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .socket
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (socket, operation) = runtime_sync::block_on(py, async move {
-            let socket = socket;
+        let socket_cell = Arc::new(std::sync::Mutex::new(Some(socket)));
+        let cell = Arc::clone(&socket_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let socket = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = async {
                 let mut buf = vec![0u8; max_size];
                 let n = tokio::time::timeout(timeout, socket.recv(&mut buf))
@@ -1309,8 +1413,12 @@ impl UdpSocketPy {
             }
             .await;
             Ok::<_, PyErr>((socket, operation))
-        })?;
-        state.lock().unwrap().socket = Some(socket);
+        });
+        if let Some(s) = socket_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(s);
+        }
+        let (socket, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(socket);
         let (result, buf) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -1319,7 +1427,7 @@ impl UdpSocketPy {
         let mut data = buf;
         data.truncate(result);
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_received += result as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -1350,14 +1458,20 @@ impl UdpSocketPy {
 
         let socket = state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .socket
             .take()
             .ok_or_else(|| NetworkError::new_err("Not connected"))?;
 
         let start = Instant::now();
-        let (socket, operation) = runtime_sync::block_on(py, async move {
-            let socket = socket;
+        let socket_cell = Arc::new(std::sync::Mutex::new(Some(socket)));
+        let cell = Arc::clone(&socket_cell);
+        let result = runtime_sync::block_on(py, async move {
+            let socket = cell
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap();
             let operation = async {
                 let mut buf = vec![0u8; max_size];
                 let (n, from) = tokio::time::timeout(timeout, socket.recv_from(&mut buf))
@@ -1373,8 +1487,12 @@ impl UdpSocketPy {
             }
             .await;
             Ok::<_, PyErr>((socket, operation))
-        })?;
-        state.lock().unwrap().socket = Some(socket);
+        });
+        if let Some(s) = socket_cell.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(s);
+        }
+        let (socket, operation) = result?;
+        state.lock().unwrap_or_else(|p| p.into_inner()).socket = Some(socket);
         let (result, buf, from_addr) = operation?;
 
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -1386,7 +1504,7 @@ impl UdpSocketPy {
         let source_address = from_addr.ip().to_string();
         let source_port = from_addr.port();
 
-        let mut s = state.lock().unwrap();
+        let mut s = state.lock().unwrap_or_else(|p| p.into_inner());
         s.bytes_received += result as u64;
         s.sequence += 1;
         let seq = s.sequence;
@@ -1413,7 +1531,7 @@ impl UdpSocketPy {
 
     /// Close the UDP socket deterministically.
     fn close(&self) -> PyResult<()> {
-        let mut s = self.state.lock().unwrap();
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if s.is_closed {
             return Ok(());
         }
@@ -1439,7 +1557,7 @@ impl UdpSocketPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         format!(
             "UdpSocket(host={}, port={}, closed={})",
             self.config.host, self.config.port, s.is_closed
@@ -1447,7 +1565,7 @@ impl UdpSocketPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if s.is_closed {
             format!("udp://{}:{} (closed)", self.config.host, self.config.port)
         } else {

@@ -333,10 +333,14 @@ fn build_recommendations(report: &WebProxySessionReport) -> Vec<String> {
 }
 
 fn truncate_narrative(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let char_count = s.chars().count();
+    if char_count <= max {
         s.to_string()
+    } else if max < 3 {
+        s.chars().take(max).collect()
     } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
+        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }
 
@@ -467,6 +471,24 @@ mod tests {
         assert_eq!(narrative.correlations.len(), 1);
         assert!(narrative.correlations[0].contains("DbPentest"));
         assert!(narrative.events.iter().any(|e| e.category == "correlation"));
+    }
+
+    #[test]
+    fn truncate_narrative_unicode_no_panic() {
+        let result = truncate_narrative(&"\u{1FA63}".repeat(10), 5);
+        assert!(result.chars().count() <= 5);
+    }
+
+    #[test]
+    fn truncate_narrative_short_no_pad() {
+        let result = truncate_narrative(&"\u{1FA63}".repeat(10), 100);
+        assert_eq!(result.chars().count(), 10);
+    }
+
+    #[test]
+    fn truncate_narrative_max_2_no_suffix() {
+        let result = truncate_narrative("abc", 2);
+        assert_eq!(result, "ab");
     }
 
     #[test]

@@ -856,7 +856,8 @@ impl BrowserSession {
         }
 
         inner.state = BrowserSessionState::Stopping;
-        // TODO: Tear down browser
+        // No browser engine to tear down: start() returns an error until the engine
+        // is wired up. State transition is a no-op until then.
         inner.state = BrowserSessionState::Stopped;
         Ok(())
     }
@@ -1410,7 +1411,8 @@ impl AsyncBrowserSession {
         }
 
         inner.state = BrowserSessionState::Stopping;
-        // TODO: Tear down browser
+        // No browser engine to tear down: start() returns an error until the engine
+        // is wired up. State transition is a no-op until then.
         inner.state = BrowserSessionState::Stopped;
         Ok(())
     }

@@ -2,6 +2,8 @@ pub(crate) fn truncate_str(s: &str, max_len: usize) -> String {
     let char_count = s.chars().count();
     if char_count <= max_len {
         s.to_string()
+    } else if max_len < 3 {
+        s.chars().take(max_len).collect()
     } else {
         let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
         format!("{}...", truncated)
