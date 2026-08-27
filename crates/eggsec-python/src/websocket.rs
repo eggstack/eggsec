@@ -1536,7 +1536,10 @@ impl WebSocketSessionPy {
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_closed
     }
 
     #[getter]
@@ -1554,7 +1557,9 @@ impl WebSocketSessionPy {
         let subprotocols = self.config.subprotocols.clone();
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed {
                 return Err(NetworkError::new_err("Session is closed"));
             }
@@ -1636,7 +1641,9 @@ impl WebSocketSessionPy {
 
             // Store the stream
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.ws_stream = Some(ws_stream);
             }
 
@@ -1660,28 +1667,44 @@ impl WebSocketSessionPy {
         let text_len = text.len();
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
-        let start = Instant::now();
-        {
-            let mut s = state.lock().unwrap();
-            let ws = s.ws_stream.as_mut().unwrap();
-            let ws_ref = unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
-
-            runtime_sync::block_on(py, async move {
-                tokio::time::timeout(std::time::Duration::from_millis(5000), ws_ref.send(msg))
+        let ws = {
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            s.ws_stream
+                .take()
+                .ok_or_else(|| NetworkError::new_err("Not connected"))?
+        };
+        let (ws, result) = runtime_sync::block_on(py, async move {
+            let mut ws = ws;
+            let result =
+                match tokio::time::timeout(std::time::Duration::from_millis(5000), ws.send(msg))
                     .await
-                    .map_err(|_| TimeoutError::new_err("Send timed out"))?
-                    .map_err(|e| NetworkError::new_err(format!("Send failed: {}", e)))
-            })?;
-        }
-        let _ = start;
+                {
+                    Ok(result) => {
+                        result.map_err(|e| NetworkError::new_err(format!("Send failed: {}", e)))
+                    }
+                    Err(_) => Err(TimeoutError::new_err("Send timed out")),
+                };
+            Ok::<_, PyErr>((ws, result))
+        })?;
+        state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ws_stream = Some(ws);
+        result?;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         s.bytes_sent += text_len as u64;
         s.message_count += 1;
         Ok(())
@@ -1694,26 +1717,44 @@ impl WebSocketSessionPy {
         let data_len = data.len();
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
-        {
-            let mut s = state.lock().unwrap();
-            let ws = s.ws_stream.as_mut().unwrap();
-            let ws_ref = unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
-
-            runtime_sync::block_on(py, async move {
-                tokio::time::timeout(std::time::Duration::from_millis(5000), ws_ref.send(msg))
+        let ws = {
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            s.ws_stream
+                .take()
+                .ok_or_else(|| NetworkError::new_err("Not connected"))?
+        };
+        let (ws, result) = runtime_sync::block_on(py, async move {
+            let mut ws = ws;
+            let result =
+                match tokio::time::timeout(std::time::Duration::from_millis(5000), ws.send(msg))
                     .await
-                    .map_err(|_| TimeoutError::new_err("Send timed out"))?
-                    .map_err(|e| NetworkError::new_err(format!("Send failed: {}", e)))
-            })?;
-        }
+                {
+                    Ok(result) => {
+                        result.map_err(|e| NetworkError::new_err(format!("Send failed: {}", e)))
+                    }
+                    Err(_) => Err(TimeoutError::new_err("Send timed out")),
+                };
+            Ok::<_, PyErr>((ws, result))
+        })?;
+        state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ws_stream = Some(ws);
+        result?;
 
-        let mut s = state.lock().unwrap();
+        let mut s = state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         s.bytes_sent += data_len as u64;
         s.message_count += 1;
         Ok(())
@@ -1725,37 +1766,51 @@ impl WebSocketSessionPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
-        let tungstenite_msg = {
-            let mut s = state.lock().unwrap();
-            let ws = s.ws_stream.as_mut().unwrap();
-            let ws_ref = unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
-
-            runtime_sync::block_on(py, async move {
-                tokio::time::timeout(timeout, ws_ref.next())
-                    .await
-                    .map_err(|_| {
-                        TimeoutError::new_err(format!(
-                            "Receive timed out after {}ms",
-                            timeout.as_millis()
-                        ))
-                    })?
-                    .ok_or_else(|| NetworkError::new_err("Connection closed by remote"))?
-                    .map_err(|e| NetworkError::new_err(format!("Receive failed: {}", e)))
-            })?
+        let ws = {
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            s.ws_stream
+                .take()
+                .ok_or_else(|| NetworkError::new_err("Not connected"))?
         };
+        let (ws, result) = runtime_sync::block_on(py, async move {
+            let mut ws = ws;
+            let result = match tokio::time::timeout(timeout, ws.next()).await {
+                Ok(Some(Ok(message))) => Ok(message),
+                Ok(Some(Err(error))) => {
+                    Err(NetworkError::new_err(format!("Receive failed: {}", error)))
+                }
+                Ok(None) => Err(NetworkError::new_err("Connection closed by remote")),
+                Err(_) => Err(TimeoutError::new_err(format!(
+                    "Receive timed out after {}ms",
+                    timeout.as_millis()
+                ))),
+            };
+            Ok::<_, PyErr>((ws, result))
+        })?;
+        state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ws_stream = Some(ws);
+        let tungstenite_msg = result?;
 
         let message = match tungstenite_msg {
             TungsteniteMessage::Text(text) => {
                 let text_str = text.to_string();
                 let data = text_str.as_bytes().to_vec();
                 let size = data.len();
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.bytes_received += size as u64;
                 s.message_count += 1;
                 let mut msg = WebSocketMessagePy::from_wire("text", &data);
@@ -1765,7 +1820,9 @@ impl WebSocketSessionPy {
             TungsteniteMessage::Binary(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.bytes_received += size as u64;
                 s.message_count += 1;
                 WebSocketMessagePy::from_wire("binary", &bytes)
@@ -1773,14 +1830,18 @@ impl WebSocketSessionPy {
             TungsteniteMessage::Ping(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.bytes_received += size as u64;
                 WebSocketMessagePy::from_wire("ping", &bytes)
             }
             TungsteniteMessage::Pong(data) => {
                 let bytes: Vec<u8> = data.into();
                 let size = bytes.len();
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.bytes_received += size as u64;
                 WebSocketMessagePy::from_wire("pong", &bytes)
             }
@@ -1813,24 +1874,40 @@ impl WebSocketSessionPy {
         let msg = TungsteniteMessage::Ping(ping_data.into());
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
-        {
-            let mut s = state.lock().unwrap();
-            let ws = s.ws_stream.as_mut().unwrap();
-            let ws_ref = unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
-
-            runtime_sync::block_on(py, async move {
-                tokio::time::timeout(std::time::Duration::from_millis(5000), ws_ref.send(msg))
+        let ws = {
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            s.ws_stream
+                .take()
+                .ok_or_else(|| NetworkError::new_err("Not connected"))?
+        };
+        let (ws, result) = runtime_sync::block_on(py, async move {
+            let mut ws = ws;
+            let result =
+                match tokio::time::timeout(std::time::Duration::from_millis(5000), ws.send(msg))
                     .await
-                    .map_err(|_| TimeoutError::new_err("Ping timed out"))?
-                    .map_err(|e| NetworkError::new_err(format!("Ping failed: {}", e)))
-            })?;
-        }
+                {
+                    Ok(result) => {
+                        result.map_err(|e| NetworkError::new_err(format!("Ping failed: {}", e)))
+                    }
+                    Err(_) => Err(TimeoutError::new_err("Ping timed out")),
+                };
+            Ok::<_, PyErr>((ws, result))
+        })?;
+        state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ws_stream = Some(ws);
+        result?;
 
         Ok(())
     }
@@ -1847,7 +1924,9 @@ impl WebSocketSessionPy {
         let close_reason = reason.unwrap_or("client close").to_string();
 
         {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed {
                 return Ok(WebSocketCloseInfoPy {
                     code: 1000,
@@ -1866,44 +1945,35 @@ impl WebSocketSessionPy {
             }
         }
 
-        let close_info = {
-            // Take the stream out of the state so we can operate on it without
-            // holding a mutable borrow across the block_on boundary.
-            let mut s = state.lock().unwrap();
-            let ws = s.ws_stream.take().unwrap();
-
-            let close_frame = CloseFrame {
-                code: CloseCode::from(close_code),
-                reason: close_reason.clone().into(),
-            };
-            let msg = TungsteniteMessage::Close(Some(close_frame));
-
-            let result = runtime_sync::block_on(py, async move {
-                let mut ws = ws;
-                tokio::time::timeout(std::time::Duration::from_millis(5000), ws.send(msg))
-                    .await
-                    .map_err(|_| TimeoutError::new_err("Close timed out"))?
-                    .map_err(|e| NetworkError::new_err(format!("Close failed: {}", e)))
-            });
-
-            match result {
-                Ok(()) => {
-                    s.is_closed = true;
-                    WebSocketCloseInfoPy {
-                        code: close_code,
-                        reason: close_reason,
-                        was_clean: true,
-                    }
-                }
-                Err(_) => {
-                    s.is_closed = true;
-                    WebSocketCloseInfoPy {
-                        code: close_code,
-                        reason: close_reason,
-                        was_clean: false,
-                    }
-                }
-            }
+        let ws = {
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            s.ws_stream
+                .take()
+                .ok_or_else(|| NetworkError::new_err("Not connected"))?
+        };
+        let close_frame = CloseFrame {
+            code: CloseCode::from(close_code),
+            reason: close_reason.clone().into(),
+        };
+        let msg = TungsteniteMessage::Close(Some(close_frame));
+        let result = runtime_sync::block_on(py, async move {
+            let mut ws = ws;
+            tokio::time::timeout(std::time::Duration::from_millis(5000), ws.send(msg))
+                .await
+                .map_err(|_| TimeoutError::new_err("Close timed out"))?
+                .map_err(|e| NetworkError::new_err(format!("Close failed: {}", e)))
+        });
+        let was_clean = result.is_ok();
+        state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_closed = true;
+        let close_info = WebSocketCloseInfoPy {
+            code: close_code,
+            reason: close_reason,
+            was_clean,
         };
 
         Ok(close_info)
@@ -1926,7 +1996,10 @@ impl WebSocketSessionPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         format!(
             "WebSocketSession(url={}, closed={}, sent={}, received={}, messages={})",
             self.config.url, s.is_closed, s.bytes_sent, s.bytes_received, s.message_count
@@ -1934,7 +2007,10 @@ impl WebSocketSessionPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if s.is_closed {
             format!("ws://{} (closed)", self.config.url)
         } else {
@@ -1959,7 +2035,9 @@ impl WebSocketSessionPy {
         let timeout = std::time::Duration::from_millis(100);
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
@@ -1967,23 +2045,32 @@ impl WebSocketSessionPy {
 
         let mut messages = Vec::new();
         for _ in 0..max_count {
-            let result = {
-                let mut s = state.lock().unwrap();
-                let ws = s.ws_stream.as_mut().unwrap();
-                let ws_ref =
-                    unsafe { &mut *(ws as *mut WebSocketStream<MaybeTlsStream<TcpStream>>) };
-
-                runtime_sync::block_on(py, async move {
-                    tokio::time::timeout(timeout, ws_ref.next()).await
-                })
+            let ws = {
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                s.ws_stream
+                    .take()
+                    .ok_or_else(|| NetworkError::new_err("Not connected"))?
             };
+            let (ws, result) = runtime_sync::block_on(py, async move {
+                let mut ws = ws;
+                let result = tokio::time::timeout(timeout, ws.next()).await;
+                Ok::<_, PyErr>((ws, result))
+            })?;
+            state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .ws_stream = Some(ws);
 
             match result {
                 Ok(Some(Ok(TungsteniteMessage::Text(text)))) => {
                     let text_str = text.to_string();
                     let data = text_str.as_bytes().to_vec();
                     let size = data.len();
-                    let mut s = state.lock().unwrap();
+                    let mut s = state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     s.bytes_received += size as u64;
                     s.message_count += 1;
                     let mut msg = WebSocketMessagePy::from_wire("text", &data);
@@ -1993,7 +2080,9 @@ impl WebSocketSessionPy {
                 Ok(Some(Ok(TungsteniteMessage::Binary(data)))) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let mut s = state.lock().unwrap();
+                    let mut s = state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     s.bytes_received += size as u64;
                     s.message_count += 1;
                     messages.push(WebSocketMessagePy::from_wire("binary", &bytes));
@@ -2001,7 +2090,9 @@ impl WebSocketSessionPy {
                 Ok(Some(Ok(TungsteniteMessage::Pong(data)))) => {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
-                    let mut s = state.lock().unwrap();
+                    let mut s = state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     s.bytes_received += size as u64;
                     messages.push(WebSocketMessagePy::from_wire("pong", &bytes));
                 }
@@ -2015,7 +2106,10 @@ impl WebSocketSessionPy {
     /// Return the transcript of all messages exchanged.
     #[getter]
     fn transcript(&self) -> NetworkTranscriptPy {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         NetworkTranscriptPy {
             entries: Vec::new(),
             total_bytes: s.bytes_sent + s.bytes_received,
@@ -2075,7 +2169,10 @@ impl AsyncWebSocketSessionPy {
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_closed
     }
 
     #[getter]
@@ -2093,7 +2190,9 @@ impl AsyncWebSocketSessionPy {
         let state = Arc::clone(&self.state);
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed {
                 return Err(NetworkError::new_err("Session is closed"));
             }
@@ -2167,7 +2266,9 @@ impl AsyncWebSocketSessionPy {
                 .unwrap_or_default();
 
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.ws_stream = Some(ws_stream);
             }
 
@@ -2189,7 +2290,9 @@ impl AsyncWebSocketSessionPy {
         let text_len = text.len();
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
@@ -2197,7 +2300,9 @@ impl AsyncWebSocketSessionPy {
 
         // Take the stream out to avoid holding MutexGuard across thread boundary
         let ws = {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             s.ws_stream.take()
         }
         .ok_or_else(|| NetworkError::new_err("Not connected"))?;
@@ -2211,7 +2316,9 @@ impl AsyncWebSocketSessionPy {
 
             // Put the stream back and update stats
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.ws_stream = Some(ws);
                 s.bytes_sent += text_len as u64;
                 s.message_count += 1;
@@ -2227,14 +2334,18 @@ impl AsyncWebSocketSessionPy {
         let data_len = data.len();
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
         let ws = {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             s.ws_stream.take()
         }
         .ok_or_else(|| NetworkError::new_err("Not connected"))?;
@@ -2247,7 +2358,9 @@ impl AsyncWebSocketSessionPy {
                 .map_err(|e| NetworkError::new_err(format!("Send failed: {}", e)))?;
 
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.ws_stream = Some(ws);
                 s.bytes_sent += data_len as u64;
                 s.message_count += 1;
@@ -2262,14 +2375,18 @@ impl AsyncWebSocketSessionPy {
         let timeout = std::time::Duration::from_millis(self.config.timeout_ms);
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
         let ws = {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             s.ws_stream.take()
         }
         .ok_or_else(|| NetworkError::new_err("Not connected"))?;
@@ -2293,7 +2410,9 @@ impl AsyncWebSocketSessionPy {
                     let data = text_str.as_bytes().to_vec();
                     let size = data.len();
                     {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                         s.message_count += 1;
@@ -2306,7 +2425,9 @@ impl AsyncWebSocketSessionPy {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
                     {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                         s.message_count += 1;
@@ -2317,7 +2438,9 @@ impl AsyncWebSocketSessionPy {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
                     {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                     }
@@ -2327,14 +2450,18 @@ impl AsyncWebSocketSessionPy {
                     let bytes: Vec<u8> = data.into();
                     let size = bytes.len();
                     {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
                         s.ws_stream = Some(ws);
                         s.bytes_received += size as u64;
                     }
                     WebSocketMessagePy::from_wire("pong", &bytes)
                 }
                 TungsteniteMessage::Close(frame) => {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     s.is_closed = true;
                     // Don't put the stream back - connection is closed
                     let close_info = frame.map(|f| WebSocketCloseInfoPy {
@@ -2352,7 +2479,9 @@ impl AsyncWebSocketSessionPy {
                 }
                 TungsteniteMessage::Frame(_) => {
                     // Put the stream back
-                    let mut s = state.lock().unwrap();
+                    let mut s = state
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     s.ws_stream = Some(ws);
                     return Err(NetworkError::new_err("Unexpected raw frame"));
                 }
@@ -2369,14 +2498,18 @@ impl AsyncWebSocketSessionPy {
         let msg = TungsteniteMessage::Ping(ping_data.into());
 
         {
-            let s = state.lock().unwrap();
+            let s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed || s.ws_stream.is_none() {
                 return Err(NetworkError::new_err("Not connected"));
             }
         }
 
         let ws = {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             s.ws_stream.take()
         }
         .ok_or_else(|| NetworkError::new_err("Not connected"))?;
@@ -2390,7 +2523,9 @@ impl AsyncWebSocketSessionPy {
 
             // Put the stream back
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.ws_stream = Some(ws);
             }
             Ok(())
@@ -2408,7 +2543,9 @@ impl AsyncWebSocketSessionPy {
         let close_reason = reason.unwrap_or("client close").to_string();
 
         let ws = {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if s.is_closed {
                 // Idempotent: already closed returns a successful close info.
                 return crate::runtime_async::spawn_async(async move {
@@ -2447,7 +2584,9 @@ impl AsyncWebSocketSessionPy {
 
             // Mark as closed - don't put the stream back
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 s.is_closed = true;
             }
 
@@ -2478,7 +2617,9 @@ impl AsyncWebSocketSessionPy {
     ) -> bool {
         let state = Arc::clone(&self.state);
         {
-            let mut s = state.lock().unwrap();
+            let mut s = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !s.is_closed {
                 s.is_closed = true;
                 s.ws_stream.take();
@@ -2488,7 +2629,10 @@ impl AsyncWebSocketSessionPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         format!(
             "AsyncWebSocketSession(url={}, closed={}, sent={}, received={}, messages={})",
             self.config.url, s.is_closed, s.bytes_sent, s.bytes_received, s.message_count
@@ -2496,7 +2640,10 @@ impl AsyncWebSocketSessionPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if s.is_closed {
             format!("ws://{} (closed)", self.config.url)
         } else {

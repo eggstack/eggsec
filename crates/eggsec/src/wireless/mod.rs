@@ -11,6 +11,7 @@ pub mod active;
 
 use crate::error::{EggsecError, Result};
 use crate::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -445,8 +446,7 @@ impl WirelessScanner {
             }
         }
 
-        let mut ssid_groups: std::collections::HashMap<String, Vec<&WirelessNetwork>> =
-            std::collections::HashMap::new();
+        let mut ssid_groups: FxHashMap<String, Vec<&WirelessNetwork>> = FxHashMap::default();
         for network in networks {
             ssid_groups
                 .entry(network.ssid.clone())
@@ -937,7 +937,7 @@ fn compute_changes_since(
         }
     }
 
-    let prev_sec: std::collections::HashMap<String, SecurityType> = prev
+    let prev_sec: FxHashMap<String, SecurityType> = prev
         .networks
         .iter()
         .map(|n| (n.bssid.clone(), n.security_type))
@@ -956,7 +956,7 @@ fn compute_changes_since(
         }
     }
 
-    let prev_sig: std::collections::HashMap<String, i32> = prev
+    let prev_sig: FxHashMap<String, i32> = prev
         .networks
         .iter()
         .map(|n| (n.bssid.clone(), n.signal_strength))
@@ -1005,9 +1005,8 @@ fn build_temporal_summary(
     let mut unique_ssids: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut all_seen_nets: std::collections::HashSet<(String, String)> =
         std::collections::HashSet::new();
-    let mut last_sec: std::collections::HashMap<String, SecurityType> =
-        std::collections::HashMap::new();
-    let mut last_sig: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
+    let mut last_sec: FxHashMap<String, SecurityType> = FxHashMap::default();
+    let mut last_sig: FxHashMap<String, i32> = FxHashMap::default();
     let mut scans_with_new_nets: u32 = 0;
     let mut sec_changes: u32 = 0;
     let mut sig_drifts: u32 = 0;

@@ -1481,12 +1481,19 @@ impl AsyncHttpClientPy {
     /// Whether the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        *self.is_closed.lock().unwrap()
+        *self
+            .is_closed
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Execute an HTTP request asynchronously.
     fn async_request(&self, req: HttpRequestPy) -> PyResult<runtime_async::PyFuture> {
-        if *self.is_closed.lock().unwrap() {
+        if *self
+            .is_closed
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
             return Err(NetworkError::new_err("HTTP client is closed"));
         }
 
@@ -1638,7 +1645,10 @@ impl AsyncHttpClientPy {
 
     /// Mark the client as closed.
     fn close(&self) {
-        *self.is_closed.lock().unwrap() = true;
+        *self
+            .is_closed
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
     }
 
     /// Async context manager __aenter__.
@@ -1670,7 +1680,10 @@ impl AsyncHttpClientPy {
         format!(
             "AsyncHttpClientPy(base_url={:?}, closed={})",
             self.config.base_url,
-            *self.is_closed.lock().unwrap()
+            *self
+                .is_closed
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
         )
     }
 

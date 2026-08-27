@@ -451,7 +451,9 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         // Receivers may already be dropped during normal shutdown; send failure is expected.
-        let _ = self.shutdown_tx.send(true);
+        if let Err(error) = self.shutdown_tx.send(true) {
+            tracing::debug!(?error, "Worker shutdown receiver already dropped");
+        }
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();
         }

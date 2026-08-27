@@ -395,7 +395,10 @@ impl Runtime {
 
             // Reject task kinds not supported by runtime capabilities
             {
-                let session = state.sessions.get(&session_id).unwrap();
+                let session = state
+                    .sessions
+                    .get(&session_id)
+                    .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
                 if !session
                     .capabilities()
                     .supports_task_kind(&request.task_kind)
@@ -408,7 +411,7 @@ impl Runtime {
             let active_ids: Vec<TaskId> = state
                 .sessions
                 .get(&session_id)
-                .unwrap()
+                .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?
                 .tasks
                 .iter()
                 .filter(|(_, t)| !t.status.is_terminal())
@@ -418,7 +421,7 @@ impl Runtime {
                 if let Some(task) = state
                     .sessions
                     .get_mut(&session_id)
-                    .unwrap()
+                    .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?
                     .tasks
                     .get_mut(&existing_id)
                 {
@@ -452,7 +455,10 @@ impl Runtime {
 
             // Build execution context from session state (trust boundary).
             let context = {
-                let session = state.sessions.get(&session_id).unwrap();
+                let session = state
+                    .sessions
+                    .get(&session_id)
+                    .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
                 RuntimeExecutionContext {
                     session_id,
                     surface: session.execution_surface(),
@@ -479,18 +485,23 @@ impl Runtime {
                 normalized_request.surface = session_surface;
             }
 
-            state.sessions.get_mut(&session_id).unwrap().tasks.insert(
-                task_id,
-                crate::session::TaskRecord {
-                    request: normalized_request.clone(),
-                    status: TaskStatus::Queued,
-                    progress: None,
-                    last_error: None,
-                    outcome: None,
-                    abort: Some(cancel_token.clone()),
-                    _handle: None,
-                },
-            );
+            state
+                .sessions
+                .get_mut(&session_id)
+                .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?
+                .tasks
+                .insert(
+                    task_id,
+                    crate::session::TaskRecord {
+                        request: normalized_request.clone(),
+                        status: TaskStatus::Queued,
+                        progress: None,
+                        last_error: None,
+                        outcome: None,
+                        abort: Some(cancel_token.clone()),
+                        _handle: None,
+                    },
+                );
 
             emit_event(
                 &state.event_tx,

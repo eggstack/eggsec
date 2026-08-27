@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::dispatch::executor::OperationExecutor;
 
@@ -9,7 +9,7 @@ use crate::dispatch::executor::OperationExecutor;
 pub struct ExecutorRegistry {
     executors: Vec<Box<dyn OperationExecutor>>,
     /// Maps canonical operation ID → index into `executors`.
-    operation_to_executor: HashMap<String, usize>,
+    operation_to_executor: FxHashMap<String, usize>,
 }
 
 impl ExecutorRegistry {
@@ -17,7 +17,7 @@ impl ExecutorRegistry {
     pub fn new() -> Self {
         Self {
             executors: Vec::new(),
-            operation_to_executor: HashMap::new(),
+            operation_to_executor: FxHashMap::default(),
         }
     }
 

@@ -117,11 +117,21 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::PersistedSnapshot { request_id, .. } => {
                                         request_id.clone()
                                     }
-                                    ServerMessage::RuntimeEvent { .. } => unreachable!(),
+                                    ServerMessage::RuntimeEvent { .. } => {
+                                        tracing::warn!(
+                                            "Unexpected runtime event in pending response channel"
+                                        );
+                                        continue;
+                                    }
                                 };
                                 let mut pending = pending_clone.lock().unwrap();
                                 if let Some(sender) = pending.remove(&request_id) {
-                                    let _ = sender.send(other);
+                                    if let Err(error) = sender.send(other) {
+                                        tracing::debug!(
+                                            ?error,
+                                            "Pending daemon response receiver dropped"
+                                        );
+                                    }
                                 }
                             }
                         }

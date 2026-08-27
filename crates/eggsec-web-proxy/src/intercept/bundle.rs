@@ -413,10 +413,28 @@ pub fn compare_bundles(baseline: &EvidenceBundle, other: &EvidenceBundle) -> Bun
     let mut flows_modified = Vec::new();
     for b_flow in &baseline.flows {
         if let Some(o_flow) = other.flows.iter().find(|f| f.index == b_flow.index) {
-            let b_json = serde_json::to_string(b_flow).unwrap_or_default();
-            let o_json = serde_json::to_string(o_flow).unwrap_or_default();
-            if b_json != o_json {
-                flows_modified.push(b_flow.index);
+            match (serde_json::to_string(b_flow), serde_json::to_string(o_flow)) {
+                (Ok(b_json), Ok(o_json)) if b_json != o_json => {
+                    flows_modified.push(b_flow.index);
+                }
+                (Err(b_err), Err(o_err)) => {
+                    tracing::warn!(
+                        flow_index = b_flow.index,
+                        baseline_error = %b_err,
+                        other_error = %o_err,
+                        "Failed to serialize compared flows"
+                    );
+                    flows_modified.push(b_flow.index);
+                }
+                (Err(error), Ok(_)) | (Ok(_), Err(error)) => {
+                    tracing::warn!(
+                        flow_index = b_flow.index,
+                        error = %error,
+                        "Failed to serialize compared flow"
+                    );
+                    flows_modified.push(b_flow.index);
+                }
+                _ => {}
             }
         }
     }

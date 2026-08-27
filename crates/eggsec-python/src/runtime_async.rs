@@ -45,7 +45,11 @@ impl PyFuture {
     /// Iterator protocol: returns Python `None` while pending and raises
     /// StopIteration with the result once the worker completes.
     fn __next__<'py>(mut slf: PyRefMut<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
-        let recv_result = slf.rx.as_ref().map(|rx| rx.lock().unwrap().try_recv());
+        let recv_result = slf.rx.as_ref().map(|rx| {
+            rx.lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .try_recv()
+        });
         match recv_result {
             Some(Ok(Ok(result))) => {
                 slf.rx.take();
@@ -103,7 +107,9 @@ where
             }
             Err(e) => Err(e),
         };
-        let _ = tx.send(converted);
+        if let Err(error) = tx.send(converted) {
+            tracing::debug!(%error, "Python async result receiver dropped");
+        }
     });
 
     Ok(PyFuture {

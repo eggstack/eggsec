@@ -2789,7 +2789,11 @@ W/PackageManager: permission denied: READ_SMS
         // quick size sanity (gzipped should be small but non-zero)
         let meta = std::fs::metadata(&out).unwrap();
         assert!(meta.len() > 10);
-        let _ = std::fs::remove_file(&out);
+        if let Err(error) = std::fs::remove_file(&out) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(path = %out, error = %error, "Failed to remove temporary evidence bundle");
+            }
+        }
     }
 
     #[test]
@@ -3122,7 +3126,11 @@ W/PackageManager: permission denied: READ_SMS
             .iter()
             .any(|n| n.contains("new categories") || n.contains("no significant")));
         assert!(corr.is_none()); // no static baseline supplied
-        let _ = std::fs::remove_file(&bp);
+        if let Err(error) = std::fs::remove_file(&bp) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(path = %bp, error = %error, "Failed to remove temporary baseline");
+            }
+        }
 
         // 3. export_evidence_bundle now includes bundle_manifest (Phase 4c)
         let mut r = DynamicMobileReport::new("bm.apk");
@@ -3137,7 +3145,11 @@ W/PackageManager: permission denied: READ_SMS
         let p = tmp.to_string_lossy().to_string();
         let out = export_evidence_bundle(&r, Some(&ts), &p).expect("bundle");
         assert!(std::path::Path::new(&out).exists());
-        let _ = std::fs::remove_file(&p);
+        if let Err(error) = std::fs::remove_file(&p) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(path = %p, error = %error, "Failed to remove temporary evidence bundle");
+            }
+        }
 
         // 4. compare_to_baseline surfaces the Phase 4c "new categories" note
         let base = MobileBaseline {
@@ -3259,6 +3271,10 @@ W/PackageManager: permission denied: READ_SMS
             .is_object());
         assert!(val.get("exported_at").expect("exported_at").is_string());
 
-        let _ = std::fs::remove_file(&path);
+        if let Err(error) = std::fs::remove_file(&path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(path = %path, error = %error, "Failed to remove temporary report");
+            }
+        }
     }
 }

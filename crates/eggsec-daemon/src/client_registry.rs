@@ -437,12 +437,13 @@ mod tests {
         for cmd in &commands {
             let perm = command_permission(cmd);
             // Every command must map to a permission — no panics or undefined behavior.
-            let _ = check_permission(
+            assert!(check_permission(
                 &ClientKind::Tui,
                 &ClientRole::Owner,
                 &RuntimeSurface::TuiManual,
                 perm,
-            );
+            )
+            .is_ok());
         }
     }
 

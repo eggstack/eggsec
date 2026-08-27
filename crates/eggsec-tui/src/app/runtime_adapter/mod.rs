@@ -756,19 +756,23 @@ mod tests {
 
         // Send events before draining.
         let sid = eggsec_runtime::SessionId::new();
-        let _ = tx.send(RuntimeEvent::TaskStarted {
-            session_id: sid,
-            task_id,
-        });
-        let _ = tx.send(RuntimeEvent::TaskProgress {
-            session_id: sid,
-            task_id,
-            progress: eggsec_runtime::TaskProgress {
-                completed: 25,
-                total: Some(100),
-                message: None,
-            },
-        });
+        assert!(tx
+            .send(RuntimeEvent::TaskStarted {
+                session_id: sid,
+                task_id,
+            })
+            .is_ok());
+        assert!(tx
+            .send(RuntimeEvent::TaskProgress {
+                session_id: sid,
+                task_id,
+                progress: eggsec_runtime::TaskProgress {
+                    completed: 25,
+                    total: Some(100),
+                    message: None,
+                },
+            })
+            .is_ok());
         drop(tx);
 
         let actions = adapter.drain_and_reduce(&mut rx, None);

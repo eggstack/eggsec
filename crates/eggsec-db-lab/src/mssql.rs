@@ -28,10 +28,11 @@ pub async fn run_mssql_checks(
     config.port(target.port);
     let db_name = target.database.as_deref().unwrap_or("master");
     config.database(db_name);
-    config.authentication(AuthMethod::sql_server(
-        target.user.clone(),
-        target.password.clone().unwrap_or_default(),
-    ));
+    let password = target
+        .password
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("MSSQL checks require a password"))?;
+    config.authentication(AuthMethod::sql_server(target.user.clone(), password));
     // Lab-friendly: trust self-signed / dev certs; production labs should use proper certs.
     config.trust_cert();
 

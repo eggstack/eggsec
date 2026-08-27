@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
 use crate::tabs::core::render_input_fields;
@@ -434,14 +432,6 @@ impl PacketTab {
                 self.state = AppState::Running;
                 self.run_interfaces();
             }
-        }
-    }
-
-    fn update_results_view(&mut self) {
-        self.results_view.clear();
-        let lines: Vec<Line> = self.results.iter().map(|s| Line::from(s.clone())).collect();
-        for line in lines {
-            self.results_view.add_line(line);
         }
     }
 

@@ -1466,7 +1466,10 @@ mod tests {
             _ => panic!("expected SessionCreated"),
         };
 
-        let access = host.session_access.lock().unwrap();
+        let access = host
+            .session_access
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let session_access = access.get(&session_id).unwrap();
         assert_eq!(session_access.owner_client_id, Some(client_id));
     }
@@ -2044,7 +2047,10 @@ mod tests {
             _ => panic!("expected SessionCreated"),
         };
 
-        let access = host.session_access.lock().unwrap();
+        let access = host
+            .session_access
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let session_access = access.get(&session_id).unwrap();
         assert_eq!(
             session_access.surface,
@@ -2295,7 +2301,10 @@ mod tests {
                 Ok(vec![])
             }
             async fn record_audit_event(&self, event: &PersistedAuditEvent) -> anyhow::Result<()> {
-                self.events.lock().unwrap().push(event.clone());
+                self.events
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .push(event.clone());
                 Ok(())
             }
             async fn delete_session(
@@ -2377,7 +2386,11 @@ mod tests {
         }
         // Give the audit-event record task a moment to complete.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        let events = recorder.events.lock().unwrap().clone();
+        let events = recorder
+            .events
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let denial = events
             .iter()
             .find(|e| e.action.starts_with("command-denied") && e.outcome == "denied")
@@ -2593,7 +2606,11 @@ mod tests {
             fn blocking_list_sessions(
                 &self,
             ) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
-                Ok(self.sessions.lock().unwrap().clone())
+                Ok(self
+                    .sessions
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone())
             }
             fn blocking_get_snapshot(
                 &self,
@@ -2668,7 +2685,10 @@ mod tests {
 
         // Register owner and other in session_access
         {
-            let mut access = host.session_access.lock().unwrap();
+            let mut access = host
+                .session_access
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let sid = eggsec_runtime::SessionId::new();
             access.insert(
                 sid,
@@ -2692,7 +2712,10 @@ mod tests {
 
         // Get the session ID from the access map
         let sid = {
-            let access = host.session_access.lock().unwrap();
+            let access = host
+                .session_access
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             access.keys().next().copied().unwrap()
         };
 
@@ -2877,7 +2900,10 @@ mod tests {
                 &self,
             ) -> anyhow::Result<Vec<eggsec_runtime::SessionSnapshot>> {
                 let sid = eggsec_runtime::SessionId::new();
-                let owner = *self.owner.lock().unwrap();
+                let owner = *self
+                    .owner
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 Ok(vec![eggsec_runtime::SessionSnapshot {
                     session_id: sid,
                     surface: eggsec_runtime::RuntimeSurface::McpServer,
@@ -2926,7 +2952,10 @@ mod tests {
         host.recover_persisted_state().await.unwrap();
 
         // After recovery, session_access should have the owner
-        let access = host.session_access.lock().unwrap();
+        let access = host
+            .session_access
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let found = access.values().any(|a| a.owner_client_id == Some(owner_id));
         assert!(
             found,

@@ -210,17 +210,25 @@ async fn wait_for_shutdown_signal() {
         Ok(s) => s,
         Err(e) => {
             tracing::warn!(error = %e, "Failed to install SIGTERM handler");
-            let _ = tokio::signal::ctrl_c().await;
+            if let Err(e) = tokio::signal::ctrl_c().await {
+                tracing::error!(error = %e, "Failed to install Ctrl-C handler");
+            }
             return;
         }
     };
     tokio::select! {
         _ = sigterm.recv() => {}
-        _ = tokio::signal::ctrl_c() => {}
+        result = tokio::signal::ctrl_c() => {
+            if let Err(e) = result {
+                tracing::error!(error = %e, "Ctrl-C handler failed");
+            }
+        }
     }
 }
 
 #[cfg(not(unix))]
 async fn wait_for_shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        tracing::error!(error = %e, "Ctrl-C handler failed");
+    }
 }

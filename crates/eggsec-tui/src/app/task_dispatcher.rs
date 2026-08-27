@@ -44,7 +44,9 @@ impl TaskDispatcher for TuiTaskDispatcher {
             let envelope = task_result_to_envelope(&task_result);
 
             // Send typed result through the channel for TUI rendering.
-            let _ = result_tx.send(task_result).await;
+            if let Err(error) = result_tx.send(task_result).await {
+                tracing::warn!(%error, "TUI result receiver dropped before task completion");
+            }
 
             // Return a structured envelope so non-TUI frontends
             // (daemon, REST, MCP) also receive useful completion data.

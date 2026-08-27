@@ -380,13 +380,15 @@ async fn execute_linked_server_probe(
             use tokio::net::TcpStream;
             use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+            let password = target
+                .password
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("MSSQL linked-server probe requires a password"))?;
+
             let mut config = Config::new();
             config.host(&target.host);
             config.port(target.port);
-            config.authentication(AuthMethod::sql_server(
-                target.user.clone(),
-                target.password.clone().unwrap_or_default(),
-            ));
+            config.authentication(AuthMethod::sql_server(target.user.clone(), password));
             config.trust_cert();
 
             let tcp = TcpStream::connect(config.get_addr()).await?;

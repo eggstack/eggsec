@@ -516,13 +516,15 @@ async fn handle_http2_interception(
                             Ok(r) => r,
                             Err(e) => {
                                 tracing::debug!("Failed to build upstream request: {}", e);
-                                let _ = client_respond.send_response(
+                                if let Err(error) = client_respond.send_response(
                                     http::Response::builder()
                                         .status(502)
                                         .body(())
                                         .unwrap(),
                                     true,
-                                );
+                                ) {
+                                    tracing::debug!(%error, "Failed to send HTTP/2 client error response");
+                                }
                                 continue;
                             }
                         };
@@ -532,13 +534,15 @@ async fn handle_http2_interception(
                             Ok(ready_send) => { h2_upstream_send = ready_send; }
                             Err(e) => {
                                 tracing::debug!("HTTP/2 upstream not ready: {}", e);
-                                let _ = client_respond.send_response(
+                                if let Err(error) = client_respond.send_response(
                                     http::Response::builder()
                                         .status(502)
                                         .body(())
                                         .unwrap(),
                                     true,
-                                );
+                                ) {
+                                    tracing::debug!(%error, "Failed to send HTTP/2 upstream readiness error response");
+                                }
                                 break;
                             }
                         }
@@ -558,13 +562,15 @@ async fn handle_http2_interception(
                                     Ok(r) => r,
                                     Err(e) => {
                                         tracing::debug!("HTTP/2 upstream response error on stream {}: {}", stream_id, e);
-                                        let _ = client_respond.send_response(
+                                        if let Err(error) = client_respond.send_response(
                                             http::Response::builder()
                                                 .status(502)
                                                 .body(())
                                                 .unwrap(),
                                             true,
-                                        );
+                                        ) {
+                                            tracing::debug!(%error, "Failed to send HTTP/2 upstream response error");
+                                        }
                                         continue;
                                     }
                                 };

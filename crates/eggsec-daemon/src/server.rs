@@ -86,7 +86,12 @@ pub async fn run_server(
     shutdown: CancellationToken,
 ) -> Result<(), DaemonError> {
     let socket_path = &host.config().socket_path;
-    let _ = std::fs::remove_file(socket_path);
+    if let Err(error) = std::fs::remove_file(socket_path) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(path = %socket_path, error = %error, "Failed to remove stale daemon socket");
+            return Err(error.into());
+        }
+    }
     let listener = UnixListener::bind(socket_path)?;
 
     // Restrict the socket to its owner. With a permissive umask the socket
@@ -136,7 +141,11 @@ pub async fn run_server(
         }
     }
 
-    let _ = std::fs::remove_file(socket_path);
+    if let Err(error) = std::fs::remove_file(socket_path) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(path = %socket_path, error = %error, "Failed to remove daemon socket during shutdown");
+        }
+    }
     Ok(())
 }
 

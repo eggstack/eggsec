@@ -1266,12 +1266,18 @@ impl AsyncCaptureSessionPy {
 
     #[getter]
     fn is_running(&self) -> bool {
-        self.state.lock().unwrap().is_running
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_running
     }
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_closed
     }
 
     #[getter]
@@ -1286,7 +1292,10 @@ impl AsyncCaptureSessionPy {
 
     /// Start the capture session (async).
     fn start(&self) -> PyResult<()> {
-        let mut s = self.state.lock().unwrap();
+        let mut s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if s.is_closed {
             return Err(pyo3::exceptions::PyValueError::new_err("Session is closed"));
         }
@@ -1296,7 +1305,10 @@ impl AsyncCaptureSessionPy {
 
     /// Stop the capture session (async).
     fn stop(&self) -> PyResult<CaptureStatsPy> {
-        let mut s = self.state.lock().unwrap();
+        let mut s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         s.is_running = false;
         s.is_closed = true;
         Ok(CaptureStatsPy {
@@ -1309,12 +1321,19 @@ impl AsyncCaptureSessionPy {
 
     /// Get current drop statistics.
     fn drop_stats(&self) -> CaptureDropStatsPy {
-        self.state.lock().unwrap().drop_stats.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .drop_stats
+            .clone()
     }
 
     /// Get live capture statistics.
     fn stats(&self) -> CaptureStatsPy {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         CaptureStatsPy {
             packets_captured: s.packet_count as usize,
             bytes_captured: s.bytes_captured as usize,
@@ -1338,7 +1357,10 @@ impl AsyncCaptureSessionPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         format!(
             "AsyncCaptureSession(interface={}, running={}, packets={}, dropped={})",
             self.config.interface, s.is_running, s.packet_count, s.packets_dropped
@@ -1346,7 +1368,10 @@ impl AsyncCaptureSessionPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if s.is_closed {
             format!("capture@{} (closed)", self.config.interface)
         } else {
@@ -2858,12 +2883,18 @@ impl SyncCaptureSessionPy {
 
     #[getter]
     fn is_running(&self) -> bool {
-        self.state.lock().unwrap().is_running
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_running
     }
 
     #[getter]
     fn is_closed(&self) -> bool {
-        self.state.lock().unwrap().is_closed
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_closed
     }
 
     fn __enter__(slf: Py<Self>) -> Py<Self> {
@@ -2882,7 +2913,10 @@ impl SyncCaptureSessionPy {
     }
 
     fn __repr__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         format!(
             "SyncCaptureSession(interface={}, running={}, closed={})",
             self.config.interface, s.is_running, s.is_closed
@@ -2890,7 +2924,10 @@ impl SyncCaptureSessionPy {
     }
 
     fn __str__(&self) -> String {
-        let s = self.state.lock().unwrap();
+        let s = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if s.is_closed {
             format!("sync_capture@{} (closed)", self.config.interface)
         } else if s.is_running {

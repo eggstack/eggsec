@@ -86,7 +86,10 @@ pub fn get_shared_insecure_http_client() -> Client {
         Client::builder()
             .danger_accept_invalid_certs(true)
             .build()
-            .unwrap()
+            .unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to create insecure fallback HTTP client; using verified client");
+                Client::new()
+            })
     })
 }
 
