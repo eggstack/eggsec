@@ -111,12 +111,18 @@ pub fn redact_json(input: &serde_json::Value) -> serde_json::Value {
         serde_json::Value::Object(obj) => {
             let mut redacted = serde_json::Map::new();
             for (key, value) in obj {
-                let redacted_key = if is_sensitive_key(key) {
+                let sensitive_key = is_sensitive_key(key);
+                let redacted_key = if sensitive_key {
                     format!("[REDACTED {}]", key.to_uppercase())
                 } else {
                     key.clone()
                 };
-                redacted.insert(redacted_key, redact_json(value));
+                let redacted_value = if sensitive_key {
+                    serde_json::Value::String("[REDACTED]".to_string())
+                } else {
+                    redact_json(value)
+                };
+                redacted.insert(redacted_key, redacted_value);
             }
             serde_json::Value::Object(redacted)
         }
@@ -315,6 +321,8 @@ mod tests {
             .as_object()
             .unwrap()
             .contains_key("[REDACTED PASSWORD]"));
+        assert_eq!(result["[REDACTED PASSWORD]"], "[REDACTED]");
+        assert_eq!(result["[REDACTED API_KEY]"], "[REDACTED]");
     }
 
     #[test]
@@ -337,7 +345,7 @@ mod tests {
         });
         let result = redact_json(&input);
         let items = result["items"].as_array().unwrap();
-        assert_eq!(items[0]["token=[REDACTED TOKEN]"], serde_json::Value::Null);
+        assert_eq!(items[0]["[REDACTED TOKEN]"], "[REDACTED]");
         assert_eq!(items[1]["value"], "safe");
     }
 
@@ -352,14 +360,7 @@ mod tests {
             }
         });
         let result = redact_json(&input);
-        let auth_obj = result["config"]
-            .as_object()
-            .unwrap()
-            .get("[REDACTED AUTH]")
-            .unwrap()
-            .as_object()
-            .unwrap();
-        assert_eq!(auth_obj["timeout"], 30);
-        assert!(auth_obj.contains_key("[REDACTED SECRET]"));
+        assert_eq!(result["config"]["[REDACTED AUTH]"], "[REDACTED]");
+        assert!(!result.to_string().contains("hunter2"));
     }
 }

@@ -147,11 +147,11 @@ impl AsyncEngine {
     ///
     /// When the engine was constructed via `AsyncEngine.daemon(...)`, the request
     /// is submitted to the daemon session instead of executing locally.
-    fn run(&self, py: Python<'_>, request: OperationRequest) -> PyResult<runtime_async::PyFuture> {
+    fn run(&self, _py: Python<'_>, request: OperationRequest) -> PyResult<runtime_async::PyFuture> {
         #[cfg(feature = "daemon-client")]
         {
             if let Some(daemon) = &self.daemon_backend {
-                return self.run_via_daemon_async(py, &request, daemon);
+                return self.run_via_daemon_async(_py, &request, daemon);
             }
         }
         self.state
@@ -2093,7 +2093,7 @@ impl AsyncEngine {
         config: crate::graphql::GraphQLTestConfigPy,
     ) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
-            let mut fuzzer =
+            let fuzzer =
                 eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
                     .with_introspection(config.enable_introspection)
                     .with_depth_bypass(config.enable_depth_bypass)
@@ -2140,7 +2140,7 @@ impl AsyncEngine {
 
     fn run_auth_test_async(&self, target: String) -> PyResult<runtime_async::PyFuture> {
         runtime_async::spawn_async(async move {
-            let mut engine = eggsec::auth::AuthEngine::new(100, 10, 30, true).map_pyerr()?;
+            let engine = eggsec::auth::AuthEngine::new(100, 10, 30, true).map_pyerr()?;
             let report = engine.run_full_test(&target).await.map_pyerr()?;
             Ok(crate::auth_assess::AuthTestReportPy::from_engine(report))
         })

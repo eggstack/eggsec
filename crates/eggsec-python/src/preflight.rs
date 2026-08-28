@@ -1,10 +1,7 @@
 use pyo3::prelude::*;
 
-use crate::authorization::{ExecutionPolicyPy, ManualOverridePy};
-use crate::error::EnforcementError as PyEnforcementError;
-use crate::execution_context::{
-    EnforcementContextPy, EnforcementOutcomePy, OperationDescriptorPy, PolicyDecisionPy,
-};
+use crate::authorization::ExecutionPolicyPy;
+use crate::execution_context::{OperationDescriptorPy, PolicyDecisionPy};
 use crate::scope_eval::LoadedScopePy;
 
 // ---------------------------------------------------------------------------

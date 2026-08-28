@@ -96,6 +96,7 @@ mod tests {
             ports: Some("80,443".into()),
             scan_type: None,
             timeout_ms: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         let meta = operation_metadata("scan-ports").unwrap();
@@ -115,6 +116,7 @@ mod tests {
             target: "https://example.com".into(),
             methods: None,
             wordlist: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "scan-endpoints");
@@ -125,6 +127,7 @@ mod tests {
     fn fingerprint_descriptor() {
         let req = make_request(TaskKind::Fingerprint(FingerprintParams {
             target: "10.0.0.1".into(),
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "fingerprint");
@@ -135,6 +138,7 @@ mod tests {
     fn waf_descriptor() {
         let req = make_request(TaskKind::Waf(WafParams {
             target: "https://example.com".into(),
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "waf-detect");
@@ -145,6 +149,7 @@ mod tests {
         let req = make_request(TaskKind::WafStress(WafStressParams {
             target: "https://example.com".into(),
             requests: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "waf-stress");
@@ -178,6 +183,7 @@ mod tests {
             connections: None,
             duration_secs: None,
             rate_limit: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "load-test");
@@ -189,6 +195,7 @@ mod tests {
             target: "https://example.com".into(),
             payload_type: None,
             threads: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "fuzz");
@@ -201,6 +208,7 @@ mod tests {
             flood_type: "syn".into(),
             duration_secs: None,
             threads: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "stress-test");
@@ -212,6 +220,7 @@ mod tests {
             interface: None,
             filter: None,
             duration_secs: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());
@@ -226,6 +235,7 @@ mod tests {
         let req = make_request(TaskKind::GraphQl(GraphQlParams {
             target: "https://example.com/graphql".into(),
             introspection: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "graphql");
@@ -236,6 +246,7 @@ mod tests {
         let req = make_request(TaskKind::OAuth(OAuthParams {
             target: "https://example.com".into(),
             flow: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "oauth");
@@ -247,6 +258,7 @@ mod tests {
             target: "https://example.com".into(),
             username: None,
             credential_list: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "auth-test");
@@ -379,6 +391,7 @@ mod tests {
             db_type: "postgres".into(),
             target: "localhost".into(),
             port: None,
+            ..Default::default()
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "db-pentest");
@@ -389,6 +402,7 @@ mod tests {
         let req = make_request(TaskKind::Intercept(InterceptParams {
             listen_port: None,
             target: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());
@@ -403,6 +417,7 @@ mod tests {
         let req = make_request(TaskKind::C2(C2Params {
             profile: None,
             target: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());
@@ -432,6 +447,7 @@ mod tests {
             target: "10.0.0.1".into(),
             protocol: "tcp".into(),
             payload: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());

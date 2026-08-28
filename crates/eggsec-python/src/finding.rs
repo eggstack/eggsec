@@ -394,7 +394,7 @@ impl FindingSetIteratorPy {
         slf
     }
 
-    fn __next__<'py>(mut slf: PyRefMut<'py, Self>, py: Python<'py>) -> PyResult<Option<Finding>> {
+    fn __next__<'py>(mut slf: PyRefMut<'py, Self>, _py: Python<'py>) -> PyResult<Option<Finding>> {
         if slf.index >= slf.findings.len() {
             return Ok(None);
         }

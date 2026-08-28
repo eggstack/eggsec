@@ -2710,7 +2710,7 @@ impl Engine {
 
         let endpoint = config.endpoint.clone();
         let result = runtime_sync::block_on(py, async move {
-            let mut fuzzer =
+            let fuzzer =
                 eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
                     .with_introspection(config.enable_introspection)
                     .with_depth_bypass(config.enable_depth_bypass)
@@ -2799,7 +2799,7 @@ impl Engine {
 
         let target_owned = target.to_string();
         let result = runtime_sync::block_on(py, async move {
-            let mut engine = eggsec::auth::AuthEngine::new(100, 10, 30, true).map_err(|e| {
+            let engine = eggsec::auth::AuthEngine::new(100, 10, 30, true).map_err(|e| {
                 pyo3::exceptions::PyValueError::new_err(format!("Auth engine error: {}", e))
             })?;
             engine.run_full_test(&target_owned).await.map_err(|e| {

@@ -870,7 +870,6 @@ impl Pipeline {
         let mut overall_status = ExecutionStatus::Completed();
         let correlation_id = format!("pipeline-{}", start.elapsed().as_millis());
         let mut retried_steps: u32 = 0;
-        let max_concurrency = self.max_concurrency;
 
         // Validate dependency graph before execution
         validate_dependency_graph(&self.steps)?;

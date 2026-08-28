@@ -1,6 +1,15 @@
 use crate::dispatch::types::{send_progress, ReconOptions, TaskResult};
 use crate::types::ScanProfile;
 
+async fn stop_stage_monitor(handle: tokio::task::JoinHandle<()>) {
+    handle.abort();
+    if let Err(e) = handle.await {
+        if e.is_panic() {
+            tracing::warn!("Stage monitor task panicked: {:?}", e);
+        }
+    }
+}
+
 pub async fn run_pipeline(
     target: String,
     profile: ScanProfile,
@@ -110,28 +119,25 @@ pub async fn run_recon(
         });
 
         let watch_sender = stage_tx.clone();
-        let stage_for_thread = stage.clone();
-        let start_time = std::time::Instant::now();
-        // NOTE: This OS thread is intentionally not joined. It polls the shared stage
-        // Arc<Mutex<String>> and sends updates via a watch channel. On timeout (120s)
-        // it exits naturally. On retry, a new stage clone is created, orphaning the old
-        // thread — acceptable for short-lived polling that self-terminates.
-        std::thread::spawn(move || {
+        let stage_for_monitor = stage.clone();
+        let stage_handle = tokio::spawn(async move {
             let mut last = String::new();
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
+            let timeout = tokio::time::sleep(std::time::Duration::from_secs(120));
+            tokio::pin!(timeout);
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let current = stage_for_thread.lock().clone();
-                if current != last {
-                    last = current.clone();
-                    if let Err(e) = watch_sender.send(current) {
-                        tracing::warn!("Failed to send stage update: {}", e);
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let current = stage_for_monitor.lock().clone();
+                        if current != last {
+                            last = current.clone();
+                            if let Err(e) = watch_sender.send(current) {
+                                tracing::warn!("Failed to send stage update: {}", e);
+                                break;
+                            }
+                        }
                     }
-                }
-                if start_time.elapsed().as_secs() > 120 {
-                    if let Err(e) = watch_sender.send("timeout".to_string()) {
-                        tracing::warn!("Failed to send timeout signal: {}", e);
-                    }
-                    break;
+                    _ = &mut timeout => break,
                 }
             }
         });
@@ -145,6 +151,7 @@ pub async fn run_recon(
 
         match recon_result {
             Ok(Ok(r)) => {
+                stop_stage_monitor(stage_handle).await;
                 progress_handle.abort();
                 send_progress(&progress_tx, 100, 100).await;
                 if let Err(e) = progress_handle.await {
@@ -155,6 +162,7 @@ pub async fn run_recon(
                 return Ok(TaskResult::Recon(r));
             }
             Ok(Err(e)) => {
+                stop_stage_monitor(stage_handle).await;
                 progress_handle.abort();
                 let error_str = e.to_string().to_lowercase();
 
@@ -184,6 +192,7 @@ pub async fn run_recon(
                 }
             }
             Err(_) => {
+                stop_stage_monitor(stage_handle).await;
                 progress_handle.abort();
                 tracing::error!("Recon timed out after 120 seconds");
                 if let Err(e) = progress_handle.await {

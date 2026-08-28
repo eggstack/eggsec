@@ -12,6 +12,7 @@ pub enum LogFormat {
     #[default]
     Pretty,
     Json,
+    #[allow(dead_code)] // Kept for callers that select compact logging programmatically.
     Compact,
 }
 

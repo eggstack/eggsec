@@ -185,7 +185,7 @@ impl EventStream {
         slf
     }
 
-    fn __anext__<'py>(slf: PyRef<'py, Self>, _py: Python<'py>) -> PyResult<Option<PyObject>> {
+    fn __anext__<'py>(_slf: PyRef<'py, Self>, _py: Python<'py>) -> PyResult<Option<PyObject>> {
         // For a non-async context, return None immediately (empty async iterator)
         Ok(None)
     }

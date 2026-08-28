@@ -111,6 +111,7 @@ mod tests {
                 ports: Some("80".into()),
                 scan_type: None,
                 timeout_ms: None,
+                ..Default::default()
             }),
             surface,
         )
@@ -122,6 +123,7 @@ mod tests {
                 target: "https://example.com".into(),
                 payload_type: None,
                 threads: None,
+                ..Default::default()
             }),
             surface,
         )

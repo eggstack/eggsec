@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -454,6 +452,7 @@ pub fn audit_event_from_enforcement(
     correlation_id: Option<String>,
     metadata_id: Option<String>,
 ) -> PyResult<EnforcementAuditEventPy> {
+    drop(enforcement);
     // For Python bindings, we accept serialized representations and reconstruct
     // the Rust types. This is a simplified bridge that works when the Python side
     // provides the data as simple types (strings, dicts).

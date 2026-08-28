@@ -1252,10 +1252,9 @@ impl HttpClientPy {
 
     /// Execute an HTTP request.
     fn request(&self, py: Python<'_>, req: HttpRequestPy) -> PyResult<HttpResponsePy> {
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| NetworkError::new_err("HTTP client is closed"))?;
+        if self.client.is_none() {
+            return Err(NetworkError::new_err("HTTP client is closed"));
+        }
 
         let config = self.config.clone();
 

@@ -414,7 +414,7 @@ impl FindingMigrationPy {
     /// Batch migrate findings from a list of legacy dicts.
     fn migrate_batch(&self, legacy_findings: Vec<PyObject>) -> MigrationResultPy {
         let mut warnings = Vec::new();
-        let mut errors = Vec::<String>::new();
+        let errors = Vec::<String>::new();
         let mut migrated = 0u32;
 
         Python::attach(|py| {

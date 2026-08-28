@@ -1,10 +1,9 @@
 use crate::PyObject;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
 
 use crate::finding::Severity;
-use crate::runtime_sync;
 
 /// OAuth vulnerability type.
 #[pyclass(frozen, eq, eq_int)]

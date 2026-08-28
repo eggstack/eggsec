@@ -1,3 +1,10 @@
+// Most bindings are consumed from Python rather than referenced by Rust code.
+// Keep Rust's dead-code lint from reporting the intentionally broad provisional API.
+#![allow(dead_code)]
+// PyO3 0.29 still emits this compatibility warning for Clone pyclasses; these
+// classes remain intentionally usable through the Python conversion protocol.
+#![allow(deprecated)]
+
 mod artifact;
 mod async_client;
 mod async_engine;

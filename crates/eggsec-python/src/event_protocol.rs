@@ -439,7 +439,7 @@ impl PlanningEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "operation_id": self.operation_id,
             "target": self.target,
@@ -491,7 +491,7 @@ impl PreflightEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "outcome": self.outcome,
             "confirmations_required": self.confirmations_required,
@@ -529,7 +529,7 @@ impl StageLifecycleEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "stage": self.stage,
             "status": self.status,
@@ -585,7 +585,7 @@ impl ProgressEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "percentage": self.percentage,
             "message": self.message,
@@ -643,7 +643,7 @@ impl FindingEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "finding_id": self.finding_id,
             "severity": self.severity,
@@ -701,7 +701,7 @@ impl ArtifactEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "artifact_name": self.artifact_name,
             "kind": self.kind,
@@ -746,7 +746,7 @@ impl CancellationEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "reason": self.reason,
             "cancelled_by": self.cancelled_by,
@@ -793,7 +793,7 @@ impl FailureEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         serde_json::to_string(&serde_json::json!({
             "error_type": self.error_type,
             "error_message": self.error_message,
@@ -846,7 +846,7 @@ impl CompletionEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         let val = serde_json::json!({
             "status": self.status,
             "duration_ms": self.duration_ms,
@@ -930,7 +930,7 @@ impl ResolutionEvent {
         Ok(dict.into())
     }
 
-    fn to_json(&self, py: Python) -> PyResult<String> {
+    fn to_json(&self, _py: Python) -> PyResult<String> {
         let val = serde_json::json!({
             "target": self.target,
             "resolved_address": self.resolved_address,

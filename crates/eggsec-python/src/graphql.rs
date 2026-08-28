@@ -1,6 +1,6 @@
 use crate::PyObject;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
 
 use crate::finding::Severity;
@@ -446,7 +446,7 @@ impl GraphQLTestConfigPy {
 pub fn graphql_test(config: GraphQLTestConfigPy) -> PyResult<Vec<GraphQLTestResultPy>> {
     Python::attach(|py| {
         let result = runtime_sync::block_on(py, async move {
-            let mut fuzzer =
+            let fuzzer =
                 eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
                     .with_introspection(config.enable_introspection)
                     .with_depth_bypass(config.enable_depth_bypass)
@@ -482,11 +482,10 @@ pub fn graphql_test(config: GraphQLTestConfigPy) -> PyResult<Vec<GraphQLTestResu
 #[pyfunction]
 pub fn async_graphql_test(config: GraphQLTestConfigPy) -> PyResult<crate::runtime_async::PyFuture> {
     crate::runtime_async::spawn_async(async move {
-        let mut fuzzer =
-            eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
-                .with_introspection(config.enable_introspection)
-                .with_depth_bypass(config.enable_depth_bypass)
-                .with_alias_overload(config.enable_alias_overload);
+        let fuzzer = eggsec::fuzzer::payloads::graphql::GraphQLFuzzer::new(config.endpoint.clone())
+            .with_introspection(config.enable_introspection)
+            .with_depth_bypass(config.enable_depth_bypass)
+            .with_alias_overload(config.enable_alias_overload);
 
         let mut results = Vec::new();
         results.extend(fuzzer.test_introspection_enabled());

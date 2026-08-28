@@ -968,6 +968,7 @@ mod tests {
                 ports: Some("80".into()),
                 scan_type: None,
                 timeout_ms: None,
+                concurrency: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1640,6 +1641,7 @@ mod tests {
                 flood_type: "syn".into(),
                 duration_secs: None,
                 threads: None,
+                rate_pps: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1713,6 +1715,7 @@ mod tests {
                 ports: None,
                 scan_type: None,
                 timeout_ms: None,
+                concurrency: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::CliManual, // spoofed!
@@ -1798,11 +1801,13 @@ mod tests {
             TaskKind::C2(crate::request::C2Params {
                 profile: None,
                 target: None,
+                ..Default::default()
             }),
             TaskKind::PacketSend(crate::request::PacketSendParams {
                 target: "10.0.0.1".into(),
                 protocol: "tcp".into(),
                 payload: None,
+                ..Default::default()
             }),
             TaskKind::WirelessActive(crate::request::WirelessActiveParams {
                 interface: None,
@@ -1812,16 +1817,19 @@ mod tests {
                 db_type: "postgres".into(),
                 target: "10.0.0.1".into(),
                 port: None,
+                ..Default::default()
             }),
             TaskKind::Intercept(crate::request::InterceptParams {
                 listen_port: None,
                 target: None,
+                ..Default::default()
             }),
             TaskKind::StressTest(crate::request::StressTestParams {
                 target: "10.0.0.1".into(),
                 flood_type: "syn".into(),
                 duration_secs: None,
                 threads: None,
+                rate_pps: None,
             }),
         ];
 

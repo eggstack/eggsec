@@ -471,22 +471,27 @@ fn build_run_request(kind: &str, target: &str) -> Result<eggsec_runtime::RunRequ
             ports: None,
             scan_type: None,
             timeout_ms: None,
+            ..Default::default()
         }),
         "endpoint-scan" => TaskKind::EndpointScan(EndpointScanParams {
             target: target.into(),
             methods: None,
             wordlist: None,
+            ..Default::default()
         }),
         "fingerprint" => TaskKind::Fingerprint(FingerprintParams {
             target: target.into(),
+            ..Default::default()
         }),
         "fuzz" => TaskKind::Fuzz(FuzzParams {
             target: target.into(),
             payload_type: None,
             threads: None,
+            ..Default::default()
         }),
         "waf" => TaskKind::Waf(WafParams {
             target: target.into(),
+            ..Default::default()
         }),
         "recon" => TaskKind::Recon(ReconParams {
             target: target.into(),
@@ -498,6 +503,7 @@ fn build_run_request(kind: &str, target: &str) -> Result<eggsec_runtime::RunRequ
             connections: None,
             duration_secs: None,
             rate_limit: None,
+            ..Default::default()
         }),
         "pipeline" => TaskKind::Pipeline(PipelineParams {
             target: target.into(),
@@ -507,6 +513,7 @@ fn build_run_request(kind: &str, target: &str) -> Result<eggsec_runtime::RunRequ
             target: target.into(),
             username: None,
             credential_list: None,
+            ..Default::default()
         }),
         "hunt" => TaskKind::Hunt(HuntParams {
             target: target.into(),

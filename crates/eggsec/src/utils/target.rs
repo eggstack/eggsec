@@ -15,7 +15,11 @@ pub fn extract_target_from_url(url: &str) -> Option<String> {
     if let Ok(parsed) = url::Url::parse(url) {
         if let Some(host) = parsed.host_str() {
             if let Some(port) = parsed.port() {
-                return Some(format!("{}:{}", host, port));
+                return Some(if host.parse::<IpAddr>().is_ok_and(|ip| ip.is_ipv6()) {
+                    format!("[{}]:{}", host, port)
+                } else {
+                    format!("{}:{}", host, port)
+                });
             }
             return Some(host.to_string());
         }
@@ -31,17 +35,8 @@ pub fn extract_target_from_url(url: &str) -> Option<String> {
 
 pub fn extract_host_port(url: &str) -> Option<(String, u16)> {
     let target = extract_target_from_url(url)?;
-
-    if target.contains(':') {
-        let parts: Vec<&str> = target.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            if let Ok(port) = parts[1].parse::<u16>() {
-                return Some((parts[0].to_string(), port));
-            }
-        }
-    }
-
-    None
+    let (host, port) = parse_host_port(&target, 0);
+    (port != 0).then_some((host, port))
 }
 
 pub fn is_ip_address(s: &str) -> bool {
@@ -49,14 +44,30 @@ pub fn is_ip_address(s: &str) -> bool {
 }
 
 pub fn parse_host_port(target: &str, default_port: u16) -> (String, u16) {
-    if target.contains(':') {
-        let parts: Vec<&str> = target.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            let port = parts[1].parse().unwrap_or(default_port);
-            return (parts[0].to_string(), port);
+    if let Ok(addr) = target.parse::<SocketAddr>() {
+        return (addr.ip().to_string(), addr.port());
+    }
+
+    if let Some((host, port)) = target.rsplit_once("]:") {
+        if let Ok(port) = port.parse() {
+            return (host.trim_start_matches('[').to_string(), port);
         }
     }
-    (target.to_string(), default_port)
+
+    if target.matches(':').count() == 1 {
+        if let Some((host, port)) = target.split_once(':') {
+            return (host.to_string(), port.parse().unwrap_or(default_port));
+        }
+    }
+
+    (
+        target
+            .strip_prefix('[')
+            .and_then(|host| host.strip_suffix(']'))
+            .unwrap_or(target)
+            .to_string(),
+        default_port,
+    )
 }
 
 pub fn normalize_url(url: &str) -> String {
@@ -79,7 +90,8 @@ pub fn extract_domain(url: &str) -> Option<String> {
         .trim_start_matches("https://")
         .trim_start_matches("www.");
 
-    Some(cleaned.split('/').next()?.split(':').next()?.to_string())
+    let host = cleaned.split('/').next()?;
+    Some(parse_host_port(host, 0).0)
 }
 
 #[cfg(test)]
@@ -122,6 +134,23 @@ mod tests {
         assert_eq!(
             parse_host_port("192.168.1.1:443", 80),
             ("192.168.1.1".to_string(), 443)
+        );
+        assert_eq!(
+            parse_host_port("2001:db8::1", 80),
+            ("2001:db8::1".to_string(), 80)
+        );
+        assert_eq!(parse_host_port("[::1]:8080", 80), ("::1".to_string(), 8080));
+    }
+
+    #[test]
+    fn test_extract_ipv6_host_port() {
+        assert_eq!(
+            extract_host_port("http://[::1]:8080/path"),
+            Some(("::1".to_string(), 8080))
+        );
+        assert_eq!(
+            extract_domain("https://2001:db8::1"),
+            Some("2001:db8::1".into())
         );
     }
 

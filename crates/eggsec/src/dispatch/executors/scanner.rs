@@ -62,6 +62,7 @@ impl OperationExecutor for ScannerExecutor {
                         target,
                         "1-1024".to_string(),
                         timeout,
+                        20,
                         progress_tx,
                     )
                     .await

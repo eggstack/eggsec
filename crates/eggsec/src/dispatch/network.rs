@@ -114,6 +114,7 @@ pub async fn run_packet_capture(
     interface: String,
     filter: String,
     max_packets: usize,
+    promiscuous: bool,
     output_file: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
@@ -129,7 +130,7 @@ pub async fn run_packet_capture(
     let mut builder = CaptureBuilder::new()
         .interface(iface.name.clone())
         .filter(filter)
-        .promiscuous(true)
+        .promiscuous(promiscuous)
         .snapshot_len(65535)
         .timeout(std::time::Duration::from_secs(1))
         .max_packets(max_packets);
@@ -207,6 +208,7 @@ pub async fn run_packet_capture(
     _interface: String,
     _filter: String,
     _max_packets: usize,
+    _promiscuous: bool,
     _output_file: Option<String>,
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {

@@ -1431,7 +1431,7 @@ impl PyAlertChannelConfig {
 }
 
 impl PyAlertChannelConfig {
-    pub(crate) fn from_inner(name: &str, entry: &eggsec::config::AlertChannelConfigEntry) -> Self {
+    pub(crate) fn from_inner(_name: &str, entry: &eggsec::config::AlertChannelConfigEntry) -> Self {
         use eggsec::config::AlertChannelConfigEntry as E;
         match entry {
             E::Webhook(wh) => Self {

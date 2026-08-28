@@ -171,7 +171,7 @@ pub enum RuntimeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::{LoadTestParams, PortScanParams, RuntimeSurface, TaskKind};
+    use crate::request::{LoadTestParams, RuntimeSurface, TaskKind};
 
     #[test]
     fn task_status_is_terminal() {
@@ -195,6 +195,7 @@ mod tests {
                     connections: Some(10),
                     duration_secs: Some(30),
                     rate_limit: None,
+                    requests: None,
                 }),
                 requested_by: None,
                 surface: RuntimeSurface::TuiManual,

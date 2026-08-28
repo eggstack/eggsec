@@ -132,6 +132,7 @@ mod tests {
                 ports: Some("80".into()),
                 scan_type: None,
                 timeout_ms: None,
+                ..Default::default()
             }),
             requested_by: None,
             surface: RuntimeSurface::CliManual,
@@ -145,6 +146,7 @@ mod tests {
                 target: target.into(),
                 payload_type: None,
                 threads: None,
+                ..Default::default()
             }),
             requested_by: None,
             surface: RuntimeSurface::CliManual,
@@ -172,6 +174,7 @@ mod tests {
                 ports: Some("80".into()),
                 scan_type: None,
                 timeout_ms: None,
+                ..Default::default()
             })
         );
     }
@@ -224,6 +227,7 @@ mod tests {
                 ports: Some("80".into()),
                 scan_type: None,
                 timeout_ms: None,
+                ..Default::default()
             })
         );
     }

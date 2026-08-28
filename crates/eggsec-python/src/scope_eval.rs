@@ -227,7 +227,7 @@ impl LoadedScopePy {
         let scope = &self.inner.scope;
 
         let mut allowed = false;
-        let mut reason = String::new();
+        let mut reason;
         let mut matched_rules: Vec<String> = Vec::new();
 
         for rule in &scope.allowed_targets {

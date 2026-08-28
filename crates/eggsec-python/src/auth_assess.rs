@@ -4,7 +4,6 @@ use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 
 use crate::finding::Severity;
-use crate::runtime_async;
 use crate::runtime_sync;
 
 /// Authentication test type.

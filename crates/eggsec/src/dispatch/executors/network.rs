@@ -55,6 +55,7 @@ impl OperationExecutor for NetworkExecutor {
                         "eth0".to_string(),
                         String::new(),
                         1000,
+                        true,
                         None,
                         progress_tx,
                     )

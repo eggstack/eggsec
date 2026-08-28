@@ -10,7 +10,6 @@
 //!
 //! No `eggsec-tui` dependency is required.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use eggsec_runtime::event::{LogLevel, RuntimeEvent, TaskOutcome, TaskStatus};
@@ -141,6 +140,7 @@ fn port_scan_request() -> RunRequest {
             ports: Some("80,443".into()),
             scan_type: Some("syn".into()),
             timeout_ms: Some(5000),
+            concurrency: None,
         }),
         requested_by: None,
         surface: RuntimeSurface::CliManual,
@@ -154,6 +154,8 @@ fn endpoint_scan_request() -> RunRequest {
             target: "http://api.example.com".into(),
             methods: Some(vec!["GET".into(), "POST".into()]),
             wordlist: None,
+            concurrency: None,
+            timeout_secs: None,
         }),
         requested_by: None,
         surface: RuntimeSurface::McpServer,

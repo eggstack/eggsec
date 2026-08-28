@@ -85,6 +85,15 @@ pub async fn dispatch_task(
     Ok((progress_rx, result_rx))
 }
 
+fn load_test_parameters(p: &eggsec_runtime::request::LoadTestParams) -> (u64, usize) {
+    (
+        p.requests
+            .or_else(|| p.connections.map(u64::from))
+            .unwrap_or(100),
+        p.connections.unwrap_or(10) as usize,
+    )
+}
+
 /// Internal dispatch that routes `TaskKind` to worker functions.
 ///
 /// Returns the [`TaskResult`] directly so callers can convert it to a
@@ -105,20 +114,14 @@ pub async fn dispatch_inner(
     match request.task_kind {
         TaskKind::LoadTest(p) => {
             let timeout = std::time::Duration::from_secs(p.duration_secs.unwrap_or(30) as u64);
-            network::run_load_test(
-                p.target,
-                p.connections.unwrap_or(100) as u64,
-                p.connections.unwrap_or(10) as usize,
-                timeout,
-                progress_tx,
-            )
-            .await
+            let (requests, concurrency) = load_test_parameters(&p);
+            network::run_load_test(p.target, requests, concurrency, timeout, progress_tx).await
         }
         TaskKind::StressTest(p) => {
             network::run_stress_test(
                 p.target,
                 p.flood_type,
-                1000,
+                p.rate_pps.unwrap_or(1000),
                 p.duration_secs.unwrap_or(60) as u64,
                 p.threads.unwrap_or(10) as usize,
                 progress_tx,
@@ -130,46 +133,73 @@ pub async fn dispatch_inner(
             scanner::run_port_scan(
                 p.target,
                 p.ports.unwrap_or_else(|| "1-1024".to_string()),
-                100,
+                p.concurrency.unwrap_or(100),
                 timeout,
                 progress_tx,
             )
             .await
         }
         TaskKind::EndpointScan(p) => {
-            let timeout = std::time::Duration::from_secs(60);
-            scanner::run_endpoint_scan(p.target, 10, timeout, p.wordlist, progress_tx).await
+            let timeout = std::time::Duration::from_secs(p.timeout_secs.unwrap_or(60));
+            scanner::run_endpoint_scan(
+                p.target,
+                p.concurrency.unwrap_or(10),
+                timeout,
+                p.wordlist,
+                progress_tx,
+            )
+            .await
         }
         TaskKind::Fingerprint(p) => {
-            let timeout = std::time::Duration::from_secs(60);
-            scanner::run_fingerprint(p.target, "1-1024".to_string(), timeout, progress_tx).await
+            let timeout = std::time::Duration::from_secs(p.timeout_secs.unwrap_or(60));
+            scanner::run_fingerprint(
+                p.target,
+                p.ports.unwrap_or_else(|| "1-1024".to_string()),
+                timeout,
+                p.concurrency.unwrap_or(20),
+                progress_tx,
+            )
+            .await
         }
         TaskKind::Fuzz(p) => {
             fuzzer::run_fuzz(
                 p.target,
                 p.payload_type.unwrap_or_else(|| "xss".to_string()),
-                "smart".to_string(),
-                false,
-                0,
-                "GET".to_string(),
-                None,
+                p.mode.unwrap_or_else(|| "smart".to_string()),
+                p.mutations.unwrap_or(false),
+                p.mutation_count.unwrap_or(0),
+                p.method.unwrap_or_else(|| "GET".to_string()),
+                p.param,
                 p.threads.unwrap_or(10) as usize,
-                60,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
+                p.timeout.unwrap_or(60),
+                p.graphql_introspection.unwrap_or(false),
+                p.graphql_depth_bypass.unwrap_or(false),
+                p.graphql_alias_overload.unwrap_or(false),
+                p.oauth_redirect_test.unwrap_or(false),
+                p.oauth_scope_test.unwrap_or(false),
+                p.oauth_state_test.unwrap_or(false),
+                p.oauth_grant_test.unwrap_or(false),
                 progress_tx,
             )
             .await
         }
-        TaskKind::Waf(p) => fuzzer::run_waf(p.target, false, vec![], progress_tx).await,
+        TaskKind::Waf(p) => {
+            fuzzer::run_waf(
+                p.target,
+                p.bypass_mode.unwrap_or(false),
+                p.techniques.unwrap_or_default(),
+                progress_tx,
+            )
+            .await
+        }
         TaskKind::WafStress(p) => {
-            fuzzer::run_waf_stress(p.target, 10, p.requests.unwrap_or(100) as u64, progress_tx)
-                .await
+            fuzzer::run_waf_stress(
+                p.target,
+                p.concurrency.unwrap_or(10),
+                p.requests.unwrap_or(100) as u64,
+                progress_tx,
+            )
+            .await
         }
         TaskKind::Pipeline(p) => {
             let profile = match p.profile.as_deref() {
@@ -195,8 +225,9 @@ pub async fn dispatch_inner(
         TaskKind::PacketCapture(p) => {
             network::run_packet_capture(
                 p.interface.unwrap_or_else(|| "eth0".to_string()),
-                String::new(),
-                1000,
+                p.filter.unwrap_or_default(),
+                p.max_packets.unwrap_or(1000),
+                p.promiscuous.unwrap_or(true),
                 None,
                 progress_tx,
             )
@@ -207,17 +238,24 @@ pub async fn dispatch_inner(
                 .await
         }
         TaskKind::PacketSend(p) => {
-            network::run_packet_send(p.target, 80, 10, 64, progress_tx).await
+            network::run_packet_send(
+                p.target,
+                p.port.unwrap_or(80),
+                p.count.unwrap_or(10),
+                p.packet_size.unwrap_or(64),
+                progress_tx,
+            )
+            .await
         }
         TaskKind::GraphQl(p) => {
             api::run_graphql(
                 p.target,
                 p.introspection.unwrap_or(true),
-                false,
-                false,
-                false,
-                10,
-                300,
+                p.inject.unwrap_or(false),
+                p.depth_bypass.unwrap_or(false),
+                p.alias_overload.unwrap_or(false),
+                p.concurrency.unwrap_or(10),
+                p.timeout_secs.unwrap_or(300),
                 progress_tx,
             )
             .await
@@ -225,14 +263,14 @@ pub async fn dispatch_inner(
         TaskKind::OAuth(p) => {
             api::run_oauth(
                 p.target,
-                None,
-                None,
-                false,
-                false,
-                false,
-                false,
-                10,
-                300,
+                p.client_id,
+                p.redirect_uri,
+                p.redirect_test.unwrap_or(false),
+                p.scope_test.unwrap_or(false),
+                p.state_test.unwrap_or(false),
+                p.grant_test.unwrap_or(false),
+                p.concurrency.unwrap_or(10),
+                p.timeout_secs.unwrap_or(300),
                 progress_tx,
             )
             .await
@@ -242,10 +280,10 @@ pub async fn dispatch_inner(
                 p.target,
                 p.username,
                 p.credential_list,
-                None,
-                100,
-                1,
-                30,
+                p.credential_file,
+                p.max_attempts.unwrap_or(100),
+                p.concurrency.unwrap_or(1),
+                p.timeout_secs.unwrap_or(30),
                 progress_tx,
             )
             .await
@@ -347,11 +385,12 @@ pub async fn dispatch_inner(
                 None,
                 Some(p.target),
                 Some(p.db_type),
-                "all".to_string(),
-                true,
-                false,
-                200,
-                120,
+                p.port,
+                p.checks.unwrap_or_else(|| "all".to_string()),
+                p.dry_run.unwrap_or(true),
+                p.allow_advanced.unwrap_or(false),
+                p.max_queries.unwrap_or(200),
+                p.max_duration.unwrap_or(120),
                 progress_tx,
             )
             .await
@@ -359,9 +398,13 @@ pub async fn dispatch_inner(
         #[cfg(feature = "web-proxy")]
         TaskKind::Intercept(p) => {
             intercept::run_intercept_task(
-                format!("127.0.0.1:{}", p.listen_port.unwrap_or(8080)),
-                true,
-                100,
+                format!(
+                    "{}:{}",
+                    p.listen_host.unwrap_or_else(|| "127.0.0.1".to_string()),
+                    p.listen_port.unwrap_or(8080)
+                ),
+                p.dry_run.unwrap_or(true),
+                p.max_flows.unwrap_or(100),
                 p.target,
                 progress_tx,
             )
@@ -372,7 +415,7 @@ pub async fn dispatch_inner(
             c2::run_c2_task(
                 p.target.unwrap_or_else(|| "127.0.0.1".to_string()),
                 p.profile.unwrap_or_else(|| "default".to_string()),
-                true,
+                p.dry_run.unwrap_or(true),
                 progress_tx,
             )
             .await
@@ -392,6 +435,22 @@ mod tests {
     use super::*;
     use eggsec_runtime::request::{PortScanParams, RuntimeSurface};
 
+    #[test]
+    fn load_test_parameters_preserve_requests_and_legacy_connections() {
+        let explicit = eggsec_runtime::request::LoadTestParams {
+            requests: Some(1_000),
+            connections: Some(10),
+            ..Default::default()
+        };
+        assert_eq!(load_test_parameters(&explicit), (1_000, 10));
+
+        let legacy = eggsec_runtime::request::LoadTestParams {
+            connections: Some(25),
+            ..Default::default()
+        };
+        assert_eq!(load_test_parameters(&legacy), (25, 25));
+    }
+
     #[tokio::test]
     async fn dispatch_task_port_scan_returns_receivers() {
         let request = RunRequest {
@@ -400,6 +459,7 @@ mod tests {
                 ports: Some("22".into()),
                 scan_type: None,
                 timeout_ms: Some(2000),
+                ..Default::default()
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -410,7 +470,7 @@ mod tests {
         // (actual port scan may fail, but the dispatch plumbing works)
         let result = dispatch_task(request).await;
         assert!(result.is_ok());
-        let (mut progress_rx, mut result_rx) = result.unwrap();
+        let (progress_rx, result_rx) = result.unwrap();
         // Drop receivers so channels close cleanly
         drop(progress_rx);
         drop(result_rx);
@@ -429,6 +489,7 @@ mod tests {
                 duration_secs: Some(1),
                 connections: Some(1),
                 rate_limit: None,
+                ..Default::default()
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -485,7 +546,7 @@ mod tests {
 
     #[test]
     fn executor_registry_feature_gated_operations() {
-        let reg = executors::build_default_registry();
+        let _reg = executors::build_default_registry();
 
         // Feature-gated operations (only check if feature is enabled)
         #[cfg(feature = "nse")]

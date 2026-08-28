@@ -313,7 +313,7 @@ impl ContentAddressedArtifactStore {
     #[pyo3(signature = (data, content_type, metadata_json=None))]
     fn put(
         &self,
-        py: Python<'_>,
+        _py: Python<'_>,
         data: &Bound<'_, PyBytes>,
         content_type: &str,
         metadata_json: Option<&str>,
@@ -362,7 +362,7 @@ impl ContentAddressedArtifactStore {
     }
 
     /// Retrieve an artifact by its content hash.
-    fn get<'py>(&self, py: Python<'py>, hash: &str) -> PyResult<Option<ArtifactData>> {
+    fn get<'py>(&self, _py: Python<'py>, hash: &str) -> PyResult<Option<ArtifactData>> {
         let entries = self.entries.lock().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Lock poisoned: {}", e))
         })?;
@@ -648,7 +648,7 @@ impl DirectoryArtifactStore {
     /// Store data under the given name and return artifact info.
     fn put<'py>(
         &self,
-        py: Python<'py>,
+        _py: Python<'py>,
         name: &str,
         data: &Bound<'py, PyBytes>,
         content_type: &str,
@@ -697,7 +697,7 @@ impl DirectoryArtifactStore {
     }
 
     /// Retrieve an artifact by name.
-    fn get<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Option<ArtifactData>> {
+    fn get<'py>(&self, _py: Python<'py>, name: &str) -> PyResult<Option<ArtifactData>> {
         let entries = self.entries.lock().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Lock poisoned: {}", e))
         })?;

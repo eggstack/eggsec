@@ -316,6 +316,7 @@ mod tests {
             ports: None,
             scan_type: None,
             timeout_ms: None,
+            concurrency: None,
         })));
         assert!(caps.supports_task_kind(&TaskKind::Recon(ReconParams {
             target: "example.com".into(),
@@ -332,6 +333,7 @@ mod tests {
                 flood_type: "syn".into(),
                 duration_secs: None,
                 threads: None,
+                rate_pps: None,
             }))
         );
         assert!(

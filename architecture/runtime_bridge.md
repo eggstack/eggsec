@@ -136,6 +136,17 @@ Only `CliManual` and `TuiManual` honor manual overrides (`config/policy.rs:412�
 
 The resolved operation ID is looked up in `ALL_OPERATION_METADATA` to produce the full `OperationDescriptor` (risk tier, mode, capabilities, scope requirements, feature gates). `descriptor_for_run_request()` uses `metadata.try_descriptor_for_target()` for validated construction (`descriptor.rs:25–30`).
 
+### Runtime task tuning
+
+Task payloads expose the execution tunables that dispatch applies, including
+load-test request count and concurrency, scan concurrency/ports/timeouts,
+fuzz mode/mutation/HTTP and GraphQL/OAuth options, WAF techniques, packet
+capture/send limits, GraphQL/OAuth/auth settings, database budgets, proxy
+listen/dry-run settings, and C2 dry-run mode. These fields are optional so
+older serialized requests retain their existing defaults. For compatibility,
+`LoadTestParams.connections` supplies both the request count and concurrency
+when the newer `requests` field is absent.
+
 ### Preflight & Approval (`manual.rs:17–77`)
 
 Two entry points for callers (daemon, MCP server, etc.):

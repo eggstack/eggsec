@@ -6,7 +6,10 @@ use tracing::{error, warn};
 use super::archive::decode_lzma_base64;
 use super::loader::{load_halloy_theme, ThemeLoadError};
 use super::manager::ThemeSource;
-use super::packaged::{PACKAGED_THEMES_LZMA_BASE64, PACKAGED_THEMES_VERSION};
+use super::packaged::{
+    PACKAGED_THEMES_ARCHIVE_SHA256, PACKAGED_THEMES_FILE_COUNT, PACKAGED_THEMES_LZMA_BASE64,
+    PACKAGED_THEMES_VERSION, PACKAGED_THEME_FILES,
+};
 use super::palette::Theme;
 
 /// Marker filename used to short-circuit LZMA decoding on subsequent launches
@@ -121,6 +124,20 @@ pub fn ensure_packaged_themes_installed(dir: &Path) -> ThemeInstallReport {
             return report;
         }
     };
+
+    let manifest_matches = packaged.len() == PACKAGED_THEMES_FILE_COUNT
+        && packaged
+            .iter()
+            .map(|file| file.relative_path.to_string_lossy().into_owned())
+            .eq(PACKAGED_THEME_FILES.iter().map(|name| (*name).to_string()));
+    if !manifest_matches {
+        warn!(
+            expected_file_count = PACKAGED_THEMES_FILE_COUNT,
+            actual_file_count = packaged.len(),
+            expected_archive_sha256 = PACKAGED_THEMES_ARCHIVE_SHA256,
+            "packaged theme archive manifest does not match generated metadata"
+        );
+    }
 
     for file in packaged {
         let dest = dir.join(&file.relative_path);

@@ -94,66 +94,91 @@ pub struct RunRequest {
 // ---- Payload structs ----
 
 /// Load test parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoadTestParams {
     pub target: String,
     pub method: String,
+    /// Total requests to send. When absent, legacy callers use `connections`.
+    pub requests: Option<u64>,
     pub connections: Option<u32>,
     pub duration_secs: Option<u32>,
     pub rate_limit: Option<u32>,
 }
 
 /// Stress test parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StressTestParams {
     pub target: String,
     pub flood_type: String,
+    pub rate_pps: Option<u64>,
     pub duration_secs: Option<u32>,
     pub threads: Option<u32>,
 }
 
 /// Port scan parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortScanParams {
     pub target: String,
     pub ports: Option<String>,
     pub scan_type: Option<String>,
     pub timeout_ms: Option<u64>,
+    pub concurrency: Option<usize>,
 }
 
 /// Endpoint scan parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointScanParams {
     pub target: String,
     pub methods: Option<Vec<String>>,
     pub wordlist: Option<String>,
+    pub concurrency: Option<usize>,
+    pub timeout_secs: Option<u64>,
 }
 
 /// Fingerprint parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FingerprintParams {
     pub target: String,
+    pub ports: Option<String>,
+    pub timeout_secs: Option<u64>,
+    pub concurrency: Option<usize>,
 }
 
 /// Fuzz parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FuzzParams {
     pub target: String,
     pub payload_type: Option<String>,
     pub threads: Option<u32>,
+    pub mode: Option<String>,
+    pub mutations: Option<bool>,
+    pub mutation_count: Option<usize>,
+    pub method: Option<String>,
+    pub param: Option<String>,
+    pub timeout: Option<u64>,
+    pub graphql_introspection: Option<bool>,
+    pub graphql_depth_bypass: Option<bool>,
+    pub graphql_alias_overload: Option<bool>,
+    pub oauth_redirect_test: Option<bool>,
+    pub oauth_scope_test: Option<bool>,
+    pub oauth_state_test: Option<bool>,
+    pub oauth_grant_test: Option<bool>,
 }
 
 /// WAF detection parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WafParams {
     pub target: String,
+    pub bypass_mode: Option<bool>,
+    pub techniques: Option<Vec<String>>,
 }
 
 /// WAF stress test parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WafStressParams {
     pub target: String,
     pub requests: Option<u32>,
+    pub concurrency: Option<usize>,
 }
 
 /// Pipeline parameters.
@@ -171,11 +196,13 @@ pub struct ReconParams {
 }
 
 /// Packet capture parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PacketCaptureParams {
     pub interface: Option<String>,
     pub filter: Option<String>,
     pub duration_secs: Option<u32>,
+    pub max_packets: Option<usize>,
+    pub promiscuous: Option<bool>,
 }
 
 /// Packet traceroute parameters.
@@ -186,33 +213,53 @@ pub struct PacketTracerouteParams {
 }
 
 /// Packet send parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PacketSendParams {
     pub target: String,
     pub protocol: String,
     pub payload: Option<String>,
+    pub port: Option<u16>,
+    pub count: Option<u32>,
+    pub packet_size: Option<usize>,
 }
 
 /// GraphQL testing parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphQlParams {
     pub target: String,
     pub introspection: Option<bool>,
+    pub inject: Option<bool>,
+    pub depth_bypass: Option<bool>,
+    pub alias_overload: Option<bool>,
+    pub concurrency: Option<usize>,
+    pub timeout_secs: Option<u64>,
 }
 
 /// OAuth testing parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OAuthParams {
     pub target: String,
     pub flow: Option<String>,
+    pub client_id: Option<String>,
+    pub redirect_uri: Option<String>,
+    pub redirect_test: Option<bool>,
+    pub scope_test: Option<bool>,
+    pub state_test: Option<bool>,
+    pub grant_test: Option<bool>,
+    pub concurrency: Option<usize>,
+    pub timeout_secs: Option<u64>,
 }
 
 /// Authentication test parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthTestParams {
     pub target: String,
     pub username: Option<String>,
     pub credential_list: Option<String>,
+    pub credential_file: Option<String>,
+    pub max_attempts: Option<usize>,
+    pub concurrency: Option<usize>,
+    pub timeout_secs: Option<u64>,
 }
 
 /// NSE script parameters.
@@ -287,25 +334,34 @@ pub struct WirelessActiveParams {
 }
 
 /// Database pentest parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbPentestParams {
     pub db_type: String,
     pub target: String,
     pub port: Option<u16>,
+    pub checks: Option<String>,
+    pub max_queries: Option<u64>,
+    pub max_duration: Option<u64>,
+    pub dry_run: Option<bool>,
+    pub allow_advanced: Option<bool>,
 }
 
 /// Intercept proxy parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterceptParams {
     pub listen_port: Option<u16>,
     pub target: Option<String>,
+    pub listen_host: Option<String>,
+    pub dry_run: Option<bool>,
+    pub max_flows: Option<u64>,
 }
 
 /// C2 simulation parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct C2Params {
     pub profile: Option<String>,
     pub target: Option<String>,
+    pub dry_run: Option<bool>,
 }
 
 impl TaskKind {
@@ -360,6 +416,7 @@ mod tests {
                 ports: Some("80,443".into()),
                 scan_type: Some("syn".into()),
                 timeout_ms: Some(3000),
+                concurrency: None,
             }),
             requested_by: Some(ClientId::new()),
             surface: RuntimeSurface::CliManual,

@@ -489,6 +489,7 @@ mod tests {
             ports: None,
             scan_type: None,
             timeout_ms: None,
+            concurrency: None,
         });
         assert_eq!(summarize_request(&kind), "port-scan: 10.0.0.1");
     }
@@ -546,6 +547,7 @@ mod tests {
                     ports: None,
                     scan_type: None,
                     timeout_ms: None,
+                    concurrency: None,
                 }),
                 request_summary: "port-scan: 10.0.0.1".into(),
                 progress: None,

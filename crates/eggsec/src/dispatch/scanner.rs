@@ -95,6 +95,7 @@ pub async fn run_fingerprint(
     target: String,
     ports: String,
     timeout: std::time::Duration,
+    concurrency: usize,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::scanner::fingerprint::fingerprint_services;
@@ -111,7 +112,7 @@ pub async fn run_fingerprint(
             port_list,
             timeout,
             true,
-            20,
+            concurrency,
             Some(progress_tx.clone()),
             None,
         ),

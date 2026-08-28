@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::PyObject;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 
 use crate::event_protocol::EventEnvelope;
 use crate::status::{ExecutionStatus, OperationResult};
