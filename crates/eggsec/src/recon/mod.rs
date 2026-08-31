@@ -118,6 +118,7 @@ pub use spinner::Spinner;
 struct SpinnerGuard {
     stop: Arc<AtomicBool>,
     has_spinner: bool,
+    thread: Option<std::thread::JoinHandle<()>>,
 }
 
 #[cfg(feature = "cli")]
@@ -125,28 +126,45 @@ impl SpinnerGuard {
     fn start(args: &ReconArgs, stage: &Arc<Mutex<String>>) -> Self {
         let has_spinner = !args.quiet;
         let stop = Arc::new(AtomicBool::new(false));
+        let mut thread = None;
 
         if has_spinner {
             let stop_clone = stop.clone();
             let stage_clone = stage.clone();
-            std::thread::spawn(move || {
+            thread = Some(std::thread::spawn(move || {
                 let mut spinner = Spinner::new(stop_clone, stage_clone);
                 while !spinner.stop.load(Ordering::Relaxed) {
                     spinner.tick();
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
                 spinner.stop();
-            });
+            }));
             runner::set_stage(stage, "init");
         }
 
-        Self { stop, has_spinner }
+        Self {
+            stop,
+            has_spinner,
+            thread,
+        }
     }
 
-    async fn stop(&self) {
+    async fn stop(&mut self) {
         if self.has_spinner {
             self.stop.store(true, Ordering::Relaxed);
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            if let Some(thread) = self.thread.take() {
+                let join = tokio::time::timeout(
+                    std::time::Duration::from_secs(1),
+                    tokio::task::spawn_blocking(move || thread.join()),
+                )
+                .await;
+                match join {
+                    Ok(Ok(Ok(()))) => {}
+                    Ok(Ok(Err(_))) => tracing::warn!("Recon spinner thread panicked"),
+                    Ok(Err(e)) => tracing::warn!("Failed to join recon spinner: {}", e),
+                    Err(_) => tracing::warn!("Timed out joining recon spinner thread"),
+                }
+            }
         }
     }
 }
@@ -308,12 +326,12 @@ where
 {
     let verbose = args.verbose;
     let stage = Arc::new(Mutex::new(String::new()));
-    let spinner = SpinnerGuard::start(&args, &stage);
+    let mut spinner = SpinnerGuard::start(&args, &stage);
 
-    let recon =
-        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await?;
-
+    let recon_result =
+        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await;
     spinner.stop().await;
+    let recon = recon_result?;
 
     emit_recon_findings(&recon, callback);
 
@@ -416,13 +434,13 @@ where
 #[cfg(feature = "cli")]
 pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()> {
     let stage = Arc::new(Mutex::new(String::new()));
-    let spinner = SpinnerGuard::start(&args, &stage);
+    let mut spinner = SpinnerGuard::start(&args, &stage);
     let verbose = args.verbose;
 
-    let recon =
-        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await?;
-
+    let recon_result =
+        runner::run_full_recon_from_request(&args.clone().into(), config, stage, verbose).await;
     spinner.stop().await;
+    let recon = recon_result?;
 
     write_recon_output(&recon, &args, spinner.has_spinner).await
 }

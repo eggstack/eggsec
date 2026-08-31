@@ -2,11 +2,14 @@ use crate::packet::{hexdump, PacketInfo};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
+
+#[cfg(all(feature = "packet-inspection", unix))]
+use std::sync::atomic::AtomicUsize;
 
 #[cfg(all(feature = "packet-inspection", unix))]
 use pnet::datalink::{self, DataLinkReceiver, NetworkInterface};
@@ -18,6 +21,13 @@ pub struct PcapWriter {
 
 impl PcapWriter {
     pub fn new(path: &str, snapshot_len: usize) -> Result<Self, std::io::Error> {
+        if snapshot_len > u32::MAX as usize {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "pcap snapshot length exceeds u32::MAX",
+            ));
+        }
+
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
 
@@ -26,7 +36,7 @@ impl PcapWriter {
         let version_minor: u16 = 4;
         let thiszone: i32 = 0;
         let sigfigs: u32 = 0;
-        let snaplen: u32 = snapshot_len as u32;
+        let snaplen = snapshot_len as u32;
         let network: u32 = 1;
 
         writer.write_all(&magic.to_le_bytes())?;
@@ -62,7 +72,7 @@ impl PcapWriter {
             secs.to_le_bytes(),
             (ts.subsec_nanos() as u32).to_le_bytes(),
             (len as u32).to_le_bytes(),
-            (data.len() as u32).to_le_bytes(),
+            u32::try_from(data.len()).unwrap_or(u32::MAX).to_le_bytes(),
         ]
         .concat();
 
@@ -115,6 +125,7 @@ pub struct CaptureStats {
 pub struct PacketCapture {
     config: CaptureConfig,
     running: Arc<AtomicBool>,
+    stop_notify: Arc<Notify>,
     stats: CaptureStats,
 }
 
@@ -123,6 +134,7 @@ impl PacketCapture {
         Self {
             config,
             running: Arc::new(AtomicBool::new(false)),
+            stop_notify: Arc::new(Notify::new()),
             stats: CaptureStats {
                 packets_captured: 0,
                 bytes_captured: 0,
@@ -138,6 +150,7 @@ impl PacketCapture {
 
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
+        self.stop_notify.notify_one();
     }
 
     pub fn stats(&self) -> CaptureStats {
@@ -153,7 +166,6 @@ impl PacketCapture {
         &mut self,
         sender: mpsc::Sender<PacketInfo>,
     ) -> Result<CaptureStats, CaptureError> {
-        use crossbeam::channel;
         use std::time::Instant;
 
         if self.running.swap(true, Ordering::SeqCst) {
@@ -173,16 +185,19 @@ impl PacketCapture {
         let start = Instant::now();
         let packets_received = Arc::new(AtomicUsize::new(0));
         let bytes_received = Arc::new(AtomicUsize::new(0));
+        let packets_dropped = Arc::new(AtomicUsize::new(0));
 
         tracing::info!(
             "Starting packet capture on interface: {}",
             self.config.interface
         );
 
-        let (tx_packet, rx_packet) = channel::bounded::<Vec<u8>>(100);
+        let (tx_packet, mut rx_packet) = mpsc::channel::<Vec<u8>>(100);
         let running = self.running.clone();
+        let stop_notify = self.stop_notify.clone();
+        let packets_dropped_for_capture = packets_dropped.clone();
 
-        let _capture_thread = std::thread::spawn(move || {
+        let capture_task = tokio::task::spawn_blocking(move || {
             let mut receiver = rx;
             loop {
                 if !running.load(Ordering::SeqCst) {
@@ -190,11 +205,13 @@ impl PacketCapture {
                 }
 
                 match receiver.next() {
-                    Ok(packet) => {
-                        if tx_packet.send(packet.to_vec()).is_err() {
-                            break;
+                    Ok(packet) => match tx_packet.try_send(packet.to_vec()) {
+                        Ok(()) => {}
+                        Err(mpsc::error::TrySendError::Full(_)) => {
+                            packets_dropped_for_capture.fetch_add(1, Ordering::Relaxed);
                         }
-                    }
+                        Err(mpsc::error::TrySendError::Closed(_)) => break,
+                    },
                     Err(_) => {
                         std::thread::sleep(Duration::from_millis(10));
                     }
@@ -203,39 +220,34 @@ impl PacketCapture {
         });
 
         loop {
-            match rx_packet.try_recv() {
-                Ok(packet) => {
-                    if !Self::packet_matches_filter(&packet, self.config.filter.as_deref()) {
-                        continue;
-                    }
+            let packet = tokio::select! {
+                packet = rx_packet.recv() => packet,
+                _ = stop_notify.notified() => None,
+            };
+            let Some(packet) = packet else {
+                break;
+            };
 
-                    if let Some(ref mut writer) = pcap_writer {
-                        if let Err(e) = writer.write_packet(&packet) {
-                            tracing::warn!("Failed to write packet to pcap file: {}", e);
-                        }
-                    }
+            if !Self::packet_matches_filter(&packet, self.config.filter.as_deref()) {
+                continue;
+            }
 
-                    let packet_info = Self::parse_packet_internal(&packet);
-                    if sender.send(packet_info).await.is_err() {
-                        break;
-                    }
-
-                    packets_received.fetch_add(1, Ordering::Relaxed);
-                    bytes_received.fetch_add(packet.len(), Ordering::Relaxed);
-
-                    if let Some(max) = self.config.max_packets {
-                        if packets_received.load(Ordering::Relaxed) >= max {
-                            break;
-                        }
-                    }
+            if let Some(ref mut writer) = pcap_writer {
+                if let Err(e) = writer.write_packet(&packet) {
+                    tracing::warn!("Failed to write packet to pcap file: {}", e);
                 }
-                Err(crossbeam::channel::TryRecvError::Empty) => {
-                    if !self.running.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-                Err(crossbeam::channel::TryRecvError::Disconnected) => {
+            }
+
+            let packet_info = Self::parse_packet_internal(&packet);
+            if sender.send(packet_info).await.is_err() {
+                break;
+            }
+
+            packets_received.fetch_add(1, Ordering::Relaxed);
+            bytes_received.fetch_add(packet.len(), Ordering::Relaxed);
+
+            if let Some(max) = self.config.max_packets {
+                if packets_received.load(Ordering::Relaxed) >= max {
                     break;
                 }
             }
@@ -243,8 +255,13 @@ impl PacketCapture {
 
         self.running.store(false, Ordering::SeqCst);
 
+        if let Err(e) = capture_task.await {
+            tracing::warn!("Packet capture task failed: {}", e);
+        }
+
         self.stats.packets_captured = packets_received.load(Ordering::Relaxed);
         self.stats.bytes_captured = bytes_received.load(Ordering::Relaxed);
+        self.stats.packets_dropped = packets_dropped.load(Ordering::Relaxed);
         self.stats.runtime_ms = start.elapsed().as_millis() as u64;
 
         if let Some(ref mut writer) = pcap_writer {
@@ -522,7 +539,7 @@ impl Default for CaptureBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::PacketCapture;
+    use super::{PacketCapture, PcapWriter};
 
     const TCP_PACKET: [u8; 54] = [
         0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0x08, 0x00, 0x45,
@@ -553,5 +570,15 @@ mod tests {
             &TCP_PACKET,
             Some("port 443")
         ));
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn pcap_writer_rejects_snapshot_lengths_that_do_not_fit() {
+        let error = match PcapWriter::new("/this/path/is/not/created", usize::MAX) {
+            Ok(_) => panic!("oversized snapshot length was accepted"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     }
 }

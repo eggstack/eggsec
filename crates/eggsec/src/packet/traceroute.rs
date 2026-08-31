@@ -1,5 +1,6 @@
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioResolver;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -126,7 +127,7 @@ impl Traceroute {
             ));
         }
 
-        let target_ip = self.resolve_target(&self.config.target)?;
+        let target_ip = self.resolve_target(&self.config.target).await?;
         let target_str = target_ip.to_string();
 
         tracing::info!(
@@ -142,6 +143,7 @@ impl Traceroute {
 
         let use_icmp = self.config.use_icmp;
         let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent_probes));
+        let mut reverse_dns_cache = FxHashMap::default();
 
         if self.config.parallel_probes {
             for ttl in self.config.first_ttl..=self.config.max_hops {
@@ -157,7 +159,8 @@ impl Traceroute {
                 if let Some(ref addr) = hop_addr {
                     if self.config.resolve_names {
                         let mut hop_with_name = hop;
-                        hop_with_name.name = Self::reverse_dns(addr).await.ok();
+                        hop_with_name.name =
+                            Self::reverse_dns_cached(addr, &mut reverse_dns_cache).await;
                         hops.push(hop_with_name);
                     } else {
                         hops.push(hop);
@@ -177,13 +180,13 @@ impl Traceroute {
             for ttl in self.config.first_ttl..=self.config.max_hops {
                 let mut hop = TracerouteHop::new(ttl);
 
-                for _ in 0..self.config.max_retries {
+                for probe_index in 0..self.config.max_retries {
                     let start = Instant::now();
 
                     let probe_result = if use_icmp {
-                        self.probe_icmp(target_ip, ttl).await
+                        self.probe_icmp(target_ip, ttl, probe_index).await
                     } else {
-                        self.probe_udp(target_ip, ttl).await
+                        self.probe_udp(target_ip, ttl, probe_index).await
                     };
 
                     match probe_result {
@@ -201,13 +204,6 @@ impl Traceroute {
                         Err(ProbeError::Timeout) => {
                             hop.add_probe(None, None);
                         }
-                        Err(ProbeError::PortUnreachable) => {
-                            let rtt = start.elapsed();
-                            hop.add_probe(Some(target_str.clone()), Some(rtt));
-                            hop.is_final = true;
-                            final_reached = true;
-                            break;
-                        }
                         Err(e) => {
                             tracing::debug!("Probe error at hop {}: {}", ttl, e);
                             hop.add_probe(None, None);
@@ -219,7 +215,8 @@ impl Traceroute {
                     let hop_addr = hop.address.clone();
                     if let Some(ref addr) = hop_addr {
                         let mut hop_with_name = hop;
-                        hop_with_name.name = Self::reverse_dns(addr).await.ok();
+                        hop_with_name.name =
+                            Self::reverse_dns_cached(addr, &mut reverse_dns_cache).await;
                         hops.push(hop_with_name);
                     } else {
                         hops.push(hop);
@@ -256,14 +253,12 @@ impl Traceroute {
         semaphore: Arc<Semaphore>,
     ) -> TracerouteHop {
         let mut hop = TracerouteHop::new(ttl);
-        let target_port = self.config.port.wrapping_add(ttl as u16).wrapping_sub(1);
-
         let probes: Vec<_> = (0..self.config.max_retries)
-            .map(|_| {
+            .map(|probe_index| {
                 let target = target;
                 let ttl = ttl;
                 let timeout = self.config.timeout;
-                let port = target_port;
+                let port = probe_port(self.config.port, ttl, probe_index);
                 let packet_size = self.config.packet_size;
                 let semaphore = semaphore.clone();
 
@@ -330,15 +325,14 @@ impl Traceroute {
                 Ok(Err(ProbeError::Timeout)) => {
                     hop.add_probe(None, None);
                 }
-                Ok(Err(ProbeError::PortUnreachable)) => {
-                    hop.add_probe(Some(target.to_string()), Some(Duration::ZERO));
-                    hop.is_final = true;
-                    break;
-                }
-                Err(_) => {
+                Ok(Err(e)) => {
+                    tracing::debug!("Traceroute UDP probe failed at hop {}: {}", ttl, e);
                     hop.add_probe(None, None);
                 }
-                _ => {}
+                Err(e) => {
+                    tracing::debug!("Traceroute UDP probe task failed at hop {}: {}", ttl, e);
+                    hop.add_probe(None, None);
+                }
             }
         }
 
@@ -367,25 +361,37 @@ impl Traceroute {
             }
         };
 
+        let client = Arc::new(client);
         let mut handles = Vec::new();
 
-        for _ in 0..self.config.max_retries {
+        for probe_index in 0..self.config.max_retries {
             let target = target;
             let payload = payload.clone();
             let semaphore = semaphore.clone();
+            let client = Arc::clone(&client);
 
-            let handle: tokio::task::JoinHandle<(Option<IpAddr>, Option<Duration>)> =
+            let handle: tokio::task::JoinHandle<Result<(IpAddr, Duration), ProbeError>> =
                 tokio::spawn(async move {
-                    let _permit = match semaphore.acquire().await {
-                        Ok(p) => p,
-                        Err(_) => return (None, None),
-                    };
-                    match surge_ping::ping(target, &payload).await {
-                        Ok((_, rtt)) => (Some(target), Some(rtt)),
-                        Err(e) => {
-                            tracing::debug!("ICMP ping failed: {}", e);
-                            (None, None)
-                        }
+                    let _permit = semaphore
+                        .acquire()
+                        .await
+                        .map_err(|e| ProbeError::SocketError(e.to_string()))?;
+
+                    let result = tokio::time::timeout(timeout, async {
+                        let mut pinger = client
+                            .pinger(target, surge_ping::PingIdentifier(probe_index as u16))
+                            .await;
+                        pinger.timeout(timeout);
+                        pinger
+                            .ping(surge_ping::PingSequence(probe_index as u16), &payload)
+                            .await
+                    })
+                    .await
+                    .map_err(|_| ProbeError::Timeout)?;
+
+                    match result {
+                        Ok((_, rtt)) => Ok((target, rtt)),
+                        Err(e) => Err(ProbeError::ReceiveError(e.to_string())),
                     }
                 });
 
@@ -394,19 +400,20 @@ impl Traceroute {
 
         for handle in handles {
             match handle.await {
-                Ok((Some(ip), Some(rtt))) => {
+                Ok(Ok((ip, rtt))) => {
                     hop.add_probe(Some(ip.to_string()), Some(rtt));
                     if ip == target {
                         hop.is_final = true;
                     }
                 }
-                Ok((None, None)) => {
+                Ok(Err(e)) => {
+                    tracing::debug!("ICMP traceroute probe failed: {}", e);
                     hop.add_probe(None, None);
                 }
                 Err(e) => {
                     tracing::debug!("Traceroute probe task failed: {}", e);
+                    hop.add_probe(None, None);
                 }
-                _ => {}
             }
         }
 
@@ -457,24 +464,54 @@ impl Traceroute {
         Ok(normalize_ptr_name(&name))
     }
 
-    fn resolve_target(&self, target: &str) -> Result<IpAddr, TracerouteError> {
+    async fn reverse_dns_cached(
+        addr: &str,
+        cache: &mut FxHashMap<IpAddr, Option<String>>,
+    ) -> Option<String> {
+        let ip = match addr.parse::<IpAddr>() {
+            Ok(ip) => ip,
+            Err(e) => {
+                tracing::debug!("Invalid hop address '{}': {}", addr, e);
+                return None;
+            }
+        };
+
+        if let Some(name) = cache.get(&ip) {
+            return name.clone();
+        }
+
+        let name = match Self::reverse_dns(addr).await {
+            Ok(name) => Some(name),
+            Err(e) => {
+                tracing::debug!("Reverse DNS lookup failed for {}: {}", addr, e);
+                None
+            }
+        };
+        cache.insert(ip, name.clone());
+        name
+    }
+
+    async fn resolve_target(&self, target: &str) -> Result<IpAddr, TracerouteError> {
         if let Ok(ip) = target.parse::<IpAddr>() {
             return Ok(ip);
         }
 
-        use std::net::ToSocketAddrs;
-        let addrs: Vec<_> = (target, 0)
-            .to_socket_addrs()
-            .map_err(|e| TracerouteError::ResolveError(e.to_string()))?
-            .collect();
+        let mut addrs = tokio::net::lookup_host((target, 0))
+            .await
+            .map_err(|e| TracerouteError::ResolveError(e.to_string()))?;
 
         addrs
-            .first()
+            .next()
             .map(|a| a.ip())
             .ok_or_else(|| TracerouteError::ResolveError(format!("Failed to resolve: {}", target)))
     }
 
-    async fn probe_udp(&self, target: IpAddr, ttl: u8) -> Result<IpAddr, ProbeError> {
+    async fn probe_udp(
+        &self,
+        target: IpAddr,
+        ttl: u8,
+        probe_index: u32,
+    ) -> Result<IpAddr, ProbeError> {
         use std::net::UdpSocket;
 
         let socket =
@@ -489,10 +526,7 @@ impl Traceroute {
             .map_err(|e| ProbeError::SocketError(e.to_string()))?;
 
         let packet = vec![0u8; self.config.packet_size];
-        let dst = SocketAddr::new(
-            target,
-            self.config.port.wrapping_add(ttl as u16).wrapping_sub(1),
-        );
+        let dst = SocketAddr::new(target, probe_port(self.config.port, ttl, probe_index));
 
         socket
             .send_to(&packet, dst)
@@ -504,13 +538,16 @@ impl Traceroute {
                 tracing::debug!("UDP response from {} ({} bytes)", addr, len);
                 Ok(addr.ip())
             }
-            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(ProbeError::Timeout),
-            Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => Ok(target),
-            Err(e) => Err(ProbeError::ReceiveError(e.to_string())),
+            Err(e) => classify_udp_receive_error(&e, target),
         }
     }
 
-    async fn probe_icmp(&self, target: IpAddr, ttl: u8) -> Result<IpAddr, ProbeError> {
+    async fn probe_icmp(
+        &self,
+        target: IpAddr,
+        _ttl: u8,
+        _probe_index: u32,
+    ) -> Result<IpAddr, ProbeError> {
         #[cfg(all(feature = "stress-testing", unix))]
         {
             let timeout = self.config.timeout;
@@ -536,9 +573,14 @@ impl Traceroute {
         #[cfg(not(all(feature = "stress-testing", unix)))]
         {
             tracing::debug!("ICMP probe not available, using UDP fallback");
-            self.probe_udp(target, ttl).await
+            self.probe_udp(target, _ttl, _probe_index).await
         }
     }
+}
+
+fn probe_port(base: u16, ttl: u8, probe_index: u32) -> u16 {
+    base.wrapping_add(ttl as u16)
+        .wrapping_add(probe_index as u16)
 }
 
 fn normalize_ptr_name(name: &str) -> String {
@@ -567,8 +609,17 @@ pub enum ProbeError {
     ReceiveError(String),
     #[error("Timeout")]
     Timeout,
-    #[error("Port unreachable")]
-    PortUnreachable,
+}
+
+fn classify_udp_receive_error(
+    error: &std::io::Error,
+    target: IpAddr,
+) -> Result<IpAddr, ProbeError> {
+    match error.kind() {
+        std::io::ErrorKind::TimedOut => Err(ProbeError::Timeout),
+        std::io::ErrorKind::ConnectionRefused => Ok(target),
+        _ => Err(ProbeError::ReceiveError(error.to_string())),
+    }
 }
 
 pub struct TracerouteBuilder {
@@ -673,5 +724,21 @@ mod tests {
     fn normalize_ptr_name_trims_trailing_dot() {
         assert_eq!(normalize_ptr_name("example.com."), "example.com");
         assert_eq!(normalize_ptr_name("router.local"), "router.local");
+    }
+
+    #[test]
+    fn udp_connection_refused_marks_target_as_final() {
+        let result = classify_udp_receive_error(
+            &std::io::Error::from(std::io::ErrorKind::ConnectionRefused),
+            "192.0.2.1".parse().unwrap(),
+        );
+
+        assert_eq!(result.unwrap(), "192.0.2.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn udp_probe_ports_increment_for_retries() {
+        assert_eq!(probe_port(33434, 1, 0), 33435);
+        assert_eq!(probe_port(33434, 1, 1), 33436);
     }
 }

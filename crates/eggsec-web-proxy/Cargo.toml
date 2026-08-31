@@ -25,7 +25,7 @@ rustls-pki-types = "1"
 rcgen = { version = "0.14", features = ["pem"] }
 
 # WebSocket interception
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"], optional = true }
+tokio-tungstenite = { version = "0.27", features = ["rustls-tls-native-roots"], optional = true }
 
 # HTTP/2 interception
 h2 = { version = "0.4", optional = true }

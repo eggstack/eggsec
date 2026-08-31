@@ -153,7 +153,7 @@ optional = true
 features = ["cors", "trace", "compression-br"]
 
 [dependencies.tokio-tungstenite]
-version = "0.26"
+version = "0.27"
 features = ["rustls-tls-native-roots"]
 optional = true
 

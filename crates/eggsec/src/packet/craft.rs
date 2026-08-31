@@ -285,38 +285,16 @@ impl PacketBuilder {
         if self.ipv4.is_some() && self.ipv6.is_some() {
             return Err(PacketValidationError::AddressFamilyMismatch);
         }
-        if let Some(ref ip) = self.ipv4 {
-            if ip.ttl == 0 {
-                return Err(PacketValidationError::InvalidTtl);
-            }
-            let header_len = 20;
-            let payload_len = self.payload.as_ref().map(|p| p.len()).unwrap_or(0);
-            if header_len + payload_len > 65535 {
-                return Err(PacketValidationError::PacketTooLarge {
-                    size: header_len + payload_len,
-                    max: 65535,
-                });
-            }
-            if payload_len > 65507 {
-                return Err(PacketValidationError::PayloadTooLarge {
-                    size: payload_len,
-                    max: 65507,
-                });
-            }
-        }
 
-        if let Some(ref ip) = self.ipv6 {
-            if ip.hop_limit == 0 {
-                return Err(PacketValidationError::InvalidHopLimit);
-            }
-            let header_len = 40;
-            let payload_len = self.payload.as_ref().map(|p| p.len()).unwrap_or(0);
-            if header_len + payload_len > 65575 {
-                return Err(PacketValidationError::PacketTooLarge {
-                    size: header_len + payload_len,
-                    max: 65575,
-                });
-            }
+        let payload_len = self.payload.as_ref().map_or(0, Vec::len);
+        let transport_len = self.transport_header_len();
+        let transport_and_payload_len = transport_len + payload_len;
+
+        if transport_and_payload_len > u16::MAX as usize {
+            return Err(PacketValidationError::PacketTooLarge {
+                size: transport_and_payload_len,
+                max: u16::MAX as usize,
+            });
         }
 
         if let Some(ref trans) = self.transport {
@@ -328,21 +306,79 @@ impl PacketBuilder {
             }
         }
 
+        if let Some(ref ip) = self.ipv4 {
+            if ip.ttl == 0 {
+                return Err(PacketValidationError::InvalidTtl);
+            }
+            let total_len = 20 + transport_and_payload_len;
+            if total_len > u16::MAX as usize {
+                return Err(PacketValidationError::PacketTooLarge {
+                    size: total_len,
+                    max: u16::MAX as usize,
+                });
+            }
+            let max_payload_len = u16::MAX as usize - 20 - transport_len;
+            if payload_len > max_payload_len {
+                return Err(PacketValidationError::PayloadTooLarge {
+                    size: payload_len,
+                    max: max_payload_len,
+                });
+            }
+        }
+
+        if let Some(ref ip) = self.ipv6 {
+            if ip.hop_limit == 0 {
+                return Err(PacketValidationError::InvalidHopLimit);
+            }
+            if transport_and_payload_len > u16::MAX as usize {
+                return Err(PacketValidationError::PacketTooLarge {
+                    size: 40 + transport_and_payload_len,
+                    max: 40 + u16::MAX as usize,
+                });
+            }
+        }
+
         Ok(())
+    }
+
+    fn transport_header_len(&self) -> usize {
+        match self.transport.as_ref() {
+            Some(TransportBuilder::Tcp(tcp)) => 20 + tcp.options.len(),
+            Some(TransportBuilder::Udp(_)) | Some(TransportBuilder::Icmp(_)) => 8,
+            None => 0,
+        }
     }
 
     pub fn build(&self) -> Result<Vec<u8>, PacketValidationError> {
         self.validate()?;
-        let mut packet = Vec::new();
+        let payload = self.payload.as_deref().unwrap_or(&[]);
+        let transport_len = self.transport_header_len();
+        let ip_payload_len = transport_len + payload.len();
+        let mut packet = Vec::with_capacity(
+            self.ethernet.as_ref().map_or(0, |_| 14)
+                + if self.ipv4.is_some() { 20 } else { 0 }
+                + if self.ipv6.is_some() { 40 } else { 0 }
+                + ip_payload_len,
+        );
 
         if let Some(ref eth) = self.ethernet {
             packet.extend_from_slice(&eth.to_bytes());
         }
 
         if let Some(ref ip) = self.ipv4 {
-            packet.extend_from_slice(&ip.to_bytes());
+            packet.extend_from_slice(&ip.to_bytes(u16::try_from(20 + ip_payload_len).map_err(
+                |_| PacketValidationError::PacketTooLarge {
+                    size: 20 + ip_payload_len,
+                    max: u16::MAX as usize,
+                },
+            )?));
         } else if let Some(ref ip) = self.ipv6 {
-            packet.extend_from_slice(&ip.to_bytes());
+            packet.extend_from_slice(&ip.to_bytes(u16::try_from(ip_payload_len).map_err(
+                |_| PacketValidationError::PacketTooLarge {
+                    size: 40 + ip_payload_len,
+                    max: 40 + u16::MAX as usize,
+                },
+            )?));
         }
 
         let (src_ip, dst_ip) = self
@@ -359,31 +395,20 @@ impl PacketBuilder {
                 IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             ));
 
-        let mut payload_appended = false;
-
         if let Some(ref trans) = self.transport {
             match trans {
                 TransportBuilder::Tcp(tcp) => {
-                    let payload = self.payload.as_deref().unwrap_or(&[]);
                     packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload)?);
-                    payload_appended = true;
                 }
                 TransportBuilder::Udp(udp) => {
-                    let payload = self.payload.as_deref().unwrap_or(&[]);
-                    packet.extend_from_slice(&udp.to_bytes(src_ip, dst_ip, payload));
+                    packet.extend_from_slice(&udp.to_bytes(src_ip, dst_ip, payload)?);
                 }
                 TransportBuilder::Icmp(icmp) => {
-                    let payload = self.payload.as_deref().unwrap_or(&[]);
                     packet.extend_from_slice(&icmp.to_bytes(payload));
-                    payload_appended = true;
                 }
             }
-        }
-
-        if !payload_appended {
-            if let Some(ref payload) = self.payload {
-                packet.extend_from_slice(payload);
-            }
+        } else {
+            packet.extend_from_slice(payload);
         }
 
         Ok(packet)
@@ -429,6 +454,37 @@ mod tests {
             Err(PacketValidationError::AddressFamilyMismatch)
         );
     }
+
+    #[test]
+    fn ipv4_total_length_includes_transport_and_payload() {
+        let packet = PacketBuilder::new()
+            .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 17, 64)
+            .udp(1000, 1001)
+            .payload(vec![1, 2, 3])
+            .build()
+            .unwrap();
+
+        assert_eq!(u16::from_be_bytes([packet[2], packet[3]]), 31);
+        assert_eq!(u16::from_be_bytes([packet[24], packet[25]]), 11);
+        assert_eq!(&packet[28..], &[1, 2, 3]);
+    }
+
+    #[test]
+    fn transport_header_is_counted_when_validating_packet_size() {
+        let result = PacketBuilder::new()
+            .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 6, 64)
+            .tcp(1000, 1001, 0, 0, TcpFlags::syn(), 65535)
+            .payload(vec![0; 65_507])
+            .build();
+
+        assert_eq!(
+            result,
+            Err(PacketValidationError::PacketTooLarge {
+                size: 65_547,
+                max: 65_535,
+            })
+        );
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -459,11 +515,11 @@ pub struct Ipv4Builder {
 }
 
 impl Ipv4Builder {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self, total_len: u16) -> [u8; 20] {
         let mut bytes = [0u8; 20];
         bytes[0] = 0x45;
         bytes[1] = (self.flags & 0x07) << 5;
-        bytes[2..4].copy_from_slice(&20u16.to_be_bytes());
+        bytes[2..4].copy_from_slice(&total_len.to_be_bytes());
         bytes[4..6].copy_from_slice(&self.id.to_be_bytes());
         bytes[6] = 0;
         bytes[7] = 0;
@@ -473,7 +529,7 @@ impl Ipv4Builder {
         bytes[16..20].copy_from_slice(&self.dst.octets());
         let checksum = calculate_ipv4_checksum(&bytes);
         bytes[10..12].copy_from_slice(&checksum.to_be_bytes());
-        bytes.to_vec()
+        bytes
     }
 }
 
@@ -488,12 +544,12 @@ pub struct Ipv6Builder {
 }
 
 impl Ipv6Builder {
-    fn to_bytes(&self) -> [u8; 40] {
+    fn to_bytes(&self, payload_len: u16) -> [u8; 40] {
         let mut bytes = [0u8; 40];
         let version_traffic_class_flow =
             (6u32 << 28) | ((self.traffic_class as u32) << 20) | (self.flow_label & 0x000FFFFF);
         bytes[0..4].copy_from_slice(&version_traffic_class_flow.to_be_bytes());
-        bytes[4..6].copy_from_slice(&0u16.to_be_bytes());
+        bytes[4..6].copy_from_slice(&payload_len.to_be_bytes());
         bytes[6] = self.next_header;
         bytes[7] = self.hop_limit;
         bytes[8..24].copy_from_slice(&self.src.octets());
@@ -580,15 +636,26 @@ pub struct UdpBuilder {
 }
 
 impl UdpBuilder {
-    fn to_bytes(&self, src_ip: IpAddr, dst_ip: IpAddr, payload: &[u8]) -> [u8; 8] {
-        let mut bytes = [0u8; 8];
-        let len = (8 + payload.len()) as u16;
+    fn to_bytes(
+        &self,
+        src_ip: IpAddr,
+        dst_ip: IpAddr,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, PacketValidationError> {
+        let len = u16::try_from(8 + payload.len()).map_err(|_| {
+            PacketValidationError::PacketTooLarge {
+                size: 8 + payload.len(),
+                max: u16::MAX as usize,
+            }
+        })?;
+        let mut bytes = vec![0u8; 8 + payload.len()];
         bytes[0..2].copy_from_slice(&self.src_port.to_be_bytes());
         bytes[2..4].copy_from_slice(&self.dst_port.to_be_bytes());
         bytes[4..6].copy_from_slice(&len.to_be_bytes());
         let checksum = compute_udp_checksum(src_ip, dst_ip, self.src_port, self.dst_port, payload);
         bytes[6..8].copy_from_slice(&checksum.to_be_bytes());
-        bytes
+        bytes[8..].copy_from_slice(payload);
+        Ok(bytes)
     }
 }
 

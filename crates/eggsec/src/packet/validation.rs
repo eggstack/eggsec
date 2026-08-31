@@ -1,10 +1,12 @@
 use smallvec::SmallVec;
 
 pub fn format_ipv6(bytes: &[u8]) -> String {
-    let parts: Vec<String> = (0..8)
-        .map(|i| format!("{:x}", u16::from_be_bytes([bytes[i * 2], bytes[i * 2 + 1]])))
-        .collect();
-    parts.join(":")
+    bytes
+        .get(..16)
+        .and_then(|bytes| <[u8; 16]>::try_from(bytes).ok())
+        .map_or_else(String::new, |bytes| {
+            std::net::Ipv6Addr::from(bytes).to_string()
+        })
 }
 
 pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
@@ -28,6 +30,9 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
                 return None;
             }
             let new_offset = ((length & 0x3f) as usize) << 8 | data[pos + 1] as usize;
+            if new_offset >= data.len() {
+                return None;
+            }
             jump_end.get_or_insert(pos + 2);
             pos = new_offset;
             jumps += 1;
@@ -47,16 +52,20 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
             return None;
         }
 
+        let separator_len = if name.is_empty() { 0 } else { 1 };
+        if name.len() + separator_len + length > 255 {
+            return None;
+        }
         name.extend_from_slice(&data[label_start..label_end]);
         pos = label_end;
     }
 
-    Some((String::from_utf8_lossy(&name).to_string(), pos))
+    None
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_dns_name;
+    use super::{format_ipv6, parse_dns_name};
 
     #[test]
     fn compressed_name_returns_offset_after_pointer() {
@@ -64,6 +73,20 @@ mod tests {
         let (name, next) = parse_dns_name(&data, 5).unwrap();
         assert_eq!(name, "www");
         assert_eq!(next, 7);
+    }
+
+    #[test]
+    fn unterminated_name_is_rejected() {
+        assert_eq!(parse_dns_name(&[3, b'w', b'w', b'w'], 0), None);
+    }
+
+    #[test]
+    fn ipv6_uses_rfc5952_compression() {
+        assert_eq!(format_ipv6(&[0; 16]), "::");
+        assert_eq!(
+            format_ipv6(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+            "2001:db8::1"
+        );
     }
 }
 
