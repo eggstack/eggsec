@@ -1398,7 +1398,7 @@ fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::S
     }
 }
 
-fn cron_should_run_for(scheduler: &CronScheduler, schedule: &str, now: &DateTime<Utc>) -> bool {
+fn cron_should_run_for(_scheduler: &CronScheduler, schedule: &str, now: &DateTime<Utc>) -> bool {
     if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
         expr.matches(now)
     } else {

@@ -248,7 +248,7 @@ where
         .await?;
         // Convert UDP results to FingerprintResults for the unified callback.
         let services_identified = udp_results.results.len();
-        let mut results = FingerprintResults {
+        let results = FingerprintResults {
             host: udp_results.host,
             ports_scanned: udp_results.ports_scanned,
             services_identified,

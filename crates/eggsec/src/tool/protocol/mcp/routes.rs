@@ -168,6 +168,7 @@ async fn handle_health() -> axum::Json<serde_json::Value> {
     }))
 }
 
+#[allow(dead_code)]
 struct SseStreamState {
     receiver: tokio::sync::broadcast::Receiver<StreamEvent>,
     request_id: String,

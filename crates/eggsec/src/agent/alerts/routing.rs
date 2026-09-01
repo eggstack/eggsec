@@ -346,6 +346,7 @@ impl AlertRouter {
         )
     }
 
+    #[allow(dead_code)]
     fn cleanup_stale_entries(&self) {
         let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
         let mut recent_alerts = self.recent_alerts.lock();

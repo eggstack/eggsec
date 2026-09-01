@@ -126,6 +126,7 @@ async fn handle_agent_run_impl(
     let use_ai_final = use_ai && config.ai_config.is_some();
     let run_once = run_args.once;
 
+    #[allow(unused_variables)]
     let ai_config = config.ai_config.clone();
 
     let mut agent = Agent::new(config).await?;

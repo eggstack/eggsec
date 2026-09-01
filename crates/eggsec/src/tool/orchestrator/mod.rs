@@ -160,7 +160,7 @@ impl Orchestrator {
 
         if stage.parallel {
             let depends_on = stage.depends_on.clone();
-            let mut handles: Vec<_> = stage
+            let handles: Vec<_> = stage
                 .tools
                 .iter()
                 .map(|tool| {

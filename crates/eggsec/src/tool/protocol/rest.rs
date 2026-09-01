@@ -239,6 +239,7 @@ pub fn create_router(
         .max_age(Duration::from_secs(3600))
         .allow_credentials(false);
 
+    #[allow(unused_mut)]
     let mut router = Router::new()
         .route("/health", get(health_check))
         .route("/metrics", get(metrics_endpoint))
@@ -631,6 +632,7 @@ fn operation_descriptor_for_rest_tool(
     }
 }
 
+#[allow(dead_code)]
 fn policy_denied_response(
     message: impl Into<String>,
     decision: crate::config::PolicyDecision,

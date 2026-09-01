@@ -101,7 +101,7 @@ impl SecurityTool for ScannerTool {
             std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
 
-        let result: Result<(), crate::error::EggsecError> = match self.mode {
+        let _result: Result<(), crate::error::EggsecError> = match self.mode {
             ScanMode::Ports => {
                 let ports = crate::utils::parsing::parse_ports("1-1000")?;
                 let request = crate::scanner::ports::PortScanRequest {

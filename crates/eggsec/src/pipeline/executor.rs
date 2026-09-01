@@ -21,6 +21,7 @@ use crate::types::{CommonHttpArgs, ScanProfile};
 #[cfg(feature = "web-proxy")]
 static PROXY_DISCOVERY_CLIENT: std::sync::LazyLock<reqwest::Client> =
     std::sync::LazyLock::new(|| {
+        // Builder only fails on invalid TLS config; with default features this is impossible.
         reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
@@ -30,6 +31,7 @@ static PROXY_DISCOVERY_CLIENT: std::sync::LazyLock<reqwest::Client> =
 #[cfg(feature = "web-proxy")]
 static PROXY_BASELINE_CLIENT: std::sync::LazyLock<reqwest::Client> =
     std::sync::LazyLock::new(|| {
+        // Builder only fails on invalid TLS config; with default features this is impossible.
         reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()

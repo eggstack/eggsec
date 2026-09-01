@@ -483,7 +483,7 @@ pub fn required_capabilities_for_tool_call(
 pub fn operation_descriptor_for_mcp_call(
     profile_policy: &McpProfilePolicy,
     tool_id: &str,
-    capability: Option<&str>,
+    _capability: Option<&str>,
     arguments: &serde_json::Value,
 ) -> Option<crate::config::OperationDescriptor> {
     use crate::config::IntendedUse;

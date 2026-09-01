@@ -1,4 +1,4 @@
-use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk};
+use crate::config::{IntendedUse, OperationMode, OperationRisk};
 use serde::{Deserialize, Serialize};
 
 /// Metadata for a tool that describes its capabilities and risk profile

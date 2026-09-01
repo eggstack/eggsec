@@ -2,6 +2,7 @@
 // All domain logic lives in the domain crate. This module provides
 // backward-compatible paths for TUI, CLI, and other consumers.
 
+#[cfg(not(feature = "web-proxy"))]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "web-proxy")]
