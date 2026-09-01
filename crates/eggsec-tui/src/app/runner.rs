@@ -433,6 +433,7 @@ mod tests {
             ports: None,
             scan_type: None,
             timeout_ms: None,
+            concurrency: None,
         });
         assert_eq!(tab_for_task_kind(&kind), Tab::ScanPorts);
     }
@@ -451,6 +452,7 @@ mod tests {
         let kind = TaskKind::LoadTest(LoadTestParams {
             target: "http://example.com".into(),
             method: "GET".into(),
+            requests: None,
             connections: None,
             duration_secs: None,
             rate_limit: None,
@@ -462,6 +464,9 @@ mod tests {
     fn tab_for_task_kind_fingerprint() {
         let kind = TaskKind::Fingerprint(FingerprintParams {
             target: "10.0.0.1".into(),
+            ports: None,
+            timeout_secs: None,
+            concurrency: None,
         });
         assert_eq!(tab_for_task_kind(&kind), Tab::Fingerprint);
     }

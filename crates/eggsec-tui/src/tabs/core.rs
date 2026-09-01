@@ -1218,7 +1218,7 @@ pub fn render_standard_2area(
 
     render_results_area(
         f,
-        chunks[1],
+        chunks.get(1).copied().unwrap_or(area),
         &core.state,
         &core.error,
         &core.results_view,
@@ -1283,11 +1283,15 @@ pub fn render_standard_3area(
 
     render_input_fields(f, &input_chunks, &core.inputs, true);
 
-    (config.render_options)(f, chunks[1], config.focus_area == config.options_focused);
+    (config.render_options)(
+        f,
+        chunks.get(1).copied().unwrap_or(area),
+        config.focus_area == config.options_focused,
+    );
 
     render_results_area(
         f,
-        chunks[2],
+        chunks.get(2).copied().unwrap_or(area),
         &core.state,
         &core.error,
         &core.results_view,

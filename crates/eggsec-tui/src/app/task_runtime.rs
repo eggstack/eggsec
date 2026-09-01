@@ -231,7 +231,12 @@ impl super::App {
                         .await
                     {
                         Ok(sid) => {
-                            *pending_session_id_clone.lock().unwrap() = Some(sid);
+                            *pending_session_id_clone.lock().unwrap_or_else(|poisoned| {
+                                tracing::warn!(
+                                    "TUI pending-session-id mutex was poisoned; recovering state"
+                                );
+                                poisoned.into_inner()
+                            }) = Some(sid);
                             sid
                         }
                         Err(e) => {

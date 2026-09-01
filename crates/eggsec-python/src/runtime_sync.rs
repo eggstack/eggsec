@@ -13,7 +13,19 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
             .enable_all()
             .thread_name("eggsec-python")
             .build()
-            .expect("Failed to create tokio runtime for eggsec-python")
+            .unwrap_or_else(|e| {
+                // Fall back to a current-thread runtime so callers still
+                // receive a usable handle instead of crashing the Python
+                // interpreter on init failure.
+                tracing::error!(
+                    error = %e,
+                    "failed to create multi-thread runtime; falling back to current-thread runtime"
+                );
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to construct fallback current-thread runtime")
+            })
     })
 }
 

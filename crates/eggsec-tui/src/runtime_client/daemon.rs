@@ -124,7 +124,10 @@ impl DaemonRuntimeClient {
                                         continue;
                                     }
                                 };
-                                let mut pending = pending_clone.lock().unwrap();
+                                let mut pending = pending_clone.lock().unwrap_or_else(|poisoned| {
+                                    tracing::warn!("TUI pending request registry mutex was poisoned; recovering state");
+                                    poisoned.into_inner()
+                                });
                                 if let Some(sender) = pending.remove(&request_id) {
                                     if let Err(error) = sender.send(other) {
                                         tracing::debug!(
@@ -208,7 +211,14 @@ impl DaemonRuntimeClient {
 
         let (tx, rx) = oneshot::channel();
         {
-            let mut pending = self.inner.pending_responses.lock().unwrap();
+            let mut pending = self
+                .inner
+                .pending_responses
+                .lock()
+                .unwrap_or_else(|poisoned| {
+                    tracing::warn!("TUI pending_responses mutex was poisoned; recovering state");
+                    poisoned.into_inner()
+                });
             pending.insert(request_id, tx);
         }
 

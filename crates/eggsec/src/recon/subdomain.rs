@@ -203,22 +203,34 @@ impl SubdomainEnumerator {
                 };
 
                 let fqdn = Self::normalize_fqdn(&domain, &subdomain);
+                let per_query_timeout = std::time::Duration::from_secs(5);
 
-                if let Ok(lookup) = resolver.lookup_ip(&fqdn).await {
+                if let Ok(Ok(lookup)) =
+                    tokio::time::timeout(per_query_timeout, resolver.lookup_ip(&fqdn)).await
+                {
                     for ip in lookup.iter() {
                         info.ip_addresses.push(ip.to_string());
                     }
                 }
 
-                if let Ok(mx_lookup) = resolver.mx_lookup(&fqdn).await {
+                if let Ok(Ok(mx_lookup)) =
+                    tokio::time::timeout(per_query_timeout, resolver.mx_lookup(&fqdn)).await
+                {
                     info.has_mx = !mx_lookup.answers().is_empty();
                 }
 
-                if let Ok(txt_lookup) = resolver.txt_lookup(&fqdn).await {
+                if let Ok(Ok(txt_lookup)) =
+                    tokio::time::timeout(per_query_timeout, resolver.txt_lookup(&fqdn)).await
+                {
                     info.has_txt = !txt_lookup.answers().is_empty();
                 }
 
-                if let Ok(cname_lookup) = resolver.lookup(&fqdn, RecordType::CNAME).await {
+                if let Ok(Ok(cname_lookup)) = tokio::time::timeout(
+                    per_query_timeout,
+                    resolver.lookup(&fqdn, RecordType::CNAME),
+                )
+                .await
+                {
                     info.has_cname = cname_lookup.answers().iter().any(|record| {
                         matches!(record.data, hickory_resolver::proto::rr::RData::CNAME(_))
                     });
@@ -260,7 +272,12 @@ impl SubdomainEnumerator {
                     }
                 };
 
-                if let Ok(lookup) = resolver.lookup_ip(&subdomain).await {
+                if let Ok(Ok(lookup)) = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    resolver.lookup_ip(&subdomain),
+                )
+                .await
+                {
                     let ips: Vec<String> = lookup.iter().map(|ip| ip.to_string()).collect();
                     if !ips.is_empty() {
                         return Some(SubdomainInfo {

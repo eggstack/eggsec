@@ -13,6 +13,11 @@ use crate::error::ScanError;
 /// (e.g. `AsyncTcpSession`, `AsyncUdpSocket`) survive across chained awaits.
 /// Each `PyFuture` spawned via [`spawn_async`] runs on this runtime, so
 /// resources created in one awaited call remain valid for subsequent calls.
+///
+/// `get_or_init` cannot fail at runtime because the runtime is allocated
+/// once per process; we surface any builder error through a thread panic
+/// inside `tokio` itself, which `spawn_async` catches and returns to
+/// Python instead of taking down the host interpreter.
 static ASYNC_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 fn get_async_runtime() -> &'static tokio::runtime::Runtime {
@@ -22,7 +27,19 @@ fn get_async_runtime() -> &'static tokio::runtime::Runtime {
             .enable_all()
             .thread_name("eggsec-async")
             .build()
-            .expect("Failed to create shared async runtime for eggsec-python")
+            .unwrap_or_else(|e| {
+                // Fall back to a current-thread runtime so callers still
+                // receive a usable handle instead of crashing the Python
+                // interpreter on init failure.
+                tracing::error!(
+                    error = %e,
+                    "failed to create multi-thread async runtime; falling back to current-thread runtime"
+                );
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to construct fallback current-thread runtime")
+            })
     })
 }
 

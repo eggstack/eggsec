@@ -1,3 +1,10 @@
+//! Daemon host process — orchestrates the runtime, client registry, and
+//! session-level authorization for the eggsec daemon.
+//!
+//! Hold no std::sync::Mutex across an `.await`; doing so would deadlock the
+//! async runtime. The `clippy::await_holding_lock` deny below enforces this.
+#![warn(clippy::await_holding_lock)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -1195,6 +1202,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -1523,6 +1531,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -1634,6 +1643,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -1696,6 +1706,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -1921,6 +1932,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -2367,6 +2379,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,
@@ -2506,6 +2519,7 @@ mod tests {
                                 ports: Some("1".into()),
                                 scan_type: None,
                                 timeout_ms: Some(2000),
+                                concurrency: None,
                             }),
                             requested_by: None,
                             surface: eggsec_runtime::RuntimeSurface::CliManual,
@@ -3052,6 +3066,7 @@ mod tests {
                                 ports: Some("80".into()),
                                 scan_type: None,
                                 timeout_ms: None,
+                                concurrency: None,
                             },
                         ),
                         requested_by: None,

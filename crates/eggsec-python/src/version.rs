@@ -118,11 +118,20 @@ pub fn build_info() -> PyObject {
         });
 
         let json_str = info.to_string();
-        py.import("json")
-            .expect("json module not available")
-            .call_method1("loads", (json_str,))
-            .expect("json.loads failed")
-            .into()
+        let json_module = match py.import("json") {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::error!(error = %e, "json module not available");
+                return PyDict::new(py).into();
+            }
+        };
+        match json_module.call_method1("loads", (json_str,)) {
+            Ok(v) => v.into(),
+            Err(e) => {
+                tracing::error!(error = %e, "json.loads failed");
+                PyDict::new(py).into()
+            }
+        }
     })
 }
 
@@ -133,14 +142,18 @@ pub fn api_surface_version() -> PyObject {
     Python::attach(|py| {
         let dict = PyDict::new(py);
 
-        dict.set_item("package_version", env!("CARGO_PKG_VERSION"))
-            .expect("set_item failed");
-        dict.set_item("schema_version", SCHEMA_VERSION)
-            .expect("set_item failed");
-        dict.set_item("protocol_version", PROTOCOL_VERSION)
-            .expect("set_item failed");
-        dict.set_item("abi_version", ABI_VERSION)
-            .expect("set_item failed");
+        if let Err(e) = dict.set_item("package_version", env!("CARGO_PKG_VERSION")) {
+            tracing::warn!(error = %e, "api_surface_version: set package_version failed");
+        }
+        if let Err(e) = dict.set_item("schema_version", SCHEMA_VERSION) {
+            tracing::warn!(error = %e, "api_surface_version: set schema_version failed");
+        }
+        if let Err(e) = dict.set_item("protocol_version", PROTOCOL_VERSION) {
+            tracing::warn!(error = %e, "api_surface_version: set protocol_version failed");
+        }
+        if let Err(e) = dict.set_item("abi_version", ABI_VERSION) {
+            tracing::warn!(error = %e, "api_surface_version: set abi_version failed");
+        }
 
         let features = PyList::empty(py);
         let feature_names: Vec<&str> = vec![

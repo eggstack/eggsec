@@ -632,7 +632,9 @@ mod render_tests {
         app.current_tab = Tab::Fuzz;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -640,7 +642,9 @@ mod render_tests {
         let mut app = create_test_app();
         let backend = TestBackend::new(40, 20);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -649,7 +653,9 @@ mod render_tests {
         app.current_tab = Tab::Dashboard;
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -658,7 +664,9 @@ mod render_tests {
         app.current_tab = Tab::Settings;
         let backend = TestBackend::new(120, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -668,7 +676,9 @@ mod render_tests {
         app.current_tab = Tab::Scan;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -676,7 +686,9 @@ mod render_tests {
         let mut app = create_test_app();
         let backend = TestBackend::new(30, 20);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -684,7 +696,9 @@ mod render_tests {
         let mut app = create_test_app();
         let backend = TestBackend::new(80, 12);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
     }
 
     #[test]
@@ -695,7 +709,9 @@ mod render_tests {
             app.current_tab = Tab::Recon;
             let backend = TestBackend::new(width, 24);
             let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+            terminal
+                .draw(|f| ui::draw(f, &mut app))
+                .expect("test render failed");
         }
     }
 
@@ -707,7 +723,9 @@ mod render_tests {
             app.current_tab = *last_tab;
             let backend = TestBackend::new(80, 24);
             let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+            terminal
+                .draw(|f| ui::draw(f, &mut app))
+                .expect("test render failed");
         }
     }
 
@@ -717,7 +735,9 @@ mod render_tests {
         app.current_tab = Tab::Recon;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "Recon tab should render some content");
@@ -729,7 +749,9 @@ mod render_tests {
         app.current_tab = Tab::Fuzz;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "Fuzz tab should render some content");
@@ -741,7 +763,9 @@ mod render_tests {
         app.current_tab = Tab::Dashboard;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "Dashboard tab should render some content");
@@ -753,7 +777,9 @@ mod render_tests {
         app.current_tab = Tab::Settings;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "Settings tab should render some content");
@@ -765,7 +791,9 @@ mod render_tests {
         app.current_tab = Tab::Waf;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "WAF tab should render some content");
@@ -777,7 +805,9 @@ mod render_tests {
         app.current_tab = Tab::Fuzz;
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let space_count = buf
             .content
@@ -799,7 +829,9 @@ mod render_tests {
         app.current_tab = Tab::Scan;
         let backend = TestBackend::new(200, 40);
         let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| ui::draw(f, &mut app))
+            .expect("test render failed");
         let buf = terminal.backend().buffer();
         let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
         assert!(has_content, "Scan tab at large size should render content");
@@ -813,7 +845,9 @@ mod render_tests {
             app.current_tab = *tab;
             let backend = TestBackend::new(80, 24);
             let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+            terminal
+                .draw(|f| ui::draw(f, &mut app))
+                .expect("test render failed");
             let buf = terminal.backend().buffer();
             let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
             assert!(has_content, "Tab {:?} should render some content", tab);

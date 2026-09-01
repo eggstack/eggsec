@@ -448,9 +448,12 @@ impl AdbConnection {
             .shell_exec(&format!("pm install -r -t {}", shell_quote(remote)))
             .await?;
         // best effort cleanup of tmp
-        let _ = self
+        if let Err(e) = self
             .shell_exec(&format!("rm -f {}", shell_quote(remote)))
-            .await;
+            .await
+        {
+            tracing::warn!(error = %e, "adb: best-effort cleanup of tmp install artifact failed");
+        }
         if out.contains("Success") || out.contains("INSTALL_SUCCEEDED") {
             Ok(out)
         } else {

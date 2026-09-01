@@ -1493,6 +1493,63 @@ else
   echo "SKIP: engine.rs not found."
 fi
 
+# 67. NSE libraries must not use unsafe Handle::current().block_on
+echo ""
+echo "--- Check 67: NSE libraries avoid Handle::current().block_on ---"
+HANDLE_BLOCK_HITS=$(rg -n 'Handle::current\(\)\.block_on' crates/eggsec-nse/src/libraries/ 2>/dev/null \
+  | rg -v 'libraries/runtime_bridge.rs' || true)
+if [[ -n "$HANDLE_BLOCK_HITS" ]]; then
+  echo "$HANDLE_BLOCK_HITS"
+  echo "FAIL: NSE libraries must use crate::libraries::runtime_bridge::block_on_async."
+  echo "      Handle::current().block_on panics when called inside a tokio runtime task"
+  echo "      and may deadlock when no runtime is active."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NSE libraries route async execution through runtime_bridge::block_on_async."
+fi
+
+# 68. NSE libraries must not hardcode insecure TLS acceptance (BUG-003)
+# Direct reqwest::Client::builder() calls that hardcode `true` are forbidden.
+# Calls inside `if <parameter>` blocks that gate on the caller's choice are OK,
+# since the parameter is propagated by the caller.
+echo ""
+echo "--- Check 68: NSE libraries gate insecure TLS on capability context ---"
+TLS_HARDCODED=$(rg -nU --multiline \
+  'Client::builder\(\)[\s\S]{0,200}?\.danger_accept_invalid_certs\(true\)' \
+  crates/eggsec-nse/src/libraries/ crates/eggsec-nse/src/public_api/ 2>/dev/null \
+  | rg -v 'helpers\.rs' \
+  | rg -v 'http\.rs' || true)
+if [[ -n "$TLS_HARDCODED" ]]; then
+  echo "$TLS_HARDCODED"
+  echo "FAIL: NSE libraries/public_api must not hardcode insecure TLS acceptance."
+  echo "      Pass NseCapabilityContext through and gate on allows_insecure_tls()."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NSE libraries gate insecure TLS on capability context."
+fi
+
+# 69. NSE library globals expose reset_for_run() to allow ExecutorCore to
+# reset per-scan state. The reset is invoked from clear_library_reports().
+echo ""
+echo "--- Check 69: NSE library globals expose reset_for_run() ---"
+LIBRARY_GLOBALS=$(rg -l 'static (CR|ACCOUNT|FILE_HANDLES|CRAWLER|CRAWLER_COUNTER|COMPILED|REGEX|SMB_SESSIONS|SSL_SESSIONS|CREDENTIALS|TARGET|USERNAMES|PASSWORDS|HASH|TEST_RESULTS)' \
+  crates/eggsec-nse/src/libraries/ 2>/dev/null || true)
+MISSING_RESET=""
+for f in $LIBRARY_GLOBALS; do
+  if ! rg -q 'pub fn reset_for_run' "$f"; then
+    MISSING_RESET="$MISSING_RESET $f"
+  fi
+done
+if [[ -n "$MISSING_RESET" ]]; then
+  echo "$MISSING_RESET"
+  echo "FAIL: NSE library files with global statics must expose pub fn reset_for_run."
+  echo "      ExecutorCore::clear_library_reports calls each module's reset_for_run."
+  echo "      to prevent cross-scan contamination."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NSE library globals expose reset_for_run()."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

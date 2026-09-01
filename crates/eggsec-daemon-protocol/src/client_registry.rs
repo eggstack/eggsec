@@ -390,6 +390,7 @@ mod tests {
                             ports: None,
                             scan_type: None,
                             timeout_ms: None,
+                            concurrency: None,
                         },
                     ),
                     requested_by: None,

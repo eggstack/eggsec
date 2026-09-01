@@ -1025,7 +1025,9 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs) -> Result<()> {
             let mut conn_pr = crate::adb::AdbClient::connect(device)
                 .await
                 .map_err(|e| MobileError::Validation(e.to_string()))?;
-            let _ = conn_pr.get_global_proxy().await; // best-effort read-before (ignored; we only care about the set side-effect for lab)
+            if let Err(e) = conn_pr.get_global_proxy().await {
+                tracing::debug!(error = %e, "mobile-lab: pre-proxy read failed (best-effort)");
+            } // best-effort read-before (ignored; we only care about the set side-effect for lab)
             match conn_pr.set_global_proxy(&host, port).await {
                 Ok(_) => {
                     actions.push(format!("configured device global proxy {}:{}", host, port));
@@ -1085,7 +1087,9 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs) -> Result<()> {
             let mut conn_cl = crate::adb::AdbClient::connect(device)
                 .await
                 .map_err(|e| MobileError::Validation(e.to_string()))?;
-            let _ = conn_cl.uninstall(&package, false).await;
+            if let Err(e) = conn_cl.uninstall(&package, false).await {
+                tracing::warn!(error = %e, package = %package, "mobile-lab: post-run uninstall failed (best effort)");
+            }
             actions.push(format!(
                 "post-run cleanup: uninstall attempted for {} (best effort)",
                 package

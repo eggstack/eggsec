@@ -329,10 +329,18 @@ impl TabRender for ScanTab {
 
         if self.inputs.fields.len() >= 2 {
             if let Some(field) = self.inputs.fields.first() {
-                field.render(f, inner_chunks[0], insert_mode);
+                field.render(
+                    f,
+                    inner_chunks.get(0).copied().unwrap_or(input_inner),
+                    insert_mode,
+                );
             }
             if let Some(field) = self.inputs.fields.get(1) {
-                field.render(f, inner_chunks[1], insert_mode);
+                field.render(
+                    f,
+                    inner_chunks.get(1).copied().unwrap_or(input_inner),
+                    insert_mode,
+                );
             }
         }
 
