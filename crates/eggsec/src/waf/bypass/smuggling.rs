@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use crate::constants::waf;
 use crate::error::Result;
 use reqwest::Client;

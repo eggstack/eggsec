@@ -1,4 +1,4 @@
-use crate::constants::{http, scan};
+use crate::constants::http;
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 
@@ -13,21 +13,25 @@ pub fn validate_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
             .canonicalize()
             .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?
     } else {
-        // For non-existent paths, resolve parent directory and join
-        if let Some(parent) = user_path.parent() {
-            if parent.exists() {
-                let parent_canonical = parent
-                    .canonicalize()
-                    .map_err(|e| anyhow!("Failed to canonicalize parent path: {}", e))?;
-                let file_name = user_path
-                    .file_name()
-                    .ok_or_else(|| anyhow!("Invalid path: no file name"))?;
-                parent_canonical.join(file_name)
-            } else {
-                user_path.to_path_buf()
+        // For non-existent paths, walk up to the nearest existing ancestor,
+        // canonicalize it, then re-append the remaining tail components and
+        // lexically normalize `..` / `.` before the prefix check.
+        let (ancestor, tail) = find_existing_ancestor(user_path);
+        if let Some(ancestor) = ancestor {
+            let ancestor_canonical = ancestor
+                .canonicalize()
+                .map_err(|e| anyhow!("Failed to canonicalize ancestor path: {}", e))?;
+            let mut candidate = ancestor_canonical;
+            for comp in tail.iter() {
+                candidate.push(comp);
             }
+            normalize_lexically(&candidate)
         } else {
-            user_path.to_path_buf()
+            return Err(anyhow!(
+                "Path traversal detected: {} is not within {} (no existing ancestor)",
+                user_path.display(),
+                base.display()
+            ));
         }
     };
 
@@ -39,6 +43,79 @@ pub fn validate_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
         ));
     }
     Ok(canonical)
+}
+
+fn find_existing_ancestor(path: &Path) -> (Option<PathBuf>, Vec<std::ffi::OsString>) {
+    use std::path::Component;
+    for ancestor in path.ancestors() {
+        if ancestor.as_os_str().is_empty() {
+            continue;
+        }
+        if ancestor.exists() {
+            let tail_path = path
+                .strip_prefix(ancestor)
+                .unwrap_or_else(|_| Path::new(""));
+            let mut tail = Vec::new();
+            for comp in tail_path.components() {
+                match comp {
+                    Component::Normal(os) => tail.push(os.to_os_string()),
+                    Component::ParentDir => tail.push(std::ffi::OsString::from("..")),
+                    Component::CurDir => tail.push(std::ffi::OsString::from(".")),
+                    Component::RootDir | Component::Prefix(_) => {}
+                }
+            }
+            return (Some(ancestor.to_path_buf()), tail);
+        }
+    }
+    // No ancestor found; for relative paths try "." as fallback ancestor if it exists
+    if !path.is_absolute() && Path::new(".").exists() {
+        let mut tail = Vec::new();
+        for comp in path.components() {
+            match comp {
+                Component::Normal(os) => tail.push(os.to_os_string()),
+                Component::ParentDir => tail.push(std::ffi::OsString::from("..")),
+                Component::CurDir => tail.push(std::ffi::OsString::from(".")),
+                Component::RootDir | Component::Prefix(_) => {}
+            }
+        }
+        return (Some(PathBuf::from(".")), tail);
+    }
+    (None, Vec::new())
+}
+
+fn normalize_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut components: Vec<Component> = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                // Pop last Normal if possible, otherwise keep ParentDir unless at root
+                if let Some(last) = components.last() {
+                    match last {
+                        Component::Normal(_) => {
+                            components.pop();
+                        }
+                        Component::RootDir | Component::Prefix(_) => {
+                            // Cannot go above root
+                        }
+                        _ => components.push(comp),
+                    }
+                } else {
+                    components.push(comp);
+                }
+            }
+            Component::CurDir => {}
+            _ => components.push(comp),
+        }
+    }
+    let mut out = PathBuf::new();
+    for comp in components {
+        out.push(comp.as_os_str());
+    }
+    if out.as_os_str().is_empty() {
+        out.push(".");
+    }
+    out
 }
 
 pub fn validate_path_string(base: &Path, user_path: &str) -> Result<PathBuf> {
@@ -54,14 +131,15 @@ pub fn validate_url(url: &str) -> Result<()> {
 }
 
 pub fn validate_concurrency(concurrency: usize) -> Result<()> {
+    // Shared validator is used by port scans (default 100) and by fuzzer/endpoint
+    // scans which may legitimately use higher concurrency. Keep the hard cap
+    // above the port-scan default to avoid rejecting valid CLI values.
+    const MAX_CONCURRENCY: usize = 1000;
     if concurrency == 0 {
         return Err(anyhow!("Concurrency must be greater than 0"));
     }
-    if concurrency > scan::DEFAULT_PORT_CONCURRENCY {
-        return Err(anyhow!(
-            "Concurrency cannot exceed {}",
-            scan::DEFAULT_PORT_CONCURRENCY
-        ));
+    if concurrency > MAX_CONCURRENCY {
+        return Err(anyhow!("Concurrency cannot exceed {}", MAX_CONCURRENCY));
     }
     Ok(())
 }
@@ -137,7 +215,15 @@ mod tests {
 
     #[test]
     fn test_validate_concurrency_too_high() {
-        assert!(validate_concurrency(scan::DEFAULT_PORT_CONCURRENCY + 1).is_err());
+        assert!(validate_concurrency(1001).is_err());
+    }
+
+    #[test]
+    fn test_validate_concurrency_port_default_plus_one_still_allowed() {
+        // Shared validator intentionally allows values above the port-scan default
+        // (100) for fuzzer/endpoint scans up to the hard cap (1000).
+        assert!(validate_concurrency(crate::constants::scan::DEFAULT_PORT_CONCURRENCY + 1).is_ok());
+        assert!(validate_concurrency(200).is_ok());
     }
 
     #[test]
@@ -167,7 +253,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_validate_concurrency_in_range_passes(val in 1usize..scan::DEFAULT_PORT_CONCURRENCY) {
+        fn test_validate_concurrency_in_range_passes(val in 1usize..1000usize) {
             prop_assert!(validate_concurrency(val).is_ok());
         }
 

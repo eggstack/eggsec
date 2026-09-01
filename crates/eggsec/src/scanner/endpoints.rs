@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use crate::error::EggsecError;
 use crate::error::Result;
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};

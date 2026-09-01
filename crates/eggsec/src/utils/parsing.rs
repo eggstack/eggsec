@@ -114,11 +114,9 @@ pub fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
         return false;
     }
 
-    haystack_bytes.windows(needle_bytes.len()).any(|window| {
-        // SAFETY: We're comparing bytes from valid UTF-8 strings
-        let candidate = std::str::from_utf8(window).unwrap_or("");
-        candidate.eq_ignore_ascii_case(needle)
-    })
+    haystack_bytes
+        .windows(needle_bytes.len())
+        .any(|window| window.eq_ignore_ascii_case(needle_bytes))
 }
 
 #[cfg(test)]

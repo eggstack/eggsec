@@ -550,11 +550,60 @@ impl Pipeline {
                 })
                 .collect();
 
-            let wave_results = futures::future::join_all(stage_futures).await;
+            // Wave-level timeout prevents a single stalled stage from holding the whole wave.
+            let wave_results = match tokio::time::timeout(
+                Duration::from_secs(310),
+                futures::future::join_all(stage_futures),
+            )
+            .await
+            {
+                Ok(results) => results,
+                Err(_) => {
+                    tracing::warn!(
+                        wave = wave_idx + 1,
+                        "Wave {} timed out after 310s; marking remaining stages as failed",
+                        wave_idx + 1
+                    );
+                    wave.iter()
+                        .map(|stage| StageResult {
+                            stage: *stage,
+                            duration_ms: 310_000,
+                            success: false,
+                            error: Some("wave timeout after 310s".to_string()),
+                        })
+                        .collect()
+                }
+            };
             stage_results.extend(wave_results);
 
             if let Some(ref pb) = progress {
                 pb.inc(wave.len() as u64);
+            }
+
+            // Checkpoint per wave — sequential run checkpoints after every stage; concurrent should
+            // not lose an entire run if interrupted mid-execution.
+            if let Some(ref path) = self.session_path {
+                let remaining_stages: Vec<Stage> =
+                    waves.iter().skip(wave_idx + 1).flatten().copied().collect();
+                let session = PipelineSession {
+                    target: self.target.clone(),
+                    profile: self.profile,
+                    completed_stages: stage_results.iter().map(|r| r.stage).collect(),
+                    remaining_stages,
+                    context: self.context.lock().await.clone(),
+                    spoof_config: self.spoof_config.clone(),
+                    concurrency: Some(self.concurrency),
+                    concurrent_stages: Some(self.concurrent_stages),
+                    config: self.config.clone(),
+                };
+                if let Err(e) = save(path, &session).await {
+                    tracing::warn!(
+                        path = %path,
+                        error = %e,
+                        wave = wave_idx + 1,
+                        "Failed to save session checkpoint after wave"
+                    );
+                }
             }
         }
 

@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use crate::dispatch::types::{send_progress, TaskResult};
 #[cfg(feature = "stress-testing")]
 use std::net::SocketAddr;

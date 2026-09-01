@@ -3,6 +3,30 @@ use crate::supply_chain::Severity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+const MAX_MANIFEST_BYTES: u64 = 10 * 1024 * 1024;
+
+fn read_manifest_capped(path: &Path) -> std::io::Result<String> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > MAX_MANIFEST_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "manifest {} exceeds size cap of {} bytes",
+                path.display(),
+                MAX_MANIFEST_BYTES
+            ),
+        ));
+    }
+    let content = std::fs::read_to_string(path)?;
+    if content.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("manifest {} exceeds size cap after read", path.display()),
+        ));
+    }
+    Ok(content)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SbomReport {
     pub format: SbomFormat,
@@ -61,7 +85,7 @@ impl SbomGenerator {
         let mut components = Vec::new();
 
         if cargo_toml.exists() {
-            let content = std::fs::read_to_string(&cargo_toml)?;
+            let content = read_manifest_capped(&cargo_toml)?;
             let project_name = self
                 .extract_package_name(&content)
                 .unwrap_or_else(|| "unknown".to_string());
@@ -70,7 +94,7 @@ impl SbomGenerator {
                 .unwrap_or_else(|| "0.0.0".to_string());
 
             if cargo_lock.exists() {
-                let lock_content = std::fs::read_to_string(&cargo_lock)?;
+                let lock_content = read_manifest_capped(&cargo_lock)?;
                 components = self.parse_cargo_lock(&lock_content);
             }
 
@@ -100,7 +124,7 @@ impl SbomGenerator {
         let package_lock = Path::new(project_path).join("package-lock.json");
 
         if package_json.exists() {
-            let content = std::fs::read_to_string(&package_json)?;
+            let content = read_manifest_capped(&package_json)?;
             let json: serde_json::Value = serde_json::from_str(&content)?;
             let project_name = json
                 .get("name")
@@ -134,7 +158,7 @@ impl SbomGenerator {
             }
 
             if package_lock.exists() {
-                let lock_content = std::fs::read_to_string(&package_lock)?;
+                let lock_content = read_manifest_capped(&package_lock)?;
                 if let Ok(lock_json) = serde_json::from_str::<serde_json::Value>(&lock_content) {
                     if let Some(packages) = lock_json.get("packages").and_then(|v| v.as_object()) {
                         for (key, info) in packages {
@@ -189,7 +213,7 @@ impl SbomGenerator {
     ) -> Result<SbomReport> {
         let req_file = Path::new(project_path).join("requirements.txt");
         if req_file.exists() {
-            let content = std::fs::read_to_string(&req_file)?;
+            let content = read_manifest_capped(&req_file)?;
             let mut components = Vec::new();
 
             for line in content.lines() {

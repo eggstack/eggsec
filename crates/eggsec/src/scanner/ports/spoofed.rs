@@ -103,6 +103,7 @@ pub fn shutdown_packet_trace() {
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn scan_ports_spoofed(
     host: &str,
     ports: Vec<u16>,
@@ -111,6 +112,7 @@ pub(crate) async fn scan_ports_spoofed(
     tui_mode: bool,
     spoof_config: SpoofConfig,
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    max_results: Option<usize>,
 ) -> Result<PortScanResults> {
     use crate::scanner::spoof::{
         build_fragmented_packets, build_tcp_packet, get_local_ip, get_network_interface,
@@ -601,19 +603,31 @@ pub(crate) async fn scan_ports_spoofed(
     });
 
     let total_open = results.len();
+    let mut results_truncated = false;
+    if let Some(limit) = max_results {
+        if results.len() > limit {
+            results.truncate(limit);
+            results_truncated = true;
+        }
+    }
+    if results.len() > super::MAX_SCAN_RESULTS {
+        results.truncate(super::MAX_SCAN_RESULTS);
+        results_truncated = true;
+    }
     Ok(PortScanResults {
         host: host.to_string(),
         ports_scanned: u32::try_from(ports_count)
             .expect("port count exceeds u32::MAX; type-widening guard"),
         open_ports: results,
         total_open_ports: total_open,
-        results_truncated: false,
+        results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats,
     })
 }
 
 #[cfg(not(all(feature = "stress-testing", unix)))]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn scan_ports_spoofed(
     _host: &str,
     _ports: Vec<u16>,
@@ -622,6 +636,7 @@ pub(crate) async fn scan_ports_spoofed(
     _tui_mode: bool,
     _spoof_config: SpoofConfig,
     _progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    _max_results: Option<usize>,
 ) -> Result<PortScanResults> {
     Err(EggsecError::Runtime(
         "IP spoofing requires 'stress-testing' feature and Unix system".to_string(),

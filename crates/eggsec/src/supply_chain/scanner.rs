@@ -3,6 +3,29 @@ use std::path::Path;
 
 use super::{Severity, SupplyChainFinding};
 
+const MAX_MANIFEST_BYTES: u64 = 10 * 1024 * 1024;
+
+fn read_manifest_capped(path: &Path) -> anyhow::Result<String> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > MAX_MANIFEST_BYTES {
+        anyhow::bail!(
+            "manifest {} exceeds size cap of {} bytes ({} bytes)",
+            path.display(),
+            MAX_MANIFEST_BYTES,
+            metadata.len()
+        );
+    }
+    let content = std::fs::read_to_string(path)?;
+    if content.len() as u64 > MAX_MANIFEST_BYTES {
+        anyhow::bail!(
+            "manifest {} exceeds size cap after read ({} bytes)",
+            path.display(),
+            content.len()
+        );
+    }
+    Ok(content)
+}
+
 /// Dependency manifest type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ManifestType {
@@ -182,7 +205,7 @@ pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>>
 
     let cargo_toml = project_path.join("Cargo.toml");
     if cargo_toml.exists() {
-        let content = std::fs::read_to_string(&cargo_toml)?;
+        let content = read_manifest_capped(&cargo_toml)?;
         let mut in_deps = false;
         for line in content.lines() {
             let trimmed = line.trim();
@@ -200,7 +223,7 @@ pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>>
 
     let package_json = project_path.join("package.json");
     if package_json.exists() {
-        let content = std::fs::read_to_string(&package_json)?;
+        let content = read_manifest_capped(&package_json)?;
         let json: serde_json::Value = serde_json::from_str(&content)?;
         if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
             for name in deps.keys() {
@@ -211,7 +234,7 @@ pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>>
 
     let req_file = project_path.join("requirements.txt");
     if req_file.exists() {
-        let content = std::fs::read_to_string(&req_file)?;
+        let content = read_manifest_capped(&req_file)?;
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('-') {
@@ -232,7 +255,7 @@ pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>>
 }
 
 fn count_cargo_toml_deps(path: &Path) -> anyhow::Result<usize> {
-    let content = std::fs::read_to_string(path)?;
+    let content = read_manifest_capped(path)?;
     let mut count = 0;
     let mut in_deps = false;
 
@@ -253,7 +276,7 @@ fn count_cargo_toml_deps(path: &Path) -> anyhow::Result<usize> {
 }
 
 fn count_package_json_deps(path: &Path) -> anyhow::Result<usize> {
-    let content = std::fs::read_to_string(path)?;
+    let content = read_manifest_capped(path)?;
     let json: serde_json::Value = serde_json::from_str(&content)?;
 
     let mut count = 0;
@@ -268,7 +291,7 @@ fn count_package_json_deps(path: &Path) -> anyhow::Result<usize> {
 }
 
 fn count_go_mod_deps(path: &Path) -> anyhow::Result<usize> {
-    let content = std::fs::read_to_string(path)?;
+    let content = read_manifest_capped(path)?;
     Ok(content
         .lines()
         .filter(|l| l.starts_with('\t'))
@@ -280,7 +303,7 @@ fn count_go_mod_deps(path: &Path) -> anyhow::Result<usize> {
 fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
     let mut findings = Vec::new();
 
-    if let Ok(content) = std::fs::read_to_string(path) {
+    if let Ok(content) = read_manifest_capped(path) {
         let lines: Vec<&str> = content.lines().collect();
         let has_user_instruction = lines.iter().any(|l| l.trim().starts_with("USER "));
 
@@ -359,7 +382,7 @@ fn is_pinned_action(line: &str) -> bool {
 fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
     let mut findings = Vec::new();
 
-    if let Ok(content) = std::fs::read_to_string(path) {
+    if let Ok(content) = read_manifest_capped(path) {
         // Check for overly broad permissions (inline and block YAML forms)
         let has_broad_permissions = content.contains("permissions: write-all")
             || content.contains("permissions: read-all")

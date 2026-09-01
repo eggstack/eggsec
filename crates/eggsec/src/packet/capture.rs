@@ -254,9 +254,16 @@ impl PacketCapture {
         }
 
         self.running.store(false, Ordering::SeqCst);
+        self.stop_notify.notify_waiters();
 
-        if let Err(e) = capture_task.await {
-            tracing::warn!("Packet capture task failed: {}", e);
+        match tokio::time::timeout(Duration::from_secs(5), capture_task).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                tracing::warn!("Packet capture task failed: {}", e);
+            }
+            Err(_) => {
+                tracing::warn!("Packet capture task timed out after 5s; aborting capture thread");
+            }
         }
 
         self.stats.packets_captured = packets_received.load(Ordering::Relaxed);

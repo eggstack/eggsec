@@ -76,7 +76,10 @@ impl StatefulFuzzer {
         if let Some(regex) = self.regex_cache.get(pattern) {
             return Some(regex.clone());
         }
-        let regex = Regex::new(pattern).ok()?;
+        let regex = regex::RegexBuilder::new(pattern)
+            .size_limit(100_000)
+            .build()
+            .ok()?;
         self.regex_cache.put(pattern.to_string(), regex.clone());
         Some(regex)
     }

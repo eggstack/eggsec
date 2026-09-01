@@ -37,10 +37,10 @@ async fn read_bounded_line(
             return if bytes.is_empty() {
                 Ok(None)
             } else {
-                // EOF mid-frame; treat trailing bytes as a final line.
-                String::from_utf8(bytes)
-                    .map(Some)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unterminated frame: missing newline",
+                ))
             };
         }
         match available.iter().position(|&b| b == b'\n') {

@@ -545,6 +545,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
             config.tui_mode,
             config.spoof_config,
             config.progress_tx,
+            config.max_results,
         )
         .await;
     }
