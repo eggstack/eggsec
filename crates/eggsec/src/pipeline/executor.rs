@@ -18,6 +18,24 @@ use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 use crate::types::{CommonHttpArgs, ScanProfile};
 
+#[cfg(feature = "web-proxy")]
+static PROXY_DISCOVERY_CLIENT: std::sync::LazyLock<reqwest::Client> =
+    std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_default()
+    });
+
+#[cfg(feature = "web-proxy")]
+static PROXY_BASELINE_CLIENT: std::sync::LazyLock<reqwest::Client> =
+    std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_default()
+    });
+
 /// A simple finding type for pipeline proxy stage results.
 #[cfg(feature = "web-proxy")]
 #[derive(Debug, Clone)]
@@ -748,10 +766,7 @@ impl Pipeline {
         ];
 
         let mut endpoints = Vec::new();
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap_or_default();
+        let client = &*PROXY_DISCOVERY_CLIENT;
 
         for path in common_paths {
             let url = format!("{}{}", base_url.trim_end_matches('/'), path);
@@ -774,10 +789,7 @@ impl Pipeline {
         endpoints: &[String],
     ) -> Vec<crate::proxy::intercept::types::ProxyFlow> {
         let mut flows = Vec::new();
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
+        let client = &*PROXY_BASELINE_CLIENT;
 
         for (i, endpoint) in endpoints.iter().enumerate().take(10) {
             let url = format!("{}{}", base_url.trim_end_matches('/'), endpoint);

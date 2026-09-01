@@ -909,6 +909,13 @@ impl TargetScope {
     }
 }
 
+/// Legacy broad check: returns `true` for any address that is not globally
+/// routable (RFC1918 private, loopback, link-local, IPv6 ULA / link-local).
+///
+/// This is intentionally broader than [`classify_address`]: it groups loopback
+/// and link-local alongside true RFC1918 addresses. New policy code should
+/// prefer [`classify_address`] and check `AddressClass::Private` explicitly so
+/// loopback/link-local are handled separately.
 pub fn is_private_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(ipv4) => {

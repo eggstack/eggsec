@@ -603,9 +603,11 @@ pub(crate) async fn scan_ports_spoofed(
     let total_open = results.len();
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: u32::try_from(ports_count).unwrap_or(u32::MAX),
+        ports_scanned: u32::try_from(ports_count)
+            .expect("port count exceeds u32::MAX; type-widening guard"),
         open_ports: results,
         total_open_ports: total_open,
+        results_truncated: false,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats,
     })

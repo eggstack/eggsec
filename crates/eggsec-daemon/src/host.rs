@@ -777,16 +777,16 @@ impl DaemonHost {
                         // CLI/TUI clients see only their own sessions by default, matching
                         // the single-user local daemon model. This can be relaxed via config
                         // if multi-client scenarios arise.
-                        let is_elevated = client_id.map_or(false, |cid| {
+                        let is_elevated = client_id.is_some_and(|cid| {
                             let registry = self.client_registry.lock().unwrap_or_else(|poisoned| {
                                 tracing::warn!(
                                     "client registry mutex was poisoned; recovering state"
                                 );
                                 poisoned.into_inner()
                             });
-                            registry.get(&cid).map_or(false, |info| {
-                                matches!(info.kind, ClientKind::DaemonInternal)
-                            })
+                            registry
+                                .get(&cid)
+                                .is_some_and(|info| matches!(info.kind, ClientKind::DaemonInternal))
                         });
                         let filtered = if is_elevated {
                             sessions

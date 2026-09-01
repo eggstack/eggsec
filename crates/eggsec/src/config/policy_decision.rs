@@ -1058,14 +1058,13 @@ pub fn evaluate_operation_policy(
 pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
     // Prefer typed denial classes when available (new code path)
     if !decision.denial_classes.is_empty() {
-        use std::collections::HashSet;
-        let set: HashSet<DenialClass> = decision.denial_classes.iter().copied().collect();
+        let set: rustc_hash::FxHashSet<DenialClass> =
+            decision.denial_classes.iter().copied().collect();
         return set.into_iter().collect();
     }
 
     // Legacy fallback: string inspection of denied_reasons
-    use std::collections::HashSet;
-    let mut classes: HashSet<DenialClass> = HashSet::new();
+    let mut classes: rustc_hash::FxHashSet<DenialClass> = rustc_hash::FxHashSet::default();
     let reasons = &decision.denied_reasons;
 
     if reasons.iter().any(|r| {
@@ -1488,7 +1487,7 @@ pub fn confirmation_classes_for(
 /// Stable kebab-case strings for the given confirmation classes.
 /// Deduplicates while preserving first-seen order (for deterministic audit/JSON).
 pub fn confirmation_class_strings(classes: &[ConfirmationClass]) -> Vec<String> {
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = rustc_hash::FxHashSet::default();
     classes
         .iter()
         .filter_map(|c| {

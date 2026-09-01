@@ -135,15 +135,33 @@ pub async fn fingerprint_udp_services(
         let semaphore = semaphore.clone();
         let rate_limiter = rate_limiter.clone();
         let handle = tokio::spawn(async move {
-            // Fail closed: a closed semaphore must not bypass the concurrency limit.
-            if semaphore.acquire_owned().await.is_err() {
-                tracing::warn!("UDP fingerprint semaphore closed while waiting for permit");
-                return None;
+            // Outer bound across semaphore + rate-limit + probe phases, so a
+            // stalled upstream cannot pin the task indefinitely. The inner
+            // `fingerprint_udp_port` also enforces per-probe timeouts.
+            let overall_budget = timeout_duration.checked_mul(4).unwrap_or(timeout_duration)
+                + Duration::from_secs(30);
+            match tokio::time::timeout(overall_budget, async {
+                // Fail closed: a closed semaphore must not bypass the concurrency limit.
+                if semaphore.acquire_owned().await.is_err() {
+                    tracing::warn!("UDP fingerprint semaphore closed while waiting for permit");
+                    return None;
+                }
+                rate_limiter.acquire().await;
+                // Bind a dedicated socket per task so concurrent probes cannot
+                // consume each other's replies on a shared unconnected socket.
+                fingerprint_udp_port(ip, port, timeout_duration, None).await
+            })
+            .await
+            {
+                Ok(inner) => inner,
+                Err(_) => {
+                    tracing::debug!(
+                        "UDP fingerprint task exceeded overall budget for port {}",
+                        port
+                    );
+                    None
+                }
             }
-            rate_limiter.acquire().await;
-            // Bind a dedicated socket per task so concurrent probes cannot
-            // consume each other's replies on a shared unconnected socket.
-            fingerprint_udp_port(ip, port, timeout_duration, None).await
         });
         handles.push(handle);
     }

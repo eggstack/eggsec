@@ -96,9 +96,9 @@ impl ResultComparator {
         }
 
         let severity_change = (
-            new.summary.critical as i32 - old.summary.critical as i32,
-            new.summary.high as i32 - old.summary.high as i32,
-            new.summary.medium as i32 - old.summary.medium as i32,
+            new.summary.critical as i64 - old.summary.critical as i64,
+            new.summary.high as i64 - old.summary.high as i64,
+            new.summary.medium as i64 - old.summary.medium as i64,
         );
 
         ComparisonResult {
@@ -132,7 +132,7 @@ pub struct ComparisonResult {
     pub added: Vec<Finding>,
     pub removed: Vec<Finding>,
     pub unchanged: Vec<Finding>,
-    pub severity_change: (i32, i32, i32),
+    pub severity_change: (i64, i64, i64),
     pub old_timestamp: String,
     pub new_timestamp: String,
 }

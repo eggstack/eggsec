@@ -254,6 +254,7 @@ async fn test_port_scan_results_display() {
             },
         ],
         total_open_ports: 2,
+        results_truncated: false,
         duration_ms: 1000,
         spoof_stats: None,
     };

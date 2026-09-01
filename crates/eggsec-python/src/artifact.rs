@@ -294,53 +294,77 @@ impl ArtifactStorePy {
     /// Store an artifact and return its ID.
     fn store(&self, artifact: ArtifactPy) -> String {
         let id = artifact.id.clone();
-        self.artifacts.write().unwrap().insert(id.clone(), artifact);
+        self.artifacts
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.clone(), artifact);
         id
     }
 
     /// Retrieve an artifact by ID.
     fn get(&self, artifact_id: &str) -> Option<ArtifactPy> {
-        self.artifacts.read().unwrap().get(artifact_id).cloned()
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(artifact_id)
+            .cloned()
     }
 
     /// Check if an artifact exists.
     fn contains(&self, artifact_id: &str) -> bool {
-        self.artifacts.read().unwrap().contains_key(artifact_id)
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(artifact_id)
     }
 
     /// Remove an artifact by ID. Returns true if it existed.
     fn remove(&self, artifact_id: &str) -> bool {
         self.artifacts
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .remove(artifact_id)
             .is_some()
     }
 
     /// Number of stored artifacts.
     fn __len__(&self) -> usize {
-        self.artifacts.read().unwrap().len()
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
     }
 
     /// Number of stored artifacts (method alias).
     fn len(&self) -> usize {
-        self.artifacts.read().unwrap().len()
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
     }
 
     /// Whether the store is empty.
     fn is_empty(&self) -> bool {
-        self.artifacts.read().unwrap().is_empty()
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
     }
 
     /// List all artifact IDs.
     fn list_ids(&self) -> Vec<String> {
-        self.artifacts.read().unwrap().keys().cloned().collect()
+        self.artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Convert to a dictionary mapping artifact IDs to artifact dicts.
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
-        let artifacts = self.artifacts.read().unwrap();
+        let artifacts = self.artifacts.read().unwrap_or_else(|e| e.into_inner());
         for (id, artifact) in artifacts.iter() {
             dict.set_item(id, artifact.to_dict(py)?)?;
         }
@@ -349,7 +373,7 @@ impl ArtifactStorePy {
 
     /// Serialize all artifacts to JSON.
     fn to_json(&self) -> PyResult<String> {
-        let artifacts = self.artifacts.read().unwrap();
+        let artifacts = self.artifacts.read().unwrap_or_else(|e| e.into_inner());
         let map: HashMap<&str, &ArtifactPy> =
             artifacts.iter().map(|(k, v)| (k.as_str(), v)).collect();
         serde_json::to_string(&map)
@@ -357,7 +381,11 @@ impl ArtifactStorePy {
     }
 
     fn __repr__(&self) -> String {
-        let len = self.artifacts.read().unwrap().len();
+        let len = self
+            .artifacts
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .len();
         format!("ArtifactStore(artifacts={len})")
     }
 }

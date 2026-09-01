@@ -23,7 +23,7 @@ impl From<&SessionSummary> for SessionSummaryView {
             surface: format!("{:?}", s.surface),
             surface_label: s.surface.label().into(),
             scope_source: s.scope.as_ref().map(|sc| sc.source.clone()),
-            has_explicit_scope: s.scope.as_ref().map_or(false, |sc| sc.is_explicit),
+            has_explicit_scope: s.scope.as_ref().is_some_and(|sc| sc.is_explicit),
             active_count: s.active_count,
             completed_count: s.completed_count,
             created_at_secs: s.created_at_epoch_secs,

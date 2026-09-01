@@ -140,6 +140,7 @@ pub struct PortScanResults {
     pub ports_scanned: u32,
     pub open_ports: Vec<PortResult>,
     pub total_open_ports: usize,
+    pub results_truncated: bool,
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spoof_stats: Option<SpoofStats>,
@@ -361,6 +362,7 @@ where
             ports_scanned: request.ports.len() as u32,
             open_ports: Vec::new(),
             total_open_ports: 0,
+            results_truncated: false,
             duration_ms: 0,
             spoof_stats: None,
         });
@@ -637,7 +639,8 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
     let mut results: Vec<PortResult> = results_map.into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
 
-    if results.len() > MAX_SCAN_RESULTS {
+    let results_truncated = results.len() > MAX_SCAN_RESULTS;
+    if results_truncated {
         results.truncate(MAX_SCAN_RESULTS);
     }
 
@@ -646,9 +649,11 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: u32::try_from(ports_count).unwrap_or(u32::MAX),
+        ports_scanned: u32::try_from(ports_count)
+            .expect("port count exceeds u32::MAX; type-widening guard"),
         open_ports,
         total_open_ports,
+        results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,
     })
@@ -713,6 +718,7 @@ mod tests {
             ports_scanned: 100,
             open_ports: vec![],
             total_open_ports: 0,
+            results_truncated: false,
             duration_ms: 5000,
             spoof_stats: None,
         };
@@ -745,6 +751,7 @@ mod tests {
                 },
             ],
             total_open_ports: 3,
+            results_truncated: false,
             duration_ms: 3000,
             spoof_stats: None,
         };

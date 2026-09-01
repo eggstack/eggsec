@@ -59,12 +59,13 @@ impl Mutator {
     }
 
     pub fn mutate(&mut self, payload: &str) -> Vec<String> {
-        let mutation_types = self.mutation_types.clone();
         let mut mutations = Vec::new();
 
-        for mutation_type in &mutation_types {
-            if let Some(mutated) = self.apply_mutation(payload, mutation_type) {
-                mutations.push(mutated);
+        for i in 0..self.mutation_types.len() {
+            if let Some(mutation_type) = self.mutation_types.get(i).copied() {
+                if let Some(mutated) = self.apply_mutation(payload, &mutation_type) {
+                    mutations.push(mutated);
+                }
             }
         }
 

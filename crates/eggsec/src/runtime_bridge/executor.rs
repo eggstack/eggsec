@@ -383,6 +383,7 @@ mod tests {
             ports_scanned: 1000,
             open_ports: vec![],
             total_open_ports: 0,
+            results_truncated: false,
             duration_ms: 500,
             spoof_stats: None,
         });

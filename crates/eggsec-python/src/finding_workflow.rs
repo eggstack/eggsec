@@ -222,7 +222,7 @@ impl FindingWorkflowPy {
 
     /// Register a finding with initial state `New`.
     fn register_finding(&self, finding_id: &str) -> PyResult<()> {
-        let mut states = self.states.write().unwrap();
+        let mut states = self.states.write().unwrap_or_else(|e| e.into_inner());
         if states.contains_key(finding_id) {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Finding already registered: {finding_id}"
@@ -231,7 +231,7 @@ impl FindingWorkflowPy {
         states.insert(finding_id.to_string(), FindingStatePy::New);
         self.transitions
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(finding_id.to_string(), Vec::new());
         Ok(())
     }
@@ -240,7 +240,7 @@ impl FindingWorkflowPy {
     fn get_state(&self, finding_id: &str) -> PyResult<FindingStatePy> {
         self.states
             .read()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(finding_id)
             .cloned()
             .ok_or_else(|| {
@@ -281,11 +281,11 @@ impl FindingWorkflowPy {
 
         self.states
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(finding_id.to_string(), to_state);
         self.transitions
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .entry(finding_id.to_string())
             .or_default()
             .push(transition.clone());
@@ -331,7 +331,7 @@ impl FindingWorkflowPy {
 
         self.suppressions
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(finding_id.to_string(), suppression.clone());
 
         Ok(suppression)
@@ -339,7 +339,7 @@ impl FindingWorkflowPy {
 
     /// Check whether a finding is currently suppressed (and not expired).
     fn is_suppressed(&self, finding_id: &str) -> bool {
-        let suppressions = self.suppressions.read().unwrap();
+        let suppressions = self.suppressions.read().unwrap_or_else(|e| e.into_inner());
         match suppressions.get(finding_id) {
             Some(sup) => match &sup.expires_at {
                 Some(expires) => {
@@ -360,7 +360,7 @@ impl FindingWorkflowPy {
         let removed = self
             .suppressions
             .write()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .remove(finding_id)
             .is_some();
         if !removed {
@@ -375,7 +375,7 @@ impl FindingWorkflowPy {
     fn get_history(&self, finding_id: &str) -> PyResult<Vec<WorkflowTransitionPy>> {
         self.transitions
             .read()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(finding_id)
             .cloned()
             .ok_or_else(|| {
@@ -386,7 +386,7 @@ impl FindingWorkflowPy {
     }
 
     fn __repr__(&self) -> String {
-        let len = self.states.read().unwrap().len();
+        let len = self.states.read().unwrap_or_else(|e| e.into_inner()).len();
         format!("FindingWorkflow(findings={len})")
     }
 }

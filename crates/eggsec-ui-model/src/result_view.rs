@@ -28,8 +28,8 @@ impl From<&TaskResultEnvelope> for ResultEnvelopeView {
             payload: env.payload.clone(),
             artifact_count: artifacts.len(),
             artifacts,
-            supports_rich_tui: renderer.map_or(false, |r| r.supports_rich_tui),
-            supports_json_detail: renderer.map_or(true, |r| r.supports_json_detail),
+            supports_rich_tui: renderer.is_some_and(|r| r.supports_rich_tui),
+            supports_json_detail: renderer.is_none_or(|r| r.supports_json_detail),
         }
     }
 }
