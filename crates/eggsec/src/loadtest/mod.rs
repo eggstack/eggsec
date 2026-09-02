@@ -40,6 +40,7 @@
 pub mod metrics;
 pub mod runner;
 
+#[cfg(feature = "cli")]
 use crate::error::Result;
 
 pub use metrics::LoadTestResults;

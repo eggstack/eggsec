@@ -103,13 +103,18 @@ pub mod whois;
 
 #[cfg(feature = "cli")]
 use crate::cli::ReconArgs;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::error::Result;
+#[cfg(feature = "cli")]
 use parking_lot::Mutex;
 #[cfg(feature = "tool-api")]
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "cli")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use std::sync::Arc;
 
 pub use spinner::Spinner;

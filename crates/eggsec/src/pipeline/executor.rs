@@ -9,7 +9,9 @@ use tokio::sync::Mutex;
 use super::context::PipelineContext;
 use super::report::PipelineReport;
 use super::session::{save, PipelineSession};
-use super::stage::{parse_stages, Stage, EXTENDED_SCAN_PORTS};
+#[cfg(feature = "cli")]
+use super::stage::parse_stages;
+use super::stage::{Stage, EXTENDED_SCAN_PORTS};
 #[cfg(feature = "cli")]
 use crate::cli::ScanArgs;
 use crate::config::EggsecConfig;

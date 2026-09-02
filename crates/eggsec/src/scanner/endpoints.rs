@@ -2,8 +2,11 @@
 
 use crate::error::EggsecError;
 use crate::error::Result;
-use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};
+#[cfg(feature = "cli")]
+use crate::scanner::spoof::format_spoof_warning;
+use crate::scanner::spoof::SpoofConfig;
 use crate::utils::preserve_all;
+#[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -18,6 +21,7 @@ use url::Url;
 
 #[cfg(feature = "cli")]
 use crate::cli::EndpointScanArgs;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
 
 const MAX_SCAN_RESULTS: usize = 100_000;

@@ -698,7 +698,7 @@ impl ProxyTool {
             .rules
             .iter()
             .enumerate()
-            .map(|(i, r)| {
+            .map(|(_, r)| {
                 let parts: Vec<&str> = r.splitn(2, ':').collect();
                 serde_json::json!({
                     "id": parts.first().unwrap_or(&""),
@@ -749,7 +749,7 @@ impl ProxyTool {
             .and_then(|v| v.as_str())
             .unwrap_or("json");
 
-        let report = WebProxySessionReport::new(&state.listen_addr, state.dry_run);
+        let _report = WebProxySessionReport::new(&state.listen_addr, state.dry_run);
 
         match export_format {
             "json" => Ok(serde_json::json!({

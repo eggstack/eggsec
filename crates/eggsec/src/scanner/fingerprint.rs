@@ -1,6 +1,8 @@
 use crate::error::EggsecError;
 use crate::error::Result;
-use crate::utils::parsing::{parse_ports, resolve_host};
+#[cfg(feature = "cli")]
+use crate::utils::parsing::parse_ports;
+use crate::utils::parsing::resolve_host;
 use crate::utils::strip_controls;
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -14,9 +16,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use super::udp_fingerprint::{fingerprint_udp_services, get_default_udp_ports};
 #[cfg(feature = "cli")]
 use crate::cli::FingerprintArgs;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
 
 const MAX_SCAN_RESULTS: usize = 100_000;

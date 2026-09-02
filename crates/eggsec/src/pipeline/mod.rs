@@ -48,15 +48,22 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-use crate::error::{EggsecError, Result};
+#[cfg(any(feature = "tool-api", feature = "cli"))]
+use crate::error::EggsecError;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
+use crate::error::Result;
+#[cfg(feature = "cli")]
 use crate::output::extensions::{JUnitBuilderExt, SarifBuilderExt};
 
 #[cfg(feature = "cli")]
 use crate::cli::ResumeArgs;
 #[cfg(feature = "cli")]
 use crate::cli::ScanArgs;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
+#[cfg(feature = "cli")]
 use crate::types::OutputFormat;
+#[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
 
 pub use context::PipelineContext;
@@ -64,6 +71,7 @@ pub use executor::Pipeline;
 pub use report::PipelineReport;
 pub use stage::{parse_stages, Stage};
 
+#[cfg(feature = "cli")]
 async fn write_output(
     report: &PipelineReport,
     output_path: &str,

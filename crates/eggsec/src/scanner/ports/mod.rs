@@ -6,16 +6,23 @@
 mod spoofed;
 
 use crate::error::Result;
+#[cfg(feature = "cli")]
 use crate::output::escape::escape_xml;
-use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
+#[cfg(feature = "cli")]
+use crate::scanner::spoof::format_spoof_warning;
+use crate::scanner::spoof::{SpoofConfig, SpoofStats};
 use crate::utils::connect_with_nodelay_timeout;
-use crate::utils::parsing::{parse_ports, resolve_host};
+#[cfg(feature = "cli")]
+use crate::utils::parsing::parse_ports;
+use crate::utils::parsing::resolve_host;
+#[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
 use crate::utils::strip_controls;
 use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "cli")]
 use std::fmt::Write as FmtWrite;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -23,6 +30,7 @@ use std::time::Duration;
 
 #[cfg(feature = "cli")]
 use crate::cli::PortScanArgs;
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
 use crate::utils::service_detection::get_service_name as get_service_name_from_utils;
 
