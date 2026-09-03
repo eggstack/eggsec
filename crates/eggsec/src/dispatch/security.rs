@@ -437,8 +437,13 @@ pub async fn run_integrations_task(
 }
 
 #[cfg(feature = "finding-workflow")]
+/// Dispatch stub for finding-workflow tasks.
+///
+/// Currently returns an empty [`WorkflowReport`] with counts derived from
+/// `finding_ids`. `mode` is reserved for future filtering (e.g. list/triage)
+/// once `WorkflowParams` carries it; it is intentionally unused for now.
 pub async fn run_workflow_task(
-    mode: String,
+    _mode: String,
     _target: Option<String>,
     finding_ids: Vec<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
@@ -472,7 +477,7 @@ pub async fn run_vuln_task(
     use crate::vuln::asset::assess_asset;
     use crate::vuln::prioritizer::prioritize_findings;
     use crate::vuln::triage::triage_finding;
-    use crate::vuln::{AssetCriticality, CvssScore, ExploitInfo, Remediation, VulnAssessment};
+    use crate::vuln::{CvssScore, ExploitInfo, Remediation, VulnAssessment};
 
     match tokio::time::timeout(std::time::Duration::from_secs(120), async move {
         send_progress(&progress_tx, 0, 3).await;

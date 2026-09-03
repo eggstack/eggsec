@@ -1,6 +1,12 @@
 use crate::error::Result;
 use crate::utils::create_insecure_http_client;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
+
+static MIN_LEN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
+        .expect("valid regex pattern")
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordPolicyResult {
@@ -41,7 +47,13 @@ impl PasswordPolicyTester {
         let response = self.client.get(target).send().await;
 
         if let Ok(resp) = response {
-            let body = resp.text().await.unwrap_or_default();
+            let body = match resp.text().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("Failed to read password-policy response body: {}", e);
+                    String::new()
+                }
+            };
             let lower = body.to_lowercase();
 
             if lower.contains("password") && lower.contains("policy") {
@@ -64,10 +76,7 @@ impl PasswordPolicyTester {
                 result.requires_special = true;
             }
 
-            let re =
-                regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
-                    .expect("valid regex pattern");
-            if let Some(caps) = re.captures(&lower) {
+            if let Some(caps) = MIN_LEN_RE.captures(&lower) {
                 if let Some(m) = caps.get(1) {
                     if let Ok(len) = m.as_str().parse::<usize>() {
                         result.min_length = Some(len);
@@ -93,7 +102,16 @@ impl PasswordPolicyTester {
             if let Ok(resp) = test_response {
                 let status = resp.status().as_u16();
                 if status == 302 || status == 200 {
-                    let body = resp.text().await.unwrap_or_default();
+                    let body = match resp.text().await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to read weak-password probe response body: {}",
+                                e
+                            );
+                            continue;
+                        }
+                    };
                     if !body.contains("invalid")
                         && !body.contains("error")
                         && !body.contains("weak")

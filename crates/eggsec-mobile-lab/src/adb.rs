@@ -366,7 +366,9 @@ impl AdbConnection {
                     }
                 }
                 ADB_CLSE => {
-                    let _ = self.close_service(ids).await;
+                    if let Err(e) = self.close_service(ids).await {
+                        tracing::warn!("adb: shell_exec close_service failed: {}", e);
+                    }
                     break;
                 }
                 ADB_OKAY => {
@@ -423,7 +425,9 @@ impl AdbConnection {
             match parse_sync_status(&resp.data) {
                 SyncStatus::Ok => ok = true,
                 SyncStatus::Fail(reason) => {
-                    let _ = self.close_service(ids).await;
+                    if let Err(e) = self.close_service(ids).await {
+                        tracing::warn!("adb: sync_push close_service failed: {}", e);
+                    }
                     return Err(anyhow!("adb sync push failed: {}", reason));
                 }
                 SyncStatus::Unknown => {}

@@ -65,7 +65,13 @@ impl MfaTester {
             .await;
 
         if let Ok(resp) = response {
-            let body = resp.text().await.unwrap_or_default();
+            let body = match resp.text().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("Failed to read MFA probe response body: {}", e);
+                    return findings;
+                }
+            };
             let lower = body.to_lowercase();
 
             if lower.contains("two-factor")

@@ -339,7 +339,7 @@ pub async fn dispatch_inner(
             .await
         }
         #[cfg(feature = "finding-workflow")]
-        TaskKind::Workflow(p) => {
+        TaskKind::Workflow(_p) => {
             security::run_workflow_task("list".to_string(), None, vec![], progress_tx).await
         }
         #[cfg(feature = "vuln-management")]
