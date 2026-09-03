@@ -441,9 +441,25 @@ mod tests {
 
     #[test]
     fn history_enter_is_no_op() {
+        use super::super::history::HistoryFocusArea;
+
+        // Empty history: Enter is a no-op.
         let mut tab = HistoryTab::new();
         tab.handle_enter();
         assert!(!tab.is_running());
+        assert_eq!(tab.focus_area, HistoryFocusArea::List);
+
+        // With a selected entry: Enter shows details by focusing Details.
+        tab.add_entry(
+            "PortScan".to_string(),
+            "example.com".to_string(),
+            "summary".to_string(),
+            vec!["detail".to_string()],
+        );
+        tab.focus_area = HistoryFocusArea::List;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+        assert_eq!(tab.focus_area, HistoryFocusArea::Details);
     }
 
     // =========================================================================

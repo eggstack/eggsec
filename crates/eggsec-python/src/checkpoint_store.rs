@@ -377,7 +377,20 @@ impl CheckpointStore {
                 })?;
                 let mut checkpoints = HashMap::new();
                 for mut cp in file_data.checkpoints {
-                    let _ = migrate_checkpoint(&mut cp);
+                    let pipeline_id = cp.pipeline_id.clone();
+                    match migrate_checkpoint(&mut cp) {
+                        Ok(true) => tracing::debug!(
+                            pipeline_id = %pipeline_id,
+                            version = cp.version.0,
+                            "migrated checkpoint to current schema version"
+                        ),
+                        Ok(false) => {}
+                        Err(e) => tracing::warn!(
+                            pipeline_id = %pipeline_id,
+                            error = %e,
+                            "checkpoint migration failed; loading unmigrated checkpoint"
+                        ),
+                    }
                     checkpoints.insert(cp.pipeline_id.clone(), cp);
                 }
                 let mut locked = store.checkpoints.lock().map_err(|e| {

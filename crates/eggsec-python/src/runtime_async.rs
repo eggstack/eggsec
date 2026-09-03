@@ -14,33 +14,43 @@ use crate::error::ScanError;
 /// Each `PyFuture` spawned via [`spawn_async`] runs on this runtime, so
 /// resources created in one awaited call remain valid for subsequent calls.
 ///
-/// `get_or_init` cannot fail at runtime because the runtime is allocated
-/// once per process; we surface any builder error through a thread panic
-/// inside `tokio` itself, which `spawn_async` catches and returns to
-/// Python instead of taking down the host interpreter.
+/// Init is fallible and fails closed: total resource exhaustion returns a
+/// Python error instead of panicking inside the interpreter.
 static ASYNC_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
-fn get_async_runtime() -> &'static tokio::runtime::Runtime {
-    ASYNC_RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .thread_name("eggsec-async")
-            .build()
-            .unwrap_or_else(|e| {
-                // Fall back to a current-thread runtime so callers still
-                // receive a usable handle instead of crashing the Python
-                // interpreter on init failure.
-                tracing::error!(
-                    error = %e,
-                    "failed to create multi-thread async runtime; falling back to current-thread runtime"
-                );
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("failed to construct fallback current-thread runtime")
-            })
-    })
+fn get_async_runtime() -> PyResult<&'static tokio::runtime::Runtime> {
+    if let Some(runtime) = ASYNC_RUNTIME.get() {
+        return Ok(runtime);
+    }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .thread_name("eggsec-async")
+        .build()
+        .or_else(|e| {
+            // Fall back to a current-thread runtime so callers still
+            // receive a usable handle instead of crashing the Python
+            // interpreter on init failure.
+            tracing::error!(
+                error = %e,
+                "failed to create multi-thread async runtime; falling back to current-thread runtime"
+            );
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+        })
+        .map_err(|e| {
+            tracing::error!(
+                error = %e,
+                "failed to construct fallback current-thread runtime"
+            );
+            ScanError::new_err(format!("failed to initialize async runtime: {}", e))
+        })?;
+    // If another thread won the init race, drop ours and use theirs.
+    let _ = ASYNC_RUNTIME.set(runtime);
+    ASYNC_RUNTIME
+        .get()
+        .ok_or_else(|| ScanError::new_err("async runtime unavailable after init"))
 }
 
 /// A Python-awaitable wrapper around a Rust future running on the shared runtime.
@@ -110,7 +120,7 @@ where
     T: for<'py> IntoPyObject<'py> + Send + 'static,
 {
     let (tx, rx) = mpsc::channel();
-    let runtime = get_async_runtime();
+    let runtime = get_async_runtime()?;
 
     runtime.spawn(async move {
         let result = future.await;

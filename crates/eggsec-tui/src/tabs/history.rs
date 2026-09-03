@@ -616,7 +616,14 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.is_running() {}
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+        if self.selected.is_some() {
+            self.update_results_view();
+            self.focus_area = HistoryFocusArea::Details;
+        }
     }
 
     fn handle_escape(&mut self) {

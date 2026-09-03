@@ -403,9 +403,16 @@ pub(crate) fn emit_lifecycle_event(
         h.push_event(event.clone())?;
     }
 
-    // Send on event channel if configured
+    // Send on event channel if configured. Delivery loss is counted inside
+    // `EventSender::try_send`; log the kind here so Full/Closed is visible.
     if let Some(tx) = event_tx {
-        let _ = tx.try_send(event);
+        if let Err(e) = tx.try_send(event) {
+            tracing::warn!(
+                error = %e,
+                event_type = %event_type,
+                "lifecycle event channel send failed; loss recorded in delivery stats"
+            );
+        }
     }
 
     Ok(())

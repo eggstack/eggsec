@@ -59,24 +59,20 @@ pub(crate) fn operation_descriptor_for_agent_scan(
     target: &str,
     scan_type: &str,
     depth: ScanDepth,
-) -> OperationDescriptor {
+) -> Result<OperationDescriptor, crate::config::DescriptorError> {
     use crate::tool::metadata::metadata_for_tool_id;
 
     // Try to match scan_type to known metadata
     if let Some(metadata) = metadata_for_tool_id(scan_type) {
-        let mut descriptor = metadata
-            .try_descriptor_for_target(Some(target))
-            .unwrap_or_else(|_| {
-                // Fallback: if target validation fails, construct with no target
-                // This maintains backward compatibility for edge cases
-                metadata.descriptor_for_target(None)
-            });
+        // Fail closed: propagate target validation failures instead of
+        // synthesizing a target-less descriptor that would lose binding.
+        let mut descriptor = metadata.try_descriptor_for_target(Some(target))?;
         descriptor.requires_explicit_scope = true;
-        return descriptor;
+        return Ok(descriptor);
     }
 
     // Fallback: keyword-based classification for unknown scan types
-    OperationDescriptor::new(
+    Ok(OperationDescriptor::new(
         scan_type.to_string(),
         OperationMode::StandardAssessment,
         risk_for_agent_scan_depth(depth, scan_type),
@@ -87,7 +83,7 @@ pub(crate) fn operation_descriptor_for_agent_scan(
         false,
         true,
         capabilities_for_agent_scan(scan_type, depth),
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -266,7 +262,8 @@ mod tests {
     #[test]
     fn operation_descriptor_shallow_recon() {
         let desc =
-            operation_descriptor_for_agent_scan("https://example.com", "recon", ScanDepth::Shallow);
+            operation_descriptor_for_agent_scan("https://example.com", "recon", ScanDepth::Shallow)
+                .expect("valid target should produce a descriptor");
         assert_eq!(desc.operation, "recon");
         assert_eq!(desc.risk, OperationRisk::SafeActive);
         assert!(desc.target.as_deref() == Some("https://example.com"));
@@ -284,7 +281,8 @@ mod tests {
             "https://target.com",
             "syn_stress",
             ScanDepth::Deep,
-        );
+        )
+        .expect("valid target should produce a descriptor");
         assert_eq!(desc.risk, OperationRisk::StressTest);
         assert!(desc
             .required_capabilities
@@ -300,8 +298,20 @@ mod tests {
             "https://example.com",
             "stress_load",
             ScanDepth::Shallow,
-        );
+        )
+        .expect("valid target should produce a descriptor");
         // "stress" is checked before "load", so StressTest wins
         assert_eq!(desc.risk, OperationRisk::StressTest);
+    }
+
+    #[test]
+    fn operation_descriptor_invalid_target_fails_closed() {
+        // Empty target violates ExplicitScopeRequired for "recon": must Err
+        // instead of falling back to a target-less descriptor.
+        let result = operation_descriptor_for_agent_scan("", "recon", ScanDepth::Shallow);
+        assert!(
+            result.is_err(),
+            "invalid target should fail closed, not synthesize a target-less descriptor"
+        );
     }
 }

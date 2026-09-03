@@ -939,7 +939,21 @@ impl Agent {
 
         if let Some(ref enforcement) = self.config.enforcement {
             let preflight_descriptor =
-                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
+                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth)
+                    .map_err(|e| {
+                        tracing::warn!(
+                            operation = %scan_type,
+                            target = %target,
+                            error = %e,
+                            "agent descriptor validation failed - scan will not proceed"
+                        );
+                        anyhow::anyhow!(
+                            "agent descriptor validation failed for {} on {}: {}",
+                            scan_type,
+                            target,
+                            e
+                        )
+                    })?;
             let preflight_result = preflight_operation(
                 crate::config::ExecutionSurface::SecurityAgent,
                 enforcement,
@@ -988,7 +1002,21 @@ impl Agent {
 
         if let Some(ref enforcement) = self.config.enforcement {
             let descriptor =
-                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
+                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth)
+                    .map_err(|e| {
+                        tracing::warn!(
+                            operation = %scan_type,
+                            target = %target,
+                            error = %e,
+                            "agent descriptor validation failed"
+                        );
+                        anyhow::anyhow!(
+                            "agent descriptor validation failed for {} on {}: {}",
+                            scan_type,
+                            target,
+                            e
+                        )
+                    })?;
 
             let approved = enforcement
                 .approve(ExecutionSurface::SecurityAgent, descriptor.clone())
