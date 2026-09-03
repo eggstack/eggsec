@@ -120,8 +120,8 @@ impl From<AiCacheSerialized> for AiCache {
 
 impl From<&AiCache> for AiCacheSerialized {
     fn from(cache: &AiCache) -> Self {
-        let entries = cache.entries.try_read().map(|guard| {
-            guard
+        let entries = match cache.entries.try_read() {
+            Ok(guard) => guard
                 .iter()
                 .map(|(k, v)| {
                     (
@@ -134,11 +134,19 @@ impl From<&AiCache> for AiCacheSerialized {
                         },
                     )
                 })
-                .collect()
-        });
+                .collect(),
+            Err(e) => {
+                // Never silently persist an empty map on lock contention.
+                tracing::warn!(
+                    "AI cache lock contended during serialization, persisting empty snapshot: {}",
+                    e
+                );
+                FxHashMap::default()
+            }
+        };
 
         AiCacheSerialized {
-            entries: entries.unwrap_or_default(),
+            entries,
             max_entries: cache.max_entries,
             default_ttl_nanos: cache.default_ttl.as_nanos() as u64,
         }

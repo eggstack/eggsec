@@ -53,6 +53,26 @@ pub struct MarkdownReport {
     summary: ScanSummary,
 }
 
+/// Escape user-controlled text for Markdown table cells: a literal `|` would
+/// split the row, and newlines/control characters would break the table.
+fn escape_table_cell(s: &str) -> String {
+    s.replace('|', "\\|")
+        .replace(['\n', '\r'], " ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect()
+}
+
+/// Sanitize user-controlled text rendered as headings or inline fields:
+/// collapse newlines and strip control characters so finding content cannot
+/// inject headings, lists, or multi-line block structure.
+fn sanitize_inline(s: &str) -> String {
+    s.replace(['\n', '\r'], " ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect()
+}
+
 impl MarkdownReport {
     pub fn new(summary: ScanSummary, findings: Vec<Finding>) -> Self {
         Self { summary, findings }
@@ -65,8 +85,16 @@ impl MarkdownReport {
         writeln!(md, "## Summary\n")?;
         writeln!(md, "| Field | Value |")?;
         writeln!(md, "|-------|-------|")?;
-        writeln!(md, "| Target | {} |", self.summary.target)?;
-        writeln!(md, "| Scan Type | {} |", self.summary.scan_type)?;
+        writeln!(
+            md,
+            "| Target | {} |",
+            escape_table_cell(&self.summary.target)
+        )?;
+        writeln!(
+            md,
+            "| Scan Type | {} |",
+            escape_table_cell(&self.summary.scan_type)
+        )?;
         writeln!(md, "| Timestamp | {} |", self.summary.timestamp)?;
         writeln!(
             md,
@@ -94,10 +122,28 @@ impl MarkdownReport {
                     _ => "⚪",
                 };
 
-                writeln!(md, "### {}. {} {}\n", i + 1, severity_icon, finding.title)?;
-                writeln!(md, "**Severity:** {}  \n", finding.severity)?;
-                writeln!(md, "**Category:** {}  \n", finding.category)?;
-                writeln!(md, "**Location:** {}  \n\n", finding.location)?;
+                writeln!(
+                    md,
+                    "### {}. {} {}\n",
+                    i + 1,
+                    severity_icon,
+                    sanitize_inline(&finding.title)
+                )?;
+                writeln!(
+                    md,
+                    "**Severity:** {}  \n",
+                    sanitize_inline(&finding.severity)
+                )?;
+                writeln!(
+                    md,
+                    "**Category:** {}  \n",
+                    sanitize_inline(&finding.category)
+                )?;
+                writeln!(
+                    md,
+                    "**Location:** {}  \n\n",
+                    sanitize_inline(&finding.location)
+                )?;
 
                 writeln!(md, "{}\n\n", finding.description)?;
 
@@ -138,4 +184,51 @@ pub fn generate_markdown_report(
 ) -> Result<String, std::fmt::Error> {
     let report = MarkdownReport::new(summary, findings);
     report.generate()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_summary(target: &str) -> ScanSummary {
+        ScanSummary {
+            target: target.to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: "2026-09-03".to_string(),
+            duration_seconds: 1,
+            total_requests: 1,
+            findings_count: 1,
+            critical_count: 0,
+            high_count: 1,
+            medium_count: 0,
+            low_count: 0,
+            info_count: 0,
+        }
+    }
+
+    #[test]
+    fn user_controlled_fields_do_not_break_table_or_headings() {
+        let findings = vec![Finding {
+            title: "XSS\n# injected heading".to_string(),
+            severity: "High".to_string(),
+            category: "xss".to_string(),
+            description: "desc".to_string(),
+            location: "https://example.com/?q=1|2".to_string(),
+            evidence: None,
+            remediation: None,
+            references: vec![],
+            cwe_ids: vec![],
+        }];
+        let md = generate_markdown_report(test_summary("example.com | injected"), findings)
+            .expect("report generation is infallible for valid input");
+        assert!(md.contains("example.com \\| injected"));
+        // The newline in the title is collapsed: no line may start a new
+        // heading from finding content.
+        assert!(
+            !md.lines()
+                .any(|line| line.starts_with("# injected heading")),
+            "finding title must not inject a heading line"
+        );
+        assert!(md.contains("XSS # injected heading"));
+    }
 }

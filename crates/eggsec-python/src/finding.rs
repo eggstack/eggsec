@@ -496,7 +496,7 @@ impl FindingSet {
     /// Iterate over findings.
     fn __iter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<PyObject> {
         let findings = slf.findings.clone();
-        Ok(FindingSetIteratorPy::new(findings).into_py_any(py).unwrap())
+        Ok(FindingSetIteratorPy::new(findings).into_py_any(py)?)
     }
 
     /// Check if a finding with the given id exists in the set.

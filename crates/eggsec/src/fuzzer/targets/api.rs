@@ -173,7 +173,13 @@ impl OpenAPIFuzzer {
     }
 
     pub fn parse_from_url(url: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let content = reqwest::blocking::get(url)?.text()?;
+        // Blocking client with a timeout: the bare `reqwest::blocking::get`
+        // convenience call has no timeout and would hang the fuzzer thread
+        // indefinitely on an unresponsive server.
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()?;
+        let content = client.get(url).send()?.text()?;
         let spec: OpenAPISpec = serde_json::from_str(&content)?;
         Ok(Self::new(spec))
     }

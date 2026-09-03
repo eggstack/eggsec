@@ -161,13 +161,17 @@ impl DaemonRuntimeClient {
             }),
         };
 
-        // Declare client kind to the daemon (best effort)
-        let _ = client
+        // Declare client kind to the daemon; a rejection leaves this client
+        // unregistered, so later session-scoped commands would fail opaquely.
+        if let Err(e) = client
             .declare_client(
                 eggsec_daemon_protocol::client_registry::ClientKind::Tui,
                 Some("eggsec-tui".into()),
             )
-            .await;
+            .await
+        {
+            tracing::warn!("Daemon rejected TUI client declaration: {}", e);
+        }
 
         Ok(client)
     }

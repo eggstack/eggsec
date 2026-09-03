@@ -266,8 +266,12 @@ impl GrammarFuzzer {
             let idx = rand::Rng::gen_range(&mut self.rng, 0..rule.alternatives.len());
             let alternative = &rule.alternatives[idx];
 
-            if alternative.starts_with('$') && alternative.ends_with('$') {
-                let inner = alternative[1..alternative.len() - 1].to_string();
+            if let Some(inner) = alternative
+                .strip_prefix('$')
+                .and_then(|s| s.strip_suffix('$'))
+            {
+                // Copy out of the borrowed rule before recursing mutably.
+                let inner = inner.to_string();
                 return self.expand_rule(&inner, depth + 1);
             }
 
@@ -300,5 +304,22 @@ mod tests {
         let mut fuzzer = GrammarFuzzer::new(grammar, GrammarKind::Ssti);
         let result = fuzzer.generate();
         assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_dollar_only_alternative_does_not_panic() {
+        // Regression test: a custom grammar alternative of exactly "$" must not
+        // panic the expansion via an out-of-range slice.
+        let grammar = Grammar {
+            start: "root".to_string(),
+            rules: vec![GrammarRule {
+                name: "root".to_string(),
+                alternatives: vec!["$".to_string()],
+                weight: None,
+            }],
+        };
+        let mut fuzzer = GrammarFuzzer::with_seed(grammar, GrammarKind::Json, 42);
+        let result = fuzzer.generate();
+        assert_eq!(result, "$");
     }
 }

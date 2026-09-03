@@ -1157,10 +1157,19 @@ impl RemoteClient {
             ));
         }
 
-        let data: serde_json::Value = response
-            .output
-            .and_then(|o| serde_json::from_str(&o).ok())
-            .unwrap_or(serde_json::json!({}));
+        let data: serde_json::Value = match response.output {
+            Some(o) => match serde_json::from_str(&o) {
+                Ok(value) => value,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to parse coordinator status payload: {}; returning empty object",
+                        e
+                    );
+                    serde_json::json!({})
+                }
+            },
+            None => serde_json::json!({}),
+        };
 
         Ok(data)
     }

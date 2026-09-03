@@ -616,8 +616,9 @@ pub(crate) async fn scan_ports_spoofed(
     }
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: u32::try_from(ports_count)
-            .expect("port count exceeds u32::MAX; type-widening guard"),
+        ports_scanned: u32::try_from(ports_count).map_err(|_| {
+            crate::error::EggsecError::Internal("port count exceeds u32::MAX".into())
+        })?,
         open_ports: results,
         total_open_ports: total_open,
         results_truncated,

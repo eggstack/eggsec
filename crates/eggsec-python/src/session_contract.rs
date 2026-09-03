@@ -31,6 +31,29 @@ impl SessionState {
     fn __str__(&self) -> String {
         self.as_str().to_string()
     }
+
+    /// Parse a session state from its string name (case-insensitive).
+    ///
+    /// Raises:
+    ///     ValueError: If the string is not a valid session state.
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        match s.to_lowercase().as_str() {
+            "created" => Ok(SessionState::Created),
+            "starting" => Ok(SessionState::Starting),
+            "running" => Ok(SessionState::Running),
+            "pausing" => Ok(SessionState::Pausing),
+            "paused" => Ok(SessionState::Paused),
+            "stopping" => Ok(SessionState::Stopping),
+            "stopped" => Ok(SessionState::Stopped),
+            "failed" => Ok(SessionState::Failed),
+            "cancelled" => Ok(SessionState::Cancelled),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid session state: '{}'. Must be one of: Created, Starting, Running, Pausing, Paused, Stopping, Stopped, Failed, Cancelled",
+                s
+            ))),
+        }
+    }
 }
 
 impl SessionState {
@@ -45,21 +68,6 @@ impl SessionState {
             SessionState::Stopped => "Stopped",
             SessionState::Failed => "Failed",
             SessionState::Cancelled => "Cancelled",
-        }
-    }
-
-    fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "Created" => Some(SessionState::Created),
-            "Starting" => Some(SessionState::Starting),
-            "Running" => Some(SessionState::Running),
-            "Pausing" => Some(SessionState::Pausing),
-            "Paused" => Some(SessionState::Paused),
-            "Stopping" => Some(SessionState::Stopping),
-            "Stopped" => Some(SessionState::Stopped),
-            "Failed" => Some(SessionState::Failed),
-            "Cancelled" => Some(SessionState::Cancelled),
-            _ => None,
         }
     }
 }
@@ -82,6 +90,23 @@ impl SessionCloseMode {
     fn __str__(&self) -> String {
         self.as_str().to_string()
     }
+
+    /// Parse a session close mode from its string name (case-insensitive).
+    ///
+    /// Raises:
+    ///     ValueError: If the string is not a valid session close mode.
+    #[staticmethod]
+    fn from_str(s: &str) -> PyResult<Self> {
+        match s.to_lowercase().as_str() {
+            "graceful" => Ok(SessionCloseMode::Graceful),
+            "forced" => Ok(SessionCloseMode::Forced),
+            "immediate" => Ok(SessionCloseMode::Immediate),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid session close mode: '{}'. Must be one of: Graceful, Forced, Immediate",
+                s
+            ))),
+        }
+    }
 }
 
 impl SessionCloseMode {
@@ -90,15 +115,6 @@ impl SessionCloseMode {
             SessionCloseMode::Graceful => "Graceful",
             SessionCloseMode::Forced => "Forced",
             SessionCloseMode::Immediate => "Immediate",
-        }
-    }
-
-    fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "Graceful" => Some(SessionCloseMode::Graceful),
-            "Forced" => Some(SessionCloseMode::Forced),
-            "Immediate" => Some(SessionCloseMode::Immediate),
-            _ => None,
         }
     }
 }

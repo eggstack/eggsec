@@ -1,6 +1,6 @@
 use crate::PyObject;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyAny, PyDict, PyList};
 
 /// Paginated result iterator — fetches results in pages.
 ///
@@ -135,21 +135,21 @@ pub fn batch_to_dicts<'py, T: for<'a> IntoPyObject<'a> + Clone>(
     py: Python<'py>,
     items: &[T],
     batch_size: usize,
-) -> Vec<Vec<Bound<'py, PyAny>>> {
+) -> PyResult<Vec<Vec<Bound<'py, PyAny>>>> {
     use pyo3::conversion::IntoPyObjectExt;
     if batch_size == 0 {
-        return vec![items
+        return Ok(vec![items
             .iter()
-            .map(|i| i.clone().into_py_any(py).unwrap().bind(py).clone())
-            .collect()];
+            .map(|i| Ok(i.clone().into_py_any(py)?.bind(py).clone()))
+            .collect::<PyResult<Vec<Bound<'py, PyAny>>>>()?]);
     }
     items
         .chunks(batch_size)
         .map(|chunk| {
             chunk
                 .iter()
-                .map(|i| i.clone().into_py_any(py).unwrap().bind(py).clone())
-                .collect()
+                .map(|i| Ok(i.clone().into_py_any(py)?.bind(py).clone()))
+                .collect::<PyResult<Vec<Bound<'py, PyAny>>>>()
         })
-        .collect()
+        .collect::<PyResult<Vec<Vec<Bound<'py, PyAny>>>>>()
 }

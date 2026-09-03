@@ -62,8 +62,11 @@ struct CachedPlan {
 
 impl AiPlanner {
     fn request_cache_key(request: &PlanRequest) -> String {
+        // NOTE: fields are joined with '\x00' (not ':') because goal/target
+        // routinely contain colons (URLs, host:port); a ':' separator allows
+        // distinct requests to collide and serve the wrong cached plan.
         format!(
-            "{}:{}:{}:{}",
+            "{}\x00{}\x00{}\x00{}",
             request.goal.replace('\x00', ""),
             request.target.replace('\x00', ""),
             request.attack_surfaces.len(),
@@ -654,5 +657,25 @@ mod tests {
         assert_eq!(planner.cache_size(), 1);
         planner.clear_cache();
         assert_eq!(planner.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_request_cache_key_no_colon_collision() {
+        // Regression test: goal/target routinely contain ':' (URLs,
+        // host:port), so a ':'-joined key collides for distinct requests.
+        let a = PlanRequest {
+            goal: "port:scan".to_string(),
+            target: "example.com".to_string(),
+            ..PlanRequest::default()
+        };
+        let b = PlanRequest {
+            goal: "port".to_string(),
+            target: "scan:example.com".to_string(),
+            ..PlanRequest::default()
+        };
+        assert_ne!(
+            AiPlanner::request_cache_key(&a),
+            AiPlanner::request_cache_key(&b)
+        );
     }
 }

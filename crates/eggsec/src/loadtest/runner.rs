@@ -376,12 +376,12 @@ impl LoadTestRunner {
 
         let cancellation_token = CancellationToken::new();
 
-        let rate_limit_sem = self.rate_limit.map(|rate| {
+        let rate_limit_handle = self.rate_limit.map(|rate| {
             let sem = Arc::new(Semaphore::new(0));
             let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
             let sem_clone = sem.clone();
             let token = cancellation_token.clone();
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 loop {
                     tokio::select! {
                         _ = sleep(min_interval) => {
@@ -393,8 +393,9 @@ impl LoadTestRunner {
                     }
                 }
             });
-            sem
+            (sem, handle)
         });
+        let rate_limit_sem = rate_limit_handle.as_ref().map(|(sem, _)| sem.clone());
 
         let worker_count = self.concurrency.min(self.total_requests as usize);
         let mut workers = JoinSet::new();
@@ -485,6 +486,20 @@ impl LoadTestRunner {
         }
 
         cancellation_token.cancel();
+
+        // Guard the rate-limiter task against leaks: it exits on cancellation,
+        // but if the owner panics before cancelling (or the task stalls), bound
+        // its lifetime with a timeout and abort instead of detaching it.
+        if let Some((_, mut handle)) = rate_limit_handle {
+            match tokio::time::timeout(Duration::from_secs(5), &mut handle).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => tracing::warn!("Rate limiter task failed: {}", e),
+                Err(_) => {
+                    tracing::warn!("Rate limiter task did not exit after cancellation; aborting");
+                    handle.abort();
+                }
+            }
+        }
 
         let total_duration = start.elapsed();
         if let Some(ref pb) = progress {

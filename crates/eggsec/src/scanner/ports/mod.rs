@@ -658,8 +658,9 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: u32::try_from(ports_count)
-            .expect("port count exceeds u32::MAX; type-widening guard"),
+        ports_scanned: u32::try_from(ports_count).map_err(|_| {
+            crate::error::EggsecError::Internal("port count exceeds u32::MAX".into())
+        })?,
         open_ports,
         total_open_ports,
         results_truncated,

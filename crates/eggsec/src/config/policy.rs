@@ -1191,6 +1191,14 @@ pub enum DescriptorError {
         operation_id: String,
         target_policy: TargetPolicyKind,
     },
+
+    /// The operation ID is not registered in the operation metadata registry.
+    ///
+    /// Returned by strict-surface constructors (e.g. agent scan descriptors)
+    /// that must fail closed instead of synthesizing policy for unknown
+    /// operations.
+    #[error("unknown operation '{operation_id}': no registered operation metadata")]
+    UnknownOperation { operation_id: String },
 }
 
 /// Canonical operation metadata — single source of truth for OperationDescriptor generation.

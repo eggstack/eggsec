@@ -723,8 +723,18 @@ impl EnforcementContext {
     }
 
     pub fn policy_hash(&self) -> String {
-        let json = serde_json::to_vec(&self.execution_policy)
-            .expect("ExecutionPolicy is JSON-serializable");
+        let json = match serde_json::to_vec(&self.execution_policy) {
+            Ok(json) => json,
+            Err(e) => {
+                // Never panic on the enforcement path: fall back to a static
+                // sentinel hash so callers can still correlate decisions.
+                tracing::warn!(
+                    "Failed to serialize ExecutionPolicy for hashing: {}; using fallback hash",
+                    e
+                );
+                return hex::encode(Sha256::digest(b"eggsec-policy-serialization-failed"));
+            }
+        };
         let hash = Sha256::digest(&json);
         hex::encode(hash)
     }

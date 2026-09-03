@@ -100,12 +100,14 @@ pub async fn dispatch_approved_runtime_request(
         ));
     }
 
-    // Validate target matches.
-    if approved.descriptor().target != current_descriptor.target {
+    // Validate target matches using normalized comparison (same as the
+    // dispatcher binding check): raw strings can differ in casing,
+    // trailing slashes, or default-port notation for the same target.
+    if approved.descriptor().normalized_target != current_descriptor.normalized_target {
         return Err(anyhow::anyhow!(
-            "approved target {:?} does not match request target {:?} — dispatch rejected",
-            approved.descriptor().target,
-            current_descriptor.target,
+            "approved normalized target {:?} does not match request normalized target {:?} — dispatch rejected",
+            approved.descriptor().normalized_target,
+            current_descriptor.normalized_target,
         ));
     }
 
@@ -288,8 +290,24 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("does not match request target"),
-            "expected target mismatch error, got: {err_msg}"
+            err_msg.contains("does not match request normalized target"),
+            "expected normalized target mismatch error, got: {err_msg}"
+        );
+    }
+
+    #[test]
+    fn normalized_target_comparison_accepts_equivalent_notation() {
+        // The bundle dispatch check compares normalized targets (same as the
+        // dispatcher binding check), so casing, default ports, and trailing
+        // slashes must not cause spurious rejections.
+        use crate::config::normalize_target;
+        assert_eq!(
+            normalize_target("https://example.com", None),
+            normalize_target("https://EXAMPLE.COM:443/", None)
+        );
+        assert_eq!(
+            normalize_target("EXAMPLE.COM", None),
+            normalize_target("example.com", None)
         );
     }
 

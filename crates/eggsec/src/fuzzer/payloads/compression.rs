@@ -152,15 +152,22 @@ fn generate_gzip_bomb(compressed_size: usize) -> String {
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
     if let Err(e) = encoder.write_all(&uncompressed_data) {
-        tracing::warn!(error = %e, "Failed to write gzip bomb data");
+        tracing::error!(error = %e, "Failed to write gzip bomb data");
     }
-    let compressed = encoder.finish().unwrap_or_default();
-
-    format!(
-        "[GZIP BOMB: {} bytes compressed, {} bytes uncompressed]",
-        compressed.len(),
-        uncompressed_data.len()
-    )
+    match encoder.finish() {
+        Ok(compressed) => format!(
+            "[GZIP BOMB: {} bytes compressed, {} bytes uncompressed]",
+            compressed.len(),
+            uncompressed_data.len()
+        ),
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to finish gzip bomb encoding");
+            format!(
+                "[GZIP BOMB: compression failed, {} bytes uncompressed]",
+                uncompressed_data.len()
+            )
+        }
+    }
 }
 
 fn generate_zip_bomb_description() -> String {
@@ -172,9 +179,17 @@ pub fn generate_gzip_payload(size_multiplier: usize) -> Vec<u8> {
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
     if let Err(e) = encoder.write_all(&uncompressed_data) {
-        tracing::warn!(error = %e, "Failed to write gzip payload data");
+        tracing::error!(error = %e, "Failed to write gzip payload data");
     }
-    encoder.finish().unwrap_or_default()
+    match encoder.finish() {
+        Ok(compressed) => compressed,
+        Err(e) => {
+            // Never return an empty payload as success: fall back to the
+            // uncompressed bytes so the fuzzer still sends real data.
+            tracing::error!(error = %e, "Failed to finish gzip payload encoding; falling back to uncompressed data");
+            uncompressed_data
+        }
+    }
 }
 
 pub fn generate_deflate_payload(size_multiplier: usize) -> Vec<u8> {
@@ -184,9 +199,17 @@ pub fn generate_deflate_payload(size_multiplier: usize) -> Vec<u8> {
 
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
     if let Err(e) = encoder.write_all(&uncompressed_data) {
-        tracing::warn!(error = %e, "Failed to write deflate payload data");
+        tracing::error!(error = %e, "Failed to write deflate payload data");
     }
-    encoder.finish().unwrap_or_default()
+    match encoder.finish() {
+        Ok(compressed) => compressed,
+        Err(e) => {
+            // Never return an empty payload as success: fall back to the
+            // uncompressed bytes so the fuzzer still sends real data.
+            tracing::error!(error = %e, "Failed to finish deflate payload encoding; falling back to uncompressed data");
+            uncompressed_data
+        }
+    }
 }
 
 #[cfg(test)]
