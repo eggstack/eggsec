@@ -14,6 +14,33 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Architecture convergence and capability maturity (active)
+
+Roadmap:
+[`architecture-convergence-roadmap-2026-09-08.md`](architecture-convergence-roadmap-2026-09-08.md)
+
+This is a corrective convergence roadmap against the post-simplification
+architecture. It does not reopen or replace the historical dependency/
+architecture A-J roadmap. It targets residual dual scope semantics, feature/build
+contract drift, incomplete operation/dispatch migration, protocol/agent coupling,
+programmability parity, and platform integration maturity.
+
+Ordered implementation plans:
+
+1. [`architecture-convergence-phase-a-scope-contract-unification.md`](architecture-convergence-phase-a-scope-contract-unification.md)
+2. [`architecture-convergence-phase-b-feature-build-verification-reconciliation.md`](architecture-convergence-phase-b-feature-build-verification-reconciliation.md)
+3. [`architecture-convergence-phase-c-operation-dispatch-runtime-convergence.md`](architecture-convergence-phase-c-operation-dispatch-runtime-convergence.md)
+4. [`architecture-convergence-phase-d-protocol-agent-boundaries-hotspot-decomposition.md`](architecture-convergence-phase-d-protocol-agent-boundaries-hotspot-decomposition.md)
+5. [`architecture-convergence-phase-e-programmability-parity-browser-daemon-proxy.md`](architecture-convergence-phase-e-programmability-parity-browser-daemon-proxy.md)
+6. [`architecture-convergence-phase-f-platform-integration-maturity.md`](architecture-convergence-phase-f-platform-integration-maturity.md)
+7. [`architecture-convergence-phase-g-closure-measurement-documentation.md`](architecture-convergence-phase-g-closure-measurement-documentation.md)
+
+Phases A and B are foundational. Phase C converges request/dispatch ownership;
+Phase D then completes protocol/agent boundaries against that stable service
+surface. Phase E closes existing programmable API execution gaps. Phase F adds
+reproducible platform-sensitive integration evidence without expanding hazardous
+capability. Phase G is a bounded closure/reconciliation pass and must run last.
+
 ## Dependency, architecture, and verification simplification
 
 Roadmap:
@@ -46,6 +73,8 @@ The final dispatch-profile parity corrective pass is complete:
 This pass corrected dispatch and tool-API pipeline construction to use
 `Pipeline::from_profile()` as the canonical parser-independent constructor,
 ensuring `ScanProfile` is the single source of truth for stage selection, risk
-budget, and profile-specific validation. No active corrective handoff remains.
+budget, and profile-specific validation. The historical roadmap is closed; the
+active architecture-convergence roadmap above addresses newly confirmed residual
+maintenance and capability-maturity work.
 
 Package publication and release cadence remain manual maintainer actions.
