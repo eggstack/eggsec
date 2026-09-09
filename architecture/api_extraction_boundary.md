@@ -4,11 +4,22 @@
 
 API/agent modules are split across crates:
 
-- `crates/eggsec/src/tool/protocol/` - REST, MCP, gRPC, OpenAI, OpenResponses adapters (in `eggsec`)
+- `crates/eggsec/src/tool/protocol/` - REST, MCP, gRPC, OpenAI, OpenResponses adapters (in `eggsec`, behind injected `EngineServices`)
 - `crates/eggsec-agent/` - Agent coordination primitives (registry, scheduler, lifecycle, communication, delegation, aggregation) (**extracted**)
 - `crates/eggsec/src/tool/mod.rs` - Compatibility facade that re-exports `eggsec-agent` as `eggsec::tool::agents`
-- `crates/eggsec/src/agent/` - Autonomous agent (portfolio, memory, alerts, skills) (in `eggsec`)
+- `crates/eggsec/src/agent/` - Autonomous agent (portfolio, memory, alerts, skills) (in `eggsec`, behind injected `AgentExecutionService`)
 - `crates/eggsec/src/nse_tool.rs` - NSE tool implementation (in `eggsec`)
+
+Phase D (2026-09-09) completed the injected boundary without moving crates:
+`tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`
+is the adapter boundary; `agent::services::AgentExecutionService` is the agent
+boundary; `mcp::bridge::McpEngineBridge` is the MCP narrow bridge. Adapters take
+`EngineServices` via `with_services`/`router_with_services`; only composition
+roots call `EngineServices::new`. A separate `eggsec-api` crate was deliberately
+not created: it would become a second composition root (TLS types, Axum/tonic
+closures, generated protobuf) or invert dependencies (bridge needs engine policy
+types). The injected boundary is the equivalent clean boundary per the Phase D
+acceptance criteria.
 
 Feature gates:
 - `rest-api` = `["tool-api", "axum", "tower", "tower-http", "async-stream", "email-notifications", "config-watch"]`
@@ -167,19 +178,26 @@ To enable extraction of the server adapters into `eggsec-api`:
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-09 (Phase D)*
 
-## Known blockers
+## Known blockers — Phase D resolution
 
-1. **McpServer deep coupling** - `handlers/server.rs` is 1686 lines and directly uses `ToolRegistry`, `ToolDispatcher`, `SessionManager`, `AiClient`, `Scope`, `CancellationToken`, and many other eggsec-internal types. Extracting this requires either: (a) trait-based decoupling of all dependencies, or (b) keeping McpServer in eggsec and only extracting the HTTP transport layer.
-
-2. **`create_default_registry()` coupling** - Both `Agent::new()` and test code call `create_default_registry()` which hardcodes all tool implementations. The agent module would need the registry injected.
-
-3. **Feature gate alignment** - `rest-api` enables axum/tower/async-stream, while `grpc-api` enables tonic/prost. A `eggsec-api` crate would need to re-export these as optional features.
-
-4. **`From` impls in finding.rs** - The `From<FuzzResult> for Finding` etc. impls depend on engine types. These must stay in eggsec, but the `Finding` type itself is already in `eggsec-tool-core`.
-
-5. **WebSocket support** - `ws-api` feature adds WebSocket handler inside `rest.rs`. Would need conditional compilation in eggsec-api.
+1. **McpServer deep coupling** — RESOLVED via injected boundary (not crate move).
+   `handlers/server.rs` now holds `EngineServices` + `McpEngineBridge` (`mcp/bridge.rs`)
+   for catalog/authorization/checked execution; transport/session/profile/AI
+   remain adapter-owned. `with_services` is the injected constructor;
+   `with_enforcement` is the composition-root shim. A small bridge remains in
+   `eggsec` intentionally to avoid inverting dependencies.
+2. **`create_default_registry()` coupling** — RESOLVED via `Agent::with_engine_services`
+   and `agent::services::AgentExecutionService`. `Agent::new` remains as the
+   composition-root shim; tests use fakes without building the registry.
+3. **OpenAI/OpenResponses unchecked execution** — FIXED. Both now approve via
+   `EngineServices` (`RestApi` surface) and dispatch via `dispatch_checked`;
+   the legacy `Scope::is_target_allowed` DTO check and direct `tool.execute`
+   bypass were removed. Wire formats preserved (denials render as chat content).
+4. **Feature gate alignment / `From` impls / WebSocket** — UNCHANGED (no new
+   crate). Axum/tonic closures, generated protobuf, and `TlsConfig` stay in
+   `eggsec`; TLS config is passed from the process host, not moved.
 
 ---
 
@@ -208,7 +226,10 @@ Implementation lives in `crates/eggsec-agent/src/`. The `eggsec` crate preserves
 
 **Compatibility shim:** `eggsec::tool::agents` is re-exported from `eggsec-agent` behind the `rest-api` feature gate.
 
-### Phase 3: Extract gRPC adapter to eggsec-api
+
+> Phase D (2026-09-09): the `Files to move` / `Dependencies to resolve` blocks below are retained as historical record. They are superseded by the injected boundary documented in Current Owner and Known blockers — no crate move occurred (see rationale there).
+
+### Phase 3: gRPC adapter — DONE via injected boundary (Phase D)
 The gRPC adapter is the cleanest candidate - it has a clear proto boundary and minimal coupling beyond ToolRegistry/ToolDispatcher.
 
 **Files to move:**
@@ -218,7 +239,7 @@ The gRPC adapter is the cleanest candidate - it has a clear proto boundary and m
 **Dependencies to resolve:**
 - Accept `ToolRegistry` and `ToolDispatcher` via constructor injection.
 
-### Phase 4: Extract REST + OpenAI + OpenResponses adapters to eggsec-api
+### Phase 4: REST + OpenAI + OpenResponses — DONE via injected boundary (Phase D)
 These all use axum and share similar patterns.
 
 **Files to move:**
@@ -232,7 +253,7 @@ These all use axum and share similar patterns.
 - `ScopeSpec` - pass as `Option<ScopeSpec>` from eggsec-tool-core (declarative only; convert via `eggsec::config::scope_from_spec` before any policy check)
 - `RateLimiter` - already in eggsec-tool-core
 
-### Phase 5: Extract MCP adapter to eggsec-api
+### Phase 5: MCP adapter — DONE via narrow bridge (Phase D)
 Most complex extraction due to McpServer coupling.
 
 **Files to move:**
@@ -251,7 +272,7 @@ Most complex extraction due to McpServer coupling.
 - McpServer needs trait-based access to ToolRegistry, ToolDispatcher, SessionManager, AiClient
 - Consider splitting McpServer into transport (move to eggsec-api) and handler logic (stay in eggsec)
 
-### Phase 6: Extract agent core to eggsec-agent
+### Phase 6: Agent core — DONE via DI, no crate move (Phase D)
 Move the autonomous agent runtime (portfolio, memory, alerts, constraints, skills).
 
 **Files to move:**

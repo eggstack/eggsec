@@ -11,9 +11,9 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 
 | Crate | Purpose |
 |-------|---------|
-| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs`, `client.rs`, `client_registry.rs`, `protocol.rs`, `http.rs`, SQLite store (`store/`) |
+| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs` (facade), `host_auth.rs` (RBAC), `host_persistence.rs` (fan-out), `client.rs`, `client_registry.rs`, `protocol.rs`, `http.rs`, SQLite store (`store/`) |
 | `crates/eggsec-daemon-protocol/` | Wire types + client registry shared by daemon and clients |
-| `crates/eggsec-runtime/` | `Runtime`, `RuntimeTaskExecutor`, task lifecycle DTOs |
+| `crates/eggsec-runtime/` | `Runtime`, `RuntimeTaskExecutor`, task lifecycle DTOs (`runtime.rs` facade; `runtime_config.rs`, `runtime_sink.rs`) |
 
 ## Dependency Rules (guard-enforced)
 
@@ -64,3 +64,7 @@ cargo check --workspace --no-default-features   # dependency-rule baseline
 - `docs/DAEMON.md` - Transport config, schema, CLI reference
 - `architecture/daemon.md` - Persistence, session lifecycle, transport deep dive
 - `architecture/runtime.md` / `architecture/runtime_bridge.md` - Runtime types and bridge contract
+
+## Phase D Hotspots (2026-09-09)
+
+`host.rs` is a stable facade; RBAC lives in `host_auth.rs` (`role_for_session`, `may_observe_session`), persistence fan-out in `host_persistence.rs`. `runtime.rs` is a facade over `runtime_config.rs`/`runtime_sink.rs`. Import from the cohesive module, not the facade internals.

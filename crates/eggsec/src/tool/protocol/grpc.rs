@@ -10,10 +10,9 @@ use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use crate::config::{
     EnforcementContext, EnforcementError, EnforcementOutcome, ExecutionSurface, OperationDescriptor,
 };
-use crate::tool::dispatcher::EnforcedDispatcher;
 use crate::tool::registration::grpc_tool_registrations;
 use crate::tool::traits::{ParameterType, ToolCategory};
-use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest};
+use crate::tool::{ToolRegistry, ToolRequest};
 
 // Include the proto-generated code (checked-in, no protoc required for Rust code)
 include!("../../generated/eggsec.tool.v1.rs");
@@ -123,26 +122,50 @@ impl tonic::service::Interceptor for ApiKeyInterceptor {
 }
 
 // Service implementation
+//
+// Phase D (WS1/WS2): transport/service implementation. The gRPC adapter is
+// the cleanest extraction pilot: wire types stay here, while catalog,
+// authorization, and execution come from injected [`EngineServices`].
+// The adapter never constructs engine internals itself except via the
+// composition-root `new` shim, which delegates to `with_services`.
 pub struct GrpcService {
     registry: ToolRegistry,
-    dispatcher: EnforcedDispatcher,
-    enforcement: EnforcementContext,
     api_key: Option<String>,
+    /// Injected engine services (authoritative for approve/dispatch).
+    services: crate::tool::service::EngineServices,
 }
 
 impl GrpcService {
+    /// Composition-root constructor: builds [`EngineServices`] from the
+    /// concrete registry plus enforcement, then delegates to
+    /// [`GrpcService::with_services`].
     pub fn new(
         registry: ToolRegistry,
         enforcement: EnforcementContext,
         api_key: Option<String>,
     ) -> Self {
-        let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
+        let services = crate::tool::service::EngineServices::new(registry.clone(), enforcement);
+        Self::with_services(registry, services, api_key)
+    }
+
+    /// Injected constructor (Phase D): the caller supplies a prebuilt
+    /// [`EngineServices`] bundle. Only transport concerns (`api_key`)
+    /// remain adapter-owned.
+    pub fn with_services(
+        registry: ToolRegistry,
+        services: crate::tool::service::EngineServices,
+        api_key: Option<String>,
+    ) -> Self {
         Self {
             registry,
-            dispatcher,
-            enforcement,
             api_key,
+            services,
         }
+    }
+
+    /// Checked-only engine services for this adapter.
+    pub fn services(&self) -> &crate::tool::service::EngineServices {
+        &self.services
     }
 
     pub fn validate_api_key(&self, key: &str) -> Result<(), String> {
@@ -617,7 +640,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
 
         let approved = match self
             .service
-            .enforcement
+            .services
             .approve(ExecutionSurface::GrpcApi, descriptor.clone())
         {
             Ok(approved) => approved,
@@ -625,7 +648,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::Deny(decision.clone()),
                     false,
@@ -648,7 +671,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::RequireConfirmation(decision.clone()),
                     false,
@@ -668,7 +691,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::Deny(decision.clone()),
                     false,
@@ -692,7 +715,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let correlation_id = uuid::Uuid::new_v4().to_string();
         let audit_event = audit_event_from_enforcement_outcome(
             ExecutionSurface::GrpcApi,
-            &self.service.enforcement,
+            self.service.services.enforcement(),
             approved.descriptor(),
             &EnforcementOutcome::Allow(approved.decision().clone()),
             false,
@@ -710,7 +733,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
 
         let response = self
             .service
-            .dispatcher
+            .services
             .dispatch_checked(&approved, tool_request)
             .await
             .map_err(|e| Status::internal(format!("Tool execution failed: {}", e)))?;
@@ -758,7 +781,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
 
         let approved = match self
             .service
-            .enforcement
+            .services
             .approve(ExecutionSurface::GrpcApi, descriptor.clone())
         {
             Ok(approved) => approved,
@@ -766,7 +789,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::Deny(decision.clone()),
                     false,
@@ -789,7 +812,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::RequireConfirmation(decision.clone()),
                     false,
@@ -809,7 +832,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 let correlation_id = uuid::Uuid::new_v4().to_string();
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::GrpcApi,
-                    &self.service.enforcement,
+                    self.service.services.enforcement(),
                     &descriptor,
                     &EnforcementOutcome::Deny(decision.clone()),
                     false,
@@ -833,7 +856,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let correlation_id = uuid::Uuid::new_v4().to_string();
         let audit_event = audit_event_from_enforcement_outcome(
             ExecutionSurface::GrpcApi,
-            &self.service.enforcement,
+            self.service.services.enforcement(),
             approved.descriptor(),
             &EnforcementOutcome::Allow(approved.decision().clone()),
             false,
@@ -850,7 +873,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             .with_options(options);
 
         let request_id = tool_request.id.clone();
-        let dispatcher = self.service.dispatcher.clone();
+        let services = self.service.services.clone();
 
         let stream = async_stream::stream! {
             yield Ok(ToolStreamEvent {
@@ -861,7 +884,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 })),
             });
 
-            match dispatcher.dispatch_checked(&approved, tool_request).await {
+            match services.dispatch_checked(&approved, tool_request).await {
                 Ok(response) => {
                     yield Ok(ToolStreamEvent {
                         request_id: request_id.clone(),

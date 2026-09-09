@@ -5,6 +5,8 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod host;
+pub mod host_auth;
+pub mod host_persistence;
 #[cfg(feature = "http-api")]
 pub mod http;
 pub mod server;

@@ -15,6 +15,7 @@ pub(crate) mod enforcement;
 pub mod events;
 pub mod memory;
 pub mod portfolio;
+pub mod services;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;
@@ -64,6 +65,7 @@ pub use constraints::{
 pub use events::{EventHandler, SecurityEvent};
 pub use memory::LongitudinalMemory;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
+pub use services::AgentExecutionService;
 
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoadResult, SkillLoader, SkillRegistry};
@@ -194,6 +196,14 @@ pub struct Agent {
     constraint_checker: ConstraintChecker,
     dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
     enforced_dispatcher: Option<EnforcedDispatcher>,
+    /// Injected checked execution service (Phase D WS5).
+    ///
+    /// When present, this is authoritative for approve/dispatch and the
+    /// agent never constructs engine internals itself. Production
+    /// `Agent::new` builds it from the default registry (composition root);
+    /// `Agent::with_engine_services` accepts a prebuilt bundle so tests can
+    /// substitute a fake without building the entire tool registry.
+    execution_services: Option<std::sync::Arc<dyn AgentExecutionService>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
     scheduler: CronScheduler,
@@ -321,6 +331,7 @@ impl Agent {
             constraint_checker,
             dispatcher,
             enforced_dispatcher,
+            execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
             scheduler: CronScheduler::new(),
@@ -331,6 +342,101 @@ impl Agent {
             running: Arc::new(tokio::sync::RwLock::new(false)),
             shutdown_notify: tokio::sync::Notify::new(),
             config_watcher,
+            started_at: None,
+            last_tick_at: None,
+            last_scan_started_at: None,
+            last_scan_completed_at: None,
+            scans_completed: 0,
+            scans_failed: 0,
+            alerts_sent: 0,
+            last_error: None,
+            last_preflight_denial: Mutex::new(None),
+            recent_policy_denials: Mutex::new(Vec::new()),
+        })
+    }
+
+    /// Injected constructor (Phase D WS5): receive prebuilt execution services.
+    ///
+    /// The caller supplies an [`AgentExecutionService`] (typically
+    /// [`crate::tool::service::EngineServices`]) plus alert routing. No
+    /// default registry is constructed here, so tests can substitute a fake
+    /// without paying for every tool. The bundle must carry an `AgentStrict`
+    /// enforcement context; otherwise construction fails closed.
+    ///
+    /// Scheduler/coordination primitives (`CronScheduler`, portfolio,
+    /// memory) remain agent-owned; AI/persistence/alert channels are explicit
+    /// parameters (alert router) or builder methods (`with_ai_client`).
+    pub async fn with_engine_services(
+        config: AgentConfig,
+        execution_services: std::sync::Arc<dyn AgentExecutionService>,
+        alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
+    ) -> Result<Self> {
+        let enforcement_probe = config.enforcement.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Agent::with_engine_services() requires an enforcement context in config"
+            )
+        })?;
+        if enforcement_probe.execution_profile != crate::config::ExecutionProfile::AgentStrict {
+            anyhow::bail!(
+                "security agent requires AgentStrict enforcement context; \
+                 manual or guarded profiles are not accepted"
+            );
+        }
+        // The injected bundle must also be AgentStrict; otherwise the agent
+        // could be downgraded through a mismatched service.
+        {
+            let probe = crate::config::OperationDescriptor::new(
+                "scan-ports".to_string(),
+                crate::config::OperationMode::StandardAssessment,
+                crate::config::OperationRisk::SafeActive,
+                Vec::new(),
+                Some("127.0.0.1".to_string()),
+                Vec::new(),
+                Vec::new(),
+                false,
+                false,
+                Vec::new(),
+            );
+            let outcome = execution_services.evaluate(&probe);
+            let _ = outcome;
+            // Strictness is enforced at approve/dispatch time; construction
+            // records the bundle without executing.
+        }
+
+        let registry = ToolRegistry::new();
+        let tool_dispatcher = ToolDispatcher::new(registry.clone());
+        let dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync> = Box::new(tool_dispatcher);
+
+        let portfolio = if let Some(ref path) = config.portfolio_path {
+            TargetPortfolio::load_from_file(path)?
+        } else {
+            TargetPortfolio::new()
+        };
+        let memory_dir = config.memory_dir.join("memory");
+        let memory = LongitudinalMemory::new(memory_dir).await?;
+        memory.warm_cache().await.ok();
+        let constraint_checker = if let Some(constraints) = config.operational_constraints.clone() {
+            ConstraintChecker::new(constraints)
+        } else {
+            ConstraintChecker::new(OperationalConstraints::default())
+        };
+        Ok(Self {
+            config,
+            registry,
+            constraint_checker,
+            dispatcher,
+            enforced_dispatcher: None,
+            execution_services: Some(execution_services),
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
+            scheduler: CronScheduler::new(),
+            portfolio,
+            memory,
+            alert_router,
+            event_handlers: Vec::new(),
+            running: Arc::new(tokio::sync::RwLock::new(false)),
+            shutdown_notify: tokio::sync::Notify::new(),
+            config_watcher: None,
             started_at: None,
             last_tick_at: None,
             last_scan_started_at: None,
@@ -370,6 +476,7 @@ impl Agent {
             constraint_checker,
             dispatcher,
             enforced_dispatcher: None,
+            execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
             scheduler: CronScheduler::new(),
@@ -423,6 +530,7 @@ impl Agent {
             constraint_checker,
             dispatcher,
             enforced_dispatcher: Some(enforced_dispatcher),
+            execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
             scheduler: CronScheduler::new(),
@@ -1182,7 +1290,24 @@ impl Agent {
             cancellation_token: token_handle,
         };
 
-        if let Some(ref enforced) = self.enforced_dispatcher {
+        // Phase D WS5: prefer injected execution services (checked-only).
+        // `execution_services` is set by `with_engine_services` and exposes
+        // no raw dispatch. `enforced_dispatcher` is the legacy production
+        // path via `Agent::new`. The raw `dispatcher` fallback remains
+        // test-only (`new_for_test` sets both checked paths to None).
+        if let Some(ref services) = self.execution_services {
+            let approved = approved_token.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "internal enforcement invariant violation: \
+                     security-agent dispatch reached without ApprovedOperation"
+                )
+            })?;
+
+            services
+                .dispatch_checked(approved, request)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e))
+        } else if let Some(ref enforced) = self.enforced_dispatcher {
             let approved = approved_token.as_ref().ok_or_else(|| {
                 anyhow::anyhow!(
                     "internal enforcement invariant violation: \

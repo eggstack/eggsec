@@ -82,8 +82,11 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `EnforcementContext` | `config/policy_decision.rs` | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope`. Created once per execution path. |
 | `EnforcementOutcome` | `config/policy_decision.rs` | Profile-aware result: `Allow`, `Warn`, `RequireConfirmation`, `Deny`. |
 | `ManualOverride` | `config/policy_decision.rs` | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
-| `ApprovedOperation` | `config/policy_decision.rs` | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
+| `ApprovedOperation` | `config/policy_approval.rs` | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
 | `EnforcedDispatcher` | `tool/dispatcher.rs` | Wraps `ToolDispatcher` requiring `ApprovedOperation` before dispatch. Type-level enforcement gate. |
+| `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |
+| `McpEngineBridge` | `tool/protocol/mcp/bridge.rs` | Narrow MCP bridge (wire/profile/session stay adapter-owned) |
+| `AgentExecutionService` | `agent/services.rs` | Checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injects |
 | `RuntimeBridgeError` | `runtime_bridge/surface.rs` | Bridge error type: `UnknownSurface`, `UnsupportedTaskKind`, `MissingTarget`, `UnknownOperationId`, `ManualOverrideRejected`, `EnforcementDenied`. |
 | `runtime_surface_to_execution_surface()` | `runtime_bridge/surface.rs` | Converts `RuntimeSurface` (daemon DTO) → `ExecutionSurface` (engine type). |
 | `descriptor_for_run_request()` | `runtime_bridge/descriptor.rs` | Converts `RunRequest` + `TaskKind` → `OperationDescriptor` via `operation_metadata()`. |
@@ -375,6 +378,9 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | `LoadedScope`, `Scope` | `crates/eggsec/src/config/scope.rs` |
 | `ScopeSpec` (declarative), `scope_from_spec`, intersection | `crates/eggsec-tool-core/src/request.rs`, `crates/eggsec/src/config/scope_spec.rs` |
 | `EnforcedDispatcher` | `crates/eggsec/src/tool/dispatcher.rs` |
+| `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |
+| `McpEngineBridge` | `tool/protocol/mcp/bridge.rs` | Narrow MCP bridge (wire/profile/session stay adapter-owned) |
+| `AgentExecutionService` | `agent/services.rs` | Checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injects |
 | `runtime_bridge` (Runtime→Engine bridge) | `crates/eggsec/src/runtime_bridge/` |
 | `TuiEnforcementState` | `crates/eggsec-tui/src/app/enforcement.rs` |
 | CLI surface resolution | `crates/eggsec-cli/src/main.rs` |

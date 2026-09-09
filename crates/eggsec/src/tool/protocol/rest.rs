@@ -37,16 +37,47 @@ pub struct RestState {
     pub enforcement: EnforcementContext,
     pub tls_config: Option<TlsConfig>,
     pub metrics: Arc<Metrics>,
+    /// Injected engine services (Phase D WS1/WS3).
+    ///
+    /// Handlers must use [`RestState::services`] for evaluate/approve and
+    /// checked dispatch. The `dispatcher`/`enforcement` fields remain as
+    /// composition-root-compatible views of the same underlying services.
+    pub services: crate::tool::service::EngineServices,
 }
 
 impl RestState {
+    /// Composition-root constructor: builds [`EngineServices`] from the
+    /// concrete registry plus enforcement, then delegates to
+    /// [`RestState::with_services`].
+    ///
+    /// Prefer `with_services` in tests and new composition roots so the
+    /// adapter never constructs engine internals itself.
     pub fn new(
         registry: ToolRegistry,
         api_key: Option<String>,
         enforcement: EnforcementContext,
         tls_config: Option<TlsConfig>,
     ) -> Self {
+        let services =
+            crate::tool::service::EngineServices::new(registry.clone(), enforcement.clone());
+        Self::with_services(registry, services, api_key, tls_config)
+    }
+
+    /// Injected constructor (Phase D): the caller supplies a prebuilt
+    /// [`EngineServices`] bundle. Transport-only concerns (`api_key`,
+    /// `tls_config`, rate limiting) stay in the adapter; authorization,
+    /// catalog, and execution stay in the engine service path.
+    pub fn with_services(
+        registry: ToolRegistry,
+        services: crate::tool::service::EngineServices,
+        api_key: Option<String>,
+        tls_config: Option<TlsConfig>,
+    ) -> Self {
+        // Keep the concrete views consistent with the injected bundle.
+        // `services` is authoritative for execution; `dispatcher`/`enforcement`
+        // are retained for backward-compatible field access.
         let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
+        let enforcement = services.enforcement().clone();
         let rate_limiter = RateLimiter::new(RateLimitConfig::standard().requests_per_minute);
         Self {
             registry,
@@ -56,7 +87,14 @@ impl RestState {
             enforcement,
             tls_config,
             metrics: Arc::new(Metrics::default()),
+            services,
         }
+    }
+
+    /// Checked-only executor for this adapter. Handlers must not use raw
+    /// dispatch.
+    pub fn services(&self) -> &crate::tool::service::EngineServices {
+        &self.services
     }
 }
 
@@ -700,7 +738,7 @@ async fn execute_tool(
     }
 
     let approved = match state
-        .enforcement
+        .services
         .approve(ExecutionSurface::RestApi, descriptor.clone())
     {
         Ok(approved) => approved,
@@ -708,7 +746,7 @@ async fn execute_tool(
             let correlation_id = generate_correlation_id();
             let audit_event = audit_event_from_enforcement_outcome(
                 ExecutionSurface::RestApi,
-                &state.enforcement,
+                state.services.enforcement(),
                 &descriptor,
                 &EnforcementOutcome::Deny(decision.clone()),
                 false,
@@ -732,7 +770,7 @@ async fn execute_tool(
             let correlation_id = generate_correlation_id();
             let audit_event = audit_event_from_enforcement_outcome(
                 ExecutionSurface::RestApi,
-                &state.enforcement,
+                state.services.enforcement(),
                 &descriptor,
                 &EnforcementOutcome::RequireConfirmation(decision.clone()),
                 false,
@@ -753,7 +791,7 @@ async fn execute_tool(
             let correlation_id = generate_correlation_id();
             let audit_event = audit_event_from_enforcement_outcome(
                 ExecutionSurface::RestApi,
-                &state.enforcement,
+                state.services.enforcement(),
                 &descriptor,
                 &EnforcementOutcome::Deny(decision.clone()),
                 false,
@@ -786,7 +824,7 @@ async fn execute_tool(
     let correlation_id = generate_correlation_id();
     let audit_event = audit_event_from_enforcement_outcome(
         ExecutionSurface::RestApi,
-        &state.enforcement,
+        state.services.enforcement(),
         approved.descriptor(),
         &EnforcementOutcome::Allow(approved.decision().clone()),
         false,
@@ -820,7 +858,7 @@ async fn execute_tool(
         cancellation_token: None,
     };
 
-    match state.dispatcher.dispatch_checked(&approved, request).await {
+    match state.services.dispatch_checked(&approved, request).await {
         Ok(response) => {
             state
                 .metrics
@@ -858,11 +896,11 @@ async fn preflight_tool(
         }
     }
 
-    let outcome = state.enforcement.evaluate(&descriptor);
+    let outcome = state.services.evaluate(&descriptor);
     let correlation_id = generate_correlation_id();
     let audit_event = audit_event_from_enforcement_outcome(
         crate::config::ExecutionSurface::RestApi,
-        &state.enforcement,
+        state.services.enforcement(),
         &descriptor,
         &outcome,
         false, // confirmed — REST preflight never confirms
@@ -876,7 +914,7 @@ async fn preflight_tool(
 
     let result = crate::config::preflight_operation(
         crate::config::ExecutionSurface::RestApi,
-        &state.enforcement,
+        state.services.enforcement(),
         descriptor,
         None,
     );

@@ -79,3 +79,7 @@ Load individual skill files as needed based on the task. The security testing do
 - `crates/eggsec/src/agent/AGENTS.override.md` - Agent module guidance
 - `AGENTS.md` - General project guidelines
 - `architecture/overview.md` - Overall design
+
+## Phase D Agent DI (2026-09-09)
+
+`agent::services::AgentExecutionService` is the agent boundary (checked-only, `AgentStrict` by construction). Use `Agent::with_engine_services(config, services, alert_router)` for injection; `Agent::new` is the composition-root shim that builds `EngineServices` from the default registry. Tests use fakes without building the registry. Never construct the registry/dispatcher inside orchestration code.

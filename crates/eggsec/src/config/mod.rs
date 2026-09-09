@@ -39,10 +39,15 @@ mod feature_registry;
 mod http;
 mod loader;
 mod policy;
+mod policy_approval;
+mod policy_catalog;
 mod policy_decision;
+mod policy_target;
 mod presets;
 mod scan;
 mod scope;
+mod scope_address;
+mod scope_resolver;
 mod scope_spec;
 mod settings;
 

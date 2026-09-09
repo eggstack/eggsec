@@ -89,3 +89,7 @@ bash scripts/smoke-daemon-local.sh /custom/path    # custom socket path
 | `session_snapshots` | `session_id` (PK), `snapshot_json`, `created_at_secs` | Session state snapshots |
 | `audit_events` | `audit_id` (PK), `action`, `surface`, `outcome`, `client_id`, `session_id`, `created_at_secs` | Security audit log |
 | `schema_meta` | `key` (PK), `value` | Schema version tracking |
+
+## Hotspot Modules (Phase D, 2026-09-09)
+
+`host.rs` is a stable facade. RBAC ownership lives in `host_auth.rs` (`role_for_session`, `may_observe_session`); persistence fan-out lives in `host_persistence.rs` (`PERSISTENCE_TASK_TIMEOUT`, `persistence_with_timeout`, `record_audit_event_logged`). Session ownership behavior is unchanged (legacy ownerless sessions stay visible; owned sessions restrict to owner + allowed clients).

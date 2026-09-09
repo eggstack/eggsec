@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09). All workstreams implemented; see Completion record below.
 
 ## Objective
 
@@ -203,4 +203,86 @@ Use Cargo dependency tests/architecture guards only for durable crate-direction 
 
 ## Completion record
 
-Record baseline/final SHA, modules/crates moved, trait/service interfaces introduced, largest-file before/after sizes, compatibility shims retained, and verification results.
+Executed 2026-09-09.
+
+- Baseline SHA: `e47aaaa3` (Phase C follow-up head).
+- No new crate created (deliberate): a separate `eggsec-api` crate would
+  become a second composition root (Axum/tonic closures, generated protobuf,
+  `TlsConfig`) or invert dependencies (bridge needs engine policy types).
+  The injected `EngineServices` boundary is the equivalent clean boundary
+  per the acceptance criteria; rationale recorded in
+  `architecture/api_extraction_boundary.md`.
+- New engine service interfaces (WS1):
+  - `crates/eggsec/src/tool/service.rs`: `OperationCatalog`
+    (`StaticOperationCatalog`), `CheckedExecutor` (checked-only; blanket
+    impl for `EnforcedDispatcher`), `PreflightService` (blanket impl for
+    `EnforcementContext`), `EngineServices` bundle (`new` for composition
+    roots, `with_executor`/`with_parts` for injection).
+  - `crates/eggsec/src/tool/protocol/mcp/bridge.rs`: `McpEngineBridge`
+    narrow bridge (evaluate/decision/dispatch delegate to services; no
+    `EnforcementContext` duplication).
+  - `crates/eggsec/src/agent/services.rs`: `AgentExecutionService`
+    (checked-only, `AgentStrict` by construction; blanket impl for
+    `EngineServices`; `FakeAgentExecutor` for tests).
+- Adapter decoupling (WS2-4):
+  - `GrpcService::with_services`, `RestState::with_services`,
+    `McpServer::with_services`, `openai::router_with_services`,
+    `openresponses::router_with_services`; legacy `new`/`router` remain as
+    composition-root/compat shims building inert fail-closed `EngineServices`.
+  - REST/gRPC/MCP approve/dispatch migrated to `services` (no behavior
+    change; wire formats preserved).
+  - OpenAI/OpenResponses fixed: removed `Scope::is_target_allowed` DTO check
+    and direct `tool.execute` bypass; per-tool `try_descriptor_for_target` +
+    `services.approve(RestApi)` + `services.dispatch_checked`, denials fail
+    closed per tool with wire-compatible rendering.
+  - TLS config stays as process-host input (not moved).
+- Agent DI (WS5):
+  - `Agent::with_engine_services(config, services, alert_router)` (no default
+    registry construction; validates `AgentStrict`); `Agent::new` remains as
+    composition-root shim; execution prefers `execution_services`, then
+    `enforced_dispatcher`, then test-only raw dispatcher.
+- Hotspot decomposition (WS6-7, stable facades via re-exports):
+  - `config/policy.rs` 2453 → 1009; new `policy_target.rs` (220:
+    `TargetHint`/`OperationTarget`/`normalize_*`/`TargetPolicyKind`/`DescriptorError`),
+    `policy_catalog.rs` (1270: `OperationMetadata`/statics/lookups + catalog
+    tests), `policy_approval.rs` (149: `ApprovedOperation` + token tests).
+  - `config/policy_decision.rs` 3768 → 3696 (approval moved out).
+  - `config/scope.rs` 1634 → 1430; new `scope_address.rs` (174) +
+    `scope_resolver.rs` (132) with facts tests.
+  - `eggsec-runtime/src/runtime.rs` 1851 → 1668; new `runtime_config.rs`
+    (64) + `runtime_sink.rs` (207) with backpressure tests.
+  - `eggsec-daemon/src/host.rs` 3149 → 3124; new `host_auth.rs` (140: RBAC
+    role/observe helpers + tests) + `host_persistence.rs` (67: fan-out
+    timeout/audit helpers + tests). Ownership behavior unchanged.
+- Compatibility shims retained (with Phase G removal criterion):
+  - `RestState::new`, `GrpcService::new`, `McpServer::with_enforcement`,
+    `openai::router`, `openresponses::router`, `Agent::new` (all delegate to
+    injected constructors); concrete `dispatcher`/`registry` fields kept
+    where external field access or history bridging requires them;
+    `OpenAiState.scope` retained as ignored deprecated field.
+- Tests/guards (WS8):
+  - New `crates/eggsec/tests/phase_d_protocol_agent.rs` (8 tests):
+    REST/MCP/gRPC identical approval, empty-scope deny, binding mismatches
+    fail closed, agent downgrade rejected/accept, facade equivalence, token
+    binding.
+  - Unit tests in `service.rs`, `bridge.rs`, `agent/services.rs`,
+    `policy_approval.rs`, `scope_address.rs`, `scope_resolver.rs`,
+    `runtime_config.rs`, `runtime_sink.rs`, `host_auth.rs`,
+    `host_persistence.rs`.
+  - New arch guards 73-78 (service traits exist; checked dispatch only; no
+    DTO auth in adapters; approval construction controlled; protocol free of
+    concrete impls; hotspot facades exist). Guards comment-aware (exclude
+    `//` prose and `constraints.rs` profile checks).
+- Docs pruning:
+  - `AGENTS.md` (service/hotspot patterns + guards 73-78), `README.md`
+    (service boundary note), `architecture/api_extraction_boundary.md`
+    (injected boundary, resolved blockers, Phase 3-6 DONE), `runtime.md`,
+    `daemon.md`, `config.md`, `dispatch.md`, `overview.md` (new modules,
+    pruned stale counts), skills `eggsec-tool`/`agent`/`daemon`/`config`
+    (Phase D sections), `docs/ARCHITECTURE.md`/`AGENT.md`/`DAEMON.md`.
+- Verification: `make check` PASS, `make check-python` PASS (no Python
+  changes; bindings untouched), `cargo check` protocol profiles
+  (`rest-api`, `grpc-api`, `tool-api`) PASS, `cargo test -p eggsec-daemon`
+  PASS, `cargo test -p eggsec-runtime` PASS, arch guards ALL PASSED.
+  New tests: `phase_d_protocol_agent` (8 passed), plus unit tests listed
+  above.

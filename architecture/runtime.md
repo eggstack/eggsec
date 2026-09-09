@@ -14,12 +14,14 @@ Frontend-neutral async runtime for task lifecycle management. Provides the bridg
 
 Architecture guard: zero TUI, transport, persistence, or engine dependencies. Enforced by `scripts/check-architecture-guards.sh`.
 
-## Architecture (9 source files)
+## Architecture (11 source files, Phase D)
 
 | Module | File | Purpose |
 |--------|------|---------|
 | `lib` | `src/lib.rs` | Public API re-exports |
-| `runtime` | `src/runtime.rs` | `Runtime` orchestrator, `RuntimeConfig`, `RuntimeEventReceiver`, `RuntimeEventSink`, `RuntimeTaskExecutor` trait |
+| `runtime` | `src/runtime.rs` | `Runtime` orchestrator, `RuntimeTaskExecutor` trait (facade; config/sink re-exported) |
+| `runtime_config` | `src/runtime_config.rs` | `RuntimeConfig`, `SessionOptions` (submission/lifecycle tuning) |
+| `runtime_sink` | `src/runtime_sink.rs` | `RuntimeEventReceiver`, `RuntimeEventSink`, broadcast helpers (events/backpressure) |
 | `session` | `src/session.rs` | `RuntimeSession`, `RuntimeExecutionContext`, `SessionScope`, `SessionSnapshot`, `TaskSnapshot`, `SessionSummary` |
 | `request` | `src/request.rs` | `TaskKind` (29 variants), `RuntimeSurface` (10 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
@@ -33,10 +35,10 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | Type | Location | Purpose |
 |------|----------|---------|
 | `Runtime` | `runtime.rs` | Main orchestrator: `create_session()`, `submit()`, `cancel()`, `cancel_active()`, `snapshot()`, `subscribe()`, `close_session()`, `hydrate_session()` |
-| `RuntimeConfig` | `runtime.rs:37-49` | `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`, `capabilities` |
-| `RuntimeTaskExecutor` | `runtime.rs:212-228` | Trait for frontend-supplied execution logic |
-| `RuntimeEventSink` | `runtime.rs:122-203` | Progress/log/completion/failure reporting for executors |
-| `RuntimeEventReceiver` | `runtime.rs:70-119` | Broadcast receiver with lag recovery |
+| `RuntimeConfig` | `runtime_config.rs` | `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`, `capabilities` |
+| `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic |
+| `RuntimeEventSink` | `runtime_sink.rs` | Progress/log/completion/failure reporting for executors |
+| `RuntimeEventReceiver` | `runtime_sink.rs` | Broadcast receiver with lag recovery |
 | `RuntimeExecutionContext` | `session.rs:34-42` | Per-execution context: session_id, surface, scope |
 | `RuntimeSession` | `session.rs:91-120` | Mutable session state (tasks, surface, scope, generation, capabilities) |
 | `SessionSnapshot` | `session.rs:349-370` | Immutable snapshot for persistence/transport |
@@ -268,4 +270,4 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-09 (Phase D: runtime_config/runtime_sink split)*

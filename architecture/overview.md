@@ -586,6 +586,10 @@ Process/reference docs not tied to a single component: [review_plan.md](review_p
 
 ---
 
+## Phase D Service Boundaries (2026-09-09)
+
+Protocol/agent adapters depend on `tool::service::EngineServices` (`CheckedExecutor` = checked-only dispatch), `agent::services::AgentExecutionService` (`AgentStrict` by construction), and `mcp::bridge::McpEngineBridge` (narrow bridge). Hotspot modules (`policy_target`/`policy_catalog`/`policy_approval`, `scope_address`/`scope_resolver`, `runtime_config`/`runtime_sink`, `host_auth`/`host_persistence`) keep stable facades. See `api_extraction_boundary.md` and `docs/ARCHITECTURE.md`.
+
 ## See Also
 
 Workspace-level canonical docs:

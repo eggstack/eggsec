@@ -1,4 +1,5 @@
 mod auth;
+pub mod bridge;
 pub mod coding_agent_output;
 mod constraints;
 mod handlers;
@@ -12,6 +13,7 @@ mod streaming;
 mod types;
 
 pub use auth::{validate_auth, validate_auth_internal, validate_auth_params};
+pub use bridge::McpEngineBridge;
 pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use policy::{

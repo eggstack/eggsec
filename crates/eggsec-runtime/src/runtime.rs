@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::sync::{broadcast, Mutex};
 use tokio_util::sync::CancellationToken;
 
-use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress, TaskStatus};
+use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskStatus};
 use crate::ids::{ClientId, SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface};
 use crate::session::{
@@ -13,194 +12,12 @@ use crate::session::{
 };
 use crate::RuntimeError;
 
-/// Emit a runtime event best-effort. Logs at trace level if no subscribers
-/// are listening. Never panics on channel failure.
-fn emit_event(tx: &broadcast::Sender<RuntimeEvent>, event: RuntimeEvent) {
-    if tx.receiver_count() == 0 {
-        tracing::trace!("no event subscribers; dropping event");
-    } else if let Err(e) = tx.send(event) {
-        tracing::trace!("event send failed (likely no active receivers): {}", e);
-    }
-}
-
-/// Emit a runtime event with audit-critical semantics. Logs at warn level
-/// on send failure to make policy-relevant event loss observable.
-fn emit_event_critical(tx: &broadcast::Sender<RuntimeEvent>, event: RuntimeEvent) {
-    if tx.receiver_count() == 0 {
-        tracing::warn!("no event subscribers for critical event; event dropped");
-    } else if let Err(e) = tx.send(event) {
-        tracing::warn!("critical event send failed: {}", e);
-    }
-}
-
-/// Configuration for the runtime.
-#[derive(Debug, Clone)]
-pub struct RuntimeConfig {
-    /// Default timeout for tasks. None means no timeout.
-    pub default_task_timeout: Option<Duration>,
-    /// Maximum active tasks per session.
-    pub max_active_tasks_per_session: usize,
-    /// Capacity of the event broadcast channel.
-    pub event_channel_capacity: usize,
-    /// Capabilities advertised by this runtime. Determines which task kinds
-    /// sessions report as available. Use `RuntimeCapabilities::noop()` for
-    /// daemons without a real executor.
-    pub capabilities: crate::capabilities::RuntimeCapabilities,
-}
-
-impl Default for RuntimeConfig {
-    fn default() -> Self {
-        Self {
-            default_task_timeout: Some(Duration::from_secs(300)),
-            max_active_tasks_per_session: 1,
-            event_channel_capacity: 256,
-            capabilities: crate::capabilities::RuntimeCapabilities::full_lab(),
-        }
-    }
-}
-
-/// Options for creating a session.
-#[derive(Debug, Clone, Default)]
-pub struct SessionOptions {
-    /// Override for the default task timeout for this session.
-    pub task_timeout: Option<Duration>,
-}
-
-/// Event receiver for subscribing to runtime events.
-pub struct RuntimeEventReceiver {
-    rx: broadcast::Receiver<RuntimeEvent>,
-}
-
-impl RuntimeEventReceiver {
-    /// Create a receiver from a broadcast channel. Useful for tests.
-    pub fn from_broadcast(rx: broadcast::Receiver<RuntimeEvent>) -> Self {
-        Self { rx }
-    }
-
-    /// Receive the next event. Returns `None` if the channel is closed.
-    /// Logs a warning each time events were dropped due to broadcast
-    /// overflow, then keeps receiving — lag is recoverable and must not be
-    /// misreported as channel closure.
-    pub async fn recv(&mut self) -> Option<RuntimeEvent> {
-        loop {
-            match self.rx.recv().await {
-                Ok(event) => return Some(event),
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(
-                        dropped = n,
-                        "Broadcast event channel overflow, events dropped"
-                    );
-                    // Keep consuming; the channel is still open.
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
-            }
-        }
-    }
-
-    /// Try to receive an event without blocking. Returns `None` when no event
-    /// is available or the channel is closed. Logs a warning on overflow and
-    /// keeps draining instead of swallowing the lag.
-    pub fn try_recv(&mut self) -> Option<RuntimeEvent> {
-        loop {
-            match self.rx.try_recv() {
-                Ok(event) => return Some(event),
-                Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
-                    tracing::warn!(
-                        dropped = n,
-                        "Broadcast event channel overflow, events dropped"
-                    );
-                    // Keep draining; the channel is still open.
-                }
-                Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return None,
-                Err(tokio::sync::broadcast::error::TryRecvError::Closed) => return None,
-            }
-        }
-    }
-}
-
-/// Sink for task executors to report progress and completion.
-#[derive(Clone)]
-pub struct RuntimeEventSink {
-    task_id: TaskId,
-    session_id: SessionId,
-    event_tx: broadcast::Sender<RuntimeEvent>,
-}
-
-impl RuntimeEventSink {
-    fn new(
-        task_id: TaskId,
-        session_id: SessionId,
-        event_tx: broadcast::Sender<RuntimeEvent>,
-    ) -> Self {
-        Self {
-            task_id,
-            session_id,
-            event_tx,
-        }
-    }
-
-    /// Return the session ID this sink belongs to.
-    pub fn session_id(&self) -> SessionId {
-        self.session_id
-    }
-
-    /// Emit a progress event.
-    pub fn progress(&self, completed: u64, total: Option<u64>, message: Option<String>) {
-        emit_event(
-            &self.event_tx,
-            RuntimeEvent::TaskProgress {
-                session_id: self.session_id,
-                task_id: self.task_id,
-                progress: TaskProgress {
-                    completed,
-                    total,
-                    message,
-                },
-            },
-        );
-    }
-
-    /// Emit a log event.
-    pub fn log(&self, level: crate::event::LogLevel, message: String) {
-        emit_event(
-            &self.event_tx,
-            RuntimeEvent::TaskLog {
-                session_id: self.session_id,
-                task_id: Some(self.task_id),
-                level,
-                message,
-            },
-        );
-    }
-
-    /// Emit a completion event.
-    pub fn completed(&self, outcome: TaskOutcome) {
-        emit_event(
-            &self.event_tx,
-            RuntimeEvent::TaskCompleted {
-                session_id: self.session_id,
-                task_id: self.task_id,
-                outcome,
-            },
-        );
-    }
-
-    /// Emit a failure event.
-    pub fn failed(&self, message: String, code: Option<String>) {
-        emit_event_critical(
-            &self.event_tx,
-            RuntimeEvent::TaskFailed {
-                session_id: self.session_id,
-                task_id: self.task_id,
-                error: RuntimeErrorInfo {
-                    message,
-                    code,
-                    details: None,
-                },
-            },
-        );
-    }
-}
+// Phase D WS7: configuration and event sink/receiver live in cohesive
+// modules. Re-exported here so `crate::runtime::{RuntimeConfig, ...}`
+// remains a stable facade.
+pub use super::runtime_config::{RuntimeConfig, SessionOptions};
+pub(crate) use super::runtime_sink::{emit_event, emit_event_critical};
+pub use super::runtime_sink::{RuntimeEventReceiver, RuntimeEventSink};
 
 /// Trait for task executors. Implementations bridge the runtime to actual tool
 /// execution. In Phase 2 the TUI provides an executor that wraps the existing
@@ -852,6 +669,7 @@ mod tests {
     use super::*;
     use crate::event::LogLevel;
     use crate::request::{PortScanParams, RuntimeSurface, TaskKind};
+    use std::time::Duration;
 
     /// A test executor that immediately completes with a text outcome.
     struct ImmediateExecutor;

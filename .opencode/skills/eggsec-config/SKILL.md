@@ -217,3 +217,7 @@ For full config management, use CLI commands or edit config files directly when 
 
 - `crates/eggsec/src/config/AGENTS.override.md` - Detailed config patterns
 - `architecture/config.md` - Architecture documentation
+
+## Phase D Hotspot Modules (2026-09-09)
+
+Policy/target/catalog/approval: `config/policy.rs` (facade) + `policy_target.rs` + `policy_catalog.rs` + `policy_approval.rs`. Scope: `scope.rs` (facade) + `scope_address.rs` + `scope_resolver.rs`. Public paths stable via re-exports; new code imports from the cohesive module. `ApprovedOperation::new` only in `policy_approval.rs`; adapters obtain tokens via `approve()`.

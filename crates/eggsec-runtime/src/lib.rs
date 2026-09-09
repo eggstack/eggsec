@@ -5,6 +5,8 @@ pub mod event;
 pub mod ids;
 pub mod request;
 pub mod runtime;
+pub mod runtime_config;
+pub mod runtime_sink;
 pub mod session;
 
 pub use capabilities::{RuntimeCapabilities, TaskCapability};
@@ -15,10 +17,9 @@ pub use event::{
 };
 pub use ids::{ClientId, SessionId, TaskId};
 pub use request::{LoadTestParams, RunRequest, RuntimeSurface, TaskKind};
-pub use runtime::{
-    Runtime, RuntimeConfig, RuntimeEventReceiver, RuntimeEventSink, RuntimeTaskExecutor,
-    SessionOptions,
-};
+pub use runtime::{Runtime, RuntimeTaskExecutor};
+pub use runtime_config::{RuntimeConfig, SessionOptions};
+pub use runtime_sink::{RuntimeEventReceiver, RuntimeEventSink};
 pub use session::{
     RuntimeExecutionContext, RuntimeSession, SessionScope, SessionSnapshot, SessionSummary,
     TaskSnapshot,

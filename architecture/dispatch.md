@@ -135,6 +135,14 @@ CLI/TUI handler
 
 ### 2. Strict Protocol Surfaces (REST/MCP/gRPC/Agent)
 
+> Phase D: adapters hold `tool::service::EngineServices` (`OperationCatalog`,
+> `CheckedExecutor`, `PreflightService`) via `with_services`, not concrete
+> `ToolRegistry`/`ToolDispatcher`. `CheckedExecutor` exposes only
+> `dispatch_checked`; MCP uses the narrow `mcp::bridge::McpEngineBridge`, the
+> agent uses `agent::services::AgentExecutionService`. Authorization stays in
+> `EnforcementContext`; see `architecture/api_extraction_boundary.md`.
+
+
 Route through `EnforcedDispatcher::dispatch_checked()` in `tool/dispatcher.rs:258`, which calls `validate_request_binding()` to verify the `ApprovedOperation` token binding (tool ↔ canonical operation, target agreement). Fails closed before any executor runs.
 
 ```

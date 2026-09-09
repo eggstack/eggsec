@@ -18,28 +18,12 @@ use crate::config::DaemonConfig;
 use crate::protocol::{ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage};
 use crate::store::{DaemonStore, PersistedAuditEvent};
 
-async fn record_audit_event_logged(store: &dyn DaemonStore, event: PersistedAuditEvent) {
-    if let Err(error) = store.record_audit_event(&event).await {
-        tracing::warn!(
-            ?error,
-            action = %event.action,
-            "failed to persist daemon audit event"
-        );
-    }
-}
-
-/// Upper bound for fire-and-forget persistence fan-out tasks so a stalled
-/// store cannot leak long-lived tasks (project invariant: 30-300s timeouts).
-const PERSISTENCE_TASK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-
-async fn persistence_with_timeout(label: &str, fut: impl std::future::Future<Output = ()>) {
-    if tokio::time::timeout(PERSISTENCE_TASK_TIMEOUT, fut)
-        .await
-        .is_err()
-    {
-        tracing::warn!(action = label, "daemon persistence task timed out");
-    }
-}
+// Phase D WS7: persistence fan-out and RBAC helpers live in cohesive
+// modules. Re-exported here so `host::{...}` remains a stable facade.
+pub use super::host_auth::{may_observe_session, role_for_session};
+pub use super::host_persistence::{
+    persistence_with_timeout, record_audit_event_logged, PERSISTENCE_TASK_TIMEOUT,
+};
 
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
 ///
@@ -147,17 +131,8 @@ impl DaemonHost {
             tracing::warn!("session access mutex was poisoned; recovering state");
             poisoned.into_inner()
         });
-        if let Some(session_access) = access.get(session_id) {
-            if session_access.owner_client_id == Some(*client_id) {
-                return ClientRole::Owner;
-            }
-            for rule in &session_access.allowed_clients {
-                if rule.client_id == *client_id {
-                    return rule.role.clone();
-                }
-            }
-        }
-        ClientRole::Observer
+        // Phase D WS7: ownership/role resolution lives in `host_auth`.
+        role_for_session(&access, client_id, session_id)
     }
 
     // --- Persistence helpers ---

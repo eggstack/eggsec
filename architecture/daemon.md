@@ -106,8 +106,10 @@ Architecture guards enforce:
 | Module | File | Purpose |
 |--------|------|---------|
 | `main` | `src/main.rs` | Binary entry point: CLI args (clap), store setup, host creation, shutdown signal, event persistence loop |
-| `lib` | `src/lib.rs` | Library root: re-exports `protocol` and `client_registry` from daemon-protocol; declares `host`, `server`, `config`, `error`, `store`, `client`; `http` behind `http-api` |
-| `host` | `src/host.rs` | `DaemonHost`: command dispatch, RBAC enforcement, persistence fan-out, recovery |
+| `lib` | `src/lib.rs` | Library root: re-exports `protocol` and `client_registry` from daemon-protocol; declares `host`, `host_auth`, `host_persistence`, `server`, `config`, `error`, `store`, `client`; `http` behind `http-api` |
+| `host` | `src/host.rs` | `DaemonHost`: command dispatch, recovery (facade; RBAC/persistence delegated) |
+| `host_auth` | `src/host_auth.rs` | RBAC ownership/role helpers (`role_for_session`, `may_observe_session`) |
+| `host_persistence` | `src/host_persistence.rs` | Persistence fan-out (`PERSISTENCE_TASK_TIMEOUT`, `persistence_with_timeout`, `record_audit_event_logged`) |
 | `server` | `src/server.rs` | Unix socket server: JSON-line protocol, client handler loop, subscribe streaming, bounded read |
 | `client` | `src/client.rs` | `DaemonClient`: typed client library for Unix socket communication |
 | `config` | `src/config.rs` | `DaemonConfig`: socket path, max clients, default surface, data dir, persistence toggle |

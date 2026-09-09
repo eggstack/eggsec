@@ -7,6 +7,11 @@ use super::{
     OperationDescriptor, OperationMode, OperationRisk, Scope,
 };
 
+// Phase D WS6: approval token issuance lives in a cohesive module.
+// Re-exported here so `crate::config::policy_decision::ApprovedOperation`
+// and `crate::config::ApprovedOperation` remain stable facades.
+pub use super::policy_approval::ApprovedOperation;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyDecision {
     pub decision_id: String,
@@ -316,83 +321,6 @@ impl EnforcementError {
             | Self::ManualOverrideUnavailable { decision, .. } => Some(decision),
             Self::SurfaceProfileMismatch { .. } => None,
         }
-    }
-}
-
-/// Proof that an operation has passed enforcement evaluation.
-///
-/// This token is produced exclusively by [`EnforcementContext::approve`] or
-/// [`EnforcementContext::approve_manual`]. Strict programmatic surfaces
-/// (REST, MCP, Agent, CI) require an `ApprovedOperation` before dispatching
-/// a tool, ensuring enforcement is structurally impossible to bypass.
-///
-/// Fields are private; access is via read-only accessors.
-#[derive(Debug, Clone)]
-pub struct ApprovedOperation {
-    descriptor: OperationDescriptor,
-    decision: PolicyDecision,
-    surface: ExecutionSurface,
-    profile: ExecutionProfile,
-    audit_event_id: Option<String>,
-}
-
-impl ApprovedOperation {
-    /// Construct an approved operation. Only enforcement code should call this.
-    pub(crate) fn new(
-        descriptor: OperationDescriptor,
-        decision: PolicyDecision,
-        surface: ExecutionSurface,
-        profile: ExecutionProfile,
-        audit_event_id: Option<String>,
-    ) -> Self {
-        Self {
-            descriptor,
-            decision,
-            surface,
-            profile,
-            audit_event_id,
-        }
-    }
-
-    /// Construct an approved operation for integration testing.
-    ///
-    /// This is a public convenience wrapper around the private constructor
-    /// intended for integration test files that need to build approval tokens
-    /// without going through the full enforcement path.
-    #[doc(hidden)]
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn for_test(
-        descriptor: OperationDescriptor,
-        decision: PolicyDecision,
-        surface: ExecutionSurface,
-        profile: ExecutionProfile,
-    ) -> Self {
-        Self::new(descriptor, decision, surface, profile, None)
-    }
-
-    /// The operation descriptor that was approved.
-    pub fn descriptor(&self) -> &OperationDescriptor {
-        &self.descriptor
-    }
-
-    /// The policy decision underlying this approval.
-    pub fn decision(&self) -> &PolicyDecision {
-        &self.decision
-    }
-
-    /// The execution surface that produced this approval.
-    pub fn surface(&self) -> ExecutionSurface {
-        self.surface
-    }
-
-    /// The execution profile that produced this approval.
-    pub fn profile(&self) -> ExecutionProfile {
-        self.profile
-    }
-
-    /// Optional audit event ID associated with this approval.
-    pub fn audit_event_id(&self) -> Option<&str> {
-        self.audit_event_id.as_deref()
     }
 }
 

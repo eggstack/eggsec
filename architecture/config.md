@@ -40,9 +40,14 @@ All source files live under `crates/eggsec/src/config/`:
 | File | Lines | Feature Gate | Purpose |
 |------|-------|:---:|---------|
 | `mod.rs` | 127 | — | Re-exports, `ENV_PREFIX`, default config template |
-| `policy.rs` | 2394 | — | `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor`, `OperationMetadata`, `ALL_OPERATION_METADATA` (31), `ALL_OPERATION_METADATA_ALIASES` (42) |
-| `policy_decision.rs` | 3759 | — | `PolicyDecision`, `EnforcementOutcome`, `EnforcementContext`, `ApprovedOperation`, `ConfirmationClass` (8), `ManualOverride`, `PreflightResult`, `EnforcementError`, `classify_denial_reasons()`, `evaluate_enforcement()`, `evaluate_operation_policy()`, `confirmation_classes_for()` |
-| `scope.rs` | ~1570 | — | `Scope`, `ScopeRule`, `ScopeSource` (4), `LoadedScope`, `AddressClass` (7), `HostResolver` trait, `SystemResolver`, `TargetScope`, `classify_address()`, `is_private_ip()` |
+| `policy.rs` | ~1000 | — | Facade + types: `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor` (re-exports target/catalog) |
+| `policy_target.rs` | ~220 | — | `TargetHint`, `OperationTarget`, `normalize_target()`, `TargetPolicyKind`, `DescriptorError` |
+| `policy_catalog.rs` | ~1270 | — | `OperationMetadata`, `ALL_OPERATION_METADATA`, `ALL_OPERATION_METADATA_ALIASES`, lookup helpers + catalog tests |
+| `policy_approval.rs` | ~150 | — | `ApprovedOperation` issuance/binding (private `new`, `for_test` shim) |
+| `policy_decision.rs` | ~3700 | — | Facade: `PolicyDecision`, `EnforcementOutcome`, `EnforcementContext`, `ConfirmationClass` (8), `ManualOverride`, `PreflightResult`, `EnforcementError`, evaluation fns (re-exports `ApprovedOperation` from `policy_approval.rs`) |
+| `scope.rs` | ~1430 | — | Facade: `Scope`, `ScopeRule`, `ScopeSource` (4), `LoadedScope`, `TargetScope` (re-exports address/resolver) |
+| `scope_address.rs` | ~175 | — | `AddressClass` (7), `classify_address()`, `is_private_ip()` + facts tests |
+| `scope_resolver.rs` | ~130 | — | `ResolutionResult`, `HostResolver` trait, `SystemResolver`, `default_resolver()` + facts tests |
 | `scope_spec.rs` | — | — | `scope_from_spec()`, `ScopeSpecError`, `is_target_allowed_by_scope_and_spec[_with_resolver]()`, `is_parsed_target_allowed_by_scope_and_spec()` — conservative `ScopeSpec`→`Scope` conversion plus intersection evaluation |
 | `settings.rs` | 744 | — | `EggsecConfig`, `ScanConfig`, `HttpConfig`, `OutputConfig`, `NotificationConfig`, `AiConfig`, `ReconConfig`, `RemoteConfig`, `SearchConfig`, `AlertChannelsConfig`, `ProxyConfigEntry`, `ConfigError`, validation impls |
 | `loader.rs` | 478 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
@@ -62,22 +67,22 @@ All source files live under `crates/eggsec/src/config/`:
 
 | Type | File:Line | Variants | Purpose |
 |------|-----------|----------|---------|
-| `OperationRisk` | `policy.rs:9` | 15 | Risk tier ordering (Passive → AgentAutonomous) |
-| `ExecutionSurface` | `policy.rs:357` | 9 | Caller origin identity |
-| `ExecutionProfile` | `policy.rs:461` | 5 | Trust boundary for enforcement |
-| `OperationMode` | `policy.rs:179` | 3 | Session safety boundary |
-| `Capability` | `policy.rs:507` | 19 | Operation capability declarations |
-| `IntendedUse` | `policy.rs:227` | 8 | Operation use-case classification |
-| `DenialClass` | `policy.rs:573` | 8 | Typed denial classification |
-| `ConfirmationClass` | `policy_decision.rs:402` | 8 | Manual discretion trigger categories |
-| `EnforcementOutcome` | `policy_decision.rs:236` | 4 | Profile-aware enforcement result |
-| `AddressClass` | `scope.rs:14` | 7 | IP address classification |
-| `ScopeSource` | `scope.rs:201` | 4 | Scope provenance |
-| `DescriptorError` | `policy.rs:1175` | 2 | Target-policy violation errors |
+| `OperationRisk` | `policy.rs` | 15 | Risk tier ordering (Passive → AgentAutonomous) |
+| `ExecutionSurface` | `policy.rs` | 9 | Caller origin identity |
+| `ExecutionProfile` | `policy.rs` | 5 | Trust boundary for enforcement |
+| `OperationMode` | `policy.rs` | 3 | Session safety boundary |
+| `Capability` | `policy.rs` | 19 | Operation capability declarations |
+| `IntendedUse` | `policy.rs` | 8 | Operation use-case classification |
+| `DenialClass` | `policy.rs` | 8 | Typed denial classification |
+| `ConfirmationClass` | `policy_decision.rs` | 8 | Manual discretion trigger categories |
+| `EnforcementOutcome` | `policy_decision.rs` | 4 | Profile-aware enforcement result |
+| `AddressClass` | `scope_address.rs` | 7 | IP address classification |
+| `ScopeSource` | `scope.rs` | 4 | Scope provenance |
+| `DescriptorError` | `policy_target.rs` | 2 | Target-policy violation errors |
 | `DiscoveredTargetStatus` | `discovery.rs:10` | 4 | Discovery promotion model |
 | `BudgetError` | `budget.rs:107` | 3 | Budget validation errors |
 | `ConfigError` | `settings.rs:708` | 4 | Config loading/parsing errors |
-| `ScopeError` | `scope.rs:931` | 7 | Scope validation/loading errors |
+| `ScopeError` | `scope.rs` | 7 | Scope validation/loading errors |
 
 ### Key Types — Structs
 

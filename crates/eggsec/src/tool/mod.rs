@@ -41,6 +41,7 @@ pub mod openapi;
 pub mod planner;
 pub mod registry;
 pub mod scripting;
+pub mod service;
 pub mod session;
 pub mod state;
 pub mod traits;
@@ -84,6 +85,9 @@ pub use registry::{ToolInfo, ToolRegistry};
 pub use response::{
     Finding, FindingType, ProgressUpdate, ResponseMetadata, ResponseSeverity, ResponseStatus,
     StreamEvent, StreamEventType,
+};
+pub use service::{
+    CheckedExecutor, EngineServices, OperationCatalog, PreflightService, StaticOperationCatalog,
 };
 pub use session::{
     AuthMethod, AuthenticatedSessionManager, CsrfExtractor, CsrfToken, CsrfTokenLocation,

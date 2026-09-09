@@ -1612,6 +1612,108 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Individual feature sweep is maintained and scheduled."
 fi
 
+# 73. Engine service traits exist (Phase D WS1).
+# Protocol/agent adapters must depend on narrow capability traits, not on
+# concrete registry/dispatcher construction.
+echo ""
+echo "--- Check 73: Engine service traits exist ---"
+SECTION_FAIL=0
+for sym in "trait OperationCatalog" "trait CheckedExecutor" "trait PreflightService" "struct EngineServices" "trait AgentExecutionService" "struct McpEngineBridge"; do
+  if ! rg -q "$sym" crates/eggsec/src/tool/service.rs crates/eggsec/src/agent/services.rs crates/eggsec/src/tool/protocol/mcp/bridge.rs 2>/dev/null; then
+    echo "FAIL: missing '$sym' in service/bridge modules."
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Engine service traits exist."
+fi
+
+# 74. Protocol adapters use checked dispatch only (Phase D WS2-4/WS8).
+# Raw `.dispatch(` (without `_checked`) and direct `tool.execute(` bypass
+# enforcement binding checks. Adapters must go through
+# `dispatch_checked` via EngineServices/McpEngineBridge.
+echo ""
+echo "--- Check 74: Protocol adapters use checked dispatch only ---"
+SECTION_FAIL=0
+RAW_DISPATCH=$(rg -n '\.dispatch\(' crates/eggsec/src/tool/protocol/ 2>/dev/null | rg -v 'dispatch_checked' | rg -v '^\s*//' | rg -v '//' | rg -v 'ChainPlanner|planner' || true)
+if [[ -n "$RAW_DISPATCH" ]]; then
+  echo "$RAW_DISPATCH"
+  echo "FAIL: Raw .dispatch() in protocol adapters. Use dispatch_checked via EngineServices."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+DIRECT_EXEC=$(rg -n '\.execute\(' crates/eggsec/src/tool/protocol/openai/ crates/eggsec/src/tool/protocol/openresponses/ 2>/dev/null | rg -v 'dispatch_checked' | rg -v '^\s*//' | rg -v '//' || true)
+if [[ -n "$DIRECT_EXEC" ]]; then
+  echo "$DIRECT_EXEC"
+  echo "FAIL: Direct tool.execute() in OpenAI/OpenResponses adapters. Use EngineServices dispatch_checked."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Protocol adapters use checked dispatch only."
+fi
+
+# 75. Adapters do not duplicate scope/policy evaluation (Phase D WS3).
+# The legacy `Scope::is_target_allowed` DTO check must not appear in protocol
+# adapter *code*; authorization lives in EnforcementContext via EngineServices.
+# (Comments mentioning the removed check and MCP profile constraints in
+# `constraints.rs` are not DTO authorization and are excluded.)
+echo ""
+echo "--- Check 75: No DTO scope auth in protocol adapters ---"
+HITS=$(rg -n 'is_target_allowed' crates/eggsec/src/tool/protocol/ 2>/dev/null | rg -v '^\s*//' | rg -v '//' | rg -v 'constraints\.rs' || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Protocol adapters must not call is_target_allowed. Use EnforcementContext via EngineServices."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No DTO scope auth in protocol adapters."
+fi
+
+# 76. Approval token construction stays private/controlled (Phase D WS6/WS8).
+# Only enforcement code (policy_approval.rs, policy_decision.rs) may call
+# `ApprovedOperation::new`. Adapters/agents must obtain tokens via approve().
+echo ""
+echo "--- Check 76: Approval token construction is controlled ---"
+HITS=$(rg -n 'ApprovedOperation::new' crates/ --glob='*.rs' 2>/dev/null | rg -v 'config/policy_approval.rs' | rg -v 'config/policy_decision.rs' || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: ApprovedOperation::new outside enforcement modules."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Approval token construction is controlled."
+fi
+
+# 77. Protocol adapters do not depend on concrete domain implementations.
+# They may use ToolRegistry/EngineServices/catalog metadata, but must not
+# import `tool::implementations::` directly (that would make the adapter a
+# second composition root).
+echo ""
+echo "--- Check 77: Protocol free of concrete domain impls ---"
+HITS=$(rg -n 'implementations::' crates/eggsec/src/tool/protocol/ 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Protocol adapters must not depend on concrete domain implementations."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Protocol free of concrete domain impls."
+fi
+
+# 78. Hotspot decomposition facades exist (Phase D WS6-7).
+echo ""
+echo "--- Check 78: Hotspot facades exist ---"
+SECTION_FAIL=0
+for f in "crates/eggsec/src/config/policy_target.rs" "crates/eggsec/src/config/policy_catalog.rs" "crates/eggsec/src/config/policy_approval.rs" "crates/eggsec/src/config/scope_address.rs" "crates/eggsec/src/config/scope_resolver.rs" "crates/eggsec-runtime/src/runtime_config.rs" "crates/eggsec-runtime/src/runtime_sink.rs" "crates/eggsec-daemon/src/host_auth.rs" "crates/eggsec-daemon/src/host_persistence.rs" "crates/eggsec/src/tool/service.rs" "crates/eggsec/src/tool/protocol/mcp/bridge.rs" "crates/eggsec/src/agent/services.rs"; do
+  if [[ ! -f "$f" ]]; then
+    echo "FAIL: missing hotspot module: $f"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Hotspot facades exist."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

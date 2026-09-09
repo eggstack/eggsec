@@ -47,7 +47,13 @@ pub struct McpServer {
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) profile: McpProfile,
     pub(crate) policy: McpProfilePolicy,
-    pub(crate) enforcement: crate::config::EnforcementContext,
+    /// Injected engine services (Phase D WS1/WS4).
+    ///
+    /// Authoritative for catalog, authorization, and checked execution.
+    /// Transport/session/profile concerns remain adapter-owned. Use
+    /// [`McpServer::services`] / [`McpServer::bridge`] in handlers; do not
+    /// reintroduce direct `ToolRegistry`/`ToolDispatcher` construction.
+    services: crate::tool::service::EngineServices,
 }
 
 impl McpServer {
@@ -85,6 +91,22 @@ impl McpServer {
         profile: McpProfile,
         enforcement: crate::config::EnforcementContext,
     ) -> Self {
+        let services = crate::tool::service::EngineServices::new(registry.clone(), enforcement);
+        Self::with_services(registry, api_key, profile, services)
+    }
+
+    /// Injected constructor (Phase D WS4): the caller supplies a prebuilt
+    /// [`EngineServices`](crate::tool::service::EngineServices) bundle.
+    ///
+    /// Only transport/session/profile concerns (`api_key`, `profile`,
+    /// session manager, rate limiting) remain adapter-owned. Authorization,
+    /// catalog, and execution come from `services`.
+    pub fn with_services(
+        registry: ToolRegistry,
+        api_key: Option<String>,
+        profile: McpProfile,
+        services: crate::tool::service::EngineServices,
+    ) -> Self {
         let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
 
@@ -106,7 +128,7 @@ impl McpServer {
             shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             profile,
             policy: mcp_policy,
-            enforcement,
+            services,
         };
 
         server.start_hashmap_reaper(60);
@@ -114,16 +136,31 @@ impl McpServer {
         server
     }
 
+    /// Borrow injected engine services (catalog/authorization/execution).
+    pub fn services(&self) -> &crate::tool::service::EngineServices {
+        &self.services
+    }
+
+    /// Narrow engine bridge for MCP handlers. See `mcp::bridge`.
+    pub fn bridge(&self) -> crate::tool::protocol::mcp::bridge::McpEngineBridge {
+        crate::tool::protocol::mcp::bridge::McpEngineBridge::new(self.services.clone())
+    }
+
     /// Patch the enforcement context after construction.
     ///
     /// This remains available for tests and transitional call sites, but
     /// production code should prefer the `with_enforcement` constructor to
     /// avoid "build default then patch" footguns.
+    ///
+    /// Rebuilds the injected services bundle so `services` stays
+    /// authoritative; the concrete `dispatcher` is preserved for history.
     pub fn with_enforcement_context(
         mut self,
         enforcement: crate::config::EnforcementContext,
     ) -> Self {
-        self.enforcement = enforcement;
+        let executor: std::sync::Arc<dyn crate::tool::service::CheckedExecutor> =
+            std::sync::Arc::new(self.dispatcher.clone());
+        self.services = crate::tool::service::EngineServices::with_executor(executor, enforcement);
         self
     }
 
@@ -149,6 +186,14 @@ impl McpServer {
 
     pub fn with_history(self, history: ExecutionHistory) -> Self {
         let dispatcher = self.dispatcher.with_history(history);
+        // Keep the injected services consistent: rebuild the checked executor
+        // from the history-aware dispatcher so execution and history agree.
+        let executor: std::sync::Arc<dyn crate::tool::service::CheckedExecutor> =
+            std::sync::Arc::new(dispatcher.clone());
+        let services = crate::tool::service::EngineServices::with_executor(
+            executor,
+            self.services.enforcement().clone(),
+        );
         Self {
             registry: self.registry,
             dispatcher,
@@ -163,7 +208,7 @@ impl McpServer {
             shutdown_requested: self.shutdown_requested,
             profile: self.profile,
             policy: self.policy,
-            enforcement: self.enforcement,
+            services,
         }
     }
 
@@ -498,7 +543,7 @@ impl McpServer {
                 &tool_id,
                 capability.as_deref(),
                 &arguments,
-                &self.enforcement,
+                self.services.enforcement(),
             );
             return req.error_response(McpError {
                 code: violation.to_mcp_error_code(),
@@ -515,7 +560,7 @@ impl McpServer {
                     &tool_id,
                     capability.as_deref(),
                     &arguments,
-                    &self.enforcement,
+                    self.services.enforcement(),
                 );
                 return req.error_response(McpError {
                     code: violation.to_mcp_error_code(),
@@ -545,7 +590,7 @@ impl McpServer {
         };
 
         let approved = match self
-            .enforcement
+            .services
             .approve(ExecutionSurface::McpServer, descriptor.clone())
         {
             Ok(approved) => {
@@ -553,7 +598,7 @@ impl McpServer {
                 let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::McpServer,
-                    &self.enforcement,
+                    self.services.enforcement(),
                     approved.descriptor(),
                     &crate::config::EnforcementOutcome::Allow(approved.decision().clone()),
                     false, // confirmed: MCP never confirms
@@ -594,7 +639,7 @@ impl McpServer {
                 };
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::McpServer,
-                    &self.enforcement,
+                    self.services.enforcement(),
                     &descriptor,
                     &outcome,
                     false,
@@ -647,7 +692,7 @@ impl McpServer {
             .with_params(request_args)
             .with_options(options);
 
-        match self.dispatcher.dispatch_checked(&approved, request).await {
+        match self.services.dispatch_checked(&approved, request).await {
             Ok(response) => {
                 let content = if self.profile.is_coding_agent() {
                     let output = self.build_coding_agent_output(&target_value, &response);
@@ -712,7 +757,7 @@ impl McpServer {
 
         let result = crate::config::preflight_operation(
             crate::config::ExecutionSurface::McpServer,
-            &self.enforcement,
+            self.services.enforcement(),
             descriptor,
             None,
         );

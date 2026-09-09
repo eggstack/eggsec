@@ -633,3 +633,7 @@ Coding agents should:
 - [AGENTS.md](../AGENTS.md) - Developer documentation for the codebase
 - [SAFETY.md](SAFETY.md) - Risk tiers and authorization requirements
 - [scope.md](scope.md) - Scope model and enforcement details
+
+## Dependency Injection (Phase D, 2026-09-09)
+
+`Agent::with_engine_services(config, services, alert_router)` injects `agent::services::AgentExecutionService` (checked-only, `AgentStrict` by construction). `Agent::new` is the composition-root shim. Tests use fakes without building the default registry. The injected executor exposes no raw dispatch.

@@ -20,9 +20,9 @@ Tool abstraction layer workflows and patterns for security tool integration.
 - `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`)
 - `mcp/policy.rs` - MCP profile policy enforcement, `extract_hostname()` IPv6-aware parsing, `classify_tool_risk()`, `operation_descriptor_for_mcp_call`, `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`).
 - `mcp/coding_agent_output.rs` - Typed `CodingAgentFindingReport` struct for coding-agent output
-- `openai/` - OpenAI-compatible chat completions
-- `rest.rs` - REST API (scope validation implemented)
-- `grpc.rs` - gRPC service
+- `openai/` - OpenAI-compatible chat completions (`router_with_services`; checked dispatch, no DTO scope check)
+- `rest.rs` - REST API (`RestState::with_services`; approve/dispatch via `EngineServices`)
+- `grpc.rs` - gRPC service (`GrpcService::with_services`; approve/dispatch via `EngineServices`)
 
 ### MCP Enforcement Boundary
 
@@ -170,3 +170,7 @@ Follow existing test patterns in `tool/` modules, testing trait implementations,
 - `crates/eggsec/src/tool/AGENTS.override.md` - Detailed tool patterns
 - `AGENTS.md` - General project guidelines
 - `architecture/overview.md` - Overall design
+
+## Phase D Service Boundaries (2026-09-09)
+
+Adapters depend on `tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`, not on concrete `ToolRegistry`/`ToolDispatcher` construction. `CheckedExecutor` exposes only `dispatch_checked`; MCP uses `mcp::bridge::McpEngineBridge`. Only composition roots call `EngineServices::new`; adapters take it via `with_services`/`router_with_services`. Never call raw `.dispatch`, direct `tool.execute`, or `Scope::is_target_allowed` in `tool/protocol/`. Approval tokens come from `EnforcementContext::approve`, never `ApprovedOperation::new`.

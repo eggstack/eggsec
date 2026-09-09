@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::*;
 use super::AppState;
+use crate::config::ExecutionSurface;
 use crate::tool::request::Target;
 use crate::tool::request::ToolRequest;
 use crate::tool::response::ResponseSeverity;
@@ -36,10 +37,46 @@ pub async fn create_response(
     let mut output_items: Vec<OutputItem> = Vec::new();
     let mut findings: Vec<AiFinding> = Vec::new();
 
+    // Phase D WS3: all execution goes through shared enforcement + checked
+    // dispatch. No direct `tool.execute()` bypass. Denials fail closed for
+    // that tool (skipped with a warning); the wire format is preserved
+    // (message fallback when no findings survive enforcement).
     for tool_info in matched_tools.iter().take(5) {
-        if let Some(tool) = state.registry.get(&tool_info.id) {
+        let descriptor = match state.services.metadata_for_id(&tool_info.id) {
+            Some(metadata) => {
+                match metadata.try_descriptor_for_target(Some(target.value.as_str())) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::warn!(
+                            "OpenResponses policy denied {}: invalid target: {}",
+                            tool_info.name,
+                            e
+                        );
+                        continue;
+                    }
+                }
+            }
+            None => {
+                tracing::warn!(
+                    "OpenResponses policy denied {}: missing operation metadata",
+                    tool_info.name
+                );
+                continue;
+            }
+        };
+        let approved = match state
+            .services
+            .approve(ExecutionSurface::RestApi, descriptor)
+        {
+            Ok(approved) => approved,
+            Err(e) => {
+                tracing::warn!("OpenResponses policy denied {}: {}", tool_info.name, e);
+                continue;
+            }
+        };
+        {
             let request = ToolRequest::new(tool_info.id.clone(), target.clone());
-            match tool.execute(request).await {
+            match state.services.dispatch_checked(&approved, request).await {
                 Ok(response) => {
                     for finding in &response.findings {
                         findings.push(AiFinding {
