@@ -8,7 +8,9 @@
 //! - [`xss_dom`] - DOM XSS detection via source/sink tracing
 //! - [`spa_discovery`] - Single Page App route discovery
 //! - [`client_checks`] - Client-side security checks
+//! - [`backend`] - Managed session backend contract (Phase E WS1)
 
+pub mod backend;
 pub mod client_checks;
 pub mod corpus;
 pub mod spa_discovery;

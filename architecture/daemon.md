@@ -33,10 +33,10 @@ Architecture guards enforce:
 | Module | File | Contents |
 |--------|------|----------|
 | `lib` | `src/lib.rs` | Re-exports `client_registry` and `protocol` modules |
-| `protocol` | `src/protocol.rs` | `ClientCommand` (14 variants), `ServerMessage` (13 variants), `ErrorCode` (11 variants), `TransportKind` (4 variants), `DaemonCapabilities`, `TransportCapability`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` (= 1) |
+| `protocol` | `src/protocol.rs` | `ClientCommand` (15 variants), `ServerMessage` (14 variants), `ErrorCode` (11 variants), `TransportKind` (4 variants), `DaemonCapabilities`, `TransportCapability`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` (= 2; v2 adds `GetTaskResult`/`TaskResult`) |
 | `client_registry` | `src/client_registry.rs` | `ClientKind` (7 variants), `ClientRole` (4 variants), `CommandPermission` (6 variants), `ClientInfo`, `ClientAccessRule`, `SessionAccess`, `ClientRegistry`, `check_permission()`, `command_permission()` |
 
-#### ClientCommand — 14 variants (`protocol.rs:71-134`)
+#### ClientCommand — 15 variants (`protocol.rs:71-145`)
 
 | # | Variant | Fields | Permission |
 |---|---------|--------|-----------|
@@ -46,16 +46,17 @@ Architecture guards enforce:
 | 4 | `CreateSession` | `request_id`, `surface: RuntimeSurface`, `scope: Option<SessionScope>`, `labels: Vec<String>` | DeclaredClient |
 | 5 | `ListSessions` | `request_id` | DeclaredClient |
 | 6 | `GetSnapshot` | `request_id`, `session_id: SessionId` | Observer |
-| 7 | `SubmitTask` | `request_id`, `session_id: SessionId`, `request: RunRequest` | Controller |
-| 8 | `CancelTask` | `request_id`, `session_id: SessionId`, `task_id: TaskId` | Controller |
-| 9 | `CancelActive` | `request_id`, `session_id: SessionId` | Controller |
-| 10 | `Subscribe` | `request_id`, `session_id: SessionId` | Observer |
-| 11 | `CloseSession` | `request_id`, `session_id: SessionId` | Owner |
-| 12 | `ApprovePolicy` | `request_id`, `session_id: SessionId`, `task_id: TaskId`, `approved: bool`, `reason: Option<String>` | Approver |
-| 13 | `ListPersistedSessions` | `request_id` | DeclaredClient |
-| 14 | `GetPersistedSnapshot` | `request_id`, `session_id: SessionId` | DeclaredClient |
+| 7 | `GetTaskResult` | `request_id`, `session_id: SessionId`, `task_id: TaskId` | Observer |
+| 8 | `SubmitTask` | `request_id`, `session_id: SessionId`, `request: RunRequest` | Controller |
+| 9 | `CancelTask` | `request_id`, `session_id: SessionId`, `task_id: TaskId` | Controller |
+| 10 | `CancelActive` | `request_id`, `session_id: SessionId` | Controller |
+| 11 | `Subscribe` | `request_id`, `session_id: SessionId` | Observer |
+| 12 | `CloseSession` | `request_id`, `session_id: SessionId` | Owner |
+| 13 | `ApprovePolicy` | `request_id`, `session_id: SessionId`, `task_id: TaskId`, `approved: bool`, `reason: Option<String>` | Approver |
+| 14 | `ListPersistedSessions` | `request_id` | DeclaredClient |
+| 15 | `GetPersistedSnapshot` | `request_id`, `session_id: SessionId` | DeclaredClient |
 
-#### ServerMessage — 13 variants (`protocol.rs:196-252`)
+#### ServerMessage — 14 variants (`protocol.rs`)
 
 | # | Variant | Fields |
 |---|---------|--------|
@@ -65,13 +66,18 @@ Architecture guards enforce:
 | 4 | `SessionCreated` | `request_id`, `session_id: SessionId` |
 | 5 | `Sessions` | `request_id`, `sessions: Vec<SessionSummary>` |
 | 6 | `Snapshot` | `request_id`, `snapshot: SessionSnapshot` |
-| 7 | `TaskSubmitted` | `request_id`, `task_id: TaskId` |
-| 8 | `Capabilities` | `request_id`, `capabilities: DaemonCapabilities` |
-| 9 | `Health` | `request_id`, `status: String`, `version: String`, `protocol_version: u32` |
-| 10 | `RuntimeEvent` | `session_id: SessionId`, `event: RuntimeEvent` |
-| 11 | `SessionClosed` | `request_id` |
-| 12 | `PersistedSessions` | `request_id`, `sessions: Vec<SessionSummary>` |
-| 13 | `PersistedSnapshot` | `request_id`, `snapshot: Option<SessionSnapshot>` |
+| 7 | `TaskResult` | `request_id`, `session_id: SessionId`, `task_id: TaskId`, `status: TaskStatus`, `outcome: Option<TaskOutcome>` |
+| 8 | `TaskSubmitted` | `request_id`, `task_id: TaskId` |
+| 9 | `Capabilities` | `request_id`, `capabilities: DaemonCapabilities` |
+| 10 | `Health` | `request_id`, `status: String`, `version: String`, `protocol_version: u32` |
+| 11 | `RuntimeEvent` | `session_id: SessionId`, `event: RuntimeEvent` |
+| 12 | `SessionClosed` | `request_id` |
+| 13 | `PersistedSessions` | `request_id`, `sessions: Vec<SessionSummary>` |
+| 14 | `PersistedSnapshot` | `request_id`, `snapshot: Option<SessionSnapshot>` |
+
+`TaskResult` (Phase E WS5) is durable single-task retrieval: live snapshot
+first, persisted snapshot fallback, `None` outcome while active. See
+[docs/DAEMON_PARITY.md](../docs/DAEMON_PARITY.md) for reconnect semantics.
 
 #### ErrorCode — 11 variants (`protocol.rs:51-66`)
 
@@ -101,7 +107,7 @@ Architecture guards enforce:
 
 `Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`
 
-### eggsec-daemon (11 source files)
+### eggsec-daemon (10 top-level source files + store/)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -116,8 +122,7 @@ Architecture guards enforce:
 | `error` | `src/error.rs` | `DaemonError`: Io, Serialization, Protocol, Runtime |
 | `store/mod` | `src/store/mod.rs` | `DaemonStore` trait, `PersistedAuditEvent`, `noop_store()` |
 | `store/sqlite` | `src/store/sqlite.rs` | `SqliteStore` (WAL, foreign keys, schema version 2), `NoopStore` |
-| `protocol` | `src/protocol.rs` | Re-exports from daemon-protocol (backward compat) |
-| `client_registry` | `src/client_registry.rs` | Re-exports from daemon-protocol (backward compat) |
+| `client_registry` | `src/client_registry.rs` | Daemon-local RBAC mirror (`ClientKind`, `ClientRole`, `CommandPermission`, `SessionAccess`, `command_permission()`); `host.rs` authorizes against this copy, the TUI against the protocol-crate copy — keep the two `command_permission()` maps in sync when adding commands |
 | `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum routes, SSE streaming, auth header, bind validation |
 
 ## Behavior & Flows
@@ -169,6 +174,7 @@ Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSe
 | `/sessions` | POST | `CreateSession` |
 | `/sessions/{id}/snapshot` | GET | `GetSnapshot` |
 | `/sessions/{id}/tasks` | POST | `SubmitTask` |
+| `/sessions/{id}/tasks/{tid}` | GET | `GetTaskResult` |
 | `/sessions/{id}/tasks/{tid}/cancel` | POST | `CancelTask` |
 | `/sessions/{id}/cancel-active` | POST | `CancelActive` |
 | `/sessions/{id}/events` | GET | Subscribe (SSE) |
@@ -190,7 +196,7 @@ Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSe
 |---------|:------:|:--------------:|:--------:|:----------:|:-----:|:--------:|
 | `Health`, `Capabilities` | ✓ | — | — | — | — | — |
 | `DeclareClient`, `CreateSession`, `ListSessions`, `ListPersistedSessions`, `GetPersistedSnapshot` | — | ✓ | — | — | — | — |
-| `GetSnapshot`, `Subscribe` | — | — | ✓ | ✓ | ✓ | ✓ |
+| `GetSnapshot`, `GetTaskResult`, `Subscribe` | — | — | ✓ | ✓ | ✓ | ✓ |
 | `SubmitTask`, `CancelTask`, `CancelActive` | — | — | ✗ | ✓ | ✓ | ✗ |
 | `CloseSession` | — | — | ✗ | ✓ | ✓ | ✗ |
 | `ApprovePolicy` (manual surface) | — | — | ✗ | ✓ | ✓ | ✓ |

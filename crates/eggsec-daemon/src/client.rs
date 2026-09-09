@@ -109,6 +109,25 @@ impl DaemonClient {
         .await
     }
 
+    /// Fetch a single task's current status and completed outcome.
+    ///
+    /// Durable result retrieval (Phase E WS5): reads live runtime state
+    /// first and falls back to the persisted snapshot, so reconnecting
+    /// clients can retrieve a completed result without relying on transient
+    /// event delivery.
+    pub async fn get_task_result(
+        &mut self,
+        session_id: eggsec_runtime::SessionId,
+        task_id: eggsec_runtime::TaskId,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::GetTaskResult {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            session_id,
+            task_id,
+        })
+        .await
+    }
+
     /// Submit a task to a session.
     pub async fn submit_task(
         &mut self,
@@ -332,6 +351,99 @@ mod tests {
     async fn client_connect_failure() {
         let result = DaemonClient::connect("/tmp/nonexistent-daemon.sock").await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn client_get_task_result_unknown_task() {
+        let (socket_path, shutdown) = start_server().await;
+        let mut client = DaemonClient::connect(&socket_path).await.unwrap();
+        // Declare client first so subsequent commands have a client_id.
+        let _decl = client
+            .declare_client(
+                crate::client_registry::ClientKind::Cli,
+                Some("test-cli".into()),
+            )
+            .await
+            .unwrap();
+        let session_id = match client
+            .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
+            .await
+            .unwrap()
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+        let resp = client
+            .get_task_result(session_id, eggsec_runtime::TaskId::new())
+            .await
+            .unwrap();
+        match resp {
+            ServerMessage::Error { code, .. } => {
+                assert_eq!(code, crate::protocol::ErrorCode::TaskNotFound);
+            }
+            other => panic!("expected TaskNotFound error, got {:?}", other),
+        }
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn client_get_task_result_completed_task() {
+        let (socket_path, shutdown) = start_server().await;
+        let mut client = DaemonClient::connect(&socket_path).await.unwrap();
+        let _decl = client
+            .declare_client(
+                crate::client_registry::ClientKind::Cli,
+                Some("test-cli".into()),
+            )
+            .await
+            .unwrap();
+        let session_id = match client
+            .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
+            .await
+            .unwrap()
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+        let request = eggsec_runtime::RunRequest {
+            task_kind: eggsec_runtime::TaskKind::PortScan(
+                eggsec_runtime::request::PortScanParams {
+                    target: "10.0.0.1".into(),
+                    ports: None,
+                    scan_type: None,
+                    timeout_ms: None,
+                    concurrency: None,
+                },
+            ),
+            requested_by: None,
+            surface: eggsec_runtime::RuntimeSurface::CliManual,
+            labels: vec![],
+        };
+        let task_id = match client.submit_task(session_id, request).await.unwrap() {
+            ServerMessage::TaskSubmitted { task_id, .. } => task_id,
+            other => panic!("expected TaskSubmitted, got {:?}", other),
+        };
+        // Poll until the test executor completes the task.
+        let mut outcome = None;
+        for _ in 0..100 {
+            match client.get_task_result(session_id, task_id).await.unwrap() {
+                ServerMessage::TaskResult {
+                    status, outcome: o, ..
+                } => {
+                    if status == eggsec_runtime::TaskStatus::Completed {
+                        outcome = o;
+                        break;
+                    }
+                }
+                other => panic!("expected TaskResult, got {:?}", other),
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        match outcome {
+            Some(TaskOutcome::Text(text)) => assert_eq!(text, "test-result"),
+            other => panic!("expected completed Text outcome, got {:?}", other),
+        }
+        shutdown.cancel();
     }
 
     #[tokio::test]

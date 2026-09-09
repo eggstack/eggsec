@@ -107,7 +107,7 @@ use crate::cli::ReconArgs;
 use crate::config::EggsecConfig;
 #[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::error::Result;
-#[cfg(feature = "cli")]
+#[cfg(any(feature = "tool-api", feature = "cli"))]
 use parking_lot::Mutex;
 #[cfg(feature = "tool-api")]
 use rustc_hash::FxHashMap;

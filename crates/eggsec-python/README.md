@@ -1050,7 +1050,7 @@ Wire compatibility alone is not the stable contract: request/result parity,
 reconnect and replay behavior, cancellation, checkpoint portability, and
 event ordering still require a dedicated follow-up gate.
 
-**Wire format:** JSON lines over Unix socket. Protocol version: `DAEMON_PROTOCOL_VERSION = 1`.
+**Wire format:** JSON lines over Unix socket. Protocol version: `DAEMON_PROTOCOL_VERSION = 2` (v2 adds durable `GetTaskResult` / `TaskResult`; see `docs/DAEMON_PARITY.md`).
 
 **Task kinds** use `eggsec_runtime::TaskKind` serde format: `{"kind": "PortScan", "params": {"target": "10.0.0.1"}}`.
 

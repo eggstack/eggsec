@@ -321,8 +321,14 @@ impl ProxyConfigPy {
 // ---------------------------------------------------------------------------
 
 /// A single proxy entry in the pool.
+///
+/// The `password` field carries secret material for upstream proxy auth.
+/// It is accepted at construction and passed to the engine via `to_engine()`,
+/// but every Python-visible readout — the `password` getter, `to_dict()`,
+/// `to_json()`, and `__repr__` — emits `[REDACTED]` instead of the secret,
+/// mirroring `DbProbeRequest`. Secrets go in, never out.
 #[pyclass(frozen)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProxyEntryPy {
     pub(crate) name: Option<String>,
     #[pyo3(get)]
@@ -342,6 +348,24 @@ pub struct ProxyEntryPy {
     #[pyo3(get)]
     pub enabled: bool,
     pub(crate) tags: Vec<String>,
+}
+
+impl std::fmt::Debug for ProxyEntryPy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProxyEntryPy")
+            .field("name", &self.name)
+            .field("proxy_type", &self.proxy_type)
+            .field("address", &self.address)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .field("weight", &self.weight)
+            .field("priority", &self.priority)
+            .field("timeout_ms", &self.timeout_ms)
+            .field("enabled", &self.enabled)
+            .field("tags", &self.tags)
+            .finish()
+    }
 }
 
 #[pymethods]
@@ -388,7 +412,7 @@ impl ProxyEntryPy {
 
     #[getter]
     fn password(&self) -> Option<String> {
-        self.password.clone()
+        self.password.as_ref().map(|_| "[REDACTED]".to_string())
     }
 
     #[getter]
@@ -403,7 +427,8 @@ impl ProxyEntryPy {
         dict.set_item("address", &self.address)?;
         dict.set_item("port", self.port)?;
         dict.set_item("username", &self.username)?;
-        dict.set_item("password", &self.password)?;
+        // Never emit the raw credential into dicts (logs/reports/checkpoints).
+        dict.set_item("password", &self.password.as_ref().map(|_| "[REDACTED]"))?;
         dict.set_item("weight", self.weight)?;
         dict.set_item("priority", self.priority)?;
         dict.set_item("timeout_ms", self.timeout_ms)?;
@@ -413,8 +438,23 @@ impl ProxyEntryPy {
     }
 
     fn to_json(&self) -> PyResult<String> {
-        let engine_entry = self.to_engine();
-        serde_json::to_string(&engine_entry)
+        // Manual JSON with redaction: the engine entry serializes
+        // SensitiveString in plaintext (config-file compatibility), which
+        // must never reach Python-visible JSON output.
+        let value = serde_json::json!({
+            "name": self.name,
+            "proxy_type": self.proxy_type.as_str(),
+            "address": self.address,
+            "port": self.port,
+            "username": self.username,
+            "password": self.password.as_ref().map(|_| "[REDACTED]"),
+            "weight": self.weight,
+            "priority": self.priority,
+            "timeout_ms": self.timeout_ms,
+            "enabled": self.enabled,
+            "tags": self.tags,
+        });
+        serde_json::to_string(&value)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
@@ -1068,7 +1108,15 @@ impl CapturedExchangePy {
 
 /// Result of an interception proxy session.
 ///
-/// Contains all captured exchanges and session statistics.
+/// Contains session statistics and, when the producing API captured them,
+/// the intercepted exchanges. NOTE (Phase E WS7): `run_intercept_session()`
+/// binds a real listener in the requested mode for the configured duration,
+/// but per-exchange capture into `exchanges` is not yet wired through that
+/// binding — its results carry session metadata with empty `exchanges`.
+/// An empty `exchanges` list therefore means "no exchanges were captured by
+/// this binding", never "no traffic occurred". Use the engine
+/// `WebProxySessionReport` APIs for exchange-level capture until the binding
+/// is wired to the live flow sink.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterceptSessionResultPy {
@@ -1269,14 +1317,22 @@ impl InterceptStatsPy {
 
 /// Run an interception proxy session synchronously.
 ///
-/// Creates a proxy listener, captures traffic for the configured duration,
-/// and returns the session result with all captured exchanges.
+/// Creates a proxy listener in the requested mode (`Monitor` unless the
+/// config enables request/response modification), serves for the configured
+/// duration, and returns session metadata.
+///
+/// NOTE (Phase E WS7): per-exchange capture into the returned `exchanges`
+/// list is not yet wired through this binding — the result carries the
+/// listen address, duration, and zeroed counters with empty `exchanges`.
+/// Bind failures and listener errors raise `ScanError`; an empty `exchanges`
+/// list is a documented binding limitation, not evidence of no traffic.
+/// For exchange-level data use the engine `WebProxySessionReport` APIs.
 ///
 /// Args:
 ///     config: Intercept configuration (listen address, port, SSL settings, etc.).
 ///
 /// Returns:
-///     InterceptSessionResultPy: The session result containing captured exchanges.
+///     InterceptSessionResultPy: The session metadata (see limitation note).
 ///
 /// Raises:
 ///     ScanError: If the session fails to start or encounters an error.
@@ -1326,13 +1382,13 @@ pub fn run_intercept_session(
 
 /// Run an interception proxy session asynchronously.
 ///
-/// Returns a PyFuture that resolves to an InterceptSessionResultPy.
-///
-/// Args:
-///     config: Intercept configuration.
+/// Binds a real listener for the configured duration and returns session
+/// metadata. Same capture limitation as [`run_intercept_session`]:
+/// per-exchange capture into `exchanges` is not yet wired, so results carry
+/// empty `exchanges` with zeroed counters.
 ///
 /// Returns:
-///     PyFuture: Resolves to InterceptSessionResultPy.
+///     PyFuture: Resolves to InterceptSessionResultPy (see limitation note).
 #[pyfunction]
 pub fn async_run_intercept_session(config: InterceptConfigPy) -> PyResult<runtime_async::PyFuture> {
     runtime_async::spawn_async(async move {

@@ -145,6 +145,7 @@ The `eggsec-daemon` crate provides optional durable session state backed by SQLi
 eggsec daemon start
 eggsec daemon history
 eggsec daemon show <session-id>
+eggsec task result <session-id> <task-id>   # durable result retrieval (survives reconnect/restart)
 ```
 
 ## Agent and Orchestration

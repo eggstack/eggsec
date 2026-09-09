@@ -33,6 +33,7 @@ try:
         async_daemon_create_session,
         async_daemon_list_sessions,
         async_daemon_get_snapshot,
+        async_daemon_get_task_result,
         async_daemon_close_session,
         async_daemon_submit_task,
         async_daemon_cancel_task,

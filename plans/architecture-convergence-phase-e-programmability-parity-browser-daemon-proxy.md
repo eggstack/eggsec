@@ -2,7 +2,9 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09). No domain promoted; all three areas stay
+provisional with documented rationale (see `docs/python/domain-maturity.md`
+"Architecture Convergence Phase E" section).
 
 ## Objective
 
@@ -227,4 +229,48 @@ Do not automatically mark browser/daemon/proxy stable. Promotion requires:
 
 ## Completion record
 
-Record baseline/final SHA, backend selected, daemon protocol version changes if any, parity matrix result, maturity promotions (if justified), skips/blockers, and verification commands.
+- Baseline SHA: `8dd20331` (Phase D head). Final SHA: recorded in the
+  follow-up "record Phase E completion SHA" commit.
+- Backend selected: `headless_chrome` (`headless-browser` Cargo feature).
+  New engine contract `crates/eggsec/src/browser/backend.rs`
+  (`BrowserBackendKind`, `BrowserBackendCapabilities`,
+  `BrowserBackend` trait, `capabilities_for_current_build()`,
+  `validate_browser_url()`); Python capabilities derive from the compiled
+  backend via `BrowserCapabilities::current()` /
+  `browser_backend_name()` / `browser_backend_available()`.
+- Daemon protocol: v1 → v2 (additive `GetTaskResult` / `TaskResult`;
+  `Observer` permission; Unix socket + HTTP
+  `GET /sessions/{id}/tasks/{task_id}` + CLI `eggsec task result` +
+  Python `async_daemon_get_task_result()` on the canonical `TaskOutcome`
+  schema). Parity matrix: `docs/DAEMON_PARITY.md`. Removed dead duplicate
+  `crates/eggsec-daemon/src/protocol.rs` (wire types live only in
+  `eggsec-daemon-protocol`).
+- Proxy: `FlowBuffer::flows()` returns a real ordered slice (in-place
+  `make_contiguous`); MCP `proxy-start` fails explicitly for live mode and
+  serves labeled synthetic fixtures in dry-run only;
+  `proxy-export-session` builds a real `WebProxySessionReport`;
+  `ProxyEntry`/`ProxyRoutePy` passwords follow the `DbProbeRequest`
+  `[REDACTED]` pattern in every readout; `run_intercept_session()` runs a
+  real timed listener with a documented per-exchange capture limitation.
+- Maturity promotions: none (browser/daemon/proxy stay provisional;
+  per-area remaining gaps recorded in `docs/python/domain-maturity.md`).
+- Drive-by corrections required to verify: stale `host_auth.rs` RBAC tests
+  updated to the current `SessionAccess`/`ClientRole` API (pre-existing
+  `--lib` compile failure on main); `tool-api`-without-`cli` feature combo
+  fixed (`parking_lot::Mutex` import gate in `recon/mod.rs` — the combo
+  never compiled); nested `block_on` in `engine.rs::run_nse_inner` fixed
+  (all full-feature `nse_run` contract tests panicked); stale
+  `async_daemon_subscribe` test call fixed with a session id.
+- Skips/blockers: live CONNECT/WebSocket/HTTP-2 flow capture into reports
+  and binding-level exchange capture remain open (proxy); managed
+  `BrowserSession` has no bound tab driver (browser); event replay stays
+  state-based by design, no event log (daemon). Full-feature local profile
+  (`nse,web-proxy,db-pentest,mobile,headless-browser,daemon-client`) is
+  green except pre-existing skips (no Chrome binary, no emulator, daemon
+  tests needing extra fixtures); routine CI uses the default-feature build.
+- Verification: `make check` (exit 0), `make check-python` (exit 0),
+  `cargo test -p eggsec-daemon` (74 passed), `cargo test
+  -p eggsec-daemon-protocol` (72 passed), `cargo test -p eggsec-web-proxy`
+  (426 passed), full-feature pytest for browser/proxy/network/daemon areas
+  (753 passed; 2 new `GetTaskResult` socket tests green against a spawned
+  daemon binary).

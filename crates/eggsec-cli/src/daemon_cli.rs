@@ -412,6 +412,41 @@ async fn handle_task(args: &eggsec::cli::TaskArgs, socket_path: &str, json: bool
                 other => bail!("unexpected response: {:?}", other),
             }
         }
+        eggsec::cli::TaskSubcommand::Result {
+            session_id,
+            task_id,
+        } => {
+            let sid: eggsec_runtime::SessionId = session_id.parse()?;
+            let tid: eggsec_runtime::TaskId = task_id.parse()?;
+            let resp = client.get_task_result(sid, tid).await?;
+            match resp {
+                ServerMessage::TaskResult {
+                    status, outcome, ..
+                } => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "session_id": session_id,
+                                "task_id": task_id,
+                                "status": status,
+                                "outcome": outcome,
+                            }))?
+                        );
+                    } else {
+                        println!("Task {} in session {}: {:?}", task_id, session_id, status);
+                        match outcome {
+                            Some(o) => println!("Outcome: {}", serde_json::to_string_pretty(&o)?),
+                            None => println!("Outcome: pending (task not yet complete)"),
+                        }
+                    }
+                }
+                ServerMessage::Error { code, message, .. } => {
+                    bail!("Daemon error ({:?}): {}", code, message);
+                }
+                other => bail!("unexpected response: {:?}", other),
+            }
+        }
         eggsec::cli::TaskSubcommand::Watch { session_id } => {
             let sid: eggsec_runtime::SessionId = session_id.parse()?;
             let mut receiver = client.subscribe(sid).await?;

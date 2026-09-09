@@ -179,6 +179,76 @@ class TestDaemonSessionCRUD:
             loop.close()
 
 
+class TestDaemonGetTaskResult:
+    """Durable single-task retrieval (Phase E WS5).
+
+    `GetTaskResult` reads live state first and the persisted snapshot
+    second, so unknown tasks fail closed with TaskNotFound and completed
+    tasks stay retrievable without event replay.
+    """
+
+    def test_unknown_task_returns_task_not_found(self, daemon_socket):
+        import asyncio
+        import uuid
+
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_declare_client = _import_or_skip("async_daemon_declare_client")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
+        async_daemon_get_task_result = _import_or_skip("async_daemon_get_task_result")
+
+        client = daemon_connect(daemon_socket)
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(async_daemon_declare_client(client))
+            created = loop.run_until_complete(
+                async_daemon_create_session(client, surface="cli_manual")
+            )
+            # create_session resolves to a response envelope carrying
+            # "session_id=<uuid>" in its message field.
+            session_id = created.message.split("session_id=", 1)[1].strip()
+            assert len(session_id) > 0
+
+            resp = loop.run_until_complete(
+                async_daemon_get_task_result(
+                    client,
+                    session_id=session_id,
+                    task_id=str(uuid.uuid4()),
+                )
+            )
+            assert resp is not None
+            assert resp.ok is False
+            assert resp.error_code == "TaskNotFound"
+        finally:
+            loop.close()
+
+    def test_unknown_session_returns_session_not_found(self, daemon_socket):
+        import asyncio
+        import uuid
+
+        daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_declare_client = _import_or_skip("async_daemon_declare_client")
+        async_daemon_get_task_result = _import_or_skip("async_daemon_get_task_result")
+
+        client = daemon_connect(daemon_socket)
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(async_daemon_declare_client(client))
+            resp = loop.run_until_complete(
+                async_daemon_get_task_result(
+                    client,
+                    session_id=str(uuid.uuid4()),
+                    task_id=str(uuid.uuid4()),
+                )
+            )
+            assert resp is not None
+            assert resp.ok is False
+            # Live snapshot miss falls back to the store, which has no such
+            # session: SessionNotFound either way.
+            assert resp.error_code == "SessionNotFound"
+        finally:
+            loop.close()
+
+
 class TestDaemonProtocol:
     def test_protocol_version_construction(self):
         DPV = _import_or_skip("DaemonProtocolVersion")
@@ -871,16 +941,24 @@ class TestDaemonSubscribe:
     def test_subscribe_returns_client(self, daemon_socket):
         """Subscribe creates an event stream client."""
         daemon_connect = _import_or_skip("daemon_connect")
+        async_daemon_declare_client = _import_or_skip("async_daemon_declare_client")
+        async_daemon_create_session = _import_or_skip("async_daemon_create_session")
         async_daemon_subscribe = _import_or_skip("async_daemon_subscribe")
 
         client = daemon_connect(daemon_socket)
         import asyncio
         loop = asyncio.new_event_loop()
         try:
+            loop.run_until_complete(async_daemon_declare_client(client))
+            created = loop.run_until_complete(
+                async_daemon_create_session(client, surface="cli_manual")
+            )
+            session_id = created.message.split("session_id=", 1)[1].strip()
             subscriber = loop.run_until_complete(
-                async_daemon_subscribe(client)
+                async_daemon_subscribe(client, session_id=session_id)
             )
             assert subscriber is not None
+            assert subscriber.ok is True
         finally:
             loop.close()
 

@@ -486,6 +486,17 @@ impl ProxyTool {
         state.dry_run = dry_run;
         state.flows.clear();
 
+        // Phase E WS7: live proxy serving is not implemented on this tool
+        // path. Dry-run mode returns clearly-labeled synthetic fixture flows
+        // for workflow testing; live mode fails explicitly instead of
+        // returning synthetic data as if traffic had been intercepted.
+        if !dry_run {
+            state.running = false;
+            return Err(EggsecError::Proxy(
+                "live proxy serving is not supported by this tool action: re-run with dry_run=true for labeled synthetic fixture flows, or drive capture through the engine WebProxySessionReport APIs".to_string(),
+            ));
+        }
+
         let now = Utc::now();
         let synthetic_flows: Vec<ProxyFlow> = (0..3)
             .map(|i| ProxyFlow {
@@ -749,17 +760,28 @@ impl ProxyTool {
             .and_then(|v| v.as_str())
             .unwrap_or("json");
 
-        let _report = WebProxySessionReport::new(&state.listen_addr, state.dry_run);
+        // Build a real session report from captured state so counters
+        // (https_intercepted/http_logged/redacted) reflect the flows instead
+        // of being hand-assembled and silently zero.
+        let mut report = WebProxySessionReport::new(&state.listen_addr, state.dry_run);
+        for flow in state.flows.iter().cloned() {
+            report.add_flow(flow);
+        }
+        report.finalize();
 
         match export_format {
             "json" => Ok(serde_json::json!({
                 "format": "json",
                 "session": {
-                    "listen_addr": state.listen_addr,
-                    "dry_run": state.dry_run,
-                    "flows_count": state.flows.len(),
+                    "listen_addr": report.listen_addr,
+                    "dry_run": report.dry_run,
+                    "flows_count": report.flows.len(),
+                    "https_intercepted": report.https_intercepted,
+                    "http_logged": report.http_logged,
+                    "redacted": report.redacted,
+                    "duration_ms": report.duration_ms,
                     "rules_count": state.rules.len(),
-                    "flows": state.flows,
+                    "flows": report.flows,
                     "rules": state.rules
                 }
             })),

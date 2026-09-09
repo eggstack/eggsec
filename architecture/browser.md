@@ -33,6 +33,7 @@ When `headless-browser` is disabled, `run_browser_scan()` returns `EggsecError::
 | File | Lines | Description |
 |------|-------|-------------|
 | `browser/mod.rs` | 237 | `BrowserConfig`, `BrowserReport`, `run_browser_scan()` entry point, XHR/Fetch interceptor injection, `capture_requests()` |
+| `browser/backend.rs` | ~200 | Phase E WS1/WS3: `BrowserBackendKind`, `BrowserBackendCapabilities`, `BrowserBackend` trait, `capabilities_for_current_build()`, `validate_browser_url()` URL policy gate |
 | `browser/xss_dom.rs` | 323 | `DomXssFinding`, `XssSource` (8 variants), `XssSink` (10 variants), `scan_dom_xss()`, `calculate_severity()`, `get_remediation()` |
 | `browser/spa_discovery.rs` | 259 | `SpaRoute`, `DiscoveryMethod` (4 variants), `discover_routes()`, `extract_parameters()` |
 | `browser/client_checks.rs` | 346 | `ClientIssue`, `ClientIssueType` (6 variants), `check_client_security()`, `get_remediation()` |
@@ -110,6 +111,20 @@ The `headless_chrome` crate (v1) wraps the Chrome DevTools Protocol. It requires
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `run_browser_scan` | `pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<BrowserReport>` | Main entry point (real impl gated; stub returns error) |
+| `capabilities_for_current_build` | `pub fn capabilities_for_current_build() -> BrowserBackendCapabilities` | Truthful backend capabilities for managed sessions (Phase E WS1) |
+| `validate_browser_url` | `pub fn validate_browser_url(url: &str) -> Result<()>` | Managed-session URL policy gate: http/https only, host required, no userinfo (Phase E WS3) |
+
+## Managed Sessions (Phase E, `eggsec-python`)
+
+The Python `BrowserSession`/`AsyncBrowserSession` classes are provisional and
+truthful: `BrowserCapabilities::current()`, `browser_backend_name()`, and
+`browser_backend_available()` derive from the compiled backend, and every
+live-backend operation fails with an explicit structured error until a tab
+driver is bound — no synthetic navigation events, empty DOM snapshots, or
+unresolvable screenshot artifact references. `validate_browser_url()`
+enforces the navigation policy before any backend call; redirect targets must
+be re-validated. Cookie values are masked in repr with a `redacted()` helper
+for persistence. `browser_test()` remains the real assessment path.
 
 `BrowserConfig` and `BrowserReport` are public types. Submodule types (`DomXssFinding`, `SpaRoute`, `ClientIssue`, `RequestCorpus`, etc.) are all public.
 

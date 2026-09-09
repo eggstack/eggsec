@@ -150,8 +150,20 @@ class TestProxyEntry:
             name="my-proxy", username="user", password="pass",
         )
         assert entry.username == "user"
-        assert entry.password == "pass"
+        # Secrets go in, never out: the getter redacts like DbProbeRequest.
+        assert entry.password == "[REDACTED]"
         assert entry.name == "my-proxy"
+
+    def test_password_redacted_in_dict_and_json(self):
+        import json as _json
+        entry = ProxyEntry(
+            ProxyType.Http, "127.0.0.1", 8080,
+            username="admin", password="secret",
+        )
+        d = entry.to_dict()
+        assert d["password"] == "[REDACTED]"
+        assert "secret" not in entry.to_json()
+        assert _json.loads(entry.to_json())["password"] == "[REDACTED]"
 
     def test_to_dict(self):
         entry = ProxyEntry(ProxyType.Http, "127.0.0.1", 8080)

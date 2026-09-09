@@ -69,13 +69,13 @@ pub fn may_observe_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client_registry::{AllowedClient, ClientKind};
+    use crate::client_registry::{ClientAccessRule, ClientKind};
 
     fn owner_access(owner: eggsec_runtime::ClientId) -> SessionAccess {
         SessionAccess {
             owner_client_id: Some(owner),
-            owner_client_kind: Some(ClientKind::Cli),
-            allowed_clients: Vec::new(),
+            owner_client_kind: ClientKind::Cli,
+            ..Default::default()
         }
     }
 
@@ -109,25 +109,26 @@ mod tests {
     #[test]
     fn allowed_client_keeps_explicit_role() {
         let owner = eggsec_runtime::ClientId::new();
-        let viewer = eggsec_runtime::ClientId::new();
+        let observer = eggsec_runtime::ClientId::new();
         let session = SessionId::new();
         let mut access = HashMap::new();
         access.insert(
             session,
             SessionAccess {
                 owner_client_id: Some(owner),
-                owner_client_kind: Some(ClientKind::Cli),
-                allowed_clients: vec![AllowedClient {
-                    client_id: viewer,
-                    role: ClientRole::Viewer,
+                owner_client_kind: ClientKind::Cli,
+                allowed_clients: vec![ClientAccessRule {
+                    client_id: observer,
+                    role: ClientRole::Observer,
                 }],
+                ..Default::default()
             },
         );
         assert!(matches!(
-            role_for_session(&access, &viewer, &session),
-            ClientRole::Viewer
+            role_for_session(&access, &observer, &session),
+            ClientRole::Observer
         ));
-        assert!(may_observe_session(&access, Some(viewer), &session));
+        assert!(may_observe_session(&access, Some(observer), &session));
     }
 
     #[test]

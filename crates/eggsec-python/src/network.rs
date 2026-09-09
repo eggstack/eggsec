@@ -1008,8 +1008,14 @@ impl NetworkEvidencePy {
 // ---------------------------------------------------------------------------
 
 /// A proxy route configuration for routing network traffic through a proxy.
+///
+/// The `password` field carries secret material for upstream proxy auth.
+/// It is accepted at construction for operational use, but every
+/// Python-visible readout — the `password` getter, `to_dict()`, `to_json()`,
+/// `__repr__`, and Rust `Debug` — emits `[REDACTED]` instead of the secret,
+/// mirroring `DbProbeRequest`. Secrets go in, never out.
 #[pyclass(frozen)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ProxyRoutePy {
     #[pyo3(get)]
     pub proxy_type: String,
@@ -1019,10 +1025,22 @@ pub struct ProxyRoutePy {
     pub port: u16,
     #[pyo3(get)]
     pub username: Option<String>,
-    #[pyo3(get)]
-    pub password: Option<String>,
+    pub(crate) password: Option<String>,
     #[pyo3(get)]
     pub no_proxy: Vec<String>,
+}
+
+impl std::fmt::Debug for ProxyRoutePy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProxyRoutePy")
+            .field("proxy_type", &self.proxy_type)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .field("no_proxy", &self.no_proxy)
+            .finish()
+    }
 }
 
 #[pymethods]
@@ -1053,13 +1071,24 @@ impl ProxyRoutePy {
         dict.set_item("host", &self.host)?;
         dict.set_item("port", self.port)?;
         dict.set_item("username", &self.username)?;
-        dict.set_item("password", &self.password)?;
+        // Never emit the raw credential into dicts (logs/reports/checkpoints).
+        dict.set_item("password", &self.password.as_ref().map(|_| "[REDACTED]"))?;
         dict.set_item("no_proxy", &self.no_proxy)?;
         Ok(dict.into())
     }
 
     fn to_json(&self) -> PyResult<String> {
-        serde_json::to_string(self)
+        // Manual JSON with redaction: derived Serialize would emit the
+        // plaintext credential, which must never reach Python-visible output.
+        let value = serde_json::json!({
+            "proxy_type": self.proxy_type,
+            "host": self.host,
+            "port": self.port,
+            "username": self.username,
+            "password": self.password.as_ref().map(|_| "[REDACTED]"),
+            "no_proxy": self.no_proxy,
+        });
+        serde_json::to_string(&value)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
@@ -1068,6 +1097,13 @@ impl ProxyRoutePy {
             "ProxyRoutePy(type={}, host={}, port={}, user={:?})",
             self.proxy_type, self.host, self.port, self.username
         )
+    }
+
+    /// Redacted password readout: returns `[REDACTED]` when a password was
+    /// configured, `None` otherwise. The real credential is operational-only.
+    #[getter]
+    fn password(&self) -> Option<String> {
+        self.password.as_ref().map(|_| "[REDACTED]".to_string())
     }
 
     fn __str__(&self) -> String {

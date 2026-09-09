@@ -2896,7 +2896,12 @@ impl Engine {
                 script_args_owned.as_deref(),
                 false,
             );
-            crate::nse::run_nse_sync(config, None)
+            // Await the async NSE runner directly: the sync wrapper would
+            // nest a second block_on inside this one and panic at runtime.
+            crate::nse::run_nse_inner(config, None)
+                .await
+                .map(crate::nse::NseReportPy::from_engine)
+                .map_err(|e| crate::error::ScanError::new_err(format!("NSE execution failed: {e}")))
         });
 
         match result {

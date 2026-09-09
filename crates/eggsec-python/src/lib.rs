@@ -450,6 +450,13 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<browser_session::BrowserCookieInfo>()?;
         m.add_class::<browser_session::BrowserSession>()?;
         m.add_class::<browser_session::AsyncBrowserSession>()?;
+        // Phase E WS1/WS3: backend-derived capabilities + URL policy gate.
+        m.add_function(wrap_pyfunction!(browser_session::browser_backend_name, m)?)?;
+        m.add_function(wrap_pyfunction!(
+            browser_session::browser_backend_available,
+            m
+        )?)?;
+        m.add_function(wrap_pyfunction!(browser_session::validate_browser_url, m)?)?;
         // WS10: Browser event types
         m.add_class::<browser_events::BrowserDomEvent>()?;
         m.add_class::<browser_events::BrowserDownloadEvent>()?;
@@ -908,6 +915,7 @@ pub fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(daemon::async_daemon_create_session, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_list_sessions, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_get_snapshot, m)?)?;
+        m.add_function(wrap_pyfunction!(daemon::async_daemon_get_task_result, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_close_session, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_submit_task, m)?)?;
         m.add_function(wrap_pyfunction!(daemon::async_daemon_cancel_task, m)?)?;
@@ -1407,6 +1415,7 @@ fn api_surface() -> PyObject {
         add_entry!("async_daemon_create_session", "provisional");
         add_entry!("async_daemon_list_sessions", "provisional");
         add_entry!("async_daemon_get_snapshot", "provisional");
+        add_entry!("async_daemon_get_task_result", "provisional");
         add_entry!("async_daemon_close_session", "provisional");
         add_entry!("async_daemon_submit_task", "provisional");
         add_entry!("async_daemon_cancel_task", "provisional");
@@ -1760,6 +1769,10 @@ fn api_surface() -> PyObject {
         add_entry!("BrowserCookieInfo", "provisional");
         add_entry!("BrowserSession", "provisional");
         add_entry!("AsyncBrowserSession", "provisional");
+        // Phase E WS1/WS3: backend-derived capabilities + URL policy gate.
+        add_entry!("browser_backend_name", "provisional");
+        add_entry!("browser_backend_available", "provisional");
+        add_entry!("validate_browser_url", "provisional");
         // Release 4: Browser event types (WS10)
         add_entry!("BrowserDomEvent", "provisional");
         add_entry!("BrowserDownloadEvent", "provisional");

@@ -1,10 +1,11 @@
 """Real browser backend integration tests - Workstream 8.
 
-Tests exercise the browser session types against a real browser backend.
-When the browser binary is not available, the test FAILS (not skips).
-
-These tests prove the browser binding surface works end-to-end:
-construction, lifecycle, navigation, DOM inspection, cleanup.
+Tests exercise the browser binding surface against a real browser backend.
+`browser_test()` exercises the real `headless_chrome` engine end-to-end
+against a loopback fixture app; tests requiring a browser binary skip when
+none is installed. Managed `BrowserSession` types stay explicitly unbound
+(Phase E): `start()` fails with a structured error even when a binary is
+present, and `browser_test()` is asserted as the real assessment path.
 """
 
 import http.server
@@ -396,11 +397,20 @@ class TestBrowserDomTypes:
 
 
 class TestBrowserWithRealBackend:
-    """Test browser session with real browser (fails if browser not found)."""
+    """Managed sessions stay explicitly unbound (Phase E WS2).
+
+    Even with a browser binary present, `BrowserSession.start()` fails with
+    an explicit structured error until a live tab driver is bound into the
+    managed class: no synthetic Ready state is ever reported. `stop()`
+    remains idempotent. `browser_test()` is the real assessment path
+    (see TestBrowserRealPageInteraction below).
+    """
 
     @pytest.mark.timeout(30)
     def test_browser_session_start_stop_with_browser(self, browser_binary):
-        """BrowserSession starts and stops with real browser binary."""
+        """BrowserSession.start() fails explicitly; stop() is idempotent."""
+        import pytest as _pytest
+
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         BrowserSessionState = _import_or_skip("BrowserSessionState")
@@ -410,13 +420,9 @@ class TestBrowserWithRealBackend:
             headless=True,
         )
         session = BrowserSession(config)
-        session.start()
-        # Session should be in Ready or a valid state
-        assert session.state in (
-            BrowserSessionState.Ready,
-            BrowserSessionState.Launching,
-            BrowserSessionState.Failed,
-        )
+        with _pytest.raises(Exception, match="active browser engine"):
+            session.start()
+        assert session.state == BrowserSessionState.Created
         session.stop()
         assert session.state == BrowserSessionState.Stopped
 

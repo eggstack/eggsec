@@ -291,6 +291,43 @@ async fn submit_task(
     json_response(&resp)
 }
 
+async fn get_task_result(
+    State(state): State<Arc<HttpState>>,
+    auth: AuthenticatedClientId,
+    Path((session_id, task_id)): Path<(String, String)>,
+) -> Response {
+    if let Err(resp) = enforce_auth(&state, &auth) {
+        return resp;
+    }
+    let session_id = match session_id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                ErrorCode::InvalidRequest,
+                "invalid session_id".into(),
+            );
+        }
+    };
+    let task_id = match task_id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                ErrorCode::InvalidRequest,
+                "invalid task_id".into(),
+            );
+        }
+    };
+    let cmd = ClientCommand::GetTaskResult {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        session_id,
+        task_id,
+    };
+    let resp = state.host.handle_command(cmd, make_ctx(auth.0)).await;
+    json_response(&resp)
+}
+
 async fn cancel_task(
     State(state): State<Arc<HttpState>>,
     auth: AuthenticatedClientId,
@@ -578,6 +615,10 @@ pub async fn run_http_server(
         .route(
             "/sessions/{session_id}/tasks/{task_id}/cancel",
             post(cancel_task),
+        )
+        .route(
+            "/sessions/{session_id}/tasks/{task_id}",
+            get(get_task_result),
         )
         .route("/sessions/{session_id}/cancel-active", post(cancel_active))
         .route("/sessions/{session_id}/events", get(subscribe_events))

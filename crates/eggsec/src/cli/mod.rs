@@ -828,6 +828,19 @@ pub enum TaskSubcommand {
         #[arg(value_name = "TASK_ID")]
         task_id: String,
     },
+    /// Fetch a task's current status and completed outcome
+    ///
+    /// Durable result retrieval: reads live runtime state first and falls
+    /// back to the persisted snapshot, so completed results stay available
+    /// after reconnect or daemon restart without replaying events.
+    Result {
+        /// Session ID
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+        /// Task ID to inspect
+        #[arg(value_name = "TASK_ID")]
+        task_id: String,
+    },
     /// Watch task events in real-time
     Watch {
         /// Session ID to watch events for

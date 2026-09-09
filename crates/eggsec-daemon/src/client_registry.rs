@@ -70,6 +70,8 @@ pub fn command_permission(cmd: &ClientCommand) -> CommandPermission {
         ClientCommand::GetSnapshot { .. } | ClientCommand::Subscribe { .. } => {
             CommandPermission::Observer
         }
+        // Durable single-task reads are read-only like snapshots.
+        ClientCommand::GetTaskResult { .. } => CommandPermission::Observer,
         ClientCommand::SubmitTask { .. }
         | ClientCommand::CancelTask { .. }
         | ClientCommand::CancelActive { .. } => CommandPermission::Controller,

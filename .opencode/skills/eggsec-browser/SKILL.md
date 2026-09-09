@@ -33,10 +33,20 @@ let report = run_browser_scan(target, config).await?;
 
 ## Key Files
 - `mod.rs` - Main browser engine, `BrowserConfig`, `BrowserReport`, `run_browser_scan()`
+- `backend.rs` - Phase E managed-session contract: `BrowserBackendKind`, `BrowserBackendCapabilities`, `BrowserBackend` trait, `capabilities_for_current_build()`, `validate_browser_url()` (http/https only, host required, no userinfo)
 - `xss_dom.rs` - DOM XSS detection (`DomXssFinding`, `XssSource`, `XssSink`)
 - `spa_discovery.rs` - SPA route discovery (`SpaRoute`, `DiscoveryMethod`)
 - `client_checks.rs` - Client-side checks (`ClientIssue`, `ClientIssueType`)
 - `corpus.rs` - Request corpus building (`RequestCorpus`, `CorpusEntry`)
+
+## Managed Sessions (Phase E, provisional)
+
+Python `BrowserSession`/`AsyncBrowserSession` derive capabilities from the
+compiled backend (`BrowserCapabilities::current()`, `browser_backend_name()`)
+and fail every live-backend operation with an explicit structured error until
+a tab driver is bound — never synthetic success. `validate_browser_url()`
+gates navigation (redirect targets re-validated); cookie values are masked in
+repr with a `redacted()` helper. `browser_test()` is the real assessment path.
 
 ## Module Notes
 See `architecture/browser.md` for architecture documentation.

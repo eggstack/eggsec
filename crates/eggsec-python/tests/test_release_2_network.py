@@ -848,6 +848,45 @@ class TestRedactConfig:
 
 
 # ============================================================================
+# ProxyRoute credential redaction (Phase E WS8)
+# ============================================================================
+
+
+class TestProxyRouteRedaction:
+    """ProxyRoutePy passwords follow the DbProbeRequest pattern: accepted at
+    construction for operational use, `[REDACTED]` in every readout."""
+
+    def test_password_getter_redacted(self):
+        r = eggsec._core.ProxyRoutePy(
+            "proxy.example.com", 8080, username="user", password="s3cret",
+        )
+        assert r.username == "user"
+        assert r.password == "[REDACTED]"
+
+    def test_password_absent_stays_none(self):
+        r = eggsec._core.ProxyRoutePy("proxy.example.com", 8080)
+        assert r.password is None
+
+    def test_password_redacted_in_dict_and_json(self):
+        r = eggsec._core.ProxyRoutePy(
+            "proxy.example.com", 8080, username="user", password="s3cret",
+        )
+        d = r.to_dict()
+        assert d["password"] == "[REDACTED]"
+        parsed = json.loads(r.to_json())
+        assert parsed["password"] == "[REDACTED]"
+        assert "s3cret" not in r.to_json()
+
+    def test_password_absent_from_repr_and_debug(self):
+        r = eggsec._core.ProxyRoutePy(
+            "proxy.example.com", 8080, username="user", password="s3cret",
+        )
+        assert "s3cret" not in repr(r)
+        assert "s3cret" not in str(r)
+        assert "proxy.example.com" in r.url()
+
+
+# ============================================================================
 # WebSocket Types (feature-gated)
 # ============================================================================
 

@@ -1,9 +1,11 @@
-"""Operational proof tests for browser session types (WS6).
+"""Operational proof tests for browser session types (WS6, Phase E).
 
-Tests prove the browser binding surface is real: construction, serialization,
-state transitions, and attribute access all work without external browser
-infrastructure. Session methods that require a real browser engine return
-stub/error responses which we test for correctness.
+Tests prove the browser binding surface is truthful: construction,
+serialization, state transitions, and attribute access all work without
+external browser infrastructure. Managed live sessions have no bound tab
+driver, so every live-backend operation fails with an explicit structured
+error — never synthetic success data. `browser_test()` remains the real
+assessment path.
 """
 
 import json
@@ -28,13 +30,86 @@ pytestmark = [pytest.mark.timeout(60)]
 # 1. TestBrowserCapabilities
 # ============================================================================
 class TestBrowserCapabilities:
-    """BrowserCapabilities is not directly constructable.
-    Test import and verify the type exists.
+    """BrowserCapabilities advertises backend-derived values (Phase E WS1).
+    Test import, the truthful `current()` constructor, and dict/JSON output.
     """
 
     def test_import(self):
         BrowserCapabilities = _import_or_skip("BrowserCapabilities")
         assert BrowserCapabilities is not None
+
+    def test_current_reflects_compiled_backend(self):
+        BrowserCapabilities = _import_or_skip("BrowserCapabilities")
+        browser_backend_name = _import_or_skip("browser_backend_name")
+        caps = BrowserCapabilities.current()
+        assert caps.engine == browser_backend_name()
+        # This build compiles the headless_chrome backend: assessment-backed
+        # capabilities are true, unwired paths stay false.
+        assert caps.engine == "headless_chrome"
+        assert caps.supports_javascript is True
+        assert caps.supports_dom is True
+        assert caps.supports_network_intercept is True
+        assert caps.supports_console_capture is True
+        assert caps.supports_screenshot is True
+        assert caps.supports_pdf_export is False
+        assert caps.supports_cookie_access is True
+        assert caps.supports_storage_access is True
+        assert caps.supports_route_discovery is True
+        assert caps.supports_proxy is False
+
+    def test_current_to_dict(self):
+        BrowserCapabilities = _import_or_skip("BrowserCapabilities")
+        caps = BrowserCapabilities.current()
+        d = caps.to_dict()
+        assert d["engine"] == "headless_chrome"
+        assert d["supports_dom"] is True
+        assert d["supports_pdf_export"] is False
+
+    def test_current_to_json(self):
+        BrowserCapabilities = _import_or_skip("BrowserCapabilities")
+        caps = BrowserCapabilities.current()
+        data = json.loads(caps.to_json())
+        assert data["engine"] == "headless_chrome"
+        assert data["supports_screenshot"] is True
+
+    def test_current_repr(self):
+        BrowserCapabilities = _import_or_skip("BrowserCapabilities")
+        caps = BrowserCapabilities.current()
+        r = repr(caps)
+        assert "headless_chrome" in r
+
+
+# ============================================================================
+# 1b. TestBrowserBackendModule (Phase E WS1/WS3)
+# ============================================================================
+class TestBrowserBackendModule:
+    def test_backend_name(self):
+        browser_backend_name = _import_or_skip("browser_backend_name")
+        assert browser_backend_name() == "headless_chrome"
+
+    def test_backend_available(self):
+        browser_backend_available = _import_or_skip("browser_backend_available")
+        assert browser_backend_available() is True
+
+    def test_validate_browser_url_accepts_http(self):
+        validate_browser_url = _import_or_skip("validate_browser_url")
+        assert validate_browser_url("http://127.0.0.1:8080/") is None
+        assert validate_browser_url("https://example.com/page?q=1") is None
+
+    def test_validate_browser_url_rejects_non_http(self):
+        validate_browser_url = _import_or_skip("validate_browser_url")
+        for bad in (
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+            "example.com/no-scheme",
+            "http://",
+            "http://user:pass@example.com/",
+            "",
+            "   ",
+        ):
+            with pytest.raises(Exception):
+                validate_browser_url(bad)
 
 
 # ============================================================================
@@ -256,63 +331,73 @@ class TestBrowserSessionStats:
 # 5. TestBrowserNavigationEvent
 # ============================================================================
 class TestBrowserNavigationEvent:
+    """Navigation events come from real navigation only (Phase E WS2).
+
+    Managed sessions have no bound backend, so `navigate()` fails explicitly
+    instead of returning synthetic status-0 events. These tests pin the
+    failure contract: state errors before start, URL policy next, then the
+    explicit unbound-backend error — and stats never move on failure.
+    """
+
     def test_import(self):
         BrowserNavigationEvent = _import_or_skip("BrowserNavigationEvent")
         assert BrowserNavigationEvent is not None
+
+    def test_navigate_fails_before_start(self):
+        BrowserSession = _import_or_skip("BrowserSession")
+        BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
+        cfg = BrowserSessionConfig()
+        session = BrowserSession(cfg)
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
+        assert session.stats.pages_navigated == 0
+
+    def test_navigate_without_backend_fails_explicitly(self):
+        # Even a state that would allow navigation must not synthesize an
+        # event: there is no backend to perform it. (State is unreachable
+        # via start() today; this pins the URL-policy ordering instead.)
+        BrowserSession = _import_or_skip("BrowserSession")
+        BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
+        cfg = BrowserSessionConfig()
+        session = BrowserSession(cfg)
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("not-a-url")
+        assert session.stats.pages_navigated == 0
 
     def test_event_from_navigate(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://example.com")
-        assert event.url == "https://example.com"
-        assert event.final_url == "https://example.com"
-        assert event.status_code == 0
-        assert event.load_time_ms == 0
-        assert event.timestamp_ms > 0
-        assert isinstance(event.redirect_chain, list)
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
+        assert session.stats.pages_navigated == 0
 
     def test_event_to_dict(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://test.example")
-        d = event.to_dict()
-        assert d["url"] == "https://test.example"
-        assert d["final_url"] == "https://test.example"
-        assert d["status_code"] == 0
-        assert d["load_time_ms"] == 0
-        assert "redirect_chain" in d
-        assert "timestamp_ms" in d
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://test.example")
+        assert session.stats.pages_navigated == 0
 
     def test_event_to_json(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://json.test")
-        j = event.to_json()
-        data = json.loads(j)
-        assert data["url"] == "https://json.test"
-        assert data["status_code"] == 0
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://json.test")
+        assert session.stats.pages_navigated == 0
 
     def test_event_repr(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://repr.test")
-        r = repr(event)
-        assert "BrowserNavigationEvent" in r
-        assert "https://repr.test" in r
-        assert "status=" in r
-        assert "load_time=" in r
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://repr.test")
 
 
 # ============================================================================
@@ -323,13 +408,15 @@ class TestBrowserConsoleEvent:
         BrowserConsoleEvent = _import_or_skip("BrowserConsoleEvent")
         assert BrowserConsoleEvent is not None
 
-    def test_console_events_initially_empty(self):
+    def test_console_events_require_live_session(self):
+        # Without a live backend there is nothing truthful to return: an
+        # explicit error replaces the old synthetic empty list.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        events = session.get_console_events()
-        assert events == []
+        with pytest.raises(Exception, match="no live backend"):
+            session.get_console_events()
 
 
 # ============================================================================
@@ -340,13 +427,15 @@ class TestBrowserNetworkEvent:
         BrowserNetworkEvent = _import_or_skip("BrowserNetworkEvent")
         assert BrowserNetworkEvent is not None
 
-    def test_network_events_initially_empty(self):
+    def test_network_events_require_live_session(self):
+        # Without a live backend there is nothing truthful to return: an
+        # explicit error replaces the old synthetic empty list.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        events = session.get_network_events()
-        assert events == []
+        with pytest.raises(Exception, match="no live backend"):
+            session.get_network_events()
 
 
 # ============================================================================
@@ -357,70 +446,52 @@ class TestBrowserDomSnapshot:
         BrowserDomSnapshot = _import_or_skip("BrowserDomSnapshot")
         assert BrowserDomSnapshot is not None
 
-    def test_snapshot_from_session(self):
+    def test_snapshot_requires_live_session(self):
+        # No synthetic empty snapshots: without a bound backend the capture
+        # fails explicitly, and stats never move on failure.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        assert snap.url == ""
-        assert snap.title is None
-        assert snap.forms == []
-        assert snap.links == []
-        assert snap.scripts == []
-        assert snap.frames == []
-        assert snap.timestamp_ms > 0
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
+        assert session.stats.dom_snapshots == 0
 
     def test_snapshot_to_dict(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        d = snap.to_dict()
-        assert "url" in d
-        assert "title" in d
-        assert "forms" in d
-        assert "links" in d
-        assert "scripts" in d
-        assert "frames" in d
-        assert "timestamp_ms" in d
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
     def test_snapshot_to_json(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        j = snap.to_json()
-        data = json.loads(j)
-        assert "url" in data
-        assert "forms" in data
-        assert "links" in data
-        assert "scripts" in data
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
     def test_snapshot_repr(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        r = repr(snap)
-        assert "BrowserDomSnapshot" in r
-        assert "forms=" in r
-        assert "links=" in r
-        assert "scripts=" in r
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
-    def test_snapshot_increments_stats(self):
+    def test_snapshot_stats_unchanged_on_failure(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
         assert session.stats.dom_snapshots == 0
-        session.get_dom_snapshot()
-        assert session.stats.dom_snapshots == 1
-        session.get_dom_snapshot()
-        assert session.stats.dom_snapshots == 2
+        with pytest.raises(Exception):
+            session.get_dom_snapshot()
+        with pytest.raises(Exception):
+            session.get_dom_snapshot()
+        assert session.stats.dom_snapshots == 0
 
 
 # ============================================================================
@@ -458,38 +529,32 @@ class TestBrowserStorageInfo:
         BrowserStorageInfo = _import_or_skip("BrowserStorageInfo")
         assert BrowserStorageInfo is not None
 
-    def test_storage_from_session(self):
+    def test_storage_requires_live_session(self):
+        # No synthetic empty storage: collection without a bound backend
+        # fails explicitly instead of returning empty cookies/storage.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        assert storage.local_storage == []
-        assert storage.session_storage == []
-        assert storage.cookies == []
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
+        assert session.stats.cookies_collected == 0
 
     def test_storage_to_dict(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        d = storage.to_dict()
-        assert "local_storage" in d
-        assert "session_storage" in d
-        assert "cookies" in d
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
     def test_storage_to_json(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        j = storage.to_json()
-        data = json.loads(j)
-        assert data["local_storage"] == []
-        assert data["session_storage"] == []
-        assert data["cookies"] == []
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
 
 # ============================================================================
@@ -525,14 +590,18 @@ class TestBrowserSessionConstruction:
         session = BrowserSession(cfg)
         assert session.state == BrowserSessionState.Created
 
-    def test_start_transitions_to_ready(self):
+    def test_start_fails_without_backend(self):
+        # Managed live sessions are provisional: start() fails with an
+        # explicit structured error (pointing at browser_test()) instead of
+        # pretending to launch, and the state stays Created.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        assert session.state == BrowserSessionState.Ready
+        with pytest.raises(Exception, match="active browser engine"):
+            session.start()
+        assert session.state == BrowserSessionState.Created
 
     def test_stop_transitions_to_stopped(self):
         BrowserSession = _import_or_skip("BrowserSession")
@@ -540,7 +609,6 @@ class TestBrowserSessionConstruction:
         BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
         session.stop()
         assert session.state == BrowserSessionState.Stopped
 
@@ -610,22 +678,22 @@ class TestBrowserSessionConstruction:
         BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
         with session as s:
-            assert s.state == BrowserSessionState.Ready
+            assert s.state == BrowserSessionState.Created
         assert session.state == BrowserSessionState.Stopped
 
     def test_navigate_after_start(self):
+        # start() cannot reach Ready without a bound backend, so navigation
+        # fails at the state gate and records nothing.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
-        BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://example.com")
-        assert event.url == "https://example.com"
-        assert session.state == BrowserSessionState.Ready
-        assert session.stats.pages_navigated == 1
+        with pytest.raises(Exception, match="active browser engine"):
+            session.start()
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
+        assert session.stats.pages_navigated == 0
 
     def test_navigate_fails_before_start(self):
         BrowserSession = _import_or_skip("BrowserSession")
@@ -635,85 +703,88 @@ class TestBrowserSessionConstruction:
         with pytest.raises(Exception, match="Cannot navigate"):
             session.navigate("https://example.com")
 
-    def test_screenshot_after_start(self):
+    def test_screenshot_without_backend_fails(self):
+        # No synthetic screenshot-N artifact references: without a bound
+        # backend and artifact-store write, capture fails explicitly so every
+        # returned artifact ID stays resolvable.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        artifact = session.take_screenshot()
-        assert artifact.artifact_id.startswith("screenshot-")
-        assert session.stats.screenshots_taken == 1
+        with pytest.raises(Exception, match="Cannot take screenshot"):
+            session.take_screenshot()
+        assert session.stats.screenshots_taken == 0
 
     def test_execute_script_fails_without_engine(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        with pytest.raises(Exception, match="requires an active browser engine"):
+        with pytest.raises(Exception, match="active browser engine"):
             session.execute_script("return document.title")
+
+    def test_execute_script_rejects_empty(self):
+        BrowserSession = _import_or_skip("BrowserSession")
+        BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
+        cfg = BrowserSessionConfig()
+        session = BrowserSession(cfg)
+        with pytest.raises(Exception, match="must not be empty"):
+            session.execute_script("   ")
 
     def test_wait_for_selector_fails_without_engine(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        with pytest.raises(Exception, match="requires an active browser engine"):
+        with pytest.raises(Exception, match="active browser engine"):
             session.wait_for_selector("#app")
 
-    def test_multiple_navigations(self):
+    def test_wait_for_selector_rejects_empty(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
+        with pytest.raises(Exception, match="must not be empty"):
+            session.wait_for_selector("  ")
+
+    def test_navigations_record_nothing_without_backend(self):
+        BrowserSession = _import_or_skip("BrowserSession")
+        BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
+        cfg = BrowserSessionConfig()
+        session = BrowserSession(cfg)
         for i in range(5):
-            event = session.navigate(f"https://example.com/page/{i}")
-            assert event.url == f"https://example.com/page/{i}"
-        assert session.stats.pages_navigated == 5
+            with pytest.raises(Exception, match="Cannot navigate"):
+                session.navigate(f"https://example.com/page/{i}")
+        assert session.stats.pages_navigated == 0
 
 
 # ============================================================================
 # 15. TestBrowserEventSerialization
 # ============================================================================
 class TestBrowserEventSerialization:
-    def test_navigation_event_json_roundtrip(self):
+    def test_navigation_requires_backend(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://json.test")
-        j = event.to_json()
-        data = json.loads(j)
-        assert data["url"] == "https://json.test"
-        assert isinstance(data["timestamp_ms"], int)
-        assert isinstance(data["redirect_chain"], list)
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://json.test")
 
-    def test_dom_snapshot_json_roundtrip(self):
+    def test_dom_snapshot_requires_backend(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        j = snap.to_json()
-        data = json.loads(j)
-        assert isinstance(data["forms"], list)
-        assert isinstance(data["links"], list)
-        assert isinstance(data["scripts"], list)
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
-    def test_storage_json_roundtrip(self):
+    def test_storage_requires_backend(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        j = storage.to_json()
-        data = json.loads(j)
-        assert isinstance(data["cookies"], list)
-        assert isinstance(data["local_storage"], list)
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
 
 # ============================================================================
@@ -1100,43 +1171,51 @@ class TestBrowserSessionMultipleInstances:
 # 22. TestBrowserSessionStatsAccumulation
 # ============================================================================
 class TestBrowserSessionStatsAccumulation:
-    def test_dom_snapshot_stats_increase(self):
+    """Statistics only move on successful capture (Phase E WS2).
+
+    Every managed capture fails without a bound backend, so all counters
+    stay at zero no matter how often the operations are attempted.
+    """
+
+    def test_dom_snapshot_stats_unchanged_on_failure(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
         for _ in range(3):
-            session.get_dom_snapshot()
-        assert session.stats.dom_snapshots == 3
+            with pytest.raises(Exception):
+                session.get_dom_snapshot()
+        assert session.stats.dom_snapshots == 0
 
-    def test_screenshot_stats_increase(self):
+    def test_screenshot_stats_unchanged_on_failure(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
         for _ in range(4):
-            session.take_screenshot()
-        assert session.stats.screenshots_taken == 4
+            with pytest.raises(Exception):
+                session.take_screenshot()
+        assert session.stats.screenshots_taken == 0
 
-    def test_cookie_stats_increase(self):
+    def test_cookie_stats_unchanged_on_failure(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
         for _ in range(2):
-            session.get_cookies()
-        assert session.stats.cookies_collected == 2
+            with pytest.raises(Exception):
+                session.get_cookies()
+        assert session.stats.cookies_collected == 0
 
-    def test_pages_navigated_increase(self):
+    def test_pages_navigated_unchanged_on_failure(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
         for i in range(5):
-            session.navigate(f"https://example.com/{i}")
-        assert session.stats.pages_navigated == 5
+            with pytest.raises(Exception):
+                session.navigate(f"https://example.com/{i}")
+        assert session.stats.pages_navigated == 0
 
 
 # ============================================================================
@@ -1160,28 +1239,30 @@ class TestBrowserConfigOptionals:
 # 24. TestBrowserSessionStateTransitions
 # ============================================================================
 class TestBrowserSessionStateTransitions:
-    def test_created_to_ready_to_stopped(self):
+    def test_created_start_fails_stop_works(self):
+        # Created -> start() fails explicitly (no backend to reach Ready) ->
+        # stop() still transitions to Stopped idempotently.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
         assert session.state == BrowserSessionState.Created
-        session.start()
-        assert session.state == BrowserSessionState.Ready
+        with pytest.raises(Exception, match="active browser engine"):
+            session.start()
+        assert session.state == BrowserSessionState.Created
         session.stop()
         assert session.state == BrowserSessionState.Stopped
 
-    def test_navigate_transitions(self):
+    def test_navigate_never_leaves_created(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         BrowserSessionState = _import_or_skip("BrowserSessionState")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        assert session.state == BrowserSessionState.Ready
-        session.navigate("https://example.com")
-        assert session.state == BrowserSessionState.Ready
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
+        assert session.state == BrowserSessionState.Created
 
 
 # ============================================================================
@@ -1193,32 +1274,32 @@ class TestBrowserDomSnapshotAttributes:
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        assert isinstance(snap.forms, list)
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
     def test_links_property(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        assert isinstance(snap.links, list)
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
     def test_scripts_property(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        assert isinstance(snap.scripts, list)
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
     def test_frames_property(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        snap = session.get_dom_snapshot()
-        assert isinstance(snap.frames, list)
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
 
 
 # ============================================================================
@@ -1230,18 +1311,16 @@ class TestBrowserNavigationEventFields:
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://example.com")
-        assert isinstance(event.redirect_chain, list)
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
 
     def test_timestamp_is_positive(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        session.start()
-        event = session.navigate("https://example.com")
-        assert event.timestamp_ms > 0
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
 
 
 # ============================================================================
@@ -1253,24 +1332,24 @@ class TestBrowserStorageInfoFields:
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        assert isinstance(storage.local_storage, list)
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
     def test_session_storage_property(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        assert isinstance(storage.session_storage, list)
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
     def test_cookies_property(self):
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         cfg = BrowserSessionConfig()
         session = BrowserSession(cfg)
-        storage = session.get_cookies()
-        assert isinstance(storage.cookies, list)
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
 
 
 # ============================================================================
@@ -1342,6 +1421,9 @@ class TestBrowserTestReport:
 # ============================================================================
 class TestBrowserSessionEndToEnd:
     def test_full_lifecycle(self):
+        # Truthful managed-session lifecycle: construction and serialization
+        # work; every live operation fails explicitly; stop() stays
+        # idempotent; stats never move on failure.
         BrowserSession = _import_or_skip("BrowserSession")
         BrowserSessionConfig = _import_or_skip("BrowserSessionConfig")
         BrowserSessionState = _import_or_skip("BrowserSessionState")
@@ -1350,26 +1432,28 @@ class TestBrowserSessionEndToEnd:
         session = BrowserSession(cfg)
 
         assert session.state == BrowserSessionState.Created
-        session.start()
-        assert session.state == BrowserSessionState.Ready
+        with pytest.raises(Exception, match="active browser engine"):
+            session.start()
+        assert session.state == BrowserSessionState.Created
 
-        event = session.navigate("https://example.com")
-        assert event.url == "https://example.com"
-        assert session.stats.pages_navigated == 1
+        with pytest.raises(Exception, match="Cannot navigate"):
+            session.navigate("https://example.com")
+        assert session.stats.pages_navigated == 0
 
-        snap = session.get_dom_snapshot()
-        assert snap.timestamp_ms > 0
-        assert session.stats.dom_snapshots == 1
+        with pytest.raises(Exception, match="Cannot capture DOM snapshot"):
+            session.get_dom_snapshot()
+        assert session.stats.dom_snapshots == 0
 
-        storage = session.get_cookies()
-        assert storage.cookies == []
+        with pytest.raises(Exception, match="Cannot collect cookies"):
+            session.get_cookies()
+        assert session.stats.cookies_collected == 0
 
-        artifact = session.take_screenshot()
-        assert artifact.artifact_id.startswith("screenshot-")
-        assert session.stats.screenshots_taken == 1
+        with pytest.raises(Exception, match="Cannot take screenshot"):
+            session.take_screenshot()
+        assert session.stats.screenshots_taken == 0
 
         d = session.to_dict()
-        assert d["state"] == "Ready"
+        assert d["state"] == "Created"
 
         session.stop()
         assert session.state == BrowserSessionState.Stopped

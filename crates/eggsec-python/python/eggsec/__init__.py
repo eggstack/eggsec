@@ -533,6 +533,9 @@ try:
     BrowserLinkInfo = _core.BrowserLinkInfo
     BrowserStorageInfo = _core.BrowserStorageInfo
     BrowserCookieInfo = _core.BrowserCookieInfo
+    browser_backend_name = _core.browser_backend_name
+    browser_backend_available = _core.browser_backend_available
+    validate_browser_url = _core.validate_browser_url
     BrowserTestConfigPy = _core.BrowserTestConfigPy
     BrowserTestReportPy = _core.BrowserTestReportPy
     DomXssFindingPy = _core.DomXssFindingPy
@@ -666,6 +669,7 @@ try:
     async_daemon_create_session = _core.async_daemon_create_session
     async_daemon_list_sessions = _core.async_daemon_list_sessions
     async_daemon_get_snapshot = _core.async_daemon_get_snapshot
+    async_daemon_get_task_result = _core.async_daemon_get_task_result
     async_daemon_close_session = _core.async_daemon_close_session
     async_daemon_submit_task = _core.async_daemon_submit_task
     async_daemon_cancel_task = _core.async_daemon_cancel_task
@@ -1647,6 +1651,7 @@ __all__ = [
     "async_daemon_create_session",
     "async_daemon_list_sessions",
     "async_daemon_get_snapshot",
+    "async_daemon_get_task_result",
     "async_daemon_close_session",
     "async_daemon_submit_task",
     "async_daemon_cancel_task",
@@ -2000,6 +2005,9 @@ __all__ = [
     "BrowserCookieInfo",
     "BrowserSession",
     "AsyncBrowserSession",
+    "browser_backend_name",
+    "browser_backend_available",
+    "validate_browser_url",
     "BrowserDomEvent",
     "BrowserDownloadEvent",
     "BrowserSecurityObservation",

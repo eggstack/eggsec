@@ -7,10 +7,14 @@ use crate::client_registry::ClientKind;
 /// Clients should check this value against their expected range
 /// before sending commands. The version is bumped on breaking
 /// wire-format changes (new required fields, removed variants, etc.).
-pub const DAEMON_PROTOCOL_VERSION: u32 = 1;
+///
+/// Version 2 adds durable result retrieval (`GetTaskResult` /
+/// `TaskResult`, Phase E WS5) so reconnecting clients can fetch a completed
+/// task result without relying on transient event delivery.
+pub const DAEMON_PROTOCOL_VERSION: u32 = 2;
 use eggsec_runtime::{
     ClientId, RunRequest, RuntimeCapabilities, RuntimeEvent, RuntimeSurface, SessionId,
-    SessionSnapshot, SessionSummary, TaskId,
+    SessionSnapshot, SessionSummary, TaskId, TaskOutcome, TaskStatus,
 };
 
 /// Identifies the transport layer for a daemon request.
@@ -93,6 +97,18 @@ pub enum ClientCommand {
         request_id: String,
         session_id: SessionId,
     },
+    /// Fetch a single task's current status and completed outcome.
+    ///
+    /// Durable result retrieval (Phase E WS5): unlike the transient
+    /// `TaskCompleted` broadcast event, this query reads live runtime state
+    /// first and falls back to the persisted snapshot, so reconnecting
+    /// clients and lagged receivers can retrieve a completed result after
+    /// reconnect or daemon restart without replaying the event stream.
+    GetTaskResult {
+        request_id: String,
+        session_id: SessionId,
+        task_id: TaskId,
+    },
     SubmitTask {
         request_id: String,
         session_id: SessionId,
@@ -143,6 +159,7 @@ impl ClientCommand {
             | Self::CreateSession { request_id, .. }
             | Self::ListSessions { request_id }
             | Self::GetSnapshot { request_id, .. }
+            | Self::GetTaskResult { request_id, .. }
             | Self::SubmitTask { request_id, .. }
             | Self::CancelTask { request_id, .. }
             | Self::CancelActive { request_id, .. }
@@ -158,6 +175,7 @@ impl ClientCommand {
     pub fn session_id(&self) -> Option<&SessionId> {
         match self {
             Self::GetSnapshot { session_id, .. }
+            | Self::GetTaskResult { session_id, .. }
             | Self::SubmitTask { session_id, .. }
             | Self::CancelTask { session_id, .. }
             | Self::CancelActive { session_id, .. }
@@ -178,6 +196,7 @@ impl ClientCommand {
             Self::CreateSession { .. } => "create-session",
             Self::ListSessions { .. } => "list-sessions",
             Self::GetSnapshot { .. } => "get-snapshot",
+            Self::GetTaskResult { .. } => "get-task-result",
             Self::SubmitTask { .. } => "submit-task",
             Self::CancelTask { .. } => "cancel-task",
             Self::CancelActive { .. } => "cancel-active",
@@ -217,6 +236,20 @@ pub enum ServerMessage {
     Snapshot {
         request_id: String,
         snapshot: SessionSnapshot,
+    },
+    /// Current status and completed outcome for one task.
+    ///
+    /// `outcome` is `Some` once the task reaches a terminal completed state
+    /// with a stored outcome; it is `None` while the task is still active
+    /// (queued/running). Clients detect duplicate/replayed delivery by
+    /// keying on `(session_id, task_id, status)`: a second `TaskResult`
+    /// with an identical triple carries no new information.
+    TaskResult {
+        request_id: String,
+        session_id: SessionId,
+        task_id: TaskId,
+        status: TaskStatus,
+        outcome: Option<TaskOutcome>,
     },
     TaskSubmitted {
         request_id: String,
@@ -902,6 +935,15 @@ mod tests {
                 "ListPersistedSessions",
             ),
             (
+                serde_json::to_value(&ClientCommand::GetTaskResult {
+                    request_id: rid(),
+                    session_id: SessionId::new(),
+                    task_id: TaskId::new(),
+                })
+                .unwrap(),
+                "GetTaskResult",
+            ),
+            (
                 serde_json::to_value(&ClientCommand::GetPersistedSnapshot {
                     request_id: rid(),
                     session_id: SessionId::new(),
@@ -962,6 +1004,82 @@ mod tests {
         for (val, expected_type) in cases {
             assert_eq!(val["type"], expected_type);
         }
+    }
+
+    #[test]
+    fn client_command_roundtrip_get_task_result() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let cmd = ClientCommand::GetTaskResult {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::GetTaskResult {
+            session_id,
+            task_id,
+            ..
+        } = back
+        {
+            assert_eq!(session_id, sid);
+            assert_eq!(task_id, tid);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_task_result() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let msg = ServerMessage::TaskResult {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+            status: TaskStatus::Completed,
+            outcome: None,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::TaskResult {
+            session_id,
+            task_id,
+            outcome,
+            ..
+        } = back
+        {
+            assert_eq!(session_id, sid);
+            assert_eq!(task_id, tid);
+            assert!(outcome.is_none());
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn client_command_type_field_get_task_result() {
+        let cmd = ClientCommand::GetTaskResult {
+            request_id: rid(),
+            session_id: SessionId::new(),
+            task_id: TaskId::new(),
+        };
+        let val = serde_json::to_value(&cmd).unwrap();
+        assert_eq!(val["type"], "GetTaskResult");
+    }
+
+    #[test]
+    fn server_message_type_field_task_result() {
+        let msg = ServerMessage::TaskResult {
+            request_id: rid(),
+            session_id: SessionId::new(),
+            task_id: TaskId::new(),
+            status: TaskStatus::Completed,
+            outcome: None,
+        };
+        let val = serde_json::to_value(&msg).unwrap();
+        assert_eq!(val["type"], "TaskResult");
     }
 
     #[test]

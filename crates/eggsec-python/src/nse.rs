@@ -721,7 +721,7 @@ pub(crate) fn run_nse_async(
     })
 }
 
-async fn run_nse_inner(
+pub(crate) async fn run_nse_inner(
     config: eggsec::nse::NseConfig,
     user_limits: Option<eggsec::nse::NseExecutionLimits>,
 ) -> anyhow::Result<eggsec::nse::NseRunReport> {

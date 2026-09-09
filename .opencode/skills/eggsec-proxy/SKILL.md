@@ -59,6 +59,8 @@ The following 12 tools are available when the `web-proxy-mcp` feature is enabled
 
 **Policy enforcement:** All proxy tools require `EnforcementContext::evaluate()` before dispatch. Real runs need `--allow-web-proxy` + policy confirmation. Dry-run is always safe.
 
+**Truthfulness contract (Phase E):** `proxy-start` serves labeled synthetic fixture flows in dry-run only; live mode fails explicitly. `proxy-export-session` builds a real `WebProxySessionReport` so counters reflect the flows. Python `run_intercept_session()` runs a real timed listener but per-exchange capture into its result is not yet wired (empty `exchanges` = "not captured by this binding"). Python proxy credentials (`ProxyEntry`/`ProxyRoutePy` passwords) are `[REDACTED]` in every readout, mirroring `DbProbeRequest`. `FlowBuffer::flows(&mut self)` returns a real ordered slice (linearized in place).
+
 **Tool implementation:** `tool/implementations/proxy.rs` implements the `SecurityTool` trait with all 12 actions. Tools use a shared `PROXY_SESSION` static for session state.
 
 ### Safe Logging

@@ -172,7 +172,7 @@ Each captured flow (`ProxyFlow`) records:
 
 ### Redaction
 
-Request and response bodies are truncated to `--max-bytes-per-flow` (default 64 KiB). Bodies exceeding this limit are truncated with a `[TRUNCATED]` marker. In future phases, configurable redaction patterns (PII, tokens, secrets) will be applied to headers and bodies.
+Request and response bodies are truncated to `--max-bytes-per-flow` (default 64 KiB). Bodies exceeding this limit are truncated with a `[TRUNCATED]` marker. `RedactionPattern` types (name/pattern/replacement) exist for PII, token, and secret scrubbing of headers and bodies, and `WebProxySessionReport.add_flow()` counts every flow whose `redaction_applied` marker is set — wire the configured patterns through the interception path before relying on scrubbed output, and verify with a sentinel body that the marker survives to the report. Python-side proxy credentials (`ProxyEntry.password`, `ProxyRoutePy.password`) are never emitted: getters, `to_dict()`, `to_json()`, `__repr__`, and Rust `Debug` all render `[REDACTED]`, mirroring `DbProbeRequest`.
 
 ### Budget Limits
 
@@ -269,6 +269,8 @@ When built with `--features web-proxy-mcp` (requires `web-proxy`), 12 MCP tools 
 Tools are implemented in `tool/implementations/proxy.rs` as `ProxyTool` implementing the `SecurityTool` trait. MCP exposure is gated by the `web-proxy-mcp` marker feature.
 
 **Policy enforcement:** All proxy tools require `EnforcementContext::evaluate()` before dispatch. Real runs need `--allow-web-proxy` + policy confirmation. Dry-run is always safe.
+
+**Truthfulness contract (Phase E WS7):** `proxy-start` serves labeled synthetic fixture flows in dry-run mode only (`synthetic_flows_generated: 3` in the response). Live serving is not implemented on this tool path: requesting `dry_run=false` fails explicitly instead of returning synthetic data as intercepted traffic. `proxy-export-session` builds a real `WebProxySessionReport` from captured state so `https_intercepted`/`http_logged`/`redacted` counters reflect the flows. The Python `run_intercept_session()` binding runs a real timed listener but does not yet wire per-exchange capture into its result — empty `exchanges` there means "not captured by this binding", never "no traffic occurred"; use the engine report APIs for exchange-level data.
 
 ```bash
 # Build with MCP proxy tools

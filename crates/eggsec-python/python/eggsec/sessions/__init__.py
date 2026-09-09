@@ -67,6 +67,9 @@ try:
         BrowserDomEvent,
         BrowserDownloadEvent,
         BrowserSecurityObservation,
+        browser_backend_name,
+        browser_backend_available,
+        validate_browser_url,
     )
 except (AttributeError, ImportError):
     pass

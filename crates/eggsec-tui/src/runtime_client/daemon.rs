@@ -114,7 +114,8 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::ClientDeclared { request_id, .. }
                                     | ServerMessage::SessionClosed { request_id, .. }
                                     | ServerMessage::PersistedSessions { request_id, .. }
-                                    | ServerMessage::PersistedSnapshot { request_id, .. } => {
+                                    | ServerMessage::PersistedSnapshot { request_id, .. }
+                                    | ServerMessage::TaskResult { request_id, .. } => {
                                         request_id.clone()
                                     }
                                     ServerMessage::RuntimeEvent { .. } => {
@@ -202,6 +203,7 @@ impl DaemonRuntimeClient {
             | ClientCommand::CreateSession { request_id, .. }
             | ClientCommand::ListSessions { request_id }
             | ClientCommand::GetSnapshot { request_id, .. }
+            | ClientCommand::GetTaskResult { request_id, .. }
             | ClientCommand::SubmitTask { request_id, .. }
             | ClientCommand::CancelTask { request_id, .. }
             | ClientCommand::CancelActive { request_id, .. }

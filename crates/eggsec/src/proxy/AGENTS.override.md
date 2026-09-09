@@ -38,7 +38,7 @@ Dry-run always safe; real interception is Phase 2
 - **Pipeline**: `ScanProfile::WebProxy` / `Stage::WebProxy` — pipeline profile integration for automated proxy assessments
 - **MCP**: 12 tools via `web-proxy-mcp` marker feature (list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle, flow actions)
 - **Evidence**: `EvidenceBundle` / `BundleManifest` in `bundle.rs` for multi-loadout correlation export/import
-- **Performance**: `FlowBuffer` (capacity-capped Vec, configurable max_size) and `ProxyMetrics` (runtime telemetry snapshot) in `types.rs`
+- **Performance**: `FlowBuffer` (capacity-capped VecDeque with O(1) eviction; `flows(&mut self)` linearizes in place via `make_contiguous`, Phase E) and `ProxyMetrics` (runtime telemetry snapshot) in `types.rs`
 - **Real protocols**: `tokio-tungstenite` (WebSocket), `h2` (HTTP/2) backends
 
 ## Safe Logging

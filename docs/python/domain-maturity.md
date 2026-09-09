@@ -79,10 +79,10 @@ until they satisfy the graduation checklist:
 
 | Domain | Operation ID(s) | Notes |
 |--------|-----------------|-------|
-| `browser` | -- | Conditional candidate, not yet graduated; session types well-tested (1375 lines) |
+| `browser` | -- | Conditional candidate, not yet graduated; truthful backend-derived capabilities + explicit unsupported errors (Phase E), live driver still unbound |
 | `hunt` | -- | Conditional candidate, not yet graduated; type surface exists |
-| `daemon` | -- | Transport parity pending |
-| `proxy` | -- | MITM interception semantics remain hazardous |
+| `daemon` | -- | Protocol v2 durable result retrieval + parity matrix (Phase E); event replay intentionally state-based |
+| `proxy` | -- | MITM interception semantics remain hazardous; truthful dry-run/capture contract + secret redaction (Phase E) |
 | `packet-inspection` | -- | Platform/system dependency and lifecycle coverage pending |
 | `mobile-dynamic` | -- | Session type tests; requires Android emulator |
 
@@ -438,3 +438,74 @@ No domain was promoted from provisional/experimental to stable, or demoted from
 stable, during this review. The 11 stable domains retain stable status; the
 6 provisional domains and 6 experimental domains retain their current
 classifications with documented rationale for each gap.
+
+## Architecture Convergence Phase E: Programmability Parity (2026-09-09)
+
+Phase E closes the largest gaps between the programmable APIs and the
+underlying Rust execution for browser sessions, daemon execution, and proxy
+capture — improving the usefulness of existing interfaces without adding new
+security-testing domains. No domain is promoted: graduation still requires
+the five-item checklist above.
+
+### Browser (stays provisional)
+
+- Backend contract: `eggsec::browser::backend` defines `BrowserBackendKind`,
+  `BrowserBackendCapabilities`, the `BrowserBackend` trait, and
+  `capabilities_for_current_build()`; the real `headless_chrome` backend
+  advertises DOM/XSS, SPA discovery, client checks, interception, console
+  capture, screenshots, cookies/storage, and route discovery, with PDF
+  export and proxying honestly `false`.
+- Managed sessions are truthful: `BrowserCapabilities::current()`,
+  `browser_backend_name()`, and `browser_backend_available()` derive from
+  the compiled backend; every live-backend operation (`start`, `navigate`,
+  `wait_for_selector`, `get_dom_snapshot`, console/network getters,
+  `get_cookies`, `take_screenshot`, `execute_script`, sync and async) fails
+  with an explicit structured error until a backend is bound — no synthetic
+  status codes, empty snapshots, or unresolvable `screenshot-N` artifact
+  references. Statistics only move on success.
+- Policy: `validate_browser_url()` (engine + Python binding) enforces
+  http/https-only navigation with a mandatory host and no embedded
+  userinfo; redirect targets must be re-validated. Cookie values are masked
+  in `__repr__`/`__str__` with a `redacted()` helper for persistence.
+- Remaining gap: no live tab driver is bound into `BrowserSession`, so
+  managed interactive sessions still cannot navigate; `browser_test()`
+  remains the real assessment path. Promotion needs the bound backend plus
+  a canonical operation ID and engine dispatch.
+
+### Daemon (stays provisional)
+
+- Parity matrix: `docs/DAEMON_PARITY.md` records the local-vs-daemon
+  contract for request normalization, enforcement, identifiers, ordering,
+  lag/replay, retrieval, cancellation, reconnect, restart, timeouts,
+  errors, artifacts, discovery, and RBAC, marking intentional durable /
+  multi-client differences.
+- Durable retrieval: protocol v2 adds `GetTaskResult` /
+  `TaskResult { status, outcome }` (live snapshot first, persisted snapshot
+  fallback; `Observer` permission; `TaskNotFound` / `SessionNotFound`
+  errors), exposed over Unix socket, HTTP
+  (`GET /sessions/{id}/tasks/{task_id}`), CLI
+  (`eggsec task result <session> <task>`), and Python
+  (`async_daemon_get_task_result()` returning the canonical `TaskOutcome`
+  schema — no second result-DTO family).
+- Reconnect = re-declare + re-subscribe; missed events are recovered as
+  state, never as replay; duplicates key on `(session, task, status)`.
+- Remaining gap: no event log / replay buffer by design; full transport
+  parity (timeouts, artifact byte retrieval) still open.
+
+### Proxy (stays provisional)
+
+- `FlowBuffer::flows()` now returns a real ordered slice over every
+  buffered flow (via in-place linearization), replacing the always-empty
+  stub; eviction/wrap behavior is tested.
+- MCP `proxy-start` serves labeled synthetic fixtures in dry-run only and
+  fails explicitly for live mode; `proxy-export-session` builds a real
+  `WebProxySessionReport` so counters reflect the flows.
+- Secrets: `ProxyEntry.password` and `ProxyRoutePy.password` follow the
+  `DbProbeRequest` pattern — accepted at construction for operational use,
+  `[REDACTED]` in every getter, dict, JSON, repr, and Rust `Debug` output.
+- `run_intercept_session()` runs a real timed listener; its result
+  documents that per-exchange capture is not yet wired (empty `exchanges`
+  means "not captured by this binding").
+- Remaining gap: live CONNECT/WebSocket/HTTP-2 flow capture into reports,
+  enforced body truncation on live paths, and binding-level exchange
+  capture; MITM semantics stay hazardous and provisional.

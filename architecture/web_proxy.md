@@ -251,7 +251,7 @@ Key test areas:
 1. **Cert cache is ephemeral and per-instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares via `Arc`. Cache is cleared on drop.
 2. **HTTP/2 interception is opt-in**: `proxy_http2_live` defaults to `false` (`intercept/mod.rs:88`). Without it, HTTP/2 connections fall through to HTTP/1.1 handling.
 3. **WebSocket interception fallback**: Without `web-proxy` feature, `handle_websocket_interception()` is a no-op passthrough (`intercept/mod.rs:399-410`).
-4. **`FlowBuffer::flows()` returns empty slice**: Due to `VecDeque` non-contiguity, `flows()` always returns `&[]`; callers must use `flows_vec()` or `iter()` (`types.rs:623-641`).
+4. **`FlowBuffer::flows()` linearizes in place (Phase E)**: `flows(&mut self)` calls `make_contiguous()` and returns a real ordered slice over every buffered flow; `flows_vec()`/`iter()` remain for shared-access callers (`types.rs:605-650`).
 5. **`is_private_ip` inconsistency**: The intercept version (`intercept/mod.rs:157-174`) does NOT block multicast/broadcast; the outbound version (`lib.rs:336-356`) does.
 6. **`handle_http_request()` always returns 400**: Non-CONNECT HTTP requests after rule evaluation always return `400 Bad Request` (`intercept/mod.rs:951-953`). This is a stub for Phase 2.
 7. **gRPC method type detection is heuristic**: `detect_grpc_method_type()` (`protocols.rs:1303-1321`) infers streaming from `TE: trailers` or `grpc-encoding` headers — not definitive without deep inspection.

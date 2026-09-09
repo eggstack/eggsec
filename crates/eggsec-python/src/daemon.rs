@@ -185,6 +185,27 @@ pub(crate) fn server_message_to_response(
             message: format!("task_id={}", task_id),
             error_code: None,
         },
+        ServerMessage::TaskResult {
+            request_id,
+            session_id,
+            task_id,
+            status,
+            outcome,
+        } => {
+            let outcome_str = outcome.as_ref().map_or_else(
+                || "none".to_string(),
+                |o| serde_json::to_string(o).unwrap_or_else(|_| "unserializable".to_string()),
+            );
+            DaemonResponsePy {
+                ok: true,
+                request_id,
+                message: format!(
+                    "session={} task={} status={:?} outcome={}",
+                    session_id, task_id, status, outcome_str
+                ),
+                error_code: None,
+            }
+        }
         ServerMessage::SessionClosed { request_id } => DaemonResponsePy {
             ok: true,
             request_id,
@@ -590,6 +611,60 @@ pub fn async_daemon_get_snapshot(
 
             let msg = inner.get_snapshot(sid).await.map_err(|e| {
                 crate::error::NetworkError::new_err(format!("daemon get_snapshot failed: {}", e))
+            })?;
+
+            Ok(server_message_to_response(msg))
+        })
+    }
+
+    #[cfg(not(feature = "daemon-client"))]
+    {
+        Err(crate::error::FeatureUnavailableError::new_err(
+            "Daemon client is not available. Rebuild with the `daemon-client` feature enabled.",
+        ))
+    }
+}
+
+/// Fetch a single task's current status and completed outcome (async).
+///
+/// Durable result retrieval (Phase E WS5): reads live runtime state first
+/// and falls back to the persisted snapshot, so reconnecting clients can
+/// retrieve a completed result without relying on transient event delivery.
+/// Returns a PyFuture that resolves to a DaemonResponsePy.
+///
+/// Args:
+///     client: A DaemonClientPy from daemon_connect().
+///     session_id: The session UUID string.
+///     task_id: The task UUID string.
+#[pyfunction]
+pub fn async_daemon_get_task_result(
+    client: DaemonClientPy,
+    session_id: &str,
+    task_id: &str,
+) -> PyResult<runtime_async::PyFuture> {
+    #[cfg(feature = "daemon-client")]
+    {
+        let client_arc = client.client.clone();
+        let session_id_owned = session_id.to_string();
+        let task_id_owned = task_id.to_string();
+        runtime_async::spawn_async(async move {
+            let sid: eggsec_runtime::SessionId = session_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!(
+                    "Invalid session ID: {}",
+                    session_id_owned
+                ))
+            })?;
+            let tid: eggsec_runtime::TaskId = task_id_owned.parse().map_err(|_| {
+                crate::error::ConfigError::new_err(format!("Invalid task ID: {}", task_id_owned))
+            })?;
+
+            let mut guard = client_arc.lock().await;
+            let inner = guard
+                .as_mut()
+                .ok_or_else(|| crate::error::NetworkError::new_err("client is closed"))?;
+
+            let msg = inner.get_task_result(sid, tid).await.map_err(|e| {
+                crate::error::NetworkError::new_err(format!("daemon get_task_result failed: {}", e))
             })?;
 
             Ok(server_message_to_response(msg))

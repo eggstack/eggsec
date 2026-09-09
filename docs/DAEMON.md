@@ -8,6 +8,17 @@ Session snapshots are persisted at lifecycle points (create, submit, cancel, clo
 
 On startup, `recover_persisted_state()` hydrates all persisted sessions. Running/queued tasks are dropped (not auto-resumed) and recorded as `Cancelled` with `last_error: "interrupted by daemon restart"`. Only completed task records are preserved across restarts.
 
+## Result Retrieval After Reconnect
+
+Completed task results do not depend on transient event delivery. `GetTaskResult { session_id, task_id }` reads live runtime state first and falls back to the persisted snapshot, so reconnecting clients (and clients connecting after a daemon restart) get the same `TaskResult { status, outcome }` without replaying events:
+
+```bash
+eggsec task result <session-id> <task-id>
+eggsec task result <session-id> <task-id> --json
+```
+
+See [docs/DAEMON_PARITY.md](DAEMON_PARITY.md) for the full local-vs-daemon parity matrix, reconnect/replay semantics, and the Python client mapping.
+
 ## Capabilities
 
 The daemon's default capabilities are **conservative** — when `full-executor` is enabled but lab mode is not configured, only a safe subset of task kinds is advertised (excluding hazardous families such as stress, packet, wireless-deauth, postex, c2, and evasion). Full capabilities require explicit `--full-executor` configuration.
@@ -23,13 +34,13 @@ The daemon supports pluggable transport layers for client connectivity:
 
 WebSocket and gRPC transports were evaluated but deferred — they are not implemented in Phase 12.
 
-The daemon advertises its available transports to clients via `DaemonCapabilities` (returned in `ServerMessage::Capabilities`). Clients send requests through `DaemonRequestContext` which carries the client ID, peer address, and transport kind. The daemon includes a `DAEMON_PROTOCOL_VERSION` (currently `1`) in its welcome message for client-side compatibility checks.
+The daemon advertises its available transports to clients via `DaemonCapabilities` (returned in `ServerMessage::Capabilities`). Clients send requests through `DaemonRequestContext` which carries the client ID, peer address, and transport kind. The daemon includes a `DAEMON_PROTOCOL_VERSION` (currently `2`; v2 adds durable `GetTaskResult` / `TaskResult`) in its health response for client-side compatibility checks.
 
 ### HTTP Transport Details
 
 - Binds to loopback only (`127.0.0.1`) by default; public bind (`0.0.0.0`) requires explicit config and emits a warning
 - Uses `McpStrict` enforcement profile by default — noninteractive, no manual overrides
-- 12 HTTP routes map to `ClientCommand` variants (create session, submit task, cancel, list sessions, etc.)
+- 14 HTTP routes map to `ClientCommand` variants (create session, submit task, get task result, cancel, list sessions, persisted history, etc.)
 - SSE endpoint provides real-time session event streaming
 
 ## Configuration
@@ -63,6 +74,10 @@ eggsec daemon show <session-id> --json
 
 # Check daemon health
 eggsec daemon status
+
+# Fetch one task's status + completed outcome (durable across reconnect)
+eggsec task result <session-id> <task-id>
+eggsec task result <session-id> <task-id> --json
 
 # Stop daemon
 eggsec daemon stop

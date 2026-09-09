@@ -11,7 +11,7 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 
 | Crate | Purpose |
 |-------|---------|
-| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs` (facade), `host_auth.rs` (RBAC), `host_persistence.rs` (fan-out), `client.rs`, `client_registry.rs`, `protocol.rs`, `http.rs`, SQLite store (`store/`) |
+| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs` (facade), `host_auth.rs` (RBAC), `host_persistence.rs` (fan-out), `client.rs`, `client_registry.rs` (daemon-local RBAC mirror — keep `command_permission()` in sync with the protocol crate), `http.rs`, SQLite store (`store/`). Wire types live only in `eggsec-daemon-protocol` (no `src/protocol.rs` duplicate). |
 | `crates/eggsec-daemon-protocol/` | Wire types + client registry shared by daemon and clients |
 | `crates/eggsec-runtime/` | `Runtime`, `RuntimeTaskExecutor`, task lifecycle DTOs (`runtime.rs` facade; `runtime_config.rs`, `runtime_sink.rs`) |
 
@@ -32,6 +32,7 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 3. Authorization uses the `CommandPermission` enum (per-command RBAC)
 4. Observers cannot submit/cancel tasks (`ErrorCode::PermissionDenied`)
 5. On strict-surface sessions only the Owner can approve policies; `ApprovePolicy` returns `ErrorCode::Unsupported` until wired
+6. Durable retrieval (protocol v2, Phase E): `GetTaskResult { session_id, task_id }` → `TaskResult { status, outcome }` reads live state first, persisted snapshot second — reconnecting clients fetch completed results without event replay. Reconnect = re-declare + re-subscribe; missed events recover as state. See `docs/DAEMON_PARITY.md`.
 
 ## CLI Integration
 
@@ -43,6 +44,7 @@ eggsec daemon history [--json]
 eggsec daemon show <session-id> [--json]
 eggsec session list|create|snapshot
 eggsec task submit|cancel|watch
+eggsec task result <session-id> <task-id> [--json]   # durable result retrieval (protocol v2)
 ```
 
 Local lifecycle smoke test: `bash scripts/smoke-daemon-local.sh [socket-path]` (ephemeral socket, observer-deny + owner-allow posture checks).

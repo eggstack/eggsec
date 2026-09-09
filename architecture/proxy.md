@@ -215,7 +215,7 @@ Key test categories:
 4. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
 5. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
 6. **Background health check never terminates**: `start_background_health_check()` returns a `JoinHandle` but the loop has no break condition (`lib.rs:248-285`).
-7. **`FlowBuffer::flows()` returns empty slice**: Due to `VecDeque` non-contiguity, `flows()` always returns `&[]`; callers must use `flows_vec()` or `iter()` (`types.rs:623-641`).
+7. **`FlowBuffer::flows()` linearizes in place (Phase E)**: `flows(&mut self)` calls `make_contiguous()` and returns a real ordered slice over every buffered flow; `flows_vec()`/`iter()` remain for shared-access callers (`intercept/types.rs:605-650`).
 8. **`is_private_ip` differs between layers**: The outbound `is_private_ip` (`lib.rs:336-356`) also blocks multicast and broadcast; the intercept `is_private_ip` (`intercept/mod.rs:157-174`) only blocks RFC 1918, loopback, link-local, and unspecified.
 
 ## References

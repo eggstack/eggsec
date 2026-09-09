@@ -25,6 +25,46 @@ pub use super::host_persistence::{
     persistence_with_timeout, record_audit_event_logged, PERSISTENCE_TASK_TIMEOUT,
 };
 
+/// Build a `TaskResult` response for one task inside a session snapshot.
+///
+/// Searches completed tasks first (durable outcomes), then active tasks
+/// (current status, no outcome yet). Returns `TaskNotFound` when the task
+/// is in neither list — e.g. it was never submitted or its session snapshot
+/// predates the submission.
+fn task_result_response(
+    request_id: String,
+    session_id: eggsec_runtime::SessionId,
+    task_id: eggsec_runtime::TaskId,
+    snapshot: &eggsec_runtime::SessionSnapshot,
+) -> ServerMessage {
+    let found = snapshot
+        .completed_tasks
+        .iter()
+        .find(|task| task.task_id == task_id)
+        .map(|task| (task.status.clone(), task.outcome.clone()))
+        .or_else(|| {
+            snapshot
+                .active_tasks
+                .iter()
+                .find(|task| task.task_id == task_id)
+                .map(|task| (task.status.clone(), task.outcome.clone()))
+        });
+    match found {
+        Some((status, outcome)) => ServerMessage::TaskResult {
+            request_id,
+            session_id,
+            task_id,
+            status,
+            outcome,
+        },
+        None => ServerMessage::Error {
+            request_id,
+            code: ErrorCode::TaskNotFound,
+            message: format!("task {task_id} not found in session {session_id}"),
+        },
+    }
+}
+
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
 ///
 /// `DaemonHost` is the bridge between the IPC protocol and the runtime.
@@ -484,6 +524,47 @@ impl DaemonHost {
                     message: e.to_string(),
                 },
             },
+
+            ClientCommand::GetTaskResult {
+                request_id,
+                session_id,
+                task_id,
+            } => {
+                // Durable result retrieval (Phase E WS5): live runtime state
+                // first so reconnecting clients see up-to-date status, then
+                // the persisted snapshot so completed results survive daemon
+                // restart. This never depends on transient event delivery.
+                match self.runtime().snapshot(session_id).await {
+                    Ok(snapshot) => {
+                        task_result_response(request_id, session_id, task_id, &snapshot)
+                    }
+                    Err(_) => {
+                        let store = self.store.clone();
+                        let sid = session_id;
+                        let persisted =
+                            tokio::task::spawn_blocking(move || store.blocking_get_snapshot(&sid))
+                                .await
+                                .unwrap_or_else(|e| {
+                                    Err(anyhow::anyhow!("spawn_blocking failed: {e}"))
+                                });
+                        match persisted {
+                            Ok(Some(snapshot)) => {
+                                task_result_response(request_id, session_id, task_id, &snapshot)
+                            }
+                            Ok(None) => ServerMessage::Error {
+                                request_id,
+                                code: ErrorCode::SessionNotFound,
+                                message: format!("session {session_id} not found"),
+                            },
+                            Err(e) => ServerMessage::Error {
+                                request_id,
+                                code: ErrorCode::Internal,
+                                message: e.to_string(),
+                            },
+                        }
+                    }
+                }
+            }
 
             ClientCommand::SubmitTask {
                 request_id,

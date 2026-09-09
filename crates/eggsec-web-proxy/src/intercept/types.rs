@@ -620,14 +620,10 @@ impl FlowBuffer {
         self.flows.push_back(flow);
     }
 
-    pub fn flows(&self) -> &[ProxyFlow] {
-        // VecDeque doesn't guarantee contiguous memory for slices, but
-        // for iteration/display purposes we convert to a Vec reference.
-        // For hot paths, use iter() instead.
-        // Safety: we need a contiguous slice; convert via make_contiguous after Rust 1.66.
-        // For now, return an empty slice and document the API change.
-        // NOTE: callers should use .iter() or .flows_vec() instead.
-        &[]
+    pub fn flows(&mut self) -> &mut [ProxyFlow] {
+        // VecDeque storage is not guaranteed contiguous; linearize in place
+        // so callers get a real slice over every buffered flow.
+        self.flows.make_contiguous()
     }
 
     /// Return a cloned Vec of flows for callers that need a contiguous slice.
@@ -954,10 +950,29 @@ mod tests {
     }
 
     #[test]
-    fn test_flow_buffer_flows_returns_empty_slice() {
+    fn test_flow_buffer_flows_returns_buffered_slice() {
         let mut buf = FlowBuffer::new(5);
         buf.push(make_flow(0));
-        // flows() currently returns &[] by design (VecDeque contiguity)
+        buf.push(make_flow(1));
+        // flows() returns a real slice over every buffered flow in order.
+        let indices: Vec<u64> = buf.flows().iter().map(|f| f.index).collect();
+        assert_eq!(indices, vec![0, 1]);
+    }
+
+    #[test]
+    fn test_flow_buffer_flows_after_eviction_wrap() {
+        let mut buf = FlowBuffer::new(3);
+        for i in 0..7 {
+            buf.push(make_flow(i));
+        }
+        // Even after the ring wraps, the slice stays ordered and complete.
+        let indices: Vec<u64> = buf.flows().iter().map(|f| f.index).collect();
+        assert_eq!(indices, vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn test_flow_buffer_flows_empty() {
+        let mut buf = FlowBuffer::new(5);
         assert!(buf.flows().is_empty());
     }
 

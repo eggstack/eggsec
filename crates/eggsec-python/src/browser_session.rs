@@ -11,7 +11,58 @@ use crate::runtime_async::PyFuture;
 
 // ═══════════════════════════════════════════════════════════════════
 // Workstream 7: Browser capabilities and session state
+//
+// Phase E: capabilities are derived from the active backend compiled into
+// this build, not hard-coded aspirational values. `BrowserCapabilities`
+// mirrors `eggsec::browser::backend::BrowserBackendCapabilities`; use
+// `BrowserCapabilities::current()` instead of constructing values by hand.
 // ═══════════════════════════════════════════════════════════════════
+
+/// Validate a navigation URL against managed-session policy (Phase E WS3).
+///
+/// Managed sessions are network execution: only `http`/`https` URLs with a
+/// host are allowed, and userinfo (`user:pass@host`) is rejected so
+/// credentials never enter the navigation path. Redirect targets must be
+/// re-validated with this helper by the caller; full scope authorization
+/// stays with the dispatching surface that owns the loaded scope.
+pub fn validate_browser_url_py(url: &str) -> Result<(), String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Err("browser navigation URL must not be empty".to_string());
+    }
+    let (scheme, rest) = url.split_once("://").ok_or_else(|| {
+        format!("browser navigation URL must use http:// or https:// (got '{url}')")
+    })?;
+    if scheme != "http" && scheme != "https" {
+        return Err(format!(
+            "browser navigation URL scheme must be http or https (got '{scheme}')"
+        ));
+    }
+    let authority = rest.split('/').next().unwrap_or_default();
+    let authority = authority.split('?').next().unwrap_or_default();
+    if authority.is_empty() {
+        return Err(format!(
+            "browser navigation URL must include a host (got '{url}')"
+        ));
+    }
+    if authority.contains('@') {
+        return Err("browser navigation URL must not embed userinfo credentials".to_string());
+    }
+    Ok(())
+}
+
+/// Name of the browser backend compiled into this build (Phase E WS1).
+///
+/// Returns `"headless_chrome"` when the `headless-browser` Cargo feature is
+/// enabled, `"unsupported"` otherwise. Managed sessions derive their
+/// advertised capabilities from this, never from hard-coded values.
+pub fn browser_backend_name_py() -> &'static str {
+    if cfg!(feature = "headless-browser") {
+        "headless_chrome"
+    } else {
+        "unsupported"
+    }
+}
 
 /// Describes the capabilities of a browser engine.
 #[pyclass(frozen)]
@@ -45,6 +96,49 @@ pub struct BrowserCapabilities {
 
 #[pymethods]
 impl BrowserCapabilities {
+    /// Truthful capabilities for the backend compiled into this build.
+    ///
+    /// Derives every field from the active backend instead of hard-coding
+    /// aspirational values. When the `headless-browser` feature is enabled
+    /// the `headless_chrome` backend backs DOM/XSS, SPA discovery, client
+    /// checks, interception, console capture, screenshots, cookies and
+    /// storage; PDF export and proxying have no engine path and stay false.
+    /// Without the feature, nothing is supported.
+    #[staticmethod]
+    fn current() -> Self {
+        if cfg!(feature = "headless-browser") {
+            Self {
+                engine: "headless_chrome".to_string(),
+                version: None,
+                supports_javascript: true,
+                supports_dom: true,
+                supports_network_intercept: true,
+                supports_console_capture: true,
+                supports_screenshot: true,
+                supports_pdf_export: false,
+                supports_cookie_access: true,
+                supports_storage_access: true,
+                supports_route_discovery: true,
+                supports_proxy: false,
+            }
+        } else {
+            Self {
+                engine: "unsupported".to_string(),
+                version: None,
+                supports_javascript: false,
+                supports_dom: false,
+                supports_network_intercept: false,
+                supports_console_capture: false,
+                supports_screenshot: false,
+                supports_pdf_export: false,
+                supports_cookie_access: false,
+                supports_storage_access: false,
+                supports_route_discovery: false,
+                supports_proxy: false,
+            }
+        }
+    }
+
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
         dict.set_item("engine", &self.engine)?;
@@ -646,7 +740,12 @@ impl BrowserDomSnapshot {
 // Workstream 11: Storage, cookies, and session lifecycle
 // ═══════════════════════════════════════════════════════════════════
 
-/// A browser cookie with sensitive value redacted.
+/// A browser cookie.
+///
+/// The `value` field carries secret material (session tokens). It is
+/// available to the session holder via the getter and `to_dict()`/`to_json()`
+/// for explicit opt-in collection, but `__repr__`/`__str__` always mask it
+/// so cookie values never leak into logs, events, or reports by accident.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserCookieInfo {
@@ -683,6 +782,34 @@ impl BrowserCookieInfo {
     fn to_json(&self) -> PyResult<String> {
         serde_json::to_string(self)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Masked summary: the value is never rendered into logs or reports.
+    fn __repr__(&self) -> String {
+        format!(
+            "BrowserCookieInfo(name={}, domain={}, path={}, value=[REDACTED])",
+            self.name, self.domain, self.path
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("BrowserCookieInfo({}=[REDACTED])", self.name)
+    }
+
+    /// Copy of this cookie with the value replaced by `[REDACTED]`.
+    ///
+    /// Use before persisting cookies to reports, checkpoints, or daemon
+    /// snapshots unless full-value retention was explicitly opted in.
+    fn redacted(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            value: "[REDACTED]".to_string(),
+            domain: self.domain.clone(),
+            path: self.path.clone(),
+            expires: self.expires,
+            http_only: self.http_only,
+            secure: self.secure,
+        }
     }
 }
 
@@ -822,6 +949,13 @@ impl BrowserSession {
     }
 
     /// Start the browser session.
+    ///
+    /// Managed live sessions are provisional: `start()` launches a backend
+    /// and reaches `Ready`, or fails with a structured error. The live
+    /// tab driver is not yet bound into this class, so `start()` fails
+    /// explicitly instead of pretending to launch. Use `browser_test()`
+    /// (backed by the real `headless_chrome` engine) for assessment until
+    /// managed live sessions are wired to [`browser_backend_name`].
     fn start(&self) -> PyResult<()> {
         let inner = self
             .inner
@@ -838,7 +972,7 @@ impl BrowserSession {
         }
 
         Err(ScanError::new_err(
-            "Browser session requires an active browser engine",
+            "Browser session requires an active browser engine: managed live sessions are not yet bound to a backend (see browser_backend_name); use browser_test() for headless assessment",
         ))
     }
 
@@ -863,8 +997,14 @@ impl BrowserSession {
     }
 
     /// Navigate to a URL and return the navigation event.
+    ///
+    /// The URL is validated against managed-session policy first (http/https
+    /// only, host required, no embedded credentials); redirect targets must
+    /// be re-validated by the caller under the same policy. Navigation
+    /// itself requires a live backend and fails explicitly until managed
+    /// live sessions are bound — no synthetic status/timing is returned.
     fn navigate(&self, url: &str) -> PyResult<BrowserNavigationEvent> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -878,111 +1018,179 @@ impl BrowserSession {
             )));
         }
 
-        inner.state = BrowserSessionState::Navigating;
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        if let Err(reason) = validate_browser_url_py(url) {
+            return Err(ScanError::new_err(format!(
+                "Invalid navigation URL: {reason}"
+            )));
+        }
 
-        let event = BrowserNavigationEvent {
-            url: url.to_string(),
-            final_url: url.to_string(),
-            status_code: 0,
-            redirect_chain: Vec::new(),
-            load_time_ms: 0,
-            timestamp_ms: now_ms,
-        };
-
-        inner.stats.pages_navigated += 1;
-        inner.state = BrowserSessionState::Ready;
-        Ok(event)
+        Err(ScanError::new_err(format!(
+            "Navigation to '{url}' requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment"
+        )))
     }
 
     /// Wait for a CSS selector to appear in the DOM.
+    ///
+    /// Uses actual DOM state with a bounded timeout once a live backend is
+    /// bound; until then it fails explicitly. An empty selector is rejected
+    /// up front.
+    #[pyo3(signature = (selector, timeout_ms=None))]
     fn wait_for_selector(&self, selector: &str, timeout_ms: Option<u64>) -> PyResult<bool> {
-        let _ = (selector, timeout_ms);
-        Err(ScanError::new_err(
-            "Browser session requires an active browser engine",
-        ))
+        if selector.trim().is_empty() {
+            return Err(ScanError::new_err("selector must not be empty"));
+        }
+        let _ = timeout_ms;
+        Err(ScanError::new_err(format!(
+            "wait_for_selector('{selector}') requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment"
+        )))
     }
 
     /// Capture a DOM snapshot of the current page.
+    ///
+    /// Requires a live session (`Ready`/`Inspecting`) and a bound backend.
+    /// Returns an explicit unsupported error until the backend is wired —
+    /// never a synthetic empty snapshot — so callers cannot mistake an
+    /// empty page for a successful capture.
     fn get_dom_snapshot(&self) -> PyResult<BrowserDomSnapshot> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
 
-        inner.stats.dom_snapshots += 1;
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        if inner.state != BrowserSessionState::Ready
+            && inner.state != BrowserSessionState::Inspecting
+        {
+            return Err(ScanError::new_err(format!(
+                "Cannot capture DOM snapshot in state {:?}",
+                inner.state
+            )));
+        }
 
-        Ok(BrowserDomSnapshot {
-            url: String::new(),
-            title: None,
-            forms: Vec::new(),
-            links: Vec::new(),
-            scripts: Vec::new(),
-            frames: Vec::new(),
-            timestamp_ms: now_ms,
-        })
+        Err(ScanError::new_err(
+            "DOM snapshot requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment",
+        ))
     }
 
     /// Get all captured console events.
+    ///
+    /// Returns only events captured from a live backend while collection was
+    /// enabled (`collect_console`). Without a live session there is nothing
+    /// truthful to return, so this fails explicitly instead of returning a
+    /// synthetic empty list.
     fn get_console_events(&self) -> PyResult<Vec<BrowserConsoleEvent>> {
-        self.inner
+        let inner = self
+            .inner
             .lock()
-            .map(|i| i.console_events.clone())
-            .map_err(|_| ScanError::new_err("Session state lock poisoned"))
+            .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
+
+        if inner.state != BrowserSessionState::Ready
+            && inner.state != BrowserSessionState::Inspecting
+        {
+            return Err(ScanError::new_err(format!(
+                "Cannot read console events in state {:?}: no live backend has captured events",
+                inner.state
+            )));
+        }
+
+        Ok(inner.console_events.clone())
     }
 
     /// Get all captured network events.
+    ///
+    /// Returns only events captured from a live backend while collection was
+    /// enabled (`collect_network`). Without a live session this fails
+    /// explicitly instead of returning a synthetic empty list.
     fn get_network_events(&self) -> PyResult<Vec<BrowserNetworkEvent>> {
-        self.inner
+        let inner = self
+            .inner
             .lock()
-            .map(|i| i.network_events.clone())
-            .map_err(|_| ScanError::new_err("Session state lock poisoned"))
+            .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
+
+        if inner.state != BrowserSessionState::Ready
+            && inner.state != BrowserSessionState::Inspecting
+        {
+            return Err(ScanError::new_err(format!(
+                "Cannot read network events in state {:?}: no live backend has captured events",
+                inner.state
+            )));
+        }
+
+        Ok(inner.network_events.clone())
     }
 
     /// Collect cookies and storage from the current page.
+    ///
+    /// Requires a live session and honors the configured collection settings
+    /// (`collect_cookies`/`collect_storage`): with collection disabled this
+    /// fails explicitly rather than returning synthetic empty storage.
+    /// Cookie values are sensitive; callers must treat the returned storage
+    /// as secret material (see `BrowserCookieInfo` redaction notes).
     fn get_cookies(&self) -> PyResult<BrowserStorageInfo> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
 
-        inner.stats.cookies_collected += 1;
-        Ok(BrowserStorageInfo {
-            local_storage: Vec::new(),
-            session_storage: Vec::new(),
-            cookies: Vec::new(),
-        })
+        if inner.state != BrowserSessionState::Ready
+            && inner.state != BrowserSessionState::Inspecting
+        {
+            return Err(ScanError::new_err(format!(
+                "Cannot collect cookies in state {:?}",
+                inner.state
+            )));
+        }
+
+        if !self.config.collect_cookies && !self.config.collect_storage {
+            return Err(ScanError::new_err(
+                "Cookie/storage collection is disabled for this session (collect_cookies=false, collect_storage=false)",
+            ));
+        }
+
+        Err(ScanError::new_err(
+            "Cookie collection requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment",
+        ))
     }
 
     /// Take a screenshot of the current page and return an artifact reference.
+    ///
+    /// Screenshots write through the artifact store and return a resolvable
+    /// artifact reference once a backend is bound. Until then this fails
+    /// explicitly — no synthetic `screenshot-N` references are issued, so
+    /// every returned artifact ID is guaranteed resolvable.
     fn take_screenshot(&self) -> PyResult<ArtifactReferencePy> {
-        let mut inner = self
+        let inner = self
             .inner
             .lock()
             .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
 
-        inner.stats.screenshots_taken += 1;
-        let artifact_id = format!("screenshot-{}", inner.stats.screenshots_taken);
+        if inner.state != BrowserSessionState::Ready
+            && inner.state != BrowserSessionState::Inspecting
+        {
+            return Err(ScanError::new_err(format!(
+                "Cannot take screenshot in state {:?}",
+                inner.state
+            )));
+        }
 
-        Ok(ArtifactReferencePy {
-            artifact_id,
-            finding_id: String::new(),
-            role: "screenshot".to_string(),
-        })
+        Err(ScanError::new_err(
+            "Screenshot capture requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment",
+        ))
     }
 
     /// Execute JavaScript in the page context.
+    ///
+    /// Script execution is risk-classified: it runs only when the backend
+    /// capability and security policy allow it. Managed sessions have no
+    /// bound backend, so execution is refused explicitly. An empty script
+    /// is rejected up front.
+    #[pyo3(signature = (script, timeout_ms=None))]
     fn execute_script(&self, script: &str, timeout_ms: Option<u64>) -> PyResult<String> {
-        let _ = (script, timeout_ms);
+        if script.trim().is_empty() {
+            return Err(ScanError::new_err("script must not be empty"));
+        }
+        let _ = timeout_ms;
         Err(ScanError::new_err(
-            "Browser session requires an active browser engine",
+            "Script execution requires an active browser engine and an explicit security-policy allowance: managed live sessions are not yet bound to a backend",
         ))
     }
 
@@ -1163,9 +1371,13 @@ impl AsyncBrowserSession {
     }
 
     /// Stop the browser session asynchronously.
+    ///
+    /// Idempotent resource cleanup, mirroring the synchronous `stop()`:
+    /// transitions to `Stopped` with no backend to tear down until managed
+    /// live sessions are bound.
     fn async_stop(&self) -> PyResult<PyFuture> {
         {
-            let inner = self
+            let mut inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
@@ -1175,16 +1387,18 @@ impl AsyncBrowserSession {
             {
                 return runtime_async::spawn_async(async { Ok(()) });
             }
+
+            inner.state = BrowserSessionState::Stopping;
+            inner.state = BrowserSessionState::Stopped;
         }
 
-        runtime_async::spawn_async(async move {
-            Err::<(), PyErr>(ScanError::new_err(
-                "Async browser session requires an active browser engine",
-            ))
-        })
+        runtime_async::spawn_async(async { Ok(()) })
     }
 
     /// Navigate to a URL asynchronously.
+    ///
+    /// Validates the URL against managed-session policy before spawning;
+    /// navigation itself requires a bound backend and fails explicitly.
     fn async_navigate(&self, url: &str) -> PyResult<PyFuture> {
         {
             let inner = self
@@ -1202,55 +1416,88 @@ impl AsyncBrowserSession {
             }
         }
 
+        if let Err(reason) = validate_browser_url_py(url) {
+            return Err(ScanError::new_err(format!(
+                "Invalid navigation URL: {reason}"
+            )));
+        }
+
         let url_owned = url.to_string();
         runtime_async::spawn_async(async move {
             Err::<BrowserNavigationEvent, PyErr>(ScanError::new_err(format!(
-                "Async navigation to '{}' requires an active browser engine",
-                url_owned
+                "Async navigation to '{url_owned}' requires an active browser engine: managed live sessions are not yet bound to a backend; use browser_test() for headless assessment"
             )))
         })
     }
 
     /// Wait for a selector asynchronously.
+    #[pyo3(signature = (selector, timeout_ms=None))]
     fn async_wait_for_selector(
         &self,
         selector: &str,
         timeout_ms: Option<u64>,
     ) -> PyResult<PyFuture> {
+        if selector.trim().is_empty() {
+            return Err(ScanError::new_err("selector must not be empty"));
+        }
         let _ = timeout_ms;
         let selector_owned = selector.to_string();
         runtime_async::spawn_async(async move {
             Err::<bool, PyErr>(ScanError::new_err(format!(
-                "Async wait_for_selector('{}') requires an active browser engine",
-                selector_owned
+                "Async wait_for_selector('{selector_owned}') requires an active browser engine: managed live sessions are not yet bound to a backend"
             )))
         })
     }
 
     /// Get a DOM snapshot asynchronously.
+    ///
+    /// Requires a live session; fails explicitly without a bound backend.
+    /// Statistics are only updated on successful capture, never on failure.
     fn async_get_dom_snapshot(&self) -> PyResult<PyFuture> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
         {
-            let mut inner = self
+            let inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
-            inner.stats.dom_snapshots += 1;
+
+            if inner.state != BrowserSessionState::Ready
+                && inner.state != BrowserSessionState::Inspecting
+            {
+                return Err(ScanError::new_err(format!(
+                    "Cannot capture DOM snapshot in state {:?}",
+                    inner.state
+                )));
+            }
         }
 
         runtime_async::spawn_async(async move {
             Err::<BrowserDomSnapshot, PyErr>(ScanError::new_err(
-                "Async DOM snapshot requires an active browser engine",
+                "Async DOM snapshot requires an active browser engine: managed live sessions are not yet bound to a backend",
             ))
         })
     }
 
     /// Get console events asynchronously.
+    ///
+    /// Without a live session there is nothing truthful to return, so this
+    /// fails explicitly instead of resolving to a synthetic empty list.
     fn async_get_console_events(&self) -> PyResult<PyFuture> {
+        {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
+
+            if inner.state != BrowserSessionState::Ready
+                && inner.state != BrowserSessionState::Inspecting
+            {
+                return Err(ScanError::new_err(format!(
+                    "Cannot read console events in state {:?}: no live backend has captured events",
+                    inner.state
+                )));
+            }
+        }
+
         let events = self
             .inner
             .lock()
@@ -1261,7 +1508,26 @@ impl AsyncBrowserSession {
     }
 
     /// Get network events asynchronously.
+    ///
+    /// Without a live session there is nothing truthful to return, so this
+    /// fails explicitly instead of resolving to a synthetic empty list.
     fn async_get_network_events(&self) -> PyResult<PyFuture> {
+        {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
+
+            if inner.state != BrowserSessionState::Ready
+                && inner.state != BrowserSessionState::Inspecting
+            {
+                return Err(ScanError::new_err(format!(
+                    "Cannot read network events in state {:?}: no live backend has captured events",
+                    inner.state
+                )));
+            }
+        }
+
         let events = self
             .inner
             .lock()
@@ -1272,56 +1538,83 @@ impl AsyncBrowserSession {
     }
 
     /// Collect cookies and storage asynchronously.
+    ///
+    /// Honors the configured collection settings and fails explicitly
+    /// without a bound backend. Statistics are only updated on success.
     fn async_get_cookies(&self) -> PyResult<PyFuture> {
         {
-            let mut inner = self
+            let inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
-            inner.stats.cookies_collected += 1;
+
+            if inner.state != BrowserSessionState::Ready
+                && inner.state != BrowserSessionState::Inspecting
+            {
+                return Err(ScanError::new_err(format!(
+                    "Cannot collect cookies in state {:?}",
+                    inner.state
+                )));
+            }
+        }
+
+        if !self.config.collect_cookies && !self.config.collect_storage {
+            return Err(ScanError::new_err(
+                "Cookie/storage collection is disabled for this session (collect_cookies=false, collect_storage=false)",
+            ));
         }
 
         runtime_async::spawn_async(async move {
             Err::<BrowserStorageInfo, PyErr>(ScanError::new_err(
-                "Async cookie collection requires an active browser engine",
+                "Async cookie collection requires an active browser engine: managed live sessions are not yet bound to a backend",
             ))
         })
     }
 
     /// Take a screenshot asynchronously.
+    ///
+    /// No synthetic `screenshot-N` references are issued: without a bound
+    /// backend and artifact-store write this fails explicitly, so every
+    /// returned artifact ID stays resolvable.
     fn async_take_screenshot(&self) -> PyResult<PyFuture> {
         {
-            let mut inner = self
+            let inner = self
                 .inner
                 .lock()
                 .map_err(|_| ScanError::new_err("Session state lock poisoned"))?;
-            inner.stats.screenshots_taken += 1;
+
+            if inner.state != BrowserSessionState::Ready
+                && inner.state != BrowserSessionState::Inspecting
+            {
+                return Err(ScanError::new_err(format!(
+                    "Cannot take screenshot in state {:?}",
+                    inner.state
+                )));
+            }
         }
 
-        let screenshot_count = self
-            .inner
-            .lock()
-            .map(|i| i.stats.screenshots_taken)
-            .unwrap_or(0);
-
-        let artifact_id = format!("screenshot-{}", screenshot_count);
         runtime_async::spawn_async(async move {
-            Ok(ArtifactReferencePy {
-                artifact_id,
-                finding_id: String::new(),
-                role: "screenshot".to_string(),
-            })
+            Err::<ArtifactReferencePy, PyErr>(ScanError::new_err(
+                "Async screenshot capture requires an active browser engine: managed live sessions are not yet bound to a backend",
+            ))
         })
     }
 
     /// Execute JavaScript asynchronously.
+    ///
+    /// Refused without a bound backend and an explicit security-policy
+    /// allowance; an empty script is rejected up front. The script text is
+    /// echoed in the error only as an identifier, never executed.
+    #[pyo3(signature = (script, timeout_ms=None))]
     fn async_execute_script(&self, script: &str, timeout_ms: Option<u64>) -> PyResult<PyFuture> {
+        if script.trim().is_empty() {
+            return Err(ScanError::new_err("script must not be empty"));
+        }
         let _ = timeout_ms;
         let script_owned = script.to_string();
         runtime_async::spawn_async(async move {
             Err::<String, PyErr>(ScanError::new_err(format!(
-                "Async script execution requires an active browser engine: {}",
-                script_owned
+                "Async script execution requires an active browser engine and an explicit security-policy allowance: managed live sessions are not yet bound to a backend ({script_owned})"
             )))
         })
     }
@@ -1416,4 +1709,34 @@ impl AsyncBrowserSession {
         inner.state = BrowserSessionState::Stopped;
         Ok(())
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase E WS1/WS3: backend-derived module functions
+// ═══════════════════════════════════════════════════════════════════
+
+/// Name of the browser backend compiled into this build.
+///
+/// Returns `"headless_chrome"` when the `headless-browser` Cargo feature is
+/// enabled, `"unsupported"` otherwise. Use with
+/// `BrowserCapabilities::current()` to advertise truthful capabilities.
+#[pyfunction]
+pub fn browser_backend_name() -> &'static str {
+    browser_backend_name_py()
+}
+
+/// Whether a real browser backend is compiled into this build.
+#[pyfunction]
+pub fn browser_backend_available() -> bool {
+    cfg!(feature = "headless-browser")
+}
+
+/// Validate a navigation URL against managed-session policy.
+///
+/// Only `http`/`https` URLs with a host are accepted; embedded userinfo
+/// credentials are rejected. Redirect targets must be re-validated with
+/// this function. Raises `ScanError` on violation.
+#[pyfunction]
+pub fn validate_browser_url(url: &str) -> PyResult<()> {
+    validate_browser_url_py(url).map_err(ScanError::new_err)
 }
