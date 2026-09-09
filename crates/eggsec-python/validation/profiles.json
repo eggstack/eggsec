@@ -519,6 +519,58 @@
         "import_error": 0,
         "feature_gate": 10
       }
+    },
+    {
+      "name": "wireless-fixture",
+      "description": "Wireless fixture — type surface + parser/heuristic, no hardware or privilege. Fails if all skip.",
+      "cargo_features": ["wireless"],
+      "system_packages": [],
+      "binaries": [],
+      "services": [],
+      "fixture_setup": null,
+      "readiness_probe": null,
+      "test_selector": "pytest -k 'TestWireless or test_wireless'",
+      "required_min_tests": 1,
+      "max_skips": 0,
+      "max_xfails": 0,
+      "blocking": true,
+      "schedule": "push",
+      "supported_os": ["linux"],
+      "expected_artifacts": ["test-results.xml"],
+      "timeout_seconds": 300,
+      "memory_mb": 512,
+      "requires_privileges": false,
+      "skip_budget": {
+        "network_error": 0,
+        "import_error": 0,
+        "feature_gate": 10
+      }
+    },
+    {
+      "name": "mobile-dynamic-fixture",
+      "description": "Mobile-dynamic fixture — session types + dry-run, no emulator. Fails if all skip. Live emulator stays in mobile-emulator (manual).",
+      "cargo_features": ["mobile", "mobile-dynamic"],
+      "system_packages": [],
+      "binaries": [],
+      "services": [],
+      "fixture_setup": null,
+      "readiness_probe": null,
+      "test_selector": "pytest -k 'test_mobile and not emulator and not dynamic_live'",
+      "required_min_tests": 1,
+      "max_skips": 0,
+      "max_xfails": 0,
+      "blocking": true,
+      "schedule": "push",
+      "supported_os": ["linux"],
+      "expected_artifacts": ["test-results.xml"],
+      "timeout_seconds": 300,
+      "memory_mb": 512,
+      "requires_privileges": false,
+      "skip_budget": {
+        "network_error": 0,
+        "import_error": 0,
+        "feature_gate": 10
+      }
     }
   ]
 }

@@ -3132,7 +3132,7 @@ W/PackageManager: permission denied: READ_SMS
         assert!(corr.is_none()); // no static baseline supplied
         if let Err(error) = std::fs::remove_file(&bp) {
             if error.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!(path = %bp, error = %error, "Failed to remove temporary baseline");
+                tracing::warn!(path = %bp.display(), error = %error, "Failed to remove temporary baseline");
             }
         }
 

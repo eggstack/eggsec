@@ -29,9 +29,17 @@ pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArg
         // Dynamic path: DefenseLab + SafeActive (Intrusive only for real/non-dry Frida) + mobile-dynamic feature + explicit allow flag(s)
         #[cfg(feature = "mobile-dynamic")]
         {
-            let descriptor = ctx
+            let mut descriptor = ctx
                 .describe_from_registry("mobile-dynamic", dynamic_target.clone())
                 .expect("mobile-dynamic should have registry metadata");
+            // Dry-run sends no traffic and touches no device (verified in
+            // run_dynamic_cli): evaluate at SafeActive so planning/CI works
+            // without privilege. Real runs keep the Intrusive metadata tier.
+            if let Some(crate::cli::MobileSubcommand::Dynamic(dargs)) = &args.command {
+                if dargs.dry_run {
+                    descriptor.risk = crate::config::OperationRisk::SafeActive;
+                }
+            }
             ctx.evaluate_and_enforce_operation(descriptor)?;
             // Extra runtime gate for non-dry (audited; same pattern as wireless deauth)
             // Note: the actual DynamicMobileArgs is inside the subcommand; re-fetch for the check

@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09).
 
 ## Objective
 
@@ -210,4 +210,22 @@ Do not promote `wireless-advanced` or other hazardous domains solely because fix
 
 ## Completion record
 
-Record baseline/final SHA, tested OS/kernel/tool versions, fixture images/artifacts, commands, required privileges, test/skip counts, lifecycle-loop results, and any external/hardware blockers.
+- Baseline SHA: `3a576421` (docs: Phase E completion). Final SHA: recorded on push (see CI run).
+- Tested host: Linux 6.8.0-139-generic x86_64 (Ubuntu), rustc 1.98.1, Python 3.12.3, no ADB/emulator/Frida (live legs correctly SKIP).
+- Fixture images/artifacts: no third-party fetch. Test APK generated from source (`scripts/make_test_apk.py`, 683 bytes, sha256 `b80372a3…`); canned `iwlist`/networks/frames in `wireless::fixture`; loopback bytes in `packet::fixture`; mock ADB on `127.0.0.1:0`.
+- Commands (all hermetic, no privilege):
+  - `cargo run -p eggsec-cli -- doctor`
+  - `bash scripts/check_platform.sh`
+  - `cargo test -p eggsec --lib --features packet-inspection packet::fixture::` (10 passed)
+  - `cargo test -p eggsec --lib --features wireless wireless::fixture::` (4 passed) and with `wireless-advanced` (6 passed)
+  - `cargo test -p eggsec-mobile-lab --features mobile-dynamic --lib` (108 passed)
+  - `./scripts/test-mobile-dynamic.sh` (dry-run legs pass)
+  - `cargo test -p eggsec --lib platform::` (6 passed) + doctor test
+  - `python3 scripts/validate_python_profiles.py` (new `wireless-fixture` + `mobile-dynamic-fixture` PASS)
+  - `bash scripts/check-architecture-guards.sh` (ALL PASSED)
+- Required privileges: none for fixtures. Live legs need root/`CAP_NET_ADMIN` (netns), ADB/AVD (emulator), lab interface + `iwlist` (wireless) — all isolated scripts that SKIP with the named prerequisite; full suite never runs as root.
+- Test/skip counts: fixture suites run with 0 skips on this host. Live probes (`setup_packet_netns.sh --check`, `setup_android_emulator.sh --check`) SKIP as expected (non-root, no SDK) with explicit messages — not failures.
+- Lifecycle loops: ADB 10x connect/shell, Frida 20x attach/execute, packet 20x craft→parse with FD-leak guard (`/proc/self/fd` delta ≤ 8), wireless 9 reason codes + 20x frame builds. No leaks observed; capture/emulator cleanup via abort/drop/trap.
+- Corrections made: `compute_tcp_checksum` option/payload offsets (pre-existing panic on TCP craft); `packet_matches_filter` → `pub(crate)` for fixture use; `AdbConnection: Debug` for error assertions; `dynamic.rs` `PathBuf` display in `tracing::warn!`; `adb.rs` useless `.into()` clippy fix; mobile-dynamic dry-run evaluated at SafeActive (was denied as Intrusive even though dry-run touches no device) plus `--allow-nonbaseline-capability` injection in `test-mobile-dynamic.sh` for non-interactive contexts; `RUST_LOG=error` on `--json` legs so tracing audit logs on stdout don't pollute JSON streams (script `jq` validation).
+- External/hardware blockers (accepted, documented in `docs/PLATFORM.md`): no Android SDK/AVD/KVM, no Frida CLI, non-root (no netns/live capture), no wireless lab interface — live integration evidence awaits a lab host; deep-checks `platform-integration` job (scheduled/manual) will carry it.
+- No new hazardous capability. `wireless-advanced`/`stress-testing`/RF stay manual/lab-only; fixtures alone promote nothing.

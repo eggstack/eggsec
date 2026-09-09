@@ -52,13 +52,19 @@ Mobile application security analysis module (static APK/IPA checks plus optional
 ```bash
 cargo check -p eggsec --features mobile
 cargo check -p eggsec --features mobile-dynamic
-cargo test -p eggsec-mobile-lab
+cargo test -p eggsec-mobile-lab --features mobile-dynamic --lib   # mock ADB + Frida simulation (no emulator)
+./scripts/test-mobile-dynamic.sh                                  # dry-run smoke (no device)
+bash scripts/check_platform.sh                                   # full fixture layer
 ```
 
-Dynamic tests require a connected device/emulator; see `scripts/test-mobile-dynamic.sh`.
+Fixture tests are hermetic (mock ADB server on loopback, Frida simulation,
+generated APK via `scripts/make_test_apk.py`). Live AVD runs are manual:
+`scripts/setup_android_emulator.sh --start`, then `test-mobile-dynamic.sh
+<apk> --real`. Prerequisites in `eggsec doctor` / `docs/PLATFORM.md`.
 
 ## Resources
 
 - `crates/eggsec/src/mobile/AGENTS.override.md` - Module guidance
 - `docs/MOBILE.md` - Full usage documentation
+- `docs/PLATFORM.md` - Prerequisite matrix and fixture vs live commands
 - `architecture/mobile.md` - Architecture deep dive

@@ -180,6 +180,33 @@ Phase 1 (Android ADB core + runtime log analysis) complete 2026-06-12.
 
 See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan for full details + safety model.
 
+## Test fixtures (Phase F)
+
+No emulator needed for the fixture layer (always runs, no privilege):
+
+```bash
+cargo test -p eggsec-mobile-lab --features mobile-dynamic --lib   # mock ADB lifecycle + Frida simulation
+./scripts/test-mobile-dynamic.sh                                  # dry-run smoke, no device
+python3 scripts/make_test_apk.py --out /tmp/eggsec-test.apk       # deterministic fixture APK from source
+eggsec doctor                                                     # centralized prerequisite matrix
+```
+
+The mock ADB server speaks CNXN/OPEN/OKAY/WRTE/CLSE on loopback and covers
+handshake, shell, sync push, package discovery, proxy/logcat, timeout,
+malformed handling, close idempotency, and reconnect. Frida lifecycle
+(attach → benign inspection → detach, cancellation, 20x repetition) uses
+simulation sessions. Live AVD runs stay manual:
+`scripts/setup_android_emulator.sh --check|--start|--stop`, then
+`./scripts/test-mobile-dynamic.sh /tmp/eggsec-test.apk --real`.
+See [PLATFORM.md](PLATFORM.md).
+
+Note (Phase F fix): `mobile-dynamic` is a non-baseline capability, so even
+dry-run planning requires the audited manual-only override in non-interactive
+(piped/CI) contexts: add `--allow-nonbaseline-capability` (global flag, safe
+for dry-run — no device touch). Interactive terminals prompt instead. The
+smoke script (`scripts/test-mobile-dynamic.sh`) injects this automatically;
+copy that pattern when scripting dry-runs.
+
 **Phase 1 Lab Setup (quick)**:
 1. Android Studio AVD (API 34+ recommended) or physical dev device with USB debugging + `adb`.
 2. Build a debug/test APK you control (signing disabled only in isolated CI job; provenance note required).

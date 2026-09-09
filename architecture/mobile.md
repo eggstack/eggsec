@@ -204,11 +204,19 @@ resolve_frida_script_spec("builtin:basic_method_trace") → embedded script sour
 - `apk.rs` (7 tests): Text manifest findings, ZipSlip rejection, empty manifest, network config, insecure storage, binary AXML, invalid input
 - `ipa.rs`: Synthetic IPA tests (plist, entitlements, signing, transport)
 - `dynamic.rs`: Dynamic report generation, correlation, baselines, evidence bundles
-- `frida.rs`: Script resolution, builtin dispatch, dry-run sessions
+- `frida.rs`: Script resolution, builtin dispatch, dry-run sessions, plus Phase F lifecycle (attach/execute/detach, cancellation, 20x loop)
+- `adb.rs`: Framing unit tests plus Phase F mock-server lifecycle (handshake, shell, sync/install, discovery, proxy/logcat, close idempotency, malformed, reconnect, 10x loop) — hermetic, no emulator
 - `traffic.rs`: Text log parsing, HAR parsing, cleartext/suspicious detection
 - `runtime.rs`: Logcat finding extraction (permission, crash, cleartext, secrets)
 - `lib.rs` (6 tests): Report defaults, formatting, bridge roundtrips, iOS/Android categories
-- Integration via `make test-ci`
+- Integration via `make test-ci`; fixtures via `bash scripts/check_platform.sh`
+
+## Platform Integration (Phase F)
+
+- Prerequisite matrix: `eggsec::platform` (`mobile-dynamic` rows: OS, feature, ADB, Frida CLI optional, emulator/device); `eggsec doctor` surfaces it.
+- Fixture APKs generated from source (`scripts/make_test_apk.py`); no third-party fetch.
+- Live AVD runner: `scripts/setup_android_emulator.sh` (pinned API 34 image, KVM check, `--check|--start|--stop`).
+- Live runs stay manual (`--real` + `--allow-dynamic-mobile`/`--allow-frida`); fixtures never need hardware or privilege.
 
 ## Invariants & Gotchas
 

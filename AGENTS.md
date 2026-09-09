@@ -240,6 +240,15 @@ Note: `http-api` is a feature on `eggsec-daemon` (not `eggsec`), enabling HTTP/S
 
 CLI features: `tui` (default), `daemon-client`, `headless`
 
+Platform integration (Phase F): prerequisite detection lives in
+`crates/eggsec/src/platform/` (`PlatformReport`, `skip_reason_for`) and is
+surfaced via `eggsec doctor`. Fixture tests (mock ADB, Frida simulation,
+`packet::fixture`, `wireless::fixture`) run hermetically with no root or
+hardware; live legs are isolated scripts (`scripts/setup_packet_netns.sh`,
+`scripts/setup_android_emulator.sh`) that SKIP with the named prerequisite.
+Never require the full suite to run as root. See `docs/PLATFORM.md` and
+`bash scripts/check_platform.sh`.
+
 Python bindings (`eggsec-python`): Build with `maturin develop` from `crates/eggsec-python/`. The stable-core boundary is the twenty-two-operation engine registry: the original ten (`scan_ports`, `scan_endpoints`, `fingerprint_services`, `recon_dns`, `inspect_tls`, `detect_technology`, `detect_waf`, `validate_waf`, `fuzz_http`, `load_test`) plus twelve promoted domains (`scan_git_secrets`, `generate_sbom`, `run_consolidated_recon`, `graphql_test`, `oauth_test`, `auth_test`, `db_probe`, `nse_run`, `scan_docker_image`, `scan_kubernetes`, `analyze_apk`, `analyze_ipa`). Daemon-client APIs remain provisional. Release fixtures use `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1`. See `docs/python/domain-maturity.md` for provisional/experimental boundary and `crates/eggsec-python/README.md` for examples.
 
 Provisional subsystems (scope-checked, policy-gated, not stable-core): network types (`eggsec.net`, `eggsec.sessions`, `eggsec.storage`), NSE runtime, interception proxy, database assessment. Experimental: raw packet injection (feature: `packet-inspection`). Package layout: stable core at top-level `eggsec`, provisional under `eggsec.net`/`eggsec.sessions`/`eggsec.storage`/`eggsec.reporting`/`eggsec.daemon`, experimental under `eggsec.experimental`. Feature introspection via `eggsec._feature_guard`.

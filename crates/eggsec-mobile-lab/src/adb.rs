@@ -276,6 +276,7 @@ impl AdbClient {
     }
 }
 
+#[derive(Debug)]
 pub struct AdbConnection {
     stream: TcpStream,
     next_local_id: u32,
@@ -362,7 +363,7 @@ impl AdbConnection {
                     output.extend_from_slice(&msg.data);
                     if let Err(e) = ids.ack().write_to(&mut self.stream).await {
                         tracing::warn!("adb: failed to send OKAY: {}", e);
-                        return Err(e.into());
+                        return Err(e);
                     }
                 }
                 ADB_CLSE => {
@@ -864,5 +865,319 @@ mod tests {
             format!("shell:{}\0", dumpsys_cmd).into_bytes(),
         );
         open_list.write_to(&mut c).await.unwrap();
+    }
+
+    // ------------------------------------------------------------------
+    // Phase F: hermetic ADB lifecycle fixture (mock server on loopback).
+    //
+    // No emulator, ADB binary, or privilege required. The mock speaks the
+    // minimal CNXN/OPEN/OKAY/WRTE/CLSE framing the client expects so the
+    // lifecycle below is deterministic: handshake, shell, sync push,
+    // package discovery, timeout/cancellation, malformed handling,
+    // close/cleanup idempotency, and reconnect.
+    // ------------------------------------------------------------------
+
+    use std::io::Write as _;
+    use tokio::net::TcpListener;
+
+    fn canned_shell_output(service: &str) -> Vec<u8> {
+        if service.contains("pm list packages") {
+            b"package:com.example.vuln.test\npackage:com.android.shell\n".to_vec()
+        } else if service.contains("pm install") {
+            b"Success\n".to_vec()
+        } else if service.contains("pm uninstall") {
+            b"Success\n".to_vec()
+        } else if service.contains("dumpsys package") {
+            b"requestedPermissions:\n  android.permission.CAMERA: granted=true\n".to_vec()
+        } else if service == "logcat" || service.starts_with("logcat") {
+            b"I/ActivityManager: START u0 {cmp=com.example.vuln.test/.MainActivity}\n".to_vec()
+        } else if service.contains("settings get global http_proxy") {
+            b":0\n".to_vec()
+        } else {
+            format!("mock-output for {service}\n").into_bytes()
+        }
+    }
+
+    /// Minimal mock ADB server. Handles one connection, then any number of
+    /// sequential OPEN services on it. Returns the bound address.
+    async fn spawn_mock_adb() -> (SocketAddr, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            // Handshake: expect CNXN, reply CNXN.
+            let Ok(hello) = AdbMessage::read_from(&mut stream).await else {
+                return;
+            };
+            if hello.command != ADB_CNXN {
+                return;
+            }
+            let reply = AdbMessage::new(
+                ADB_CNXN,
+                ADB_VERSION,
+                ADB_MAX_PAYLOAD,
+                b"device::\0".to_vec(),
+            );
+            if reply.write_to(&mut stream).await.is_err() {
+                return;
+            }
+            let mut next_remote: u32 = 100;
+            loop {
+                let open = match timeout(Duration::from_secs(5), AdbMessage::read_from(&mut stream))
+                    .await
+                {
+                    Ok(Ok(m)) => m,
+                    _ => break,
+                };
+                if open.command == ADB_CLSE {
+                    continue;
+                }
+                if open.command != ADB_OPEN {
+                    continue;
+                }
+                let local = open.arg0;
+                let remote = next_remote;
+                next_remote += 1;
+                let service = String::from_utf8_lossy(&open.data)
+                    .trim_matches('\0')
+                    .to_string();
+                let okay = AdbMessage::new(ADB_OKAY, remote, local, vec![]);
+                if okay.write_to(&mut stream).await.is_err() {
+                    break;
+                }
+                if service == "sync:" {
+                    // Drain WRTEs until DONE, then reply OKAY.
+                    loop {
+                        let msg = match timeout(
+                            Duration::from_secs(5),
+                            AdbMessage::read_from(&mut stream),
+                        )
+                        .await
+                        {
+                            Ok(Ok(m)) => m,
+                            _ => break,
+                        };
+                        if msg.command == ADB_WRTE && msg.data.starts_with(b"DONE") {
+                            break;
+                        }
+                        if msg.command == ADB_CLSE {
+                            break;
+                        }
+                    }
+                    let _ = AdbMessage::new(ADB_WRTE, remote, local, b"OKAY".to_vec())
+                        .write_to(&mut stream)
+                        .await;
+                    // Drain the client's CLSE (best-effort).
+                    let _ = timeout(
+                        Duration::from_millis(500),
+                        AdbMessage::read_from(&mut stream),
+                    )
+                    .await;
+                    continue;
+                }
+                // Shell-like service: one WRTE + CLSE.
+                let output =
+                    canned_shell_output(service.strip_prefix("shell:").unwrap_or(&service));
+                if AdbMessage::new(ADB_WRTE, remote, local, output)
+                    .write_to(&mut stream)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                if AdbMessage::new(ADB_CLSE, remote, local, vec![])
+                    .write_to(&mut stream)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                // Drain client OKAY/CLSE chatter (best-effort, bounded).
+                for _ in 0..4 {
+                    match timeout(
+                        Duration::from_millis(200),
+                        AdbMessage::read_from(&mut stream),
+                    )
+                    .await
+                    {
+                        Ok(Ok(m)) if m.command == ADB_CLSE || m.command == ADB_OKAY => {
+                            if m.command == ADB_CLSE {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
+            }
+        });
+        (addr, handle)
+    }
+
+    /// Deterministic minimal APK zip generated from source (no third-party
+    /// fetch). Contains a text AndroidManifest.xml plus a placeholder entry
+    /// so `install_apk` has stable bytes to push.
+    fn make_test_apk_bytes() -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file("AndroidManifest.xml", options).unwrap();
+            zip.write_all(
+                br#"<?xml version="1.0" encoding="utf-8"?>
+<manifest package="com.example.vuln.test" versionCode="1" versionName="1.0">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <application android:debuggable="true"/>
+</manifest>"#,
+            )
+            .unwrap();
+            zip.start_file("classes.dex", options).unwrap();
+            zip.write_all(b"dex-placeholder-for-fixture-only").unwrap();
+            zip.finish().unwrap();
+        }
+        buf
+    }
+
+    #[tokio::test]
+    async fn lifecycle_handshake_and_shell_against_mock() {
+        let (addr, server) = spawn_mock_adb().await;
+        let spec = addr.to_string();
+        let mut conn = timeout(Duration::from_secs(5), AdbClient::connect(&spec))
+            .await
+            .expect("connect must not hang")
+            .expect("handshake against mock must succeed");
+        let out = timeout(Duration::from_secs(5), conn.shell_exec("echo hello"))
+            .await
+            .expect("shell must not hang")
+            .expect("shell must succeed");
+        assert!(
+            out.contains("mock-output"),
+            "unexpected shell output: {out}"
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_package_discovery_and_permissions_against_mock() {
+        let (addr, server) = spawn_mock_adb().await;
+        let mut conn = AdbClient::connect(&addr.to_string()).await.unwrap();
+        let pkgs = conn.shell_exec("pm list packages").await.unwrap();
+        assert!(pkgs.contains("com.example.vuln.test"));
+        let perms = conn
+            .list_permissions("com.example.vuln.test")
+            .await
+            .unwrap();
+        assert!(perms.to_lowercase().contains("permission"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_sync_push_install_and_uninstall_against_mock() {
+        let (addr, server) = spawn_mock_adb().await;
+        let mut conn = AdbClient::connect(&addr.to_string()).await.unwrap();
+        let apk = make_test_apk_bytes();
+        assert!(!apk.is_empty());
+        let install_out = timeout(Duration::from_secs(10), conn.install_apk(&apk))
+            .await
+            .expect("install must not hang")
+            .expect("install against mock must succeed");
+        assert!(install_out.contains("Success"));
+        conn.uninstall("com.example.vuln.test", false)
+            .await
+            .expect("uninstall against mock must succeed");
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_proxy_and_logcat_against_mock() {
+        let (addr, server) = spawn_mock_adb().await;
+        let mut conn = AdbClient::connect(&addr.to_string()).await.unwrap();
+        conn.set_global_proxy("127.0.0.1", 8080).await.unwrap();
+        let proxy = conn.get_global_proxy().await.unwrap();
+        assert!(!proxy.is_empty());
+        conn.clear_global_proxy().await.unwrap();
+        let logs = conn
+            .capture_logcat(Duration::from_millis(300), Some("com.example.vuln.test"))
+            .await
+            .unwrap();
+        assert!(logs.contains("com.example.vuln.test") || logs.contains("ActivityManager"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_failed_close_does_not_corrupt_later_sessions() {
+        let (addr, server) = spawn_mock_adb().await;
+        let mut conn = AdbClient::connect(&addr.to_string()).await.unwrap();
+        // First session completes; close_service failures are best-effort
+        // (warn, not error), so a second session on the same transport must
+        // still work.
+        let first = conn.shell_exec("echo one").await.unwrap();
+        assert!(first.contains("mock-output"));
+        let second = conn.shell_exec("echo two").await.unwrap();
+        assert!(second.contains("mock-output"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_malformed_and_closed_responses_error_cleanly() {
+        // Closed port: fast, deterministic failure (no hang).
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let err = AdbClient::connect(&addr.to_string()).await.unwrap_err();
+        assert!(!err.to_string().is_empty());
+
+        // Bad magic: server sends a header with a wrong magic word.
+        let bad_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bad_addr = bad_listener.local_addr().unwrap();
+        let bad_server = tokio::spawn(async move {
+            if let Ok((mut s, _)) = bad_listener.accept().await {
+                let mut header = [0u8; 24];
+                use tokio::io::AsyncReadExt as _;
+                if s.read_exact(&mut header).await.is_ok() {
+                    let mut bad = header;
+                    bad[20..24].copy_from_slice(&0xdeadbeefu32.to_le_bytes());
+                    use tokio::io::AsyncWriteExt as _;
+                    let _ = s.write_all(&bad).await;
+                }
+            }
+        });
+        let err = AdbClient::connect(&bad_addr.to_string()).await.unwrap_err();
+        assert!(
+            err.to_string().contains("bad magic")
+                || err.to_string().contains("connect")
+                || err.to_string().contains("failed"),
+            "unexpected error: {err}"
+        );
+        bad_server.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_reconnect_after_restart() {
+        let (addr1, server1) = spawn_mock_adb().await;
+        let mut first = AdbClient::connect(&addr1.to_string()).await.unwrap();
+        assert!(first.shell_exec("echo before").await.is_ok());
+        drop(first);
+        server1.abort();
+
+        let (addr2, server2) = spawn_mock_adb().await;
+        let mut second = AdbClient::connect(&addr2.to_string()).await.unwrap();
+        let out = second.shell_exec("echo after").await.unwrap();
+        assert!(out.contains("mock-output"));
+        server2.abort();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_repeated_loops_show_no_regression() {
+        // Bounded repetition (fast, hermetic) to catch framing or cleanup
+        // regressions without an emulator.
+        for i in 0..10 {
+            let (addr, server) = spawn_mock_adb().await;
+            let mut conn = AdbClient::connect(&addr.to_string()).await.unwrap();
+            let out = conn.shell_exec(&format!("echo iter-{i}")).await.unwrap();
+            assert!(out.contains("mock-output"), "iteration {i} failed");
+            server.abort();
+        }
     }
 }

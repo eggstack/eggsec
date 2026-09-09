@@ -305,7 +305,7 @@ impl PacketCapture {
         }
     }
 
-    fn packet_matches_filter(data: &[u8], filter: Option<&str>) -> bool {
+    pub(crate) fn packet_matches_filter(data: &[u8], filter: Option<&str>) -> bool {
         let Some(filter) = filter.map(str::trim).filter(|f| !f.is_empty()) else {
             return true;
         };

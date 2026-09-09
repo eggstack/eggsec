@@ -46,11 +46,25 @@ make check-python
 
 This runs `scripts/check-python.sh` which builds the extension once and runs behavioral tests, capability/architecture checks, stub parity, and type checks in a single virtual environment.
 
-## Platform portability
+## Platform portability and integration (Phase F)
 
 Rust checks run on Linux in CI (`ci.yml` `rust` job). The `msrv` and
 `portability` jobs have been moved to `deep-checks.yml` (weekly schedule or
 manual trigger) to keep routine PR CI lightweight. The declared MSRV is 1.88.
+
+Platform-sensitive fixture suites are hermetic (no root/hardware) and run
+locally without privilege:
+
+```bash
+cargo run -p eggsec-cli -- doctor
+bash scripts/check_platform.sh
+```
+
+Live layers (netns, emulator, RF) are isolated, may SKIP with the named
+prerequisite, and run only via the scheduled/manual `platform-integration`
+job in `deep-checks.yml` — never in routine PR CI. Real RF/hardware stays a
+maintainer procedure. See [PLATFORM.md](PLATFORM.md) for the matrix, fixture
+vs live commands, expected skips, and release-gating.
 
 - MSRV validation: `deep-checks.yml` `msrv` job (Rust 1.88, `--no-default-features`)
 - macOS/Windows portability: `deep-checks.yml` `portability` job

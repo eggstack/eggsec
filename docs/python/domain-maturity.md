@@ -439,6 +439,43 @@ stable, during this review. The 11 stable domains retain stable status; the
 6 provisional domains and 6 experimental domains retain their current
 classifications with documented rationale for each gap.
 
+## Architecture Convergence Phase F: Platform Integration Maturity
+
+Phase F adds reproducible fixtures, centralized prerequisite detection, and
+isolated live tests for platform-sensitive domains without promoting any
+domain. No graduation changes: `mobile-dynamic` and `packet-inspection`
+stay provisional; `wireless`/`evasion`/`postex`/`c2` stay experimental.
+
+- Prerequisite matrix: `eggsec::platform` (`PlatformReport`, per-domain rows,
+  `skip_reason_for`); surfaced via `eggsec doctor` (human + `EGGSEC_DOCTOR_JSON=1`).
+- Mobile-dynamic: hermetic mock-ADB lifecycle (handshake/shell/sync/discovery/
+  timeout/malformed/close-idempotency/reconnect/10x loop) + Frida simulation
+  lifecycle (attach/execute/detach, cancellation, 20x loop) + generated fixture
+  APK (`scripts/make_test_apk.py`) + documented AVD runner
+  (`scripts/setup_android_emulator.sh`). Rust: 108 lib tests green.
+- Packet: `packet::fixture` loopback lifecycle (craft→parse roundtrip, filter,
+  hexdump, UDP loopback, bounded traceroute, cancellation/cleanup, 20x FD-leak
+  loop) + `scripts/setup_packet_netns.sh` isolated namespace fixture. Also
+  fixes a pre-existing TCP-checksum offset bug (`compute_tcp_checksum`).
+- Wireless: `wireless::fixture` three-tier split (unit / passive fixture /
+  manual RF) with canned `iwlist`, rogue-heuristic networks, known-good
+  suppression, and dry-run-only frame bytes (34-byte layout + 20x loop).
+- Privilege containment: fixtures never need root; live legs are isolated
+  scripts that SKIP with the named prerequisite; `doctor` explains missing caps.
+- CI: scheduled/manual `platform-integration` job in `deep-checks.yml` runs
+  fixtures + best-effort live probes (SKIP, never fail); routine PR CI unchanged.
+- Skip budgets: new `wireless-fixture` and `mobile-dynamic-fixture` Python
+  profiles (required_min_tests=1, max_skips=0; 100% skip fails). Live profiles
+  (`mobile-emulator`, `packet-live`, `active-probes`, `stress-testing`) remain
+  manual/privilege-gated.
+- Robustness: repeated lifecycle loops with FD-leak guards where observable;
+  no lingering capture/emulator tasks by construction (bounded timeouts, abort,
+  trap cleanup).
+
+Evidence: `bash scripts/check_platform.sh` (doctor + 4 fixture suites +
+dry-run smoke). Live evidence is recorded per-run in `docs/PLATFORM.md`
+terms, not as permanent green skips.
+
 ## Architecture Convergence Phase E: Programmability Parity (2026-09-09)
 
 Phase E closes the largest gaps between the programmable APIs and the

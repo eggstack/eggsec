@@ -324,9 +324,23 @@ eggsec report convert deauth.json -f html
 
 The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings. Native `--json` output from `eggsec wireless <iface> deauth` is auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled. TUI-generated results follow the same bridge path when exported to JSON.
 
+## Test tiers (Phase F safe-fixture strategy)
+
+1. **Unit** (no hardware): parser, security-type, and state tests under
+   `wireless::` — run with `cargo test -p eggsec --lib --features wireless wireless::`.
+2. **Passive fixture** (no hardware/privilege): canned `iwlist` output,
+   multi-BSSID rogue-heuristic networks, and known-good suppression in
+   `wireless::fixture` — same command, `wireless::fixture::` selector.
+3. **Active fixture** (bytes only, never transmitted): deauth/disassoc frame
+   construction under `wireless-advanced` — `cargo test -p eggsec --lib
+   --features wireless,wireless-advanced wireless::fixture::`.
+4. **Manual RF** (lab hardware only, never CI): real scans on owned nets and
+   any frame injection. Documented procedure; not required for release
+   readiness. See [PLATFORM.md](PLATFORM.md) and `eggsec doctor`.
+
 ## Troubleshooting
 
-- "iwlist: command not found" or permission denied: install wireless-tools; run as root or grant CAP_NET_ADMIN; ensure interface exists and is up (`ip link show`).
+- "iwlist: command not found" or permission denied: install wireless-tools; run as root or grant CAP_NET_ADMIN; ensure interface exists and is up (`ip link show`). For planning without privilege use `--dry-run --json`; for the matrix use `eggsec doctor`.
 - No networks seen: wrong interface, interface down, regulatory domain restrictions, or very short duration.
 - "No wireless interface specified": pass the interface name (e.g. `wlan0`, `wlp3s0`).
 - TUI wireless tab not visible: rebuild TUI/CLI with `--features wireless`.

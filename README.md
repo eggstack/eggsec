@@ -109,7 +109,7 @@ cargo build --release -p eggsec-cli
 ./target/release/eggsec scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
 ```
 
-See [docs/BUILD.md](docs/BUILD.md) for system dependencies, feature flags, and build examples.
+See [docs/BUILD.md](docs/BUILD.md) for system dependencies, feature flags, and build examples. For platform-sensitive domains (mobile-dynamic, packet, wireless), see [docs/PLATFORM.md](docs/PLATFORM.md) and `eggsec doctor`.
 
 ## Pipeline Profiles
 
@@ -181,6 +181,7 @@ See [docker-compose.yml](docker-compose.yml) for configuration.
 | [Capability Matrix](docs/CAPABILITY_MATRIX.md) | Operation/risk/feature/exposure matrix |
 | [Feature Matrix](docs/FEATURE_MATRIX.md) | Feature inventory and classification |
 | [Build Features](docs/BUILD.md) | System dependencies, feature flags, build examples |
+| [Platform Integration](docs/PLATFORM.md) | Prerequisite matrix, fixtures vs live tests, privilege containment |
 | [Pipeline Profiles](docs/PIPELINE.md) | Profile reference, command examples, defense-lab mode |
 | [Daemon Persistence](docs/DAEMON.md) | Session persistence, transport, CLI commands |
 | [Command Registry](docs/COMMAND_REGISTRY.md) | Command registry and dispatch |

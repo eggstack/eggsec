@@ -41,13 +41,18 @@ Wireless security analysis: passive WiFi reconnaissance plus lab-only active att
 ```bash
 cargo check -p eggsec --features wireless
 cargo check -p eggsec --features wireless-advanced
-cargo test --lib -p eggsec wireless::
+cargo test --lib -p eggsec --features wireless wireless::fixture::              # passive fixtures (no hardware)
+cargo test --lib -p eggsec --features wireless,wireless-advanced wireless::fixture::  # + dry-run frame bytes
 ```
 
-Hardware-dependent tests must be feature-gated and skipped without an interface.
+Three tiers: unit / passive fixture (`wireless::fixture`: canned iwlist,
+rogue heuristic, known-good) / manual RF (lab procedure only, never CI).
+Active frames are tested as bytes, never transmitted. See `eggsec doctor`
+and `docs/PLATFORM.md`.
 
 ## Resources
 
 - `crates/eggsec/src/wireless/AGENTS.override.md` - Module guidance
 - `docs/WIRELESS.md` - Full usage documentation
+- `docs/PLATFORM.md` - Prerequisite matrix and fixture vs live commands
 - `architecture/wireless.md` - Architecture deep dive

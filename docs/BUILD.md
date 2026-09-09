@@ -1,5 +1,8 @@
 # Build Features and System Dependencies
 
+See also: [PLATFORM.md](PLATFORM.md) (Phase F capability/prerequisite matrix,
+fixture vs live commands, and privilege containment) and `eggsec doctor`.
+
 ## Native Dependency Inventory
 
 Each native or external runtime requirement is documented with its owning
@@ -36,13 +39,14 @@ when the proto schema changes (a maintainer task).
 
 ## System Dependencies
 
-| Feature | Required Packages | Install (Ubuntu/Debian) |
-|---------|-------------------|--------------------------|
-| `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` |
-| `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) |
-| `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` |
-| `nse-ssh2` | `libssh2-dev` | `sudo apt-get install libssh2-dev` |
-| `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) |
+| Feature | Required Packages | Install (Ubuntu/Debian) | Live prerequisite (fixture needs none) |
+|---------|-------------------|--------------------------|----------------------------------------|
+| `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` | Linux + `CAP_NET_RAW`/root + `ip` (netns fixture); see `scripts/setup_packet_netns.sh --check` |
+| `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) | Linux + `CAP_NET_ADMIN`/root + managed/up lab interface; `--dry-run` needs nothing |
+| `mobile-dynamic` | Android SDK platform-tools (`adb`) | SDK platform-tools | Lab AVD/device you own; fixture (mock ADB) needs nothing; see `scripts/setup_android_emulator.sh --check` |
+| `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` | none (local fixtures) |
+| `nse-ssh2` | `libssh2-dev` | `sudo apt-get install libssh2-dev` | none beyond `nse` |
+| `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) | none |
 
 ```bash
 # Ubuntu/Debian (all features)

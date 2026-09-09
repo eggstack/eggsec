@@ -94,16 +94,37 @@ fi
 # Prefer cargo run when in-tree (ensures fresh build with features); fallback to prebuilt bin.
 run_eggsec() {
   local args=("$@")
+  # Phase F: mobile-dynamic is a non-baseline capability, so even dry-run
+  # planning requires the audited manual-only override in non-interactive
+  # (piped/CI) contexts. Safe: dry-run touches no device (verified).
+  local allow=(--allow-nonbaseline-capability)
+  # Phase F: tracing audit logs share stdout and would pollute --json streams
+  # (jq reads the first object). Keep JSON legs clean unless the caller set
+  # RUST_LOG explicitly; human legs keep default logs.
+  local want_quiet_logs=false
+  if [[ -z "${RUST_LOG:-}" ]]; then
+    for a in "${args[@]}"; do
+      if [[ "$a" == "--json" ]]; then want_quiet_logs=true; break; fi
+    done
+  fi
   if command -v cargo >/dev/null 2>&1 && [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
     # Run via cargo to guarantee features and latest code (quiet build noise on success path)
-    (cd "${REPO_ROOT}" && cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- mobile dynamic "${args[@]}")
+    if $want_quiet_logs; then
+      (cd "${REPO_ROOT}" && RUST_LOG=error cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- "${allow[@]}" mobile dynamic "${args[@]}")
+    else
+      (cd "${REPO_ROOT}" && cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- "${allow[@]}" mobile dynamic "${args[@]}")
+    fi
   else
     if [[ ! -x "${EGGSEC_BIN}" ]]; then
       echo "ERROR: eggsec binary not found at ${EGGSEC_BIN} and cargo not available in PATH." >&2
       echo "Build first: cargo build -p eggsec-cli --features ${FEATURES}" >&2
       exit 1
     fi
-    "${EGGSEC_BIN}" mobile dynamic "${args[@]}"
+    if $want_quiet_logs; then
+      RUST_LOG=error "${EGGSEC_BIN}" "${allow[@]}" mobile dynamic "${args[@]}"
+    else
+      "${EGGSEC_BIN}" "${allow[@]}" mobile dynamic "${args[@]}"
+    fi
   fi
 }
 

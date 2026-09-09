@@ -76,8 +76,15 @@ Packet capture, crafting, and parsing module workflows and patterns.
 
 ### Running Packet Tests
 ```bash
-cargo test --lib -p eggsec packet::
+cargo test --lib -p eggsec --features packet-inspection packet::fixture::  # hermetic loopback fixtures
+cargo test --lib -p eggsec --features packet-inspection packet::            # full unit suite
+bash scripts/check_platform.sh                                              # fixture layer + doctor
 ```
+
+`packet::fixture` needs no privilege or hardware (craft→parse, filter,
+hexdump, UDP loopback, bounded traceroute, FD-leak loops). Live capture
+stays in `scripts/setup_packet_netns.sh` (isolated namespace, SKIP without
+root). See `eggsec doctor` and `docs/PLATFORM.md`.
 
 ## Common Tasks
 
@@ -115,4 +122,6 @@ let packet = PacketBuilder::new()
 
 ## Resources
 - `architecture/networking.md` - Networking module design
+- `docs/PLATFORM.md` - Prerequisite matrix and fixture vs live commands
 - `crates/eggsec/src/packet/mod.rs` - Public API exports
+- `crates/eggsec/src/packet/fixture.rs` - Hermetic loopback fixtures

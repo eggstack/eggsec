@@ -46,8 +46,8 @@ fn compute_tcp_checksum(
     pseudo[26..28].copy_from_slice(&window.to_be_bytes());
     pseudo[28..30].copy_from_slice(&0u16.to_be_bytes());
     pseudo[30..32].copy_from_slice(&urgent.to_be_bytes());
-    pseudo[32..tcp_header_len].copy_from_slice(options);
-    pseudo[tcp_header_len..].copy_from_slice(payload);
+    pseudo[32..32 + options.len()].copy_from_slice(options);
+    pseudo[12 + tcp_header_len..].copy_from_slice(payload);
 
     checksum_data(&pseudo)
 }

@@ -1,5 +1,6 @@
 pub mod capture;
 pub mod craft;
+pub mod fixture;
 pub mod hexdump;
 pub mod parse_impl;
 pub mod traceroute;

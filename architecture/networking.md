@@ -211,7 +211,22 @@ Packet module does not use `ProbeIntent`/`ProbeRisk`. It is outside the `ScanPro
 | Traceroute (ICMP) | `stress-testing` or `packet-inspection` + unix + root (uses `surge_ping`) |
 | Build | `libpcap-dev` for pnet on some platforms |
 
+## Platform Integration (Phase F)
+
+`packet::fixture` provides the hermetic loopback layer (craft→parse
+roundtrip, filter, hexdump, UDP loopback, bounded traceroute, cancellation/
+cleanup, FD-leak loops) — no privilege or hardware. Live capture stays in
+`scripts/setup_packet_netns.sh` (isolated namespace, trap cleanup, local
+subnet only). Matrix in `eggsec::platform`; `eggsec doctor` reports OS/
+`CAP_NET_RAW`/interface status. Also fixes `compute_tcp_checksum` option/
+payload offsets. See `docs/PLATFORM.md`.
+
 ## Testing
+
+### Fixture Tests (`packet/fixture.rs`)
+
+Hermetic loopback lifecycle (see above). Live capture tests SKIP with the
+named prerequisite when root/pcap is absent.
 
 ### Unit Tests
 

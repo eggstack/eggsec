@@ -197,7 +197,21 @@ Wireless does not use `ProbeIntent`/`ProbeRisk` — it is a standalone defense-l
 | Interface mode | Managed mode, up | Monitor mode |
 | Build flag | `--features wireless` | `--features wireless-advanced` |
 
+## Platform Integration (Phase F)
+
+Three tiers: unit (parser/state, no hardware) / passive fixture
+(`wireless::fixture`: canned `iwlist`, rogue-heuristic networks, known-good
+suppression) / manual RF (lab procedure only, never CI). Active frames are
+tested as dry-run bytes (34-byte layout, reason codes, 20x loop). Matrix in
+`eggsec::platform`; `eggsec doctor` reports `iwlist`/privilege/interface
+status. See `docs/PLATFORM.md`.
+
 ## Testing
+
+### Fixture Tests (`wireless/fixture.rs`)
+
+Hermetic: parser on canned `iwlist`, rogue heuristic, known-good
+suppression, frame bytes + repetition loops. No interface or privilege.
 
 ### Unit Tests (`wireless/mod.rs:1068-1568`)
 

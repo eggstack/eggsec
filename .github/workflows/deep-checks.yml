@@ -57,3 +57,29 @@ jobs:
           key: portability-${{ matrix.os }}
       - name: Check compilation
         run: cargo check -p eggsec
+
+  # Phase F: platform integration maturity (scheduled/manual only, never PR CI).
+  # Fixture layer always runs (no root/hardware). Live layers report SKIP with
+  # the named prerequisite when caps/devices are absent — never red, never
+  # green-without-owner. Real RF/hardware stays a maintainer procedure.
+  platform-integration:
+    name: Platform integration (fixtures + live probes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: platform-integration
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep libpcap-dev wireless-tools iproute2 python3
+      - name: Doctor (centralized prerequisites)
+        run: cargo run -q -p eggsec-cli -- doctor
+      - name: Fixture layer (hermetic)
+        run: bash scripts/check_platform.sh
+      - name: Live probes (best-effort SKIP, never fail the job)
+        run: |
+          bash scripts/setup_packet_netns.sh --check || true
+          bash scripts/setup_android_emulator.sh --check || true
+          cargo run -q -p eggsec-cli --features wireless -- wireless --help >/dev/null
+          echo "live probes complete (SKIP above means prerequisite absent, not failure)"

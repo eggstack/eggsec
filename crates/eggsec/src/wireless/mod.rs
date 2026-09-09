@@ -8,6 +8,7 @@
 
 #[cfg(feature = "wireless-advanced")]
 pub mod active;
+pub mod fixture;
 
 use crate::error::{EggsecError, Result};
 use crate::types::Severity;

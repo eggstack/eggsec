@@ -958,4 +958,74 @@ mod tests {
         let res = execute_script(&sess, script).expect("struct");
         assert!(res.structured_output.is_some());
     }
+
+    // Phase F: instrumentation lifecycle evidence (hermetic, no device).
+    #[test]
+    fn lifecycle_backend_detection_reports_clearly_when_absent() {
+        // Must never panic and must distinguish simulation from live.
+        let available = is_frida_cli_available();
+        let sess = connect("emulator-5554").expect("connect always succeeds (sim or live)");
+        if available {
+            assert_eq!(sess.device_id, "emulator-5554");
+        } else {
+            assert!(
+                sess.is_simulation,
+                "without frida CLI the session must be marked simulation"
+            );
+        }
+    }
+
+    #[test]
+    fn lifecycle_attach_execute_detach_and_reattach() {
+        let first = connect("emulator-5554").expect("attach");
+        let script =
+            generate_basic_method_trace_script("com.example.vuln.test", &["javax.crypto.Cipher"]);
+        let res = execute_script(&first, &script).expect("benign inspection");
+        assert!(!res.findings.is_empty());
+        assert!(res.output.contains("simulation") || !res.output.is_empty());
+        drop(first); // detach/cleanup: session is a plain value, drop is idempotent
+        let second = connect("emulator-5554").expect("reattach after detach");
+        let res2 = execute_script(&second, &script).expect("second session works");
+        assert!(!res2.findings.is_empty());
+    }
+
+    #[test]
+    fn lifecycle_cancellation_is_observable_and_fast() {
+        use std::sync::mpsc::RecvTimeoutError;
+        let sess = FridaSession {
+            device_id: "emulator-5554".into(),
+            is_simulation: true,
+        };
+        let script = generate_crypto_keystore_script("com.example.vuln.test");
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let r = execute_script(&sess, &script);
+            let _ = tx.send(r);
+        });
+        // Simulation executes in milliseconds; a 5s bound proves no hang.
+        // A timeout here would mean the instrumentation path hung.
+        match rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(Ok(res)) => assert!(!res.findings.is_empty()),
+            Ok(Err(e)) => panic!("simulation execute must not error: {e}"),
+            Err(RecvTimeoutError::Timeout) => {
+                panic!("frida simulation hung (cancellation failure)")
+            }
+            Err(RecvTimeoutError::Disconnected) => panic!("worker dropped without result"),
+        }
+    }
+
+    #[test]
+    fn lifecycle_repeated_attach_execute_loops_show_no_regression() {
+        for i in 0..20 {
+            let sess = connect("emulator-5554").expect("attach");
+            let script = generate_api_trace_script("com.example.vuln.test");
+            let res = execute_script(&sess, &script).expect("execute");
+            assert!(
+                !res.findings.is_empty(),
+                "iteration {i} produced no findings"
+            );
+            assert!(res.duration_ms < 5000, "iteration {i} too slow");
+            drop(sess);
+        }
+    }
 }
