@@ -176,7 +176,7 @@ Add an architecture guard or compile-time ownership test only if necessary to pr
 
 Status: Executed.
 Baseline SHA: 2555c7b73e0b0734d569564d27119465a63fc6c5
-Final SHA: <filled at commit time>
+Final SHA: e27efccd41ea572548e2d689b86952d20dfa23a6
 Compatibility aliases retained:
 - Rust: `eggsec_tool_core::Scope` (deprecated alias for `ScopeSpec`),
   `eggsec_tool_core::ToolScopeSpec`, `eggsec::tool::Scope` (deprecated re-export)
