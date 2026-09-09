@@ -59,10 +59,12 @@ pub mod orchestrator;
 pub mod protocol;
 
 // Re-export core types at tool module level for convenience
+#[allow(deprecated)]
+pub use eggsec_tool_core::Scope;
 pub use eggsec_tool_core::{
     AuthConfig, AuthType, CancellationToken, CancellationTokenHandle, EndpointData, EndpointLimit,
-    GlobalRateLimitStatus, PortData, PortState, RequestOptions, Scope, Target, TargetType,
-    ToolError, ToolErrorType, ToolRequest, ToolResponse,
+    GlobalRateLimitStatus, PortData, PortState, RequestOptions, ScopeSpec, Target, TargetType,
+    ToolError, ToolErrorType, ToolRequest, ToolResponse, ToolScopeSpec,
 };
 
 pub use dispatcher::EnforcedDispatcher;

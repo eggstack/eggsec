@@ -124,7 +124,7 @@ impl ToolRequest {
 pub struct Target {
     pub target_type: TargetType,
     pub value: String,
-    pub scope: Option<Scope>,
+    pub scope: Option<ScopeSpec>,
 }
 
 impl Target {
@@ -160,7 +160,7 @@ impl Target {
         }
     }
 
-    pub fn with_scope(mut self, scope: Scope) -> Self {
+    pub fn with_scope(mut self, scope: ScopeSpec) -> Self {
         self.scope = Some(scope);
         self
     }
@@ -187,53 +187,106 @@ impl std::fmt::Display for TargetType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Scope {
+/// Declarative scope specification attached to a tool request.
+///
+/// This is transport data describing caller intent. It is **not** an
+/// authorization decision: only the engine (`eggsec::config::Scope` evaluated
+/// through `EnforcementContext`) may authorize execution. A `ScopeSpec` must
+/// be converted into an engine scope via the explicit fallible conversion in
+/// `eggsec::config` before any policy check, and the effective authorization
+/// is the intersection of the engine scope and the converted specification
+/// (both must allow; either may deny).
+///
+/// Wire compatibility: serde field names are unchanged from the legacy
+/// `Scope` DTO, so existing JSON/Python payloads deserialize. The Rust type
+/// was renamed to make the declarative role explicit; `Scope` remains as a
+/// deprecated alias.
+///
+/// There is intentionally no `is_allowed()`/`authorize()` method on this
+/// type. Glob matching here previously diverged from engine CIDR,
+/// DNS multi-address, port, and non-public-address policy. Callers needing a
+/// decision must convert and evaluate through the engine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScopeSpec {
+    /// Caller-declared hostname patterns (e.g. `example.com`, `*.example.com`).
+    /// Interpreted only after conversion to engine `ScopeRule`s.
+    #[serde(default)]
     pub allowed_patterns: Vec<String>,
+    /// Caller-declared exclusions. Never weakened during conversion.
+    #[serde(default)]
     pub excluded_patterns: Vec<String>,
+    /// Caller-declared IP/CIDR literals. Each entry must parse as an IP
+    /// address or CIDR during conversion; unparsable entries fail closed.
+    #[serde(default)]
     pub allowed_ips: Vec<String>,
+    /// Hint about subdomain intent for hostname patterns. Advisory only;
+    /// authoritative subdomain semantics come from the engine `*.` rule
+    /// handling after conversion.
+    #[serde(default)]
     pub allow_subdomains: bool,
 }
 
-impl Default for Scope {
+/// Preferred explicit name for the protocol-neutral declarative scope.
+pub type ToolScopeSpec = ScopeSpec;
+
+/// Deprecated compatibility alias for the legacy `Scope` DTO name.
+///
+/// The type is identical to [`ScopeSpec`]; the alias exists only so existing
+/// `eggsec_tool_core::Scope` / `eggsec::tool::Scope` paths keep compiling.
+/// It carries no authorization semantics. Migrate to `ScopeSpec` or
+/// `ToolScopeSpec`.
+#[deprecated(
+    since = "0.1.0",
+    note = "Declarative only; renamed to ScopeSpec (alias ToolScopeSpec). It never authorizes execution — convert to eggsec::config::Scope and evaluate via EnforcementContext."
+)]
+pub type Scope = ScopeSpec;
+
+impl Default for ScopeSpec {
+    /// Fail-closed default: no declared allowances.
+    ///
+    /// This is intentionally *not* the legacy permissive `["*"]` default.
+    /// An empty specification converts to an engine scope with no allowed
+    /// targets, which denies. Use [`ScopeSpec::allow_all`] only when the
+    /// caller explicitly intends a permissive declaration (still subject to
+    /// engine policy intersection).
     fn default() -> Self {
         Self {
+            allowed_patterns: Vec::new(),
+            excluded_patterns: Vec::new(),
+            allowed_ips: Vec::new(),
+            allow_subdomains: false,
+        }
+    }
+}
+
+impl ScopeSpec {
+    /// Explicitly permissive declaration (legacy `Default` shape).
+    ///
+    /// Still declarative only: after conversion the engine scope and policy
+    /// must also allow before anything executes.
+    pub fn allow_all() -> Self {
+        Self {
             allowed_patterns: vec!["*".to_string()],
-            excluded_patterns: vec![],
-            allowed_ips: vec![],
+            excluded_patterns: Vec::new(),
+            allowed_ips: Vec::new(),
             allow_subdomains: true,
         }
     }
-}
 
-impl Scope {
-    pub fn is_allowed(&self, target: &str) -> bool {
-        if !self.excluded_patterns.is_empty() {
-            for pattern in &self.excluded_patterns {
-                if glob_match(pattern, target) {
-                    return false;
-                }
-            }
+    /// Explicit deny-all declaration.
+    pub fn deny_all() -> Self {
+        Self {
+            allowed_patterns: Vec::new(),
+            excluded_patterns: vec!["*".to_string()],
+            allowed_ips: Vec::new(),
+            allow_subdomains: false,
         }
-
-        for pattern in &self.allowed_patterns {
-            if glob_match(pattern, target) {
-                return true;
-            }
-        }
-
-        false
     }
-}
 
-fn glob_match(pattern: &str, target: &str) -> bool {
-    if pattern == "*" {
-        return true;
+    /// Returns `true` when no allowances are declared.
+    pub fn is_empty_declaration(&self) -> bool {
+        self.allowed_patterns.is_empty() && self.allowed_ips.is_empty()
     }
-    if let Some(suffix) = pattern.strip_prefix("*.") {
-        return target.ends_with(suffix) || target == suffix;
-    }
-    pattern == target
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

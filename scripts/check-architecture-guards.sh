@@ -1550,6 +1550,25 @@ else
   echo "PASS: NSE library globals expose reset_for_run()."
 fi
 
+# 70. Protocol-neutral scope DTO must not authorize (Phase A scope contract)
+# eggsec-tool-core's ScopeSpec/ToolScopeSpec is declarative caller intent only.
+# An is_allowed()/authorize() method on the DTO would be a competing
+# authorization implementation diverging from engine policy (CIDR, DNS
+# multi-address, ports, non-public handling). Only eggsec::config::Scope
+# evaluated through EnforcementContext may authorize.
+echo ""
+echo "--- Check 70: ScopeSpec DTO has no authorization methods ---"
+DTO_AUTH=$(rg -n 'fn (is_allowed|authorize)\b' crates/eggsec-tool-core/src/ 2>/dev/null || true)
+if [[ -n "$DTO_AUTH" ]]; then
+  echo "$DTO_AUTH"
+  echo "FAIL: eggsec-tool-core must not implement is_allowed()/authorize()."
+  echo "      Convert ScopeSpec via eggsec::config::scope_from_spec and evaluate"
+  echo "      through EnforcementContext/engine Scope instead."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: ScopeSpec DTO has no authorization methods."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

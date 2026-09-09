@@ -921,7 +921,7 @@ impl Agent {
         depth: crate::agent::portfolio::ScanDepth,
         cancellation_token: Option<CancellationToken>,
         target_type: crate::tool::request::TargetType,
-        scope: Option<crate::tool::request::Scope>,
+        scope: Option<crate::tool::request::ScopeSpec>,
     ) -> Result<ToolResponse> {
         // Check operational constraints before dispatch
         self.constraint_checker
@@ -1408,21 +1408,40 @@ impl Agent {
     }
 }
 
-/// Convert config::Scope to tool::request::Scope
-fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::Scope {
-    crate::tool::request::Scope {
-        allowed_patterns: config_scope
-            .allowed_targets
-            .iter()
-            .map(|rule| rule.pattern.clone())
-            .collect(),
-        excluded_patterns: config_scope
-            .excluded_targets
-            .iter()
-            .map(|rule| rule.pattern.clone())
-            .collect(),
-        allowed_ips: vec![],    // config::Scope doesn't have allowed_ips directly
-        allow_subdomains: true, // default
+/// Convert config::Scope to the declarative transport specification.
+///
+/// This is a view projection for carrying scope intent on a tool request; it
+/// never authorizes. Enforcement still happens in the engine via
+/// `EnforcementContext` plus the request-spec intersection in dispatch.
+/// CIDR rules (both `cidr` fields and CIDR-in-`pattern` entries) are preserved
+/// into `allowed_ips`/`excluded_patterns` so the round trip through
+/// `scope_from_spec` does not silently narrow or broaden the rule set.
+fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::ScopeSpec {
+    use crate::tool::request::ScopeSpec;
+    let mut allowed_patterns = Vec::new();
+    let mut allowed_ips = Vec::new();
+    for rule in &config_scope.allowed_targets {
+        if let Some(ref cidr) = rule.cidr {
+            allowed_ips.push(cidr.clone());
+        } else if rule.pattern.contains('/') {
+            allowed_ips.push(rule.pattern.clone());
+        } else if !rule.pattern.is_empty() {
+            allowed_patterns.push(rule.pattern.clone());
+        }
+    }
+    let mut excluded_patterns = Vec::new();
+    for rule in &config_scope.excluded_targets {
+        if let Some(ref cidr) = rule.cidr {
+            excluded_patterns.push(cidr.clone());
+        } else if !rule.pattern.is_empty() {
+            excluded_patterns.push(rule.pattern.clone());
+        }
+    }
+    ScopeSpec {
+        allowed_patterns,
+        excluded_patterns,
+        allowed_ips,
+        allow_subdomains: true,
     }
 }
 

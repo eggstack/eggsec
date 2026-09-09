@@ -11,6 +11,16 @@ All target-bearing operations go through scope validation:
 - Scope rules define allowed targets
 - Operations outside scope are rejected
 
+Exactly one implementation authorizes network targets: `eggsec::config::Scope`
+evaluated through `EnforcementContext` (or its `is_target_allowed` policy
+implementation). Protocol-neutral declarations (`eggsec-tool-core::ScopeSpec`,
+Python `ToolScopeSpec`, gRPC `Scope` message) are caller intent only — they
+have no authorization method and must be converted via
+`eggsec::config::scope_from_spec` before any policy check. A request carrying
+a declaration is authorized only when the engine scope **and** the converted
+declaration both allow (intersection; either may deny, conversion failures
+deny).
+
 ## Type-Level Enforcement
 
 Strict programmatic surfaces (REST, MCP, security-agent, gRPC, CI) require an `ApprovedOperation` token before dispatch. The token is produced exclusively by `EnforcementContext::approve()` or `approve_manual()` and verified by `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` calls are prohibited in strict surfaces and enforced by source-scan regression tests.

@@ -371,6 +371,10 @@ impl TaskQueue {
         }
     }
 
+    // Large error type is inherent to the channel API (SendError carries the
+    // task back to the caller); boxing would only add indirection at every
+    // send site for no behavioral gain.
+    #[allow(clippy::result_large_err)]
     pub async fn send(
         &self,
         task: ScheduledTask,

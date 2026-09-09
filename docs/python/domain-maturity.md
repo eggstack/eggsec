@@ -118,7 +118,7 @@ aliased wrappers. The binding map is documented in
 | `ToolErrorType` | `ToolErrorType` | Error classification enum |
 | `ToolPortState` | `PortState` | Port scan state enum |
 | `ToolStreamEventType` | `StreamEventType` | Stream event type enum |
-| `ToolScope` | `Scope` | Execution scope |
+| `ToolScopeSpec` (`ToolScope` deprecated alias) | `ScopeSpec` | Declarative scope spec (caller intent; convert via `to_engine_scope()`) |
 | `ToolTarget` | `Target` | Scanning target |
 | `ToolRequestOptions` | `RequestOptions` | Request options |
 | `ToolAuthConfig` | `AuthConfig` | Auth configuration |

@@ -49,7 +49,7 @@ All types are frozen pyclasses with `to_dict()`, `to_json()`, `__repr__`, and
 
 | Python Type | Rust Source | Description |
 |-------------|-------------|-------------|
-| `ToolScope` | `Scope` | Allowed/excluded patterns and IPs |
+| `ToolScopeSpec` (`ToolScope` deprecated alias) | `ScopeSpec` | Declarative scope spec (caller intent; no `is_allowed()` — convert via `to_engine_scope()`) |
 | `ToolTarget` | `Target` | Target type + value + optional scope |
 | `ToolRequestOptions` | `RequestOptions` | Timeout, concurrency, proxy, stealth, SSL |
 | `ToolAuthConfig` | `AuthConfig` | Auth type + credentials (redacted in repr) |

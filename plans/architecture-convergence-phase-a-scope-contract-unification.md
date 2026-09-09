@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed.
 
 ## Objective
 
@@ -174,12 +174,21 @@ Add an architecture guard or compile-time ownership test only if necessary to pr
 
 ## Completion record
 
-When implemented, append:
-
-```text
 Status: Executed.
-Baseline SHA: <sha>
-Final SHA: <sha>
-Compatibility aliases retained: <list or none>
-Verification: <commands/results>
-```
+Baseline SHA: 2555c7b73e0b0734d569564d27119465a63fc6c5
+Final SHA: <filled at commit time>
+Compatibility aliases retained:
+- Rust: `eggsec_tool_core::Scope` (deprecated alias for `ScopeSpec`),
+  `eggsec_tool_core::ToolScopeSpec`, `eggsec::tool::Scope` (deprecated re-export)
+- Python: `ToolScope` (alias for `ToolScopeSpec`)
+- gRPC: `Scope` message field names/numbers unchanged (documented declarative)
+Verification: `make check` (EXIT=0), `make check-python` (EXIT=0, 4450 passed),
+`cargo check -p eggsec --features rest-api/grpc-api/tool-api`,
+`cargo check -p eggsec-cli` (default + `--no-default-features`),
+`cargo check -p eggsec-daemon`, arch guard check 70 PASS.
+Notes:
+- `ScopeSpec::default()` is now fail-closed deny (was permissive `["*"]`);
+  use `ScopeSpec::allow_all()` for an explicit permissive declaration.
+- Pre-existing clippy `result_large_err` failure in untouched
+  `crates/eggsec-agent/src/scheduler.rs` fixed with a targeted allow so the
+  `make check` contract is green.

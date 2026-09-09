@@ -116,6 +116,32 @@ eggsec.load_test_http("https://evil.com", 100, 10, 30, scope)
 eggsec.load_test_http("https://example.com", 0, 10, 30, scope)  # total_requests=0
 ```
 
+## ToolScopeSpec: declarative scope for tool requests (not authorization)
+
+`eggsec.ToolScopeSpec` (legacy alias `ToolScope`) is a protocol-neutral
+**scope specification**: caller intent attached to a `ToolTarget`, never an
+authorization decision. It has no `is_allowed()` method. Before anything
+executes, the declaration is converted into an engine `Scope` and intersected
+with the configured engine scope — both must allow, either may deny:
+
+```python
+spec = eggsec.ToolScopeSpec.new(allowed_patterns=["example.com"])
+engine_scope = spec.to_engine_scope()  # fail-closed; bad IP/CIDR raises ValueError
+
+# Permissive declarations cannot widen a restrictive engine scope:
+strict = eggsec.Scope.allow_hosts(["example.com"])
+wide = eggsec.ToolScopeSpec.allow_all().to_engine_scope()
+assert wide.is_target_allowed("other.com") is True   # declaration alone...
+assert strict.is_target_allowed("other.com") is False  # ...never overrides policy
+```
+
+Rules:
+
+- Convert with `to_engine_scope()`; conversion failures deny (fail closed).
+- `allowed_ips` entries must be IP literals or CIDR ranges.
+- The spec carries no port/rate-limit fields; those stay under engine policy.
+- An empty declaration denies everything.
+
 ## Best Practices
 
 1. **Be specific** -- allow only the hosts and ports you need. Start with `deny_all()` and add rules.

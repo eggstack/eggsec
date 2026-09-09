@@ -323,8 +323,8 @@ class TestToolTarget:
         assert t.target_type.value == "file"
 
     def test_with_scope(self):
-        from eggsec import ToolTarget, ToolScope
-        scope = ToolScope.allow_all()
+        from eggsec import ToolTarget, ToolScopeSpec
+        scope = ToolScopeSpec.allow_all()
         t = ToolTarget.with_scope(ToolTarget.url("example.com"), scope)
         assert t.scope is not None
         assert t.scope.allow_subdomains is True
@@ -354,22 +354,22 @@ class TestToolTarget:
         assert "example.com" in str(t)
 
 
-class TestToolScope:
+class TestToolScopeSpec:
     def test_allow_all(self):
-        from eggsec import ToolScope
-        s = ToolScope.allow_all()
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.allow_all()
         assert s.allow_subdomains is True
         assert "*" in s.allowed_patterns
 
     def test_deny_all(self):
-        from eggsec import ToolScope
-        s = ToolScope.deny_all()
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.deny_all()
         assert s.allowed_patterns == []
         assert "*" in s.excluded_patterns
 
     def test_custom(self):
-        from eggsec import ToolScope
-        s = ToolScope.new(
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(
             allowed_patterns=["example.com", "*.test.com"],
             excluded_patterns=["admin.example.com"],
             allowed_ips=["10.0.0.1"],
@@ -380,29 +380,97 @@ class TestToolScope:
         assert len(s.allowed_ips) == 1
         assert s.allow_subdomains is False
 
-    def test_is_allowed(self):
-        from eggsec import ToolScope
-        s = ToolScope.new(allowed_patterns=["example.com"])
-        assert s.is_allowed("example.com") is True
-        assert s.is_allowed("other.com") is False
+    def test_no_authorization_method(self):
+        # Contract: the declarative DTO must not decide authorization.
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(allowed_patterns=["example.com"])
+        assert not hasattr(s, "is_allowed")
+
+    def test_to_engine_scope(self):
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(allowed_patterns=["example.com"])
+        engine_scope = s.to_engine_scope()
+        assert engine_scope.is_target_allowed("example.com") is True
+        assert engine_scope.is_target_allowed("other.com") is False
+
+    def test_to_engine_scope_invalid_ip_fails_closed(self):
+        import pytest
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(allowed_ips=["not-an-ip"])
+        with pytest.raises(ValueError):
+            s.to_engine_scope()
+
+    def test_permissive_spec_cannot_override_restrictive_engine_scope(self):
+        # Intersection contract: a permissive declaration never widens a
+        # restrictive engine scope. Both layers must allow; either may deny.
+        from eggsec import Scope, ToolScopeSpec
+        engine_scope = Scope.allow_hosts(["example.com"])
+        permissive = ToolScopeSpec.allow_all().to_engine_scope()
+        assert permissive.is_target_allowed("other.com") is True
+        assert engine_scope.is_target_allowed("other.com") is False
+        effective = permissive.is_target_allowed(
+            "other.com"
+        ) and engine_scope.is_target_allowed("other.com")
+        assert effective is False
+        assert engine_scope.is_target_allowed("example.com") is True
+
+    def test_from_dict_round_trip(self):
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(
+            allowed_patterns=["example.com"],
+            excluded_patterns=["admin.example.com"],
+            allowed_ips=["10.0.0.1"],
+            allow_subdomains=False,
+        )
+        restored = ToolScopeSpec.from_dict(s.to_dict())
+        assert restored.allowed_patterns == ["example.com"]
+        assert restored.excluded_patterns == ["admin.example.com"]
+        assert restored.allowed_ips == ["10.0.0.1"]
+        assert restored.allow_subdomains is False
+
+    def test_from_json_round_trip(self):
+        import json
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.allow_all()
+        restored = ToolScopeSpec.from_json(s.to_json())
+        assert restored.allowed_patterns == ["*"]
+        parsed = json.loads(s.to_json())
+        assert "allowed_patterns" in parsed
+
+    def test_legacy_scope_json_deserializes(self):
+        # Wire compatibility: payloads written with the legacy Scope DTO
+        # field names must still deserialize.
+        from eggsec import ToolScopeSpec
+        legacy = (
+            '{"allowed_patterns": ["example.com"], "excluded_patterns": [], '
+            '"allowed_ips": [], "allow_subdomains": true}'
+        )
+        s = ToolScopeSpec.from_json(legacy)
+        assert s.allowed_patterns == ["example.com"]
+        assert s.allow_subdomains is True
+
+    def test_tool_scope_alias(self):
+        # Deprecated alias still resolves to the same class.
+        from eggsec import ToolScope, ToolScopeSpec
+        assert ToolScope is ToolScopeSpec
 
     def test_to_dict(self):
-        from eggsec import ToolScope
-        d = ToolScope.allow_all().to_dict()
+        from eggsec import ToolScopeSpec
+        d = ToolScopeSpec.allow_all().to_dict()
         assert isinstance(d, dict)
         assert "allowed_patterns" in d
 
     def test_to_json(self):
-        from eggsec import ToolScope
-        j = ToolScope.allow_all().to_json()
+        from eggsec import ToolScopeSpec
+        j = ToolScopeSpec.allow_all().to_json()
         parsed = json.loads(j)
         assert "allowed_patterns" in parsed
 
     def test_repr_and_str(self):
-        from eggsec import ToolScope
-        s = ToolScope.allow_all()
-        assert "ScopeToolPy" in repr(s)
-        assert "Scope" in str(s)
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.allow_all()
+        assert "ToolScopeSpec" in repr(s)
+        assert "ToolScopeSpec" in str(s)
 
 
 class TestToolRequestOptions:
@@ -979,8 +1047,8 @@ class TestRoundTripSerialization:
         assert "value" in parsed_json
 
     def test_scope_round_trip(self):
-        from eggsec import ToolScope
-        s = ToolScope.new(
+        from eggsec import ToolScopeSpec
+        s = ToolScopeSpec.new(
             allowed_patterns=["example.com"],
             allow_subdomains=False,
         )

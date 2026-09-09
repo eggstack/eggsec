@@ -348,12 +348,15 @@ fn proto_target_type_to_internal(t: i32) -> crate::tool::request::TargetType {
 }
 
 fn convert_proto_target(target: &Target) -> crate::tool::request::Target {
-    let scope = target.scope.as_ref().map(|s| crate::tool::request::Scope {
-        allowed_patterns: s.allowed_patterns.clone(),
-        excluded_patterns: s.excluded_patterns.clone(),
-        allowed_ips: s.allowed_ips.clone(),
-        allow_subdomains: s.allow_subdomains,
-    });
+    let scope = target
+        .scope
+        .as_ref()
+        .map(|s| crate::tool::request::ScopeSpec {
+            allowed_patterns: s.allowed_patterns.clone(),
+            excluded_patterns: s.excluded_patterns.clone(),
+            allowed_ips: s.allowed_ips.clone(),
+            allow_subdomains: s.allow_subdomains,
+        });
 
     crate::tool::request::Target {
         target_type: proto_target_type_to_internal(target.r#type),

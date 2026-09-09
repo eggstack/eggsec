@@ -17,6 +17,8 @@ The contract below is the source of truth for how enforcement behaves per execut
 | **Manual guarded** | Strict human mode (`ManualGuarded`). Equivalent to CLI `--strict-scope` and future TUI guarded toggle. No discretion path. |
 | **Agent strict** | Noninteractive/model-controlled strict posture (`AgentStrict`). Cannot self-approve scope expansion or override any enforcement. Handler defensively rebuilds `AgentStrict`; runtime validates profile at construction. |
 | **Scope provenance** | Whether scope came from an explicit manifest (`ConfigFile`, `CliScopeFile`, `GeneratedPreset`) versus `DefaultEmpty` (no manifest provided). |
+| **Scope specification** | Declarative caller intent (`eggsec-tool-core::ScopeSpec`, Python `ToolScopeSpec`): transport data with no authorization semantics and no `is_allowed()` method. Must be converted via `eggsec::config::scope_from_spec` before any policy check. |
+| **Scope intersection** | Effective authorization for tool requests carrying a specification: the engine scope **and** the converted declaration must both allow; either may deny. A permissive declaration can never widen a restrictive engine scope. |
 | **Manual override** | Explicit operator acceptance of specific confirmation classes. Only valid in `ManualPermissive` contexts. Honored and audited only there. |
 | **Confirmation class** | Machine-readable class (`ConfirmationClass`) requiring explicit operator action before dispatch. |
 
@@ -113,6 +115,8 @@ These invariants hold across all execution paths:
 6. **Re-evaluation**: Agent/MCP dispatch must re-evaluate enforcement immediately before dispatch.
 7. **Constructor intent**: Programmatic constructors for agent-facing servers should require explicit enforcement context or be clearly test-only.
 8. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, Agent, gRPC) require an `ApprovedOperation` token before dispatch via `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` is not reachable from these surfaces.
+9. **Single authorizer**: Only `eggsec::config::Scope` evaluated through `EnforcementContext` (or its `is_target_allowed` policy implementation) decides whether a network target is authorized. Protocol-neutral DTOs (`ScopeSpec`) carry intent only.
+10. **Specification intersection**: A tool request carrying a `ScopeSpec` is additionally constrained at dispatch (`enforce_request_scope_spec`): the converted declaration must also allow the effective target. Conversion failures deny (fail closed).
 
 ## Operation Metadata Integration (Phase 6)
 

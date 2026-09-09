@@ -15,9 +15,11 @@ pub mod tool_error;
 pub use finding::{Finding, FindingType, ResponseSeverity};
 pub use history::ExecutionEntry;
 pub use ratelimit::{EndpointLimit, GlobalRateLimitStatus, RateLimitConfig, RateLimitStatus};
+#[allow(deprecated)]
+pub use request::Scope;
 pub use request::{
-    AuthConfig, AuthType, CancellationToken, CancellationTokenHandle, RequestOptions, Scope,
-    Target, TargetType, ToolRequest,
+    AuthConfig, AuthType, CancellationToken, CancellationTokenHandle, RequestOptions, ScopeSpec,
+    Target, TargetType, ToolRequest, ToolScopeSpec,
 };
 pub use response::{
     EndpointData, PortData, PortState, ProgressUpdate, ResponseMetadata, ResponseStatus,

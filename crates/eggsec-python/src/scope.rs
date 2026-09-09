@@ -188,6 +188,11 @@ impl Scope {
 }
 
 impl Scope {
+    /// Wrap an engine scope (e.g. converted from a `ToolScopeSpec`).
+    pub(crate) fn from_inner(inner: eggsec::config::Scope) -> Self {
+        Self { inner }
+    }
+
     /// Validate that a target is within scope, raising EnforcementError if denied.
     pub fn enforce_target(&self, target: &str) -> PyResult<()> {
         let allowed = self

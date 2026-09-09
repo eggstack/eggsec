@@ -31,7 +31,7 @@ binding strategy, and conversion properties.
 
 | eggsec-tool-core Type | Python Type | Binding | Conversion |
 |---|---|---|---|
-| `Scope` | `ToolScope` | Direct (aliased) | Lossless; fields preserved |
+| `ScopeSpec` (`ToolScopeSpec`; legacy alias `Scope`) | `ToolScopeSpec` (legacy alias `ToolScope`) | Renamed for declarative role | Lossless; fields preserved; `is_allowed()` removed (never authorized) — convert via `to_engine_scope()` and evaluate through engine `Scope` |
 | `Target` | `ToolTarget` | Direct (renamed via `name` attr) | Lossless; factory methods preserved |
 | `RequestOptions` | `ToolRequestOptions` | Direct (aliased) | Lossless; all fields mapped |
 | `AuthConfig` | `ToolAuthConfig` | Direct (aliased) | Lossless; credentials redacted in repr/to_dict/to_json |

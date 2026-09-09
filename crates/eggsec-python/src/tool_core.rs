@@ -1000,11 +1000,21 @@ impl From<eggsec_tool_core::StreamEventType> for StreamEventTypePy {
 // Structs
 // ---------------------------------------------------------------------------
 
-/// Tool execution scope (allowed/excluded patterns and IPs).
-#[pyclass(frozen)]
+/// Declarative tool execution scope specification.
+///
+/// Carrier for caller intent (allowed/excluded patterns and IPs). This type
+/// is **not** authoritative: it never decides whether execution is allowed.
+/// Convert it with [`to_engine_scope`](Self::to_engine_scope) (or the mapping
+/// documented in `docs/python/scope-and-safety.md`) and evaluate the result
+/// through the engine `Scope` / enforcement context. Effective authorization
+/// is the intersection of the engine scope and the converted declaration.
+///
+/// The legacy `ToolScope` name remains available as a Python-level alias for
+/// `ToolScopeSpec`; new code should use `ToolScopeSpec`.
+#[pyclass(frozen, name = "ToolScopeSpec")]
 #[derive(Debug, Clone)]
 pub struct ScopeToolPy {
-    inner: eggsec_tool_core::Scope,
+    inner: eggsec_tool_core::ScopeSpec,
 }
 
 #[pymethods]
@@ -1018,8 +1028,8 @@ impl ScopeToolPy {
         allow_subdomains: bool,
     ) -> Self {
         Self {
-            inner: eggsec_tool_core::Scope {
-                allowed_patterns: allowed_patterns.unwrap_or_else(|| vec!["*".to_string()]),
+            inner: eggsec_tool_core::ScopeSpec {
+                allowed_patterns: allowed_patterns.unwrap_or_default(),
                 excluded_patterns: excluded_patterns.unwrap_or_default(),
                 allowed_ips: allowed_ips.unwrap_or_default(),
                 allow_subdomains,
@@ -1030,20 +1040,30 @@ impl ScopeToolPy {
     #[staticmethod]
     fn allow_all() -> Self {
         Self {
-            inner: eggsec_tool_core::Scope::default(),
+            inner: eggsec_tool_core::ScopeSpec::allow_all(),
         }
     }
 
     #[staticmethod]
     fn deny_all() -> Self {
         Self {
-            inner: eggsec_tool_core::Scope {
-                allowed_patterns: vec![],
-                excluded_patterns: vec!["*".to_string()],
-                allowed_ips: vec![],
-                allow_subdomains: false,
-            },
+            inner: eggsec_tool_core::ScopeSpec::deny_all(),
         }
+    }
+
+    #[staticmethod]
+    fn from_dict(dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let value = pydict_to_json_value(dict)?;
+        let inner: eggsec_tool_core::ScopeSpec = serde_json::from_value(value)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    #[staticmethod]
+    fn from_json(s: &str) -> PyResult<Self> {
+        let inner: eggsec_tool_core::ScopeSpec = serde_json::from_str(s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
     }
 
     #[getter]
@@ -1066,10 +1086,6 @@ impl ScopeToolPy {
         self.inner.allow_subdomains
     }
 
-    fn is_allowed(&self, target: &str) -> bool {
-        self.inner.is_allowed(target)
-    }
-
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
         dict.set_item("allowed_patterns", &self.inner.allowed_patterns)?;
@@ -1084,16 +1100,30 @@ impl ScopeToolPy {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
+    /// Convert this declaration into the authoritative engine `Scope`.
+    ///
+    /// Uses the same conservative conversion as the engine dispatch path
+    /// (`eggsec::config::scope_from_spec`): exclusions are preserved,
+    /// `allowed_ips` entries must parse as IP/CIDR, and failures raise
+    /// `ValueError` (fail closed). The returned `Scope` still participates
+    /// in intersection semantics — a permissive declaration cannot override
+    /// a restrictive engine scope.
+    fn to_engine_scope(&self) -> PyResult<crate::scope::Scope> {
+        let engine_scope = eggsec::config::scope_from_spec(&self.inner)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(crate::scope::Scope::from_inner(engine_scope))
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "ScopeToolPy(allowed_patterns={:?}, allow_subdomains={})",
+            "ToolScopeSpec(allowed_patterns={:?}, allow_subdomains={})",
             self.inner.allowed_patterns, self.inner.allow_subdomains
         )
     }
 
     fn __str__(&self) -> String {
         format!(
-            "Scope({} patterns, {} excluded, {} ips, subdomains={})",
+            "ToolScopeSpec({} patterns, {} excluded, {} ips, subdomains={})",
             self.inner.allowed_patterns.len(),
             self.inner.excluded_patterns.len(),
             self.inner.allowed_ips.len(),
@@ -1102,18 +1132,68 @@ impl ScopeToolPy {
     }
 }
 
+/// Recursively convert a Python dict to a `serde_json::Value`.
+fn pydict_to_json_value(dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    for (key, value) in dict.iter() {
+        if let Ok(key_str) = key.extract::<String>() {
+            map.insert(key_str, pyany_to_json_value(&value)?);
+        }
+    }
+    Ok(serde_json::Value::Object(map))
+}
+
+/// Recursively convert a Python object to a `serde_json::Value`.
+fn pyany_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
+    use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PyString};
+    if obj.is_none() {
+        return Ok(serde_json::Value::Null);
+    }
+    if let Ok(v) = obj.cast::<PyBool>() {
+        return Ok(serde_json::Value::Bool(v.extract::<bool>()?));
+    }
+    if let Ok(v) = obj.cast::<PyString>() {
+        return Ok(serde_json::Value::String(v.to_string()));
+    }
+    if let Ok(v) = obj.extract::<i64>() {
+        return Ok(serde_json::json!(v));
+    }
+    if let Ok(v) = obj.cast::<PyFloat>() {
+        return Ok(serde_json::json!(v.extract::<f64>()?));
+    }
+    if let Ok(v) = obj.cast::<PyList>() {
+        let mut items = Vec::new();
+        for item in v.iter() {
+            items.push(pyany_to_json_value(&item)?);
+        }
+        return Ok(serde_json::Value::Array(items));
+    }
+    if let Ok(v) = obj.cast::<PyDict>() {
+        return pydict_to_json_value(&v);
+    }
+    if let Ok(v) = obj.extract::<String>() {
+        return Ok(serde_json::Value::String(v));
+    }
+    if let Ok(v) = obj.extract::<bool>() {
+        return Ok(serde_json::Value::Bool(v));
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "from_dict: unsupported value type",
+    ))
+}
+
 impl ScopeToolPy {
-    pub fn inner(&self) -> &eggsec_tool_core::Scope {
+    pub fn inner(&self) -> &eggsec_tool_core::ScopeSpec {
         &self.inner
     }
 
-    pub fn into_inner(self) -> eggsec_tool_core::Scope {
+    pub fn into_inner(self) -> eggsec_tool_core::ScopeSpec {
         self.inner
     }
 }
 
-impl From<eggsec_tool_core::Scope> for ScopeToolPy {
-    fn from(inner: eggsec_tool_core::Scope) -> Self {
+impl From<eggsec_tool_core::ScopeSpec> for ScopeToolPy {
+    fn from(inner: eggsec_tool_core::ScopeSpec) -> Self {
         Self { inner }
     }
 }

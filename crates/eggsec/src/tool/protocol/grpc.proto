@@ -120,6 +120,10 @@ enum TargetType {
   TARGET_TYPE_FILE = 5;
 }
 
+// Declarative scope specification (caller intent, NOT an authorization
+// decision). The server converts this to an engine Scope and intersects it
+// with the configured engine scope via EnforcementContext; either may deny.
+// Wire-compatible with the legacy Scope DTO: same field numbers and types.
 message Scope {
   repeated string allowed_patterns = 1;
   repeated string excluded_patterns = 2;

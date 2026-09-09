@@ -90,6 +90,9 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Strict surfaces (REST, MCP, gRPC, agent) must not call `ToolDispatcher::dispatch()` directly.
 - CI handler must not import dispatch-related types.
 
+### Scope Contract Unification
+- `eggsec-tool-core` must not implement `is_allowed()`/`authorize()` on the declarative `ScopeSpec` DTO; only `eggsec::config::Scope` via `EnforcementContext` authorizes.
+
 ### Plan Retention
 - Verify key phase plan files still exist for handoff/audit continuity.
 

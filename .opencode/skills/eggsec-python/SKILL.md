@@ -1556,7 +1556,7 @@ generation, and a registry-driven invocation path.
 | `ToolErrorType` | Error classification enum (validation, authentication, network, etc.) |
 | `ToolPortState` | Port scan state enum (open, closed, filtered) |
 | `ToolStreamEventType` | Stream event type enum (progress, finding, result, error) |
-| `ToolScope` | Execution scope (allowed/excluded patterns, IPs) |
+| `ToolScopeSpec` | Declarative scope spec (caller intent; convert via `to_engine_scope()`, never authorizes; legacy alias `ToolScope`) |
 | `ToolTarget` | Scanning target (type + value + optional scope) |
 | `ToolRequestOptions` | Request options (timeout, concurrency, proxy, stealth, SSL) |
 | `ToolAuthConfig` | Auth configuration (type + credentials, redacted in repr) |
@@ -1671,7 +1671,7 @@ asyncio.run(main())
 from eggsec import (
     ToolTargetType, ToolAuthType, ToolResponseType, ToolFindingType,
     ToolSeverity, ToolErrorType, ToolPortState, ToolStreamEventType,
-    ToolScope, ToolTarget, ToolRequestOptions, ToolAuthConfig,
+    ToolScopeSpec, ToolTarget, ToolRequestOptions, ToolAuthConfig,
     ToolRequest, ToolFinding, ToolError, ToolResponse,
     ToolPortData, ToolEndpointData, ToolTechnologyData,
     ToolRateLimitConfig, ToolRateLimitStatus, ToolExecutionEntry,

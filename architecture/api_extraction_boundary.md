@@ -229,7 +229,7 @@ These all use axum and share similar patterns.
 
 **Dependencies to resolve:**
 - `TlsConfig` - pass as parameter or trait
-- `Scope` - pass as `Option<Scope>` from eggsec-tool-core (Scope already exists there)
+- `ScopeSpec` - pass as `Option<ScopeSpec>` from eggsec-tool-core (declarative only; convert via `eggsec::config::scope_from_spec` before any policy check)
 - `RateLimiter` - already in eggsec-tool-core
 
 ### Phase 5: Extract MCP adapter to eggsec-api

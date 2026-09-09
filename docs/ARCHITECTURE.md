@@ -373,6 +373,7 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | `OperationDescriptor`, `OperationMetadata` | `crates/eggsec/src/config/policy.rs` |
 | `EnforcementContext`, `ApprovedOperation` | `crates/eggsec/src/config/policy_decision.rs` |
 | `LoadedScope`, `Scope` | `crates/eggsec/src/config/scope.rs` |
+| `ScopeSpec` (declarative), `scope_from_spec`, intersection | `crates/eggsec-tool-core/src/request.rs`, `crates/eggsec/src/config/scope_spec.rs` |
 | `EnforcedDispatcher` | `crates/eggsec/src/tool/dispatcher.rs` |
 | `runtime_bridge` (Runtime→Engine bridge) | `crates/eggsec/src/runtime_bridge/` |
 | `TuiEnforcementState` | `crates/eggsec-tui/src/app/enforcement.rs` |

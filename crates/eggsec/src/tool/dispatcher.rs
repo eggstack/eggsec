@@ -147,6 +147,55 @@ pub fn validate_request_binding(
     Ok(())
 }
 
+/// Enforce an attached declarative request scope (`ScopeSpec`) as an
+/// additional constraint at dispatch time.
+///
+/// The specification is converted into an engine `Scope` via
+/// `crate::config::scope_from_spec` and evaluated against the request's
+/// effective target. This is intersection semantics: the approval already
+/// verified the target against the configured engine scope, and this check
+/// additionally requires the converted declaration to allow it. Conversion
+/// failures deny (fail closed). A request without an attached specification
+/// is unaffected.
+fn enforce_request_scope_spec(request: &ToolRequest) -> Result<(), EggsecError> {
+    let Some(spec) = request.target.scope.as_ref() else {
+        return Ok(());
+    };
+    let effective_target = if !request.target.value.is_empty() {
+        request.target.value.as_str()
+    } else if let Some(param) = request
+        .params
+        .get("target")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        param
+    } else {
+        // No target to evaluate; binding validation handles target presence.
+        return Ok(());
+    };
+    let converted = crate::config::scope_from_spec(spec).map_err(|e| {
+        EggsecError::Config(format!(
+            "request scope specification is invalid (failing closed): {e}"
+        ))
+    })?;
+    let allowed = converted.is_target_allowed(effective_target).map_err(|e| {
+        EggsecError::Config(format!(
+            "request scope evaluation failed (failing closed): {e}"
+        ))
+    })?;
+    if !allowed {
+        tracing::warn!(
+            target = %effective_target,
+            "request scope specification denies target; rejecting dispatch"
+        );
+        return Err(EggsecError::Config(format!(
+            "request target '{effective_target}' denied by attached scope specification"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct ToolDispatcher {
     registry: ToolRegistry,
@@ -179,6 +228,8 @@ impl ToolDispatcher {
         if request.is_cancelled() {
             return Err(EggsecError::Cancelled);
         }
+
+        enforce_request_scope_spec(&request)?;
 
         let tool = self
             .registry

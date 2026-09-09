@@ -1435,7 +1435,7 @@ try:
         ToolErrorTypePy as ToolErrorType,
         PortStatePy as ToolPortState,
         StreamEventTypePy as ToolStreamEventType,
-        ScopeToolPy as ToolScope,
+        ToolScopeSpec as ToolScopeSpec,
         ToolTarget as ToolTarget,
         RequestOptionsPy as ToolRequestOptions,
         AuthConfigPy as ToolAuthConfig,
@@ -1460,6 +1460,12 @@ try:
         OpenApiAdapter as OpenApiAdapter,
         operation_as_tool as operation_as_tool,
     )
+    # Deprecated alias: the protocol-neutral scope DTO was renamed to
+    # ToolScopeSpec to make its declarative (non-authoritative) role explicit.
+    # ToolScope remains importable but new code should use ToolScopeSpec.
+    # Note: the DTO no longer has is_allowed(); convert via
+    # ToolScopeSpec.to_engine_scope() and evaluate through Scope.
+    ToolScope = ToolScopeSpec
 except (AttributeError, ImportError):
     pass
 
@@ -2040,6 +2046,7 @@ __all__ = [
     "ToolErrorType",
     "ToolPortState",
     "ToolStreamEventType",
+    "ToolScopeSpec",
     "ToolScope",
     "ToolTarget",
     "ToolRequestOptions",

@@ -43,6 +43,7 @@ mod policy_decision;
 mod presets;
 mod scan;
 mod scope;
+mod scope_spec;
 mod settings;
 
 pub use feature_registry::{
@@ -81,6 +82,10 @@ pub use scan::{
 pub use scope::{
     classify_address, default_resolver, is_private_ip, AddressClass, HostResolver, LoadedScope,
     ResolutionResult, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope,
+};
+pub use scope_spec::{
+    is_parsed_target_allowed_by_scope_and_spec, is_target_allowed_by_scope_and_spec,
+    is_target_allowed_by_scope_and_spec_with_resolver, scope_from_spec, ScopeSpecError,
 };
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
