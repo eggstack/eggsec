@@ -15,7 +15,9 @@ This expands to:
 ```bash
 cargo fmt --all --check
 cargo check --workspace --no-default-features
-cargo clippy --lib -p eggsec -- -D warnings
+make clippy   # engine lib + leaf crates (-D warnings)
+cargo test -p eggsec --doc
+cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 cargo test -p eggsec --features rest-api --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 bash scripts/check-architecture-guards.sh
@@ -29,7 +31,7 @@ The package-level test commands automatically include all integration tests. New
 |---------|-------------|----------------|
 | `cargo fmt --all --check` | Style inconsistency | Mechanical; blocks clean diffs |
 | `cargo check --workspace --no-default-features` | Missing feature gates, broken no-default build | Catches regressions in optional-feature boundaries |
-| `cargo clippy --lib -p eggsec -- -D warnings` | Code quality, API misuse, common bugs | Low-cost static analysis on primary engine |
+| `make clippy` (engine lib + `eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
 | `cargo test -p eggsec --features rest-api --tests` | Behavioral regressions across all integration tests | Exercises MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more |
 | `cargo test -p eggsec-output --tests` | Report envelope roundtrip | Output crate is leaf; distinct defect class |
 | `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
@@ -72,7 +74,9 @@ These checks are valuable but not required for every merge. They run in the opti
 |-------|---------|---------|
 | Full mandatory contract | `make check` (included in `check-full`) | Baseline correctness |
 | Advisory/license/ban policy | `cargo deny check` | Dependency policy enforcement |
+| Domain/platform lint | `make clippy-domain` | Lint extracted implementation crates with relevant features |
 | Representative feature profiles | `make check-feature-profiles` | Feature coherence |
+| Exhaustive per-feature sweep | `make check-features-individual` | Every feature compiled in its minimum set (`full` is curated, not exhaustive) |
 
 ### Security tool ownership
 
@@ -107,15 +111,18 @@ Before a release tag is created, the Linux release host must pass:
 make check
 make check-python
 make check-full
+make check-features-individual
 make release-check
 ```
 
-`make check-full` covers the selected representative feature profiles, not
-every possible `--all-features` combination. Unsupported or currently broken
-all-feature combinations are not release gates. Python wheel validation is
-limited to the artifacts built by the manual release process; cross-platform
-wheel production is not claimed unless it is separately performed and recorded
-on each target platform.
+`make check-full` covers domain lint and the selected representative feature
+profiles, not every possible `--all-features` combination. Exhaustive
+per-feature coverage comes from `make check-features-individual`
+(weekly/manual; missing system prerequisites are reported as SKIP, not FAIL).
+Unsupported or currently broken all-feature combinations are not release gates.
+Python wheel validation is limited to the artifacts built by the manual release
+process; cross-platform wheel production is not claimed unless it is separately
+performed and recorded on each target platform.
 
 ## Merge readiness vs release readiness
 
@@ -126,7 +133,8 @@ on each target platform.
 - Format check passes
 
 **Release readiness** additionally requires:
-- `make check-full` passes (advisories and representative profiles)
+- `make check-full` passes (advisories, domain lint, representative profiles)
+- `make check-features-individual` passes (or reports only documented system-prerequisite SKIP entries)
 - `make release-check` passes end-to-end on the supported Linux release host
 - all intended Rust archives are created by Cargo's workspace package command,
   recorded with size/SHA-256, and inspected with standalone Cargo metadata;
@@ -162,4 +170,6 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
+| `make clippy-domain` | Lint domain/platform crates | Pre-release (part of `make check-full`) |
+| `make check-features-individual` | Exhaustive per-feature compile sweep | Pre-release / weekly (deep checks) |
 | `make build` | Release build of CLI binary | Release only |

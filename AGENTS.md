@@ -17,7 +17,7 @@ Prerequisites: `ripgrep` (`rg`) for architecture guards. No `cargo-nextest` requ
 
 Scope notes:
 - `make test` runs `cargo test --lib -p eggsec` only (engine lib unit tests). Use `make test-ci` for the full package suite.
-- `make clippy` lints `-p eggsec --lib` only; whole-workspace compile coverage comes from `make check`.
+- `make clippy` lints the engine lib plus dependency-light leaf crates (`eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`); `make clippy-domain` covers domain/platform crates (deep checks only).
 - `make check-python` builds into `.venv-ci/` (override with `EGGSEC_PYTHON_VENV`). Pytest excludes tests marked `network` by default (`-m 'not network'`).
 
 `make check-full` is optional; run before broad feature/release work. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full verification contract.
@@ -75,7 +75,7 @@ cargo check -p eggsec-mobile-lab
 cargo check -p eggsec-nse --features nse
 
 # CLI variants
-cargo check -p eggsec-cli                          # default (TUI + daemon-client)
+cargo check -p eggsec-cli                          # default (TUI only; default = ["tui"])
 cargo check -p eggsec-cli --no-default-features    # headless
 cargo check -p eggsec-cli --no-default-features --features daemon-client  # daemon client only
 
@@ -108,6 +108,8 @@ make test-feature-matrix    # feature + metadata validation
 make check-no-default       # no-default-features workspace build
 make check-msrv             # MSRV compile check (requires rustup toolchain install 1.88)
 make check-feature-profiles # representative feature profile checks
+make check-features-individual # exhaustive per-feature compile sweep (deep checks only)
+make clippy-domain          # lint domain/platform crates (deep checks only)
 make build                  # release build
 make clean                  # remove build artifacts
 make help                   # authoritative target list
@@ -142,7 +144,7 @@ cargo test -p eggsec-python
 
 GitHub Actions (`.github/workflows/`):
 - `ci.yml` — mandatory Rust (`make check`) and Python (`make check-python`) checks on ubuntu
-- `deep-checks.yml` — optional diagnostic workflow (weekly schedule or manual trigger): `make check-full` + cargo-deny, exact-MSRV 1.88 job, macOS/Windows portability job
+- `deep-checks.yml` — optional diagnostic workflow (weekly schedule or manual trigger): `make check-full` + cargo-deny, `make check-features-individual` sweep, exact-MSRV 1.88 job, macOS/Windows portability job
 
 Consumer GitLab CI example: `examples/ci/gitlab/eggsec-scan.yml` (not wired to repository triggers).
 
@@ -227,9 +229,11 @@ Feature-gated modules require explicit build flags:
 | `cli` | `clap`, `clap_complete` | CLI types, command dispatch, and argument parsing |
 | `config-watch` | (none) | File watching (notify + debouncer) for config hot-reload |
 
-Marker features (no direct dependency activation): `tool-api`, `insecure-tls`, `api-schema`, `ai-integration`, `cloud`, `git-secrets`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`.
+Empty gates (empty feature arrays; compile-time gate only): `tool-api`, `insecure-tls`, `api-schema`, `cloud`, `git-secrets`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `wireless`, `evasion`, `postex`, `daemon-client`, `test-helpers`.
 
-Dependency-backed feature flags: `rest-api`, `grpc-api`, `ws-api`, `sbom`, `container`, `websocket`, `headless-browser`, `database`, `pdf`, `transparent-proxy`, `dynamic-plugins`, `email-notifications`, `logging-subscriber`, `config-watch`.
+Feature-coupled markers (base/domain refs, no new third-party closure): `wireless-advanced` (→`wireless`), `c2` (→`postex`+`evasion`), `c2-mcp`/`db-pentest-mcp`/`web-proxy-mcp` (exposure markers), `transparent-proxy`/`dynamic-plugins` (→`web-proxy`), `nse-sandbox` (→`nse`), `mobile-dynamic` (→`mobile`).
+
+Dependency-backed feature flags: `cli`, `rest-api`, `grpc-api`, `ws-api`, `sbom`, `container`, `websocket`, `headless-browser`, `database`, `db-pentest`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `mobile`, `web-proxy`, `nse`, `nse-ssh2`, `ai-integration`, `pdf`, `stress-testing`, `packet-inspection`, `email-notifications`, `logging-subscriber`, `config-watch`.
 
 Note: `http-api` is a feature on `eggsec-daemon` (not `eggsec`), enabling HTTP/SSE transport.
 
@@ -250,7 +254,7 @@ lives in `[project.optional-dependencies]` of
 `crates/eggsec-python/pyproject.toml`; system-dependent ones need
 libpcap/libssl/wireless-tools/Chromium at build or run time.
 
-Aggregate: `full-no-system` = all non-system features. Not conservative/production.
+Aggregates: engine `full` = curated 28-member lab set (pinned in `FULL_MEMBERS`, `crates/eggsec/src/config/feature_registry.rs`; not exhaustive — the oracle is `make check-features-individual`). Python `full-no-system` = `websocket` + `git-secrets` + `sbom` + `container` only. Neither is conservative/production.
 
 ## Key Patterns
 

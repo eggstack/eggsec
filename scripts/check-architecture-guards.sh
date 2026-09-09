@@ -1569,6 +1569,49 @@ else
   echo "PASS: ScopeSpec DTO has no authorization methods."
 fi
 
+# 71. Feature documentation matches Cargo source of truth (Phase B).
+# Default features, declared features, curated `full` membership, and the
+# domain-crate inventory must agree with crates/eggsec/Cargo.toml and
+# FULL_MEMBERS/FULL_EXCLUDED_WITH_REASON in feature_registry.rs.
+echo ""
+echo "--- Check 71: Feature docs match Cargo source of truth ---"
+if command -v python3 >/dev/null 2>&1; then
+  if python3 scripts/check-feature-docs.py; then
+    echo "PASS: Feature docs match Cargo source of truth."
+  else
+    echo "FAIL: Feature docs drifted from Cargo source of truth (see above)."
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo "FAIL: python3 is required for feature docs validation."
+  FAIL=$((FAIL + 1))
+fi
+
+# 72. Individual feature sweep exists and is wired into deep checks.
+# `full` is curated, so the sweep in scripts/check-features-individual.sh is
+# the exhaustive oracle; it must be runnable via make and scheduled weekly.
+echo ""
+echo "--- Check 72: Individual feature sweep is maintained ---"
+SECTION_FAIL=0
+if [[ ! -f "scripts/check-features-individual.sh" ]]; then
+  echo "FAIL: scripts/check-features-individual.sh is missing."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'check-features-individual' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile has no check-features-individual target."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'check-features-individual' .github/workflows/deep-checks.yml 2>/dev/null; then
+  echo "FAIL: deep-checks.yml does not schedule the individual feature sweep."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Individual feature sweep is maintained and scheduled."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

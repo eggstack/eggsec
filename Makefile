@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles release-check clippy fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -28,9 +28,23 @@ test-nse:
 test-slow:
 	cargo test -p eggsec --features rest-api --tests -- --ignored
 
-# Run clippy
+# Run clippy (routine: engine + dependency-light leaf crates)
 clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
+	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -- -D warnings
+
+# Lint domain/platform crates with their relevant features (deep checks only:
+# heavier closures, may need system prerequisites like libssl-dev).
+# eggsec-nse is warn-only: it carries pre-existing warning debt (dead_code in
+# optional paths, deprecated openssl calls) that predates lint ownership.
+# Promoting it to -D warnings is tracked future work; the warn-only run keeps
+# new lints visible in deep-check logs without failing the gate.
+clippy-domain:
+	cargo clippy -p eggsec-db-lab --features db-drivers -- -D warnings
+	cargo clippy -p eggsec-web-proxy --features web-proxy -- -D warnings
+	cargo clippy -p eggsec-mobile-lab -- -D warnings
+	cargo clippy -p eggsec-nse --features nse
+	cargo clippy -p eggsec-daemon -- -D warnings
 
 # Run format check
 fmt:
@@ -66,7 +80,7 @@ check-msrv:
 check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
-	cargo clippy --lib -p eggsec -- -D warnings
+	$(MAKE) clippy
 	cargo test -p eggsec --doc
 	cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 	cargo test -p eggsec --features rest-api --tests --no-fail-fast
@@ -76,7 +90,13 @@ check:
 # Optional broad validation (pre-release, not required for merge)
 check-full: check
 	cargo deny check
+	$(MAKE) clippy-domain
 	$(MAKE) check-feature-profiles
+
+# Exhaustive per-feature compilation sweep (weekly/manual, not per-PR).
+# `full` is a curated aggregate, so this sweep is the completeness oracle.
+check-features-individual:
+	bash scripts/check-features-individual.sh
 
 # Representative feature profile checks (representative, not exhaustive)
 check-feature-profiles:
@@ -120,7 +140,9 @@ help:
 	@echo "  make clean           - Clean artifacts"
 	@echo ""
 	@echo "Specialist diagnostics (as needed):"
-	@echo "  make clippy          - Lint"
+	@echo "  make clippy          - Lint (engine + leaf crates)"
+	@echo "  make clippy-domain   - Lint domain/platform crates (deep checks)"
+	@echo "  make check-features-individual - Per-feature compile sweep (deep checks)"
 	@echo "  make fmt             - Format check"
 	@echo "  make build           - Release build"
 	@echo "  make test-ci         - Full package tests with rest-api"

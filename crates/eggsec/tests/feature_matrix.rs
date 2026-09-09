@@ -16,6 +16,9 @@ use eggsec::domain::all_domain_descriptors;
 static FEATURE_DEPENDENCIES: &[(&str, &str)] = &[
     // rest-api depends on tool-api
     ("rest-api", "tool-api"),
+    // rest-api pulls process-host adapters
+    ("rest-api", "email-notifications"),
+    ("rest-api", "config-watch"),
     // grpc-api depends on tool-api
     ("grpc-api", "tool-api"),
     // nse depends on tool-api
@@ -43,10 +46,16 @@ static FEATURE_DEPENDENCIES: &[(&str, &str)] = &[
     ("transparent-proxy", "web-proxy"),
     // dynamic-plugins depends on web-proxy
     ("dynamic-plugins", "web-proxy"),
-    // full aggregates many features
+    // full aggregates many features (curated lab aggregate; exact membership
+    // is pinned by FULL_MEMBERS in feature_registry.rs and validated by
+    // full_membership_matches_cargo below — keep these edges in sync)
+    ("full", "cli"),
     ("full", "stress-testing"),
     ("full", "packet-inspection"),
     ("full", "rest-api"),
+    ("full", "email-notifications"),
+    ("full", "logging-subscriber"),
+    ("full", "config-watch"),
     ("full", "nse"),
     ("full", "ai-integration"),
     ("full", "websocket"),
@@ -561,6 +570,314 @@ fn tui_full_aggregate_forwards_all_tui_capabilities() {
             tui_full_deps.iter().any(|f| f == req),
             "TUI 'full' aggregate does not include feature '{}'",
             req
+        );
+    }
+}
+
+// ─── Phase B: `full` aggregate contract ─────────────────────────────────────
+//
+// `full` is a curated developer/lab aggregate (28 pinned members), not an
+// exhaustive "enable everything" flag. Membership is declared once in
+// `FULL_MEMBERS` (feature_registry.rs) and checked against Cargo below.
+// Exclusions carry machine-checked reasons in FULL_EXCLUDED_WITH_REASON.
+
+/// `FULL_MEMBERS` must exactly match the `full = [...]` array in Cargo.toml.
+///
+/// Direct string entries only; `dep:`/crate-qualified entries are not used
+/// by the engine `full` aggregate.
+#[test]
+fn full_membership_matches_cargo() {
+    use eggsec::config::{is_full_member, FULL_MEMBERS};
+
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+    let cargo_full = features
+        .get("full")
+        .expect("engine Cargo.toml must declare a 'full' aggregate feature");
+
+    let mut cargo_sorted = cargo_full.clone();
+    cargo_sorted.sort();
+    let mut registry_sorted: Vec<String> = FULL_MEMBERS.iter().map(|s| s.to_string()).collect();
+    registry_sorted.sort();
+
+    assert_eq!(
+        cargo_sorted, registry_sorted,
+        "engine `full` aggregate in Cargo.toml does not match FULL_MEMBERS in \
+         feature_registry.rs — update both together"
+    );
+
+    // Every FULL_MEMBERS entry must be a known registry feature.
+    for member in FULL_MEMBERS {
+        assert!(
+            is_known_feature_registry(member),
+            "FULL_MEMBERS entry '{}' is not in the feature registry",
+            member
+        );
+        assert!(
+            is_full_member(member),
+            "is_full_member('{}') returned false — registry helper out of sync",
+            member
+        );
+    }
+
+    // Pin the curated size so accidental additions/removals fail loudly.
+    assert_eq!(
+        FULL_MEMBERS.len(),
+        28,
+        "FULL_MEMBERS length changed (expected 28 curated lab members) — \
+         update the contract, exclusion reasons, and docs together"
+    );
+}
+
+/// Every non-default feature is either in `full` or has a documented
+/// exclusion reason — exactly once, never both.
+#[test]
+fn full_exclusions_are_documented() {
+    use eggsec::config::{full_exclusion_reason, is_full_member, FULL_EXCLUDED_WITH_REASON};
+
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+
+    let mut seen_excluded = rustc_hash::FxHashSet::default();
+    for (name, reason) in FULL_EXCLUDED_WITH_REASON {
+        assert!(
+            !name.is_empty() && !reason.is_empty(),
+            "exclusion entry has empty name or reason"
+        );
+        assert!(
+            seen_excluded.insert(*name),
+            "duplicate exclusion entry for '{}'",
+            name
+        );
+        assert!(
+            is_known_feature_registry(name),
+            "exclusion entry '{}' is not a known registry feature",
+            name
+        );
+        assert!(
+            !is_full_member(name),
+            "exclusion entry '{}' is also a full member — remove from one list",
+            name
+        );
+        assert_eq!(
+            full_exclusion_reason(name),
+            Some(*reason),
+            "full_exclusion_reason('{}') out of sync",
+            name
+        );
+    }
+
+    for feat_name in features.keys() {
+        if feat_name == "full" {
+            continue;
+        }
+        let in_full = is_full_member(feat_name);
+        let excluded = FULL_EXCLUDED_WITH_REASON
+            .iter()
+            .any(|(n, _)| *n == feat_name.as_str());
+        assert!(
+            in_full ^ excluded,
+            "feature '{}' must be either in FULL_MEMBERS or FULL_EXCLUDED_WITH_REASON (exactly once)",
+            feat_name
+        );
+    }
+}
+
+/// Test-only and security-risk features must never be aggregated.
+#[test]
+fn full_never_includes_test_or_risk_features() {
+    use eggsec::config::is_full_member;
+    assert!(
+        !is_full_member("test-helpers"),
+        "'test-helpers' must never be in `full`"
+    );
+    assert!(
+        !is_full_member("insecure-tls"),
+        "'insecure-tls' must never be in `full`"
+    );
+}
+
+/// Protocol exposure markers stay opt-in: domains in `full`, MCP exposure out.
+#[test]
+fn full_excludes_protocol_exposure_markers() {
+    use eggsec::config::is_full_member;
+    for marker in ["db-pentest-mcp", "web-proxy-mcp", "c2-mcp"] {
+        assert!(
+            !is_full_member(marker),
+            "exposure marker '{}' must stay opt-in (not in `full`)",
+            marker
+        );
+    }
+    // ... while their base domains are aggregated.
+    for base in ["db-pentest", "web-proxy", "c2"] {
+        assert!(
+            is_full_member(base),
+            "base domain '{}' should be in `full`",
+            base
+        );
+    }
+}
+
+/// Backend drivers opt in individually; the base domain is aggregated.
+#[test]
+fn full_excludes_backend_drivers() {
+    use eggsec::config::is_full_member;
+    for driver in [
+        "db-pentest-mssql-tiberius",
+        "db-pentest-mongodb",
+        "db-pentest-redis",
+    ] {
+        assert!(
+            !is_full_member(driver),
+            "backend driver '{}' must opt in individually (not in `full`)",
+            driver
+        );
+    }
+    assert!(
+        is_full_member("db-pentest"),
+        "base 'db-pentest' should be in `full`"
+    );
+}
+
+/// Platform/backend prerequisites are explicitly classified, never silently
+/// skipped: each must resolve to its expected non-marker category.
+#[test]
+fn platform_and_backend_features_are_explicitly_classified() {
+    use eggsec::config::{classify_feature, FeatureCategory};
+    let expected: &[(&str, FeatureCategory)] = &[
+        ("stress-testing", FeatureCategory::PlatformSensitive),
+        ("packet-inspection", FeatureCategory::PlatformSensitive),
+        ("nse-ssh2", FeatureCategory::PlatformSensitive),
+        ("nse-sandbox", FeatureCategory::PlatformSensitive),
+        ("headless-browser", FeatureCategory::PlatformSensitive),
+        ("mobile-dynamic", FeatureCategory::AdvancedExtension),
+        ("wireless-advanced", FeatureCategory::AdvancedExtension),
+        ("transparent-proxy", FeatureCategory::AdvancedExtension),
+        ("dynamic-plugins", FeatureCategory::AdvancedExtension),
+        ("db-pentest-mssql-tiberius", FeatureCategory::BackendDriver),
+        ("db-pentest-mongodb", FeatureCategory::BackendDriver),
+        ("db-pentest-redis", FeatureCategory::BackendDriver),
+        ("test-helpers", FeatureCategory::MarkerOnly),
+        ("insecure-tls", FeatureCategory::SecurityRisk),
+    ];
+    for (feat, category) in expected {
+        assert_eq!(
+            classify_feature(feat),
+            Some(*category),
+            "feature '{}' should be classified as {:?}",
+            feat,
+            category
+        );
+    }
+}
+
+/// The engine default feature set is `["cli"]` and docs must agree.
+///
+/// Guards the Phase B residual where docs claimed an empty default while
+/// Cargo declared `default = ["cli"]`.
+#[test]
+fn docs_default_feature_matches_cargo() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
+    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
+    let default_val = manifest
+        .get("features")
+        .and_then(|f| f.get("default"))
+        .and_then(|d| d.as_array())
+        .expect("Cargo.toml must declare [features] default");
+    let defaults: Vec<&str> = default_val.iter().filter_map(|v| v.as_str()).collect();
+    assert_eq!(
+        defaults,
+        vec!["cli"],
+        "engine default must be [\"cli\"] — update this test with the contract"
+    );
+
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let matrix = std::fs::read_to_string(workspace_root.join("docs/FEATURE_MATRIX.md"))
+        .expect("docs/FEATURE_MATRIX.md must exist");
+    assert!(
+        matrix.contains("default = [\"cli\"]"),
+        "docs/FEATURE_MATRIX.md must state the engine default as default = [\"cli\"]"
+    );
+    assert!(
+        !matrix.contains("default = []"),
+        "docs/FEATURE_MATRIX.md must not claim an empty default feature set"
+    );
+}
+
+/// The maintained individual-feature sweep (`scripts/check-features-individual.sh`)
+/// must enumerate engine features mechanically from Cargo.toml (so newly
+/// declared features are compiled without script maintenance), pin companion
+/// sets for markers that need a base domain, and cover domain/daemon/CLI and
+/// Python-crate profiles.
+///
+/// The sweep is the exhaustive oracle; `full` is curated and therefore not
+/// sufficient on its own.
+#[test]
+fn individual_sweep_covers_every_feature() {
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let sweep_path = workspace_root.join("scripts/check-features-individual.sh");
+    let sweep = std::fs::read_to_string(&sweep_path).unwrap_or_else(|_| {
+        panic!(
+            "individual feature sweep missing at {} — \
+             create scripts/check-features-individual.sh per Phase B workstream 3",
+            sweep_path.display()
+        )
+    });
+
+    // Mechanical enumeration: the sweep reads the engine feature list from
+    // Cargo.toml instead of duplicating it.
+    assert!(
+        sweep.contains("crates/eggsec/Cargo.toml"),
+        "sweep must enumerate engine features from crates/eggsec/Cargo.toml"
+    );
+    assert!(
+        sweep.contains("Orphan guard"),
+        "sweep must retain its orphan guard for unprofiled features"
+    );
+
+    // Companion sets for markers that need a base domain to compile meaningfully.
+    for companion in [
+        "db-pentest,db-pentest-mongodb",
+        "db-pentest,db-pentest-mssql-tiberius",
+        "db-pentest,db-pentest-redis",
+    ] {
+        assert!(
+            sweep.contains(companion),
+            "sweep must pin companion set '{}' for backend-driver features",
+            companion
+        );
+    }
+
+    // Domain crates, daemon/CLI sets, and Python-crate profiles.
+    for profile in [
+        "eggsec-nse --features nse",
+        "eggsec-db-lab --features db-drivers",
+        "eggsec-web-proxy --features web-proxy",
+        "eggsec-mobile-lab --features mobile-dynamic",
+        "eggsec-daemon --features http-api",
+        "eggsec-daemon --features full-executor",
+        "eggsec-cli --no-default-features",
+        "eggsec-python --features full-no-system",
+    ] {
+        assert!(
+            sweep.contains(profile),
+            "sweep must cover profile '{}'",
+            profile
+        );
+    }
+
+    // Prerequisite-gated features record SKIP separately from FAIL.
+    for gated in [
+        "grpc-api",
+        "nse-ssh2",
+        "packet-inspection",
+        "stress-testing",
+    ] {
+        assert!(
+            sweep.contains(gated),
+            "sweep must handle prerequisite-gated feature '{}'",
+            gated
         );
     }
 }

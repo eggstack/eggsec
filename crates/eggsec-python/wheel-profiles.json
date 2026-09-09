@@ -552,7 +552,7 @@
       "python_optional_dep": "headless-browser"
     },
     "full": {
-      "description": "All non-default features — not conservative, not all builds cleanly on all platforms",
+      "description": "Curated Python wheel subset (18 engine features) — not conservative, not exhaustive, not all builds cleanly on all platforms",
       "cargo_features": [
         "websocket",
         "git-secrets",

@@ -197,7 +197,7 @@ async fn execute_temp_udf(
     pg_pool: Option<&sqlx::postgres::PgPool>,
     mysql_pool: Option<&sqlx::mysql::MySqlPool>,
 ) -> anyhow::Result<()> {
-    let func_name = format!("eggsec_test_{}", &utils::uuid_simple());
+    let func_name = format!("eggsec_test_{}", utils::uuid_simple());
     // Defense-in-depth: the name is interpolated into DDL below. It is
     // generated from hex-only input today, but refuse to interpolate anything
     // unexpected rather than trust that invariant.

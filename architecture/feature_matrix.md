@@ -10,10 +10,10 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 | Metric | Count |
 |--------|-------|
-| Total features | 50 |
-| Features with deps | 31 |
-| Marker-only features | 19 |
-| In `full` | 28 |
+| Total features (incl. `default`) | 50 |
+| Non-empty (activates deps or other features) | 35 |
+| Empty marker gates (compile-time gate only) | 15 |
+| In `full` (curated lab aggregate) | 28 |
 
 ## Feature Table
 
@@ -49,7 +49,8 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable |
 | `wireless` | yes | no | yes | `wireless/` | Stable |
 | `wireless-advanced` | yes | yes (`wireless`) | yes | `wireless/active/` | Stable |
-| `mobile` | yes | no | yes | `mobile/` | Stable |
+| `cli` | yes | yes | yes | `cli/` | Stable |
+| `mobile` | yes | yes | yes | `mobile/` | Stable |
 | `mobile-dynamic` | yes | yes (`mobile`) | yes | `mobile/dynamic.rs` | Stable |
 | `db-pentest` | yes | yes (`sqlx`) | yes | `db_pentest/` | Stable |
 | `db-pentest-mssql-tiberius` | yes | yes | - | `db_pentest/mssql.rs` | Stable |
@@ -67,7 +68,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `api-schema` | yes | no | - | `api_schema/` | Stable |
 | `pdf` | yes | yes | - | `output/` | Stable |
 | `daemon-client` | yes | no | - | (daemon CLI) | Stable |
-| `full` | yes | yes | - | (all) | Deprecated |
+| `full` | yes | yes | - | (curated lab aggregate) | Stable |
 
 ## Stability Levels
 
@@ -82,7 +83,23 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ### `full` feature
 
-The `full` feature enables 28 sub-features. It does not include `grpc-api`, `ws-api`, `pdf`, `test-helpers`, `daemon-client`, `nse-ssh2`, `nse-sandbox`, or the `db-pentest-*` marker features.
+The `full` feature is a curated developer/lab aggregate of 28 pinned members —
+not an exhaustive "enable everything" flag. Membership is declared once in
+`FULL_MEMBERS` (`crates/eggsec/src/config/feature_registry.rs`) and checked
+against the `full = [...]` array in `crates/eggsec/Cargo.toml`
+(`full_membership_matches_cargo`); the exhaustive oracle is
+`make check-features-individual` (`scripts/check-features-individual.sh`).
+
+Intentionally excluded, with reasons in `FULL_EXCLUDED_WITH_REASON`:
+test-only (`test-helpers`), security-risk (`insecure-tls`), protocol exposure
+markers (`db-pentest-mcp`, `web-proxy-mcp`, `c2-mcp` — base domains are
+aggregated, MCP exposure stays opt-in), backend drivers
+(`db-pentest-mongodb`, `db-pentest-mssql-tiberius`, `db-pentest-redis`),
+platform modes (`nse-ssh2`, `nse-sandbox`), separate serving surfaces
+(`grpc-api`, `ws-api`), special output/plugin modes (`pdf`,
+`transparent-proxy`, `dynamic-plugins`), deferred marker gates (`api-schema`,
+`cloud`, `git-secrets`, `daemon-client`), and the implicit base (`tool-api`,
+transitively enabled via `rest-api`/`nse`/`ai-integration`).
 
 Note: The `container` feature pulls in `k8s-openapi` which requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This must be provided by the final binary crate.
 
@@ -102,12 +119,22 @@ full WebSocket pub/sub support.
 
 ### Marker-only features
 
-Features like `advanced-hunting`, `compliance`, `external-integrations`,
-`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `evasion`,
-`postex`, `api-schema`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`,
-`db-pentest-redis`, `transparent-proxy`, `dynamic-plugins`, `test-helpers`, and
-`daemon-client` have no extra runtime dependencies beyond optional crates. They gate module compilation via
-`#[cfg(feature = "...")]` in `lib.rs`.
+Pure marker gates (empty feature arrays; compile-time gate only, no activated
+dependencies): `tool-api`, `insecure-tls`, `advanced-hunting`, `compliance`,
+`external-integrations`, `finding-workflow`, `vuln-management`, `cloud`,
+`git-secrets`, `wireless`, `evasion`, `postex`, `api-schema`, `daemon-client`,
+and `test-helpers`. They gate module compilation via `#[cfg(feature = "...")]`
+in `lib.rs`.
+
+Feature-coupled markers reference a base feature and/or a domain-crate feature
+without pulling new third-party dependency closures: `wireless-advanced`
+(`wireless`), `c2` (`postex`, `evasion`), `c2-mcp` (`c2`), `db-pentest-mcp`
+(`db-pentest`), `web-proxy-mcp`/`transparent-proxy`/`dynamic-plugins`
+(`web-proxy`), `nse-sandbox` (`nse`), and `mobile-dynamic` (`mobile`). In
+contrast, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`,
+`db-pentest-redis` (`BackendDriver`), `nse-ssh2` (libssh2), `mobile`
+(`eggsec-mobile-lab`, `zip`, `plist`), and `web-proxy` (tungstenite/h2/http/prost)
+activate real dependency closures.
 
 `wireless-advanced` is a dependent feature on `wireless` and pulls in the
 `wireless/active/` module (deauth/disassoc frame crafting and injection). It is
@@ -142,4 +169,4 @@ mod example;
 This ensures the module always compiles (for internal use) but is only publicly
 exposed when the feature is enabled.
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-09 (Phase B: curated `full` contract, `cli` row, marker taxonomy)*

@@ -28,11 +28,13 @@ cargo build --release -p eggsec-cli
 cargo build --release -p eggsec-cli
 ```
 
-### Full Feature Set
+### Curated Lab Aggregate (28 pinned members, not exhaustive)
 
 ```bash
 cargo build --release -p eggsec-cli --features full
 ```
+
+`full` is a curated developer/lab set (see `docs/FEATURE_MATRIX.md` §1.3).
 
 ### REST API Server
 
@@ -58,13 +60,15 @@ cargo build --release -p eggsec-cli --features nse
 cargo build --release -p eggsec-cli --features stress-testing
 ```
 
-### All Features Combined
+### Excluded-from-`full` Features
 
-```bash
-cargo build --release -p eggsec-cli --features full
-```
-
-Note: `grpc-api`, `ws-api`, `pdf`, and `nse-sandbox` are intentionally excluded from `full` and must be enabled separately.
+Test-only (`test-helpers`), security-risk (`insecure-tls`), protocol exposure
+markers (`*-mcp`), backend drivers (`db-pentest-*`), platform modes
+(`nse-ssh2`, `nse-sandbox`), separate serving surfaces (`grpc-api`, `ws-api`),
+special output/plugin modes (`pdf`, `transparent-proxy`, `dynamic-plugins`),
+and deferred marker gates (`api-schema`, `cloud`, `git-secrets`,
+`daemon-client`) are intentionally excluded from `full` and must be enabled
+separately. The exhaustive per-feature sweep is `make check-features-individual`.
 
 ## Installing from Source
 
@@ -143,7 +147,8 @@ make check
 ## Linting
 
 ```bash
-cargo clippy --lib -p eggsec-cli
+make clippy          # engine + leaf crates
+make clippy-domain   # domain/platform crates (deep checks)
 ```
 
 ## Troubleshooting

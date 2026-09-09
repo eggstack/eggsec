@@ -1914,7 +1914,7 @@ Machine-readable manifest at `crates/eggsec-python/wheel-profiles.json`. Nine pr
 - **mobile** — mobile app static analysis
 - **packet-inspection** — packet capture (requires libpcap-dev)
 - **headless-browser** — browser security testing (requires Chromium)
-- **full** — all non-default features
+- **full** — curated wheel subset (18 engine features), not exhaustive, not conservative
 
 ### Enhanced Diagnostics
 `build_info()` now returns: `schema_version`, `protocol_version`, `abi_version`, `python_version`, `compiled_features` (list), `wheel_profile`.

@@ -25,7 +25,8 @@ All main-crate features live in `crates/eggsec/Cargo.toml` under `[features]`.
 
 ```toml
 [features]
-default = []
+# Engine default is default = ["cli"]; shown here is a minimal new-feature stanza.
+default = ["cli"]
 
 # My new feature
 my-new-feature = ["dep:some-crate", "other-feature"]
@@ -151,8 +152,13 @@ Rules:
 - Protocol exposure markers (e.g., `db-pentest-mcp`) must have edges to their
   base domain feature (e.g., `db-pentest`). This is enforced by
   `protocol_exposure_markers_require_base_domain`.
-- If the feature belongs in the `full` aggregate, add a `("full", "my-new-feature")`
-  edge.
+- `full` is curated, so most new features do NOT belong in it. If the feature
+  does belong in the lab aggregate, update all three together: the
+  `full = [...]` array in `crates/eggsec/Cargo.toml`, `FULL_MEMBERS` in
+  `feature_registry.rs`, and the `("full", "my-new-feature")` edge. Otherwise
+  add a reasoned entry to `FULL_EXCLUDED_WITH_REASON`. The
+  `full_membership_matches_cargo` and `full_exclusions_are_documented` tests
+  enforce the contract.
 
 ## 4. Decide: Required PR Feature-Profile Check vs. Deep Check
 
@@ -180,6 +186,12 @@ check-feature-profiles:
 	# ... existing checks ...
 	cargo check -p eggsec --features my-new-feature
 ```
+
+Every engine feature is also compiled by the exhaustive
+`make check-features-individual` sweep (weekly/manual), which enumerates
+`crates/eggsec/Cargo.toml` mechanically — no Makefile entry needed for sweep
+coverage, but add companion sets or prerequisite gates in
+`scripts/check-features-individual.sh` when the bare feature needs them.
 
 ### Deep checks (weekly/manual)
 
@@ -288,6 +300,10 @@ make check
 | `feature_names_follow_naming_conventions` | All names are kebab-case; MCP markers have valid base features |
 | `no_circular_feature_dependencies` | `FEATURE_DEPENDENCIES` graph has no cycles |
 | `aggregate_feature_includes_domain_features` | `full` includes all domain capabilities |
+| `full_membership_matches_cargo` | `FULL_MEMBERS` exactly matches the Cargo `full` array (28 pinned) |
+| `full_exclusions_are_documented` | Every non-`full` feature has exactly one contract entry |
+| `docs_default_feature_matches_cargo` | Engine default (`["cli"]`) agrees with `docs/FEATURE_MATRIX.md` |
+| `individual_sweep_covers_every_feature` | `scripts/check-features-individual.sh` covers all profiles |
 | `protocol_exposure_markers_require_base_domain` | MCP markers depend on their base domain feature |
 | `unknown_feature_fails_closed` | Unknown feature names return `FeatureState::Unknown` and `false` for `is_feature_enabled` |
 
@@ -298,7 +314,8 @@ When adding a new feature, verify each item:
 - [ ] Feature declared in `crates/eggsec/Cargo.toml` `[features]`
 - [ ] Feature added to `feature_registry!` in `crates/eggsec/src/config/feature_registry.rs`
 - [ ] Dependency edges added to `FEATURE_DEPENDENCIES` in `crates/eggsec/tests/feature_matrix.rs`
-- [ ] If in `full` aggregate: `("full", "my-new-feature")` edge added
+- [ ] `full` contract updated: member (Cargo array + `FULL_MEMBERS` + edge) or documented exclusion (`FULL_EXCLUDED_WITH_REASON`)
+- [ ] Sweep covers it: `scripts/check-features-individual.sh` enumerates engine features mechanically; add companion/prerequisite handling if needed
 - [ ] `cargo test -p eggsec --test feature_matrix` passes
 - [ ] `cargo test -p eggsec --test metadata_consistency` passes
 - [ ] `cargo check -p eggsec --features my-new-feature` compiles
@@ -320,12 +337,17 @@ returns `false`. This means typos in feature names will deny operations
 rather than silently allowing them. The `unknown_feature_fails_closed` test
 verifies this behavior.
 
-**`full` is an aggregate/deep profile, not a conservative/default profile.** The
-`full` meta-feature enables all non-default features including advanced/lab-only
-capabilities (`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`).
+**`full` is a curated aggregate/deep profile, not a conservative/default profile
+and not an exhaustive "enable everything" flag.** The `full` meta-feature
+enables 28 pinned members including advanced/lab-only capabilities
+(`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`).
+Membership is pinned in `FULL_MEMBERS`
+(`crates/eggsec/src/config/feature_registry.rs`); exclusions carry reasons in
+`FULL_EXCLUDED_WITH_REASON`. The exhaustive oracle is
+`make check-features-individual`.
 It is intended for development, integration testing, and explicit lab builds.
-Never recommend `full` as a default or production build profile. The default
-feature set is empty (`default = []`).
+Never recommend `full` as a default or production build profile. The engine
+default feature set is `default = ["cli"]`.
 
 **Feature-gated metadata still exists; availability and execution are separate
 concerns.** Enabling a feature makes code compile and metadata visible to

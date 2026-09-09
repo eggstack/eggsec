@@ -95,7 +95,7 @@ sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protob
 | `external-integrations` | Jira, GitHub, GitLab connectors | Marker (planned) |
 | `finding-workflow` | Finding lifecycle management | Marker (planned) |
 | `vuln-management` | Vulnerability triage and CVSS scoring | Marker (planned) |
-| `full` | Most non-default features combined (excludes several markers and experimental features) | — |
+| `full` | Curated developer/lab aggregate (28 pinned members; excludes test-only, security-risk, `*-mcp` exposure markers, backend drivers, platform modes, separate serving surfaces, and special output/plugin modes — see `FULL_EXCLUDED_WITH_REASON` in `crates/eggsec/src/config/feature_registry.rs`; exhaustive oracle is `make check-features-individual`) | — |
 
 ### CLI-Level Features
 
@@ -143,7 +143,7 @@ cargo build --release -p eggsec-cli --features c2
 # With web proxy MCP tools (requires web-proxy)
 cargo build --release -p eggsec-cli --features web-proxy-mcp
 
-# Full build - all features
+# Curated lab build - 28 pinned members (not exhaustive; see docs/FEATURE_MATRIX.md §1.3)
 cargo build --release -p eggsec-cli --features full
 
 # Headless build - no TUI, no daemon client (CI/scripting)

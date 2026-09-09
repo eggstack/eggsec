@@ -12,7 +12,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 |-------|---------|---------|
 | Formatting | `cargo fmt --all --check` | Code style consistency |
 | No-default build | `cargo check --workspace --no-default-features` | Workspace compiles without optional features |
-| Clippy | `cargo clippy --lib -p eggsec -- -D warnings` | Code quality on primary engine |
+| Clippy | `make clippy` (engine lib + leaf crates, `-D warnings`) | Code quality on engine and leaf crates |
 | Package tests | `cargo test -p eggsec --features rest-api --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
 | Report envelope | `cargo test -p eggsec-output --tests` | Output crate report/evidence envelope roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
@@ -30,7 +30,7 @@ Alternatively, run the individual commands:
 ```bash
 cargo fmt --all --check
 cargo check --workspace --no-default-features
-cargo clippy --lib -p eggsec -- -D warnings
+make clippy
 cargo test -p eggsec --features rest-api --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 bash scripts/check-architecture-guards.sh
@@ -63,7 +63,9 @@ These checks are not required for PR merge. They run in the optional `deep-check
 | Check | Command | Notes |
 |-------|---------|-------|
 | Advisory/license/ban policy | `cargo deny check` | Enforced via `deny.toml` |
+| Domain/platform lint | `make clippy-domain` | Lint extracted implementation crates (part of `make check-full`) |
 | Representative feature profiles | `make check-feature-profiles` | Coherent profile compilation |
+| Exhaustive per-feature sweep | `make check-features-individual` | Every feature in its minimum set; `full` is curated, not exhaustive |
 
 ### Security tool ownership
 
@@ -98,6 +100,8 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 
 ### Documentation Currency
 - Verify current architecture docs exist (`COMMAND_REGISTRY.md`, `TOOL_REGISTRATION.md`, `FEATURE_MATRIX.md`, `METADATA_OWNERSHIP.md`, `CI_ARCHITECTURE_GUARDS.md`).
+- Verify feature docs match the Cargo source of truth (`scripts/check-feature-docs.py`: engine default, declared features, curated `full` membership, domain inventory).
+- Verify the individual feature sweep is maintained and scheduled (`scripts/check-features-individual.sh`, Makefile target, `deep-checks.yml`).
 - Verify extensibility handoff guides exist (`EXTENSIBILITY.md`, `extending/operations.md`, `extending/domains.md`, `extending/commands.md`, `extending/tool-exposure.md`, `extending/tui-actions.md`, `extending/report-evidence.md`, `extending/features.md`, `extending/testing.md`, `extending/templates.md`).
 - Verify `EXTENSIBILITY.md` Detailed Guides table links resolve to existing files.
 - Fail on stale field names or contradictions in current docs.

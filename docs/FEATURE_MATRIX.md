@@ -126,8 +126,15 @@ Categories:
 
 ### 1.3 Defaults
 
-The default feature set is **empty** (`default = []`). The `full` meta-feature enables everything
-but is not a default. Users build with explicit feature flags or the `full` meta-feature.
+The engine default feature set is `default = ["cli"]` (CLI types and command
+dispatch only). The `full` meta-feature is a curated developer/lab aggregate
+of 28 pinned members — not an exhaustive "enable everything" flag. Its exact
+membership is declared once in `FULL_MEMBERS`
+(`crates/eggsec/src/config/feature_registry.rs`) and checked against the
+`full = [...]` array in `crates/eggsec/Cargo.toml`; every excluded feature
+carries a machine-checked reason in `FULL_EXCLUDED_WITH_REASON`. Users build
+with explicit feature flags, the `full` lab aggregate, or the exhaustive
+per-feature sweep (`make check-features-individual`).
 
 The `eggsec-cli` crate has `default = ["tui"]`. Build with `--no-default-features` for headless
 usage, or `--no-default-features --features daemon-client` for daemon client mode.
@@ -143,7 +150,7 @@ usage, or `--no-default-features --features daemon-client` for daemon client mod
 | Backend driver | `<domain>-<backend>` | `db-pentest-mongodb`, `db-pentest-redis` |
 | Advanced extension | `<domain>-advanced` | `wireless-advanced` |
 | Platform-sensitive driver | `<domain>-<driver>` | `db-pentest-mssql-tiberius` (pure-Rust TDS) |
-| Meta/aggregate | `full` | Enables all non-default features |
+| Meta/aggregate | `full` | Curated lab aggregate (28 pinned members; see §1.3) |
 
 **Naming consistency**: All features follow these patterns consistently. No deviations observed.
 
@@ -236,10 +243,22 @@ cargo check --workspace --no-default-features
 cargo test -p eggsec --test metadata_consistency
 ```
 
-#### full — Developer/lab aggregate (not a production profile)
+#### full — Curated developer/lab aggregate (not a production profile)
 
-The `full` meta-feature enables all non-default features including advanced/lab-only capabilities
-(`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`). It is intended for development,
+The `full` meta-feature enables 28 pinned members, including advanced/lab-only
+capabilities (`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`).
+It deliberately excludes test-only markers (`test-helpers`), security-risk
+flags (`insecure-tls`), protocol exposure markers (`*-mcp`, which stay opt-in
+while their base domains are aggregated), backend drivers
+(`db-pentest-mongodb`, `db-pentest-mssql-tiberius`, `db-pentest-redis`),
+platform modes (`nse-ssh2`, `nse-sandbox`), separate serving surfaces
+(`grpc-api`, `ws-api`), special output/plugin modes (`pdf`,
+`transparent-proxy`, `dynamic-plugins`), deferred marker gates (`api-schema`,
+`cloud`, `git-secrets`, `daemon-client`), and the implicit base (`tool-api`,
+transitively enabled via `rest-api`/`nse`/`ai-integration`). The complete
+exclusion table with reasons is `FULL_EXCLUDED_WITH_REASON`
+(`crates/eggsec/src/config/feature_registry.rs`); the exhaustive oracle is
+`make check-features-individual`. It is intended for development,
 integration testing, and explicit lab builds. **`full` is not a conservative user/default profile**
 and should not be recommended for production or standard deployment.
 
@@ -405,7 +424,7 @@ as `cargo check -p eggsec --features web-proxy`.
 | `ai-integration` | `ai-integration` | experimental | AI-assisted finding analysis |
 
 Default wheel: core + scanner + endpoint discovery + service fingerprinting + recon + WAF + reporting + async API.
-`full` aggregate includes all non-default features (not conservative/production).
+`full` aggregate is the curated 28-member engine lab set (not conservative/production).
 
 ### 6.2 Operation Stability Matrix
 

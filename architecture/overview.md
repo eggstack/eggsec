@@ -403,9 +403,9 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities. 
 | `email-notifications` | rest-api email transport | SMTP email via lettre |
 | `logging-subscriber` | process-host crates | tracing subscriber/appender setup |
 | `config-watch` | config hot-reload | File watching (notify + debouncer) |
-| `full` | All | All features combined |
+| `full` | Curated set (28 pinned) | Developer/lab aggregate; exclusions reasoned in `FULL_EXCLUDED_WITH_REASON`, exhaustive oracle is `make check-features-individual` |
 
-Marker features (gate code without adding dependencies) include `tool-api`, `api-schema`, `git-secrets`, `cloud`, and the `*-mcp` exposure markers. See [feature_matrix.md](feature_matrix.md) for dependency edges and [../docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical inventory.
+Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-schema`, `git-secrets`, `cloud`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `wireless`, `evasion`, `postex`, `daemon-client`, and `test-helpers`; feature-coupled markers (`*-mcp` exposure markers, `wireless-advanced`, `transparent-proxy`, `dynamic-plugins`) reference a base feature. Engine default is `default = ["cli"]`. See [feature_matrix.md](feature_matrix.md) for dependency edges and [../docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical inventory.
 
 ---
 

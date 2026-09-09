@@ -447,6 +447,165 @@ feature_registry! {
     },
 }
 
+// ─── `full` aggregate contract (Phase B) ────────────────────────────────────
+//
+// `full` is a **curated developer/lab aggregate**, not an exhaustive
+// "enable everything" flag. It pins exactly the 28 members in
+// [`FULL_MEMBERS`]. Every other non-default feature is listed in
+// [`FULL_EXCLUDED_WITH_REASON`] with a machine-checked rationale.
+//
+// Rationale classes for exclusion:
+// - `test-only`: test/internal markers, never shipped in aggregates.
+// - `security-risk`: explicit opt-in only, never aggregated.
+// - `exposure-marker`: domain enabled but MCP/agent exposure stays opt-in
+//   (least privilege; full enables the domain, not its protocol exposure).
+// - `backend-driver`: base domain in `full`; drivers opt in individually.
+// - `platform-mode`: alternative/system-dependent execution modes with
+//   their own build profiles.
+// - `serving-surface`: separate REST/gRPC/WebSocket serving surfaces with
+//   their own dependency closures.
+// - `output-mode`: heavy or special-purpose output/plugin modes.
+// - `implicit-base`: transitively enabled via `full` members (no direct entry).
+// - `process-host`: process-host/CLI concerns, not engine lab contents.
+
+/// Exact direct membership of the `full` aggregate.
+///
+/// Must match the `full = [...]` array in `crates/eggsec/Cargo.toml`.
+/// Tested by `full_membership_matches_cargo` in
+/// `crates/eggsec/tests/feature_matrix.rs`.
+pub static FULL_MEMBERS: &[&str] = &[
+    "advanced-hunting",
+    "ai-integration",
+    "c2",
+    "cli",
+    "compliance",
+    "config-watch",
+    "container",
+    "database",
+    "db-pentest",
+    "email-notifications",
+    "evasion",
+    "external-integrations",
+    "finding-workflow",
+    "headless-browser",
+    "logging-subscriber",
+    "mobile",
+    "mobile-dynamic",
+    "nse",
+    "packet-inspection",
+    "postex",
+    "rest-api",
+    "sbom",
+    "stress-testing",
+    "vuln-management",
+    "web-proxy",
+    "websocket",
+    "wireless",
+    "wireless-advanced",
+];
+
+/// Features intentionally excluded from `full`, with machine-checked reasons.
+///
+/// Every non-default Cargo feature not in [`FULL_MEMBERS`] (and not `full`
+/// itself) must appear here exactly once. Tested by
+/// `full_exclusions_are_documented` in `crates/eggsec/tests/feature_matrix.rs`.
+pub static FULL_EXCLUDED_WITH_REASON: &[(&str, &str)] = &[
+    (
+        "api-schema",
+        "marker-only compile gate; covered by individual sweep, not lab aggregate",
+    ),
+    (
+        "c2-mcp",
+        "exposure-marker: c2 domain in full, MCP exposure stays opt-in",
+    ),
+    (
+        "cloud",
+        "marker-only compile gate; covered by individual sweep, not lab aggregate",
+    ),
+    (
+        "daemon-client",
+        "process-host: CLI daemon-client concern, not engine lab contents",
+    ),
+    (
+        "db-pentest-mcp",
+        "exposure-marker: db-pentest domain in full, MCP exposure stays opt-in",
+    ),
+    (
+        "db-pentest-mongodb",
+        "backend-driver: base db-pentest in full, MongoDB driver opts in individually",
+    ),
+    (
+        "db-pentest-mssql-tiberius",
+        "backend-driver: base db-pentest in full, MSSQL driver opts in individually",
+    ),
+    (
+        "db-pentest-redis",
+        "backend-driver: base db-pentest in full, Redis driver opts in individually",
+    ),
+    (
+        "dynamic-plugins",
+        "output-mode: web-proxy extension mode with its own profile",
+    ),
+    (
+        "git-secrets",
+        "marker-only compile gate; covered by individual sweep, not lab aggregate",
+    ),
+    (
+        "grpc-api",
+        "serving-surface: separate gRPC surface (protoc + tonic closure), own profile",
+    ),
+    (
+        "insecure-tls",
+        "security-risk: explicit opt-in only, never aggregated",
+    ),
+    (
+        "nse-sandbox",
+        "platform-mode: NSE hardening mode with its own profile",
+    ),
+    (
+        "nse-ssh2",
+        "platform-mode: requires libssh2 system dependency, own profile",
+    ),
+    (
+        "pdf",
+        "output-mode: heavy printpdf closure, separate output profile",
+    ),
+    (
+        "test-helpers",
+        "test-only: internal test marker, never aggregated",
+    ),
+    (
+        "tool-api",
+        "implicit-base: transitively enabled via rest-api/nse/ai-integration in full",
+    ),
+    (
+        "transparent-proxy",
+        "output-mode: web-proxy extension mode with its own profile",
+    ),
+    (
+        "web-proxy-mcp",
+        "exposure-marker: web-proxy domain in full, MCP exposure stays opt-in",
+    ),
+    (
+        "ws-api",
+        "serving-surface: separate WebSocket surface (axum/ws closure), own profile",
+    ),
+];
+
+/// Returns `true` if the named feature is a direct member of `full`.
+pub fn is_full_member(name: &str) -> bool {
+    FULL_MEMBERS.contains(&name)
+}
+
+/// Returns the documented exclusion reason for a feature intentionally left
+/// out of `full`, or `None` if the feature is a member (or `full` itself).
+pub fn full_exclusion_reason(name: &str) -> Option<&'static str> {
+    FULL_EXCLUDED_WITH_REASON
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, reason)| *reason)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

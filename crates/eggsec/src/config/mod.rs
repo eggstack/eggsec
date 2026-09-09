@@ -47,10 +47,10 @@ mod scope_spec;
 mod settings;
 
 pub use feature_registry::{
-    classify_feature, feature_missing_hint, feature_state,
-    is_feature_enabled as is_feature_enabled_registry,
+    classify_feature, feature_missing_hint, feature_state, full_exclusion_reason,
+    is_feature_enabled as is_feature_enabled_registry, is_full_member,
     is_known_feature as is_known_feature_registry, FeatureCategory, FeatureEntry, FeatureState,
-    ALL_FEATURES,
+    ALL_FEATURES, FULL_EXCLUDED_WITH_REASON, FULL_MEMBERS,
 };
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};

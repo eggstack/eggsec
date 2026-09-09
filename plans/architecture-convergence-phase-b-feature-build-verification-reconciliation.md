@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09). All workstreams implemented; see Completion record below.
 
 ## Objective
 
@@ -162,4 +162,38 @@ Add tests for:
 
 ## Completion record
 
-Append baseline/final SHA, feature-count totals, aggregate semantics chosen, direct sweep command, runtime measurements, and verification results.
+Executed 2026-09-09.
+
+- Baseline SHA: `c3cba26b` (docs: record Phase A scope-unification completion SHA).
+- Feature-count totals: 50 declared engine features (49 non-default + `default`);
+  35 non-empty (activate deps or other features), 15 empty marker gates;
+  registry covers all 49 non-default entries bidirectionally.
+- Aggregate semantics chosen: contract option 2 — `full` documented and
+  mechanically pinned as a curated 28-member developer/lab aggregate
+  (`FULL_MEMBERS` in `crates/eggsec/src/config/feature_registry.rs`);
+  every excluded feature carries a reason in `FULL_EXCLUDED_WITH_REASON`
+  (test-only, security-risk, exposure-marker, backend-driver, platform-mode,
+  serving-surface, output-mode, implicit-base, process-host). No rename; no
+  incompatibility table needed (no incompatible pairs found — exclusions are
+  policy/mode choices, not conflicts).
+- Direct sweep command: `make check-features-individual`
+  (`scripts/check-features-individual.sh`), scheduled weekly/manual in
+  `deep-checks.yml`. Local run: 66 PASS, 4 SKIP (libpcap/libssh2 absent),
+  0 FAIL. Deep CI installs libpcap-dev/libssl-dev/libssh2-dev/protoc so the
+  sweep exercises fully there.
+- Lint ownership: routine `make clippy` = engine + 6 leaf crates (`-D warnings`);
+  `make clippy-domain` (deep only) = db-lab, web-proxy, mobile-lab, daemon
+  (`-D warnings`) + eggsec-nse warn-only (182 pre-existing warnings documented
+  as promotion debt). Sweep-driven fixes: `eggsec-db-lab` redundant `&` in
+  `format!`, `eggsec-mobile-lab` `chunks_exact` helper (MSRV-safe, no `as_chunks`).
+- Docs validation: `scripts/check-feature-docs.py` (guard checks 71/72);
+  corrected empty-default claim (`default = ["cli"]`), exhaustive-`full`
+  claims (FEATURE_MATRIX, BUILD, extending/features, arch overview/matrix,
+  eggsec-python SKILL, security INSTALL, Python `full` wheel-profile
+  description), missing `cli` row / wrong `mobile` deps cell / `Deprecated`
+  stability in `architecture/feature_matrix.md`, CLI default comment and
+  marker taxonomy in `AGENTS.md`. README needed no change (no false claims).
+- Verification results: `make check` PASS (incl. 26 feature-matrix tests, 35
+  metadata-consistency tests, guards ALL PASSED), `make check-full` PASS
+  (deny + clippy-domain + profiles), `make check-features-individual` PASS,
+  `make check-python` PASS.

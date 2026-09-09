@@ -383,22 +383,20 @@ fn read_utf16_pooled_string(data: &[u8], start: usize) -> String {
         p += 2;
     }
     let byte_len = len.saturating_mul(2);
-    if p + byte_len > data.len() {
-        let avail = (data.len() - p) / 2;
-        let s = String::from_utf16_lossy(
-            &data[p..p + avail * 2]
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                .collect::<Vec<_>>(),
-        );
-        return s.to_string();
-    }
-    let s = String::from_utf16_lossy(
-        &data[p..p + byte_len]
+    // MSRV 1.88 keeps `chunks_exact(2)` here instead of `as_chunks::<2>()`.
+    #[allow(clippy::chunks_exact_to_as_chunks)]
+    fn u16_words_le(bytes: &[u8]) -> Vec<u16> {
+        bytes
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect::<Vec<_>>(),
-    );
+            .collect()
+    }
+    if p + byte_len > data.len() {
+        let avail = (data.len() - p) / 2;
+        let s = String::from_utf16_lossy(&u16_words_le(&data[p..p + avail * 2]));
+        return s.to_string();
+    }
+    let s = String::from_utf16_lossy(&u16_words_le(&data[p..p + byte_len]));
     s.to_string()
 }
 
