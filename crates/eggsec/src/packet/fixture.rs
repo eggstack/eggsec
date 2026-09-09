@@ -198,30 +198,39 @@ mod tests {
 
     #[test]
     fn fixture_repeated_craft_parse_loops_show_no_leak() {
+        // Craft→parse→hexdump is pure in-memory work: it opens no files or
+        // sockets by construction. `/proc/self/fd` sampling is racy under
+        // parallel test execution (concurrent tests open FDs mid-loop), so
+        // measure differentially: a warmup loop absorbs lazy one-time setup
+        // plus ambient noise, then the measured loop must not grow FDs.
+        let craft_parse = |offset: u32| {
+            for i in 0..20 {
+                let bytes = PacketBuilder::new()
+                    .ethernet(
+                        [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
+                        [0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb],
+                        0x0800,
+                    )
+                    .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 6, 64)
+                    .tcp(
+                        1000 + ((offset + i) % 1000) as u16,
+                        80,
+                        i as u32,
+                        0,
+                        TcpFlags::syn(),
+                        65535,
+                    )
+                    .payload(b"loop".to_vec())
+                    .build()
+                    .unwrap();
+                let parsed = ParsedPacket::parse(&bytes).unwrap();
+                assert!(parsed.ip.is_some());
+                let _ = hexdump(&bytes);
+            }
+        };
+        craft_parse(0);
         let before = fd_count();
-        for i in 0..20 {
-            let bytes = PacketBuilder::new()
-                .ethernet(
-                    [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
-                    [0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb],
-                    0x0800,
-                )
-                .ipv4(Ipv4Addr::LOCALHOST, Ipv4Addr::LOCALHOST, 6, 64)
-                .tcp(
-                    1000 + (i % 1000) as u16,
-                    80,
-                    i as u32,
-                    0,
-                    TcpFlags::syn(),
-                    65535,
-                )
-                .payload(b"loop".to_vec())
-                .build()
-                .unwrap();
-            let parsed = ParsedPacket::parse(&bytes).unwrap();
-            assert!(parsed.ip.is_some());
-            let _ = hexdump(&bytes);
-        }
+        craft_parse(20);
         assert_no_fd_leak(before, fd_count(), 8);
     }
 

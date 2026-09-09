@@ -6,7 +6,7 @@ report output, and features to the Eggsec workspace.
 ## Core Invariants
 
 1. **Metadata-first**: Every security action starts with `OperationMetadata` in
-   `crates/eggsec/src/config/policy.rs`. No command, tool, or domain integration
+   `crates/eggsec/src/config/policy_catalog.rs`. No command, tool, or domain integration
    may be added without a canonical metadata entry.
 
 2. **Domains don't authorize**: `DomainDescriptor` in
@@ -47,7 +47,7 @@ Do you need a new manual CLI command?
 
 | Extension Type | Primary Files | Metadata | Tests |
 |---------------|--------------|----------|-------|
-| Operation | `crates/eggsec/src/config/policy.rs` | `OperationMetadata` | `metadata_consistency`, `feature_matrix` |
+| Operation | `crates/eggsec/src/config/policy_catalog.rs` | `OperationMetadata` | `metadata_consistency`, `feature_matrix` |
 | Domain | `crates/eggsec/src/domain/mod.rs`, domain crate | `DomainDescriptor` | `metadata_consistency`, `tool_registration`, `feature_matrix` |
 | Command | `crates/eggsec/src/commands/registry.rs`, handler | `CommandRegistration` | `command_registry`, `enforcement_matrix` |
 | Tool exposure | `crates/eggsec/src/tool/registration.rs` | `ToolRegistration` | `tool_registration`, `enforced_dispatch_regression` |

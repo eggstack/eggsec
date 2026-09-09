@@ -165,6 +165,7 @@ Add tests for:
 Executed 2026-09-09.
 
 - Baseline SHA: `c3cba26b` (docs: record Phase A scope-unification completion SHA).
+- Final SHA: `c65477db` (feature reconciliation implementation).
 - Feature-count totals: 50 declared engine features (49 non-default + `default`);
   35 non-empty (activate deps or other features), 15 empty marker gates;
   registry covers all 49 non-default entries bidirectionally.

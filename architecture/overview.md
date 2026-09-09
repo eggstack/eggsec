@@ -120,7 +120,7 @@ nor hosted CI publishes a package.
 Every externally invokable operation takes the same path, regardless of frontend:
 
 1. **Parse** — the frontend turns user input into a request (CLI args → `Commands` enum variant; REST/MCP/gRPC → `ToolRequest`; TUI/daemon → `RunRequest`).
-2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 31 canonical operations + 42 aliases).
+2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 34 canonical operations + 42 aliases).
 3. **Evaluate** — `EnforcementContext::evaluate()` checks scope provenance (`LoadedScope` for automated surfaces), risk tier vs. profile allowlist, capabilities, and features. Outcome: `Allow` / `Warn` / `RequireConfirmation` / `Deny`.
 4. **Approve** — evaluation yields an `ApprovedOperation` token. Strict surfaces dispatch only through `EnforcedDispatcher::dispatch_checked()`, which re-validates tool+target binding against the token and fails closed.
 5. **Execute** — either a command handler (`crates/eggsec/src/commands/handlers/`, 32 handler modules behind `handle_command()`) or the domain executor layer (`crates/eggsec/src/dispatch/executors/`) calls the engine function.
@@ -433,7 +433,7 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 | `ExecutionSurface` | `config/policy.rs:357` | Caller origin (9 variants) |
 | `ExecutionProfile` | `config/policy.rs:461` | Trust boundary (5 variants) |
 | `OperationRisk` | `config/policy.rs:9` | Risk tier (15 levels) |
-| `OperationMetadata` | `config/policy.rs` | Static registry of all operations (31 canonical + 42 aliases) — single source of truth |
+| `OperationMetadata` | `config/policy_catalog.rs` | Static registry of all operations (34 canonical + 42 aliases) — single source of truth |
 | `OperationDescriptor` | `config/policy.rs` | Unit of policy evaluation |
 | `EnforcementContext` | `config/policy_decision.rs` | Central policy evaluation gate |
 | `ApprovedOperation` | `config/policy_decision.rs:331` | Proof-of-enforcement token |
@@ -535,7 +535,7 @@ Within the `eggsec` crate:
 
 ### Operation Metadata
 
-`OperationMetadata` is the single source of truth for all externally invokable operations: **31 canonical operations + 42 aliases** (`config/policy.rs:1494`, alias table at `:2027`). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
+`OperationMetadata` is the single source of truth for all externally invokable operations: **34 canonical operations + 42 aliases** (`config/policy_catalog.rs:317`, alias table at `:901`). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
 
 ### Audit Trail
 

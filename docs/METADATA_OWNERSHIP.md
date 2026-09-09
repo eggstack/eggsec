@@ -4,7 +4,7 @@
 
 Eggsec uses a **single canonical source** for all operation metadata, with derived views for commands, domains, tools, and protocols:
 
-1. **`OperationMetadata`** (`config/policy.rs`) — **Single source of truth** for operation ID, mode, risk, capabilities, feature gates, target policy, and surface exposure flags.
+1. **`OperationMetadata`** (`config/policy_catalog.rs`) — **Single source of truth** for operation ID, mode, risk, capabilities, feature gates, target policy, and surface exposure flags.
 2. **`CommandRegistration`** (`commands/registry.rs`) — Derived from `OperationMetadata` for CLI dispatch. Command-specific fields only (command_id, category, dispatch_mode). Display name and feature are derived from metadata.
 3. **`DomainDescriptor`** (`domain/mod.rs`) — Per-domain metadata: category, integration points, dry-run/evidence/baseline support. `OperationIntegration` values must match `OperationMetadata` (verified by construction tests).
 4. **`ToolRegistration`** (`tool/registration.rs`) — Derived from `OperationMetadata` + `DomainDescriptor::ToolIntegration` for MCP/REST/gRPC/agent tool listings.
@@ -15,8 +15,8 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 | Metadata | Location | Consumed By |
 |----------|----------|-------------|
-| Operation ID, risk, capabilities, feature gates | `ALL_OPERATION_METADATA` in `config/policy.rs` | Policy enforcement, preflight, REST/MCP/gRPC registration, TUI tabs |
-| Tool aliases | `ALL_OPERATION_METADATA_ALIASES` in `config/policy.rs` | `metadata_for_tool_id()` resolver |
+| Operation ID, risk, capabilities, feature gates | `ALL_OPERATION_METADATA` in `config/policy_catalog.rs` | Policy enforcement, preflight, REST/MCP/gRPC registration, TUI tabs |
+| Tool aliases | `ALL_OPERATION_METADATA_ALIASES` in `config/policy_catalog.rs` | `metadata_for_tool_id()` resolver |
 | Domain category, integrations, dry-run/evidence/baseline | `DomainDescriptor` in `domain/mod.rs` | Capability matrix generation, preflight domain info, documentation |
 | Capability matrix | `docs/CAPABILITY_MATRIX.md` | Humans (manually maintained from OperationMetadata + DomainDescriptor; metadata consistency tests validate underlying structures) |
 | Consistency tests | `crates/eggsec/tests/metadata_consistency.rs` | CI, development validation |
@@ -25,7 +25,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 ### Adding a New Operation
 
-1. Add an `OperationMetadata` entry to `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs`. This is the **only** place where mode, risk, capabilities, features, and target policy are declared.
+1. Add an `OperationMetadata` entry to `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy_catalog.rs`. This is the **only** place where mode, risk, capabilities, features, and target policy are declared.
 2. Add a `CommandRegistration` entry in `crates/eggsec/src/commands/registry.rs`. The `display_name` and `feature` fields are **derived from metadata** — the construction test `operation_backed_commands_match_metadata` enforces this.
 3. If the operation is domain-scoped, add an `OperationIntegration` to the relevant `DomainDescriptor` in `crates/eggsec/src/domain/mod.rs`. Values **must match** `OperationMetadata` — the construction test `domain_operation_matches_metadata` enforces this.
 4. Add any needed aliases to `ALL_OPERATION_METADATA_ALIASES`.
@@ -43,7 +43,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 ### Modifying Existing Metadata
 
-1. Edit `ALL_OPERATION_METADATA` in `config/policy.rs`. This is the **only** place to change mode, risk, capabilities, features, or target policy.
+1. Edit `ALL_OPERATION_METADATA` in `config/policy_catalog.rs`. This is the **only** place to change mode, risk, capabilities, features, or target policy.
 2. Update any `CommandRegistration` entries whose `display_name` or `feature` should change (the construction test will catch drift).
 3. Update any `DomainDescriptor::OperationIntegration` entries that duplicate the changed values (the construction test will catch drift).
 4. Run the full metadata consistency test suite and the construction tests.

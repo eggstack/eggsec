@@ -134,7 +134,7 @@ Surfaces that `honors_manual_override()` are only `CliManual` and `TuiManual`. A
 
 ### OperationMetadata
 
-`OperationMetadata` lives in `config::policy` and is the canonical source of truth for `OperationDescriptor` generation across all surfaces (REST, MCP, TUI, agent). It is a static registry of 31 operations (`ALL_OPERATION_METADATA`) with 42 alias mappings. Use `metadata_for_tool_id(tool_id)` to resolve any tool ID (including aliases like "scan" → "scan-ports") to its canonical `OperationMetadata`, then call `descriptor_for_target()` to generate an `OperationDescriptor` with surface-specific overrides applied.
+`OperationMetadata` lives in `config::policy_catalog` and is the canonical source of truth for `OperationDescriptor` generation across all surfaces (REST, MCP, TUI, agent). It is a static registry of 34 operations (`ALL_OPERATION_METADATA`) with 42 alias mappings. Use `metadata_for_tool_id(tool_id)` to resolve any tool ID (including aliases like "scan" → "scan-ports") to its canonical `OperationMetadata`, then call `try_descriptor_for_target()` for validated construction (`descriptor_for_target()` remains as an unchecked stable shim for backward compatibility).
 
 ### DomainDescriptor and Capability Matrix
 
@@ -220,4 +220,4 @@ For full config management, use CLI commands or edit config files directly when 
 
 ## Phase D Hotspot Modules (2026-09-09)
 
-Policy/target/catalog/approval: `config/policy.rs` (facade) + `policy_target.rs` + `policy_catalog.rs` + `policy_approval.rs`. Scope: `scope.rs` (facade) + `scope_address.rs` + `scope_resolver.rs`. Public paths stable via re-exports; new code imports from the cohesive module. `ApprovedOperation::new` only in `policy_approval.rs`; adapters obtain tokens via `approve()`.
+Policy/target/catalog/approval: `config/policy.rs` (facade) + `policy_target.rs` + `policy_catalog.rs` + `policy_approval.rs`. Scope: `scope.rs` (facade) + `scope_address.rs` + `scope_resolver.rs`. Public paths stable via re-exports; new code imports from the cohesive module. `ApprovedOperation::new` only in `policy_approval.rs` (definition) + `policy_decision.rs` (enforcement call sites); adapters obtain tokens via `approve()`.

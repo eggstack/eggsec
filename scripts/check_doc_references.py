@@ -26,6 +26,13 @@ SKIP_DIR_NAMES = {
     "dist", "build", ".eggs", "advisory-db",
 }
 
+# Top-level directories whose markdown files are historical engineering record,
+# not active documentation. Plan files may reference paths that existed at plan
+# time but were later removed/renamed by the implementation (e.g. Phase D plan
+# references `crates/eggsec-daemon/src/protocol.rs`, removed as a dead
+# duplicate in Phase E). Skip them so the check enforces active docs only.
+SKIP_TOP_DIRS = {"plans"}
+
 # Patterns that look like repository-local file/directory references.
 # We capture the path portion only (no surrounding punctuation or markdown syntax).
 PATH_PATTERNS: list[re.Pattern[str]] = [
@@ -69,6 +76,8 @@ def find_doc_files() -> list[str]:
     for f in sorted(files):
         rel = os.path.relpath(f, WORKSPACE_ROOT)
         if _is_in_skipped_dir(rel):
+            continue
+        if rel.split(os.sep)[0] in SKIP_TOP_DIRS:
             continue
         if f.endswith((".png", ".jpg", ".gif", ".pdf", ".whl", ".tar.gz")):
             continue

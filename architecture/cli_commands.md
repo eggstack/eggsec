@@ -267,11 +267,11 @@ The command registry provides static, inspectable metadata for CLI/TUI dispatch.
 
 ### Registry Entry Count
 
-The `REGISTERED_COMMANDS` array (`registry.rs:108–726`) contains **48 entries** (not 52 — daemon commands and catalog entries are not all registered). Categories:
+The `REGISTERED_COMMANDS` array (`registry.rs:108–726`) contains **49 entries**. Categories:
 
 | Dispatch Mode | Count | Commands |
 |--------------|-------|----------|
-| `RegistryBacked` | 31 | `recon`, `scan-ports`, `scan-endpoints`, `fingerprint`, `scan`, `resume`, `fuzz`, `waf`, `waf-stress`, `graphql`, `oauth`, `auth-test`, `load`, `stress`, `packet`, `icmp`, `traceroute`, `nse`, `hunt`, `evasion`, `postex`, `c2`, `proxy-intercept`, `wireless`, `wireless-deauth`, `browser`, `mobile`, `mobile-dynamic`, `db` |
+| `RegistryBacked` | 29 | `recon`, `scan-ports`, `scan-endpoints`, `fingerprint`, `scan`, `resume`, `fuzz`, `waf`, `waf-stress`, `graphql`, `oauth`, `auth-test`, `load`, `stress`, `packet`, `icmp`, `traceroute`, `nse`, `hunt`, `evasion`, `postex`, `c2`, `proxy-intercept`, `wireless`, `wireless-deauth`, `browser`, `mobile`, `mobile-dynamic`, `db` |
 | `HelperOnly` | 13 | `plan`, `preflight`, `ci`, `config`, `doctor`, `policy-explain`, `scope-explain`, `ai-analyze`, `report`, `vuln`, `storage`, `sbom`, `notify` |
 | `ServerLifecycle` | 7 | `serve`, `mcp-serve`, `agent`, `grpc`, `cluster`, `remote-serve`, `exec` |
 | `CatalogOnly` | 0 | (none currently) |
@@ -403,7 +403,7 @@ CLI handlers call engine functions directly or via the dispatch layer. The dispa
 - `EggsecConfig` loaded from TOML/YAML via `load_config()`
 - `Scope` / `LoadedScope` loaded via `load_scope_with_source()`
 - `ExecutionPolicy` from config determines which risk tiers are permitted
-- `OperationMetadata` (31 canonical + 42 aliases) is the single source of truth for operation policy
+- `OperationMetadata` (34 canonical + 42 aliases) is the single source of truth for operation policy
 
 ### Enforcement & Audit (`audit.md`)
 

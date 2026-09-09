@@ -91,7 +91,7 @@ All source files live under `crates/eggsec/src/config/`:
 | `EggsecConfig` | `settings.rs:92` | Main configuration struct |
 | `ExecutionPolicy` | `policy.rs:33` | Operation policy controls (14 boolean flags + risk + capabilities) |
 | `OperationDescriptor` | `policy.rs:279` | Unit of policy evaluation |
-| `OperationMetadata` | `policy.rs:1202` | Static metadata for one operation (17 fields) |
+| `OperationMetadata` | `policy_catalog.rs:317` | Static metadata for one operation (17 fields) |
 | `PolicyDecision` | `policy_decision.rs:11` | Fully-populated enforcement decision record (17 fields) |
 | `EnforcementContext` | `policy_decision.rs:472` | Bundles profile + policy + scope for shared evaluation |
 | `ApprovedOperation` | `policy_decision.rs:331` | Proof-of-enforcement token (private fields) |
@@ -110,8 +110,8 @@ All source files live under `crates/eggsec/src/config/`:
 
 | Registry | File:Line | Count | Purpose |
 |----------|-----------|-------|---------|
-| `ALL_OPERATION_METADATA` | `policy.rs:1494` | 31 | Canonical operation definitions |
-| `ALL_OPERATION_METADATA_ALIASES` | `policy.rs:2027` | 42 | Tool-ID → canonical-ID mappings |
+| `ALL_OPERATION_METADATA` | `policy_catalog.rs:317` | 34 | Canonical operation definitions |
+| `ALL_OPERATION_METADATA_ALIASES` | `policy_catalog.rs:901` | 42 | Tool-ID → canonical-ID mappings |
 | `ALL_FEATURES` | `feature_registry.rs:110` (generated) | ~48 | Compile-time feature registry |
 
 ### ExecutionSurface → ExecutionProfile Mapping
@@ -319,9 +319,9 @@ Key methods:
 
 ### OperationMetadata → OperationDescriptor Flow
 
-1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `policy.rs:2078`
-2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy.rs:2027` map alternative IDs to canonical operation IDs
-3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `policy.rs:1283` (validated) or `metadata.descriptor_for_target(target)` at `policy.rs:1226` (unchecked)
+1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `policy_catalog.rs:948`
+2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy_catalog.rs:901` map alternative IDs to canonical operation IDs
+3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `policy_catalog.rs:106` (validated) or `metadata.descriptor_for_target(target)` at `policy_catalog.rs:49` (unchecked stable shim for backward compatibility; new strict-surface code must use `try_`)
 4. Policy evaluation: `enforcement.evaluate(&descriptor)` or `enforcement.approve(surface, descriptor)`
 
 ### EnforcedDispatcher
@@ -367,7 +367,7 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 
 3. **Scope provenance matters.** Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `LoadedScope::is_explicit_manifest() == true` for networked operations with `requires_explicit_scope`. `DefaultEmpty` blocks these. (`policy_decision.rs:569`)
 
-4. **OperationMetadata is the single source of truth.** All surfaces use `metadata_for_tool_id()` to look up canonical operation definitions. Don't build policy checks inline. (`policy.rs:1494`)
+4. **OperationMetadata is the single source of truth.** All surfaces use `metadata_for_tool_id()` to look up canonical operation definitions. Don't build policy checks inline. (`policy_catalog.rs:317`)
 
 5. **ManualOverride is CLI-only.** Never part of MCP/agent schemas or automated paths. Automated profiles never honor overrides. (`policy_decision.rs:432`)
 

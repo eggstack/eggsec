@@ -223,6 +223,8 @@ Add exhaustive tests ensuring every operation-backed command has a canonical exe
 Executed 2026-09-09.
 
 - Baseline SHA: `c65477db` (Phase B completion).
+- Final SHA: `c75c42df` (dispatch convergence implementation;
+  follow-up test fix `e47aaaa3`).
 - Operation-backed commands migrated: all 31 canonical operations now
   `RegistryBacked`; 4-command pilot expanded to full coverage (scan→pipeline,
   resume→pipeline, icmp/traceroute→packet, evasion/postex new metadata,

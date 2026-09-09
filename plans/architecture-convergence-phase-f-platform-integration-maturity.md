@@ -210,7 +210,8 @@ Do not promote `wireless-advanced` or other hazardous domains solely because fix
 
 ## Completion record
 
-- Baseline SHA: `3a576421` (docs: Phase E completion). Final SHA: recorded on push (see CI run).
+- Baseline SHA: `3a576421` (docs: Phase E completion). Final SHA: `e3f5eaad`
+  (platform fixtures/prereqs implementation).
 - Tested host: Linux 6.8.0-139-generic x86_64 (Ubuntu), rustc 1.98.1, Python 3.12.3, no ADB/emulator/Frida (live legs correctly SKIP).
 - Fixture images/artifacts: no third-party fetch. Test APK generated from source (`scripts/make_test_apk.py`, 683 bytes, sha256 `b80372a3…`); canned `iwlist`/networks/frames in `wireless::fixture`; loopback bytes in `packet::fixture`; mock ADB on `127.0.0.1:0`.
 - Commands (all hermetic, no privilege):

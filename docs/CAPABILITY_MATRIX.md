@@ -2,7 +2,7 @@
 
 > **Maintenance model**: This matrix is manually maintained to be consistent with `DomainDescriptor`
 > and `OperationMetadata` in the `eggsec` crate. Edit metadata in `crates/eggsec/src/domain/mod.rs`
-> and `crates/eggsec/src/config/policy.rs` first, then update this file to match. Metadata consistency
+> and `crates/eggsec/src/config/policy_catalog.rs` first, then update this file to match. Metadata consistency
 > tests validate the underlying metadata structures; a future enhancement may add snapshot validation
 > of this file against generated output.
 >
@@ -26,7 +26,7 @@
 
 These operations are registered in `ALL_OPERATION_METADATA` and are not part of a specific domain.
 They are available across all surfaces where their exposure flags permit.
-(31 canonical metadata entries total: the 28 standalone rows below plus the
+(34 canonical metadata entries total: the 31 standalone rows below plus the
 3 domain operations `db-pentest`, `mobile-static`, and `mobile-dynamic`
 listed under Domain Operations.)
 
@@ -50,8 +50,11 @@ listed under Domain Operations.)
 | `c2` | C2 Simulation | C2Operation | C2Simulation | `c2` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `proxy-intercept` | Traffic Interception | TrafficInterception | TrafficInterception | `web-proxy` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `wireless` | Wireless Scanning | SafeActive | PassiveFingerprint | `wireless` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `wireless-deauth` | Wireless Deauth Attack | Intrusive | RawPacketProbe | `wireless-advanced` | Y | Y | N | N | N | always | — | — | explicit scope |
 | `hunt` | Vulnerability Hunting | SafeActive | ActiveProbe | `advanced-hunting` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `browser` | Headless Browser | SafeActive | ActiveProbe | `headless-browser` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `evasion` | Evasion Detection | EvasionTesting | EvasionTesting | `evasion` | Y | Y | N | N | N | always | — | — | optional target |
+| `postex` | Post-Exploitation | ExploitAdjacent | RemoteExecution | `postex` | Y | Y | N | N | N | always | — | — | optional target |
 | `compliance` | Compliance Scanning | SafeActive | ActiveProbe | `compliance` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `storage` | Database Storage | SafeActive | DatabaseAssessment | `database` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `integrations` | External Integrations | SafeActive | ActiveProbe | `external-integrations` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
@@ -128,6 +131,7 @@ integrated CLI, TUI, tool, and report adapters.
 | `c2` | c2 | Stable |
 | `web-proxy` | proxy-intercept | Stable |
 | `wireless` | wireless | Stable |
+| `wireless-advanced` | wireless-deauth | Stable |
 | `mobile` | mobile-static | Stable |
 | `mobile-dynamic` | mobile-dynamic | Stable |
 | `advanced-hunting` | hunt | Stable |
@@ -137,13 +141,15 @@ integrated CLI, TUI, tool, and report adapters.
 | `external-integrations` | integrations | Stable |
 | `finding-workflow` | workflow | Stable |
 | `vuln-management` | vuln | Stable |
+| `evasion` | evasion | Stable |
+| `postex` | postex | Stable |
 
 ## Updating This Document
 
 This document is manually maintained and should be kept consistent with the canonical metadata in code.
 If you add or modify an operation:
 
-1. Update `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs`
+1. Update `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy_catalog.rs`
 2. Update `DomainDescriptor` entries in `crates/eggsec/src/domain/mod.rs` (if domain-scoped)
 3. Run `cargo test -p eggsec --lib` to verify metadata consistency
 4. Update this file to reflect the new metadata (risk, capabilities, exposure flags, etc.)

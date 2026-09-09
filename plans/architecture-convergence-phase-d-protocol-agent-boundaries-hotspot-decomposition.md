@@ -206,6 +206,7 @@ Use Cargo dependency tests/architecture guards only for durable crate-direction 
 Executed 2026-09-09.
 
 - Baseline SHA: `e47aaaa3` (Phase C follow-up head).
+- Final SHA: `8dd20331` (protocol/agent boundary + hotspot implementation).
 - No new crate created (deliberate): a separate `eggsec-api` crate would
   become a second composition root (Axum/tonic closures, generated protobuf,
   `TlsConfig`) or invert dependencies (bridge needs engine policy types).

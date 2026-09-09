@@ -81,9 +81,9 @@ implies `!tui_visible` and `!programmatic_visible`.
 
 ### registry_backed
 
-Legacy field — removed in Phase C convergence. All operation-backed commands
-now use `dispatch_mode: CommandDispatchMode::RegistryBacked` instead. The
-`registry_backed` bool field no longer exists on `CommandRegistration`.
+Removed field. Phase C convergence deleted the `registry_backed` bool from
+`CommandRegistration`; operation-backed commands use
+`dispatch_mode: CommandDispatchMode::RegistryBacked`.
 
 ### dispatch_mode
 
@@ -139,7 +139,7 @@ operation does not yet exist in `ALL_OPERATION_METADATA`, add it there first.
 ### 2. Add the operation metadata
 
 If the operation ID does not already exist, add an `OperationMetadata` entry in
-`crates/eggsec/src/config/policy.rs` (or wherever `ALL_OPERATION_METADATA` is
+`crates/eggsec/src/config/policy_catalog.rs` (where `ALL_OPERATION_METADATA` is
 defined). The `command_id` and `operation_id` are usually identical but can
 differ when a CLI subcommand name differs from the canonical operation ID.
 
@@ -178,77 +178,14 @@ cargo test -p eggsec --test enforcement_matrix
 cargo clippy --lib -p eggsec
 ```
 
-## Migrating from LegacyWrapped to RegistryBacked
+## Dispatch history
 
-> **Note:** Phase C convergence completed — `LegacyWrapped` has been removed
-> as a permanent dispatch mode. All operation-backed commands now use
-> `RegistryBacked`. The migration section below is retained for historical
-> reference.
-
-### Before migration
-
-A legacy command dispatches through `handle_command()` match arms and builds
-descriptors inline (or not at all):
-
-```rust
-// Legacy pattern (inside handle_command match)
-"my-command" => {
-    let descriptor = OperationDescriptor {
-        operation: "my-command".to_string(),
-        // ... inline construction ...
-    };
-    let decision = ctx.evaluate_and_enforce_operation(descriptor)?;
-    // execute
-}
-```
-
-### Migration steps
-
-1. **Ensure operation metadata exists.** The `operation_id` must resolve via
-   `metadata_for_tool_id()`. Add it to `ALL_OPERATION_METADATA` if missing.
-
-2. **Update the registry entry.** Set `dispatch_mode` to `RegistryBacked`:
-
-```rust
-CommandRegistration {
-    command_id: "my-command",
-    operation_id: Some("my-command"),
-    // ...
-    dispatch_mode: CommandDispatchMode::RegistryBacked,
-}
-```
-
-3. **Replace inline descriptor construction.** In the handler, use
-   `ctx.describe_from_registry()`:
-
-```rust
-let descriptor = ctx
-    .describe_from_registry("my-command", Some(target))
-    .expect("registry-backed command must have metadata");
-```
-
-4. **Remove the inline `OperationDescriptor` construction.** The registry lookup
-   replaces hand-built descriptors.
-
-5. **Verify.** Run the full test suite:
-
-```bash
-cargo test -p eggsec --test command_registry
-cargo test -p eggsec --test enforcement_matrix
-cargo clippy --lib -p eggsec
-```
-
-### Pilot commands
-
-The following commands have completed migration and serve as reference
-implementations:
-
-| Command | Registry entry |
-|---|---|
-| `recon` | `handlers/recon.rs` |
-| `scan-ports` | `handlers/scan.rs` |
-| `scan-endpoints` | `handlers/scan.rs` |
-| `fingerprint` | `handlers/scan.rs` |
+Phase C convergence removed `LegacyWrapped` as a dispatch mode. All
+operation-backed commands use `RegistryBacked`
+(`OperationMetadata` → `describe_from_registry()` → `EnforcementContext` →
+canonical dispatcher). Reference implementations: `recon`
+(`handlers/recon.rs`), `scan-ports` / `scan-endpoints` / `fingerprint`
+(`handlers/scan.rs`).
 
 ## How Descriptors Are Built and Used
 

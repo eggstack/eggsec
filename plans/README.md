@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Architecture convergence and capability maturity (active)
+## Architecture convergence and capability maturity (closure)
 
 Roadmap:
 [`architecture-convergence-roadmap-2026-09-08.md`](architecture-convergence-roadmap-2026-09-08.md)
@@ -25,7 +25,9 @@ architecture A-J roadmap. It targets residual dual scope semantics, feature/buil
 contract drift, incomplete operation/dispatch migration, protocol/agent coupling,
 programmability parity, and platform integration maturity.
 
-Ordered implementation plans:
+Ordered implementation plans (all executed; Phase G closure implementation
+complete locally, hosted CI confirmation pending — see the Phase G completion
+record):
 
 1. [`architecture-convergence-phase-a-scope-contract-unification.md`](architecture-convergence-phase-a-scope-contract-unification.md)
 2. [`architecture-convergence-phase-b-feature-build-verification-reconciliation.md`](architecture-convergence-phase-b-feature-build-verification-reconciliation.md)

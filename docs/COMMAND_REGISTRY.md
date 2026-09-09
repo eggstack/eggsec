@@ -152,4 +152,4 @@ Each `CommandRegistration` carries a `dispatch_mode: CommandDispatchMode` field 
 | `crates/eggsec/src/commands/mod.rs` | Re-exports |
 | `crates/eggsec/src/commands/handlers/mod.rs` | Dispatch bridge integration |
 | `crates/eggsec/tests/command_registry.rs` | Registry consistency tests |
-| `crates/eggsec/src/config/policy.rs` | `OperationMetadata` (canonical source) |
+| `crates/eggsec/src/config/policy_catalog.rs` | `OperationMetadata` (canonical source) |

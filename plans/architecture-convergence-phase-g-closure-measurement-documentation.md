@@ -2,7 +2,8 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09). All workstreams implemented; see Completion
+record below.
 
 ## Objective
 
@@ -197,3 +198,127 @@ Do not turn optional optimization findings into indefinite blockers.
 ## Completion record
 
 When complete, append the closure summary and link any final architecture/verification documents used as canonical references.
+
+Executed 2026-09-09.
+
+- Baseline SHA: `e3f5eaad` (Phase F implementation head). Final implementation
+  SHA and hosted CI status: recorded in `plans/README.md` after push (WS7;
+  the exact final head is validated by hosted CI before the roadmap is
+  marked executed there).
+- Compatibility decisions: no temporary migration layer removed as code —
+  none remained. All retained shims are intentional stable facades with no
+  unenforceable deadline: Rust `eggsec_tool_core::Scope` / `ToolScopeSpec` /
+  `tool::Scope` aliases for `ScopeSpec` (Phase A), unchecked
+  `descriptor_for_target()` (documented stable shim; new strict-surface code
+  must use `try_descriptor_for_target`), CLI command aliases + Python
+  snake_case names + tool alias resolution (Phase C), `RestState::new` /
+  `GrpcService::new` / `McpServer::with_enforcement` / `openai::router` /
+  `openresponses::router` / `Agent::new` composition-root shims (Phase D),
+  `registry_backed_command_ids()` derived helper (Phase C). Pruned docs-only
+  migration state: `docs/extending/commands.md` step-by-step
+  LegacyWrapped→RegistryBacked migration guide condensed to a short history
+  note; `registry_backed` removed-field note condensed.
+- Verification: `make check` PASS (EXIT 0), `make check-python` PASS
+  (EXIT 0; 4454 passed, 0 failed, 1706 skipped, 17 xfailed),
+  `make check-full` PASS (EXIT 0),
+  `make check-features-individual` PASS (66 PASS, 4 SKIP for absent
+  libpcap/libssh2 system deps, 0 FAIL),
+  `bash scripts/check-architecture-guards.sh` ALL PASSED,
+  `python3 scripts/check_doc_references.py` OK (222 files; `plans/`
+  excluded as historical record — Phase D/E plans reference
+  `crates/eggsec-daemon/src/protocol.rs`, correctly removed as a dead
+  duplicate in Phase E),
+  `cargo test -p eggsec-daemon -p eggsec-daemon-protocol -p eggsec-web-proxy -p eggsec-runtime`
+  674 passed / 1 ignored, platform fixtures
+  (`packet::fixture` 10, `wireless::fixture` 4/6, `platform::` 6,
+  mobile-lab 108) PASS, `bash scripts/check_platform.sh` PASS.
+- Drive-by correction required to verify: `packet::fixture` FD-leak guard
+  was racy under parallel test execution (ambient FDs from concurrent tests
+  inflated the after-sample; failed 10→20 against +8 allowance). Fixed by
+  measuring differentially (warmup loop, then measured loop; pure in-memory
+  craft→parse→hexdump opens no FDs by construction). No production code
+  changed for this fix.
+- Documentation reconciliation (all recounted from source, not copied from
+  prior plans): canonical operations 34 (prior docs said 31) + 42 aliases;
+  `REGISTERED_COMMANDS` 49 entries: 29 `RegistryBacked` (prior docs said
+  31), 13 `HelperOnly`, 7 `ServerLifecycle`; `TaskKind` 29 variants / 29
+  params structs; `FULL_MEMBERS` 28 pinned; daemon protocol v2; invariants
+  39. Fixed: `docs/TOOL_REGISTRATION.md` (34 entries, `policy_catalog.rs`
+  paths), `architecture/overview.md` (3 spots), `architecture/cli_commands.md`
+  (49/29 counts), `architecture/config.md` (`policy_catalog.rs` paths,
+  34 ops), `docs/CAPABILITY_MATRIX.md` (34 total; added missing
+  `evasion`, `postex`, `wireless-deauth` rows + feature-gating rows),
+  `docs/METADATA_OWNERSHIP.md` + `docs/EXTENSIBILITY.md` +
+  `docs/COMMAND_REGISTRY.md` + `docs/extending/commands.md`
+  (`policy_catalog.rs` paths), `eggsec-config` skill (34 ops,
+  `try_descriptor_for_target`, approval-construction ownership).
+  README.md and AGENTS.md needed no changes (no false claims found).
+- Complexity/duplication measurements (baseline `ae7c7d44` → final):
+  - Scope authorization owners: tool-DTO `is_allowed` 1 → 0; single
+    engine `Scope::is_target_allowed` via `EnforcementContext` remains.
+    Meaning: protocol DTOs can no longer answer authorization.
+  - `LegacyWrapped` mentions: 24 → 2 (both historical comments, no code);
+    `RegistryBacked` registry entries 4-command pilot → 29 (all
+    operation-backed commands). Meaning: dispatch migration is complete,
+    not a permanent dual mode.
+  - Canonical request ownership: new since baseline —
+    `eggsec-tool-core::operation_request` (14 typed request structs,
+    single defaults/validation owner) + `eggsec::operation_request`
+    facade; `TaskKind::operation_id`/`canonical_target` exhaustive (no
+    wildcard). Meaning: runtime/CLI/tool/Python adapters translate into
+    one contract instead of mirroring params (29 runtime params structs
+    remain as wire DTOs, mapped exhaustively).
+  - Features without direct compilation: every declared feature now
+    compiles in a maintained profile (`make check-features-individual`;
+    66 PASS / 4 system-dep SKIP / 0 FAIL). Meaning: `full` stays a
+    curated 28-member lab aggregate by explicit contract, and the sweep —
+    not `full` — is the exhaustiveness oracle.
+  - Hotspots: `config/policy.rs` 2402 → 1007 (+`policy_target` 220,
+    +`policy_catalog` 1269, +`policy_approval` 149);
+    `config/scope.rs` 1634 → 1428 (+`scope_address` 174,
+    +`scope_resolver` 132); `eggsec-runtime/runtime.rs` 1851 → 1669
+    (+`runtime_config` 61, +`runtime_sink` 204); `eggsec-daemon/host.rs`
+    3149 → 3205 (+`host_auth` 141, +`host_persistence` 60).
+    Meaning: policy approval/catalog/target and scope facts are now
+    independently reviewable behind stable facades; daemon growth is
+    parity features (v2 result retrieval), not new coupling.
+  - Protocol adapters: still hosted in `eggsec` by deliberate decision
+    (a separate crate would become a second composition root; see
+    `architecture/api_extraction_boundary.md`), but all adapters now
+    depend on injected `EngineServices` / `McpEngineBridge` /
+    `AgentExecutionService` and expose only `dispatch_checked`.
+    Meaning: the boundary is dependency inversion, not relocation.
+  - Python placeholders: browser/proxy/daemon bindings now backed by
+    real execution or explicit unsupported errors (Phase E; no
+    promotions, gaps recorded in `docs/python/domain-maturity.md`).
+  - Daemon parity: protocol v1 → v2 (`GetTaskResult`/`TaskResult`,
+    durable retrieval, parity matrix `docs/DAEMON_PARITY.md`).
+  - Platform: no `platform/` module at baseline → centralized
+    `PlatformReport`/`skip_reason_for`, hermetic fixtures (0 skips on
+    host), isolated live legs that SKIP with named prerequisites.
+- Dependency/artifact measurements (final head):
+  `cargo tree -p eggsec-cli --no-default-features` 781 lines,
+  `-p eggsec-cli` (default/TUI) 939, `-p eggsec-daemon` 784,
+  `-p eggsec-daemon-protocol` 66. Duplicate major generations observed in
+  the default CLI closure (e.g. cpufeatures 0.2.17/0.3.0,
+  derive_more 0.99.20/2.1.1 via transitive hickory/scraper/crossterm
+  paths) — recorded, not gated (no product size requirement; `cargo deny`
+  bans policy unchanged and green via `make check-full`). Optional
+  native prerequisites unchanged: libpcap (packet-inspection),
+  libssl (nse), libssh2 (nse-ssh2), protoc (grpc-api), ADB/Frida
+  (mobile-dynamic), wireless-tools + lab hardware (wireless). Debug CLI
+  binary ~392M (local build, not a release artifact; no release artifacts
+  generated — publication stays manual).
+- Residual backlog (WS9): no correctness/security blockers, no required
+  roadmap acceptance gaps. Accepted platform limitations: live netns /
+  emulator / RF evidence awaits a lab host (deep-checks
+  `platform-integration` job owns it). Future optimizations outside this
+  roadmap: none introduced.
+- Canonical references: `docs/ARCHITECTURE.md`, `docs/COMMAND_REGISTRY.md`,
+  `docs/TOOL_REGISTRATION.md`, `docs/FEATURE_MATRIX.md`,
+  `docs/CAPABILITY_MATRIX.md`, `docs/ARCHITECTURE_INVARIANTS.md` (39),
+  `docs/VERIFICATION.md`, `docs/DAEMON_PARITY.md`, `docs/PLATFORM.md`,
+  `docs/python/domain-maturity.md`, `architecture/overview.md`,
+  `architecture/config.md`, `architecture/cli_commands.md`,
+  `architecture/api_extraction_boundary.md`, `Makefile`,
+  `scripts/check-architecture-guards.sh`.
