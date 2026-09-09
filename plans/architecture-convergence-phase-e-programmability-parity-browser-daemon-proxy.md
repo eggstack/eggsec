@@ -229,8 +229,8 @@ Do not automatically mark browser/daemon/proxy stable. Promotion requires:
 
 ## Completion record
 
-- Baseline SHA: `8dd20331` (Phase D head). Final SHA: recorded in the
-  follow-up "record Phase E completion SHA" commit.
+- Baseline SHA: `8dd20331` (Phase D head). Final SHA: `7b4a5ecd`
+  (implementation commit; CI + Code Quality green on that SHA).
 - Backend selected: `headless_chrome` (`headless-browser` Cargo feature).
   New engine contract `crates/eggsec/src/browser/backend.rs`
   (`BrowserBackendKind`, `BrowserBackendCapabilities`,
