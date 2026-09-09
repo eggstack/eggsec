@@ -201,10 +201,11 @@ When complete, append the closure summary and link any final architecture/verifi
 
 Executed 2026-09-09.
 
-- Baseline SHA: `e3f5eaad` (Phase F implementation head). Final implementation
-  SHA and hosted CI status: recorded in `plans/README.md` after push (WS7;
-  the exact final head is validated by hosted CI before the roadmap is
-  marked executed there).
+- Baseline SHA: `e3f5eaad` (Phase F implementation head). Final
+  implementation SHA: `74a39080` (Phase G reconciliation commit).
+  Hosted CI on that SHA: CI workflow success (Rust + Python jobs),
+  Code Quality workflow success (verified 2026-09-09 via `gh run`).
+  The WS7 record-only follow-up commit touches plan text only.
 - Compatibility decisions: no temporary migration layer removed as code —
   none remained. All retained shims are intentional stable facades with no
   unenforceable deadline: Rust `eggsec_tool_core::Scope` / `ToolScopeSpec` /
