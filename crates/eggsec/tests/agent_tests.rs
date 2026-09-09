@@ -211,7 +211,9 @@ mod tests {
         assert!(portfolio.get_target("second.com").is_some());
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 
     #[test]
@@ -247,7 +249,9 @@ mod tests {
         assert!(portfolio.get_target("example.com").unwrap().enabled);
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 
     #[test]
@@ -284,7 +288,9 @@ mod tests {
         assert!(!portfolio.get_target("example.com").unwrap().enabled);
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 
     #[test]
@@ -321,7 +327,9 @@ mod tests {
         assert!(portfolio.get_target("example.com").is_none());
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 
     #[test]
@@ -357,7 +365,9 @@ mod tests {
         );
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 
     #[test]
@@ -390,6 +400,8 @@ mod tests {
         assert!(targets.iter().any(|(id, _)| id == "target2.com"));
 
         std::fs::remove_file(&portfolio_path).ok();
-        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+        // NOTE: do not remove the shared parent dir (`test_portfolios/`);
+        // parallel tests share it and deleting it races with concurrent
+        // `save()` calls (create_dir_all/write/rename).
     }
 }
