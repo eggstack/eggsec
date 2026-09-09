@@ -39,7 +39,7 @@ Do you need a new protocol-exposed tool?
 
 Do you need a new manual CLI command?
   -> Add CommandRegistration.
-  -> Choose RegistryBacked, LegacyWrapped, HelperOnly, ServerLifecycle, or CatalogOnly.
+  -> Choose RegistryBacked (operation-backed), HelperOnly, ServerLifecycle, or CatalogOnly.
   -> Wire preflight/enforcement appropriately.
 ```
 
@@ -54,6 +54,25 @@ Do you need a new manual CLI command?
 | TUI action | `crates/eggsec-tui/src/app/action_spec.rs` | `TuiActionSpec` | `eggsec-tui --lib` |
 | Report output | `crates/eggsec-output/src/envelope.rs` | `ReportEnvelope` | `report_envelope` |
 | Feature | `crates/eggsec/Cargo.toml`, `config/feature_registry.rs` | Feature string | `feature_matrix`, `cargo check --features ...` |
+
+## Operation Request Contracts
+
+Canonical operation request types live in `eggsec-tool-core::operation_request` (the single owner for defaults and validation). The engine facade is at `eggsec::operation_request`. These modules own:
+
+- **Defaults/validation** for `ToolRequest.params` JSON, ensuring all operation-backed commands use consistent parameter schemas.
+- **`TaskKind::operation_id`/`canonical_target`** exhaustive mapping — every operation-backed command has a canonical execution mapping.
+- **`validate_tool_request_params()`** — validates params JSON through operation-owned canonical code, with alias resolution via `metadata_for_tool_id`.
+
+Examples of operation request types: `PortScanRequest`, `LoadTestRequest`, `parse_port_spec`, `resolve_load_test_counts`, `parse_scan_profile`.
+
+### Multiplexer Pattern
+
+Some commands multiplex to different canonical operations based on subcommand or arguments:
+- **mobile**: `mobile-static` vs `mobile-dynamic` (different operations, same CLI entry)
+- **packet**: `packet`, `icmp`, `traceroute` all map to `packet` (operation ID)
+- **wireless**: `wireless` vs `wireless-deauth` (different features/operations)
+
+All multiplexers resolve a canonical operation per execution branch before approval.
 
 ## Required Local Checks
 

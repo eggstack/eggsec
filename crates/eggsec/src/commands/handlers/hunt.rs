@@ -1,23 +1,13 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_hunt(ctx: &CommandContext, mut args: crate::cli::HuntArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "hunt".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(
-            crate::utils::extract_target_from_url(&args.target)
-                .unwrap_or_else(|| args.target.clone()),
-        ),
-        vec!["advanced-hunting".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let target =
+        crate::utils::extract_target_from_url(&args.target).unwrap_or_else(|| args.target.clone());
+    let descriptor = ctx
+        .describe_from_registry("hunt", Some(target))
+        .expect("hunt should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("hunt-{}", chrono::Utc::now().timestamp());

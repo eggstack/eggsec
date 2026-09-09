@@ -1353,4 +1353,99 @@ mod tests {
             );
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Phase C: canonical request contracts — Python params validate through
+    // operation-owned code where a canonical contract exists.
+    //
+    // Request `request_schema_id` values remain binding-layer identifiers, but
+    // typed validation for known operations flows through
+    // `eggsec::operation_request::validate_tool_params` (single owner).
+    // Remaining hand-written schemas are documented for Phase G removal.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stable_operation_params_validate_through_canonical_contracts() {
+        // (stable op, engine id, minimal valid params)
+        let cases: &[(StableOperation, &str, serde_json::Value)] = &[
+            (
+                StableOperation::ScanPorts,
+                "scan-ports",
+                serde_json::json!({"target": "10.0.0.1"}),
+            ),
+            (
+                StableOperation::ScanEndpoints,
+                "scan-endpoints",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::FingerprintServices,
+                "fingerprint",
+                serde_json::json!({"target": "10.0.0.1"}),
+            ),
+            (
+                StableOperation::ReconDns,
+                "recon",
+                serde_json::json!({"target": "example.com"}),
+            ),
+            (
+                StableOperation::DetectWaf,
+                "waf-detect",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::FuzzHttp,
+                "fuzz",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::LoadTest,
+                "load-test",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::GraphqlTest,
+                "graphql",
+                serde_json::json!({"target": "https://example.com/graphql"}),
+            ),
+            (
+                StableOperation::OauthTest,
+                "oauth",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::AuthTest,
+                "auth-test",
+                serde_json::json!({"target": "https://example.com"}),
+            ),
+            (
+                StableOperation::DbProbe,
+                "db-pentest",
+                serde_json::json!({"target": "localhost", "db_type": "postgres"}),
+            ),
+            (
+                StableOperation::NseRun,
+                "nse",
+                serde_json::json!({"target": "10.0.0.1"}),
+            ),
+        ];
+        for (op, engine_id, params) in cases {
+            assert_eq!(op.to_engine_id(), *engine_id, "{op:?}: engine id drift");
+            // Canonical validation is the single owner for these params.
+            // Unknown-operation contracts (e.g. sbom, git-secrets) are
+            // intentionally absent here; they retain binding-layer schemas
+            // until Phase G.
+            let validated = eggsec::operation_request::validate_tool_params(engine_id, params);
+            // NSE has no canonical params contract yet (script/args are
+            // runtime-specific); it is exempt from typed validation here.
+            if *engine_id == "nse" {
+                continue;
+            }
+            assert!(
+                validated.is_ok(),
+                "{op:?}: canonical validation failed for {params}: {:?}",
+                validated.err()
+            );
+        }
+    }
 }

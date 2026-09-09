@@ -231,6 +231,32 @@ impl ToolDispatcher {
 
         enforce_request_scope_spec(&request)?;
 
+        // Phase C convergence: `ToolRequest.params` JSON is parsed through
+        // operation-owned canonical request code (single owner). Wire JSON
+        // stays schemaless at the boundary, but typed validation happens here
+        // — not in per-protocol ad hoc structs. Unknown operations (helper/
+        // lifecycle, search/remote, etc. without canonical contracts) skip
+        // validation; known operations fail closed on invalid params.
+        //
+        // Tool aliases (e.g. `scan` → `scan-ports`, `load` → `load-test`)
+        // resolve to canonical IDs first so alias surfaces share validation.
+        let canonical_tool = crate::config::metadata_for_tool_id(&request.tool)
+            .map(|m| m.id)
+            .unwrap_or(request.tool.as_str());
+        if let Err(e) =
+            crate::operation_request::validate_tool_request_params(canonical_tool, &request.params)
+        {
+            // Only fail closed for operations with canonical contracts.
+            // `validate_tool_params` returns UnknownOperation for contracts
+            // it doesn't own; those surfaces keep their existing validation.
+            if !e.0.starts_with("unknown operation") {
+                return Err(EggsecError::Config(format!(
+                    "invalid params for operation '{}': {e}",
+                    request.tool
+                )));
+            }
+        }
+
         let tool = self
             .registry
             .get(&request.tool)

@@ -1,5 +1,4 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use crate::proxy::intercept::correlation::{
     CorrelationContext, CorrelationReference, CorrelationSource,
 };
@@ -14,24 +13,11 @@ pub async fn handle_proxy_intercept(
     args: crate::cli::ProxyInterceptArgs,
 ) -> Result<()> {
     let is_real = !args.dry_run;
-    let risk = if is_real {
-        crate::config::OperationRisk::TrafficInterception
-    } else {
-        crate::config::OperationRisk::SafeActive
-    };
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "proxy-intercept".to_string(),
-        crate::config::OperationMode::DefenseLab,
-        risk,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(args.listen.clone()),
-        vec!["web-proxy".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("proxy-intercept", Some(args.listen.clone()))
+        .expect("proxy-intercept should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     // Extra runtime safety gate
     if is_real && !args.allow_web_proxy {

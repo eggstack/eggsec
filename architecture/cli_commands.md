@@ -237,27 +237,14 @@ Side-effecting handlers call `ctx.evaluate_and_enforce_operation(descriptor)` (`
 
 ### Handler Patterns
 
-Registry-backed commands use `describe_from_registry()` to build descriptors from canonical `OperationMetadata`:
+All side-effecting commands use `describe_from_registry()` to build descriptors from canonical `OperationMetadata`:
 
 ```rust
-// Registry-backed (preferred)
+// All operation-backed commands (preferred pattern)
 pub async fn handle_recon(ctx: &CommandContext, args: ReconArgs) -> Result<()> {
     let descriptor = ctx
         .describe_from_registry("recon", Some(target))
         .ok_or_else(|| anyhow::anyhow!("No registry metadata for command"))?;
-    let decision = ctx.evaluate_and_enforce_operation(descriptor)?;
-    // proceed with dispatch
-    Ok(())
-}
-
-// Legacy (manual descriptor construction)
-pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
-    let descriptor = OperationDescriptor {
-        operation: "fuzz".to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::Intrusive,
-        // ...
-    };
     let decision = ctx.evaluate_and_enforce_operation(descriptor)?;
     // proceed with dispatch
     Ok(())
@@ -280,13 +267,12 @@ The command registry provides static, inspectable metadata for CLI/TUI dispatch.
 
 ### Registry Entry Count
 
-The `REGISTERED_COMMANDS` array (`registry.rs:108–726`) contains **46 entries** (not 52 — daemon commands, some legacy commands, and some catalog entries are not all registered). Categories:
+The `REGISTERED_COMMANDS` array (`registry.rs:108–726`) contains **48 entries** (not 52 — daemon commands and catalog entries are not all registered). Categories:
 
 | Dispatch Mode | Count | Commands |
 |--------------|-------|----------|
-| `RegistryBacked` | 4 | `recon`, `scan-ports`, `scan-endpoints`, `fingerprint` |
-| `LegacyWrapped` | 27 | `scan`, `resume`, `fuzz`, `waf`, `waf-stress`, `graphql`, `oauth`, `auth-test`, `load`, `stress`, `packet`, `icmp`, `traceroute`, `nse`, `hunt`, `evasion`, `postex`, `c2`, `proxy-intercept`, `wireless`, `browser`, `mobile`, `db`, `proxy` (not registered — omitted) |
-| `HelperOnly` | 11 | `plan`, `preflight`, `ci`, `config`, `doctor`, `policy-explain`, `scope-explain`, `ai-analyze`, `report`, `vuln`, `storage`, `sbom`, `notify` |
+| `RegistryBacked` | 31 | `recon`, `scan-ports`, `scan-endpoints`, `fingerprint`, `scan`, `resume`, `fuzz`, `waf`, `waf-stress`, `graphql`, `oauth`, `auth-test`, `load`, `stress`, `packet`, `icmp`, `traceroute`, `nse`, `hunt`, `evasion`, `postex`, `c2`, `proxy-intercept`, `wireless`, `wireless-deauth`, `browser`, `mobile`, `mobile-dynamic`, `db` |
+| `HelperOnly` | 13 | `plan`, `preflight`, `ci`, `config`, `doctor`, `policy-explain`, `scope-explain`, `ai-analyze`, `report`, `vuln`, `storage`, `sbom`, `notify` |
 | `ServerLifecycle` | 7 | `serve`, `mcp-serve`, `agent`, `grpc`, `cluster`, `remote-serve`, `exec` |
 | `CatalogOnly` | 0 | (none currently) |
 
@@ -317,7 +303,6 @@ pub struct CommandRegistration {
     pub tui_visible: bool,
     pub programmatic_visible: bool,
     pub cli_interactive_only: bool,
-    pub registry_backed: bool,
     pub dispatch_mode: CommandDispatchMode,
 }
 ```
@@ -337,8 +322,7 @@ pub struct CommandRegistration {
 
 | Variant | Description |
 |---------|-------------|
-| `RegistryBacked` | Descriptor/execution uses registry metadata (Phase 6 pilot) |
-| `LegacyWrapped` | Wraps legacy `handle_command()` dispatch |
+| `RegistryBacked` | Canonical operation-backed dispatch via registry metadata (`OperationMetadata` → `describe_from_registry()` → `EnforcementContext` → canonical dispatcher) |
 | `CatalogOnly` | Listed for discoverability, never dispatched |
 | `ServerLifecycle` | Server lifecycle command |
 | `HelperOnly` | Read-only helper/diagnostic |
@@ -412,7 +396,7 @@ Uses `clap_complete::generate()` to emit shell completion scripts. Supports all 
 
 ### Command Dispatch (`dispatch.md`)
 
-CLI handlers call engine functions directly or via the dispatch layer. The dispatch layer (`crates/eggsec/src/dispatch/`) converts `TaskKind` requests into engine module calls. CLI handlers that use registry-backed dispatch build `OperationDescriptor` from registry metadata; legacy handlers construct descriptors manually.
+CLI handlers call engine functions directly or via the dispatch layer. The dispatch layer (`crates/eggsec/src/dispatch/`) converts `TaskKind` requests into engine module calls. CLI handlers that use operation-backed dispatch build `OperationDescriptor` from registry metadata via `describe_from_registry()`.
 
 ### Configuration (`config.md`)
 
@@ -452,7 +436,7 @@ When no command is given and stdout is a terminal (feature `tui`), the CLI launc
 
 - `cli/mod.rs:666–726` — `ScanProfile` risk budget ordering, operation mode derivation
 - `commands/handlers/mod.rs:600–1640` — `CommandContext` enforcement behavior (26 tests): safe/active/intrusive/stress/raw-packet/load-test/remote-execution allowed/denied with various policy flags, JSON mode denial structure, manual override flag semantics, scope evaluation
-- `commands/registry.rs:818–1040` — Registry invariant tests (13 tests): unique IDs, metadata resolution, feature gates, pilot commands, dispatch mode consistency
+- `commands/registry.rs:818–1040` — Registry invariant tests (14 tests): unique IDs, metadata resolution, feature gates, operation-backed dispatch mode consistency, pilot commands, dispatch mode consistency
 
 ---
 

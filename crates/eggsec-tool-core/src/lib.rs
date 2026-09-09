@@ -6,6 +6,7 @@
 
 pub mod finding;
 pub mod history;
+pub mod operation_request;
 pub mod ratelimit;
 pub mod request;
 pub mod response;

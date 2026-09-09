@@ -76,7 +76,6 @@ CommandRegistration {
     tui_visible: true,
     programmatic_visible: false,
     cli_interactive_only: false,
-    registry_backed: true,
     dispatch_mode: CommandDispatchMode::RegistryBacked,
 }
 ```

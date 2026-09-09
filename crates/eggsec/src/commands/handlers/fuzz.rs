@@ -1,22 +1,13 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_fuzz(ctx: &CommandContext, mut args: crate::cli::FuzzArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "fuzz".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(target),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("fuzz", Some(target))
+        .expect("fuzz should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("fuzz-{}", chrono::Utc::now().timestamp());
@@ -48,18 +39,10 @@ pub async fn handle_waf_stress(
 ) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "waf-stress".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WafRegression],
-        Some(target),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("waf-stress", Some(target))
+        .expect("waf-stress should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("waf-stress-{}", chrono::Utc::now().timestamp());
@@ -88,18 +71,10 @@ pub async fn handle_waf_stress(
 pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "waf-detect".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WafRegression],
-        Some(target),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("waf", Some(target))
+        .expect("waf should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("waf-{}", chrono::Utc::now().timestamp());
@@ -126,18 +101,12 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
 }
 
 pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "graphql".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone())),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let target =
+        crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
+    let descriptor = ctx
+        .describe_from_registry("graphql", Some(target))
+        .expect("graphql should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("graphql-{}", chrono::Utc::now().timestamp());
@@ -164,18 +133,12 @@ pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlA
 }
 
 pub async fn handle_oauth(ctx: &CommandContext, mut args: crate::cli::OAuthArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "oauth".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone())),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let target =
+        crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
+    let descriptor = ctx
+        .describe_from_registry("oauth", Some(target))
+        .expect("oauth should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("oauth-{}", chrono::Utc::now().timestamp());

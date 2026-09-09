@@ -169,6 +169,7 @@ Scope must come from `LoadedScope` (not raw `Scope`) for automated surfaces.
 4. **eggsec-runtime** must stay dependency-light (serde/serde_json, thiserror, tokio, tokio-util, tracing, uuid only). No TUI, transport, or persistence deps. Enforced by architecture guards.
 5. **eggsec-output** must not depend on `eggsec` (engine) or `eggsec-runtime`. Only depends on `eggsec-core`.
 6. **eggsec-daemon** must never depend on TUI crates. Engine dep (`eggsec`) is optional behind `full-executor`; transport deps (axum etc.) are optional behind `http-api`. Default deps: `eggsec-runtime` + `eggsec-daemon-protocol` only. Guard rejects non-optional engine/transport deps.
+7. **Operation request contracts**: canonical defaults/validation live in `eggsec-tool-core::operation_request`; engine facade in `eggsec::operation_request`; `TaskKind::operation_id`/`canonical_target` exhaustive; `ToolRequest.params` validated via `validate_tool_request_params`; command handlers use `describe_from_registry`.
 
 ### Runtime dispatch flow
 

@@ -10,6 +10,7 @@ use tracing::info;
 
 #[cfg(feature = "grpc-api")]
 pub async fn handle_grpc_server(ctx: &CommandContext, args: GrpcServerArgs) -> anyhow::Result<()> {
+    // ServerLifecycle: grpc-server is a server lifecycle command, no OperationMetadata (Phase C non-goal)
     ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
         "grpc-server".to_string(),
         crate::config::OperationMode::StandardAssessment,

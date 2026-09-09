@@ -1,20 +1,11 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "browser".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::SafeActive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(args.target.clone()),
-        vec!["headless-browser".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("browser", Some(args.target.clone()))
+        .expect("browser should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
 
     let config = crate::browser::BrowserConfig {

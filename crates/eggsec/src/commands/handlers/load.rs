@@ -1,22 +1,13 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_load(ctx: &CommandContext, mut args: crate::cli::LoadArgs) -> Result<()> {
     let target =
         crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "load".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::LoadTest,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(target),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("load", Some(target))
+        .expect("load should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("load-{}", chrono::Utc::now().timestamp());

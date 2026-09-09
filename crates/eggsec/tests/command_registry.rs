@@ -102,22 +102,16 @@ fn registry_backed_side_effecting_commands_build_descriptors() {
 }
 
 #[test]
-fn legacy_wrapped_operation_metadata_is_optional_but_valid_when_present() {
-    // LegacyWrapped entries route through the legacy `handle_command()` match
-    // path. They may carry an `operation_id` for descriptor metadata (so CLI
-    // help and preflight can describe them), but descriptor generation is not
-    // a dispatch proof — execution still flows through the legacy handler.
+fn operation_backed_commands_use_registry_backed_dispatch() {
+    // Phase C convergence: no permanent `LegacyWrapped` operation dispatch
+    // remains. Every operation-backed command uses canonical `RegistryBacked`.
     for reg in REGISTERED_COMMANDS.iter() {
-        if matches!(reg.dispatch_mode, CommandDispatchMode::LegacyWrapped) {
-            if let Some(op_id) = reg.operation_id {
-                assert!(
-                    metadata_for_tool_id(op_id).is_some(),
-                    "LegacyWrapped command '{}' has operation_id '{}' but no matching OperationMetadata",
-                    reg.command_id,
-                    op_id
-                );
-            }
-            // legacy path does not require build_descriptor to succeed
+        if reg.operation_id.is_some() {
+            assert!(
+                matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+                "Operation-backed command '{}' must use RegistryBacked dispatch",
+                reg.command_id
+            );
         }
     }
 }
@@ -180,8 +174,8 @@ fn pilot_commands_have_metadata() {
             cmd_id
         );
         assert!(
-            reg.registry_backed,
-            "Pilot command '{}' should have registry_backed = true",
+            matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+            "Pilot command '{}' should use RegistryBacked dispatch",
             cmd_id
         );
     }
@@ -286,15 +280,10 @@ fn registry_metadata_alignment_with_all_operation_metadata() {
 #[test]
 fn registry_backed_commands_have_metadata() {
     for reg in REGISTERED_COMMANDS.iter() {
-        if reg.registry_backed {
+        if matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked) {
             assert!(
                 reg.operation_id.is_some(),
                 "Registry-backed command '{}' has no operation_id",
-                reg.command_id
-            );
-            assert!(
-                matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
-                "Registry-backed command '{}' should have dispatch_mode: RegistryBacked",
                 reg.command_id
             );
         }
@@ -306,8 +295,8 @@ fn entries_without_operation_id_not_registry_backed() {
     for reg in REGISTERED_COMMANDS.iter() {
         if reg.operation_id.is_none() {
             assert!(
-                !reg.registry_backed,
-                "Command '{}' has no operation_id but registry_backed = true",
+                !matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+                "Command '{}' has no operation_id but uses RegistryBacked dispatch",
                 reg.command_id
             );
         }
@@ -319,11 +308,6 @@ fn dispatch_mode_consistent_with_fields() {
     for reg in REGISTERED_COMMANDS.iter() {
         match reg.dispatch_mode {
             CommandDispatchMode::RegistryBacked => {
-                assert!(
-                    reg.registry_backed,
-                    "RegistryBacked dispatch for '{}' should have registry_backed = true",
-                    reg.command_id
-                );
                 assert!(
                     reg.operation_id.is_some(),
                     "RegistryBacked dispatch for '{}' should have operation_id",
@@ -346,13 +330,6 @@ fn dispatch_mode_consistent_with_fields() {
                 assert!(
                     reg.cli_interactive_only,
                     "HelperOnly command '{}' should be cli_interactive_only",
-                    reg.command_id
-                );
-            }
-            CommandDispatchMode::LegacyWrapped => {
-                assert!(
-                    reg.cli_visible,
-                    "LegacyWrapped command '{}' should be cli_visible",
                     reg.command_id
                 );
             }

@@ -273,6 +273,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             required_features.push("nse".to_string());
         }
 
+        // HelperOnly: plan is a read-only diagnostic, no OperationMetadata (Phase C non-goal)
         let descriptor = OperationDescriptor::new(
             stage.name.clone(),
             mode,

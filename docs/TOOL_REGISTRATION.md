@@ -1,7 +1,5 @@
 # Tool Registration Inventory
 
-Work Item 1 — Phase 7: Tool Registration Audit
-
 ## 1. Overview
 
 Tools in Eggsec are registered and filtered through multiple independent sources. Each protocol surface (MCP, REST, gRPC, Agent) has its own listing and filtering behavior, and the exposure checks are enforced at different points in the request lifecycle. This document inventories every place tools are registered or filtered.
@@ -24,10 +22,11 @@ All protocol surfaces share this enforcement chain:
 
 1. **Parse request** — extract tool ID and parameters
 2. **Resolve metadata** — `metadata_for_tool_id(tool_id)` → `OperationMetadata` (`config/policy.rs:1626`)
-3. **Build descriptor** — `metadata.descriptor_for_target(target)` → `OperationDescriptor`
-4. **Evaluate policy** — `EnforcementContext::evaluate(descriptor)` → outcome
-5. **Require token** — `approve()` produces `ApprovedOperation` (private fields)
-6. **Dispatch** — `EnforcedDispatcher::dispatch_checked(request, approved)` (`tool/dispatcher.rs:114`)
+3. **Validate params** — `eggsec::operation_request::validate_tool_request_params()` validates `ToolRequest.params` JSON through operation-owned canonical code (single owner for defaults/validation). Alias resolution via `metadata_for_tool_id`.
+4. **Build descriptor** — `metadata.descriptor_for_target(target)` → `OperationDescriptor`
+5. **Evaluate policy** — `EnforcementContext::evaluate(descriptor)` → outcome
+6. **Require token** — `approve()` produces `ApprovedOperation` (private fields)
+7. **Dispatch** — `EnforcedDispatcher::dispatch_checked(request, approved)` (`tool/dispatcher.rs:114`)
 
 Raw `ToolDispatcher::dispatch()` (`tool/dispatcher.rs:36`) is `pub(crate)` and `#[doc(hidden)]`. Strict surfaces must never use it.
 
@@ -132,14 +131,10 @@ respective exposure flags are enforced at execute time via
 - Enforcement paths verified unchanged — `EnforcementContext::evaluate()` remains the sole authorization gate
 - Registration-to-execution bridge demonstrated for the `search` tool: registration metadata resolves to `OperationDescriptor` via `metadata_for_tool_id()` → `descriptor_for_target()` → `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`
 
-**Phase 6-10 polish pass (Model A made explicit):**
+**Phase C completion (operation dispatch runtime convergence):**
 
-- Renamed `interactive_only` on `CommandRegistration` to `cli_interactive_only` to remove ambiguity with TUI manual actions.
-- Tightened `side_effecting_entries_have_descriptor_builder()` into three dispatch-mode-scoped tests:
-  - `registry_backed_side_effecting_commands_build_descriptors` (registry-backed only)
-  - `legacy_wrapped_operation_metadata_is_optional_but_valid_when_present` (legacy metadata is documentation, not dispatch proof)
-  - `helper_and_server_commands_do_not_require_descriptors` (helper/server have no descriptor requirement)
-- Added `ops_agent_is_expanded_metadata_exposable_not_conservative_default` to encode Model A explicitly.
+- `ToolRequest.params` JSON is validated through operation-owned canonical code (`eggsec::operation_request::validate_tool_request_params`, single owner), with alias resolution via `metadata_for_tool_id`.
+- Test names validated: `registry_backed_side_effecting_commands_build_descriptors` verifies all `RegistryBacked` side-effecting commands build descriptors.
 
 **Resolved (Phase D):**
 

@@ -36,6 +36,7 @@ pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) 
             .ok()
     });
 
+    // HelperOnly: scope-explain is a read-only diagnostic, no OperationMetadata (Phase C non-goal)
     let descriptor = OperationDescriptor::new(
         "scope-explain".to_string(),
         OperationMode::StandardAssessment,

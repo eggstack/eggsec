@@ -331,7 +331,7 @@ These checks guard:
 - **DomainDescriptor** is the canonical domain/integration grouping layer
 - **ToolRegistration** distinguishes `mcp_metadata_exposable` from `mcp_default_visible`
 - MCP OpsAgent uses Model A: profile-expanded metadata-exposable listing (strictly broader than conservative default)
-- **CommandRegistration** separates `cli_interactive_only`, `registry_backed`, and `dispatch_mode`
+- **CommandRegistration** separates `cli_interactive_only` and `dispatch_mode`
 - Feature metadata snapshot is validated against `crates/eggsec/Cargo.toml`
 - Strict surfaces (REST, MCP, gRPC, agent) do not call raw dispatch
 - Required architecture docs exist

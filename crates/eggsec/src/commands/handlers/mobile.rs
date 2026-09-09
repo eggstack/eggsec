@@ -1,5 +1,4 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 #[allow(unused_mut)]
@@ -30,28 +29,10 @@ pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArg
         // Dynamic path: DefenseLab + SafeActive (Intrusive only for real/non-dry Frida) + mobile-dynamic feature + explicit allow flag(s)
         #[cfg(feature = "mobile-dynamic")]
         {
-            let is_real_frida =
-                if let Some(crate::cli::MobileSubcommand::Dynamic(d)) = &args.command {
-                    !d.frida_script.is_empty() && !d.dry_run
-                } else {
-                    false
-                };
-            ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-                "mobile-dynamic".to_string(),
-                crate::config::OperationMode::DefenseLab,
-                if is_real_frida {
-                    crate::config::OperationRisk::Intrusive
-                } else {
-                    crate::config::OperationRisk::SafeActive
-                },
-                vec![crate::config::IntendedUse::WebAssessment],
-                dynamic_target.clone(),
-                vec!["mobile-dynamic".to_string()],
-                Vec::new(),
-                false,
-                false,
-                Vec::new(),
-            ))?;
+            let descriptor = ctx
+                .describe_from_registry("mobile-dynamic", dynamic_target.clone())
+                .expect("mobile-dynamic should have registry metadata");
+            ctx.evaluate_and_enforce_operation(descriptor)?;
             // Extra runtime gate for non-dry (audited; same pattern as wireless deauth)
             // Note: the actual DynamicMobileArgs is inside the subcommand; re-fetch for the check
             if let Some(crate::cli::MobileSubcommand::Dynamic(dargs)) = &args.command {
@@ -143,18 +124,10 @@ pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArg
     } else {
         // Static path (legacy or 'static' sub)
         let spath = static_path.expect("static path resolved");
-        ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-            "mobile-static".to_string(),
-            crate::config::OperationMode::StandardAssessment,
-            crate::config::OperationRisk::SafeActive,
-            vec![crate::config::IntendedUse::WebAssessment],
-            Some(spath.clone()),
-            vec!["mobile".to_string()],
-            Vec::new(),
-            false,
-            false,
-            Vec::new(),
-        ))?;
+        let descriptor = ctx
+            .describe_from_registry("mobile", Some(spath.clone()))
+            .expect("mobile should have registry metadata");
+        ctx.evaluate_and_enforce_operation(descriptor)?;
         // Build a legacy-style MobileArgs for the existing run_cli (or map inside run_cli).
         // We reuse the top-level flags; construct a thin static args view.
         let static_args = crate::cli::MobileArgs {

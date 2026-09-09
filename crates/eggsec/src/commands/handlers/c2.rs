@@ -1,28 +1,13 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_c2(ctx: &CommandContext, args: crate::cli::C2Args) -> Result<()> {
     let is_real = !args.dry_run;
 
-    let risk = if is_real {
-        crate::config::OperationRisk::C2Operation
-    } else {
-        crate::config::OperationRisk::SafeActive
-    };
-
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "c2".to_string(),
-        crate::config::OperationMode::DefenseLab,
-        risk,
-        vec![crate::config::IntendedUse::WafRegression],
-        args.target.clone(),
-        vec!["c2".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("c2", args.target.clone())
+        .expect("c2 should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     // Gate real mode behind --allow-c2 (same pattern as db-pentest / wireless active)
     if is_real && !args.allow_c2 {

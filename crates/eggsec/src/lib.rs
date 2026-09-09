@@ -122,6 +122,7 @@ pub mod loadtest;
 #[cfg(feature = "logging-subscriber")]
 pub mod logging;
 pub mod notify;
+pub mod operation_request;
 pub mod output;
 pub mod pipeline;
 pub mod probe;

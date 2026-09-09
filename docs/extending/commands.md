@@ -81,9 +81,9 @@ implies `!tui_visible` and `!programmatic_visible`.
 
 ### registry_backed
 
-Whether the descriptor and execution path uses registry metadata. When `true`,
-the command's `build_descriptor()` call must succeed and the handler builds its
-`OperationDescriptor` through `CommandContext::describe_from_registry()`.
+Legacy field — removed in Phase C convergence. All operation-backed commands
+now use `dispatch_mode: CommandDispatchMode::RegistryBacked` instead. The
+`registry_backed` bool field no longer exists on `CommandRegistration`.
 
 ### dispatch_mode
 
@@ -93,8 +93,7 @@ How the command's execution is routed. See the next section.
 
 | Variant | Meaning | When to use |
 |---|---|---|
-| `RegistryBacked` | Descriptor and dispatch use registry metadata (Phase 6 pilot pattern) | New commands that build descriptors via `describe_from_registry()` |
-| `LegacyWrapped` | Routes through the legacy `handle_command()` match dispatch | Existing commands not yet migrated |
+| `RegistryBacked` | Descriptor and dispatch use registry metadata via `OperationMetadata` → `describe_from_registry()` → `EnforcementContext` → canonical dispatcher | All operation-backed commands (the only side-effecting dispatch mode) |
 | `CatalogOnly` | Listed for discoverability but never dispatched | Future catalog entries |
 | `ServerLifecycle` | Server daemon lifecycle (serve, mcp-serve, agent, grpc) | Long-running server processes |
 | `HelperOnly` | Read-only helper/diagnostic (config, doctor, plan, preflight) | Non-side-effecting commands |
@@ -108,9 +107,6 @@ Choose `RegistryBacked` when:
   `ctx.describe_from_registry()`.
 - The command should be inspectable through the registry for preflight and
   enforcement evaluation.
-
-Choose `LegacyWrapped` for commands still dispatching through
-`handle_command()` match arms. These are candidates for migration.
 
 Choose `HelperOnly` or `ServerLifecycle` for commands that never flow through
 `EnforcementContext::evaluate()`.
@@ -133,7 +129,6 @@ CommandRegistration {
     tui_visible: true,
     programmatic_visible: false,
     cli_interactive_only: false,
-    registry_backed: true,
     dispatch_mode: CommandDispatchMode::RegistryBacked,
 }
 ```
@@ -185,6 +180,11 @@ cargo clippy --lib -p eggsec
 
 ## Migrating from LegacyWrapped to RegistryBacked
 
+> **Note:** Phase C convergence completed — `LegacyWrapped` has been removed
+> as a permanent dispatch mode. All operation-backed commands now use
+> `RegistryBacked`. The migration section below is retained for historical
+> reference.
+
 ### Before migration
 
 A legacy command dispatches through `handle_command()` match arms and builds
@@ -207,15 +207,13 @@ descriptors inline (or not at all):
 1. **Ensure operation metadata exists.** The `operation_id` must resolve via
    `metadata_for_tool_id()`. Add it to `ALL_OPERATION_METADATA` if missing.
 
-2. **Update the registry entry.** Change `registry_backed` to `true` and
-   `dispatch_mode` to `RegistryBacked`:
+2. **Update the registry entry.** Set `dispatch_mode` to `RegistryBacked`:
 
 ```rust
 CommandRegistration {
     command_id: "my-command",
     operation_id: Some("my-command"),
     // ...
-    registry_backed: true,
     dispatch_mode: CommandDispatchMode::RegistryBacked,
 }
 ```
@@ -293,12 +291,10 @@ Located at `crates/eggsec/tests/command_registry.rs`. Validates:
 - All `operation_id` values resolve to `OperationMetadata`.
 - Feature-gated entries declare a non-empty feature string.
 - `RegistryBacked` side-effecting commands build descriptors successfully.
-- `LegacyWrapped` entries have valid metadata when present but do not require
-  descriptor generation.
 - `cli_interactive_only` commands are not `programmatic_visible`.
 - Pilot commands (`recon`, `scan-ports`, `scan-endpoints`, `fingerprint`) have
   the expected registry properties.
-- `dispatch_mode` is consistent with `registry_backed`, `operation_id`, and
+- `dispatch_mode` is consistent with `operation_id` and
   visibility flags.
 - `suggest_command()` returns close matches for near-miss inputs.
 

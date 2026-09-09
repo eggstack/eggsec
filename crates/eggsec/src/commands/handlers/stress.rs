@@ -1,8 +1,6 @@
 #[cfg(feature = "stress-testing")]
 use crate::commands::handlers::CommandContext;
 #[cfg(feature = "stress-testing")]
-use crate::config::OperationDescriptor;
-#[cfg(feature = "stress-testing")]
 use crate::constants::DEFAULT_CONFIG_FILE;
 #[cfg(feature = "stress-testing")]
 use anyhow::Result;
@@ -11,18 +9,10 @@ use anyhow::Result;
 pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -> Result<()> {
     use crate::stress::{StressConfig, StressTest, StressType};
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "stress".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::StressTest,
-        vec![crate::config::IntendedUse::DistributedSystemStress],
-        Some(args.target.clone()),
-        vec!["stress-testing".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("stress", Some(args.target.clone()))
+        .expect("stress should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     let stress_type = match args.stress_type {
         crate::cli::StressTypeArg::Syn => StressType::Syn,
@@ -86,7 +76,7 @@ pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -
 #[cfg(feature = "stress-testing")]
 pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> Result<()> {
     use crate::cli::ProxyCommand;
-    use crate::config::ProxyConfigEntry;
+    use crate::config::{OperationDescriptor, ProxyConfigEntry};
     use crate::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry};
 
     match &args.command {
@@ -95,6 +85,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let count = proxies.len();
 
             for proxy in &proxies {
+                // HelperOnly: proxy-add is a config-management helper, no OperationMetadata (Phase C non-goal)
                 ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
                     "proxy-add".to_string(),
                     crate::config::OperationMode::StandardAssessment,
@@ -182,6 +173,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 anyhow::bail!("No proxies to check");
             }
 
+            // HelperOnly: proxy-health-check is a config-management helper, no OperationMetadata (Phase C non-goal)
             ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
                 "proxy-health-check".to_string(),
                 crate::config::OperationMode::StandardAssessment,
@@ -242,6 +234,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
         ProxyCommand::Test(test_args) => {
             let target = crate::utils::extract_target_from_url(&test_args.test_url)
                 .unwrap_or_else(|| test_args.test_url.clone());
+            // HelperOnly: proxy-test is a config-management helper, no OperationMetadata (Phase C non-goal)
             ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
                 "proxy-test".to_string(),
                 crate::config::OperationMode::StandardAssessment,

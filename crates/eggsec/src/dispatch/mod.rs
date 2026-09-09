@@ -85,13 +85,17 @@ pub async fn dispatch_task(
     Ok((progress_rx, result_rx))
 }
 
+#[allow(dead_code)]
 fn load_test_parameters(p: &eggsec_runtime::request::LoadTestParams) -> (u64, usize) {
-    (
-        p.requests
-            .or_else(|| p.connections.map(u64::from))
-            .unwrap_or(100),
-        p.connections.unwrap_or(10) as usize,
-    )
+    // Canonical owner: `eggsec-tool-core::operation_request::resolve_load_test_counts`.
+    // Explicit `requests` wins; otherwise legacy `connections` is the total;
+    // otherwise the canonical default. Bounds failures fall back to defaults
+    // here because dispatch must stay infallible for legacy callers; strict
+    // validation happens in `operation_request::LoadTestRequest::normalize`.
+    crate::operation_request::resolve_load_test_counts(p.requests, p.connections).unwrap_or((
+        crate::operation_request::DEFAULT_LOAD_REQUESTS,
+        crate::operation_request::DEFAULT_LOAD_CONCURRENCY,
+    ))
 }
 
 /// Internal dispatch that routes `TaskKind` to worker functions.
@@ -111,11 +115,25 @@ pub async fn dispatch_inner(
     request: RunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
+    // All defaults/validation below flow through the canonical
+    // `operation_request` contracts (single owner). Runtime params are first
+    // adapted into canonical requests, then normalized. This guarantees
+    // equivalent CLI/runtime/tool requests produce the same engine request.
     match request.task_kind {
         TaskKind::LoadTest(p) => {
-            let timeout = std::time::Duration::from_secs(p.duration_secs.unwrap_or(30) as u64);
-            let (requests, concurrency) = load_test_parameters(&p);
-            network::run_load_test(p.target, requests, concurrency, timeout, progress_tx).await
+            use crate::operation_request::runtime_adapters::load_test_from_runtime;
+            let normalized = load_test_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid load-test request: {e}"))?;
+            let timeout = std::time::Duration::from_secs(normalized.duration_secs);
+            network::run_load_test(
+                normalized.target,
+                normalized.requests,
+                normalized.concurrency,
+                timeout,
+                progress_tx,
+            )
+            .await
         }
         TaskKind::StressTest(p) => {
             network::run_stress_test(
@@ -129,98 +147,120 @@ pub async fn dispatch_inner(
             .await
         }
         TaskKind::PortScan(p) => {
-            let timeout = std::time::Duration::from_millis(p.timeout_ms.unwrap_or(5000));
+            use crate::operation_request::runtime_adapters::port_scan_from_runtime;
+            let normalized = port_scan_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid port-scan request: {e}"))?;
+            let timeout = std::time::Duration::from_millis(normalized.timeout_ms);
             scanner::run_port_scan(
-                p.target,
-                p.ports.unwrap_or_else(|| "1-1024".to_string()),
-                p.concurrency.unwrap_or(100),
+                normalized.target,
+                normalized.ports,
+                normalized.concurrency,
                 timeout,
                 progress_tx,
             )
             .await
         }
         TaskKind::EndpointScan(p) => {
-            let timeout = std::time::Duration::from_secs(p.timeout_secs.unwrap_or(60));
+            use crate::operation_request::runtime_adapters::endpoint_scan_from_runtime;
+            let normalized = endpoint_scan_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid endpoint-scan request: {e}"))?;
+            let timeout = std::time::Duration::from_secs(normalized.timeout_secs);
             scanner::run_endpoint_scan(
-                p.target,
-                p.concurrency.unwrap_or(10),
+                normalized.target,
+                normalized.concurrency,
                 timeout,
-                p.wordlist,
+                normalized.wordlist,
                 progress_tx,
             )
             .await
         }
         TaskKind::Fingerprint(p) => {
-            let timeout = std::time::Duration::from_secs(p.timeout_secs.unwrap_or(60));
+            use crate::operation_request::runtime_adapters::fingerprint_from_runtime;
+            let normalized = fingerprint_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid fingerprint request: {e}"))?;
+            let timeout = std::time::Duration::from_secs(normalized.timeout_secs);
             scanner::run_fingerprint(
-                p.target,
-                p.ports.unwrap_or_else(|| "1-1024".to_string()),
+                normalized.target,
+                normalized.ports,
                 timeout,
-                p.concurrency.unwrap_or(20),
+                normalized.concurrency,
                 progress_tx,
             )
             .await
         }
         TaskKind::Fuzz(p) => {
+            use crate::operation_request::runtime_adapters::fuzz_from_runtime;
+            let n = fuzz_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid fuzz request: {e}"))?;
             fuzzer::run_fuzz(
-                p.target,
-                p.payload_type.unwrap_or_else(|| "xss".to_string()),
-                p.mode.unwrap_or_else(|| "smart".to_string()),
-                p.mutations.unwrap_or(false),
-                p.mutation_count.unwrap_or(0),
-                p.method.unwrap_or_else(|| "GET".to_string()),
-                p.param,
-                p.threads.unwrap_or(10) as usize,
-                p.timeout.unwrap_or(60),
-                p.graphql_introspection.unwrap_or(false),
-                p.graphql_depth_bypass.unwrap_or(false),
-                p.graphql_alias_overload.unwrap_or(false),
-                p.oauth_redirect_test.unwrap_or(false),
-                p.oauth_scope_test.unwrap_or(false),
-                p.oauth_state_test.unwrap_or(false),
-                p.oauth_grant_test.unwrap_or(false),
+                n.target,
+                n.payload_type,
+                n.mode,
+                n.mutations,
+                n.mutation_count,
+                n.method,
+                n.param,
+                n.threads,
+                n.timeout_secs,
+                n.graphql_introspection,
+                n.graphql_depth_bypass,
+                n.graphql_alias_overload,
+                n.oauth_redirect_test,
+                n.oauth_scope_test,
+                n.oauth_state_test,
+                n.oauth_grant_test,
                 progress_tx,
             )
             .await
         }
         TaskKind::Waf(p) => {
-            fuzzer::run_waf(
-                p.target,
-                p.bypass_mode.unwrap_or(false),
-                p.techniques.unwrap_or_default(),
-                progress_tx,
-            )
-            .await
+            use crate::operation_request::runtime_adapters::waf_from_runtime;
+            let n = waf_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid waf request: {e}"))?;
+            fuzzer::run_waf(n.target, n.bypass_mode, n.techniques, progress_tx).await
         }
         TaskKind::WafStress(p) => {
-            fuzzer::run_waf_stress(
-                p.target,
-                p.concurrency.unwrap_or(10),
-                p.requests.unwrap_or(100) as u64,
-                progress_tx,
-            )
-            .await
+            use crate::operation_request::runtime_adapters::waf_stress_from_runtime;
+            let n = waf_stress_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid waf-stress request: {e}"))?;
+            fuzzer::run_waf_stress(n.target, n.concurrency, n.requests, progress_tx).await
         }
         TaskKind::Pipeline(p) => {
-            let profile = match p.profile.as_deref() {
-                Some("quick") => crate::types::ScanProfile::Quick,
-                Some("endpoint") => crate::types::ScanProfile::Endpoint,
-                Some("web") => crate::types::ScanProfile::Web,
-                Some("waf") => crate::types::ScanProfile::Waf,
-                Some("full") => crate::types::ScanProfile::Full,
-                Some("api") => crate::types::ScanProfile::Api,
-                Some("recon") => crate::types::ScanProfile::Recon,
-                Some("stealth") => crate::types::ScanProfile::Stealth,
-                Some("deep") => crate::types::ScanProfile::Deep,
-                Some("vuln") => crate::types::ScanProfile::Vuln,
-                Some("auth") => crate::types::ScanProfile::Auth,
-                Some("defense-lab") => crate::types::ScanProfile::DefenseLab,
-                _ => crate::types::ScanProfile::Quick,
+            use crate::operation_request::runtime_adapters::pipeline_from_runtime;
+            let n = pipeline_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid pipeline request: {e}"))?;
+            let profile = match n.profile.as_str() {
+                "quick" => crate::types::ScanProfile::Quick,
+                "endpoint" => crate::types::ScanProfile::Endpoint,
+                "web" => crate::types::ScanProfile::Web,
+                "waf" => crate::types::ScanProfile::Waf,
+                "full" => crate::types::ScanProfile::Full,
+                "api" => crate::types::ScanProfile::Api,
+                "recon" => crate::types::ScanProfile::Recon,
+                "stealth" => crate::types::ScanProfile::Stealth,
+                "deep" => crate::types::ScanProfile::Deep,
+                "vuln" => crate::types::ScanProfile::Vuln,
+                "auth" => crate::types::ScanProfile::Auth,
+                "defense-lab" => crate::types::ScanProfile::DefenseLab,
+                // Validated by `parse_scan_profile`; unreachable for known
+                // profiles. Fail closed rather than silently downgrading.
+                other => return Err(anyhow::anyhow!("unknown scan profile '{other}'")),
             };
-            recon::run_pipeline(p.target, profile, progress_tx).await
+            recon::run_pipeline(n.target, profile, progress_tx).await
         }
         TaskKind::Recon(p) => {
-            recon::run_recon(p.target, 20, ReconOptions::default(), progress_tx).await
+            use crate::operation_request::runtime_adapters::recon_from_runtime;
+            let n = recon_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid recon request: {e}"))?;
+            recon::run_recon(n.target, 20, ReconOptions::default(), progress_tx).await
         }
         TaskKind::PacketCapture(p) => {
             network::run_packet_capture(
@@ -248,42 +288,54 @@ pub async fn dispatch_inner(
             .await
         }
         TaskKind::GraphQl(p) => {
+            use crate::operation_request::runtime_adapters::graphql_from_runtime;
+            let n = graphql_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid graphql request: {e}"))?;
             api::run_graphql(
-                p.target,
-                p.introspection.unwrap_or(true),
-                p.inject.unwrap_or(false),
-                p.depth_bypass.unwrap_or(false),
-                p.alias_overload.unwrap_or(false),
-                p.concurrency.unwrap_or(10),
-                p.timeout_secs.unwrap_or(300),
+                n.target,
+                n.introspection,
+                n.inject,
+                n.depth_bypass,
+                n.alias_overload,
+                n.concurrency,
+                n.timeout_secs,
                 progress_tx,
             )
             .await
         }
         TaskKind::OAuth(p) => {
+            use crate::operation_request::runtime_adapters::oauth_from_runtime;
+            let n = oauth_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid oauth request: {e}"))?;
             api::run_oauth(
-                p.target,
-                p.client_id,
-                p.redirect_uri,
-                p.redirect_test.unwrap_or(false),
-                p.scope_test.unwrap_or(false),
-                p.state_test.unwrap_or(false),
-                p.grant_test.unwrap_or(false),
-                p.concurrency.unwrap_or(10),
-                p.timeout_secs.unwrap_or(300),
+                n.target,
+                n.client_id,
+                n.redirect_uri,
+                n.redirect_test,
+                n.scope_test,
+                n.state_test,
+                n.grant_test,
+                n.concurrency,
+                n.timeout_secs,
                 progress_tx,
             )
             .await
         }
         TaskKind::AuthTest(p) => {
+            use crate::operation_request::runtime_adapters::auth_test_from_runtime;
+            let n = auth_test_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid auth-test request: {e}"))?;
             auth::run_auth_task(
-                p.target,
-                p.username,
-                p.credential_list,
-                p.credential_file,
-                p.max_attempts.unwrap_or(100),
-                p.concurrency.unwrap_or(1),
-                p.timeout_secs.unwrap_or(30),
+                n.target,
+                n.username,
+                n.credential_list,
+                n.credential_file,
+                n.max_attempts,
+                n.concurrency,
+                n.timeout_secs,
                 progress_tx,
             )
             .await
@@ -381,16 +433,20 @@ pub async fn dispatch_inner(
         }
         #[cfg(feature = "db-pentest")]
         TaskKind::DbPentest(p) => {
+            use crate::operation_request::runtime_adapters::db_pentest_from_runtime;
+            let n = db_pentest_from_runtime(&p)
+                .normalize()
+                .map_err(|e| anyhow::anyhow!("invalid db-pentest request: {e}"))?;
             db_pentest::run_db_pentest_task(
                 None,
-                Some(p.target),
-                Some(p.db_type),
-                p.port,
-                p.checks.unwrap_or_else(|| "all".to_string()),
-                p.dry_run.unwrap_or(true),
-                p.allow_advanced.unwrap_or(false),
-                p.max_queries.unwrap_or(200),
-                p.max_duration.unwrap_or(120),
+                Some(n.target),
+                Some(n.db_type),
+                n.port,
+                n.checks,
+                n.dry_run,
+                n.allow_advanced,
+                n.max_queries,
+                n.max_duration_secs,
                 progress_tx,
             )
             .await

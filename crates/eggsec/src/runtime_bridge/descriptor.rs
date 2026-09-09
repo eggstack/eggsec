@@ -32,46 +32,18 @@ pub fn descriptor_for_run_request(
 
 /// Resolve the canonical operation ID and optional target from a [`TaskKind`].
 ///
-/// Returns `(operation_id, target)` where `target` is `None` for operations
-/// with `NoTarget` policy.
+/// Phase C convergence: delegates to the exhaustive
+/// `TaskKind::operation_id` / `TaskKind::canonical_target` mapping so runtime
+/// semantics cannot silently diverge from the canonical path. Returns
+/// `(operation_id, target)` where `target` is `None` for operations with
+/// `NoTarget` policy or interface-bound tasks.
 fn resolve_operation_and_target(
     task_kind: &TaskKind,
 ) -> Result<(&'static str, Option<String>), RuntimeBridgeError> {
-    match task_kind {
-        TaskKind::PortScan(p) => Ok(("scan-ports", Some(p.target.clone()))),
-        TaskKind::EndpointScan(p) => Ok(("scan-endpoints", Some(p.target.clone()))),
-        TaskKind::Fingerprint(p) => Ok(("fingerprint", Some(p.target.clone()))),
-        TaskKind::Waf(p) => Ok(("waf-detect", Some(p.target.clone()))),
-        TaskKind::WafStress(p) => Ok(("waf-stress", Some(p.target.clone()))),
-        TaskKind::Pipeline(p) => Ok(("pipeline", Some(p.target.clone()))),
-        TaskKind::Recon(p) => Ok(("recon", Some(p.target.clone()))),
-        TaskKind::LoadTest(p) => Ok(("load-test", Some(p.target.clone()))),
-        TaskKind::Fuzz(p) => Ok(("fuzz", Some(p.target.clone()))),
-        TaskKind::StressTest(p) => Ok(("stress-test", Some(p.target.clone()))),
-        TaskKind::PacketCapture(_) => Ok(("packet", None)),
-        TaskKind::GraphQl(p) => Ok(("graphql", Some(p.target.clone()))),
-        TaskKind::OAuth(p) => Ok(("oauth", Some(p.target.clone()))),
-        TaskKind::AuthTest(p) => Ok(("auth-test", Some(p.target.clone()))),
-        TaskKind::Nse(p) => Ok(("nse", Some(p.target.clone()))),
-        TaskKind::Hunt(p) => Ok(("hunt", Some(p.target.clone()))),
-        TaskKind::Browser(p) => Ok(("browser", Some(p.target.clone()))),
-        TaskKind::Compliance(p) => Ok(("compliance", Some(p.target.clone()))),
-        TaskKind::Storage(_) => Ok(("storage", None)),
-        TaskKind::Integrations(_) => Ok(("integrations", None)),
-        TaskKind::Workflow(_) => Ok(("workflow", None)),
-        TaskKind::Vuln(p) => Ok(("vuln", Some(p.target.clone()))),
-        TaskKind::Wireless(_) => Ok(("wireless", None)),
-        TaskKind::WirelessActive(_) => Ok(("wireless", None)),
-        TaskKind::DbPentest(p) => Ok(("db-pentest", Some(p.target.clone()))),
-        TaskKind::Intercept(_) => Ok(("proxy-intercept", None)),
-        TaskKind::C2(_) => Ok(("c2", None)),
-        TaskKind::PacketTraceroute(p) => Err(RuntimeBridgeError::UnsupportedTaskKind {
-            kind: format!("PacketTraceroute (target: {})", p.target),
-        }),
-        TaskKind::PacketSend(p) => Err(RuntimeBridgeError::UnsupportedTaskKind {
-            kind: format!("PacketSend (target: {})", p.target),
-        }),
-    }
+    // Exhaustive via TaskKind methods; no wildcard fallback. Packet
+    // traceroute/send map explicitly to the `packet` family with their target
+    // (they no longer fail as `UnsupportedTaskKind`).
+    Ok((task_kind.operation_id(), task_kind.canonical_target()))
 }
 
 #[cfg(test)]
@@ -428,33 +400,30 @@ mod tests {
     }
 
     #[test]
-    fn packet_traceroute_unsupported() {
+    fn packet_traceroute_maps_to_packet_operation() {
+        // Phase C convergence: packet traceroute/send are explicit `packet`
+        // family mappings with their target (no silent alias fallback, no
+        // `UnsupportedTaskKind`).
         let req = make_request(TaskKind::PacketTraceroute(PacketTracerouteParams {
             target: "10.0.0.1".into(),
             max_hops: None,
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::UnsupportedTaskKind { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "packet");
+        assert_eq!(desc.target, Some("10.0.0.1".to_string()));
     }
 
     #[test]
-    fn packet_send_unsupported() {
+    fn packet_send_maps_to_packet_operation() {
         let req = make_request(TaskKind::PacketSend(PacketSendParams {
             target: "10.0.0.1".into(),
             protocol: "tcp".into(),
             payload: None,
             ..Default::default()
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::UnsupportedTaskKind { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "packet");
+        assert_eq!(desc.target, Some("10.0.0.1".to_string()));
     }
 
     #[test]

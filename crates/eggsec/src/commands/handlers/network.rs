@@ -8,55 +8,31 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
     #[cfg(feature = "packet-inspection")]
     {
         use crate::cli::PacketSubcommand;
-        use crate::config::OperationDescriptor;
         use crate::packet::cli as packet_cli;
 
         // Policy check for subcommands that target external hosts
         match &args.command {
             PacketSubcommand::Send(send_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-                    "packet-send".to_string(),
-                    crate::config::OperationMode::StandardAssessment,
-                    crate::config::OperationRisk::RawPacket,
-                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    Some(send_args.target.clone()),
-                    vec!["packet-inspection".to_string()],
-                    Vec::new(),
-                    false,
-                    false,
-                    Vec::new(),
-                ))?;
+                let descriptor = ctx
+                    .describe_from_registry("packet", Some(send_args.target.clone()))
+                    .expect("packet should have registry metadata");
+                ctx.evaluate_and_enforce_operation(descriptor)?;
             }
             PacketSubcommand::Traceroute(trace_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-                    "packet-traceroute".to_string(),
-                    crate::config::OperationMode::StandardAssessment,
-                    crate::config::OperationRisk::RawPacket,
-                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    Some(trace_args.target.clone()),
-                    vec!["packet-inspection".to_string()],
-                    Vec::new(),
-                    false,
-                    false,
-                    Vec::new(),
-                ))?;
+                let descriptor = ctx
+                    .describe_from_registry("traceroute", Some(trace_args.target.clone()))
+                    .expect("traceroute should have registry metadata");
+                ctx.evaluate_and_enforce_operation(descriptor)?;
             }
             PacketSubcommand::Capture(cap_args) => {
-                ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-                    "packet-capture".to_string(),
-                    crate::config::OperationMode::StandardAssessment,
-                    crate::config::OperationRisk::RawPacket,
-                    vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-                    cap_args
-                        .interface
-                        .clone()
-                        .or_else(|| cap_args.filter.clone()),
-                    vec!["packet-inspection".to_string()],
-                    Vec::new(),
-                    false,
-                    false,
-                    Vec::new(),
-                ))?;
+                let target = cap_args
+                    .interface
+                    .clone()
+                    .or_else(|| cap_args.filter.clone());
+                let descriptor = ctx
+                    .describe_from_registry("packet", target)
+                    .expect("packet should have registry metadata");
+                ctx.evaluate_and_enforce_operation(descriptor)?;
             }
             _ => {}
         }
@@ -90,22 +66,13 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
 
 #[cfg(feature = "stress-testing")]
 pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Result<()> {
-    use crate::config::OperationDescriptor;
     use crate::scanner::icmp_probe;
     use std::time::Duration;
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "icmp".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::SafeActive,
-        vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-        Some(args.target.clone()),
-        vec!["stress-testing".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("icmp", Some(args.target.clone()))
+        .expect("icmp should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     let timeout = Duration::from_secs(args.timeout);
     let interval = Duration::from_secs_f64(args.interval);
@@ -184,22 +151,13 @@ pub async fn handle_traceroute(
     ctx: &CommandContext,
     args: crate::cli::TracerouteArgs,
 ) -> Result<()> {
-    use crate::config::OperationDescriptor;
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use std::time::Duration;
 
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "traceroute".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::RawPacket,
-        vec![crate::config::IntendedUse::ProtocolEdgeValidation],
-        Some(args.target.clone()),
-        vec!["stress-testing".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("traceroute", Some(args.target.clone()))
+        .expect("traceroute should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     let config = TracerouteConfig {
         target: args.target.clone(),

@@ -1,5 +1,4 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_scan_ports(
@@ -103,18 +102,10 @@ pub async fn handle_fingerprint(
 
 #[cfg(feature = "nse")]
 pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "nse".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(args.target.clone()),
-        vec!["nse".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("nse", Some(args.target.clone()))
+        .expect("nse should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
 
     // Select execution profile based on surface (CLI = ManualPermissive)
@@ -155,18 +146,10 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
 }
 
 pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "scan".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::SafeActive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(args.target.clone()),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("scan", Some(args.target.clone()))
+        .expect("scan should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("scan-{}", chrono::Utc::now().timestamp());
@@ -196,18 +179,10 @@ pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -
     let session = crate::pipeline::session::load(&args.session)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "scan-resume".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::SafeActive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(session.target.clone()),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("resume", Some(session.target.clone()))
+        .expect("resume should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager

@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for implementation.
+Status: Executed (2026-09-09). All workstreams implemented; see Completion record below.
 
 ## Objective
 
@@ -220,4 +220,40 @@ Add exhaustive tests ensuring every operation-backed command has a canonical exe
 
 ## Completion record
 
-Record baseline/final SHA, count of operation-backed commands migrated, removed transitional types/flags, retained compatibility shims, and verification commands/results.
+Executed 2026-09-09.
+
+- Baseline SHA: `c65477db` (Phase B completion).
+- Operation-backed commands migrated: all 31 canonical operations now
+  `RegistryBacked`; 4-command pilot expanded to full coverage (scan→pipeline,
+  resume→pipeline, icmp/traceroute→packet, evasion/postex new metadata,
+  mobile-dynamic + wireless-deauth multiplexer branches added).
+- Removed transitional types/flags: `CommandDispatchMode::LegacyWrapped` and
+  `CommandRegistration::registry_backed` deleted; `registry_backed_command_ids()`
+  now derives from dispatch mode; `operation_backed_command_ids()` added.
+- New canonical ownership:
+  - `eggsec-tool-core::operation_request` (defaults, normalization, typed
+    requests, `validate_tool_params`);
+  - `eggsec::operation_request` facade (CLI/runtime/ToolRequest adapters,
+    exhaustive `operation_id_for_task_kind`/`target_for_task_kind`);
+  - `TaskKind::operation_id`/`canonical_target` exhaustive (no wildcard);
+  - `runtime_bridge::descriptor_for_run_request` delegates to TaskKind methods;
+  - `dispatch_inner` normalizes via canonical (fixed endpoint 10→20,
+    fingerprint 1-1024→9-port list, fuzz xss→all/smart→sequential/0→3,
+    graphql/oauth/auth timeouts to CLI values, profile unknown→error);
+  - `ToolDispatcher::dispatch` validates params via canonical (alias-resolved);
+  - Python stable params validate via canonical (12 ops tested; nse/sbom/etc.
+    remain binding-layer until Phase G).
+- Retained compatibility shims (with Phase G removal criterion):
+  - CLI command aliases (`scan`, `waf`, `load`, `stress`, etc. via
+    `ALL_OPERATION_METADATA_ALIASES`);
+  - Python stable snake_case names (`scan_ports`, etc. via `to_engine_id`);
+  - `registry_backed_command_ids()` as derived helper (not state);
+  - Tool alias resolution in dispatcher (`scan`→`scan-ports`, etc.).
+- Verification: `make check` PASS, `make check-python` PASS,
+  `cargo check -p eggsec --features rest-api,grpc-api,tool-api` PASS,
+  `cargo check -p eggsec-cli` (default + `--no-default-features`) PASS,
+  `cargo check -p eggsec-daemon` PASS, `cargo test -p eggsec-python --lib`
+  (231 passed) PASS, arch guards ALL PASSED.
+  New tests: `operation_convergence` (12 matrix tests),
+  `operation_request` unit tests (canonical + exhaustive TaskKind),
+  Python `stable_operation_params_validate_through_canonical_contracts`.

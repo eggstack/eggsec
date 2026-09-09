@@ -315,6 +315,7 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
         }
         RemoteCommand::Start(start_args) => {
             let target = format!("localhost:{}", start_args.port);
+            // ServerLifecycle: remote-start is a server lifecycle command, no OperationMetadata (Phase C non-goal)
             ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
                 "remote-start".to_string(),
                 crate::config::OperationMode::HazardousLab,
@@ -423,6 +424,7 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
     let mut results: Vec<RemoteResult> = Vec::new();
 
     for target in &targets {
+        // ServerLifecycle: exec is a server lifecycle command, no OperationMetadata (Phase C non-goal)
         ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
             "exec".to_string(),
             crate::config::OperationMode::StandardAssessment,

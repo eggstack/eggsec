@@ -8,7 +8,7 @@ The command registry maps command IDs to dispatch metadata, enabling:
 - Static inspection of all registered commands
 - Descriptor generation from `OperationMetadata` instead of inline construction
 - Feature-gate and category metadata for diagnostics
-- Gradual migration from the legacy `handle_command()` match dispatch
+- All operation-backed commands use a single `RegistryBacked` dispatch path
 
 ## Architecture
 
@@ -24,8 +24,7 @@ Dispatch Bridge (handle_command)
     │
     ├─ registry.lookup(command_id) → CommandRegistration
     │   └─ dispatch_mode == RegistryBacked → build descriptor → evaluate_and_enforce → execute
-    │   └─ dispatch_mode == LegacyWrapped → legacy handle_command() path
-    └─ not registered → legacy handler fallback
+    └─ not registered → error (no legacy fallback)
 ```
 
 ## Command Categories
@@ -41,46 +40,41 @@ Dispatch Bridge (handle_command)
 
 ## Registered Commands
 
-### Registry-backed (Phase 6 pilot)
+### Registry-backed (operation-backed)
 
-Manual operator actions exposed in CLI and TUI. Not `cli_interactive_only`.
+All operation-backed commands use `RegistryBacked` dispatch: `OperationMetadata` → `describe_from_registry()` → `EnforcementContext` → canonical dispatcher. There is no permanent `LegacyWrapped` dispatch mode.
 
-| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed |
-|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|
-| `recon` | `recon` | SideEffectingNetwork | — | No | Yes | Yes |
-| `scan-ports` | `scan-ports` | SideEffectingNetwork | — | No | Yes | Yes |
-| `scan-endpoints` | `scan-endpoints` | SideEffectingNetwork | — | No | Yes | Yes |
-| `fingerprint` | `fingerprint` | SideEffectingNetwork | — | No | Yes | Yes |
-
-### Legacy (not yet migrated)
-
-Manual operator actions exposed in CLI and TUI. Not `cli_interactive_only`.
-
-| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed | Notes |
-|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|-------|
-| `scan` | `scan` (alias→scan-ports) | SideEffectingNetwork | — | No | Yes | No | Pipeline orchestrator, LegacyWrapped |
-| `resume` | scan-resume | SideEffectingNetwork | — | No | Yes | No | Pipeline resume, LegacyWrapped |
-| `fuzz` | `fuzz` | SideEffectingNetwork | — | No | Yes | No | Complex payload engine, LegacyWrapped |
-| `waf` | `waf-detect` | SideEffectingNetwork | — | No | Yes | No | WAF detection, LegacyWrapped |
-| `waf-stress` | `waf-stress` | SideEffectingNetwork | — | No | Yes | No | WAF stress tier, LegacyWrapped |
-| `graphql` | `graphql` | SideEffectingNetwork | — | No | Yes | No | GraphQL fuzzer, LegacyWrapped |
-| `oauth` | `oauth` | SideEffectingNetwork | — | No | Yes | No | OAuth fuzzer, LegacyWrapped |
-| `auth-test` | `auth-test` | SideEffectingNetwork | — | No | Yes | No | Multi-test suite, LegacyWrapped |
-| `load` | load-test | SideEffectingNetwork | — | No | Yes | No | Load testing, LegacyWrapped |
-| `stress` | stress-test | SideEffectingNetwork | `stress-testing` | No | Yes | No | LegacyWrapped |
-| `packet` | packet | SideEffectingNetwork | `packet-inspection` | No | Yes | No | LegacyWrapped |
-| `icmp` | icmp | SideEffectingNetwork | `stress-testing` | No | Yes | No | LegacyWrapped |
-| `traceroute` | traceroute | SideEffectingNetwork | `stress-testing` | No | Yes | No | LegacyWrapped |
-| `nse` | `nse` | SideEffectingNetwork | `nse` | No | Yes | No | LegacyWrapped |
-| `hunt` | `hunt` | SideEffectingNetwork | `advanced-hunting` | No | Yes | No | LegacyWrapped |
-| `evasion` | evasion | SideEffectingNetwork | `evasion` | No | Yes | No | LegacyWrapped |
-| `postex` | postex | SideEffectingNetwork | `postex` | No | Yes | No | LegacyWrapped |
-| `c2` | `c2` | SideEffectingNetwork | `c2` | No | Yes | No | LegacyWrapped |
-| `proxy-intercept` | `proxy-intercept` | SideEffectingNetwork | `web-proxy` | No | Yes | No | LegacyWrapped |
-| `wireless` | `wireless` | SideEffectingNetwork | `wireless` | No | Yes | No | LegacyWrapped |
-| `browser` | `browser` | SideEffectingNetwork | `headless-browser` | No | Yes | No | LegacyWrapped |
-| `mobile` | mobile-static/mobile-dynamic | LocalFileDomain | `mobile` | No | Yes | No | LegacyWrapped |
-| `db` | `db-pentest` | LocalFileDomain | `db-pentest` | No | Yes | No | LegacyWrapped |
+| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible |
+|-----------|-------------|----------|---------|:--------------------:|:-----------:|
+| `recon` | `recon` | SideEffectingNetwork | — | No | Yes |
+| `scan-ports` | `scan-ports` | SideEffectingNetwork | — | No | Yes |
+| `scan-endpoints` | `scan-endpoints` | SideEffectingNetwork | — | No | Yes |
+| `fingerprint` | `fingerprint` | SideEffectingNetwork | — | No | Yes |
+| `scan` | `pipeline` | SideEffectingNetwork | — | No | Yes |
+| `resume` | `pipeline` | SideEffectingNetwork | — | No | Yes |
+| `fuzz` | `fuzz` | SideEffectingNetwork | — | No | Yes |
+| `waf` | `waf-detect` | SideEffectingNetwork | — | No | Yes |
+| `waf-stress` | `waf-stress` | SideEffectingNetwork | — | No | Yes |
+| `graphql` | `graphql` | SideEffectingNetwork | — | No | Yes |
+| `oauth` | `oauth` | SideEffectingNetwork | — | No | Yes |
+| `auth-test` | `auth-test` | SideEffectingNetwork | — | No | Yes |
+| `load` | `load-test` | SideEffectingNetwork | — | No | Yes |
+| `stress` | `stress-test` | SideEffectingNetwork | `stress-testing` | No | Yes |
+| `packet` | `packet` | SideEffectingNetwork | `packet-inspection` | No | Yes |
+| `icmp` | `packet` | SideEffectingNetwork | `packet-inspection` | No | Yes |
+| `traceroute` | `packet` | SideEffectingNetwork | `packet-inspection` | No | Yes |
+| `nse` | `nse` | SideEffectingNetwork | `nse` | No | Yes |
+| `hunt` | `hunt` | SideEffectingNetwork | `advanced-hunting` | No | Yes |
+| `evasion` | `evasion` | SideEffectingNetwork | `evasion` | No | Yes |
+| `postex` | `postex` | SideEffectingNetwork | `postex` | No | Yes |
+| `c2` | `c2` | SideEffectingNetwork | `c2` | No | Yes |
+| `proxy-intercept` | `proxy-intercept` | SideEffectingNetwork | `web-proxy` | No | Yes |
+| `wireless` | `wireless` | SideEffectingNetwork | `wireless` | No | Yes |
+| `wireless-deauth` | `wireless-deauth` | SideEffectingNetwork | `wireless-advanced` | No | Yes |
+| `browser` | `browser` | SideEffectingNetwork | `headless-browser` | No | Yes |
+| `mobile` | `mobile-static` | LocalFileDomain | `mobile` | No | Yes |
+| `mobile-dynamic` | `mobile-dynamic` | LocalFileDomain | `mobile-dynamic` | No | Yes |
+| `db` | `db-pentest` | LocalFileDomain | `db-pentest` | No | Yes |
 
 ### CLI-helper interactive only (not TUI, not programmatic)
 
@@ -89,28 +83,28 @@ only. Hidden from TUI tabs and not exposed via MCP/REST/gRPC/agent. The flag
 does **not** mean "all human interactive surfaces"; manual operator actions
 with TUI tabs use `tui_visible`.
 
-| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed | Notes |
-|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|-------|
-| `plan` | (none) | ConfigOutputHelper | — | Yes | No | No | HelperOnly |
-| `preflight` | (uses metadata lookup) | ConfigOutputHelper | — | Yes | No | No | Advisory only, HelperOnly |
-| `ci` | (none) | ConfigOutputHelper | — | Yes | No | No | Passive quality gate, HelperOnly |
-| `config` | (none) | ConfigOutputHelper | — | Yes | No | No | Local file I/O, HelperOnly |
-| `doctor` | (none) | ConfigOutputHelper | — | Yes | No | No | Diagnostics, HelperOnly |
-| `policy-explain` | (none) | PassiveAnalytical | — | Yes | No | No | HelperOnly |
-| `scope-explain` | (none) | PassiveAnalytical | — | Yes | No | No | HelperOnly |
-| `ai-analyze` | (none) | PassiveAnalytical | `ai-integration` | Yes | No | No | HelperOnly |
-| `serve` | (none) | FrontendServer | `rest-api` | No | No | No | ServerLifecycle |
-| `mcp-serve` | (none) | FrontendServer | `rest-api` | No | No | No | ServerLifecycle |
-| `agent` | (none) | FrontendServer | `rest-api` | No | No | No | ServerLifecycle |
-| `grpc` | (none) | FrontendServer | `grpc-api` | No | No | No | ServerLifecycle |
-| `cluster` | (none) | FrontendServer | — | No | No | No | Distributed infra, ServerLifecycle |
-| `remote` | (none) | FrontendServer | — | No | No | No | Distributed infra, ServerLifecycle |
-| `exec` | (none) | FrontendServer | — | No | No | No | Distributed infra, ServerLifecycle |
-| `report` | (none) | LocalFileDomain | — | Yes | No | No | Output formatting, HelperOnly |
-| `vuln` | (none) | ConfigOutputHelper | — | Yes | No | No | CVSS scoring, HelperOnly |
-| `storage` | (none) | LocalFileDomain | `database` | Yes | No | No | HelperOnly |
-| `sbom` | (none) | LocalFileDomain | `sbom` | Yes | No | No | HelperOnly |
-| `notify` | (none) | ConfigOutputHelper | — | Yes | No | No | Test helper, HelperOnly |
+| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible |
+|-----------|-------------|----------|---------|:--------------------:|:-----------:|
+| `plan` | (none) | ConfigOutputHelper | — | Yes | No |
+| `preflight` | (uses metadata lookup) | ConfigOutputHelper | — | Yes | No |
+| `ci` | (none) | ConfigOutputHelper | — | Yes | No |
+| `config` | (none) | ConfigOutputHelper | — | Yes | No |
+| `doctor` | (none) | ConfigOutputHelper | — | Yes | No |
+| `policy-explain` | (none) | PassiveAnalytical | — | Yes | No |
+| `scope-explain` | (none) | PassiveAnalytical | — | Yes | No |
+| `ai-analyze` | (none) | PassiveAnalytical | `ai-integration` | Yes | No |
+| `serve` | (none) | FrontendServer | `rest-api` | No | No |
+| `mcp-serve` | (none) | FrontendServer | `rest-api` | No | No |
+| `agent` | (none) | FrontendServer | `rest-api` | No | No |
+| `grpc` | (none) | FrontendServer | `grpc-api` | No | No |
+| `cluster` | (none) | FrontendServer | — | No | No |
+| `remote` | (none) | FrontendServer | — | No | No |
+| `exec` | (none) | FrontendServer | — | No | No |
+| `report` | (none) | LocalFileDomain | — | Yes | No |
+| `vuln` | (none) | ConfigOutputHelper | — | Yes | No |
+| `storage` | (none) | LocalFileDomain | `database` | Yes | No |
+| `sbom` | (none) | LocalFileDomain | `sbom` | Yes | No |
+| `notify` | (none) | ConfigOutputHelper | — | Yes | No |
 
 The full server-lifecycle group (`serve`, `mcp-serve`, `agent`, `grpc`,
 `cluster`, `remote`, `exec`) is `cli_interactive_only: false` because the CLI
@@ -130,7 +124,6 @@ through `EnforcementContext::evaluate()` before execution.
 | `tui_visible` | `bool` | Whether this command appears as a TUI tab action. |
 | `programmatic_visible` | `bool` | Whether this command may be exposed through MCP/REST/gRPC/agent. |
 | `cli_interactive_only` | `bool` | Whether the command is intended for **direct CLI/operator invocation only**. CLI helper/config/report-style commands (e.g. `doctor`, `plan`, `preflight`, `config`, `report`) are `cli_interactive_only: true`; they are not TUI-visible and not programmatic. **This flag does not apply to all human-interactive surfaces** — TUI manual actions use `tui_visible`, not `cli_interactive_only`. |
-| `registry_backed` | `bool` | Shorthand for `dispatch_mode == RegistryBacked`. The descriptor/execution path uses registry metadata. |
 | `dispatch_mode` | `CommandDispatchMode` | See below. |
 
 Invariants enforced by `crates/eggsec/tests/command_registry.rs`:
@@ -138,27 +131,18 @@ Invariants enforced by `crates/eggsec/tests/command_registry.rs`:
 - `cli_interactive_only → !tui_visible`
 - `HelperOnly → cli_interactive_only`
 - `ServerLifecycle → !tui_visible && !cli_interactive_only`
-- `RegistryBacked → registry_backed && operation_id.is_some()`
+- `RegistryBacked → operation_id.is_some()`
 
-## Migration Notes
-
-- **Phase 6 pilot**: 4 low-risk commands (recon, scan-ports, scan-endpoints, fingerprint) use the registry for metadata lookup and descriptor generation. The legacy handler match in `handle_command()` remains the execution path.
-- **Future phases**: Additional commands can be migrated incrementally. The dispatch bridge supports mixed registry/legacy dispatch.
-- **No enforcement changes**: The registry is metadata and routing, not authorization. `EnforcementContext::evaluate()` remains the mandatory pre-dispatch gate.
-
-### CommandDispatchMode
+## CommandDispatchMode
 
 Each `CommandRegistration` carries a `dispatch_mode: CommandDispatchMode` field that classifies how the command is dispatched:
 
 | Variant | Description |
 |---------|-------------|
-| `RegistryBacked` | Descriptor/execution path uses registry metadata (Phase 6 pilot commands: `recon`, `scan-ports`, `scan-endpoints`, `fingerprint`). `registry_backed = true`. |
-| `LegacyWrapped` | Wraps legacy `handle_command()` dispatch (pre-migration commands). `registry_backed = false`. |
+| `RegistryBacked` | Descriptor/execution path uses registry metadata via `OperationMetadata` → `describe_from_registry()` → `EnforcementContext` → canonical dispatcher. All operation-backed commands. |
 | `CatalogOnly` | Listed for discoverability but never dispatched (catalog entries). |
 | `ServerLifecycle` | Server daemon lifecycle command (`serve`, `mcp-serve`, `agent`, `grpc`, `cluster`, `remote`, `exec`). |
 | `HelperOnly` | Read-only helper/diagnostic (`config`, `doctor`, `plan`, `preflight`, `ci`, `report`, `vuln`, `storage`, `sbom`, `notify`, `policy-explain`, `scope-explain`, `ai-analyze`). |
-
-The `registry_backed` boolean on `CommandRegistration` is a shorthand for `dispatch_mode == RegistryBacked`. It indicates the command uses registry metadata for descriptor generation via `build_descriptor()` rather than inline construction in the legacy handler match.
 
 ## File Locations
 

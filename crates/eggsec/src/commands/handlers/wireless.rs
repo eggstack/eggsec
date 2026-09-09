@@ -1,5 +1,4 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_wireless(ctx: &CommandContext, args: crate::cli::WirelessArgs) -> Result<()> {
@@ -26,18 +25,10 @@ async fn handle_scan(
     interface: String,
     mut scan_args: crate::cli::WirelessScanArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "wireless".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::SafeActive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(interface.clone()),
-        vec!["wireless".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("wireless", Some(interface.clone()))
+        .expect("wireless should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     scan_args.json |= ctx.json;
     let target = interface.clone();
     let scan_id = format!("wireless-{}", chrono::Utc::now().timestamp());
@@ -74,18 +65,10 @@ async fn handle_deauth(
     deauth_args: crate::cli::DeauthArgs,
 ) -> Result<()> {
     // Policy gate: active wireless is high-risk
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "wireless-deauth".to_string(),
-        crate::config::OperationMode::DefenseLab,
-        crate::config::OperationRisk::Intrusive,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(deauth_args.bssid.clone()),
-        vec!["wireless-advanced".to_string()],
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let descriptor = ctx
+        .describe_from_registry("wireless-deauth", Some(deauth_args.bssid.clone()))
+        .expect("wireless-deauth should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
 
     // Additional check: non-dry-run requires explicit --allow-active-wireless
     if !deauth_args.dry_run && !deauth_args.allow_active_wireless {

@@ -345,7 +345,7 @@ DaemonClient → Runtime::submit(RunRequest)
 | `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs` | `pub(crate)`, `#[doc(hidden)]`. Internal implementation detail. | Used by `EnforcedDispatcher` and pipeline orchestrator. Regression test guard prevents use in strict surfaces. |
 | Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | Monitor; refactor if needed. |
 | Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | Domain extraction is a future concern. |
-| Command registry | `commands/registry.rs` | Active. Static metadata for CLI/TUI dispatch. | Incremental migration; legacy fallback for non-pilot commands. |
+| Command registry | `commands/registry.rs` | Active. Static metadata for CLI/TUI dispatch. | All operation-backed commands use `RegistryBacked` dispatch via `OperationMetadata` → `describe_from_registry()`. No permanent `LegacyWrapped` mode. |
 
 ## 7. Architecture Invariants
 

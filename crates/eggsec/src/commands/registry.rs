@@ -39,12 +39,16 @@ impl CommandCategory {
 }
 
 /// Dispatch mode for a registered command.
+///
+/// Phase C convergence: all operation-backed commands use `RegistryBacked`
+/// (canonical `OperationMetadata` → descriptor → `EnforcementContext` →
+/// canonical dispatcher). The transitional `LegacyWrapped` mode has been
+/// removed. `HelperOnly`, `ServerLifecycle`, and `CatalogOnly` remain for
+/// genuinely non-operation commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandDispatchMode {
-    /// Descriptor/execution path uses registry metadata (Phase 6 pilot commands).
+    /// Canonical operation-backed dispatch via registry metadata.
     RegistryBacked,
-    /// Wraps legacy `handle_command()` dispatch (pre-migration commands).
-    LegacyWrapped,
     /// Listed for discoverability but never dispatched (catalog entries).
     CatalogOnly,
     /// Server lifecycle command (serve, mcp-serve, agent, grpc, etc.).
@@ -81,9 +85,8 @@ pub struct CommandRegistration {
     /// programmatic surfaces). This does **not** apply to all human-interactive
     /// surfaces; TUI manual actions use `tui_visible`, not this flag.
     pub cli_interactive_only: bool,
-    /// Whether the descriptor/execution path uses registry metadata.
-    pub registry_backed: bool,
-    /// How this command is dispatched.
+    /// How this command is dispatched. All operation-backed commands
+    /// (`operation_id.is_some()`) use `RegistryBacked`.
     pub dispatch_mode: CommandDispatchMode,
 }
 
@@ -117,7 +120,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
@@ -130,7 +132,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
@@ -143,7 +144,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
@@ -156,35 +156,35 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
-    // ── Legacy commands (not yet migrated) ──
+    // ── Canonical operation-backed commands ──
+    // All operation-backed commands resolve through `OperationMetadata`.
+    // Multiplexers (mobile static/dynamic, packet icmp/traceroute/capture)
+    // resolve a canonical operation per execution branch before approval.
     CommandRegistration {
         command_id: "scan",
-        operation_id: Some("scan-ports"),
-        display_name: "Port Scan",
+        operation_id: Some("pipeline"),
+        display_name: "Security Pipeline",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "resume",
-        operation_id: None,
-        display_name: "Resume Scan",
+        operation_id: Some("pipeline"),
+        display_name: "Security Pipeline",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "fuzz",
@@ -196,8 +196,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "waf",
@@ -209,8 +208,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "waf-stress",
@@ -222,8 +220,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "graphql",
@@ -235,8 +232,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "oauth",
@@ -248,8 +244,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "auth-test",
@@ -261,8 +256,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "load",
@@ -274,8 +268,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "stress",
@@ -287,8 +280,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "packet",
@@ -300,34 +292,31 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "icmp",
-        operation_id: None,
-        display_name: "ICMP",
+        operation_id: Some("packet"),
+        display_name: "Raw Packet",
         category: CommandCategory::SideEffectingNetwork,
-        feature: Some("stress-testing"),
+        feature: Some("packet-inspection"),
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "traceroute",
-        operation_id: None,
-        display_name: "Traceroute",
+        operation_id: Some("packet"),
+        display_name: "Raw Packet",
         category: CommandCategory::SideEffectingNetwork,
-        feature: Some("stress-testing"),
+        feature: Some("packet-inspection"),
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "nse",
@@ -339,8 +328,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "hunt",
@@ -352,12 +340,11 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "evasion",
-        operation_id: None,
+        operation_id: Some("evasion"),
         display_name: "Evasion Detection",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("evasion"),
@@ -365,12 +352,11 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "postex",
-        operation_id: None,
+        operation_id: Some("postex"),
         display_name: "Post-Exploitation",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("postex"),
@@ -378,8 +364,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "c2",
@@ -391,8 +376,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "proxy-intercept",
@@ -404,8 +388,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "wireless",
@@ -417,8 +400,19 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
+    },
+    CommandRegistration {
+        command_id: "wireless-deauth",
+        operation_id: Some("wireless-deauth"),
+        display_name: "Wireless Deauth Attack",
+        category: CommandCategory::SideEffectingNetwork,
+        feature: Some("wireless-advanced"),
+        cli_visible: true,
+        tui_visible: true,
+        programmatic_visible: false,
+        cli_interactive_only: false,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "browser",
@@ -430,8 +424,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "mobile",
@@ -443,8 +436,19 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
+    },
+    CommandRegistration {
+        command_id: "mobile-dynamic",
+        operation_id: Some("mobile-dynamic"),
+        display_name: "Mobile Dynamic Analysis",
+        category: CommandCategory::LocalFileDomain,
+        feature: Some("mobile-dynamic"),
+        cli_visible: true,
+        tui_visible: true,
+        programmatic_visible: false,
+        cli_interactive_only: false,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "db",
@@ -456,8 +460,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: true,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
-        dispatch_mode: CommandDispatchMode::LegacyWrapped,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     // ── Config/helper commands ──
     CommandRegistration {
@@ -470,7 +473,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -483,7 +485,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -496,7 +497,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -509,7 +509,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -522,7 +521,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     // ── Passive analytical commands ──
@@ -536,7 +534,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -549,7 +546,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -562,7 +558,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     // ── Server commands ──
@@ -576,7 +571,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -589,7 +583,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -602,7 +595,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -615,7 +607,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -628,7 +619,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -641,7 +631,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
@@ -654,7 +643,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: false,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     // ── Report/vuln/storage/sbom/notify ──
@@ -668,7 +656,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -681,7 +668,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -694,7 +680,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -707,7 +692,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
@@ -720,7 +704,6 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         tui_visible: false,
         programmatic_visible: false,
         cli_interactive_only: true,
-        registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
 ];
@@ -767,10 +750,23 @@ pub fn cli_interactive_only_command_ids() -> Vec<&'static str> {
 }
 
 /// Get all registered command IDs that use registry-backed dispatch.
+///
+/// Phase C convergence: this is exactly the set of operation-backed commands
+/// (`operation_id.is_some()` with `RegistryBacked` dispatch).
 pub fn registry_backed_command_ids() -> Vec<&'static str> {
     REGISTERED_COMMANDS
         .iter()
-        .filter(|r| r.registry_backed)
+        .filter(|r| matches!(r.dispatch_mode, CommandDispatchMode::RegistryBacked))
+        .map(|r| r.command_id)
+        .collect()
+}
+
+/// Get all registered command IDs that are operation-backed (canonical
+/// `OperationMetadata` dispatch).
+pub fn operation_backed_command_ids() -> Vec<&'static str> {
+    REGISTERED_COMMANDS
+        .iter()
+        .filter(|r| r.operation_id.is_some())
         .map(|r| r.command_id)
         .collect()
 }
@@ -899,12 +895,15 @@ mod tests {
     }
 
     #[test]
-    fn pilot_commands_have_registry_backed() {
+    fn operation_backed_commands_use_registry_backed_dispatch() {
+        // Phase C convergence: every operation-backed command must use
+        // canonical `RegistryBacked` dispatch. No permanent `LegacyWrapped`
+        // operation dispatch remains.
         for reg in REGISTERED_COMMANDS {
-            if matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked) {
+            if reg.operation_id.is_some() {
                 assert!(
-                    reg.registry_backed,
-                    "RegistryBacked command '{}' should have registry_backed = true",
+                    matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+                    "Operation-backed command '{}' must use RegistryBacked dispatch",
                     reg.command_id
                 );
             }
@@ -916,8 +915,8 @@ mod tests {
         for reg in REGISTERED_COMMANDS {
             if reg.operation_id.is_none() {
                 assert!(
-                    !reg.registry_backed,
-                    "Command '{}' has no operation_id but registry_backed = true",
+                    !matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+                    "Command '{}' has no operation_id but uses RegistryBacked dispatch",
                     reg.command_id
                 );
             }

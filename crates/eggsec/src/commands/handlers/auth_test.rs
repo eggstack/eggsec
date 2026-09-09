@@ -1,6 +1,5 @@
 use crate::auth::{AuthFinding, AuthTestReport, AuthTestType, AUTH_BANNER};
 use crate::cli::AuthTestArgs;
-use crate::config::OperationDescriptor;
 use crate::types::Severity;
 use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,21 +9,12 @@ pub async fn handle_auth_test(
     ctx: &crate::commands::CommandContext,
     mut args: AuthTestArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor::new(
-        "auth-test".to_string(),
-        crate::config::OperationMode::StandardAssessment,
-        crate::config::OperationRisk::CredentialTesting,
-        vec![crate::config::IntendedUse::WebAssessment],
-        Some(
-            crate::utils::extract_target_from_url(&args.target)
-                .unwrap_or_else(|| args.target.clone()),
-        ),
-        Vec::new(),
-        Vec::new(),
-        false,
-        false,
-        Vec::new(),
-    ))?;
+    let target =
+        crate::utils::extract_target_from_url(&args.target).unwrap_or_else(|| args.target.clone());
+    let descriptor = ctx
+        .describe_from_registry("auth-test", Some(target))
+        .expect("auth-test should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 

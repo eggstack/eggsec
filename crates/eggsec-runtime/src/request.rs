@@ -402,6 +402,92 @@ impl TaskKind {
             TaskKind::C2(_) => "c2",
         }
     }
+
+    /// Canonical engine operation ID for this task kind.
+    ///
+    /// Phase C convergence: this mapping is exhaustive (no wildcard). Adding
+    /// a new `TaskKind` variant without updating this function is a compile
+    /// error, which satisfies the requirement that adding a canonical
+    /// operation intended for runtime produces a compile/test failure until
+    /// runtime mapping is supplied.
+    ///
+    /// Wire-only packet capture/traceroute/send kinds share the `packet`
+    /// operation family explicitly (they do not fall through string aliases).
+    /// Interface-bound or target-less kinds map to their operation but carry
+    /// `None` from [`Self::canonical_target`]; the bridge then validates
+    /// against `OperationMetadata` target policy and fails explicitly.
+    pub fn operation_id(&self) -> &'static str {
+        match self {
+            TaskKind::LoadTest(_) => "load-test",
+            TaskKind::StressTest(_) => "stress-test",
+            TaskKind::PortScan(_) => "scan-ports",
+            TaskKind::EndpointScan(_) => "scan-endpoints",
+            TaskKind::Fingerprint(_) => "fingerprint",
+            TaskKind::Fuzz(_) => "fuzz",
+            TaskKind::Waf(_) => "waf-detect",
+            TaskKind::WafStress(_) => "waf-stress",
+            TaskKind::Pipeline(_) => "pipeline",
+            TaskKind::Recon(_) => "recon",
+            TaskKind::PacketCapture(_) => "packet",
+            TaskKind::PacketTraceroute(_) => "packet",
+            TaskKind::PacketSend(_) => "packet",
+            TaskKind::GraphQl(_) => "graphql",
+            TaskKind::OAuth(_) => "oauth",
+            TaskKind::AuthTest(_) => "auth-test",
+            TaskKind::Nse(_) => "nse",
+            TaskKind::Hunt(_) => "hunt",
+            TaskKind::Browser(_) => "browser",
+            TaskKind::Compliance(_) => "compliance",
+            TaskKind::Storage(_) => "storage",
+            TaskKind::Integrations(_) => "integrations",
+            TaskKind::Workflow(_) => "workflow",
+            TaskKind::Vuln(_) => "vuln",
+            TaskKind::Wireless(_) => "wireless",
+            TaskKind::WirelessActive(_) => "wireless",
+            TaskKind::DbPentest(_) => "db-pentest",
+            TaskKind::Intercept(_) => "proxy-intercept",
+            TaskKind::C2(_) => "c2",
+        }
+    }
+
+    /// Canonical target for this task kind (`None` for `NoTarget` or
+    /// interface-bound operations).
+    ///
+    /// Exhaustive for the same compile-failure guarantee as
+    /// [`Self::operation_id`].
+    pub fn canonical_target(&self) -> Option<String> {
+        match self {
+            TaskKind::LoadTest(p) => Some(p.target.clone()),
+            TaskKind::StressTest(p) => Some(p.target.clone()),
+            TaskKind::PortScan(p) => Some(p.target.clone()),
+            TaskKind::EndpointScan(p) => Some(p.target.clone()),
+            TaskKind::Fingerprint(p) => Some(p.target.clone()),
+            TaskKind::Fuzz(p) => Some(p.target.clone()),
+            TaskKind::Waf(p) => Some(p.target.clone()),
+            TaskKind::WafStress(p) => Some(p.target.clone()),
+            TaskKind::Pipeline(p) => Some(p.target.clone()),
+            TaskKind::Recon(p) => Some(p.target.clone()),
+            TaskKind::PacketCapture(_) => None,
+            TaskKind::PacketTraceroute(p) => Some(p.target.clone()),
+            TaskKind::PacketSend(p) => Some(p.target.clone()),
+            TaskKind::GraphQl(p) => Some(p.target.clone()),
+            TaskKind::OAuth(p) => Some(p.target.clone()),
+            TaskKind::AuthTest(p) => Some(p.target.clone()),
+            TaskKind::Nse(p) => Some(p.target.clone()),
+            TaskKind::Hunt(p) => Some(p.target.clone()),
+            TaskKind::Browser(p) => Some(p.target.clone()),
+            TaskKind::Compliance(p) => Some(p.target.clone()),
+            TaskKind::Storage(_) => None,
+            TaskKind::Integrations(_) => None,
+            TaskKind::Workflow(_) => None,
+            TaskKind::Vuln(p) => Some(p.target.clone()),
+            TaskKind::Wireless(_) => None,
+            TaskKind::WirelessActive(_) => None,
+            TaskKind::DbPentest(p) => Some(p.target.clone()),
+            TaskKind::Intercept(p) => p.target.clone(),
+            TaskKind::C2(p) => p.target.clone(),
+        }
+    }
 }
 
 #[cfg(test)]
