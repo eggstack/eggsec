@@ -89,6 +89,18 @@ impl ApprovedOperation {
     pub fn audit_event_id(&self) -> Option<&str> {
         self.audit_event_id.as_deref()
     }
+
+    /// Returns `true` when this approval is bound to the exact descriptor
+    /// currently being requested.
+    ///
+    /// Uses derived `PartialEq` on [`OperationDescriptor`] so every current
+    /// and future policy-relevant descriptor field automatically participates
+    /// in cache identity. Frontends must use this predicate (plus
+    /// scope/policy/surface/override generation checks) instead of comparing
+    /// `descriptor().operation` names alone.
+    pub fn matches_descriptor(&self, desc: &OperationDescriptor) -> bool {
+        &self.descriptor == desc
+    }
 }
 
 #[cfg(test)]
@@ -145,5 +157,74 @@ mod tests {
             crate::config::ExecutionProfile::McpStrict,
         );
         assert_eq!(approved.descriptor().operation, descriptor.operation);
+    }
+
+    fn approved_for(descriptor: OperationDescriptor) -> ApprovedOperation {
+        let decision = PolicyDecision::allowed(
+            &descriptor.operation.clone(),
+            descriptor.mode,
+            descriptor.risk,
+            descriptor.intended_uses.clone(),
+        );
+        ApprovedOperation::for_test(
+            descriptor,
+            decision,
+            ExecutionSurface::RestApi,
+            crate::config::ExecutionProfile::McpStrict,
+        )
+    }
+
+    #[test]
+    fn matches_descriptor_requires_exact_identity() {
+        let base = sample_descriptor();
+        let approved = approved_for(base.clone());
+        assert!(approved.matches_descriptor(&base));
+    }
+
+    #[test]
+    fn matches_descriptor_rejects_different_target() {
+        let base = sample_descriptor();
+        let approved = approved_for(base);
+        let other = OperationDescriptor::new(
+            "scan-ports".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            Vec::new(),
+            Some("10.0.0.2".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
+        assert!(!approved.matches_descriptor(&other));
+    }
+
+    #[test]
+    fn matches_descriptor_rejects_different_operation() {
+        let base = sample_descriptor();
+        let approved = approved_for(base);
+        let other = OperationDescriptor::new(
+            "recon".to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            Vec::new(),
+            Some("127.0.0.1".to_string()),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
+        assert!(!approved.matches_descriptor(&other));
+    }
+
+    #[test]
+    fn matches_descriptor_rejects_policy_relevant_option_change() {
+        let base = sample_descriptor();
+        let approved = approved_for(base.clone());
+        let mut other = base;
+        other.risk = OperationRisk::Intrusive;
+        assert!(!approved.matches_descriptor(&other));
     }
 }

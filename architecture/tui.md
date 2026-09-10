@@ -27,16 +27,16 @@ The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `t
 | 3 | ScanEndpoints | `scan_endpoints` | — | Assessment | SafeActive | `scan-endpoints` | no | `scan_endpoints.rs` |
 | 4 | Fingerprint | `fingerprint` | — | Assessment | Passive | `fingerprint` | no | `fingerprint.rs` |
 | 5 | Fuzz | `fuzz` | — | Assessment | Intrusive | `fuzz` | no | `fuzz.rs` |
-| 6 | Waf | `waf` | — | Assessment | SafeActive | `waf` | no | `waf.rs` |
+| 6 | Waf | `waf` | — | Assessment | SafeActive | `waf-detect` | no | `waf.rs` |
 | 7 | WafStress | `waf_stress` | — | Assessment | Intrusive | `waf-stress` | no | `waf_stress.rs` |
-| 8 | Scan | `scan` | — | Assessment | SafeActive | `scan-pipeline` | no | `scan.rs` |
+| 8 | Scan | `scan` | — | Assessment | SafeActive | `pipeline` | no | `scan.rs` |
 | 9 | Resume | `resume` | — | History | SafeActive | — | no | `resume.rs` |
 | 10 | Proxy | `proxy` | — | Traffic | Administrative | — | no | `proxy.rs` |
-| 11 | Packet | `packet` | — | Traffic | Administrative | `packet` | **yes** | `packet.rs` |
+| 11 | Packet | `packet` | `packet-inspection` (availability shell; always visible) | Traffic | Administrative | `packet` | **yes** | `packet.rs` |
 | 12 | GraphQl | `graphql` | — | Assessment | Intrusive | `graphql` | no | `graphql.rs` |
 | 13 | OAuth | `oauth` | — | Assessment | Intrusive | `oauth` | **yes** | `oauth.rs` |
 | 14 | Cluster | `cluster` | — | Configuration | Administrative | — | **yes** | `cluster.rs` |
-| 15 | Stress | `stress` | — | Assessment | Intrusive | `stress-test` | **yes** | `stress.rs` |
+| 15 | Stress | `stress` | `stress-testing` (availability shell; always visible) | Assessment | Intrusive | `stress-test` | **yes** | `stress.rs` |
 | 16 | Report | `report` | — | Reporting | Passive | — | no | `report.rs` |
 | 17 | Settings | `settings` | — | Configuration | Administrative | — | no | `settings/main.rs` |
 | 18 | History | `history` | — | History | Passive | — | no | `history.rs` |
@@ -55,6 +55,14 @@ The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `t
 | 31 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
 
 **Summary**: 21 base + 12 gated = 33 total. 26 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard).
+
+Phase 0 parity resolutions (see `crates/eggsec-tui/src/parity.rs` and `crates/eggsec/tests/frontend_surface_matrix.rs`):
+- Waf tab uses canonical `waf-detect` (`waf` remains a tested compatibility alias).
+- Scan tab uses canonical `pipeline` (`scan-pipeline` remains a tested alias).
+- Stress/Packet tabs declare canonical availability features (`stress-testing`, `packet-inspection`) but remain visible as unavailable shells when disabled (visibility != availability).
+- Proxy (helper, no operation) vs Intercept (`proxy-intercept`, `web-proxy`) are distinct capabilities.
+- `compliance`/`storage`/`integrations`/`workflow`/`vuln` are operation-backed TUI/runtime tabs; their CLI commands (where present) are helper-only.
+- No TUI tabs for `waf-bypass`, `remote`, `search`, `mobile-static`, `mobile-dynamic`, `evasion`, `postex` (intentionally CLI/programmatic-only; `wireless-deauth` via Wireless active-mode override).
 
 Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:500-546`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
 
@@ -206,11 +214,13 @@ TUI uses `ExecutionSurface::TuiManual` (default, `ManualPermissive`) or `TuiManu
 ```rust
 pub struct EnforcementFacade {
     pub state: TuiEnforcementState,
-    pub(crate) pending_approved: Option<ApprovedOperation>,
+    pending_approved: Option<CachedApproval>, // exact descriptor + scope/policy/surface/override generation
 }
 ```
 
-Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation: `toggle_posture()`, `mode_label()`, `status_string()`, `preflight()`, `enforcement()`, `loaded_scope()`.
+Phase 0.1 exact binding: cached reuse requires `ApprovedOperation::matches_descriptor()` (derived `PartialEq`, future fields automatic) plus unchanged scope fingerprint, policy hash, surface/profile, and manual-override state. Stale tokens are discarded for fresh evaluation; engine `validate_request_binding` remains the final gate. `toggle_posture()` and override changes invalidate the cache; `invalidate_cached_approval()` covers future live reload.
+
+Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `set_cached_approval(approved)`, `clear_cached_approval()`, `invalidate_cached_approval()`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation: `toggle_posture()`, `mode_label()`, `status_string()`, `preflight()`, `enforcement()`, `loaded_scope()`.
 
 ### Pre-Dispatch Gate
 

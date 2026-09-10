@@ -1714,6 +1714,84 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Hotspot facades exist."
 fi
 
+# 79. TUI approval cache uses exact descriptor binding (Phase 0.1).
+# The facade must reuse cached approvals only via matches_descriptor()
+# (derived PartialEq, future fields participate automatically), never by
+# operation-name equality. Operation-name comparisons in non-test facade
+# code would reintroduce stale reuse across targets/options.
+echo ""
+echo "--- Check 79: TUI approval cache uses exact binding ---"
+FACADE="crates/eggsec-tui/src/app/enforcement_facade.rs"
+if [[ -f "$FACADE" ]]; then
+  SECTION_FAIL=0
+  if ! rg -q 'matches_descriptor' "$FACADE" 2>/dev/null; then
+    echo "FAIL: $FACADE does not use ApprovedOperation::matches_descriptor()."
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # Operation-name-only reuse outside tests/comments (allow descriptor().operation in audit/display, not == comparisons for cache identity).
+  NAME_CMP=$(rg -n 'descriptor\(\)\.operation\s*==' "$FACADE" 2>/dev/null | rg -v '^\s*//' | rg -v '#\[' || true)
+  if [[ -n "$NAME_CMP" ]]; then
+    echo "$NAME_CMP"
+    echo "FAIL: $FACADE compares descriptor().operation by name for cache identity. Use matches_descriptor() instead."
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if [[ $SECTION_FAIL -eq 0 ]]; then
+    echo "PASS: TUI approval cache uses exact descriptor binding."
+  fi
+else
+  echo "SKIP: $FACADE not found."
+fi
+
+# 80. Frontend parity guards exist in the mandatory verification path (Phase 0).
+# Semantic parity lives in Rust tests; this guard only proves the test files
+# exist and `make check` runs the TUI suite (no shell regex for semantics).
+echo ""
+echo "--- Check 80: Frontend parity guards are wired ---"
+SECTION_FAIL=0
+for f in "crates/eggsec/tests/frontend_surface_matrix.rs" "crates/eggsec-tui/src/parity.rs"; do
+  if [[ ! -f "$f" ]]; then
+    echo "FAIL: missing parity guard file: $f"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'eggsec-tui' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile does not reference eggsec-tui (parity tests not in mandatory path)."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Frontend parity guards exist and are wired."
+fi
+
+# 81. TUI TabSpec operations are canonical (Phase 0.4).
+# Raw alias strings must not reappear as TabSpec::operation values. The
+# compatibility aliases (`waf` -> `waf-detect`, `scan-pipeline` -> `pipeline`)
+# remain resolvable via ALL_OPERATION_METADATA_ALIASES, but specs must use
+# the canonical ids so the TUI never invents a second identity.
+echo ""
+echo "--- Check 81: TUI TabSpec operations are canonical ---"
+SECTION_FAIL=0
+STALE_WAF=$(rg -n 'operation:\s*Some\("waf"\)' crates/eggsec-tui/src/tabs/spec.rs 2>/dev/null || true)
+if [[ -n "$STALE_WAF" ]]; then
+  echo "$STALE_WAF"
+  echo "FAIL: TabSpec uses raw alias Some(\"waf\"). Use canonical Some(\"waf-detect\")."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+STALE_PIPE=$(rg -n 'operation:\s*Some\("scan-pipeline"\)' crates/eggsec-tui/src/tabs/spec.rs 2>/dev/null || true)
+if [[ -n "$STALE_PIPE" ]]; then
+  echo "$STALE_PIPE"
+  echo "FAIL: TabSpec uses raw alias Some(\"scan-pipeline\"). Use canonical Some(\"pipeline\")."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI TabSpec operations are canonical."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

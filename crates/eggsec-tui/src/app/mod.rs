@@ -456,13 +456,14 @@ impl App {
         // Pre-dispatch policy gate for direct-launch tabs: evaluate BEFORE starting
         // side effects. This prevents retroactive policy enforcement after the tab
         // is already running. The `ApprovedOperation` token is cached in
-        // `self.pending_approved` so `evaluate_policy_and_dispatch()` can reuse it
-        // without redundant evaluation.
+        // the enforcement facade so `evaluate_policy_and_dispatch()` can reuse it
+        // without redundant evaluation. Reuse requires exact descriptor binding
+        // plus unchanged scope/policy/surface/override generation.
         if self.is_direct_launch_tab(self.current_tab) {
             if let Some(desc) = self.build_current_operation_descriptor() {
                 match self.try_approve(desc.clone()) {
                     Ok(approved) => {
-                        self.enforcement_state.pending_approved = Some(approved);
+                        self.enforcement_state.set_cached_approval(approved);
                         // Proceed to start the tab
                     }
                     Err(EnforcementError::ConfirmationRequired {

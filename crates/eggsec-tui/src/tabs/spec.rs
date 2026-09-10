@@ -184,7 +184,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         risk_group: TabRiskGroup::SafeActive,
         feature: None,
         breadcrumb_label: "WAF",
-        operation: Some("waf"),
+        // Canonical operation is `waf-detect`; `waf` is a compatibility alias
+        // (see ALL_OPERATION_METADATA_ALIASES). Normalized here so the TUI
+        // never invents a second canonical identity.
+        operation: Some("waf-detect"),
         direct_launch: false,
         supports_run: true,
         supports_export: true,
@@ -220,7 +223,9 @@ pub static TAB_SPECS: &[TabSpec] = &[
         risk_group: TabRiskGroup::SafeActive,
         feature: None,
         breadcrumb_label: "Scan",
-        operation: Some("scan-pipeline"),
+        // Canonical operation is `pipeline`; `scan-pipeline` is a
+        // compatibility alias (see ALL_OPERATION_METADATA_ALIASES).
+        operation: Some("pipeline"),
         direct_launch: false,
         supports_run: true,
         supports_export: true,
@@ -272,7 +277,9 @@ pub static TAB_SPECS: &[TabSpec] = &[
         help_text: "Packet Tools - Capture, send, and analyze network packets.",
         category: TabCategory::Traffic,
         risk_group: TabRiskGroup::Administrative,
-        feature: None,
+        // Canonical feature ownership is `packet-inspection` (see
+        // OperationMetadata for `packet` and registry `packet`).
+        feature: Some("packet-inspection"),
         breadcrumb_label: "Packet",
         operation: Some("packet"),
         direct_launch: true,
@@ -344,7 +351,9 @@ pub static TAB_SPECS: &[TabSpec] = &[
         help_text: "Stress Testing - Run stress/load testing against target.",
         category: TabCategory::Assessment,
         risk_group: TabRiskGroup::Intrusive,
-        feature: None,
+        // Canonical feature ownership is `stress-testing` (see
+        // OperationMetadata for `stress-test` and registry `stress`).
+        feature: Some("stress-testing"),
         breadcrumb_label: "Stress Testing",
         operation: Some("stress-test"),
         direct_launch: true,
@@ -935,7 +944,11 @@ mod tests {
         }
     }
 
-    /// Base tabs (no feature gate) are always present in Tab::all().
+    /// Base tabs are always present in Tab::all().
+    /// Most base tabs have no feature gate; Stress/Packet are explicit
+    /// unavailable-shell exceptions: always visible, but execution requires
+    /// `stress-testing`/`packet-inspection` (canonical feature ownership).
+    /// See Phase 0 parity: visibility != availability.
     #[test]
     fn test_base_tabs_always_visible() {
         let base_tabs = [
@@ -968,14 +981,25 @@ mod tests {
                 "Base tab {:?} should always be in Tab::all()",
                 tab
             );
-            // Verify the spec has no feature gate
             let spec = spec_for(*tab).expect("base tab should have spec");
-            assert!(
-                spec.feature.is_none(),
-                "Base tab {:?} should have no feature gate, but has {:?}",
-                tab,
-                spec.feature
-            );
+            match tab {
+                Tab::Stress => assert_eq!(
+                    spec.feature,
+                    Some("stress-testing"),
+                    "Stress tab must declare canonical availability feature"
+                ),
+                Tab::Packet => assert_eq!(
+                    spec.feature,
+                    Some("packet-inspection"),
+                    "Packet tab must declare canonical availability feature"
+                ),
+                _ => assert!(
+                    spec.feature.is_none(),
+                    "Base tab {:?} should have no feature gate, but has {:?}",
+                    tab,
+                    spec.feature
+                ),
+            }
         }
     }
 
@@ -1009,8 +1033,10 @@ mod tests {
         }
     }
 
-    /// Every spec with a feature gate corresponds to a Tab variant that is
-    /// conditionally compiled (i.e., gated behind #[cfg(feature = "...")]).
+    /// Every spec with a feature gate declares a known availability feature.
+    /// Visibility-gated tabs (cfg in Tab::all) and availability-gated base
+    /// shells (Stress/Packet, always visible) both use this field to denote
+    /// canonical execution ownership, not just visibility.
     #[test]
     fn test_gated_specs_match_cfg_compilation() {
         for spec in tab_specs() {
@@ -1031,6 +1057,9 @@ mod tests {
                     "db-pentest",
                     "web-proxy",
                     "c2",
+                    // Availability-gated base shells (always visible, execution gated).
+                    "stress-testing",
+                    "packet-inspection",
                 ];
                 assert!(
                     known_gated.contains(&feature),
@@ -1042,13 +1071,25 @@ mod tests {
         }
     }
 
-    /// Feature-gated tabs that are compiled in should appear in Tab::all().
-    /// Feature-gated tabs that are NOT compiled should NOT appear in Tab::all().
+    /// Visibility-gated tabs that are compiled in should appear in Tab::all().
+    /// Visibility-gated tabs that are NOT compiled should NOT appear in Tab::all().
+    /// Availability-gated base shells (Stress/Packet) are always visible by
+    /// design; their feature denotes execution availability, not visibility.
     #[test]
     fn test_feature_gated_visibility_matches_compilation() {
         let all = Tab::all();
+        // Availability shells: always in Tab::all() regardless of cfg.
+        let availability_shells = [Tab::Stress, Tab::Packet];
         for spec in tab_specs() {
             if let Some(_feature) = spec.feature {
+                if availability_shells.contains(&spec.tab) {
+                    assert!(
+                        all.contains(&spec.tab),
+                        "availability shell '{}' must remain visible in Tab::all()",
+                        spec.stable_id
+                    );
+                    continue;
+                }
                 let tab = spec.tab;
                 let in_all = all.contains(&tab);
                 // We can't directly test cfg! at runtime, but we can verify

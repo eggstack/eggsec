@@ -200,31 +200,41 @@ through a pre-dispatch enforcement gate in `handle_enter()`.
 2. The descriptor is passed to `EnforcementFacade::try_approve()`, which
    evaluates it against the current `EnforcementContext`.
 3. If the outcome is `Allow`, an `ApprovedOperation` token is returned and
-   cached in `pending_approved`.
+   cached via `set_cached_approval()` (with generation fingerprints).
 4. If the outcome is `RequireConfirmation`, the confirmation overlay is
    shown. On confirmation, `confirm_override()` builds a `ManualOverride`
    and re-evaluates.
 5. If the outcome is `Deny`, the operation is blocked with a notification.
 6. `evaluate_and_try_approve()` consumes the cached `ApprovedOperation` to
    avoid redundant evaluation between the pre-dispatch gate and the
-   dispatch call.
+   dispatch call (exact binding required).
 
-### Cached approval reuse
+### Cached approval reuse (Phase 0.1 exact binding)
 
-`pending_approved` caches the `ApprovedOperation` from the pre-dispatch gate.
-When `evaluate_and_try_approve()` is called later, it checks if the cached
-token matches the descriptor's operation and reuses it if so. This prevents
-double evaluation.
+The facade caches the `ApprovedOperation` from the pre-dispatch gate via
+`set_cached_approval()`, capturing the scope fingerprint, policy hash,
+surface/profile, and manual-override generation. When
+`evaluate_and_try_approve()` is called later, reuse requires exact binding
+via `ApprovedOperation::matches_descriptor()` (derived `PartialEq`, so
+future descriptor fields participate automatically) plus unchanged
+generation. Stale tokens are discarded for fresh evaluation — never reused
+for the wrong descriptor. Engine `validate_request_binding` remains the
+final gate.
 
 ```rust
 // In EnforcementFacade::evaluate_and_try_approve():
 if let Some(cached) = self.pending_approved.take() {
-    if cached.descriptor().operation == desc.operation {
-        return Ok(cached);
+    if self.cached_matches(&cached, &desc) {
+        return Ok(cached.approved);
     }
 }
 self.try_approve(desc)
 ```
+
+Do not compare `descriptor().operation` names alone for cache identity.
+Use `matches_descriptor()` plus generation checks, and call
+`invalidate_cached_approval()` when replacing scope/policy state (future
+live reload).
 
 ### Audit trail
 

@@ -85,6 +85,7 @@ check:
 	cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 	cargo test -p eggsec-output --tests
+	cargo test -p eggsec-tui --lib --no-fail-fast
 	bash scripts/check-architecture-guards.sh
 
 # Optional broad validation (pre-release, not required for merge)

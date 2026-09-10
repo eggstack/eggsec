@@ -357,7 +357,10 @@ impl ConfirmationClass {
 
 /// Manual override flags honored only for `ExecutionProfile::ManualPermissive`.
 /// These are never part of MCP request types, agent config, or tool serialization.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+///
+/// Derives `PartialEq`/`Eq` so frontend approval caches can invalidate on
+/// override-state changes without hand-maintaining a field subset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManualOverride {
     pub assume_yes: bool,
     pub allow_out_of_scope: bool,

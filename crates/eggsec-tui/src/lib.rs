@@ -11,6 +11,9 @@ pub mod ui;
 pub mod utils;
 
 #[cfg(test)]
+mod parity;
+
+#[cfg(test)]
 pub(crate) mod test_utils;
 
 pub use app::*;

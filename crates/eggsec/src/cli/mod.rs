@@ -294,7 +294,15 @@ pub enum Commands {
     WafStress(WafStressArgs),
     #[command(about = "Validate GraphQL endpoint security controls", long_about = GRAPHQL_ABOUT)]
     Graphql(GraphQlArgs),
-    #[command(about = "Validate OAuth/OIDC endpoint security controls", long_about = OAUTH_ABOUT)]
+    // Canonical command is `oauth` (registry/TUI/operation id). Clap's default
+    // kebab-case for `OAuth` would be `o-auth`; keep it as an alias so both
+    // spellings work without a second canonical identity.
+    #[command(
+        name = "oauth",
+        about = "Validate OAuth/OIDC endpoint security controls",
+        long_about = OAUTH_ABOUT,
+        alias = "o-auth"
+    )]
     OAuth(OAuthArgs),
     #[command(about = "Validate authentication controls in authorized environments", long_about = AUTH_TEST_ABOUT)]
     AuthTest(AuthTestArgs),

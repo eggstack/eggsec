@@ -11,7 +11,8 @@
 //! 1. Approval produces an `ApprovedRunRequest` that captures both the token
 //!    and the request at a single point in time.
 //! 2. The dispatch wrapper re-resolves the descriptor from the request and
-//!    compares operation ID and target against the approved descriptor.
+//!    requires exact binding via `ApprovedOperation::matches_descriptor`
+//!    (all policy-relevant fields, not an operation/target subset).
 //! 3. Surface/profile consistency is checked at the enforcement layer during
 //!    approval — the bundle preserves the approved surface for audit.
 
@@ -75,12 +76,10 @@ pub fn approve_run_request_bundle(
 
 /// Dispatch an approved runtime request with validation.
 ///
-/// Before routing to `dispatch_inner()`, this function verifies that:
-///
-/// 1. The approved descriptor operation matches the request's task kind mapping.
-/// 2. The approved descriptor target matches the request target.
-/// 3. These checks prevent approve-one-dispatch-another attacks where the
-///    request is mutated between approval and dispatch.
+/// Before routing to `dispatch_inner()`, this function requires exact
+/// descriptor binding via `ApprovedOperation::matches_descriptor` (all
+/// policy-relevant fields). These checks prevent approve-one-dispatch-another
+/// attacks where the request is mutated between approval and dispatch.
 pub async fn dispatch_approved_runtime_request(
     bundle: ApprovedRunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
@@ -91,23 +90,29 @@ pub async fn dispatch_approved_runtime_request(
     let current_descriptor = descriptor_for_run_request(&request)
         .map_err(|e| anyhow::anyhow!("failed to resolve descriptor for approved request: {e}"))?;
 
-    // Validate operation ID matches.
-    if approved.descriptor().operation != current_descriptor.operation {
+    // Exact binding: the approved descriptor must equal the re-resolved
+    // descriptor. Uses `matches_descriptor` (derived PartialEq) so future
+    // policy-relevant fields participate automatically — no hand-maintained
+    // subset. Detailed operation/target diagnostics below preserve actionable
+    // errors for the common mutation cases.
+    if !approved.matches_descriptor(&current_descriptor) {
+        // Preserve granular diagnostics for approve-one-dispatch-another.
+        if approved.descriptor().operation != current_descriptor.operation {
+            return Err(anyhow::anyhow!(
+                "approved operation '{}' does not match request operation '{}' — dispatch rejected",
+                approved.descriptor().operation,
+                current_descriptor.operation,
+            ));
+        }
+        if approved.descriptor().normalized_target != current_descriptor.normalized_target {
+            return Err(anyhow::anyhow!(
+                "approved normalized target {:?} does not match request normalized target {:?} — dispatch rejected",
+                approved.descriptor().normalized_target,
+                current_descriptor.normalized_target,
+            ));
+        }
         return Err(anyhow::anyhow!(
-            "approved operation '{}' does not match request operation '{}' — dispatch rejected",
-            approved.descriptor().operation,
-            current_descriptor.operation,
-        ));
-    }
-
-    // Validate target matches using normalized comparison (same as the
-    // dispatcher binding check): raw strings can differ in casing,
-    // trailing slashes, or default-port notation for the same target.
-    if approved.descriptor().normalized_target != current_descriptor.normalized_target {
-        return Err(anyhow::anyhow!(
-            "approved normalized target {:?} does not match request normalized target {:?} — dispatch rejected",
-            approved.descriptor().normalized_target,
-            current_descriptor.normalized_target,
+            "approved descriptor does not match request descriptor (policy-relevant field changed) — dispatch rejected",
         ));
     }
 

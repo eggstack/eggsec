@@ -275,7 +275,12 @@ impl std::fmt::Display for IntendedUse {
 /// Authorization-relevant fields (`operation`, `target`, `normalized_target`,
 /// `mode`, `risk`) are read-only after construction through the validated
 /// [`OperationMetadata::try_descriptor_for_target`] path.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Derives `PartialEq`/`Eq` so approval-cache identity (see
+/// `ApprovedOperation::matches_descriptor`) automatically includes every
+/// future policy-relevant field. Do not compare descriptors by operation
+/// name alone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperationDescriptor {
     /// Human-readable operation name (e.g. "scan-ports", "fuzz", "stress").
     pub operation: String,

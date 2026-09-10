@@ -183,13 +183,15 @@ App::run() → TuiEnforcementState::new(TuiManual, scope, enforcement)
   → user presses Enter on tab
   → handle_enter() → build_current_operation_descriptor()
   → try_approve(desc) → enforcement.evaluate() → approve_manual()
-  → cache ApprovedOperation in pending_approved
+  → cache ApprovedOperation via set_cached_approval (exact descriptor +
+     scope/policy/surface/override generation; see matches_descriptor)
   → evaluate_policy_and_dispatch() → spawn_task()
 ```
 
 **Surface**: `TuiManual` (default), toggle to `TuiManualStrict` via Ctrl+G.
 **Profile**: `ManualPermissive` → `ManualGuarded` on toggle.
 **Overrides**: Supported via confirmation overlay.
+**Cache binding (Phase 0.1)**: reuse requires exact `matches_descriptor()` plus unchanged generation; stale tokens are discarded for fresh evaluation; `validate_request_binding` remains the final gate.
 
 ### 4.3 REST API
 

@@ -7,8 +7,28 @@
 use eggsec::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use eggsec::config::{
     confirmation_classes_for, ApprovedOperation, ConfirmationClass, EnforcementError,
-    EnforcementOutcome, ExecutionSurface, ManualOverride, OperationDescriptor, PolicyDecision,
+    EnforcementOutcome, ExecutionProfile, ExecutionSurface, ManualOverride, OperationDescriptor,
+    PolicyDecision,
 };
+
+/// Cached approval plus the evaluation inputs that produced it.
+///
+/// Reuse requires exact equality on every field: the descriptor (via
+/// `ApprovedOperation::matches_descriptor`, which uses derived `PartialEq`
+/// so future descriptor fields participate automatically), plus the
+/// scope fingerprint, policy hash, surface/profile, and manual-override
+/// state. Any change discards the cache and forces fresh evaluation, so a
+/// stale token never triggers a second approval for the wrong descriptor
+/// nor a confusing late binding failure.
+#[derive(Debug, Clone)]
+struct CachedApproval {
+    approved: ApprovedOperation,
+    policy_hash: String,
+    scope_fingerprint: String,
+    surface: ExecutionSurface,
+    profile: ExecutionProfile,
+    manual_override: ManualOverride,
+}
 
 /// Extracted enforcement facade — owns the enforcement state and provides
 /// policy evaluation and approval methods. Reduces App's responsibility surface.
@@ -16,7 +36,7 @@ pub struct EnforcementFacade {
     pub state: super::enforcement::TuiEnforcementState,
     /// Cached approval token from the pre-dispatch gate in `handle_enter()`.
     /// Consumed by `evaluate_policy_and_dispatch()` to avoid redundant evaluation.
-    pub(crate) pending_approved: Option<ApprovedOperation>,
+    pending_approved: Option<CachedApproval>,
 }
 
 impl EnforcementFacade {
@@ -25,6 +45,78 @@ impl EnforcementFacade {
             state,
             pending_approved: None,
         }
+    }
+
+    fn scope_fingerprint(&self) -> String {
+        serde_json::to_string(&self.state.loaded_scope).unwrap_or_default()
+    }
+
+    fn current_cache_key(
+        &self,
+    ) -> (
+        String,
+        String,
+        ExecutionSurface,
+        ExecutionProfile,
+        ManualOverride,
+    ) {
+        (
+            self.state.enforcement.policy_hash(),
+            self.scope_fingerprint(),
+            self.state.surface,
+            self.state.enforcement.execution_profile,
+            self.state.manual_override.clone(),
+        )
+    }
+
+    fn cached_matches(&self, cached: &CachedApproval, desc: &OperationDescriptor) -> bool {
+        if !cached.approved.matches_descriptor(desc) {
+            return false;
+        }
+        let (policy_hash, scope_fp, surface, profile, manual_override) = self.current_cache_key();
+        cached.policy_hash == policy_hash
+            && cached.scope_fingerprint == scope_fp
+            && cached.surface == surface
+            && cached.profile == profile
+            && cached.manual_override == manual_override
+            // The token itself must also agree with the current surface/profile.
+            && cached.approved.surface() == surface
+            && cached.approved.profile() == profile
+    }
+
+    /// Store an approval for later reuse, capturing the current evaluation
+    /// inputs. Overwrites any prior cached token.
+    pub fn set_cached_approval(&mut self, approved: ApprovedOperation) {
+        let (policy_hash, scope_fingerprint, surface, profile, manual_override) =
+            self.current_cache_key();
+        self.pending_approved = Some(CachedApproval {
+            approved,
+            policy_hash,
+            scope_fingerprint,
+            surface,
+            profile,
+            manual_override,
+        });
+    }
+
+    /// Discard any cached approval without consuming it.
+    pub fn clear_cached_approval(&mut self) {
+        self.pending_approved = None;
+    }
+
+    /// Invalidate the cache for reloaded config/scope or other generation
+    /// changes. Phase 2 live reload must call this when scope/policy state
+    /// is replaced; the fingerprint check already fails closed, this makes
+    /// invalidation explicit and testable.
+    pub fn invalidate_cached_approval(&mut self) {
+        self.clear_cached_approval();
+    }
+
+    /// Returns `true` when a cached approval is present (regardless of match).
+    /// Test helper for asserting cache lifecycle without exposing the token.
+    #[cfg(test)]
+    pub(crate) fn has_pending_approval(&self) -> bool {
+        self.pending_approved.is_some()
     }
 
     /// Attempt to approve an operation using the appropriate enforcement path
@@ -75,27 +167,38 @@ impl EnforcementFacade {
     ///
     /// If a cached `ApprovedOperation` from the pre-dispatch gate exists (set in
     /// `handle_enter()`), it is consumed here to avoid redundant evaluation.
+    /// Reuse requires exact descriptor binding plus unchanged scope, policy,
+    /// surface/profile, and manual-override state. A stale token is discarded
+    /// and the request is freshly evaluated for the correct descriptor, so it
+    /// never produces a second approval for the wrong descriptor nor a late
+    /// engine binding failure the frontend could have caught earlier.
+    /// Engine-side `validate_request_binding` remains the final gate.
     pub fn evaluate_and_try_approve(
         &mut self,
         desc: OperationDescriptor,
     ) -> Result<ApprovedOperation, EnforcementError> {
-        // Consume cached approval from the pre-dispatch gate if available
+        // Consume cached approval from the pre-dispatch gate if available.
+        // Mismatched generations are dropped (fail closed to fresh evaluation).
         if let Some(cached) = self.pending_approved.take() {
-            if cached.descriptor().operation == desc.operation {
-                return Ok(cached);
+            if self.cached_matches(&cached, &desc) {
+                return Ok(cached.approved);
             }
         }
         self.try_approve(desc)
     }
 
-    /// Consume a cached approval if it matches the given descriptor.
+    /// Consume a cached approval only when it is bound to the exact descriptor
+    /// currently requested and the evaluation inputs are unchanged.
     pub fn take_cached_approval(
         &mut self,
         desc: &OperationDescriptor,
     ) -> Option<ApprovedOperation> {
-        self.pending_approved
-            .take()
-            .filter(|a| a.descriptor().operation == desc.operation)
+        let cached = self.pending_approved.take()?;
+        if self.cached_matches(&cached, desc) {
+            Some(cached.approved)
+        } else {
+            None
+        }
     }
 
     /// Confirm the pending policy override and return the approved operation + audit info.
@@ -143,6 +246,9 @@ impl EnforcementFacade {
         mo.reason = reason;
         mo.assume_yes = false; // TUI confirm popup never sets broad assume_yes
 
+        // Manual-override state is an evaluation input: drop any token cached
+        // under the previous override generation before re-evaluating.
+        self.clear_cached_approval();
         // Track the override centrally
         self.state.manual_override = mo.clone();
 
@@ -202,7 +308,10 @@ impl EnforcementFacade {
     }
 
     /// Toggle enforcement posture (delegates to TuiEnforcementState).
+    /// Clears any cached approval: surface/profile is an evaluation input,
+    /// so a token issued under the previous posture must not be reused.
     pub fn toggle_posture(&mut self) -> eggsec::config::ExecutionProfile {
+        self.clear_cached_approval();
         self.state.toggle_posture()
     }
 
@@ -317,7 +426,7 @@ mod tests {
         // Pre-populate a cached approval
         let desc = passive_descriptor("recon", Some("example.com"));
         let first = facade.try_approve(desc.clone()).unwrap();
-        facade.pending_approved = Some(first);
+        facade.set_cached_approval(first);
         // Second call should use the cached token
         let second = facade.evaluate_and_try_approve(desc);
         assert!(second.is_ok(), "cached approval should be reused");
@@ -328,13 +437,10 @@ mod tests {
         let mut facade = test_facade(ExecutionSurface::TuiManual);
         let desc = passive_descriptor("recon", Some("example.com"));
         let approved = facade.try_approve(desc.clone()).unwrap();
-        facade.pending_approved = Some(approved);
+        facade.set_cached_approval(approved);
         let taken = facade.take_cached_approval(&desc);
         assert!(taken.is_some(), "should take matching approval");
-        assert!(
-            facade.pending_approved.is_none(),
-            "pending should be cleared"
-        );
+        assert!(!facade.has_pending_approval(), "pending should be cleared");
     }
 
     #[test]
@@ -342,7 +448,7 @@ mod tests {
         let mut facade = test_facade(ExecutionSurface::TuiManual);
         let desc1 = passive_descriptor("recon", Some("example.com"));
         let approved = facade.try_approve(desc1).unwrap();
-        facade.pending_approved = Some(approved);
+        facade.set_cached_approval(approved);
         let desc2 = passive_descriptor("scan-ports", Some("example.com"));
         let taken = facade.take_cached_approval(&desc2);
         assert!(taken.is_none(), "should not return mismatched approval");
@@ -507,10 +613,8 @@ mod tests {
         let desc2 = passive_descriptor("scan-ports", Some("example.com"));
 
         let approved = facade.try_approve(desc1.clone()).unwrap();
-        facade.pending_approved = Some(approved);
+        facade.set_cached_approval(approved);
 
-        // take_cached_approval takes the value regardless of match (due to Option::take)
-        // so verify the operation mismatch via the returned value
         let taken = facade.take_cached_approval(&desc2);
         assert!(
             taken.is_none(),
@@ -518,9 +622,162 @@ mod tests {
         );
         // After take, pending is now None (take always empties)
         assert!(
-            facade.pending_approved.is_none(),
+            !facade.has_pending_approval(),
             "pending_approved should be empty after take"
         );
+    }
+
+    // ─── Phase 0.1: exact approval-cache binding regression cases ───
+
+    #[test]
+    fn same_operation_same_descriptor_may_reuse() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        assert!(
+            facade.take_cached_approval(&desc).is_some(),
+            "same operation + same descriptor must reuse"
+        );
+    }
+
+    #[test]
+    fn same_operation_different_target_must_not_reuse() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc1 = passive_descriptor("recon", Some("example.com"));
+        let desc2 = passive_descriptor("recon", Some("other.example.com"));
+        let approved = facade.try_approve(desc1).unwrap();
+        facade.set_cached_approval(approved);
+        assert!(
+            facade.take_cached_approval(&desc2).is_none(),
+            "same operation + different target must not reuse"
+        );
+        // Stale token is discarded, not retained for a later wrong reuse.
+        assert!(!facade.has_pending_approval());
+    }
+
+    #[test]
+    fn same_operation_changed_option_must_not_reuse() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc1 = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc1.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        let mut desc2 = desc1;
+        desc2.risk = OperationRisk::Intrusive;
+        assert!(
+            facade.take_cached_approval(&desc2).is_none(),
+            "same operation + changed policy-relevant option must not reuse"
+        );
+    }
+
+    #[test]
+    fn changed_scope_invalidates_cached_approval() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        // Simulate a scope reload: replace loaded scope + enforcement context.
+        let new_scope = LoadedScope::explicit(
+            Scope {
+                allowed_targets: vec![ScopeRule::new("example.com".to_string())],
+                ..Default::default()
+            },
+            ScopeSource::ConfigFile,
+            Some("scope.toml".to_string()),
+        );
+        facade.state.loaded_scope = new_scope.clone();
+        facade.state.enforcement = EnforcementContext::for_surface(
+            ExecutionSurface::TuiManual,
+            ExecutionPolicy::default(),
+            new_scope,
+        );
+        assert!(
+            facade.take_cached_approval(&desc).is_none(),
+            "changed scope generation must invalidate prior cached approval"
+        );
+    }
+
+    #[test]
+    fn changed_policy_invalidates_cached_approval() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        // Simulate a policy reload with a different flag.
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_intrusive_fuzzing = true;
+        facade.state.enforcement = EnforcementContext::for_surface(
+            ExecutionSurface::TuiManual,
+            policy,
+            LoadedScope::default_empty(),
+        );
+        // loaded_scope stays default-empty, but policy hash changed.
+        facade.state.loaded_scope = LoadedScope::default_empty();
+        assert!(
+            facade.take_cached_approval(&desc).is_none(),
+            "changed policy generation must invalidate prior cached approval"
+        );
+    }
+
+    #[test]
+    fn posture_toggle_invalidates_cached_approval() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        assert!(facade.has_pending_approval());
+        facade.toggle_posture();
+        assert!(
+            !facade.has_pending_approval(),
+            "posture toggle must clear cached approval"
+        );
+    }
+
+    #[test]
+    fn manual_override_change_invalidates_cached_approval() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc.clone()).unwrap();
+        facade.set_cached_approval(approved);
+        // confirm_override replaces manual_override state and clears the cache.
+        let classes = vec![ConfirmationClass::OutOfScope];
+        let _ = facade.confirm_override(&desc, &classes, Some("reason".to_string()));
+        assert!(
+            !facade.has_pending_approval(),
+            "override-state change must invalidate prior cached approval"
+        );
+    }
+
+    #[test]
+    fn stale_token_forces_fresh_evaluation_not_late_binding_failure() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc1 = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc1).unwrap();
+        facade.set_cached_approval(approved);
+        // Request a different target: facade must not return the stale token.
+        // It falls back to fresh evaluation for the correct descriptor.
+        let desc2 = passive_descriptor("recon", Some("other.example.com"));
+        let result = facade.evaluate_and_try_approve(desc2.clone());
+        // Fresh evaluation for a passive op in default-empty scope warns/allows;
+        // the key invariant is the returned token (if Ok) is bound to desc2.
+        if let Ok(token) = result {
+            assert!(
+                token.matches_descriptor(&desc2),
+                "re-evaluated token must be bound to the requested descriptor, not the stale one"
+            );
+        }
+        assert!(!facade.has_pending_approval());
+    }
+
+    #[test]
+    fn invalidate_cached_approval_clears_for_live_reload() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+        let approved = facade.try_approve(desc).unwrap();
+        facade.set_cached_approval(approved);
+        assert!(facade.has_pending_approval());
+        facade.invalidate_cached_approval();
+        assert!(!facade.has_pending_approval());
     }
 
     /// Preflight result's outcome_kind matches the raw enforcement evaluate() outcome.

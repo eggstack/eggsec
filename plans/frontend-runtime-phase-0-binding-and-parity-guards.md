@@ -2,11 +2,13 @@
 
 ## Status
 
-Status: Ready for handoff.
+Status: Executed.
 
 Depends on: none.
 
 Baseline: `f48b3f37a273e1e53735d98acbb0cb0bcd607260`.
+Starting HEAD: `252d6dfc3634c22e1aa82f0c2dc15cf2b0057e49` (plan-index commit; code baseline).
+Final: commit containing this record (see `git log` for Phase 0 execution).
 
 ## Objective
 
@@ -189,4 +191,32 @@ Run `make check-features-individual` if Cargo feature declarations or exhaustive
 
 Do not begin Phase 1 by deleting the existing registry match or runtime mappings before these guards are green. The value of this phase is to freeze current intended behavior, identify intentional asymmetry, and convert unknown drift into named failures.
 
-Append a completion record with baseline/final SHAs, the final support-matrix counts, mismatch resolutions, and verification evidence.
+## Completion record (Phase 0 executed 2026-09-10)
+
+Baseline: `f48b3f37`; starting HEAD `252d6dfc`; final: commit containing this record.
+
+Support-matrix counts (final):
+- `REGISTERED_COMMANDS`: 51 entries (29 operation-backed incl. multiplexers/subcommand identities; helpers/lifecycle remainder).
+- `ALL_OPERATION_METADATA`: 34 canonical operations; 44 aliases in `ALL_OPERATION_METADATA_ALIASES`.
+- Runtime `TaskKind`: 29 variants, all mapped (engine `operation_id_for_task_kind` agrees with `TaskKind::operation_id`).
+- TUI `TAB_SPECS`: 33 entries; `Tab::all()` 21 base + 12 gated. 26 operation-backed (incl. 2 availability shells).
+- Reflected Clap tree (rest-api profile): core 27 unconditional + feature-gated remainder; `oauth` primary normalized.
+
+Mismatch resolutions:
+- 0.1 cache: `ApprovedOperation::matches_descriptor()` (derived `PartialEq`) + scope fingerprint/policy hash/surface/profile/override generation; `toggle_posture`/override changes invalidate; `bundle.rs` uses same predicate. Engine `validate_request_binding` unchanged (pinned by test).
+- 0.4 TUI: `waf`→`waf-detect`, `scan-pipeline`→`pipeline` normalized (aliases retained + tested); stress/packet features set to canonical (`stress-testing`/`packet-inspection`) as always-visible availability shells; proxy (helper) vs intercept (`proxy-intercept`) distinct; compliance/storage/integrations/workflow/vuln operation-backed; no-tab ops (`waf-bypass`, `remote`, `search`, `mobile-static/dynamic`, `evasion`, `postex`, `wireless-deauth` via active-mode) classified intentional.
+- 0.3 Clap: `oauth` primary normalized to `oauth` (`o-auth` alias); `mobile-dynamic`/`wireless-deauth` subcommand identities; `proxy`/`daemon`/`session`/`task`/`codegg-mcp` explicit Clap-only exceptions; `remote-serve`→`remote` rename documented; `storage` helper remains visible as unavailable shell when `database` disabled.
+- 0.5 runtime: dual-owner agreement tests (operation_id, target extraction), surface round-trip, explicit bridge failures for targetless/interface kinds.
+- 0.6 profiles: tests track compiled feature set (absence vs unavailable-shell); `check-features-individual` remains oracle (no Cargo feature declarations changed; Clap attribute-only fix for oauth).
+
+Verification evidence (local, before push):
+- `cargo fmt --all --check`: pass (after `cargo fmt --all`).
+- `cargo test -p eggsec-tui --lib parity`: 10 passed.
+- `cargo test -p eggsec-tui --lib app::enforcement_facade`: 21 passed.
+- `cargo test -p eggsec --features rest-api --test frontend_surface_matrix`: 15 passed.
+- TUI `tabs::spec` under `stress-testing`/`packet-inspection`: pass.
+- `make test-feature-matrix`: pass.
+- `make test-architecture-guards` / `scripts/check-architecture-guards.sh`: ALL PASSED (incl. new Checks 79–81).
+- `make check`: pass (fmt, no-default check, clippy, doc tests, package tests incl. new matrix, output tests, TUI lib tests, guards).
+- `make check-feature-profiles`: pass.
+- `check-features-individual` skipped (no Cargo `[features]` changes; oracle unchanged).

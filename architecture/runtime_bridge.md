@@ -193,13 +193,13 @@ pub fn approve_run_request_bundle(
 ) -> Result<ApprovedRunRequest, RuntimeBridgeError>
 ```
 
-`dispatch_approved_runtime_request()` validates before dispatch (`bundle.rs:84–116`):
+`dispatch_approved_runtime_request()` validates before dispatch (`bundle.rs:84–130`):
 
 1. Calls `bundle.into_parts()` to get `(approved, request)`
-2. Re-resolves the `OperationDescriptor` from the current request (`bundle.rs:91`)
-3. Validates `approved.descriptor().operation == current_descriptor.operation` (`bundle.rs:95`)
-4. Validates `approved.descriptor().target == current_descriptor.target` (`bundle.rs:104`)
-5. Only then delegates to `dispatch_inner()` (`bundle.rs:113`)
+2. Re-resolves the `OperationDescriptor` from the current request
+3. Requires exact binding via `approved.matches_descriptor(&current)` (derived `PartialEq`; all policy-relevant fields participate automatically)
+4. Preserves granular `operation` / `normalized_target` diagnostics for approve-one-dispatch-another mutations
+5. Only then delegates to `dispatch_inner()`
 
 These anti-tamper checks prevent approve-one-dispatch-another attacks. The checks are **fail-closed** — any mismatch returns an error before any engine code executes.
 
@@ -236,7 +236,7 @@ The `resolve_loaded_scope()` method (`executor.rs:62–113`) determines scope re
 ## Trust Model
 
 1. **Approval** produces an `ApprovedRunRequest` capturing both the token and the request at a single point in time (`bundle.rs:11–12`).
-2. **Dispatch** re-resolves the descriptor and validates operation ID + target match — preventing approve-one-dispatch-another attacks (`bundle.rs:77–83`).
+2. **Dispatch** re-resolves the descriptor and requires exact binding (`matches_descriptor`) — preventing approve-one-dispatch-another attacks (`bundle.rs:77–83`).
 3. **Surface/profile consistency** is enforced at the enforcement layer during approval; the bundle preserves the approved surface for audit.
 4. **Scope** for strict surfaces must come from `LoadedScope` (not raw `Scope`); manual surfaces use `default_empty` fallback (`executor.rs:99–112`).
 5. **No hardcoded permissive defaults** — the executor uses the actual session surface and scope from `RuntimeExecutionContext`.
