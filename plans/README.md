@@ -14,6 +14,30 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Frontend/runtime convergence (active)
+
+Roadmap:
+[`frontend-runtime-convergence-roadmap-2026-09-10.md`](frontend-runtime-convergence-roadmap-2026-09-10.md)
+
+This is a post-convergence corrective pass against the executed 2026-09-08
+architecture roadmap. Canonical typed operation requests/defaults/validation
+remain in place; this work targets residual dispatch ownership overlap, CLI/TUI
+metadata and feature drift, runtime wire/domain mirrors, approval-cache binding,
+and remaining frontend maintenance hotspots.
+
+Ordered implementation plans:
+
+1. [`frontend-runtime-phase-0-binding-and-parity-guards.md`](frontend-runtime-phase-0-binding-and-parity-guards.md)
+2. [`frontend-runtime-phase-1-canonical-dispatch-ownership.md`](frontend-runtime-phase-1-canonical-dispatch-ownership.md)
+3. [`frontend-runtime-phase-2-tui-surface-wiring-convergence.md`](frontend-runtime-phase-2-tui-surface-wiring-convergence.md)
+4. [`frontend-runtime-phase-3-runtime-contract-hotspot-closure.md`](frontend-runtime-phase-3-runtime-contract-hotspot-closure.md)
+
+Phase 0 converts the current surface/binding assumptions into executable guards.
+Phase 1 establishes one engine-owned operation execution seam. Phase 2 completes
+TUI metadata/action/feature wiring against that seam. Phase 3 resolves runtime
+wire/domain ownership, proves embedded/daemon lifecycle parity, decomposes stable
+hotspots, and records closure evidence.
+
 ## Architecture convergence and capability maturity (executed)
 
 Roadmap:
@@ -75,7 +99,7 @@ This pass corrected dispatch and tool-API pipeline construction to use
 `Pipeline::from_profile()` as the canonical parser-independent constructor,
 ensuring `ScanProfile` is the single source of truth for stage selection, risk
 budget, and profile-specific validation. The historical roadmap is closed; the
-active architecture-convergence roadmap above addresses newly confirmed residual
-maintenance and capability-maturity work.
+active frontend/runtime convergence roadmap above addresses newly confirmed
+residual maintenance, wiring, and runtime-contract work.
 
 Package publication and release cadence remain manual maintainer actions.
