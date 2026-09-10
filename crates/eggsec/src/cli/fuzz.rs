@@ -80,7 +80,16 @@ pub struct FuzzArgs {
         help = "Enable adaptive rate limiting (auto-adjusts to server responses)"
     )]
     pub adaptive_rate: bool,
-    #[arg(long, help = "Enable HTTP session/cookie handling")]
+    // Phase 2 fix: explicit `id` avoids collision with the global
+    // `--session <ID>` (daemon attach, `Option<String>`). The previous
+    // bare `session: bool` shared Clap ID `session` with a different type,
+    // panicking on every successful `fuzz` parse ("Could not downcast to
+    // String, need bool"). Long is now `--http-session` (was `--session`).
+    #[arg(
+        id = "http-session",
+        long = "http-session",
+        help = "Enable HTTP session/cookie handling"
+    )]
     pub session: bool,
     #[arg(long, help = "Enable response diffing (compare with baseline)")]
     pub diffing: bool,

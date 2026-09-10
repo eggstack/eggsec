@@ -63,51 +63,67 @@ The number of `TabSpec` entries in `TAB_SPECS` must equal the number of `Tab`
 variants. The test `test_tab_spec_count_matches_all_tab_variants` enforces
 this.
 
-## 2. TuiActionSpec and Canonical Metadata
+## 2. Surface Route and Canonical Metadata (Phase 2)
 
-`TuiActionSpec` in `crates/eggsec-tui/src/app/action_spec.rs` provides
-metadata-backed action descriptors that point to canonical `OperationMetadata`.
+`TabSpec` (`crates/eggsec-tui/src/tabs/spec.rs`) is the single production
+owner for TUI surface metadata. The four-action pilot (`TuiActionSpec` /
+`TUI_ACTION_SPECS` in `app/action_spec.rs`) was removed in Phase 2; do not
+reintroduce a second metadata registry.
 
 ### Why this matters
 
 The TUI must not independently invent risk, capability, or scope semantics.
 Risk levels, required features, and policy flags all come from
-`OperationMetadata`. `TuiActionSpec` exists to validate that TUI actions
-remain consistent with the shared enforcement model.
+`OperationMetadata`. `TabSpec::surface_route()` / `canonical_operation()`
+resolve through `metadata_for_tool_id()` so the TUI references canonical
+metadata instead of copying operation IDs, risk, and feature strings.
 
-### Adding a new action spec
+### Adding palette/alias coverage for a new tab
 
-Add an entry to `TUI_ACTION_SPECS`:
+Aliases and discovery live with the spec (no manual match in
+`app/command.rs`):
 
-```rust
-TuiActionSpec {
-    action_id: "my-operation-run",
-    operation_id: "my-operation", // must resolve via metadata_for_tool_id()
-    tab_id: "my_new_tab",
-    feature: None, // or Some("my-feature")
-    manual_only: true,
-}
-```
+- `aliases()` — every parseable string (stable ID, CLI spellings, hidden
+  compatibility aliases such as `scan-pipeline`, `waf-detect`, `o-auth`).
+  Parsing accepts all of these; discovery uses only `palette_command()`.
+- `palette_command()` — the one discoverable palette command. Help and the
+  command palette must use this; hidden aliases stay parseable but never
+  pollute discovery.
+- `surface_route()` — `Operation(canonical_id)`, `Multiplexer(family)`
+  (currently only Wireless: passive `wireless` vs active `wireless-deauth`),
+  `Helper`, `Lifecycle`, or `UiOnly`.
+- `canonical_operation()` — validated canonical ID (rejects aliases) or
+  `None` for non-operation routes.
+- `availability()` — `Available`, `Unavailable { required_feature }`
+  (Stress/Packet always-visible shells), `UiOnly`, or `NotSupportedOnTui`.
 
-Add a corresponding `TuiTabSpec` entry to `TUI_TAB_SPECS` that references the
-action by index into `TUI_ACTION_SPECS`.
+Alias uniqueness is enforced by `tabs::surface` tests (no two tabs may claim
+the same string). Feature-disabled aliases resolve to structured
+`PaletteResolution::Unavailable`, never silent divergence.
+
+### Runtime intent (`UiAction`)
+
+`UiAction` (`crates/eggsec-tui/src/app/action.rs`) models operator intent;
+`parse_palette_action()` / `global_action_for()` (`app/palette.rs`) map
+palette strings to the same variants the key handler emits. Keybindings and
+the palette converge on one testable path: terminal event / palette command
+-> `TuiAction` -> state update / effect -> canonical request when needed.
+Rendering never starts engine work.
 
 ### Resolution validation
 
-The function `action_resolves_to_metadata()` checks that an action's
-`operation_id` resolves to an `OperationMetadata` entry. The test
-`all_pilot_actions_resolve_to_metadata` enforces this for all registered
-actions.
-
-If you add a new action with an `operation_id` that has no matching
-`OperationMetadata`, the test will fail. Add the operation to
-`ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs` first.
+`surface_route()` + `canonical_operation()` are pinned by
+`parity::production_surface_model_covers_every_tab_without_second_identity`
+and `tabs::surface` tests. If you add an operation-backed tab whose
+`operation` has no matching `OperationMetadata`, these tests fail. Add the
+operation to `ALL_OPERATION_METADATA` in
+`crates/eggsec/src/config/policy_catalog.rs` first.
 
 ### Risk consistency
 
-The test `intrusive_actions_are_manual_only` verifies that any action whose
-metadata declares `OperationRisk::Intrusive` is marked `manual_only: true`.
-This prevents high-risk operations from being programmatically exposed.
+Risk comes from `OperationMetadata`, not the TUI. The surface tests verify
+every operation-backed tab resolves to canonical metadata with matching
+feature ownership (`spec.feature == meta.primary_feature()`).
 
 ## 3. TUI Enforcement Posture
 
@@ -302,19 +318,20 @@ All new TUI tabs and actions must include tests. Run the TUI test suite with:
 cargo test --lib -p eggsec-tui
 ```
 
-### Tests for action_spec.rs
+### Tests for the surface model (`tabs/spec.rs`, `tabs/surface.rs`, `app/palette.rs`)
 
-When adding a `TuiActionSpec` or `TuiTabSpec`:
+When adding a tab, update `aliases()` / `palette_command()` in `tabs/spec.rs`
+and cover:
 
 | Test | What it validates |
 |------|-------------------|
-| `all_pilot_actions_resolve_to_metadata` | `operation_id` resolves to `OperationMetadata` |
-| `all_pilot_tab_ids_are_valid` | `tab_id` maps to a valid `TabSpec` stable_id |
-| `feature_strings_are_valid` | Feature strings are non-empty when present |
-| `intrusive_actions_are_manual_only` | Intrusive operations are marked manual_only |
-| `domain_refs_are_valid` | Domain references resolve to known `DomainDescriptor` |
-| `all_pilot_tab_operations_resolve` | TabSpec operations resolve via metadata |
-| `registry_enumeration` | Registry is non-empty and each tab has at least one action |
+| `production_surface_model_covers_every_tab_without_second_identity` | `surface_route`/`canonical_operation` resolve to canonical metadata; palette primary round-trips |
+| `discoverable_commands_match_visible_tabs_one_to_one` | One discoverable palette command per visible tab, no duplicates |
+| `aliases_are_unique_across_tabs` | No cross-tab alias collisions |
+| `hidden_aliases_resolve_but_do_not_pollute_discovery` | Compatibility aliases parse but stay out of discovery |
+| `help_discovery_metadata_agrees` | Title/palette/description/feature/run/route/help agree |
+| `key_and_palette_produce_same_typed_action` | Key and palette emit the same `UiAction` |
+| `copy_cli_*_round_trips_through_clap_and_canonical` | `cli_argv` parses via real Clap and converts to the same canonical request |
 
 ### Tests for enforcement.rs
 

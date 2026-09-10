@@ -126,7 +126,7 @@ eggsec fuzz "https://example.com/search?q=test" -t xss
 eggsec fuzz https://example.com -t xss --mutate -m 10
 
 # Test for stored XSS (requires session handling)
-eggsec fuzz https://example.com/comment -t xss --session
+eggsec fuzz https://example.com/comment -t xss --http-session
 ```
 
 #### Server-Side Request Forgery (SSRF)

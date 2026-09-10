@@ -108,3 +108,9 @@ full = [
     "web-proxy",
     "c2",
 ]
+
+[dev-dependencies]
+# Phase 2.7: copy-cli round-trip tests parse generated argv through the real
+# Clap `Cli` parser. Test-only; production `copy_cli_equivalent` never
+# depends on Clap (quotes only at the clipboard boundary).
+clap = { version = "4", features = ["derive"] }

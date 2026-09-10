@@ -1954,6 +1954,117 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Canonical dispatch tests are wired."
 fi
 
+# 88. Four-action pilot is removed (Phase 2.1).
+# TabSpec is the single production surface owner; do not reintroduce a second
+# metadata registry.
+echo ""
+echo "--- Check 88: TUI pilot registry is removed ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec-tui/src/app/action_spec.rs" ]]; then
+  echo "FAIL: pilot registry still exists: crates/eggsec-tui/src/app/action_spec.rs"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'pub struct TuiActionSpec|static TUI_ACTION_SPECS|mod action_spec' crates/eggsec-tui/src --glob='*.rs' 2>/dev/null; then
+  echo "FAIL: stale pilot registry definition (TuiActionSpec/TUI_ACTION_SPECS/mod action_spec) in eggsec-tui/src."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI pilot registry is removed."
+fi
+
+# 89. Alias lookup is single-owned (Phase 2.5).
+# No manual command->tab match in app/command.rs; resolve_palette_command owns it.
+echo ""
+echo "--- Check 89: TUI alias lookup is single-owned ---"
+SECTION_FAIL=0
+if ! rg -q 'resolve_palette_command' crates/eggsec-tui/src/tabs/spec.rs 2>/dev/null; then
+  echo "FAIL: tabs/spec.rs missing resolve_palette_command."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '"portscan" =>|"fingerprinting" =>|"wafstress" \|' crates/eggsec-tui/src/app/command.rs 2>/dev/null; then
+  echo "FAIL: app/command.rs reintroduces a manual command->tab match."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI alias lookup is single-owned."
+fi
+
+# 90. reload-scope is not discoverable (Phase 2.8).
+echo ""
+echo "--- Check 90: reload-scope is not a false affordance ---"
+SECTION_FAIL=0
+if rg -q '"reload-scope"\.to_string' crates/eggsec-tui/src/app/help_config.rs 2>/dev/null; then
+  echo "FAIL: help_config.rs still advertises reload-scope in discovery."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: reload-scope is not a false affordance."
+fi
+
+# 91. copy-cli is a semantic round trip (Phase 2.7).
+echo ""
+echo "--- Check 91: copy-cli round-trips through Clap ---"
+SECTION_FAIL=0
+if ! rg -q 'pub fn cli_argv' crates/eggsec-tui/src/app/operation.rs 2>/dev/null; then
+  echo "FAIL: app/operation.rs missing cli_argv argv vector."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec-tui/src/app/surface_wiring.rs" ]]; then
+  echo "FAIL: missing round-trip tests: crates/eggsec-tui/src/app/surface_wiring.rs"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q -- '--max-payloads' crates/eggsec-tui/src/app/operation.rs 2>/dev/null; then
+  echo "FAIL: operation.rs emits --max-payloads (no such CLI flag)."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: copy-cli round-trips through Clap."
+fi
+
+# 92. Fuzz HTTP-session flag avoids the global --session collision (Phase 2).
+# Global `--session <ID>` (daemon attach, Option<String>) and fuzz `--session`
+# (bool) shared Clap ID `session` with different types, panicking on every
+# successful fuzz parse. The fuzz flag is --http-session with explicit id.
+echo ""
+echo "--- Check 92: fuzz session flag has no Clap ID collision ---"
+SECTION_FAIL=0
+if rg -q '#\[arg\(long, help = "Enable HTTP session/cookie handling"\)\]' crates/eggsec/src/cli/fuzz.rs 2>/dev/null; then
+  echo "FAIL: fuzz.rs still defines bare --session (Clap ID collision with global --session)."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'http-session' crates/eggsec/src/cli/fuzz.rs 2>/dev/null; then
+  echo "FAIL: fuzz.rs missing --http-session replacement flag."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: fuzz session flag has no Clap ID collision."
+fi
+
+# 93. Surface decomposition follows stable concepts (Phase 2.10).
+echo ""
+echo "--- Check 93: TUI surface modules are decomposed ---"
+SECTION_FAIL=0
+for f in "crates/eggsec-tui/src/tabs/surface.rs" "crates/eggsec-tui/src/app/palette.rs"; do
+  if [[ ! -f "$f" ]]; then
+    echo "FAIL: missing surface module: $f"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI surface modules are decomposed."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

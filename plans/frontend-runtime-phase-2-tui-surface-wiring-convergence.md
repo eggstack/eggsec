@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for handoff.
+Status: Executed.
 
 Depends on: Phase 0 parity guards; Phase 1 canonical engine dispatch boundary.
 
@@ -259,4 +259,82 @@ https://ratatui.rs/tutorials/counter-async-app/actions/
 
 Do not combine this phase with a visual redesign. Keep layouts/keybindings stable except where a duplicate/false command must be corrected. The success metric is reduced semantic ownership and stronger wiring tests, not a different appearance.
 
+## Handoff notes
+
+Do not combine this phase with a visual redesign. Keep layouts/keybindings stable except where a duplicate/false command must be corrected. The success metric is reduced semantic ownership and stronger wiring tests, not a different appearance.
+
 Append a completion record with before/after counts of metadata tables/manual routing matches, number of classified tabs/actions, operation-ID discrepancies resolved, and tested feature profiles.
+
+## Completion record (Phase 2 executed 2026-09-10)
+
+Baseline: `d871f9d3` (Phase 1 executed); final: commit containing this record.
+
+### Files materially changed
+
+New (single-concept decomposition, no new registries):
+- `crates/eggsec-tui/src/tabs/surface.rs` — derived catalog (`discoverable_palette_commands`, alias-uniqueness, help/discovery agreement, shell invariants); 6 tests.
+- `crates/eggsec-tui/src/app/palette.rs` — `PaletteAction` + `parse_palette_action`/`global_action_for` (palette/keys converge on `UiAction`); 4 tests.
+- `crates/eggsec-tui/src/app/surface_wiring.rs` — 9 semantic tests (runnable->canonical, target construction, Clap round-trips, quoting, cancellation, approval invalidation, discoverability).
+
+Modified (converged onto the surface model):
+- `crates/eggsec-tui/src/tabs/spec.rs` — `TuiSurfaceRoute`/`TabAvailability`/`PaletteResolution` + `aliases()`/`palette_command()`/`surface_route()`/`canonical_operation()`/`availability()` + `resolve_palette_command()` static-slice lookup.
+- `crates/eggsec-tui/src/tabs/mod.rs` — re-exports surface types + `surface` module.
+- `crates/eggsec-tui/src/app/command.rs` — `command_to_tab` delegates to surface metadata; `execute_command` routes via `parse_palette_action` with structured unavailable; copy-cli fuzz `--concurrency` fix + `--json`/`--format` mapping fix.
+- `crates/eggsec-tui/src/app/operation.rs` — `cli_argv()` argv vector (quoting only at boundary); `copy_cli_equivalent` built from argv; fuzz omits TUI-only max-payloads.
+- `crates/eggsec-tui/src/app/help_config.rs` — added missing `wireless`/`db-pentest`/`intercept`/`c2` palette entries; added `DbPentest`/`Intercept` help sections; removed `reload-scope` from discovery.
+- `crates/eggsec-tui/src/parity.rs` — pilot test replaced with production-model pin.
+- `crates/eggsec-tui/src/app/mod.rs` — registered `palette` + `surface_wiring`; removed `action_spec`.
+- `crates/eggsec-tui/Cargo.toml` — `clap` dev-dependency for round-trip tests.
+- `crates/eggsec/src/cli/fuzz.rs` — `--session` (bool) renamed to `--http-session` (explicit id) fixing Clap ID collision with global `--session <ID>` that panicked on every successful fuzz parse.
+- `scripts/check-architecture-guards.sh` — new Checks 88–93.
+
+Deleted:
+- `crates/eggsec-tui/src/app/action_spec.rs` — four-action pilot (`TUI_ACTION_SPECS`/`TUI_TAB_SPECS`).
+
+Docs/skills synced (pruned, no new registries):
+- `AGENTS.md` (invariant 9), `architecture/tui.md` (surface model section), `architecture/cli_commands.md` (fuzz flag fix + round-trip pin), `docs/EXTENSIBILITY.md`, `docs/extending/tui-actions.md` (pilot sections replaced), `docs/USAGE.md` (`--http-session`), `crates/eggsec-tui/src/AGENTS.override.md`, skill `eggsec-tui`.
+
+### Before/after: independently maintained mappings
+
+| Mapping | Before | After |
+|---|---|---|
+| TUI action metadata | `TAB_SPECS` (33) + `TUI_ACTION_SPECS`/`TUI_TAB_SPECS` pilot (4+4) | `TAB_SPECS` (33) + methods (single owner); pilot deleted (0) |
+| Command->tab routing | `command_to_tab` manual match (~30 arms, missing db-pentest/intercept, no unavailable structure) | Static-slice lookup via `resolve_palette_command` (33 tabs, hidden aliases parseable, disabled -> `Unavailable`) |
+| Palette discovery | Manual entries (missing wireless/db-pentest/intercept/c2; `reload-scope` false affordance) | Same manual list + 4 missing entries, `reload-scope` removed; filtered via surface metadata; `discoverable_palette_commands` test pins 1:1 with `Tab::all()` |
+| Help content | Missing `DbPentest`/`Intercept` sections | Added; `help_discovery_metadata_agrees` pins title/palette/desc/feature/run/route/help |
+| `copy-cli` | String builder emitting bogus `--max-payloads` + unconditional `--format` (invalid for recon/scan-ports) | `cli_argv()` vector + boundary quoting; `--concurrency` for fuzz, `--json` for Json tabs, `--format` only where declared; round-trips via real Clap + canonical adapters |
+| `reload-scope` | Advertised but unsupported | Not discoverable; direct invocation explains restart-required (acceptable alternative) |
+| CLI `fuzz --session` | Panicked on every successful parse (Clap ID collision) | `--http-session` (explicit id); global `--session` unchanged |
+
+### Support-matrix totals
+
+- `TAB_SPECS`: 33 entries (21 base + 12 gated); `Tab::all()` unchanged.
+- Routes: 25 `Operation` (canonical, validated), 1 `Multiplexer` (Wireless: `wireless`/`wireless-deauth`), 3 `Helper` (report/resume/proxy), 1 `Lifecycle` (cluster), 3 `UiOnly` (settings/history/dashboard).
+- Availability: Stress/Packet always-visible shells (`Unavailable` when disabled); other gated tabs track cfg (`NotSupportedOnTui` when out).
+- Aliases: unique cross-tab (pinned); hidden compat aliases (`scan-pipeline`, `waf-detect`, `o-auth`, `wifi`, `portscan`, packet family, `wireless-deauth`, `db`, `proxy-intercept`) parseable without polluting discovery.
+
+### Parity test totals and profiles exercised
+
+- TUI lib: 873 passed (was 853; +19 surface/palette/wiring, -10 pilot, +11 from fixes/round-trips).
+- New: `tabs::surface` (6), `app::palette` (4), `app::surface_wiring` (9), `parity::production_surface_model_*` (1, replacing pilot).
+- Updated: `command.rs` copy-cli fuzz/format expectations.
+- Phase 0/1 suites remain green (verified via `make check`).
+- Profiles: default + `stress-testing`/`packet-inspection` + representative broad profile via `make check-feature-profiles`; `check-features-individual` remains oracle (only one Cargo `[features]`-adjacent change: TUI dev-dep `clap`, no engine feature declarations changed; engine `fuzz.rs` arg-attribute-only fix). Note: ad-hoc combo `c2,db-pentest,web-proxy,wireless,nse,headless-browser` fails identically on clean base HEAD (`task_management.rs` E0063 missing `InterceptParams`/`C2Params`/`DbPentestParams` fields) — pre-existing, untouched by this phase, out of scope.
+
+### Mandatory verification results (local, before push)
+
+- `cargo fmt --all`: pass (formatted before commit).
+- `make test-feature-matrix`: (in `make check` run).
+- `make test-architecture-guards` (`scripts/check-architecture-guards.sh`): ALL PASSED (incl. new Checks 88–93).
+- `make check`: pass (exit 0; fmt, no-default check, clippy, doc tests, package tests incl. new boundary suite, output tests, TUI lib tests, guards).
+- `make check-feature-profiles`: pass (exit 0).
+- `make check-python`: skipped (no Python-facing contracts/bindings/stubs/docs changed; only TUI surface + one CLI arg-attribute fix).
+- Fuzz collision proof: `eggsec fuzz 127.0.0.1 --concurrency 2 --timeout 1` previously panicked at `cli/mod.rs:259`; now executes (times out on network as expected, no panic); `--http-session` accepted.
+
+### Retained mappings and why each is legitimate
+
+- `Tab` enum (33 variants): UI tab identity + `tab_dispatch!` state/render/input wiring. Conversion via `TabSpec`, not execution routing.
+- `Commands` enum + boundary conversion: Clap DTO ergonomics (Phase 1, unchanged).
+- `HelpSection` long-form content (`help_config.rs`): prose owned per tab but keyed by `Tab` and pinned 1:1 with visible tabs via test; titles/descriptions checked for agreement, not byte-identity.
+- Compatibility aliases at input boundary only; resolved before approval/execution.
+- `command_to_tab()` shim: retained as available-only convenience for filtering/tests; delegates to the single owner, owns no strings itself.

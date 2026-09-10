@@ -1,52 +1,20 @@
 use std::sync::Arc;
 
+use super::palette::{parse_palette_action, PaletteAction};
 use crate::help::{CommandPalette, CommandPaletteResult};
-use crate::tabs::Tab;
+use crate::tabs::{resolve_palette_command, PaletteResolution, Tab};
 
+/// Phase 2.5: single-owner alias lookup through the consolidated surface
+/// metadata (`TabSpec::aliases` + `palette_command` + `stable_id`).
+///
+/// No manual string match: a static-slice linear scan is sufficient and keeps
+/// alias ownership in `tabs/spec.rs`. Feature-disabled tabs return `None`
+/// here (unavailable shells stay visible but do not navigate); structured
+/// unavailable results flow through `parse_palette_action` (`PaletteAction`).
 fn command_to_tab(command: &str) -> Option<Tab> {
-    match command {
-        "history" => Some(Tab::History),
-        "settings" => Some(Tab::Settings),
-        "dashboard" => Some(Tab::Dashboard),
-        "recon" => Some(Tab::Recon),
-        "load" => Some(Tab::Load),
-        "ports" | "port" | "portscan" => Some(Tab::ScanPorts),
-        "endpoints" | "endpoint" => Some(Tab::ScanEndpoints),
-        "fingerprint" | "fingerprinting" => Some(Tab::Fingerprint),
-        "fuzz" | "fuzzing" => Some(Tab::Fuzz),
-        "waf" => Some(Tab::Waf),
-        "wafstress" | "waf-stress" => Some(Tab::WafStress),
-        "pipeline" | "scan" => Some(Tab::Scan),
-        "resume" | "session" => Some(Tab::Resume),
-        "proxy" => Some(Tab::Proxy),
-        "packet" => Some(Tab::Packet),
-        "graphql" => Some(Tab::GraphQl),
-        "oauth" => Some(Tab::OAuth),
-        "auth" | "auth-test" => Some(Tab::Auth),
-        #[cfg(feature = "c2")]
-        "c2" => Some(Tab::C2),
-        "cluster" => Some(Tab::Cluster),
-        "stress" => Some(Tab::Stress),
-        "report" => Some(Tab::Report),
-        #[cfg(feature = "nse")]
-        "nse" => Some(Tab::Nse),
-        #[cfg(feature = "advanced-hunting")]
-        "hunt" => Some(Tab::Hunt),
-        #[cfg(feature = "headless-browser")]
-        "browser" => Some(Tab::Browser),
-        #[cfg(feature = "compliance")]
-        "compliance" => Some(Tab::Compliance),
-        #[cfg(feature = "database")]
-        "storage" => Some(Tab::Storage),
-        #[cfg(feature = "external-integrations")]
-        "integrations" => Some(Tab::Integrations),
-        #[cfg(feature = "finding-workflow")]
-        "workflow" => Some(Tab::Workflow),
-        #[cfg(feature = "vuln-management")]
-        "vuln" => Some(Tab::Vuln),
-        #[cfg(feature = "wireless")]
-        "wireless" | "wifi" => Some(Tab::Wireless),
-        _ => None,
+    match resolve_palette_command(command) {
+        PaletteResolution::SelectTab(tab) => Some(tab),
+        PaletteResolution::Unavailable { .. } | PaletteResolution::Unknown => None,
     }
 }
 
@@ -110,11 +78,39 @@ impl super::App {
     }
 
     pub(super) fn execute_command(&mut self, command: &str) {
-        if let Some(tab) = command_to_tab(command) {
-            if !self.set_current_tab_if_available(tab) {
-                tracing::debug!("Command target tab not available: {:?}", tab);
+        // Phase 2.4/2.5: palette intent flows through the typed surface model
+        // (`parse_palette_action` -> `PaletteAction`). Tab navigation and
+        // unavailable shells are handled here; global actions fall through to
+        // the legacy arms below (which preserve contextual notifications).
+        // Keybindings produce the same `UiAction` via `global_action_for`.
+        match parse_palette_action(command) {
+            PaletteAction::SelectTab(tab) => {
+                if !self.set_current_tab_if_available(tab) {
+                    tracing::debug!("Command target tab not available: {:?}", tab);
+                }
+                return;
             }
-            return;
+            PaletteAction::Unavailable {
+                tab,
+                required_feature,
+            } => {
+                tracing::debug!(
+                    "Command target tab unavailable: {:?} requires feature '{}'",
+                    tab,
+                    required_feature
+                );
+                self.overlay.notification = Some(super::notifications::Notification::new(
+                    format!(
+                        "'{}' requires feature '{}' (rebuild with --features {})",
+                        command, required_feature, required_feature
+                    ),
+                    super::notifications::NotificationSeverity::Warning,
+                ));
+                return;
+            }
+            // Global/Unknown fall through to the legacy arms below, which
+            // preserve contextual notifications (save/history/run guards).
+            PaletteAction::Global(_) | PaletteAction::Unknown => {}
         }
 
         match command {
@@ -253,9 +249,15 @@ impl super::App {
                     ));
                 }
             }
-            "reload-scope" => {
+            "reload-scope" | "reload-config" => {
+                // Phase 2.8 acceptable alternative: safe live reload is out of
+                // scope (requires atomic config/scope swap + approval
+                // invalidation without disturbing running tasks). The palette
+                // no longer advertises this as functional; direct invocation
+                // explains the restart-required contract instead of implying
+                // a live reload happened.
                 self.overlay.notification = Some(super::notifications::Notification::new(
-                    "Reload scope/config not supported in this build (use CLI or restart TUI)"
+                    "Live reload not supported: restart the TUI or use CLI --scope/--config for scope changes"
                         .to_string(),
                     super::notifications::NotificationSeverity::Info,
                 ));
@@ -803,14 +805,19 @@ mod tests {
         if let Some(f) = app.tabs.fuzz.core.inputs.fields.first_mut() {
             f.value = "https://target.test".to_string();
         }
-        // Non-default max payloads to trigger option
+        // Non-default concurrency (index 5) triggers the real CLI flag.
+        // Max Payloads (index 3) is TUI-only and must not emit a bogus flag.
         if let Some(f) = app.tabs.fuzz.core.inputs.fields.get_mut(3) {
             f.value = "100".to_string();
+        }
+        if let Some(f) = app.tabs.fuzz.core.inputs.fields.get_mut(5) {
+            f.value = "25".to_string();
         }
         let cli = app.copy_cli_equivalent().unwrap();
         // https:// has safe chars per our escape set, so unquoted
         assert!(cli.contains("eggsec fuzz https://target.test"));
-        assert!(cli.contains("--max-payloads 100"));
+        assert!(cli.contains("--concurrency 25"));
+        assert!(!cli.contains("--max-payloads"));
         assert!(!cli.contains("--yes"));
     }
 
@@ -834,7 +841,9 @@ mod tests {
         }
         app.export_format = eggsec::types::OutputFormat::Json;
         let cli = app.copy_cli_equivalent().unwrap();
-        assert!(cli.contains("--format json"));
+        // Phase 2.7: Json maps to the real `--json` flag (Recon has no `--format`).
+        assert!(cli.contains("--json"));
+        assert!(!cli.contains("--format"));
         assert!(!cli.contains("--yes"));
     }
 

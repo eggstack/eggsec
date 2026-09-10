@@ -553,6 +553,61 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
     );
 
+    // Phase 2.6: every visible tab must have a help section derived from the
+    // same surface spec. DbPentest/Intercept were missing (palette drift).
+    #[cfg(feature = "db-pentest")]
+    sections.insert(
+        Tab::DbPentest,
+        HelpSection {
+            title: "Db Pentest".to_string(),
+            content: "Direct database pentesting (Postgres/MySQL/MSSQL) — defense-lab only."
+                .to_string(),
+            commands: vec![
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Run db pentest".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "Tab".to_string(),
+                    description: "Toggle focus".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Esc".to_string(),
+                    description: "Stop".to_string(),
+                    category: "Control".to_string(),
+                },
+            ],
+        },
+    );
+
+    #[cfg(feature = "web-proxy")]
+    sections.insert(
+        Tab::Intercept,
+        HelpSection {
+            title: "Intercept".to_string(),
+            content: "Interactive web proxy traffic interception (defense-lab only).".to_string(),
+            commands: vec![
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Start/stop intercept".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "Tab".to_string(),
+                    description: "Toggle focus".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Esc".to_string(),
+                    description: "Stop".to_string(),
+                    category: "Control".to_string(),
+                },
+            ],
+        },
+    );
+
     let global_commands = vec![
         HelpCommand {
             key: "Ctrl+C".to_string(),
@@ -905,6 +960,33 @@ pub fn get_static_help_data() -> StaticHelpData {
             category: "Tabs".to_string(),
             shortcut: Some("27".to_string()),
         },
+        // Phase 2: previously missing tab entries now derived from the same
+        // surface metadata (`TabSpec::palette_command`). They are filtered by
+        // `filter_commands_by_availability` when the feature is disabled.
+        CommandPaletteResult {
+            command: "wireless".to_string(),
+            description: "Go to Wireless".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "db-pentest".to_string(),
+            description: "Go to Db Pentest".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "intercept".to_string(),
+            description: "Go to Intercept".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "c2".to_string(),
+            description: "Go to C2".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: None,
+        },
         CommandPaletteResult {
             command: "next-tab".to_string(),
             description: "Go to next tab".to_string(),
@@ -965,12 +1047,9 @@ pub fn get_static_help_data() -> StaticHelpData {
             category: "Data".to_string(),
             shortcut: None,
         },
-        CommandPaletteResult {
-            command: "reload-scope".to_string(),
-            description: "Reload scope/config".to_string(),
-            category: "Settings".to_string(),
-            shortcut: None,
-        },
+        // Phase 2.8: `reload-scope` removed from discoverable palette/help.
+        // Safe live reload is out of scope; direct `reload-scope` invocation
+        // explains the restart-required contract. Do not re-add here.
         CommandPaletteResult {
             command: "save-settings".to_string(),
             description: "Save settings (contextual on Settings)".to_string(),

@@ -51,7 +51,7 @@ Do you need a new manual CLI command?
 | Domain | `crates/eggsec/src/domain/mod.rs`, domain crate | `DomainDescriptor` | `metadata_consistency`, `tool_registration`, `feature_matrix` |
 | Command | `crates/eggsec/src/commands/registry.rs`, handler | `CommandRegistration` | `command_registry`, `enforcement_matrix` |
 | Tool exposure | `crates/eggsec/src/tool/registration.rs` | `ToolRegistration` | `tool_registration`, `enforced_dispatch_regression` |
-| TUI action | `crates/eggsec-tui/src/app/action_spec.rs` | `TuiActionSpec` | `eggsec-tui --lib` |
+| TUI action | `crates/eggsec-tui/src/tabs/spec.rs` (`TabSpec::aliases`/`palette_command`/`surface_route`) + `crates/eggsec-tui/src/app/palette.rs` (`UiAction`) | `TabSpec` + `TuiSurfaceRoute` | `eggsec-tui --lib` (`tabs::surface`, `app::palette`, `app::surface_wiring`) |
 | Report output | `crates/eggsec-output/src/envelope.rs` | `ReportEnvelope` | `report_envelope` |
 | Feature | `crates/eggsec/Cargo.toml`, `config/feature_registry.rs` | Feature string | `feature_matrix`, `cargo check --features ...` |
 

@@ -58,7 +58,9 @@ The confirmation overlay includes a CLI-equivalent flag preview showing what fla
 ```bash
 cargo test --lib -p eggsec-tui tui::app::enforcement
 cargo test --lib -p eggsec-tui tui::app::enforcement_facade
-cargo test --lib -p eggsec-tui tui::app::action_spec
+cargo test --lib -p eggsec-tui tabs::surface
+cargo test --lib -p eggsec-tui app::palette
+cargo test --lib -p eggsec-tui app::surface_wiring
 ```
 
 ### Audit Integration (Phase 10)
@@ -152,9 +154,25 @@ New fields (all `#[cfg(feature = "nse")]`):
 
 App retains UI-level flows (`request_policy_confirmation`, `confirm_policy_action`, `cancel_policy_action`) because they touch overlay state.
 
-### TUI Action/Tab Metadata Registry
+### TUI Surface Model (Phase 2 convergence)
 
-`TuiActionSpec` and `TuiTabSpec` (`app/action_spec.rs`) provide metadata-backed descriptors pointing to canonical `OperationMetadata`. Pilot: recon, scan-ports, fuzz, db-pentest. Tests verify metadata resolution, feature string validity, risk consistency, and domain reference validity.
+`TabSpec` (`tabs/spec.rs`) is the single production owner for discoverable
+tabs; the four-action pilot (`TuiActionSpec`/`TUI_ACTION_SPECS`,
+`app/action_spec.rs`) was deleted. `TabSpec::aliases()` /
+`palette_command()` own every parseable/discoverable string (no manual match
+in `app/command.rs`); `surface_route()` (`Operation`/`Multiplexer`/`Helper`/
+`Lifecycle`/`UiOnly`) and `canonical_operation()` resolve through canonical
+`OperationMetadata`; `availability()` derives from the compiled tab list plus
+canonical features (Stress/Packet are always-visible shells).
+`resolve_palette_command()` is the single alias lookup (static slice).
+`parse_palette_action()` / `global_action_for()` (`app/palette.rs`) map
+palette strings to the same `UiAction` the key handler emits. `cli_argv()`
+(`app/operation.rs`) builds the argv vector with quoting only at the
+clipboard boundary and round-trips through the real Clap `Cli` plus canonical
+adapters. `reload-scope` is not discoverable (restart-required info only).
+Fuzz HTTP-session flag is `--http-session` (global daemon attach keeps
+`--session`). Catalog queries live in `tabs/surface.rs` so help/palette
+discovery cannot drift.
 
 ## Phase 4: Runtime Event Reducer (TUI Adapter)
 
@@ -235,7 +253,8 @@ crates/eggsec-tui/src/
 │   ├── confirmation.rs  # PendingAction enum
 │   ├── enforcement.rs   # TuiEnforcementState, TuiPreflightResult
 │   ├── enforcement_facade.rs # EnforcementFacade (Phase 8 extraction)
-│   ├── action_spec.rs   # TuiActionSpec, TuiTabSpec (Phase 8 metadata registry)
+│   ├── palette.rs      # Phase 2: parse_palette_action/global_action_for -> UiAction bridge
+│   ├── surface_wiring.rs # Phase 2 semantic tests (Clap round-trip, approval invalidation)
 │   ├── help_config.rs   # Static help content
 │   ├── navigation.rs   # Tab navigation, scrolling
 │   ├── command.rs      # Command palette commands

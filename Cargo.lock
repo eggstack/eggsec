@@ -2219,6 +2219,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "chrono-tz",
+ "clap",
  "crossterm",
  "directories",
  "eggsec",

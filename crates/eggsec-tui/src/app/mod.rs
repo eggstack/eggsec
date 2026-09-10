@@ -1,6 +1,5 @@
 pub(crate) mod action;
 pub(crate) mod action_hints;
-pub(crate) mod action_spec;
 pub(crate) mod apply;
 pub(crate) mod bookmarks;
 pub(crate) mod command;
@@ -17,10 +16,13 @@ pub(crate) mod navigation;
 pub(crate) mod operation;
 mod options;
 pub(crate) mod overlay;
+pub(crate) mod palette;
 pub(crate) mod runner;
 pub(crate) mod runtime_adapter;
 pub(crate) mod state;
 pub(crate) mod state_update;
+#[cfg(test)]
+pub(crate) mod surface_wiring;
 pub(crate) mod tab_error;
 pub(crate) mod tab_store;
 pub(crate) mod task_dispatcher;

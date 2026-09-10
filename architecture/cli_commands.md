@@ -188,6 +188,16 @@ pub struct CommandContext {
 
 Phase 1 completion: the old dual ownership (registry prelude + separate handler match claiming routing) is gone; registry metadata and `CommandRoute` classification are pinned together by test (`registry_operation_backed_agrees_with_route`).
 
+Phase 2 fix: `FuzzArgs::session` (`--session`, HTTP cookie handling) collided
+with the global daemon `--session <ID>` (`Option<String>`): same Clap ID,
+different types, so every successful `fuzz` parse panicked ("Could not
+downcast to String, need bool"). The fuzz flag is now `--http-session`
+(explicit `id = "http-session"`); the global daemon flag keeps `--session`.
+`TUI copy-cli` round-trip tests (`app::surface_wiring`, parsing generated
+argv through the real `Cli`) pin this: generated equivalents only emit flags
+the real tree accepts (`--json` for Json-mapped tabs, `--format` only for
+commands that declare it).
+
 ### Enforcement Integration
 
 Side-effecting handlers call `ctx.evaluate_and_enforce_operation(descriptor)` (`CommandContext` `:215–440`) which wraps `EnforcementContext::evaluate()`:

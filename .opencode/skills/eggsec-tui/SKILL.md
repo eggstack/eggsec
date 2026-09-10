@@ -175,12 +175,14 @@ Priority order for hint resolution:
 
 **Status bar**: Shows mode label ("Manual"/"Guarded"), scope provenance, rule counts, and preflight outcome.
 
-**TUI Action/Tab Metadata Registry**: `TuiActionSpec` and `TuiTabSpec` in `app/action_spec.rs` provide metadata-backed descriptors that point to canonical `OperationMetadata` entries. Pilot covers recon, scan-ports, fuzz, and db-pentest. Tests verify metadata resolution, feature string validity, and risk consistency.
+**TUI Surface Model (Phase 2)**: `TabSpec` in `tabs/spec.rs` is the single production owner (title/stable_id/cli_command/description/category/risk/feature/operation/direct_launch plus `aliases()`/`palette_command()`/`surface_route()`/`canonical_operation()`/`availability()`). `TuiSurfaceRoute` (`Operation`/`Multiplexer`/`Helper`/`Lifecycle`/`UiOnly`) references canonical `OperationMetadata` instead of copying IDs; `TabAvailability` (`Available`/`Unavailable{required_feature}`/`UiOnly`/`NotSupportedOnTui`) derives from the compiled tab list plus canonical features (Stress/Packet are always-visible shells). `resolve_palette_command()` is the single alias owner (static-slice lookup, no manual match); `parse_palette_action()`/`global_action_for()` in `app/palette.rs` map palette strings to the same `UiAction` the key handler emits. `cli_argv()` builds the argv vector and quotes only at the clipboard boundary; round-trip tests parse via real Clap `Cli`. `reload-scope` is not discoverable (restart-required info only).
 
 **Tests:**
 ```bash
 cargo test --lib -p eggsec-tui tui::app::enforcement
-cargo test --lib -p eggsec-tui tui::app::action_spec
+cargo test --lib -p eggsec-tui tabs::surface
+cargo test --lib -p eggsec-tui app::palette
+cargo test --lib -p eggsec-tui app::surface_wiring
 cargo test --lib -p eggsec-tui tui::app::enforcement_facade
 ```
 

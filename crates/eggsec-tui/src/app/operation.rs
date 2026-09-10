@@ -139,11 +139,14 @@ impl App {
         }
     }
 
-    /// Produce a safe, minimal CLI equivalent for the current tab state.
-    /// Returns None for non-executable tabs (Settings, History, Dashboard, Report, etc.).
-    /// Never emits broad bypass flags (--yes, --allow-*, --insecure-tls, etc.).
-    pub fn copy_cli_equivalent(&self) -> Option<String> {
-        use crate::utils::shell_escape;
+    /// Phase 2.7: stable argument-vector representation for CLI equivalents.
+    ///
+    /// Quoting happens only at the final clipboard/string boundary
+    /// (`copy_cli_equivalent`); tests parse this argv through the real Clap
+    /// `Cli` parser and convert back to the canonical request for semantic
+    /// equality. Returns `None` for UI-only state (explicit unsupported result
+    /// rather than a misleading command).
+    pub fn cli_argv(&self) -> Option<Vec<String>> {
         let tab = self.current_tab;
         let cmd = tab.cli_command();
         if cmd == "unknown"
@@ -158,89 +161,132 @@ impl App {
         if !cmd.starts_with("eggsec ") {
             return None;
         }
-
+        let sub = cmd.strip_prefix("eggsec ").unwrap_or("");
+        if sub.is_empty() {
+            return None;
+        }
+        // Only `db pentest` is a multi-word subcommand backing a tab.
+        if sub.contains(' ') && tab != Tab::DbPentest {
+            return None;
+        }
+        let mut argv: Vec<String> = vec!["eggsec".to_string()];
+        // `db pentest` expands to two argv elements.
+        for part in sub.split_whitespace() {
+            argv.push(part.to_string());
+        }
         let target = self.current_tab_target().unwrap_or_default();
-        let target_esc = if target.is_empty() {
-            "''".to_string()
+        argv.push(if target.is_empty() {
+            String::new()
         } else {
-            shell_escape(&target)
-        };
-
-        let mut out = format!("{} {}", cmd, target_esc);
+            target
+        });
 
         match tab {
             Tab::Recon => {
                 let conc = self.tabs.recon.concurrency();
                 if conc != 20 {
-                    out.push_str(&format!(" --concurrency {}", conc));
+                    argv.push("--concurrency".to_string());
+                    argv.push(conc.to_string());
                 }
             }
             Tab::ScanPorts => {
                 let ports = self.tabs.scan_ports.ports();
                 if ports != "1-1024" {
-                    out.push_str(&format!(" --ports {}", shell_escape(ports)));
+                    argv.push("--ports".to_string());
+                    argv.push(ports.to_string());
                 }
             }
             Tab::Fuzz => {
-                let mp = self.tabs.fuzz.max_payloads();
-                if mp > 0 {
-                    out.push_str(&format!(" --max-payloads {}", mp));
+                // Phase 2.7: `Max Payloads` is TUI-only (no CLI flag); omit it
+                // rather than emitting a misleading command. `--concurrency`
+                // is the real CLI equivalent (both default to 10).
+                let conc = self.tabs.fuzz.concurrency();
+                if conc != 10 {
+                    argv.push("--concurrency".to_string());
+                    argv.push(conc.to_string());
                 }
             }
             Tab::Auth => {
                 if let Some(username) = self.tabs.auth.username() {
-                    out.push_str(&format!(" --username {}", shell_escape(username)));
+                    argv.push("--username".to_string());
+                    argv.push(username.to_string());
                 }
                 if let Some(passwords) = self.tabs.auth.password_list() {
-                    out.push_str(&format!(" --wordlist {}", shell_escape(passwords)));
+                    argv.push("--wordlist".to_string());
+                    argv.push(passwords.to_string());
                 }
             }
             #[cfg(feature = "c2")]
             Tab::C2 => {
                 if let Some(campaign) = self.tabs.c2.campaign() {
-                    out.push_str(&format!(" --campaign {}", shell_escape(campaign)));
+                    argv.push("--campaign".to_string());
+                    argv.push(campaign.to_string());
                 }
-                out.push_str(" --dry-run");
+                argv.push("--dry-run".to_string());
             }
             #[cfg(feature = "wireless-advanced")]
             Tab::Wireless if self.tabs.wireless.active_mode => {
                 if let Some((_, _, bssid, client, frame_count, rate_limit, dry_run)) =
                     self.tabs.wireless.active_attack_config()
                 {
-                    out.push_str(" deauth");
+                    argv.push("deauth".to_string());
                     if let Some(bssid) = bssid {
-                        out.push_str(&format!(" --bssid {}", shell_escape(&bssid)));
+                        argv.push("--bssid".to_string());
+                        argv.push(bssid);
                     }
                     if let Some(client) = client {
-                        out.push_str(&format!(" --client {}", shell_escape(&client)));
+                        argv.push("--client".to_string());
+                        argv.push(client);
                     }
                     if frame_count != 100 {
-                        out.push_str(&format!(" --count {}", frame_count));
+                        argv.push("--count".to_string());
+                        argv.push(frame_count.to_string());
                     }
                     if rate_limit != 10 {
-                        out.push_str(&format!(" --fps {}", rate_limit));
+                        argv.push("--fps".to_string());
+                        argv.push(rate_limit.to_string());
                     }
                     if dry_run {
-                        out.push_str(" --dry-run");
+                        argv.push("--dry-run".to_string());
                     }
                 }
             }
             _ => {}
         }
 
+        // Phase 2.7: map the TUI export format to real CLI flags.
+        // Most commands expose `--json` (bool); only some (e.g. fuzz) expose
+        // `--format`. Never emit a flag the real Clap tree rejects.
         if self.export_format != eggsec::types::OutputFormat::Pretty {
-            let fmt = match self.export_format {
-                eggsec::types::OutputFormat::Json => "json",
-                eggsec::types::OutputFormat::Compact => "compact",
-                eggsec::types::OutputFormat::Csv => "csv",
-                eggsec::types::OutputFormat::Html => "html",
-                eggsec::types::OutputFormat::Markdown => "markdown",
-                eggsec::types::OutputFormat::Sarif => "sarif",
-                eggsec::types::OutputFormat::Junit => "junit",
-                _ => "pretty",
-            };
-            if fmt != "pretty" {
-                out.push_str(&format!(" --format {}", fmt));
+            match self.export_format {
+                eggsec::types::OutputFormat::Json => {
+                    // `--json` exists on recon/scan-ports/fuzz and most tabs.
+                    argv.push("--json".to_string());
+                }
+                eggsec::types::OutputFormat::Compact
+                | eggsec::types::OutputFormat::Csv
+                | eggsec::types::OutputFormat::Html
+                | eggsec::types::OutputFormat::Markdown
+                | eggsec::types::OutputFormat::Sarif
+                | eggsec::types::OutputFormat::Junit => {
+                    // Only emit `--format` for commands that accept it
+                    // (currently Fuzz in the round-trip set). Others omit:
+                    // a misleading `--format` would fail Clap parsing.
+                    if matches!(tab, Tab::Fuzz) {
+                        let fmt = match self.export_format {
+                            eggsec::types::OutputFormat::Compact => "compact",
+                            eggsec::types::OutputFormat::Csv => "csv",
+                            eggsec::types::OutputFormat::Html => "html",
+                            eggsec::types::OutputFormat::Markdown => "markdown",
+                            eggsec::types::OutputFormat::Sarif => "sarif",
+                            eggsec::types::OutputFormat::Junit => "junit",
+                            _ => "pretty",
+                        };
+                        argv.push("--format".to_string());
+                        argv.push(fmt.to_string());
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -250,11 +296,34 @@ impl App {
                 || self.enforcement_state.state().loaded_scope.source
                     == eggsec::config::ScopeSource::ConfigFile
             {
-                out.push_str(&format!(" --scope {}", shell_escape(p)));
+                argv.push("--scope".to_string());
+                argv.push(p.clone());
             }
         }
 
-        Some(out)
+        Some(argv)
+    }
+
+    /// Produce a safe, minimal CLI equivalent for the current tab state.
+    /// Returns None for non-executable tabs (Settings, History, Dashboard, Report, etc.).
+    /// Never emits broad bypass flags (--yes, --allow-*, --insecure-tls, etc.).
+    pub fn copy_cli_equivalent(&self) -> Option<String> {
+        use crate::utils::shell_escape;
+        let argv = self.cli_argv()?;
+        // Quote only at the final clipboard/string boundary (Phase 2.7).
+        let mut parts: Vec<String> = Vec::with_capacity(argv.len());
+        for (i, arg) in argv.iter().enumerate() {
+            if i == 0 {
+                parts.push(arg.clone());
+                continue;
+            }
+            if arg.is_empty() {
+                parts.push("''".to_string());
+            } else {
+                parts.push(shell_escape(arg));
+            }
+        }
+        Some(parts.join(" "))
     }
 
     pub(crate) fn build_current_task(&self) -> Option<eggsec_runtime::RunRequest> {

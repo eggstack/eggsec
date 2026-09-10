@@ -1,13 +1,16 @@
-//! Phase 0.4 TUI operation and feature parity guards (test-owned).
+//! Phase 0.4 TUI operation and feature parity guards (test-owned) +
+//! Phase 2 production surface convergence.
 //!
 //! Classifies every TUI tab/action as operation-backed, UI-only/helper,
 //! lifecycle, unavailable, or compatibility alias. Resolves the audited
 //! baseline discrepancies explicitly so raw string differences never go
 //! undocumented.
 //!
-//! This module is test-only: it derives the matrix from `TabSpec`,
-//! `TUI_ACTION_SPECS`, and canonical `OperationMetadata` plus small explicit
-//! exception lists. Phase 2 will decide the final production metadata owner.
+//! Phase 2: the four-action pilot (`TUI_ACTION_SPECS`) is removed. The
+//! production owner is `TabSpec` (`tabs/spec.rs`) plus the typed surface
+//! model (`TuiSurfaceRoute`, `TabAvailability`, `resolve_palette_command`).
+//! This module now pins production classification instead of maintaining a
+//! parallel test-owned matrix.
 
 #[cfg(test)]
 mod tests {
@@ -359,20 +362,53 @@ mod tests {
     }
 
     #[test]
-    fn pilot_action_specs_resolve_without_second_identity() {
-        // Four-action pilot must resolve to canonical metadata (no drift).
-        for action in crate::app::action_spec::TUI_ACTION_SPECS {
-            let meta = metadata_for_tool_id(action.operation_id).unwrap_or_else(|| {
-                panic!(
-                    "pilot action '{}' operation '{}' has no metadata",
-                    action.action_id, action.operation_id
-                )
-            });
-            assert_eq!(
-                meta.id, action.operation_id,
-                "pilot action '{}' must reference canonical '{}', not an alias",
-                action.action_id, action.operation_id
-            );
+    fn production_surface_model_covers_every_tab_without_second_identity() {
+        // Phase 2: pilot removed. Every operation-backed tab resolves through
+        // the production typed model (`surface_route` + `canonical_operation`)
+        // with no second canonical identity.
+        use crate::tabs::{resolve_palette_command, PaletteResolution, TuiSurfaceRoute};
+        for spec in tab_specs() {
+            match spec.surface_route() {
+                TuiSurfaceRoute::Operation(op) => {
+                    assert_eq!(
+                        spec.canonical_operation(),
+                        Some(op),
+                        "tab '{}' operation '{op}' must be canonical",
+                        spec.stable_id
+                    );
+                    let meta = metadata_for_tool_id(op).unwrap_or_else(|| {
+                        panic!("tab '{}' operation '{op}' has no metadata", spec.stable_id)
+                    });
+                    assert_eq!(meta.id, op);
+                    // Palette primary must resolve back to the same tab when visible.
+                    if crate::tabs::Tab::all().contains(&spec.tab) {
+                        assert_eq!(
+                            resolve_palette_command(spec.palette_command()),
+                            PaletteResolution::SelectTab(spec.tab),
+                            "palette '{}' must resolve to {:?}",
+                            spec.palette_command(),
+                            spec.tab
+                        );
+                    }
+                }
+                TuiSurfaceRoute::Multiplexer(family) => {
+                    assert_eq!(
+                        spec.stable_id, "wireless",
+                        "only Wireless is a multiplexer (family '{family}')"
+                    );
+                    assert!(
+                        metadata_for_tool_id("wireless").is_some(),
+                        "multiplexer family must have canonical metadata"
+                    );
+                }
+                TuiSurfaceRoute::Helper | TuiSurfaceRoute::Lifecycle | TuiSurfaceRoute::UiOnly => {
+                    assert!(
+                        spec.canonical_operation().is_none(),
+                        "non-operation tab '{}' must have no canonical operation",
+                        spec.stable_id
+                    );
+                }
+            }
         }
     }
 }

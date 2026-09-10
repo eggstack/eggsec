@@ -31,6 +31,52 @@ pub enum TabRiskGroup {
     Administrative,
 }
 
+/// Phase 2 surface route: how a TUI tab relates to canonical execution.
+///
+/// - `Operation`: one canonical operation ID (validated via `OperationMetadata`).
+/// - `Multiplexer`: tab selects among several canonical operations at runtime
+///   (e.g. Wireless passive scan vs `wireless-deauth` active attack).
+/// - `Helper`: local/UI transformation with no canonical operation dispatch.
+/// - `Lifecycle`: daemon/session/cluster lifecycle, not a security operation.
+/// - `UiOnly`: pure navigation/inspection state, never dispatches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuiSurfaceRoute {
+    Operation(&'static str),
+    Multiplexer(&'static str),
+    Helper,
+    Lifecycle,
+    UiOnly,
+}
+
+/// Phase 2 typed availability: derived from canonical feature metadata plus
+/// the TUI crate's compiled feature set.
+///
+/// - `Available`: compiled in and executable.
+/// - `Unavailable { required_feature }`: visible discovery shell, execution gated.
+/// - `UiOnly`: never gated, no execution.
+/// - `NotSupportedOnTui`: compiled out (not in `Tab::all()`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabAvailability {
+    Available,
+    Unavailable { required_feature: &'static str },
+    UiOnly,
+    NotSupportedOnTui,
+}
+
+/// Structured result for palette/alias resolution (Phase 2.5).
+///
+/// Feature-disabled aliases return `Unavailable` rather than silently
+/// behaving differently from the tab list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaletteResolution {
+    SelectTab(Tab),
+    Unavailable {
+        tab: Tab,
+        required_feature: &'static str,
+    },
+    Unknown,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct TabSpec {
     pub tab: Tab,
@@ -700,6 +746,218 @@ impl TabSpec {
     pub fn shows_in_export(&self) -> bool {
         self.supports_export
     }
+
+    /// All parseable palette/alias strings for this tab (Phase 2.5).
+    ///
+    /// Includes the stable ID, the primary palette command, CLI-equivalent
+    /// spellings, and hidden compatibility aliases. Palette discovery uses
+    /// [`TabSpec::palette_command`] only; parsing accepts everything here.
+    pub fn aliases(&self) -> &'static [&'static str] {
+        match self.tab {
+            Tab::Recon => &["recon"],
+            Tab::Load => &["load"],
+            Tab::ScanPorts => &["ports", "port", "portscan", "scan-ports", "scan_ports"],
+            Tab::ScanEndpoints => &["endpoints", "endpoint", "scan-endpoints", "scan_endpoints"],
+            Tab::Fingerprint => &["fingerprint", "fingerprinting"],
+            Tab::Fuzz => &["fuzz", "fuzzing"],
+            Tab::Waf => &["waf", "waf-detect"],
+            Tab::WafStress => &["wafstress", "waf-stress", "waf_stress"],
+            Tab::Scan => &["pipeline", "scan", "scan-pipeline"],
+            Tab::Resume => &["resume", "session"],
+            Tab::Proxy => &["proxy"],
+            Tab::Packet => &[
+                "packet",
+                "raw-packet",
+                "packet-capture",
+                "packet-inspect",
+                "raw-packet-send",
+            ],
+            Tab::GraphQl => &["graphql"],
+            Tab::OAuth => &["oauth", "o-auth"],
+            Tab::Cluster => &["cluster"],
+            Tab::Stress => &["stress", "stress-test"],
+            Tab::Report => &["report"],
+            Tab::Nse => &["nse"],
+            Tab::Settings => &["settings"],
+            Tab::History => &["history"],
+            Tab::Dashboard => &["dashboard"],
+            Tab::Hunt => &["hunt"],
+            Tab::Browser => &["browser"],
+            Tab::Compliance => &["compliance"],
+            Tab::Storage => &["storage"],
+            Tab::Integrations => &["integrations"],
+            Tab::Workflow => &["workflow"],
+            Tab::Vuln => &["vuln"],
+            Tab::Wireless => &["wireless", "wifi", "wireless-deauth"],
+            Tab::Auth => &["auth", "auth-test"],
+            Tab::DbPentest => &["db-pentest", "db_pentest", "db"],
+            Tab::Intercept => &["intercept", "proxy-intercept", "proxy-intercept-start"],
+            Tab::C2 => &["c2"],
+        }
+    }
+
+    /// Primary discoverable palette command for this tab (Phase 2.5/2.6).
+    ///
+    /// Help and palette discovery must use this; [`TabSpec::aliases`] remains
+    /// parseable for compatibility but does not pollute discovery.
+    pub fn palette_command(&self) -> &'static str {
+        match self.tab {
+            Tab::Recon => "recon",
+            Tab::Load => "load",
+            Tab::ScanPorts => "ports",
+            Tab::ScanEndpoints => "endpoints",
+            Tab::Fingerprint => "fingerprint",
+            Tab::Fuzz => "fuzz",
+            Tab::Waf => "waf",
+            Tab::WafStress => "wafstress",
+            Tab::Scan => "pipeline",
+            Tab::Resume => "resume",
+            Tab::Proxy => "proxy",
+            Tab::Packet => "packet",
+            Tab::GraphQl => "graphql",
+            Tab::OAuth => "oauth",
+            Tab::Cluster => "cluster",
+            Tab::Stress => "stress",
+            Tab::Report => "report",
+            Tab::Nse => "nse",
+            Tab::Settings => "settings",
+            Tab::History => "history",
+            Tab::Dashboard => "dashboard",
+            Tab::Hunt => "hunt",
+            Tab::Browser => "browser",
+            Tab::Compliance => "compliance",
+            Tab::Storage => "storage",
+            Tab::Integrations => "integrations",
+            Tab::Workflow => "workflow",
+            Tab::Vuln => "vuln",
+            Tab::Wireless => "wireless",
+            Tab::Auth => "auth-test",
+            Tab::DbPentest => "db-pentest",
+            Tab::Intercept => "intercept",
+            Tab::C2 => "c2",
+        }
+    }
+
+    /// Explicit route type for this tab (Phase 2.2).
+    ///
+    /// Operation-backed entries reference canonical operation IDs; the
+    /// Wireless tab is a multiplexer (passive `wireless` vs active
+    /// `wireless-deauth` selected at runtime). Helper/lifecycle/UI-only
+    /// entries never dispatch.
+    pub fn surface_route(&self) -> TuiSurfaceRoute {
+        match self.tab {
+            Tab::Settings | Tab::History | Tab::Dashboard => TuiSurfaceRoute::UiOnly,
+            Tab::Report | Tab::Resume | Tab::Proxy => TuiSurfaceRoute::Helper,
+            Tab::Cluster => TuiSurfaceRoute::Lifecycle,
+            Tab::Wireless => TuiSurfaceRoute::Multiplexer("wireless"),
+            _ => match self.operation {
+                Some(op) => TuiSurfaceRoute::Operation(op),
+                None => TuiSurfaceRoute::UiOnly,
+            },
+        }
+    }
+
+    /// Canonical operation ID for this tab, validated to be canonical
+    /// (not an alias) via `OperationMetadata` (Phase 2.2).
+    ///
+    /// Returns `None` for non-operation routes and for multiplexers (use
+    /// runtime state to select the concrete operation).
+    pub fn canonical_operation(&self) -> Option<&'static str> {
+        match self.surface_route() {
+            TuiSurfaceRoute::Operation(op) => {
+                let meta = eggsec::config::metadata_for_tool_id(op)?;
+                if meta.id == op {
+                    Some(op)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Typed availability derived from the compiled tab list plus the
+    /// canonical feature gate (Phase 2.3).
+    ///
+    /// Stress/Packet are always-visible availability shells: they remain in
+    /// `Tab::all()` even when disabled, reporting `Unavailable`. Other
+    /// gated tabs disappear when disabled (`NotSupportedOnTui`).
+    pub fn availability(&self) -> TabAvailability {
+        if matches!(
+            self.tab,
+            Tab::Settings
+                | Tab::History
+                | Tab::Dashboard
+                | Tab::Report
+                | Tab::Resume
+                | Tab::Proxy
+                | Tab::Cluster
+        ) {
+            return TabAvailability::UiOnly;
+        }
+        let visible = Tab::all().contains(&self.tab);
+        match self.feature {
+            None => {
+                if visible {
+                    TabAvailability::Available
+                } else {
+                    TabAvailability::NotSupportedOnTui
+                }
+            }
+            Some(feat) => {
+                if visible {
+                    if eggsec::config::is_feature_enabled_registry(feat) {
+                        TabAvailability::Available
+                    } else {
+                        // Only Stress/Packet are allowed as always-visible
+                        // shells; any other visible-but-disabled tab is still
+                        // reported as unavailable (fail loudly in tests).
+                        TabAvailability::Unavailable {
+                            required_feature: feat,
+                        }
+                    }
+                } else {
+                    TabAvailability::NotSupportedOnTui
+                }
+            }
+        }
+    }
+}
+
+/// Resolve a palette/alias string through the consolidated surface metadata
+/// (Phase 2.5). No manual match: linear scan over the static slice is
+/// sufficient and keeps alias ownership in one place.
+///
+/// - Exact match on `stable_id`, `palette_command`, or any entry in
+///   [`TabSpec::aliases`].
+/// - Feature-disabled tabs return [`PaletteResolution::Unavailable`] rather
+///   than silently differing from the tab list.
+/// - Unknown strings return [`PaletteResolution::Unknown`].
+pub fn resolve_palette_command(command: &str) -> PaletteResolution {
+    let cmd = command.trim();
+    if cmd.is_empty() {
+        return PaletteResolution::Unknown;
+    }
+    for spec in TAB_SPECS {
+        if spec.stable_id == cmd || spec.palette_command() == cmd || spec.aliases().contains(&cmd) {
+            if Tab::all().contains(&spec.tab) {
+                return PaletteResolution::SelectTab(spec.tab);
+            }
+            if let Some(feat) = spec.feature {
+                return PaletteResolution::Unavailable {
+                    tab: spec.tab,
+                    required_feature: feat,
+                };
+            }
+            return PaletteResolution::Unknown;
+        }
+    }
+    PaletteResolution::Unknown
+}
+
+/// Primary palette command for a tab (convenience for help/palette builders).
+pub fn palette_command_for(tab: Tab) -> Option<&'static str> {
+    spec_for(tab).map(|s| s.palette_command())
 }
 
 use eggsec::config::OperationRisk;

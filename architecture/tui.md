@@ -66,6 +66,34 @@ Phase 0 parity resolutions (see `crates/eggsec-tui/src/parity.rs` and `crates/eg
 
 Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:500-546`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
 
+### Surface Model (Phase 2)
+
+`TabSpec` (`tabs/spec.rs`) is the single production owner for discoverable
+tabs; the four-action pilot (`app/action_spec.rs`, `TUI_ACTION_SPECS`) was
+deleted. The typed surface layer references canonical engine metadata instead
+of copying IDs/risk/features as unconstrained strings:
+
+| Type | Location | Meaning |
+|------|----------|---------|
+| `TuiSurfaceRoute` | `tabs/spec.rs` | `Operation(canonical_id)`, `Multiplexer("wireless")` (passive scan vs `wireless-deauth` active attack), `Helper`, `Lifecycle`, `UiOnly` |
+| `TabAvailability` | `tabs/spec.rs` | `Available`, `Unavailable { required_feature }` (Stress/Packet always-visible shells), `UiOnly`, `NotSupportedOnTui` |
+| `PaletteResolution` | `tabs/spec.rs` | `SelectTab`, `Unavailable { required_feature }`, `Unknown` |
+| `TabSpec::aliases()` / `palette_command()` | `tabs/spec.rs` | Every parseable string vs the one discoverable command; hidden aliases (`scan-pipeline`, `waf-detect`, `o-auth`, `wifi`, `portscan`) stay parseable but never pollute discovery |
+| `resolve_palette_command()` | `tabs/spec.rs` | Single-owner static-slice lookup (no manual match, no hash registry) |
+| `tabs/surface.rs` | catalog queries | `discoverable_palette_commands()` (one per `Tab::all()`, in order), alias-uniqueness, help/discovery agreement, shell invariants |
+| `app/palette.rs` | action bridge | `parse_palette_action()` / `global_action_for()` map palette strings to the same `UiAction` the key handler emits; `PaletteAction` (`SelectTab`/`Global`/`Unavailable`/`Unknown`) separates navigation/local actions from execution effects |
+| `app/command.rs` | dispatcher | `command_to_tab()` (available-only) + `execute_command()` routed through `parse_palette_action()`; unavailable shells notify the required feature instead of silent divergence |
+
+`copy-cli` is a semantic round trip (`app/operation.rs: cli_argv()` argv
+vector, quoting only at the clipboard boundary via `shell_escape`):
+TUI state -> argv -> real Clap `Cli::try_parse_from` -> `cli_adapters` canonical
+request -> semantic equality. UI-only tabs return explicit `None`. Format
+mapping emits only flags the real tree accepts (`--json` for Json-mapped tabs;
+`--format` only for commands declaring it; TUI-only `Max Payloads` omitted).
+`reload-scope` was removed from discoverable palette/help (Phase 2.8 acceptable
+alternative); direct invocation explains the restart-required contract without
+implying a live reload.
+
 ### TabStore (`app/tab_store.rs`)
 
 `TabStore` owns all tab instances as named fields (one per variant). When a feature is disabled, the gated field still exists but is only accessible through the `dashboard` fallback in the dispatch macro.
