@@ -1792,6 +1792,168 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: TUI TabSpec operations are canonical."
 fi
 
+# 82. Canonical execution boundary is the single executor owner (Phase 1.1/1.4).
+# The executor match lives in dispatch/canonical_execution.rs; the legacy
+# dispatch_inner shim delegates to it and owns no second TaskKind→worker match.
+echo ""
+echo "--- Check 82: Canonical execution boundary owns dispatch ---"
+SECTION_FAIL=0
+CANON="crates/eggsec/src/dispatch/canonical_execution.rs"
+if [[ ! -f "$CANON" ]]; then
+  echo "FAIL: missing canonical execution boundary: $CANON"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for sym in "execute_approved" "execute_canonical" "CanonicalOperationRequest" "ExecutionEvent" "ExecutionSink" "executor_route_for" "is_feature_available"; do
+    if ! rg -q "$sym" "$CANON" 2>/dev/null; then
+      echo "FAIL: $CANON missing required symbol: $sym"
+      FAIL=$((FAIL + 1))
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+# dispatch_inner must delegate (references execute_canonical) and must not own
+# a second TaskKind match outside tests.
+if ! rg -q 'execute_canonical' crates/eggsec/src/dispatch/mod.rs 2>/dev/null; then
+  echo "FAIL: dispatch/mod.rs does not delegate to execute_canonical."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TASKKIND_MATCH=$(rg -n 'match request\.task_kind' crates/eggsec/src/dispatch/mod.rs 2>/dev/null || true)
+if [[ -n "$TASKKIND_MATCH" ]]; then
+  echo "$TASKKIND_MATCH"
+  echo "FAIL: dispatch/mod.rs still owns a TaskKind match. Executor ownership lives in canonical_execution.rs."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Canonical execution boundary owns dispatch."
+fi
+
+# 83. Executor boundary is free of presentation imports (Phase 1.1).
+# No Clap, Ratatui, terminal, daemon-protocol, TUI, or Python types may cross
+# the execution boundary.
+echo ""
+echo "--- Check 83: Executor boundary has no presentation imports ---"
+SECTION_FAIL=0
+PRES_HITS=$(rg -n 'use clap|use ratatui|crossterm|eggsec_daemon_protocol|eggsec-daemon-protocol|use pyo3|eggsec_tui|eggsec-tui|terminal::' "$CANON" 2>/dev/null || true)
+if [[ -n "$PRES_HITS" ]]; then
+  echo "$PRES_HITS"
+  echo "FAIL: Canonical execution boundary imports presentation types."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Executor boundary is presentation-free."
+fi
+
+# 84. CLI routing contract is single-owned (Phase 1.2/1.8).
+# commands/route.rs owns Commands→CommandRoute (exhaustive); handle_command
+# classifies once via route_for_commands; the old registry-bridge prelude is gone.
+echo ""
+echo "--- Check 84: CLI routing contract is single-owned ---"
+SECTION_FAIL=0
+ROUTE="crates/eggsec/src/commands/route.rs"
+if [[ ! -f "$ROUTE" ]]; then
+  echo "FAIL: missing CLI routing contract: $ROUTE"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for sym in "route_for_commands" "CommandRoute" "route_for_command_id"; do
+    if ! rg -q "$sym" "$ROUTE" 2>/dev/null; then
+      echo "FAIL: $ROUTE missing required symbol: $sym"
+      FAIL=$((FAIL + 1))
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+if ! rg -q 'route_for_commands' crates/eggsec/src/commands/handlers/mod.rs 2>/dev/null; then
+  echo "FAIL: handle_command does not classify via route_for_commands."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+BRIDGE_HITS=$(rg -n 'Dispatch bridge' crates/eggsec/src/commands/handlers/mod.rs 2>/dev/null || true)
+if [[ -n "$BRIDGE_HITS" ]]; then
+  echo "$BRIDGE_HITS"
+  echo "FAIL: Transitional registry-bridge prelude still present in handle_command."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: CLI routing contract is single-owned."
+fi
+
+# 85. Embedded and daemon runtimes share the executor owner (Phase 1.5/1.6).
+# Daemon bundle routes via execute_approved; TUI dispatcher via
+# execute_canonical; TUI owns no dispatch_inner call.
+echo ""
+echo "--- Check 85: Runtimes share the canonical executor ---"
+SECTION_FAIL=0
+if ! rg -q 'execute_approved' crates/eggsec/src/runtime_bridge/bundle.rs 2>/dev/null; then
+  echo "FAIL: runtime_bridge/bundle.rs does not route via execute_approved."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'execute_canonical' crates/eggsec-tui/src/app/task_dispatcher.rs 2>/dev/null; then
+  echo "FAIL: TUI dispatcher does not delegate to execute_canonical."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TUI_INNER=$(rg -n 'dispatch_inner' crates/eggsec-tui/src/app/task_dispatcher.rs 2>/dev/null || true)
+if [[ -n "$TUI_INNER" ]]; then
+  echo "$TUI_INNER"
+  echo "FAIL: TUI dispatcher still calls dispatch_inner directly. Use execute_canonical."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Runtimes share the canonical executor."
+fi
+
+# 86. Cancellation semantics are shared (Phase 1.6).
+# The shared primitive lives in eggsec-runtime::cancel; both adapters race
+# dispatch against the token with identical messages.
+echo ""
+echo "--- Check 86: Cancellation semantics are shared ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec-runtime/src/cancel.rs" ]]; then
+  echo "FAIL: missing shared cancellation primitive: crates/eggsec-runtime/src/cancel.rs"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! rg -q 'race_with_cancel' crates/eggsec-runtime/src/cancel.rs 2>/dev/null; then
+  echo "FAIL: cancel.rs missing race_with_cancel."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for f in "crates/eggsec/src/runtime_bridge/executor.rs" "crates/eggsec-tui/src/app/task_runtime.rs"; do
+  if ! rg -q 'cancelled during execution' "$f" 2>/dev/null; then
+    echo "FAIL: $f missing shared cancel-race semantics."
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Cancellation semantics are shared."
+fi
+
+# 87. Application-boundary tests are in the mandatory path (Phase 1).
+echo ""
+echo "--- Check 87: Canonical dispatch tests are wired ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec/tests/canonical_dispatch_ownership.rs" ]]; then
+  echo "FAIL: missing application-boundary test: crates/eggsec/tests/canonical_dispatch_ownership.rs"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'cargo test -p eggsec --features rest-api --tests' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile mandatory path does not run eggsec --tests (boundary tests not wired)."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Canonical dispatch tests are wired."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

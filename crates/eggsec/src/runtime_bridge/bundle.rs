@@ -76,14 +76,25 @@ pub fn approve_run_request_bundle(
 
 /// Dispatch an approved runtime request with validation.
 ///
-/// Before routing to `dispatch_inner()`, this function requires exact
+/// Phase 1 convergence: this is the daemon/runtime path onto the **single
+/// canonical execution boundary**. Before routing, it requires exact
 /// descriptor binding via `ApprovedOperation::matches_descriptor` (all
-/// policy-relevant fields). These checks prevent approve-one-dispatch-another
-/// attacks where the request is mutated between approval and dispatch.
+/// policy-relevant fields) to prevent approve-one-dispatch-another attacks
+/// where the request is mutated between approval and dispatch. It then
+/// converts `TaskKind` → [`crate::dispatch::CanonicalOperationRequest`] and
+/// invokes [`crate::dispatch::execute_approved`], which re-validates binding
+/// at executor entry and owns the single executor match.
+///
+/// Embedded TUI execution reaches the same owner via
+/// `TuiTaskDispatcher` → `execute_canonical`; both paths share executor
+/// selection, operation identity, target binding, and terminal outcome
+/// semantics (progress timing/order may differ).
 pub async fn dispatch_approved_runtime_request(
     bundle: ApprovedRunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
+    use crate::dispatch::{execute_approved, CanonicalOperationRequest, ExecutionSink};
+
     let (approved, request) = bundle.into_parts();
 
     // Re-resolve the descriptor from the current request to detect mutations.
@@ -116,8 +127,11 @@ pub async fn dispatch_approved_runtime_request(
         ));
     }
 
-    // Dispatch through the engine.
-    crate::dispatch::dispatch_inner(request, progress_tx)
+    // Single canonical boundary: TaskKind → canonical request (exhaustive),
+    // then approved execution (binding re-checked at executor entry).
+    let canonical = CanonicalOperationRequest::from_task_kind(&request.task_kind);
+    let sink = ExecutionSink::detached(progress_tx);
+    execute_approved(&approved, canonical, &sink)
         .await
         .map_err(|e| anyhow::anyhow!("task execution failed: {e}"))
 }

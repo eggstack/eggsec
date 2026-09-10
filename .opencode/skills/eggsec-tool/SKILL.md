@@ -174,3 +174,14 @@ Follow existing test patterns in `tool/` modules, testing trait implementations,
 ## Phase D Service Boundaries (2026-09-09)
 
 Adapters depend on `tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`, not on concrete `ToolRegistry`/`ToolDispatcher` construction. `CheckedExecutor` exposes only `dispatch_checked`; MCP uses `mcp::bridge::McpEngineBridge`. Only composition roots call `EngineServices::new`; adapters take it via `with_services`/`router_with_services`. Never call raw `.dispatch`, direct `tool.execute`, or `Scope::is_target_allowed` in `tool/protocol/`. Approval tokens come from `EnforcementContext::approve`, never `ApprovedOperation::new`.
+
+## Phase 1 Canonical Dispatch (2026-09-10)
+
+Programmatic surfaces stay behind `EnforcedDispatcher::dispatch_checked`, which
+validates `ToolRequest.params` through the same canonical contracts as CLI/runtime
+(`operation_request::validate_tool_request_params` → typed `normalize()`). The
+runtime/embedded execution seam is `dispatch::execute_approved` over
+`CanonicalOperationRequest` (single executor owner `execute_canonical`,
+frontend-neutral `ExecutionEvent`/`ExecutionSink`, exact `matches_descriptor`
+binding at entry, one-layer feature check). Do not add a second operation→executor
+map in protocol/agent code; converge below surface ergonomics.

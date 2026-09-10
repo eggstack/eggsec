@@ -1,3 +1,4 @@
+pub mod cancel;
 pub mod capabilities;
 pub mod dispatcher;
 pub mod error;
@@ -9,6 +10,7 @@ pub mod runtime_config;
 pub mod runtime_sink;
 pub mod session;
 
+pub use cancel::race_with_cancel;
 pub use capabilities::{RuntimeCapabilities, TaskCapability};
 pub use error::RuntimeError;
 pub use event::{

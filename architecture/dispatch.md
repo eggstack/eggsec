@@ -6,25 +6,42 @@ Parent overview: [overview.md](overview.md). Related: [runtime_bridge.md](runtim
 
 ## Role
 
-`crates/eggsec/src/dispatch/` is the engine's **frontend-neutral execution layer**. It converts a `TaskKind` request into a call to the right engine module and returns a typed `TaskResult`. It performs **no authorization of its own** — every executor receives an already-evaluated `OperationDescriptor`, and all scope/policy decisions were made upstream by `EnforcementContext::evaluate()` (see [config.md](config.md)).
+`crates/eggsec/src/dispatch/` is the engine's **frontend-neutral execution layer**.
+Phase 1 convergence: the single production owner for
+`(canonical operation ID + canonical typed request + ApprovedOperation) → engine
+executor` is `canonical_execution.rs` (`execute_approved` / `execute_canonical`).
+It performs **no authorization of its own beyond binding verification** — scope/policy
+decisions were made upstream by `EnforcementContext::evaluate()` (see [config.md](config.md));
+the boundary re-verifies request/approval binding at executor entry and checks
+feature availability in one layer.
 
 ```
-CLI handler ──────────────────────────────────────┐
-TUI (via TuiTaskDispatcher) ──────────────────────┤
-REST/MCP/gRPC/Agent (EnforcedDispatcher::dispatch_checked) ──┤→ dispatch_inner() → worker → engine → TaskResult
-Daemon/Runtime (ApprovedRunRequest bundle) ───────┘
+CLI adapter (route + canonical request + approval)
+TUI shallow adapter (TaskKind → canonical request) ─┐
+Daemon bundle (approval + canonical request) ───────┤→ execute_approved() → execute_canonical() → worker → TaskResult
+REST/MCP/gRPC/Agent (EnforcedDispatcher, canonical validation) ─┘
 ```
 
-The two public entry points are:
+The public entry points are:
 
-- `dispatch_task()` (`mod.rs:63`) — creates per-task progress + result channels, calls `dispatch_inner()`, and forwards the result. Returns `(progress_rx, result_rx)` for the caller to consume.
-- `dispatch_inner()` (`mod.rs:101–388`) — the `TaskKind` router. Returns `TaskResult` directly. Marked `#[doc(hidden)]` but `pub` because `eggsec-tui`'s dispatcher and `runtime_bridge` are sanctioned callers.
+- `execute_approved()` (`canonical_execution.rs`) — the canonical boundary. Requires
+  exact operation/target/descriptor binding (`matches_descriptor`), validates through
+  canonical contracts, checks features, emits frontend-neutral `ExecutionEvent`s.
+- `execute_canonical()` (`canonical_execution.rs`) — the single-owner executor match
+  over `CanonicalOperationRequest`. `dispatch_inner()` and the TUI dispatcher both
+  delegate here; neither owns a second mapping.
+- `dispatch_task()` (`mod.rs`) — creates per-task progress + result channels, calls
+  `dispatch_inner()`, and forwards the result. Returns `(progress_rx, result_rx)`.
+- `dispatch_inner()` (`mod.rs`) — legacy manual shim over `execute_canonical`
+  (`TaskKind → CanonicalOperationRequest`, `FeatureUnavailable → Ok(Error)` for
+  backward compat). New code uses `execute_approved` or the runtime-bridge bundle.
 
 ## File Layout
 
 | File | Lines | Contents |
 |------|-------|----------|
-| `mod.rs` | 519 | `dispatch_task()` (`:63`) — channel creation + forwarding; `dispatch_inner()` (`:101–388`) — `TaskKind` router (29 match arms covering all task kinds, feature-gated kinds fall through to explicit `TaskResult::Error` when compiled out); unit tests |
+| `canonical_execution.rs` | ~1800 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
+| `mod.rs` | ~310 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
 | `types.rs` | 156 | `TaskResult` enum (27 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
 | `executor.rs` | 64 | `OperationExecutor` trait (object-safe: no generic self, no generic associated types), `ExecutionOutput` enum (`Success`/`FeatureUnavailable`/`Failed`) |
 | `executors/mod.rs` | 43 | `build_default_registry()` — registers 5 always-compiled + 2 feature-gated adapters |
@@ -54,9 +71,14 @@ These are the actual task implementations invoked by `dispatch_inner()`:
 | `db_pentest.rs` | `db-pentest` | `dispatch::db_pentest` |
 | `intercept.rs` | `web-proxy` | `dispatch::intercept` |
 
-## TaskKind Routing
+## Canonical Routing (single owner)
 
-`dispatch_inner()` (`mod.rs:101–388`) matches all 29 `TaskKind` variants (defined at `eggsec-runtime/src/request.rs:53–83`). Each arm extracts parameters from the variant's payload struct and delegates to the corresponding domain worker:
+`execute_canonical()` (`canonical_execution.rs`) matches `CanonicalOperationRequest`
+(converted exhaustively from `TaskKind` via `from_task_kind`, or from CLI adapters).
+Each arm normalizes through canonical contracts, then delegates to the corresponding
+domain worker. `dispatch_inner()` no longer owns a `TaskKind` match; it converts and
+delegates. The `TaskKind` variants (defined at `eggsec-runtime/src/request.rs:53–83`)
+route as follows:
 
 | # | TaskKind | Worker Call | Feature Gate |
 |---|----------|-------------|-------------|
@@ -90,11 +112,21 @@ These are the actual task implementations invoked by `dispatch_inner()`:
 | 28 | `Intercept` | `intercept::run_intercept_task` | `web-proxy` |
 | 29 | `C2` | `c2::run_c2_task` | `c2` |
 
-The final arm (`_ =>`) at `mod.rs:383` catches feature-gated variants compiled out and returns `TaskResult::Error("Unsupported task kind")` with a `tracing::warn!`. This is **never a silent no-op** — the caller always receives an explicit error.
+Feature-gated families without their feature return typed
+`ExecutionError::FeatureUnavailable` at the boundary (one predictable layer);
+the legacy `dispatch_inner` shim converts that to `Ok(TaskResult::Error(..))` for
+backward compatibility. This is **never a silent no-op** — the caller always
+receives an explicit error.
 
-## Executor Adapters
+## Executor Adapters (retained, non-owning)
 
-`executors/mod.rs:25` (`build_default_registry()`) registers adapters used by the tool/registry path:
+`executors/mod.rs:25` (`build_default_registry()`) registers adapters used by the tool/registry path.
+Phase 1 completion record: the `ExecutorRegistry` (`OperationExecutor` trait objects)
+is **retained** as the tool-path adapter registry (built + tested, used by
+`EngineServices` composition), but it is **not** a second runtime dispatch owner:
+runtime/embedded execution routes through `execute_canonical`, not the registry.
+Unifying the tool path onto `execute_canonical` is tracked future work; validation
+already converges via shared canonical contracts (`validate_tool_request_params`).
 
 | Executor | Feature | Operation IDs | Delegates To |
 |----------|---------|---------------|-------------|
@@ -120,17 +152,27 @@ The `ExecutorRegistry` (`executors/registry.rs:9`) uses `std::collections::HashM
 
 ## Interaction With Enforcement
 
-Three distinct paths reach engine functions, all post-authorization:
+Paths reach the single executor owner post-authorization:
 
 ### 1. Manual Surfaces (CLI/TUI)
 
-CLI/TUI handlers in `crates/eggsec/src/commands/handlers/` call `ctx.evaluate_and_enforce_operation(descriptor)` themselves, then invoke engine functions directly (not via `dispatch_inner`). See [cli_commands.md](cli_commands.md).
+CLI handlers classify once via `commands::route::route_for_commands`, convert to
+canonical requests, enforce via `ctx.evaluate_and_enforce_operation(descriptor)`,
+and render outcomes (CLI adapter owns rendering, not executor selection).
+See [cli_commands.md](cli_commands.md). TUI actions enforce via `EnforcementFacade`
+(exact binding), then `TuiTaskDispatcher` converts `TaskKind → canonical request →
+execute_canonical` (shallow adapter, no second mapping).
 
 ```
-CLI/TUI handler
+CLI handler
+    → route_for_commands() classify once
+    → canonical request conversion
     → ctx.evaluate_and_enforce_operation(descriptor)
-    → ApprovedOperation
-    → engine function directly
+    → ApprovedOperation → execute_approved() → outcome → CLI rendering
+TUI action
+    → EnforcementFacade (exact matches_descriptor binding)
+    → TuiTaskDispatcher: TaskKind → canonical → execute_canonical()
+    → envelope + typed TaskResult rendering
 ```
 
 ### 2. Strict Protocol Surfaces (REST/MCP/gRPC/Agent)
@@ -161,15 +203,16 @@ Callers include:
 
 ### 3. Daemon/Runtime Surfaces
 
-`runtime_bridge::approve_run_request_bundle()` converts `RunRequest` → descriptor, obtains an `ApprovedOperation`, and the resulting `ApprovedRunRequest` executes through this dispatch layer via `dispatch_approved_runtime_request()`. See [runtime_bridge.md](runtime_bridge.md).
+`runtime_bridge::approve_run_request_bundle()` converts `RunRequest` → descriptor, obtains an `ApprovedOperation`, and the resulting `ApprovedRunRequest` executes through the canonical boundary via `dispatch_approved_runtime_request()`. See [runtime_bridge.md](runtime_bridge.md).
 
 ```
 Daemon/Runtime
     → approve_run_request_bundle()
     → ApprovedRunRequest (token + request coupled)
     → dispatch_approved_runtime_request()
-        → re-resolve descriptor, validate operation + target match
-        → dispatch_inner(request, progress_tx)
+        → re-resolve descriptor, exact matches_descriptor check
+        → CanonicalOperationRequest::from_task_kind()
+        → execute_approved() (binding re-checked at entry)
 ```
 
 ## TaskResult Variants
@@ -212,12 +255,14 @@ Daemon/Runtime
 
 ## Invariants
 
-1. **Executors are policy-free**: no `LoadedScope`/`EnforcementContext` access below this layer. The `dispatch_inner()` function (`mod.rs:94–98`) documents this explicitly.
+1. **Executors are policy-free**: no `LoadedScope`/`EnforcementContext` access below this layer. Binding is re-verified at entry (`matches_descriptor`), but authorization decisions stay upstream.
 2. **Every spawned task path carries timeout wrappers** per workspace convention (AGENTS.md lesson).
-3. **Unsupported feature-gated task kinds fail with explicit `TaskResult::Error`**, never silently no-op (`mod.rs:383–386`).
-4. **The TUI must not host its own dispatch code** — tab UIs call into this module (architecture guard enforced).
-5. **`dispatch_inner` must only be invoked from manual surfaces** (CLI/TUI `ManualPermissive` context). Strict surfaces must never call it directly — route through `EnforcementContext::evaluate()` and `EnforcedDispatcher::dispatch_checked()` (`mod.rs:94–99`).
-6. **`dispatch_task` wraps errors in `TaskResult::Error`** — callers always receive a result through the channel, never a dropped request (`mod.rs:77–81`).
+3. **Unsupported feature-gated families fail with typed `FeatureUnavailable`** at the boundary, never silently no-op (legacy shim maps to `TaskResult::Error`).
+4. **The TUI must not host its own dispatch code** — tab UIs call into this module via the shallow `TuiTaskDispatcher` adapter (architecture guards 18, 85 enforced).
+5. **`dispatch_inner` must only be invoked from manual surfaces** (CLI/TUI `ManualPermissive` context). Strict surfaces must never call it directly — route through `EnforcementContext::evaluate()` and `EnforcedDispatcher::dispatch_checked()`. New code prefers `execute_approved`.
+6. **`dispatch_task` wraps errors in `TaskResult::Error`** — callers always receive a result through the channel, never a dropped request.
+7. **Canonical IDs only at the boundary**: aliases resolve in surface adapters (`CommandRoute`, Clap tree, `TaskKind` mappings); `execute_approved` requires exact operation equality.
+8. **Progress may coalesce; findings/terminal outcomes never drop** (`ExecutionSink` bounded 100, explicit loss counter).
 
 ## Bug Sweep
 
@@ -228,15 +273,13 @@ Daemon/Runtime
 
 ## Testing
 
-The dispatch module has three test groups in `mod.rs:390–518`:
+Boundary tests live in three mandatory-path suites:
 
-- **`dispatch_task_port_scan_returns_receivers`** (`:396`) — verifies channel plumbing works for a port scan request.
-- **`dispatch_inner_returns_task_result_for_error_case`** (`:419`) — proves `dispatch_inner` returns `TaskResult` (not `()`) using an unreachable target.
-- **`executor_registry_covers_core_operations`** (`:454`) — verifies all 15 core operation IDs have registered executors.
-- **`executor_registry_feature_gated_operations`** (`:486`) — verifies `nse` and `db-pentest` when features are enabled.
-- **`executor_registry_no_duplicates`** (`:504`) — ensures no duplicate operation IDs across executors.
-
-The `runtime_bridge/bundle.rs` tests (`:118–313`) verify dispatch-level anti-tamper checks (operation mismatch, target mismatch).
+- **`canonical_execution` unit tests** — canonical IDs (no aliases), packet-family sharing, `from_task_kind` exhaustiveness, executor routes, sink coalescing/drop-counting, binding rejections.
+- **`crates/eggsec/tests/canonical_dispatch_ownership.rs`** (26 tests) — per-family CLI/runtime/tool normalization equivalence, identity/binding/route agreement, feature-gate consistency, error/outcome classification, `CommandRoute` ownership, daemon-bundle cancel race.
+- **`dispatch/mod.rs` tests** — channel plumbing, legacy shim behavior, executor-registry coverage (retained adapter registry).
+- **`runtime_bridge/bundle.rs` tests** — anti-tamper checks (operation/target mismatch).
+- **TUI `task_runtime`/`task_dispatcher` tests** — embedded cancel contract (shared primitive).
 
 ## See Also
 
@@ -246,4 +289,18 @@ The `runtime_bridge/bundle.rs` tests (`:118–313`) verify dispatch-level anti-t
 - [tool/dispatcher.rs](../crates/eggsec/src/tool/dispatcher.rs) — `EnforcedDispatcher::dispatch_checked()` for strict surfaces
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 
-*Last verified against source: 2026-08-25*
+## Phase 1 Completion Record (2026-09-10)
+
+Starting SHA `d4723af0` (Phase 0 executed); final SHA recorded in the plan file.
+Removed: `dispatch_inner`'s 29-arm `TaskKind` match (moved to `execute_canonical`);
+registry-bridge prelude in `handle_command` (replaced by single `route_for_commands`
+classification); TUI direct `dispatch_inner` call (now `execute_canonical` shallow
+adapter); daemon direct `dispatch_inner` call (now `execute_approved` via bundle).
+Retained (legitimate boundary conversions, not duplicate ownership): `TaskKind` and
+CLI `Commands` enums (wire/UI representations); `Commands → CommandRoute` match
+(compiler-enforced boundary conversion); `TaskKind → CanonicalOperationRequest`
+conversion (explicit, exhaustive); `ExecutorRegistry` adapter registry (tool-path
+composition, validation converges via shared canonical contracts); helper/lifecycle
+routes (explicit non-operation); compatibility aliases at input/wire boundaries only.
+
+*Last verified against source: 2026-09-10*

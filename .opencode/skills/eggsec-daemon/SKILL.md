@@ -51,7 +51,7 @@ Local lifecycle smoke test: `bash scripts/smoke-daemon-local.sh [socket-path]` (
 
 ## Runtime Bridge
 
-`crates/eggsec/src/runtime_bridge/` converts runtime DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) into engine enforcement types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `preflight_run_request()` previews policy; `approve_run_request()` produces the pre-dispatch authorization bundle.
+`crates/eggsec/src/runtime_bridge/` converts runtime DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) into engine enforcement types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `preflight_run_request()` previews policy; `approve_run_request()` produces the pre-dispatch authorization bundle. Phase 1: the bundle dispatches via the single canonical boundary (`dispatch::execute_approved` over `CanonicalOperationRequest::from_task_kind`), sharing executor selection with embedded TUI execution (`execute_canonical`). Cancellation races use the shared `eggsec-runtime::race_with_cancel` primitive in both adapters.
 
 ## Testing
 

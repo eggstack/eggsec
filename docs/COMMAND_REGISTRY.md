@@ -19,12 +19,14 @@ Command Registration (static, inspectable)
     │   └─ display_name, feature derived from metadata (construction test enforced)
     ├─ command-specific fields (category, dispatch_mode, cli_interactive_only)
     └─ descriptor builder → OperationDescriptor from metadata
-    
-Dispatch Bridge (handle_command)
+
+Routing Contract (handle_command, Phase 1 single owner)
     │
-    ├─ registry.lookup(command_id) → CommandRegistration
-    │   └─ dispatch_mode == RegistryBacked → build descriptor → evaluate_and_enforce → execute
-    └─ not registered → error (no legacy fallback)
+    ├─ route_for_commands(cmd) classify once → CommandRoute
+    │   (Operation | Multiplexer | Helper | Lifecycle; aliases resolved)
+    ├─ operation-backed → canonical request → evaluate_and_enforce → execute_approved
+    │   (same single executor owner as TUI/daemon)
+    └─ helper/lifecycle → explicit non-operation paths (never forced into catalog)
 ```
 
 ## Command Categories

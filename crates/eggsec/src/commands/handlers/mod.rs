@@ -449,41 +449,35 @@ fn classes_str(classes: &[crate::config::ConfirmationClass]) -> String {
 }
 
 pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
-    // ── Dispatch bridge: validate registry metadata before execution ──
+    // ── Single-owner routing contract (Phase 1) ──
     //
-    // For commands backed by the registry (those with an operation_id),
-    // verify that the registry entry resolves to valid OperationMetadata
-    // before dispatching to the handler. This ensures registry metadata
-    // stays consistent with the canonical source and catches stale entries
-    // at runtime.
+    // Every command is classified exactly once via `route_for_commands`
+    // (exhaustive over `Commands`; canonical operation IDs resolved, aliases
+    // resolved before execution). Operation-backed routes are validated
+    // against canonical `OperationMetadata` here so a stale route fails
+    // closed instead of silently executing another operation.
     //
-    // Non-registry commands (config, helper, server) skip this check.
+    // The exhaustive `Commands` match below remains as the *boundary
+    // conversion* (Clap DTO → handler), not a second semantic routing owner:
+    // routing ownership lives in `commands::route`, execution ownership lives
+    // in `dispatch::canonical_execution`.
+    //
     // Enforcement is NOT performed here — it remains in each handler via
-    // `evaluate_and_enforce_operation()`.
+    // `evaluate_and_enforce_operation()` (CLI adapter) before the canonical
+    // execution boundary.
     if let Some(ref command) = cli.command {
+        let route = crate::commands::route::route_for_commands(command);
         let command_id = command.command_id();
-        if let Some(registry_entry) = crate::commands::registry::lookup_command(command_id) {
-            if let Some(op_id) = registry_entry.operation_id {
-                // Validate registry metadata resolves to OperationMetadata.
-                // A failure here means the registry entry is stale.
-                let metadata_valid = crate::config::metadata_for_tool_id(op_id).is_some();
-                if !metadata_valid {
-                    tracing::warn!(
-                        command_id,
-                        op_id,
-                        "Command registry entry has stale operation_id — \
-                         metadata not found. Falling back to handler."
-                    );
-                } else {
-                    tracing::trace!(
-                        command_id,
-                        op_id,
-                        category = registry_entry.category.as_str(),
-                        "Dispatch bridge: registry entry validated"
-                    );
-                }
+        // Fail closed on stale routes: every candidate operation must resolve
+        // to canonical metadata.
+        for op_id in route.operations() {
+            if crate::config::metadata_for_tool_id(op_id).is_none() {
+                anyhow::bail!(
+                    "stale CLI route: command '{command_id}' resolves to unknown operation '{op_id}'"
+                );
             }
         }
+        tracing::trace!(command_id, ?route, "CLI route classified");
     }
 
     match cli.command {

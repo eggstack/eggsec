@@ -8,7 +8,7 @@ See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md)
 
 - Render the shell (tab bar, breadcrumb, content area, status bar) and all overlays.
 - Route keyboard/mouse input through a three-layer decode pipeline (overlay → global → mode-specific).
-- Spawn tasks via `eggsec::dispatch::dispatch_inner()` and receive results through typed channels and a runtime event reducer.
+- Spawn tasks via the shallow `TuiTaskDispatcher` adapter (`TaskKind → canonical request → dispatch::execute_canonical`, single engine executor owner shared with daemon execution) and receive results through typed channels and a runtime event reducer.
 - Enforce policy via `TuiManual` / `TuiManualStrict` surfaces before any target-bearing dispatch.
 - Persist sessions (auto-save + quick-save on exit) and restore theme, tab position, bookmarks.
 - Connect to an external `eggsec-daemon` via Unix socket for remote-attach mode.

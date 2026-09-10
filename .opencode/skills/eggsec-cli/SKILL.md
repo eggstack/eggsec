@@ -141,9 +141,27 @@ pub enum Commands {
 
 ## Command Dispatch (`src/commands/handlers/`)
 
+### Routing contract (Phase 1: single owner)
+`commands/route.rs` owns the `Commands → CommandRoute` conversion (exhaustive,
+no wildcard): every variant classifies once as operation-backed, multiplexer,
+helper, or lifecycle, with canonical operation IDs resolved (`waf`→`waf-detect`,
+`load`→`load-test`, `scan`/`resume`→`pipeline`). `handle_command` classifies once
+via `route_for_commands`, fails closed on stale routes (unknown operation IDs),
+then converts through the boundary match below. The match remains as a boundary
+conversion (Clap DTO → handler), not a second routing owner; execution ownership
+lives in `dispatch::canonical_execution::execute_approved`.
+
 ### Handle Command Pattern
 ```rust
 pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
+    if let Some(ref command) = cli.command {
+        let route = crate::commands::route::route_for_commands(command);
+        for op_id in route.operations() {
+            if crate::config::metadata_for_tool_id(op_id).is_none() {
+                anyhow::bail!("stale CLI route: ...");
+            }
+        }
+    }
     match cli.command {
         None => handle_no_command(&cli).await,
         Some(Commands::ScanPorts(args)) => handle_scan_ports(ctx, args).await,

@@ -170,14 +170,15 @@ Scope must come from `LoadedScope` (not raw `Scope`) for automated surfaces.
 5. **eggsec-output** must not depend on `eggsec` (engine) or `eggsec-runtime`. Only depends on `eggsec-core`.
 6. **eggsec-daemon** must never depend on TUI crates. Engine dep (`eggsec`) is optional behind `full-executor`; transport deps (axum etc.) are optional behind `http-api`. Default deps: `eggsec-runtime` + `eggsec-daemon-protocol` only. Guard rejects non-optional engine/transport deps.
 7. **Operation request contracts**: canonical defaults/validation live in `eggsec-tool-core::operation_request`; engine facade in `eggsec::operation_request`; `TaskKind::operation_id`/`canonical_target` exhaustive; `ToolRequest.params` validated via `validate_tool_request_params`; command handlers use `describe_from_registry`.
+8. **Canonical dispatch ownership (Phase 1)**: `dispatch::canonical_execution::execute_approved` (ApprovedOperation + CanonicalOperationRequest + ExecutionSink) is the single executor owner; `execute_canonical` owns the match. `dispatch_inner` is a legacy manual shim. CLI routing is single-owned via `commands::route::route_for_commands` (exhaustive, aliases resolved). Executor code must not import Clap/Ratatui/daemon-protocol/Python types. Cancellation races share `eggsec-runtime::race_with_cancel` semantics in both adapters.
 
 ### Runtime dispatch flow
 
 ```
-TUI → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner() → TaskResult
-CLI → CLI dispatch → eggsec::dispatch::dispatch_inner() → direct output
-REST/MCP/Agent → EnforcementContext::evaluate() → EnforcedDispatcher::dispatch_checked() → tool execution
-Daemon/Runtime → runtime_bridge (RuntimeSurface→ExecutionSurface, TaskKind→OperationDescriptor) → EnforcementContext → dispatch
+TUI → TuiTaskDispatcher (shallow: TaskKind → canonical → execute_canonical) → TaskResult + envelope
+CLI → route_for_commands classify once → canonical request + approval → execute_approved → outcome → CLI rendering
+REST/MCP/Agent → EnforcementContext::evaluate() → EnforcedDispatcher::dispatch_checked() → tool execution (canonical validation shared)
+Daemon/Runtime → runtime_bridge bundle → execute_approved (same executor owner as TUI) → TaskOutcome
 ```
 
 The `runtime_bridge` module (`crates/eggsec/src/runtime_bridge/`) bridges `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to the engine enforcement model (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). It provides `preflight_run_request()` for policy preview and `approve_run_request()` for pre-dispatch authorization.

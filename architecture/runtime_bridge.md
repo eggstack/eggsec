@@ -20,8 +20,8 @@ The bridge is the **only** place where runtime DTOs are converted to enforcement
 | `surface.rs` | 149 | `RuntimeSurface` → `ExecutionSurface` conversion; `RuntimeBridgeError` enum (7 variants) |
 | `descriptor.rs` | 459 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` |
 | `manual.rs` | 438 | `preflight_run_request()` and `approve_run_request()` entry points |
-| `bundle.rs` | 313 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation |
-| `executor.rs` | 440 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; `task_result_to_outcome()` conversion |
+| `bundle.rs` | ~340 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
+| `executor.rs` | ~440 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; `task_result_to_outcome()` conversion; shared cancel race |
 
 ## Key Types
 
@@ -32,7 +32,7 @@ Error enum with **7 variants** covering all bridge failure modes (`surface.rs:6�
 | Variant | Cause | Line |
 |---------|-------|------|
 | `UnknownSurface` | `RuntimeSurface::Unknown` cannot map to `ExecutionSurface` | `:8` |
-| `UnsupportedTaskKind` | Task kind not yet bridged (e.g., `PacketTraceroute`, `PacketSend`) | `:12` |
+| `UnsupportedTaskKind` | Task kind with no canonical mapping (none currently; all 29 `TaskKind` variants map) | `:12` |
 | `MissingTarget` | Task kind requires a target but none was provided | `:16` |
 | `UnknownOperationId` | No registered metadata for the operation ID | `:20` |
 | `InvalidTarget` | Target failed validation for the given operation | `:24` |
@@ -71,8 +71,8 @@ RuntimeSurface + RunRequest
   (approved token + request coupled at single point in time)
         │
         ▼
-  dispatch_approved_runtime_request()       [bundle.rs:84]
-  (re-resolve descriptor → validate op + target match → dispatch_inner())
+  dispatch_approved_runtime_request()       [bundle.rs]
+  (re-resolve descriptor → exact match → canonical execute_approved())
         │
         ▼
   TaskResult → task_result_to_outcome()     [executor.rs:120]
@@ -98,9 +98,9 @@ Maps each `RuntimeSurface` variant to its `ExecutionSurface` counterpart. This i
 
 Only `CliManual` and `TuiManual` honor manual overrides (`config/policy.rs:412–413`).
 
-### TaskKind Resolution (`descriptor.rs:37–75`)
+### TaskKind Resolution (`descriptor.rs`)
 
-`resolve_operation_and_target()` maps **29** `TaskKind` variants to canonical operation IDs. 27 map successfully; 2 return `UnsupportedTaskKind`:
+`resolve_operation_and_target()` maps all **29** `TaskKind` variants to canonical operation IDs (Phase 0: packet traceroute/send explicitly share the `packet` family; no unsupported wire kinds remain):
 
 | TaskKind | Operation ID | Target Required | Line |
 |----------|-------------|----------------|------|
@@ -115,24 +115,24 @@ Only `CliManual` and `TuiManual` honor manual overrides (`config/policy.rs:412�
 | `Fuzz` | `fuzz` | Yes | `:49` |
 | `StressTest` | `stress-test` | Yes | `:50` |
 | `PacketCapture` | `packet` | None | `:51` |
-| `GraphQl` | `graphql` | Yes | `:52` |
-| `OAuth` | `oauth` | Yes | `:53` |
-| `AuthTest` | `auth-test` | Yes | `:54` |
-| `Nse` | `nse` | Yes | `:55` |
-| `Hunt` | `hunt` | Yes | `:56` |
-| `Browser` | `browser` | Yes | `:57` |
-| `Compliance` | `compliance` | Yes | `:58` |
-| `Storage` | `storage` | None | `:59` |
-| `Integrations` | `integrations` | None | `:60` |
-| `Workflow` | `workflow` | None | `:61` |
-| `Vuln` | `vuln` | Yes | `:62` |
-| `Wireless` | `wireless` | None | `:63` |
-| `WirelessActive` | `wireless` | None | `:64` |
-| `DbPentest` | `db-pentest` | Yes | `:65` |
-| `Intercept` | `proxy-intercept` | None | `:66` |
-| `C2` | `c2` | None | `:67` |
-| `PacketTraceroute` | **Unsupported** | — | `:68` |
-| `PacketSend` | **Unsupported** | — | `:71` |
+| `PacketTraceroute` | `packet` | Yes | `:52` |
+| `PacketSend` | `packet` | Yes | `:53` |
+| `GraphQl` | `graphql` | Yes | `:54` |
+| `OAuth` | `oauth` | Yes | `:55` |
+| `AuthTest` | `auth-test` | Yes | `:56` |
+| `Nse` | `nse` | Yes | `:57` |
+| `Hunt` | `hunt` | Yes | `:58` |
+| `Browser` | `browser` | Yes | `:59` |
+| `Compliance` | `compliance` | Yes | `:60` |
+| `Storage` | `storage` | None | `:61` |
+| `Integrations` | `integrations` | None | `:62` |
+| `Workflow` | `workflow` | None | `:63` |
+| `Vuln` | `vuln` | Yes | `:64` |
+| `Wireless` | `wireless` | None | `:65` |
+| `WirelessActive` | `wireless` | None | `:66` |
+| `DbPentest` | `db-pentest` | Yes | `:67` |
+| `Intercept` | `proxy-intercept` | Optional | `:68` |
+| `C2` | `c2` | Optional | `:69` |
 
 The resolved operation ID is looked up in `ALL_OPERATION_METADATA` to produce the full `OperationDescriptor` (risk tier, mode, capabilities, scope requirements, feature gates). `descriptor_for_run_request()` uses `metadata.try_descriptor_for_target()` for validated construction (`descriptor.rs:25–30`).
 
@@ -193,13 +193,13 @@ pub fn approve_run_request_bundle(
 ) -> Result<ApprovedRunRequest, RuntimeBridgeError>
 ```
 
-`dispatch_approved_runtime_request()` validates before dispatch (`bundle.rs:84–130`):
+`dispatch_approved_runtime_request()` validates before dispatch (Phase 1: canonical boundary):
 
 1. Calls `bundle.into_parts()` to get `(approved, request)`
 2. Re-resolves the `OperationDescriptor` from the current request
 3. Requires exact binding via `approved.matches_descriptor(&current)` (derived `PartialEq`; all policy-relevant fields participate automatically)
 4. Preserves granular `operation` / `normalized_target` diagnostics for approve-one-dispatch-another mutations
-5. Only then delegates to `dispatch_inner()`
+5. Converts `TaskKind → CanonicalOperationRequest::from_task_kind()` (exhaustive) and invokes `dispatch::execute_approved()` — binding re-checked at executor entry, single executor owner shared with embedded TUI execution
 
 These anti-tamper checks prevent approve-one-dispatch-another attacks. The checks are **fail-closed** — any mismatch returns an error before any engine code executes.
 
@@ -215,17 +215,17 @@ pub struct EggsecRuntimeExecutor {
 
 **Execution flow** (`executor.rs:284–372`):
 
-1. Check cancellation (`cancel.is_cancelled()`) — `:297`
-2. Reject `RuntimeSurface::Unknown` — `:302`
-3. Resolve scope via `resolve_loaded_scope()` — `:309`
-   - Strict surfaces: require explicit `LoadedScope` from disk; fail closed if unavailable — `:104`
-   - Permissive manual surfaces (`CliManual`/`TuiManual`): use `default_empty()` — `:101`
-4. Call `approve_run_request_bundle()` for full enforcement — `:318`
-5. Log approved operation for audit — `:330`
-6. Spawn progress forwarder task — `:344`
-7. Call `dispatch_approved_runtime_request()` racing against cancellation via `tokio::select!` — `:352`
-8. Forward progress from `mpsc` channel to `RuntimeEventSink` — `:345–347`
-9. Convert `TaskResult` → `TaskOutcome` via `task_result_to_outcome()` — `:368`
+1. Check cancellation (`cancel.is_cancelled()`) — pre-cancelled tasks never start detached work
+2. Reject `RuntimeSurface::Unknown`
+3. Resolve scope via `resolve_loaded_scope()`
+   - Strict surfaces: require explicit `LoadedScope` from disk; fail closed if unavailable
+   - Permissive manual surfaces (`CliManual`/`TuiManual`): use `default_empty()`
+4. Call `approve_run_request_bundle()` for full enforcement
+5. Log approved operation for audit
+6. Spawn progress forwarder task
+7. Call `dispatch_approved_runtime_request()` racing against cancellation via `tokio::select!` (same shared semantics as the embedded adapter: `eggsec-runtime::race_with_cancel` contract)
+8. Forward progress from `mpsc` channel to `RuntimeEventSink`
+9. Convert `TaskResult` → `TaskOutcome` via `task_result_to_outcome()`
 
 The `resolve_loaded_scope()` method (`executor.rs:62–113`) determines scope resolution strategy:
 - If session has explicit scope with a path → loads from disk via `crate::config::load_scope()`
@@ -265,8 +265,9 @@ The bridge module has extensive test coverage across all files:
 - **Surface conversion** (`surface.rs:62–148`): Tests all 9 known mappings, rejects `Unknown`, verifies `honors_manual_override()` for permissive vs strict surfaces.
 - **Descriptor resolution** (`descriptor.rs:77–459`): Tests every `TaskKind` variant individually, verifies unsupported kinds error, checks `requires_explicit_scope` for agent-exposable ops.
 - **Preflight & approval** (`manual.rs:88–438`): Tests preflight/approve paths for CLI/TUI manual, strict, MCP, REST, gRPC, CI, SecurityAgent surfaces; override rejection; daemon-backed manual surfaces remain manual.
-- **Bundle & dispatch** (`bundle.rs:118–313`): Tests bundle capture, strict surface rejection, operation mismatch detection, target mismatch detection, surface preservation.
-- **Executor** (`executor.rs:375–439`): Tests `task_result_to_outcome()` conversion for port scan, error, and load test variants.
+- **Bundle & dispatch** (`bundle.rs`): Tests bundle capture, strict surface rejection, operation mismatch detection, target mismatch detection, surface preservation.
+- **Executor** (`executor.rs`): Tests `task_result_to_outcome()` conversion for port scan, error, and load test variants.
+- **Application boundary** (`crates/eggsec/tests/canonical_dispatch_ownership.rs`, mandatory path): per-family normalization/identity/binding/route equivalence plus daemon-bundle cancel race.
 
 ## See Also
 
@@ -277,4 +278,4 @@ The bridge module has extensive test coverage across all files:
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Section 4.8 (Daemon / Runtime execution flow)
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-10*

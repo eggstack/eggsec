@@ -7,11 +7,19 @@ use crate::app::task_runtime::TuiDispatcherContext;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 
-/// TUI-side task dispatcher that delegates to `eggsec::dispatch`.
+/// TUI-side task dispatcher: shallow adapter onto the canonical engine boundary.
 ///
-/// Instead of converting `RunRequest` → `TaskConfig` → `TaskRunner`,
-/// this directly calls `eggsec::dispatch::dispatch_inner` which routes
-/// to the appropriate engine function based on `TaskKind`.
+/// Phase 1 convergence: converts `TaskKind` → canonical operation request and
+/// delegates to the single engine executor owner
+/// (`dispatch::execute_canonical`). It owns no independent operation→executor
+/// mapping beyond this explicit conversion; packet multiplexers select their
+/// canonical request before execution, and unsupported tasks fail explicitly.
+///
+/// Enforcement for TUI manual actions happens at the action layer via
+/// `EnforcementFacade` (exact descriptor binding, Phase 0); this dispatcher
+/// owns lifecycle conversion (progress/outcome) and rendering delivery, not
+/// policy semantics. Daemon-backed execution reaches the same executor owner
+/// via `runtime_bridge` bundle → `execute_approved`.
 pub(crate) struct TuiTaskDispatcher {
     executor_context: Arc<ArcSwap<TuiDispatcherContext>>,
 }
@@ -34,10 +42,23 @@ impl TaskDispatcher for TuiTaskDispatcher {
         let result_tx = ctx.result_tx.clone();
 
         Box::pin(async move {
-            let task_result = eggsec::dispatch::dispatch_inner(request, progress_tx)
+            // Shallow conversion: TaskKind → canonical request (exhaustive),
+            // then single-owner execution. No second dispatch table here.
+            let canonical =
+                eggsec::dispatch::CanonicalOperationRequest::from_task_kind(&request.task_kind);
+            let sink = eggsec::dispatch::ExecutionSink::detached(progress_tx);
+            let task_result = eggsec::dispatch::execute_canonical(canonical, &sink)
                 .await
-                .map_err(|e| {
-                    RuntimeError::DispatchFailed(format!("task execution failed: {}", e))
+                .map_err(|e| match e {
+                    eggsec::dispatch::ExecutionError::FeatureUnavailable {
+                        operation_id,
+                        feature,
+                    } => RuntimeError::DispatchFailed(format!(
+                        "unsupported task kind (feature '{feature}' not compiled for '{operation_id}')"
+                    )),
+                    other => RuntimeError::DispatchFailed(format!(
+                        "task execution failed: {other}"
+                    )),
                 })?;
 
             // Convert to envelope before sending, since TaskResult is not Clone.

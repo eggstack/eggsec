@@ -44,15 +44,29 @@ impl RuntimeTaskExecutor for TuiExecutor {
         request: RunRequest,
         _context: eggsec_runtime::RuntimeExecutionContext,
         _sink: RuntimeEventSink,
-        _cancel: CancellationToken,
+        cancel: CancellationToken,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>,
     > {
         let context = self.context.clone();
 
         Box::pin(async move {
+            // Fail fast on pre-cancelled tasks so no detached work starts.
+            // Mirrors EggsecRuntimeExecutor (daemon path) for equivalent
+            // cancellation semantics across embedded and daemon-backed adapters.
+            if cancel.is_cancelled() {
+                return Err(RuntimeError::DispatchFailed("task cancelled".into()));
+            }
             let dispatcher = TuiTaskDispatcher::new(context);
-            dispatcher.dispatch(request).await
+            let dispatch_fut = dispatcher.dispatch(request);
+            tokio::select! {
+                result = dispatch_fut => result,
+                _ = cancel.cancelled() => {
+                    Err(RuntimeError::DispatchFailed(
+                        "task cancelled during execution".into(),
+                    ))
+                }
+            }
         })
     }
 }
@@ -383,5 +397,57 @@ mod tests {
             .unwrap()
             .block_on(async { rt.session_surface(sid).await.unwrap() });
         assert_eq!(surface, RuntimeSurface::TuiManual);
+    }
+
+    /// Embedded adapter cancellation contract (Phase 1).
+    ///
+    /// `TuiExecutor` races dispatch against the runtime cancellation token
+    /// with the same shared primitive as the daemon-backed adapter
+    /// (`eggsec_runtime::race_with_cancel`): pre-cancelled tasks never start
+    /// detached work, and mid-execution cancellation drops the future,
+    /// releasing senders so forwarders drain instead of leaking.
+    #[tokio::test]
+    async fn embedded_adapter_cancels_before_detached_work() {
+        use eggsec_runtime::{race_with_cancel, RuntimeError};
+
+        let cancel = eggsec_runtime::CancellationToken::new();
+        cancel.cancel();
+        let result =
+            race_with_cancel(async { Ok::<_, RuntimeError>("must not run") }, cancel).await;
+        assert!(matches!(result, Err(RuntimeError::DispatchFailed(_))));
+        if let Err(RuntimeError::DispatchFailed(msg)) = result {
+            assert!(
+                msg.contains("cancel"),
+                "cancel error must mention cancel: {msg}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn embedded_cancel_releases_senders() {
+        use eggsec_runtime::{race_with_cancel, RuntimeError};
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<u32>(4);
+        let cancel = eggsec_runtime::CancellationToken::new();
+        let cancel_clone = cancel.clone();
+        let dispatch = async move {
+            let _held = tx;
+            std::future::pending::<()>().await;
+            #[allow(unreachable_code)]
+            Ok::<_, RuntimeError>("never")
+        };
+        tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            cancel_clone.cancel();
+        });
+        let result = race_with_cancel(dispatch, cancel).await;
+        assert!(matches!(result, Err(RuntimeError::DispatchFailed(_))));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .map(|v| v.is_none())
+                .unwrap_or(false),
+            "channel must close after cancellation (no detached sender)"
+        );
     }
 }

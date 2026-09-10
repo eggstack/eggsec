@@ -178,12 +178,15 @@ pub struct CommandContext {
 
 ## Handler Dispatch Flow
 
-### Exhaustive Match (`handlers/mod.rs:451–582`)
+### Single-Owner Routing Contract (`commands/route.rs` + `handlers/mod.rs`)
 
-`handle_command()` (`:451`) is an async function that:
+`handle_command()` is an async function that:
 
-1. **Registry validation** (`:463–487`): For commands with an `operation_id` in the registry, validates the metadata resolves to `OperationMetadata`. Logs a warning if stale (fallback to handler).
-2. **Exhaustive match** (`:489–581`): No wildcard arm — adding/removing `Commands` variants requires updating this match at compile time.
+1. **Classify once** via `route_for_commands()` (exhaustive over `Commands`, no wildcard): every variant becomes `Operation` (canonical ID), `Multiplexer` (branch-selected before approval), `Helper`, or `Lifecycle`. Aliases resolve here (`waf`→`waf-detect`, `load`→`load-test`, `scan`/`resume`→`pipeline`).
+2. **Fail closed on stale routes**: every candidate operation must resolve to canonical `OperationMetadata`; unknown IDs bail before any handler runs (replaces the old registry-bridge validation prelude, removed in Phase 1).
+3. **Boundary conversion match**: the exhaustive `Commands` match remains as the Clap-DTO→handler boundary conversion (compile-time safe), not a second routing owner. Execution ownership lives in `dispatch::canonical_execution`.
+
+Phase 1 completion: the old dual ownership (registry prelude + separate handler match claiming routing) is gone; registry metadata and `CommandRoute` classification are pinned together by test (`registry_operation_backed_agrees_with_route`).
 
 ### Enforcement Integration
 
@@ -259,11 +262,11 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 
 ---
 
-## Command Registry (`commands/registry.rs`)
+## Command Registry (`commands/registry.rs`) + Routing Contract (`commands/route.rs`)
 
-The command registry provides static, inspectable metadata for CLI/TUI dispatch. It maps command IDs to metadata and descriptor builders, enabling incremental migration from the legacy `handle_command()` match dispatch.
+The command registry provides static, inspectable metadata for CLI/TUI dispatch. `commands/route.rs` (Phase 1) is the single coherent owner for the `Commands → CommandRoute` conversion alongside the registry: static metadata plus one adjacent exhaustive conversion, not function pointers with heterogeneous args in metadata.
 
-**The registry is metadata and routing, not authorization.** All side-effecting operations still flow through `EnforcementContext::evaluate()` before execution.
+**The registry/route pair is metadata and routing, not authorization.** All side-effecting operations still flow through `EnforcementContext::evaluate()` before execution, then reach the canonical execution boundary (`dispatch::execute_approved`).
 
 ### Registry Entry Count
 

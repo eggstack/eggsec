@@ -167,9 +167,9 @@ Strict profiles (MCP, Agent, CI, REST, gRPC) never honor manual overrides.
 Cli::parse() → resolve_execution_surface() → CommandContext::new()
   → load config/scope → build EnforcementContext
   → attach ManualOverride from CLI flags
-  → handle_command() → handler builds OperationDescriptor
-  → ctx.evaluate_and_enforce_operation(descriptor)
-  → on approval: execute tool
+  → handle_command() → route_for_commands() classify once (canonical IDs)
+  → handler builds OperationDescriptor → ctx.evaluate_and_enforce_operation(descriptor)
+  → on approval: canonical request → execute_approved() → outcome → CLI rendering
 ```
 
 **Surface**: `CliManual` (default) or `CliManualStrict` (with `--strict-scope`).
@@ -272,8 +272,9 @@ DaemonClient → Runtime::submit(RunRequest)
         → strict surfaces → enforcement.approve(surface, descriptor)
         → ApprovedRunRequest bundle (couples token + request)
       → dispatch_approved_runtime_request(bundle, progress_tx)
-        → validates descriptor match (operation + target)
-        → dispatch_inner(request, progress_tx) → TaskResult
+        → validates descriptor match (exact matches_descriptor)
+        → CanonicalOperationRequest::from_task_kind() → execute_approved()
+        → (same single executor owner as embedded TUI) → TaskResult
       → task_result_to_outcome() → TaskOutcome
 ```
 
