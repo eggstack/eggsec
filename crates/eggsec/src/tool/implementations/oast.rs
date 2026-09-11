@@ -65,10 +65,57 @@ impl OastTool {
         tool
     }
 
+    /// Validate the configured OAST server URL before building requests.
+    ///
+    /// OAST is external-by-design (InteractSH); scope authorization is
+    /// enforced by `EnforcementContext` before dispatch reaches this tool.
+    /// This is a fail-closed shape check so a misconfigured or
+    /// attacker-influenced URL cannot reshape requests (SSRF-shaped) or
+    /// smuggle credentials/control characters into them.
+    fn validated_server_url(&self) -> Result<String, EggsecError> {
+        let url = self.server_url.trim();
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err(EggsecError::Config(
+                "OAST server URL must use http(s) scheme".to_string(),
+            ));
+        }
+        if url.bytes().any(|b| b.is_ascii_control() || b == b' ') {
+            return Err(EggsecError::Config(
+                "OAST server URL must not contain whitespace or control characters".to_string(),
+            ));
+        }
+        if url.contains(['?', '#', '@']) {
+            return Err(EggsecError::Config(
+                "OAST server URL must not contain query, fragment, or credentials".to_string(),
+            ));
+        }
+        Ok(url.trim_end_matches('/').to_string())
+    }
+
+    /// Validate a server-issued session id before interpolating it into a query string.
+    fn validate_session_id(session_id: &str) -> Result<(), EggsecError> {
+        if session_id.is_empty() {
+            return Err(EggsecError::Parse(
+                "OAST session id must not be empty".to_string(),
+            ));
+        }
+        if session_id
+            .bytes()
+            .any(|b| b.is_ascii_control() || b == b' ')
+            || session_id.contains(['&', '?', '#', '=', '+', '%'])
+        {
+            return Err(EggsecError::Parse(
+                "OAST session id contains characters invalid in a query value".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn register_session(&self) -> Result<String, EggsecError> {
+        let server_url = self.validated_server_url()?;
         let response = self
             .client
-            .get(&format!("{}/register", self.server_url))
+            .get(&format!("{}/register", server_url))
             .send()
             .await
             .map_err(|e| EggsecError::Network(e.to_string()))?;
@@ -85,11 +132,13 @@ impl OastTool {
         &self,
         session_id: &str,
     ) -> Result<Vec<Interaction>, EggsecError> {
+        Self::validate_session_id(session_id)?;
+        let server_url = self.validated_server_url()?;
         let response = self
             .client
             .get(&format!(
                 "{}/poll?id={}&token={}",
-                self.server_url, session_id, session_id
+                server_url, session_id, session_id
             ))
             .send()
             .await
@@ -407,5 +456,40 @@ mod tests {
 
         tool.clear_interactions().await;
         assert!(tool.get_all_interactions().await.is_empty());
+    }
+
+    #[test]
+    fn test_validated_server_url_accepts_http_https() {
+        let tool = OastTool::with_server_url("https://interactsh.com/");
+        assert_eq!(
+            tool.validated_server_url().unwrap(),
+            "https://interactsh.com"
+        );
+        let tool = OastTool::with_server_url("http://127.0.0.1:8080");
+        assert!(tool.validated_server_url().is_ok());
+    }
+
+    #[test]
+    fn test_validated_server_url_rejects_shaped_urls() {
+        assert!(OastTool::with_server_url("ftp://example.com")
+            .validated_server_url()
+            .is_err());
+        assert!(OastTool::with_server_url("https://example.com/?q=1")
+            .validated_server_url()
+            .is_err());
+        assert!(OastTool::with_server_url("https://user@example.com")
+            .validated_server_url()
+            .is_err());
+        assert!(OastTool::with_server_url("https://example.com\r\nX: 1")
+            .validated_server_url()
+            .is_err());
+    }
+
+    #[test]
+    fn test_validate_session_id_rejects_query_shaping() {
+        assert!(OastTool::validate_session_id("abc123").is_ok());
+        assert!(OastTool::validate_session_id("").is_err());
+        assert!(OastTool::validate_session_id("a&b=c").is_err());
+        assert!(OastTool::validate_session_id("a b").is_err());
     }
 }

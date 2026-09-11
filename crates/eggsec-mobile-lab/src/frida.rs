@@ -808,7 +808,10 @@ mod tests {
             device_id: "emulator-5554".into(),
             is_simulation: false,
         };
-        let _ = execute_script(&sess, "Java.perform(function(){});"); // must not panic; may err if no frida
+        // must not panic; may err if no frida CLI is installed
+        if let Err(e) = execute_script(&sess, "Java.perform(function(){});") {
+            tracing::debug!("frida dry-path probe failed (CLI may be missing): {}", e);
+        }
     }
 
     #[test]

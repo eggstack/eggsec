@@ -1200,7 +1200,12 @@ mod tests {
     #[test]
     fn test_tls_acceptor_has_alpn() {
         use crate::intercept::cert::CertGenerator;
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        if rustls::crypto::ring::default_provider()
+            .install_default()
+            .is_err()
+        {
+            tracing::debug!("rustls default provider already installed; keeping existing");
+        }
 
         let gen = CertGenerator::new();
         let material = gen.generate_for_host("example.com").unwrap();

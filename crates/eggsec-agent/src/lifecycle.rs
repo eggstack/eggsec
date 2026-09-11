@@ -81,9 +81,12 @@ impl LifecycleManager {
         config: LifecycleConfig,
     ) -> (Self, mpsc::Receiver<LifecycleEvent>) {
         let (event_tx, event_rx) = mpsc::channel(100);
-        rustls::crypto::ring::default_provider()
+        if rustls::crypto::ring::default_provider()
             .install_default()
-            .unwrap_or(());
+            .is_err()
+        {
+            tracing::debug!("rustls default provider already installed; keeping existing");
+        }
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(eggsec_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
@@ -105,42 +108,21 @@ impl LifecycleManager {
         )
     }
 
+    /// Start the health monitor loop WITHOUT a cancellation token.
+    ///
+    /// This is a convenience for tests and fire-and-forget embeddings that
+    /// manage shutdown via the returned [`tokio::task::JoinHandle::abort`].
+    /// Production code that needs graceful shutdown should prefer
+    /// [`Self::start_health_monitor_with_token`].
+    /// Each pass is bounded by a 60s timeout; the task ends when the caller
+    /// aborts the handle or (for the token variant) cancels the token.
     pub fn start_health_monitor(&self) -> tokio::task::JoinHandle<()> {
-        let health_status = Arc::clone(&self.health_status);
-        let agent_registry = self.agent_registry.clone();
-        let config = self.config.clone();
-        let event_tx = self.event_tx.clone();
-        let client = self.client.clone();
-
-        tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_secs(config.health_check_interval_secs));
-
-            loop {
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        // Bound each pass so a stalled registry/network cannot
-                        // wedge the monitor task indefinitely.
-                        if tokio::time::timeout(
-                            Duration::from_secs(60),
-                            Self::perform_health_check(
-                                &health_status,
-                                &agent_registry,
-                                &config,
-                                &event_tx,
-                                &client,
-                            ),
-                        )
-                        .await
-                        .is_err()
-                        {
-                            tracing::warn!("Agent health check pass timed out after 60s");
-                        }
-                    }
-                }
-            }
-        })
+        self.start_health_monitor_with_token(CancellationToken::new())
     }
 
+    /// Start the health monitor loop with a [`CancellationToken`] for graceful shutdown.
+    ///
+    /// Cancelling the token stops the loop after the in-flight pass finishes.
     pub fn start_health_monitor_with_token(
         &self,
         token: CancellationToken,

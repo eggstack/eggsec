@@ -177,6 +177,32 @@ fn dry_run_tasks(campaign: &C2Campaign) -> Vec<TaskResult> {
     results
 }
 
+/// Validate a C2 `target` as a bare `host[:port]` authority.
+///
+/// The real-task helpers interpolate `target` into an `http://` URL (or a
+/// `host:port` socket address), so anything beyond `host[:port]` — a path,
+/// query, credentials, whitespace, or control characters — would reshape the
+/// outgoing request (SSRF-shaped). Scope authorization itself is enforced by
+/// `EnforcementContext` before dispatch reaches this module; this is a
+/// fail-closed input-shape check at the network boundary.
+fn validate_target_host(target: &str) -> Result<(), String> {
+    if target.is_empty() {
+        return Err("target must not be empty".to_string());
+    }
+    if target.len() > 253 {
+        return Err("target exceeds maximum host length".to_string());
+    }
+    if target.bytes().any(|b| b.is_ascii_control() || b == b' ') {
+        return Err("target must not contain whitespace or control characters".to_string());
+    }
+    if target.contains(['/', '?', '#', '@', '\\']) {
+        return Err(
+            "target must be a bare host[:port] without path, query, or credentials".to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// TCP connect scan a single port with timeout.
 async fn tcp_connect_scan(host: &str, port: u16) -> (bool, u64) {
     let start = std::time::Instant::now();
@@ -194,6 +220,14 @@ async fn tcp_connect_scan(host: &str, port: u16) -> (bool, u64) {
 
 /// Perform a real recon task: TCP connect scan of common C2-related ports.
 async fn real_recon_task(target: &str, technique: &str, _phase_name: &str) -> TaskResult {
+    if let Err(reason) = validate_target_host(target) {
+        return TaskResult {
+            task_type: TaskType::Recon,
+            status: TaskStatus::Failed,
+            output: Some(format!("real: recon refused invalid target: {}", reason)),
+            mitre_technique: Some(technique.to_string()),
+        };
+    }
     let ports = [80, 443, 8443, 8080, 4443];
     let mut open_ports = Vec::new();
 
@@ -240,7 +274,19 @@ async fn real_recon_task(target: &str, technique: &str, _phase_name: &str) -> Ta
 
 /// Perform a real execute task: send HTTP POST to target simulating task delivery.
 async fn real_execute_task(target: &str, technique: &str, phase_name: &str) -> TaskResult {
+    if let Err(reason) = validate_target_host(target) {
+        return TaskResult {
+            task_type: TaskType::Execute,
+            status: TaskStatus::Failed,
+            output: Some(format!(
+                "real: execute task refused invalid target: {}",
+                reason
+            )),
+            mitre_technique: Some(technique.to_string()),
+        };
+    }
     let url = format!("http://{}/task/execute", target);
+    crate::install_tls_provider();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build();
@@ -290,7 +336,19 @@ async fn real_execute_task(target: &str, technique: &str, phase_name: &str) -> T
 
 /// Perform a real exfil task: send small test payload via HTTP POST.
 async fn real_exfil_task(target: &str, technique: &str, _phase_name: &str) -> TaskResult {
+    if let Err(reason) = validate_target_host(target) {
+        return TaskResult {
+            task_type: TaskType::Exfil,
+            status: TaskStatus::Failed,
+            output: Some(format!(
+                "real: exfil task refused invalid target: {}",
+                reason
+            )),
+            mitre_technique: Some(technique.to_string()),
+        };
+    }
     let url = format!("http://{}/data/exfil", target);
+    crate::install_tls_provider();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build();
@@ -338,11 +396,23 @@ async fn real_exfil_task(target: &str, technique: &str, _phase_name: &str) -> Ta
 
 /// Perform a real evade task: send decoy HTTP traffic.
 async fn real_evade_task(target: &str, technique: &str) -> TaskResult {
+    if let Err(reason) = validate_target_host(target) {
+        return TaskResult {
+            task_type: TaskType::Evade,
+            status: TaskStatus::Failed,
+            output: Some(format!(
+                "real: decoy traffic refused invalid target: {}",
+                reason
+            )),
+            mitre_technique: Some(technique.to_string()),
+        };
+    }
     let url = format!(
         "http://{}/decoy/{}",
         target,
         technique.to_lowercase().replace('.', "-")
     );
+    crate::install_tls_provider();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build();
@@ -481,6 +551,31 @@ mod tests {
         let campaign = test_campaign();
         let tasks = simulate_tasks(&campaign, "localhost", true).await;
         assert!(!tasks.is_empty());
+    }
+
+    #[test]
+    fn test_validate_target_host_accepts_bare_host_port() {
+        assert!(validate_target_host("localhost").is_ok());
+        assert!(validate_target_host("127.0.0.1:1").is_ok());
+        assert!(validate_target_host("example.com:8080").is_ok());
+    }
+
+    #[test]
+    fn test_validate_target_host_rejects_request_shaping() {
+        assert!(validate_target_host("").is_err());
+        assert!(validate_target_host("evil.com/path").is_err());
+        assert!(validate_target_host("evil.com?q=1").is_err());
+        assert!(validate_target_host("user@evil.com").is_err());
+        assert!(validate_target_host("evil.com\r\nX-Inject: 1").is_err());
+        assert!(validate_target_host("evil .com").is_err());
+    }
+
+    #[tokio::test]
+    async fn test_real_execute_task_refuses_invalid_target_without_io() {
+        let task = real_execute_task("evil.com/task/execute?x=1", "T1059", "Test Phase").await;
+        assert_eq!(task.status, TaskStatus::Failed);
+        let output = task.output.unwrap_or_default();
+        assert!(output.contains("refused invalid target"));
     }
 
     #[tokio::test]

@@ -333,11 +333,16 @@ impl AdbConnection {
             tracing::warn!("adb: failed to send CLSE: {}", e);
         }
         // best effort, swallow read of peer CLSE
-        let _ = timeout(
+        match timeout(
             Duration::from_millis(50),
             AdbMessage::read_from(&mut self.stream),
         )
-        .await;
+        .await
+        {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => tracing::debug!("adb: best-effort peer CLSE read failed: {}", e),
+            Err(e) => tracing::debug!("adb: best-effort peer CLSE read timed out: {}", e),
+        }
         Ok(())
     }
 
@@ -966,15 +971,27 @@ mod tests {
                             break;
                         }
                     }
-                    let _ = AdbMessage::new(ADB_WRTE, remote, local, b"OKAY".to_vec())
+                    if let Err(e) = AdbMessage::new(ADB_WRTE, remote, local, b"OKAY".to_vec())
                         .write_to(&mut stream)
-                        .await;
+                        .await
+                    {
+                        tracing::debug!("adb mock: best-effort OKAY reply skipped: {}", e);
+                    }
                     // Drain the client's CLSE (best-effort).
-                    let _ = timeout(
+                    match timeout(
                         Duration::from_millis(500),
                         AdbMessage::read_from(&mut stream),
                     )
-                    .await;
+                    .await
+                    {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            tracing::debug!("adb mock: best-effort CLSE drain failed: {}", e);
+                        }
+                        Err(e) => {
+                            tracing::debug!("adb mock: best-effort CLSE drain timed out: {}", e);
+                        }
+                    }
                     continue;
                 }
                 // Shell-like service: one WRTE + CLSE.

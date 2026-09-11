@@ -307,7 +307,7 @@ pub fn create_router(
             let (tx, _rx) = broadcast::channel::<String>(100);
             let tx_clone = tx.clone();
 
-            tokio::spawn(async move {
+            let relay = tokio::spawn(async move {
                 let mut rx = tx_clone.subscribe();
                 while let Ok(msg) = rx.recv().await {
                     if sender.send(Message::Text(msg.into())).await.is_err() {
@@ -324,6 +324,9 @@ pub fn create_router(
                     }
                 }
             }
+            // The socket is closed: stop the relay task, which still holds a
+            // broadcast Sender and would otherwise live forever.
+            relay.abort();
         }
 
         router = router.route("/ws", get(ws_handler));
