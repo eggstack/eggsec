@@ -1,5 +1,10 @@
 # Daemon Parity Protocol
 
+> Status: protocol v2 has shipped (`DAEMON_PROTOCOL_VERSION = 2` in
+> `crates/eggsec-daemon-protocol/src/protocol.rs`). The "until the parity
+> milestone closes" caveat below is historical; daemon-client maturity is now
+> tracked in [domain-maturity.md](domain-maturity.md).
+
 ## Overview
 
 The daemon parity protocol defines the contract between `eggsec-python`'s

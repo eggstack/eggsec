@@ -1,6 +1,8 @@
 # Daemon Protocol and Parity
 
 This guide covers the daemon protocol types for local/remote execution parity.
+For the wire-protocol contract (handshake, version negotiation), see
+[DAEMON_PARITY_PROTOCOL.md](DAEMON_PARITY_PROTOCOL.md).
 
 ## Protocol Version
 

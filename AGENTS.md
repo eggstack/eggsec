@@ -73,4 +73,6 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 ## Where to look
 
 - Contract/docs: `docs/VERIFICATION.md`, `docs/ARCHITECTURE.md`, `docs/ENFORCEMENT_MODES.md`, `docs/CI_ARCHITECTURE_GUARDS.md`, `docs/EXTENSIBILITY.md` (adding operations/domains/commands).
+- Module index: `architecture/overview.md` (Module Index maps each module → deep-dive; Deep-Dive Index catalogs all 65 docs).
 - Per-module guidance: `crates/eggsec/src/<module>/AGENTS.override.md` + `architecture/<topic>.md` + skill in `.opencode/skills/` (canonical skills dir; e.g. `eggsec-tool`, `eggsec-config`, `eggsec-cli`, `eggsec-daemon`, `eggsec-tui`, `eggsec-python`). Load all three when working in a module.
+- Skills: `.opencode/skills/` is canonical; `.skills/`, `.agents/skills/`, `.claude/skills/` are symlinks to it (edit once). 35 skills, one per major module, including `eggsec-compliance`, `eggsec-vuln-management`, `eggsec-findings-workflow` (cover the compliance/vuln/findings-workflow modules, which have no other skill). `eggsec-daemon` also covers `eggsec-runtime` + `eggsec-daemon-protocol`; dispatch/bridge ownership is documented in `architecture/dispatch.md` + `architecture/runtime_bridge.md` (no separate skill).

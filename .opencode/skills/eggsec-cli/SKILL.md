@@ -48,7 +48,6 @@ src/commands/      # Handler dispatch and implementations
 - `postex.rs` - `PostexArgs`, post-exploitation simulation
 - `c2.rs` - `C2Args`, C2 simulation
 - `web_proxy.rs` - `ProxyInterceptArgs`, web proxy interception
-- `explain.rs` - `PolicyExplainArgs`, `ScopeExplainArgs`, policy/scope explanation
 
 ### Key Types
 

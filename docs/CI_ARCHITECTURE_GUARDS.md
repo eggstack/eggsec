@@ -105,7 +105,7 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Verify the individual feature sweep is maintained and scheduled (`scripts/check-features-individual.sh`, Makefile target, `deep-checks.yml`), including the mechanically-enumerated TUI feature section and the `eggsec-tui/full` aggregate.
 - Verify the broad TUI profile (`db-pentest,web-proxy,c2`) remains in `make check-feature-profiles` for fast frontend drift detection.
 - Verify extensibility handoff guides exist (`EXTENSIBILITY.md`, `extending/operations.md`, `extending/domains.md`, `extending/commands.md`, `extending/tool-exposure.md`, `extending/tui-actions.md`, `extending/report-evidence.md`, `extending/features.md`, `extending/testing.md`, `extending/templates.md`).
-- Verify `EXTENSIBILITY.md` Detailed Guides table links resolve to existing files.
+- Verify `EXTENSIBILITY.md` Detailed Guides table links resolve to existing files. Convention: links are written repo-root-relative (`docs/extending/....md`, `docs/....md`) and the guard resolves them from the workspace root — do not "fix" them to `docs/`-relative form.
 - Fail on stale field names or contradictions in current docs.
 
 ### Crate Boundary Invariants

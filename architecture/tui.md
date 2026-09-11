@@ -38,10 +38,10 @@ The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `t
 | 14 | Cluster | `cluster` | — | Configuration | Administrative | — | **yes** | `cluster.rs` |
 | 15 | Stress | `stress` | `stress-testing` (availability shell; always visible) | Assessment | Intrusive | `stress-test` | **yes** | `stress.rs` |
 | 16 | Report | `report` | — | Reporting | Passive | — | no | `report.rs` |
-| 17 | Settings | `settings` | — | Configuration | Administrative | — | no | `settings/main.rs` |
-| 18 | History | `history` | — | History | Passive | — | no | `history.rs` |
-| 19 | Dashboard | `dashboard` | — | Dashboard | Passive | — | no | `dashboard.rs` |
-| 20 | Auth | `auth` | — | Assessment | Intrusive | `auth-test` | **yes** | `auth.rs` |
+| 17 | Nse | `nse` | `nse` | Assessment | SafeActive | `nse` | **yes** | `nse.rs` |
+| 18 | Settings | `settings` | — | Configuration | Administrative | — | no | `settings/main.rs` |
+| 19 | History | `history` | — | History | Passive | — | no | `history.rs` |
+| 20 | Dashboard | `dashboard` | — | Dashboard | Passive | — | no | `dashboard.rs` |
 | 21 | Hunt | `hunt` | `advanced-hunting` | Assessment | Intrusive | `hunt` | **yes** | `hunt.rs` |
 | 22 | Browser | `browser` | `headless-browser` | Assessment | Intrusive | `browser` | **yes** | `browser.rs` |
 | 23 | Compliance | `compliance` | `compliance` | Reporting | SafeActive | `compliance` | no | `compliance.rs` |
@@ -50,9 +50,10 @@ The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `t
 | 26 | Workflow | `workflow` | `finding-workflow` | Workflow | Administrative | `workflow` | no | `workflow.rs` |
 | 27 | Vuln | `vuln` | `vuln-management` | Workflow | SafeActive | `vuln` | no | `vuln.rs` |
 | 28 | Wireless | `wireless` | `wireless` | Assessment | SafeActive | `wireless` | **yes** | `wireless.rs` |
-| 29 | DbPentest | `db_pentest` | `db-pentest` | Assessment | Intrusive | `db-pentest` | **yes** | `db_pentest.rs` |
-| 30 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept.rs` |
-| 31 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
+| 29 | Auth | `auth` | — | Assessment | Intrusive | `auth-test` | **yes** | `auth.rs` |
+| 30 | DbPentest | `db_pentest` | `db-pentest` | Assessment | Intrusive | `db-pentest` | **yes** | `db_pentest.rs` |
+| 31 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept.rs` |
+| 32 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
 
 **Summary**: 21 base + 12 gated = 33 total. 26 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard).
 

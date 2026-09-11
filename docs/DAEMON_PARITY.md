@@ -1,5 +1,9 @@
 # Daemon Execution Parity (Phase E WS4–WS6)
 
+> Status: Phase E is complete (protocol v2 shipped, `DAEMON_PROTOCOL_VERSION = 2`).
+> This document is retained as the historical parity record. For current
+> transport configuration, schema, and CLI commands, see [DAEMON.md](DAEMON.md).
+
 Local `Engine`/runtime execution and daemon-backed execution share the same
 canonical request/result contracts (`RunRequest`/`TaskKind` in,
 `TaskOutcome`/`TaskResultEnvelope` out). This document records where the two

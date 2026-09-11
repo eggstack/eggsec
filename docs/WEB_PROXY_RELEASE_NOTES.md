@@ -1,5 +1,9 @@
 # Eggsec Web Proxy Loadout — Release Notes
 
+> Status: historical release notes (all web-proxy phases are complete).
+> For current proxy usage, see [WEB_PROXY.md](WEB_PROXY.md) and the
+> [web-proxy playbook](web-proxy-playbook.md).
+
 ## Version
 
 Available in Eggsec with `--features web-proxy` (or `--features full`).

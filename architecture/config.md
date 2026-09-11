@@ -22,7 +22,7 @@ The `config` module owns all configuration loading/validation and the **mandator
 - Provide preflight policy preview without dispatching
 - Define `ExecutionBudget` constraints for stress/load/packet operations
 - Define defense-lab `DefenseLabPreset` presets
-- Maintain the canonical `ALL_OPERATION_METADATA` registry (31 operations, 42 aliases)
+- Maintain the canonical `ALL_OPERATION_METADATA` registry (34 operations, 43 aliases)
 - Maintain the authoritative compile-time feature registry
 
 **Non-responsibilities:**
@@ -56,7 +56,7 @@ All source files live under `crates/eggsec/src/config/`:
 | `api.rs` | 76 | — | `ApiConfig`, `ApiKeyConfig`, `IpApiConfig`, `MaxMindConfig`, `NvdConfig`, `WaybackConfig` |
 | `budget.rs` | 217 | — | `ExecutionBudget`, `BudgetError` (3 variants) |
 | `discovery.rs` | 70 | — | `DiscoveredTargetStatus` (4 variants) |
-| `feature_registry.rs` | 531 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (~48 entries), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
+| `feature_registry.rs` | 531 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (49 entries, one per Cargo feature except `default`), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
 | `presets.rs` | 233 | — | `DefenseLabPreset` (7 built-in presets) |
 
 **Feature gating:** The config module itself requires no feature gates. Individual `OperationMetadata` entries declare `required_features` that are checked at evaluation time via `feature_registry::is_feature_enabled()`.
@@ -320,7 +320,7 @@ Key methods:
 ### OperationMetadata → OperationDescriptor Flow
 
 1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `policy_catalog.rs:948`
-2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy_catalog.rs:901` map alternative IDs to canonical operation IDs
+2. Alias resolution: 43 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy_catalog.rs:901` map alternative IDs to canonical operation IDs
 3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `policy_catalog.rs:106` (validated) or `metadata.descriptor_for_target(target)` at `policy_catalog.rs:49` (unchecked stable shim for backward compatibility; new strict-surface code must use `try_`)
 4. Policy evaluation: `enforcement.evaluate(&descriptor)` or `enforcement.approve(surface, descriptor)`
 

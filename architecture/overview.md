@@ -120,7 +120,7 @@ nor hosted CI publishes a package.
 Every externally invokable operation takes the same path, regardless of frontend:
 
 1. **Parse** — the frontend turns user input into a request (CLI args → `Commands` enum variant; REST/MCP/gRPC → `ToolRequest`; TUI/daemon → `RunRequest`).
-2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 34 canonical operations + 42 aliases).
+2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 34 canonical operations + 43 aliases).
 3. **Evaluate** — `EnforcementContext::evaluate()` checks scope provenance (`LoadedScope` for automated surfaces), risk tier vs. profile allowlist, capabilities, and features. Outcome: `Allow` / `Warn` / `RequireConfirmation` / `Deny`.
 4. **Approve** — evaluation yields an `ApprovedOperation` token. Strict surfaces dispatch only through `EnforcedDispatcher::dispatch_checked()`, which re-validates tool+target binding against the token and fails closed.
 5. **Execute** — either a command handler (`crates/eggsec/src/commands/handlers/`, 32 handler modules behind `handle_command()`) or the domain executor layer (`crates/eggsec/src/dispatch/executors/`) calls the engine function.
@@ -216,7 +216,7 @@ Frontend entry points for human interaction.
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (28 base + 24 feature-gated; `cli/mod.rs`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
+| CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (27 base + 25 feature-gated; `cli/mod.rs:270-470`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
 | TUI | `crates/eggsec-tui/src/` | Real-time terminal UI: ratatui/crossterm, **33 tabs (21 base + 12 feature-gated)** (`tabs/mod.rs:142`), tab-spec table, event loop with daemon attach mode, **50 LZMA-packaged themes**, search, overlays, `TestBackend` visual regression suite | [tui.md](tui.md) |
 
 ### Compliance & Risk
@@ -435,7 +435,7 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 | `ExecutionSurface` | `config/policy.rs:357` | Caller origin (9 variants) |
 | `ExecutionProfile` | `config/policy.rs:461` | Trust boundary (5 variants) |
 | `OperationRisk` | `config/policy.rs:9` | Risk tier (15 levels) |
-| `OperationMetadata` | `config/policy_catalog.rs` | Static registry of all operations (34 canonical + 42 aliases) — single source of truth |
+| `OperationMetadata` | `config/policy_catalog.rs` | Static registry of all operations (34 canonical + 43 aliases) — single source of truth |
 | `OperationDescriptor` | `config/policy.rs` | Unit of policy evaluation |
 | `EnforcementContext` | `config/policy_decision.rs` | Central policy evaluation gate |
 | `ApprovedOperation` | `config/policy_decision.rs:331` | Proof-of-enforcement token |
@@ -537,7 +537,7 @@ Within the `eggsec` crate:
 
 ### Operation Metadata
 
-`OperationMetadata` is the single source of truth for all externally invokable operations: **34 canonical operations + 42 aliases** (`config/policy_catalog.rs:317`, alias table at `:901`). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
+`OperationMetadata` is the single source of truth for all externally invokable operations: **34 canonical operations + 43 aliases** (`config/policy_catalog.rs:317`, alias table at `:901`). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
 
 ### Audit Trail
 
@@ -596,7 +596,7 @@ Protocol/agent adapters depend on `tool::service::EngineServices` (`CheckedExecu
 
 Workspace-level canonical docs:
 
-- [../AGENTS.md](../AGENTS.md) — agent-facing guidelines; its Module Index table maps each module to the deep-dive listed here plus its override file and loadable skill
+- [../AGENTS.md](../AGENTS.md) — agent-facing guidelines; per-module guidance is the override file + the deep-dive in the Module Index above + the loadable skill (35 skills in `../.opencode/skills/`, canonical dir; `.skills/`, `.agents/skills/`, `.claude/skills/` are symlinks to it)
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — workspace ownership, enforcement model, execution flows
 - [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) — normative invariants
 - [../docs/COMMAND_REGISTRY.md](../docs/COMMAND_REGISTRY.md) — command inventory
@@ -605,4 +605,4 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 167 implementation files / 44 descriptors (was 166/43); CLI 52 = 28 base + 24 gated (was 27/25); scanner fingerprint 45 TCP probes + UDP set (was 47). Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Same-day systematic sweep: 8 parallel review batches across all 65 docs; applied verified doc fixes (pipeline wave-checkpoint invariant, defense_lab duplicate section, daemon typo, fuzzer dirs/PayloadFilter, hunt 18 admin paths, evasion 15 MITRE IDs + gate lines, websocket gate lines, postex/c2 handler refs, dispatch/descriptor line counts, runtime cancel.rs, compliance line, loadtest counts + rate-limiter timeout note, generated off-by-ones). Alias count re-checked at 42 (subagent claim of 43 was a miscount); utils stays 20 declared sub-modules. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, TaskKind 29, ScanProfile 18, endpoints 347.*
+*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 167 implementation files / 44 descriptors (was 166/43); CLI 52 = 27 base + 25 gated (was 28/24); operations 34 canonical + 43 aliases (alias block recount); scanner fingerprint 45 TCP probes + UDP set (was 47); TUI tab table restored missing Nse (17) and Auth (29) rows. Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Same-day systematic sweep: 8 parallel review batches across all 65 docs; applied verified doc fixes (pipeline wave-checkpoint invariant, defense_lab duplicate section, daemon typo, fuzzer dirs/PayloadFilter, hunt 18 admin paths, evasion 15 MITRE IDs + gate lines, websocket gate lines, postex/c2 handler refs, dispatch/descriptor line counts, runtime cancel.rs, compliance line, loadtest counts + rate-limiter timeout note, generated off-by-ones); utils stays 20 declared sub-modules. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, TaskKind 29, ScanProfile 18, endpoints 347.*

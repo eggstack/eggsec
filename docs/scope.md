@@ -149,4 +149,3 @@ To test internal systems, use CIDR rules in your scope file (e.g., `cidr = "10.0
 
 - [SAFETY.md](SAFETY.md) - Operation risk tiers and authorization requirements
 - [AGENT.md](AGENT.md) - Agent configuration and operation
-- [SAFETY.md](SAFETY.md) - Risk tiers and lab safety guidance

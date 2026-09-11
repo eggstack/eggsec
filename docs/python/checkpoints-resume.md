@@ -1,5 +1,7 @@
 # Checkpoints and Resume
 
+> Status: stub — the full guide lives in [CHECKPOINT_RESUME.md](CHECKPOINT_RESUME.md).
+
 This guide covers checkpoint persistence for pipeline resumption.
 
 ## Checkpoint Store

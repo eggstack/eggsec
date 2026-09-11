@@ -416,7 +416,7 @@ CLI handlers call engine functions directly or via the dispatch layer. The dispa
 - `EggsecConfig` loaded from TOML/YAML via `load_config()`
 - `Scope` / `LoadedScope` loaded via `load_scope_with_source()`
 - `ExecutionPolicy` from config determines which risk tiers are permitted
-- `OperationMetadata` (34 canonical + 42 aliases) is the single source of truth for operation policy
+- `OperationMetadata` (34 canonical + 43 aliases) is the single source of truth for operation policy
 
 ### Enforcement & Audit (`audit.md`)
 
