@@ -2,7 +2,7 @@
 
 Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. This document is the bird's-eye view of the system and the index into the per-component deep-dive documents that live alongside it in `architecture/`.
 
-Every number in this document was verified against source on 2026-08-25. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
+Every number in this document was verified against source on 2026-09-11. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
 
 ## Quick Navigation
 
@@ -61,12 +61,12 @@ nor hosted CI publishes a package.
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
-| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 166 library implementations / 43 registered descriptors, sandbox, ScriptResolver. Optional. |
+| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 168 library implementation files / 44 registered descriptors, sandbox, ScriptResolver. Optional. |
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
 | `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.31 bundled); optional `http-api` SSE transport, optional `full-executor`. |
-| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (14), `ServerMessage` (13), `ErrorCode` (11), RBAC client registry. Depends only on `eggsec-runtime`. |
+| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (15), `ServerMessage` (14), `ErrorCode` (11), RBAC client registry. Depends only on `eggsec-runtime`. |
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
@@ -141,7 +141,7 @@ The discovery layer gathers intelligence about a target before active testing. T
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Recon | `crates/eggsec/src/recon/` | ~30 source files: 20 declared modules + 7 detached utilities. Full-recon pipeline runs 17 modules (`FULL_RECON_PIPELINE_MODULES`): reverse DNS, geoIP, threat intel, SSL/TLS analysis, WHOIS, subdomain enumeration, DNS records, tech detection, JS analysis, wayback, cloud assets, content discovery, CORS, email discovery, subdomain takeover, CVE mapping (NVD), secrets detection (31 secret types). Entry: `run_full_recon_from_request()` (`recon/runner.rs:536`) | [recon.md](recon.md) |
-| Scanner | `crates/eggsec/src/scanner/` | TCP port scanning (+ raw spoofed SYN/NULL/FIN/Xmas via `SpoofConfig`), endpoint discovery with **347 built-in paths** (`DEFAULT_ENDPOINTS`, `endpoints.rs:95`), service fingerprinting with confidence scoring (**47 probes**, CPE + possible-CVE output), UDP fingerprinting, Nmap-style T0–T5 timing presets, CMS scanning (WordPress/Drupal/Joomla), Nuclei-compatible template engine with signing/marketplace | [scanner.md](scanner.md) |
+| Scanner | `crates/eggsec/src/scanner/` | TCP port scanning (+ raw spoofed SYN/NULL/FIN/Xmas via `SpoofConfig`), endpoint discovery with **347 built-in paths** (`DEFAULT_ENDPOINTS`, `endpoints.rs:95`), service fingerprinting with confidence scoring (**45 TCP probes** + UDP fingerprinting, CPE + possible-CVE output), UDP fingerprinting, Nmap-style T0–T5 timing presets, CMS scanning (WordPress/Drupal/Joomla), Nuclei-compatible template engine with signing/marketplace | [scanner.md](scanner.md) |
 | Probe | `crates/eggsec/src/probe.rs` | Shared probe-risk vocabulary: `ProbeIntent` (7 variants), `ProbeRisk` (6 tiers, converts to `OperationRisk`); used by scanner/NSE/WAF/loadtest risk budgeting | [probe.md](probe.md) |
 | Wireless | `crates/eggsec/src/wireless/` | Passive WiFi recon via `iwlist` parsing, rogue-AP/evil-twin heuristics, temporal scan diffing; active deauth/disassoc frame crafting + raw injection under `wireless-advanced` (lab-only, root + monitor mode) | [wireless.md](wireless.md) |
 
@@ -205,7 +205,7 @@ The daemon architecture enables persistent sessions, background task execution, 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Daemon | `crates/eggsec-daemon/` | Long-running host: session persistence (SQLite via rusqlite, bundled), client registry, Unix socket IPC, optional HTTP/SSE transport (`http-api`), optional full engine executor (`full-executor`) | [daemon.md](daemon.md) |
-| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (14), `ServerMessage` (13), `ErrorCode` (11), `ClientRegistry` with roles/permissions; no persistence/TLS deps | [daemon.md](daemon.md) |
+| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (15), `ServerMessage` (14), `ErrorCode` (11), `ClientRegistry` with roles/permissions; no persistence/TLS deps | [daemon.md](daemon.md) |
 | Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, sessions, event broadcasting; zero workspace deps | [runtime.md](runtime.md) |
 | Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `RuntimeSurface`→`ExecutionSurface` (1:1 except `Unknown`→error), `RunRequest`/`TaskKind`→`OperationDescriptor`; `preflight_run_request()` preview, `approve_run_request()` issues `ApprovedOperation`; manual overrides honored only on ManualPermissive surfaces | [runtime_bridge.md](runtime_bridge.md) |
 | UI Model | `crates/eggsec-ui-model/` | View DTOs (`SessionView`, `TaskView`, `ResultEnvelopeView`, `DashboardSummaryView`, event/artifact/permission/policy-prompt views) + renderer registry (23 entries) keyed by task kind | [ui_model.md](ui_model.md) |
@@ -216,7 +216,7 @@ Frontend entry points for human interaction.
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (27 unconditional, 25 feature-gated; `cli/mod.rs`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
+| CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (28 base + 24 feature-gated; `cli/mod.rs`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
 | TUI | `crates/eggsec-tui/src/` | Real-time terminal UI: ratatui/crossterm, **33 tabs (21 base + 12 feature-gated)** (`tabs/mod.rs:142`), tab-spec table, event loop with daemon attach mode, **50 LZMA-packaged themes**, search, overlays, `TestBackend` visual regression suite | [tui.md](tui.md) |
 
 ### Compliance & Risk
@@ -248,7 +248,7 @@ Modules that connect to external platforms and AI services.
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | AI/LLM | `crates/eggsec/src/ai/` | Multi-provider client (OpenAI, Anthropic, Azure, OpenAI-compatible), response cache, adaptive planner + script generation behind `ai-integration`; WAF-bypass suggestions, payload suggestion | [ai_agents.md](ai_agents.md) |
-| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **166 library implementation files** exposing the NSE stdlib, **43 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
+| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **168 library implementation files** exposing the NSE stdlib, **44 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
 | Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab connectors behind a common `IssueTracker` trait; feature-gated: `external-integrations` | [integrations.md](integrations.md) |
 | Notifications | `crates/eggsec/src/notify/` | Webhook delivery plus Slack/Discord/MS Teams channels via `NotifyManager`; always compiled | [notify.md](notify.md) |
 
@@ -267,6 +267,8 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Constants | `crates/eggsec/src/constants.rs` | Facade over `eggsec-core` constants + compile-time validation (`SUPPORTED_WAF_COUNT` = 34 asserted at compile time) | [constants.md](constants.md) |
 | Audit | `crates/eggsec/src/audit.rs` | `EnforcementAuditEvent` (15 fields) normalized audit record for every enforcement/preflight decision; `AuditOutcome` (5 variants) | [audit.md](audit.md) |
 | Generated | `crates/eggsec/src/generated/` | Checked-in protobuf/gRPC code, regenerated via `build.rs` (protoc needed only for descriptor set) | [generated.md](generated.md) |
+| Operation Request | `crates/eggsec-tool-core/src/operation_request.rs` + `crates/eggsec/src/operation_request.rs` | Canonical execution-parameter contracts: single-owner `DEFAULT_*`, pure normalization, typed per-family requests with `normalize()`; shallow CLI/runtime/tool/Python adapters, no authorization | [operation_request.md](operation_request.md) |
+| Platform | `crates/eggsec/src/platform/` | Read-only capability/prerequisite detection (`PrereqStatus`, `DomainPrerequisites`, `PlatformReport`); feeds `eggsec doctor` and hermetic test skips | [platform.md](platform.md) |
 | Python | `crates/eggsec-python/` | PyO3 bindings: `_core` module, `Engine`/`AsyncEngine`, 22 stable-core operations (exhaustiveness test-enforced), feature-gated provisional/experimental domains | [python_api.md](python_api.md) |
 
 ---
@@ -579,7 +581,7 @@ Complete catalog of component deep-dives in this directory:
 | **Compliance & Risk** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
-| **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md) |
+| **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
 | **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
 
 Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md).
@@ -603,4 +605,4 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-08-25 — Full verification pass against source. Corrections: EggsecError 23 variants (was 18), PayloadType exactly 40 (was "42+"), utils 20 sub-modules (was 22), TaskKind 29 (was "27+"), stress TCP flood documented as unimplemented, postex techniques described as 16 across 4 categories, NSE 166 implementations vs 43 registered descriptors distinguished, PDF attributed to engine crate not eggsec-output, ScanProfile path corrected to src/types.rs. Added How-an-Operation-Flows section, dispatch.md and api_schema.md deep dives. Same-day addendum: See Also now links AGENTS.md Module Index (override + skill mapping); scanner endpoint count re-verified at 347.*
+*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 168 implementation files / 44 descriptors (was 166/43); CLI 52 = 28 base + 24 gated (was 27/25); scanner fingerprint 45 TCP probes + UDP set (was 47). Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, utils 20 sub-modules, TaskKind 29, ScanProfile 18, endpoints 347.*
