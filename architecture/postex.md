@@ -114,11 +114,11 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 3. **Summary**: `build_summary()` counts detections per category, total/simulated/not_simulated
 4. **Output**: `run_cli()` formats as human-readable or JSON, writes to file or stdout
 
-### Handler Policy (`commands/handlers/postex.rs:5-37`)
+### Handler Policy (`commands/handlers/postex.rs:4-24`)
 
 - **Mode**: `DefenseLab`
 - **Risk**: `SafeActive` for dry-run, `ExploitAdjacent` for real
-- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (line 29). Real mode is effectively unreachable from the CLI handler.
+- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (line 16). Real mode is effectively unreachable from the CLI handler.
 
 ### Cleanup Commands
 
@@ -139,7 +139,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Safety Model
 
-- **Dry-run default**: Handler forces `dry_run: true` at `postex.rs:29`, overriding any CLI input
+- **Dry-run default**: Handler forces `dry_run: true` at `postex.rs:16`, overriding any CLI input
 - **Scope**: `DefenseLab` mode only
 - **Risk gating**: `SafeActive` (dry) / `ExploitAdjacent` (real, unreachable from CLI)
 - **No real execution**: `real_simulations()` produces low-confidence detections but does NOT execute techniques — it is a simulation stub
@@ -180,7 +180,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Invariants & Gotchas
 
-1. **Handler forces dry-run**: `postex.rs:29` always sets `dry_run: true` — real mode is unreachable from CLI
+1. **Handler forces dry-run**: `postex.rs:16` always sets `dry_run: true` — real mode is unreachable from CLI
 2. **16 default techniques**: Exactly 4 categories × 4 techniques each, defined at `mod.rs:236-389`
 3. **Minimal profile filters**: Uses `risk <= Medium` ordering (`mod.rs:127`), not explicit list
 4. **`Aggressive == Standard`**: Both return all 16 techniques; `Aggressive` is a future expansion point (`mod.rs:130`)

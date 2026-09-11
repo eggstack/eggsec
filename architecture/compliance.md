@@ -21,7 +21,7 @@ When the feature is disabled, `lib.rs:94-96` compiles the module as `#[allow(dea
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `ComplianceFramework` | `compliance/mod.rs:62` | Enum (4 variants): `OWASP`, `PCIDSS`, `HIPAA`, `SOC2` |
+| `ComplianceFramework` | `compliance/mod.rs:64` | Enum (4 variants): `OWASP`, `PCIDSS`, `HIPAA`, `SOC2` |
 | `ComplianceReport` | `compliance/mod.rs:22` | Report: framework, target, overall_score, total_requirements, passed, failed, findings |
 | `ComplianceFinding` | `compliance/mod.rs:32` | Individual check: requirement_id, description, severity, status, remediation |
 | `ComplianceStatus` | `compliance/mod.rs:41` | Enum (4 variants): `Pass`, `Fail`, `NotApplicable`, `NeedsReview` |

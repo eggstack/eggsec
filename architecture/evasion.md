@@ -10,7 +10,7 @@ Defense-lab-only module for validating that security controls detect common evas
 
 | Item | Location | Gate |
 |------|----------|------|
-| Module declaration | `crates/eggsec/src/lib.rs:185-186` | `#[cfg(feature = "evasion")]` |
+| Module declaration | `crates/eggsec/src/lib.rs:187-188` | `#[cfg(feature = "evasion")]` |
 | No stub module | — | When disabled, the module does not exist |
 | Feature flag | `crates/eggsec/Cargo.toml:381` | `evasion = []` (marker, no deps) |
 | C2 dependency | `crates/eggsec/Cargo.toml:389` | `c2 = ["postex", "evasion"]` |
@@ -93,7 +93,7 @@ All techniques defined in `default_techniques()` at `mod.rs:135-271`. Every tech
 
 ### Unique MITRE IDs
 
-16 unique MITRE ATT&CK IDs: T1106, T1562.006, T1562.001, T1014, T1027, T1027.005, T1055.012, T1574.002, T1620, T1497.001, T1622, T1497, T1090.004, T1071.004, T1071. Note: T1106 is shared by 2 techniques (direct + indirect syscall).
+15 unique MITRE ATT&CK ID strings across 16 techniques: T1106, T1562.006, T1562.001, T1014, T1027, T1027.005, T1055.012, T1574.002, T1620, T1497.001, T1622, T1497, T1090.004, T1071.004, T1071. Note: T1106 is shared by 2 techniques (direct + indirect syscall).
 
 ## Behavior / Flow
 

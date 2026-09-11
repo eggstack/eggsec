@@ -22,7 +22,7 @@ Key capabilities:
 
 ## Location & Feature Gating
 
-- Source: `crates/eggsec/src/fuzzer/` — 73 `.rs` files across 14 directories
+- Source: `crates/eggsec/src/fuzzer/` — 73 `.rs` files across 6 directories (`fuzzer/`, `api_schema/`, `detection/`, `engine/`, `payloads/`, `targets/`)
 - Feature gate: **none** (always compiled)
 - Bidirectional type sharing with `waf`: fuzzer uses `waf::types::{OwaspCategory, Severity}` (`fuzzer/engine/types.rs:5`); WAF uses `fuzzer::config::WafConfig` (`waf/mod.rs:86`)
 
@@ -188,7 +188,7 @@ Built-in grammars: JSON (null/true/false/strings/numbers), GraphQL (introspectio
 
 **File:** `fuzzer/filters.rs`
 
-`FilterChain` applies sequential filters — any match excludes the result. **13** `PayloadFilter` variants:
+`FilterChain` applies sequential filters — any match excludes the result. **12** `PayloadFilter` variants (`fuzzer/filters.rs:13`):
 
 | # | Variant | Criterion |
 |---|---------|-----------|

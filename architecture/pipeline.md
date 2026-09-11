@@ -314,7 +314,7 @@ cargo test -p eggsec --test pipeline_e2e_tests
 
 1. **Stage timeout is 300s per stage** (`executor.rs:387`), not per-pipeline. A pipeline with 6 stages may run up to 30 minutes.
 2. **Session checkpointing is not atomic across stages**: if the process crashes mid-stage, the stage's results are lost but earlier checkpoints survive.
-3. **Concurrent mode does not checkpoint between waves**: the session is saved only once after all waves complete (`executor.rs:550-570`).
+3. **Concurrent mode checkpoints after each wave**: the session is saved after every wave (`executor.rs:587-611`), plus a final save after concurrent execution (`executor.rs:633-639`). An interrupt loses at most the in-flight wave, not the whole run.
 4. **`run_concurrent()` does not check feature gates or defense-lab scope**: those are checked in `run()` before dispatching to `run_concurrent()`.
 5. **`StageResult.duration_ms` is `#[serde(skip)]`**: it is not serialized to JSON output.
 6. **`generate_html()` and `generate_csv()` are free functions**, not methods on `PipelineReport`. Call as `report::generate_html(&report)`.

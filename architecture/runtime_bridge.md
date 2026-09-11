@@ -1,6 +1,6 @@
 # Runtime Bridge
 
-**Module:** `crates/eggsec/src/runtime_bridge/` (6 files, ~1,833 lines)
+**Module:** `crates/eggsec/src/runtime_bridge/` (6 files, ~1,792 lines)
 
 Bridges frontend-neutral `eggsec-runtime` DTOs to the engine's enforcement model. This is the security boundary between the daemon/runtime layer and the engine's policy system. The dependency direction is one-way: `eggsec` depends on `eggsec-runtime`, never vice versa.
 
@@ -18,9 +18,9 @@ The bridge is the **only** place where runtime DTOs are converted to enforcement
 |------|-------|---------|
 | `mod.rs` | 35 | Module root; re-exports all public types; documents invariants |
 | `surface.rs` | ~210 | Bidirectional surface conversion (`RuntimeSurface` ↔ `ExecutionSurface`, exhaustive; `Unknown` rejected wire → engine); `RuntimeBridgeError` enum (7 variants) |
-| `descriptor.rs` | 459 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` delegates to the single wire-side match |
+| `descriptor.rs` | 444 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` delegates to the single wire-side match |
 | `manual.rs` | 438 | `preflight_run_request()` and `approve_run_request()` entry points |
-| `bundle.rs` | ~340 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
+| `bundle.rs` | 355 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
 | `executor.rs` | ~300 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; envelope via engine-owned `dispatch::task_result_envelope`; cancellation via shared `race_with_cancel` |
 
 ## Key Types
@@ -271,7 +271,7 @@ The `resolve_loaded_scope()` method (`executor.rs:62–113`) determines scope re
 The bridge module has extensive test coverage across all files:
 
 - **Surface conversion** (`surface.rs:62–148`): Tests all 9 known mappings, rejects `Unknown`, verifies `honors_manual_override()` for permissive vs strict surfaces.
-- **Descriptor resolution** (`descriptor.rs:77–459`): Tests every `TaskKind` variant individually, verifies unsupported kinds error, checks `requires_explicit_scope` for agent-exposable ops.
+- **Descriptor resolution** (`descriptor.rs:77–444`): Tests every `TaskKind` variant individually, verifies unsupported kinds error, checks `requires_explicit_scope` for agent-exposable ops.
 - **Preflight & approval** (`manual.rs:88–438`): Tests preflight/approve paths for CLI/TUI manual, strict, MCP, REST, gRPC, CI, SecurityAgent surfaces; override rejection; daemon-backed manual surfaces remain manual.
 - **Bundle & dispatch** (`bundle.rs`): Tests bundle capture, strict surface rejection, operation mismatch detection, target mismatch detection, surface preservation.
 - **Executor** (`executor.rs`): Tests envelope conversion for port scan, error, and load test variants (via the single engine-owned mapping).

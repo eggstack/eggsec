@@ -40,7 +40,7 @@ The public entry points are:
 
 | File | Lines | Contents |
 |------|-------|----------|
-| `canonical_execution.rs` | ~1800 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
+| `canonical_execution.rs` | 2006 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
 | `mod.rs` | ~310 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
 | `types.rs` | 156 | `TaskResult` enum (27 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
 | `executor.rs` | 64 | `OperationExecutor` trait (object-safe: no generic self, no generic associated types), `ExecutionOutput` enum (`Success`/`FeatureUnavailable`/`Failed`) |

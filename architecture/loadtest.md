@@ -12,11 +12,11 @@ The load testing module provides HTTP performance benchmarking — measuring ser
 
 | File | Lines | Feature-gated | Purpose |
 |------|-------|---------------|---------|
-| `mod.rs` | 107 | `cli` (for `run_cli()`) | Module entry, `run_cli()` CLI entry point |
-| `runner.rs` | 507 | no | `LoadTestRunner` — worker/concurrency model, rate limiting, request execution |
+| `mod.rs` | 108 | `cli` (for `run_cli()`) | Module entry, `run_cli()` CLI entry point |
+| `runner.rs` | 522 | no | `LoadTestRunner` — worker/concurrency model, rate limiting, request execution |
 | `metrics.rs` | 142 | no | `Metrics` + `LoadTestResults` — hdrhistogram latency tracking, percentile extraction |
 
-**Total:** 3 files (+ `AGENTS.override.md`), 656 lines (code only).
+**Total:** 3 files (+ `AGENTS.override.md`), 772 lines (code only).
 
 ## Key Types
 
@@ -231,7 +231,7 @@ cargo clippy --lib -p eggsec
 3. **Error classification:** HTTP 2xx/3xx = successful; 4xx/5xx = failed (`metrics.rs:95-102`). Transport errors are also failures.
 4. **FxHashMap for status codes:** Uses `rustc_hash::FxHashMap` for performance over `std::collections::HashMap` (`metrics.rs:3,70`).
 5. **Histogram precision:** 3 significant figures — sufficient for ms-level latency tracking but not sub-microsecond.
-6. **No timeouts on spawned tasks:** Worker tasks in the `JoinSet` and the rate-limit background task (`runner.rs:384,400`) are spawned without explicit `tokio::time::timeout` wrappers. Workers are bounded by the atomic request counter and `CancellationToken`, but a hung `reqwest` request could block a worker until the per-request timeout fires. The rate-limit task is bounded by `CancellationToken`. This violates the AGENTS.md invariant that all spawned tokio tasks need timeout wrappers.
+6. **Spawned-task timeouts:** Worker tasks in the `JoinSet` are bounded by the atomic request counter, `CancellationToken`, and per-request timeouts rather than explicit `tokio::time::timeout` wrappers. The rate-limit background task is guarded: `runner.rs:493-501` awaits its handle with a 5s timeout and aborts on stall instead of detaching it.
 
 ## See Also
 

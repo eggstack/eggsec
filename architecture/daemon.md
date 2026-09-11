@@ -301,7 +301,7 @@ Schema version: `2` (stored in `schema_meta`). Migration refuses to load when st
 
 ## Invariants & Gotchas
 
-1. **No TUI deps in daemon**: architecture guard enforces zero `ratatity`/`crossterm` imports
+1. **No TUI deps in daemon**: architecture guard enforces zero `ratatui`/`crossterm` imports
 2. **Transport/engine deps stay feature-gated**: `http-api` and `full-executor` are opt-in
 3. **Persistence timeout**: all fire-and-forget persistence tasks bounded by `PERSISTENCE_TASK_TIMEOUT` (30s)
 4. **ApprovePolicy is unsupported**: returns `ErrorCode::Unsupported` with audit trail

@@ -14,7 +14,7 @@ Frontend-neutral async runtime for task lifecycle management. Provides the bridg
 
 Architecture guard: zero TUI, transport, persistence, or engine dependencies. Enforced by `scripts/check-architecture-guards.sh`.
 
-## Architecture (11 source files, Phase D)
+## Architecture (12 source files, Phase D)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -29,6 +29,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `ids` | `src/ids.rs` | `SessionId`, `TaskId`, `ClientId` — UUID newtypes with serde/display |
 | `error` | `src/error.rs` | `RuntimeError` (13 variants) |
 | `dispatcher` | `src/dispatcher.rs` | `TaskDispatcher` trait (unused by runtime; legacy interface) |
+| `cancel` | `src/cancel.rs` | `race_with_cancel` helper + `CancellationToken` re-export (cancellation boundary) |
 
 ### Core Types
 

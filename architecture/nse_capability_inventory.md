@@ -8,7 +8,7 @@
 
 The `eggsec-nse` crate provides Lua 5.4 script execution via `mlua`. Lua execution hooks can interrupt Lua bytecode, but once a Lua script enters Rust helper code, blocking filesystem, network, DNS, process, crypto, compression, time, or randomness work must enforce limits and cancellation cooperatively inside the helper path.
 
-This inventory classifies every side-effecting helper operation across the 166 library implementation files in `crates/eggsec-nse/src/libraries/` (167 `.rs` files total; `mod.rs` is module declarations only), plus the executor core, to guide Milestone 3 wrapper migration.
+This inventory classifies every side-effecting helper operation across the 167 library implementation files in `crates/eggsec-nse/src/libraries/` (168 `.rs` files total; `mod.rs` is module declarations only), plus the executor core, to guide Milestone 3 wrapper migration.
 
 ### Capability Classes
 

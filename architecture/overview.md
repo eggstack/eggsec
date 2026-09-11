@@ -61,7 +61,7 @@ nor hosted CI publishes a package.
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
-| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 168 library implementation files / 44 registered descriptors, sandbox, ScriptResolver. Optional. |
+| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 167 library implementation files / 44 registered descriptors, sandbox, ScriptResolver. Optional. |
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
@@ -248,7 +248,7 @@ Modules that connect to external platforms and AI services.
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | AI/LLM | `crates/eggsec/src/ai/` | Multi-provider client (OpenAI, Anthropic, Azure, OpenAI-compatible), response cache, adaptive planner + script generation behind `ai-integration`; WAF-bypass suggestions, payload suggestion | [ai_agents.md](ai_agents.md) |
-| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **168 library implementation files** exposing the NSE stdlib, **44 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
+| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **167 library implementation files** exposing the NSE stdlib, **44 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
 | Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab connectors behind a common `IssueTracker` trait; feature-gated: `external-integrations` | [integrations.md](integrations.md) |
 | Notifications | `crates/eggsec/src/notify/` | Webhook delivery plus Slack/Discord/MS Teams channels via `NotifyManager`; always compiled | [notify.md](notify.md) |
 
@@ -605,4 +605,4 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 168 implementation files / 44 descriptors (was 166/43); CLI 52 = 28 base + 24 gated (was 27/25); scanner fingerprint 45 TCP probes + UDP set (was 47). Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, utils 20 sub-modules, TaskKind 29, ScanProfile 18, endpoints 347.*
+*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 167 implementation files / 44 descriptors (was 166/43); CLI 52 = 28 base + 24 gated (was 27/25); scanner fingerprint 45 TCP probes + UDP set (was 47). Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Same-day systematic sweep: 8 parallel review batches across all 65 docs; applied verified doc fixes (pipeline wave-checkpoint invariant, defense_lab duplicate section, daemon typo, fuzzer dirs/PayloadFilter, hunt 18 admin paths, evasion 15 MITRE IDs + gate lines, websocket gate lines, postex/c2 handler refs, dispatch/descriptor line counts, runtime cancel.rs, compliance line, loadtest counts + rate-limiter timeout note, generated off-by-ones). Alias count re-checked at 42 (subagent claim of 43 was a miscount); utils stays 20 declared sub-modules. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, TaskKind 29, ScanProfile 18, endpoints 347.*

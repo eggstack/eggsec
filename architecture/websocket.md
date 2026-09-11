@@ -10,7 +10,7 @@ WebSocket security testing including connection validation, message injection, c
 
 | Item | Location | Gate |
 |------|----------|------|
-| Module declaration | `crates/eggsec/src/lib.rs:153-154` | `#[cfg(feature = "websocket")]` |
+| Module declaration | `crates/eggsec/src/lib.rs:155-156` | `#[cfg(feature = "websocket")]` |
 | No stub module | — | When disabled, the module simply does not exist |
 | `WebSocketTestConfig` | `websocket/mod.rs:34-44` | `#[cfg(feature = "websocket")]` |
 | `run_live_tests()` | `websocket/mod.rs:46-79` | `#[cfg(feature = "websocket")]` |
@@ -21,7 +21,7 @@ WebSocket security testing including connection validation, message injection, c
 | `tokio-tungstenite` dep | `crates/eggsec/Cargo.toml:155-158` | `version = "0.26"`, `features = ["rustls-tls-native-roots"]`, optional |
 | Feature flag | `crates/eggsec/Cargo.toml:333` | `websocket = ["dep:tokio-tungstenite"]` |
 
-**Important asymmetry note**: The task description claims `WebSocketTestReport`/`WebSocketFinding` are NOT cfg-gated and always available. This is **incorrect** per source: the entire `websocket` module is gated at `lib.rs:153-154` with no `#[cfg(not(...))]` stub. When the `websocket` feature is disabled, none of these types exist in the public API.
+**Important asymmetry note**: The task description claims `WebSocketTestReport`/`WebSocketFinding` are NOT cfg-gated and always available. This is **incorrect** per source: the entire `websocket` module is gated at `lib.rs:155-156` with no `#[cfg(not(...))]` stub. When the `websocket` feature is disabled, none of these types exist in the public API.
 
 The `WebSocketTestReport`, `WebSocketFinding`, `ConnectionTestResult`, `InjectionTestResult`, `OriginTestResult`, and `FuzzTestResult` structs are all defined inside the feature-gated module and therefore only available with `--features websocket`. The only always-available WebSocket types live in the fuzzer (`fuzzer/payloads/websocket.rs`), which is not gated.
 

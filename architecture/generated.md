@@ -80,8 +80,8 @@ All methods are under the `eggsec.tool.v1.ToolService` service prefix (e.g., `/e
 | `GetToolResponse` | `tool: Option<ToolInfo>` | `:33` |
 | `ExecuteToolRequest` | `tool_id`, `target`, `params`, `options` | `:38` |
 | `ExecuteToolResponse` | `request_id`, `tool_id`, `status`, `results`, `metadata`, `errors`, `findings` | `:49` |
-| `CapabilitiesRequest` | `tool_id: String` | `:111` |
-| `CapabilitiesResponse` | `capabilities: Vec<ToolCapability>` | `:116` |
+| `CapabilitiesRequest` | `tool_id: String` | `:112` |
+| `CapabilitiesResponse` | `capabilities: Vec<ToolCapability>` | `:117` |
 
 ### Core Data Types
 
@@ -90,7 +90,7 @@ All methods are under the `eggsec.tool.v1.ToolService` service prefix (e.g., `/e
 | `ToolInfo` | `id`, `name`, `category`, `description`, `protocols`, `capabilities` | `:122` |
 | `ToolCapability` | `name`, `description`, `parameters: Vec<ParameterDef>` | `:137` |
 | `ParameterDef` | `name`, `param_type`, `required`, `default`, `description` | `:146` |
-| `Target` | `type: TargetType`, `value`, `scope: Option<Scope>` | `:158` |
+| `Target` | `type: TargetType`, `value`, `scope: Option<Scope>` | `:159` |
 | `Scope` | `allowed_patterns`, `excluded_patterns`, `allowed_ips`, `allow_subdomains` | `:168` |
 | `RequestOptions` | `timeout_ms`, `concurrency`, `rate_limit`, `proxy`, `headers`, `auth`, `stealth`, `follow_redirects`, `verify_ssl` | `:179` |
 | `AuthConfig` | `auth_type: AuthType`, `credentials: HashMap` | `:203` |

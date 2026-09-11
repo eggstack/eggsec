@@ -284,29 +284,6 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 - **Mobile static/regression profiles**: `mobile-static`, `mobile-dynamic`, and `mobile-regression` pipeline profiles (aspirational; Phase 1 + Phase 2a + final polish + close-out polish are standalone CLI `eggsec mobile ...` under `SafeActive`/`DefenseLab` only, suitable for defense-lab use on lab-provided APKs/IPAs and controlled lab devices). See `architecture/mobile.md`. Dynamic loadout completed. Phase 2 closed (proxy + permissions + correlation; 2026-06-12) + final polish + close-out + Phase 3/4a (Frida + CorrelationEngine) delivered 2026-06-12 all remain standalone defense-lab (no pipeline/TUI/MCP).
 - **Wireless stages**: Similarly aspirational (`WirelessAnalysis` or `wireless-defense` profile). See `architecture/wireless.md`. Decision from integration work: Defer.
 
-## Integration with Reporting Pipeline
-
-A defense-lab run produces structured output suitable for regression analysis. The canonical envelope for this is `RunManifest` defined in `crates/eggsec/src/output/run_manifest.rs` and documented in `architecture/output.md`.
-
-| Field | Description |
-|-------|-------------|
-| `schema_version` | Manifest schema version for forward compatibility |
-| `run_id` | Unique identifier for this run |
-| `started_at` / `ended_at` | Timestamps |
-| `eggsec_version` | Version used |
-| `target_scope` | Target specification |
-| `profile` | Defense-lab profile name |
-| `probe_intents` | Categorized probe metadata (uses `ProbeIntent` enum from `probe.rs`) |
-| `risk_budget` | Allowed risk tier (uses `ProbeRisk` enum from `probe.rs`) |
-| `feature_flags` | Enabled features |
-| `observations` | Raw probe results (response codes, latencies, payloads) |
-| `findings` | Interpreted findings |
-| `artifacts` | Paths to output files (JSON, HTML, CSV, etc.) |
-| `baseline_id` | Reference to baseline run, if comparing |
-| `diff_summary` | Summary of differences against baseline (uses `DiffSummary` from `output::diff`) |
-
-The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type in `crates/eggsec-output/src/diff.rs` and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
-
 Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
 
 *Last verified against source: 2026-08-25*

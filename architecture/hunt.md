@@ -96,7 +96,7 @@ Each sub-module is gated by its `HuntConfig` boolean. Findings are added to `Hun
 
 `check_authz_bypass()` (`authz.rs:62-76`) runs 4 checks:
 
-1. **Admin access** (`authz.rs:78-146`): Tests 17 admin paths (`ADMIN_PATHS` at `authz.rs:30-49`: `/admin`, `/admin/`, `/api/admin`, `/api/admin/users`, `/api/admin/config`, `/dashboard`, `/manage`, `/management`, `/internal`, `/api/internal`, `/debug`, `/api/debug`, `/actuator`, `/actuator/health`, `/actuator/env`, `/swagger-ui.html`, `/api-docs`, `/graphql`) — concurrent with semaphore. HTTP 200 + body contains `"admin"`, `"dashboard"`, `"management"`, or `"users"` → `MissingAuthorization` (Critical, CVSS 9.0).
+1. **Admin access** (`authz.rs:78-146`): Tests 18 admin paths (`ADMIN_PATHS` at `authz.rs:30-49`: `/admin`, `/admin/`, `/api/admin`, `/api/admin/users`, `/api/admin/config`, `/dashboard`, `/manage`, `/management`, `/internal`, `/api/internal`, `/debug`, `/api/debug`, `/actuator`, `/actuator/health`, `/actuator/env`, `/swagger-ui.html`, `/api-docs`, `/graphql`) — concurrent with semaphore. HTTP 200 + body contains `"admin"`, `"dashboard"`, `"management"`, or `"users"` → `MissingAuthorization` (Critical, CVSS 9.0).
 
 2. **IDOR** (`authz.rs:148-212`): Tests 8 IDOR-prone paths (`IDOR_PATHS` at `authz.rs:51-60`: `/api/users/{1,2}`, `/api/users/{1,2}/profile`, `/api/accounts/{1,2}`, `/api/documents/{1,2}`) — concurrent with semaphore. HTTP 200 + body > 50 bytes → `Idor` (High, CVSS 7.5).
 

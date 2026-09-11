@@ -42,7 +42,7 @@ pub struct SandboxConfig {
 
 ### NSE Libraries
 
-166 library implementation files in `crates/eggsec-nse/src/libraries/` including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. The library registry (`LIBRARY_REGISTRY`) contains 43 curated descriptors covering Nmap's standard Lua library set — registry metadata is the source of truth for compatibility claims, not implementation file counts.
+167 library implementation files in `crates/eggsec-nse/src/libraries/` including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. The library registry (`LIBRARY_REGISTRY`) contains 43 curated descriptors covering Nmap's standard Lua library set — registry metadata is the source of truth for compatibility claims, not implementation file counts.
 
 ### CVE Integration
 
