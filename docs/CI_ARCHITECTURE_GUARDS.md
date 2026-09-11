@@ -53,6 +53,7 @@ Representative feature profiles are checked in the optional `deep-checks.yml` wo
 | web-proxy | `cargo check -p eggsec --features web-proxy` | Domain capability |
 | web-proxy MCP | `cargo check -p eggsec --features web-proxy-mcp,tool-api,rest-api` | Domain + protocol |
 | c2 MCP | `cargo check -p eggsec --features c2-mcp,tool-api,rest-api` | Domain + protocol |
+| broad TUI | `cargo check -p eggsec-tui --features db-pentest,web-proxy,c2` + lib tests | Frontend builders (fast drift detection; `full` stays in Deep Checks) |
 
 > **Note**: `mobile-dynamic` may require platform-specific dependencies. If it fails in CI due to missing system deps, it should be documented with an issue reference rather than silently ignored.
 
@@ -101,7 +102,8 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 ### Documentation Currency
 - Verify current architecture docs exist (`COMMAND_REGISTRY.md`, `TOOL_REGISTRATION.md`, `FEATURE_MATRIX.md`, `METADATA_OWNERSHIP.md`, `CI_ARCHITECTURE_GUARDS.md`).
 - Verify feature docs match the Cargo source of truth (`scripts/check-feature-docs.py`: engine default, declared features, curated `full` membership, domain inventory).
-- Verify the individual feature sweep is maintained and scheduled (`scripts/check-features-individual.sh`, Makefile target, `deep-checks.yml`).
+- Verify the individual feature sweep is maintained and scheduled (`scripts/check-features-individual.sh`, Makefile target, `deep-checks.yml`), including the mechanically-enumerated TUI feature section and the `eggsec-tui/full` aggregate.
+- Verify the broad TUI profile (`db-pentest,web-proxy,c2`) remains in `make check-feature-profiles` for fast frontend drift detection.
 - Verify extensibility handoff guides exist (`EXTENSIBILITY.md`, `extending/operations.md`, `extending/domains.md`, `extending/commands.md`, `extending/tool-exposure.md`, `extending/tui-actions.md`, `extending/report-evidence.md`, `extending/features.md`, `extending/testing.md`, `extending/templates.md`).
 - Verify `EXTENSIBILITY.md` Detailed Guides table links resolve to existing files.
 - Fail on stale field names or contradictions in current docs.

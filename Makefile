@@ -115,6 +115,13 @@ check-feature-profiles:
 	cargo check -p eggsec --features compliance
 	cargo check -p eggsec --features finding-workflow
 	cargo check -p eggsec --features vuln-management
+	# Broad TUI profile (dependency-light, deterministic): exercises the
+	# feature-gated runtime request builders (db-pentest, intercept,
+	# C2) plus adjacent tabs for cross-feature compile drift. Fast
+	# detection between weekly deep sweeps; NOT a substitute for the
+	# eggsec-tui/full aggregate in Deep Checks.
+	cargo check -p eggsec-tui --features db-pentest,web-proxy,c2
+	cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast
 
 # Release validation (local only, no publication)
 release-check:

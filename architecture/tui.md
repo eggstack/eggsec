@@ -299,7 +299,24 @@ assert!(text.contains("Mode:"));
 - `app/navigation.rs`: 16 tests (tab switching, edge detection)
 - `tabs/handle_enter_regression.rs`: 40 table-driven tests across 12 tabs
 - `tabs/input_accessibility.rs`: `#[cfg(test)]` module verifying unique input labels and focus traversal
+- `app/task_management.rs`: builder semantic tests for feature-gated runtime request construction (db-pentest, intercept, C2) plus canonical-conversion round trips
 - Total TUI crate: ~479 tests
+
+### Runtime Request Builders (`app/task_management.rs`)
+
+Each runnable tab implements `TaskBuilder::build_run_request()` to construct a `RunRequest` (a `TaskKind` + `RuntimeSurface::TuiManual`) from current tab state. The builders are shallow adapters: they map UI state to the runtime DTO and rely on `CanonicalOperationRequest::from_task_kind` for canonical identity/target/validation. They introduce no TUI-local canonicalization rules.
+
+Semantic rules for safety-relevant fields:
+- Map TUI-exposed controls explicitly (e.g. `dry_run`/`advanced` toggles on the DbPentest tab, `dry_run`/`max_flows` on Intercept).
+- For fields the TUI does not expose, use the runtime's canonical absence semantics (`None`) so the engine applies its documented safe default — never invent a permissive value to satisfy compilation.
+- `detect_db_type_from_target()` infers the mandatory `db_type` from the connection-string scheme (the tab has no db-type control); unknown schemes return `None` from the builder rather than fabricating a value.
+- `parse_listen_addr()` splits the Intercept listen address into typed host/port components without silently coercing missing pieces.
+
+### Feature-Profile Verification
+
+- `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only).
+- `make check-feature-profiles` includes the broad dependency-light TUI profile (`db-pentest,web-proxy,c2` check + lib tests) for fast cross-feature compile-drift detection between weekly deep sweeps. `eggsec-tui/full` remains a Deep Checks gate.
+- Guard 98 (`scripts/check-architecture-guards.sh`) pins these three invariants; DTO field-level contracts belong to Rust compilation and the builder semantic tests, not to grep guards.
 
 ### Regression Test Harness (`tabs/handle_enter_regression.rs`)
 

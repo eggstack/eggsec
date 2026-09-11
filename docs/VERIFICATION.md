@@ -89,8 +89,8 @@ These checks are valuable but not required for every merge. They run in the opti
 | Full mandatory contract | `make check` (included in `check-full`) | Baseline correctness |
 | Advisory/license/ban policy | `cargo deny check` | Dependency policy enforcement |
 | Domain/platform lint | `make clippy-domain` | Lint extracted implementation crates with relevant features |
-| Representative feature profiles | `make check-feature-profiles` | Feature coherence |
-| Exhaustive per-feature sweep | `make check-features-individual` | Every feature compiled in its minimum set (`full` is curated, not exhaustive) |
+| Representative feature profiles | `make check-feature-profiles` | Feature coherence (engine profiles + broad TUI `db-pentest,web-proxy,c2` check and lib tests) |
+| Exhaustive per-feature sweep | `make check-features-individual` | Every engine and TUI feature compiled in its minimum set (`full` aggregates are curated, not exhaustive) |
 
 ### Security tool ownership
 

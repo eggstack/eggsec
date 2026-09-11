@@ -250,3 +250,135 @@ When executed, append:
 - remaining debt with an owner/removal criterion.
 
 Do not mark this pass complete solely because the three constructors compile. The missing automated TUI feature coverage is part of the defect and must be closed in the same pass.
+
+---
+
+## Completion record
+
+Status: Executed
+
+Date: 2026-09-11
+
+Baseline SHA: `92d3577c1ebd4e48c590c5b4ec839f1911324d5c`
+Final SHA: (recorded at commit time; see `git log` for the `fix(tui)` commit on `main`)
+
+### Compiler errors reproduced before the fix
+
+`cargo check -p eggsec-tui --features full` at baseline failed with three E0063 errors in `crates/eggsec-tui/src/app/task_management.rs`:
+
+```text
+error[E0063]: missing fields `dry_run`, `listen_host` and `max_flows` in initializer of `InterceptParams`
+   --> crates/eggsec-tui/src/app/task_management.rs:542:44
+error[E0063]: missing field `dry_run` in initializer of `C2Params`
+   --> crates/eggsec-tui/src/app/task_management.rs:568:37
+error[E0063]: missing fields `allow_advanced`, `checks`, `dry_run` and 2 other fields in initializer of `DbPentestParams`
+   --> crates/eggsec-tui/src/app/task_management.rs:600:44
+```
+
+### Fields mapped for each repaired builder and why
+
+**DbPentest (`crates/eggsec-tui/src/app/task_management.rs`, `DbPentestTab` impl):**
+- `target` ← input[1] (Target field), unchanged.
+- `db_type` ← inferred from the connection-string scheme via new `detect_db_type_from_target()` (`postgres|postgresql→postgres`, `mysql→mysql`, `mongodb|mongo→mongodb`, `mssql|sqlserver→mssql`, `redis|rediss→redis`). The tab exposes no db-type control; the old code read input[2] (the Checks field, default `"all"`) as `db_type`, which would fail `DbPentestRequest::normalize()` (it requires a concrete `postgres|mysql|mssql|mongodb|redis`). Unknown schemes return `None` from the builder rather than fabricating a permissive value.
+- `port` ← `None` (no port control in the tab).
+- `checks` ← input[2], `None` when blank (engine normalizes absent to `"all"`).
+- `max_queries` ← input[3] parsed as `u64`, `None` when blank/unparseable (engine defaults to 200).
+- `max_duration` ← input[4] parsed as `u64`, `None` when blank/unparseable (engine defaults to 120).
+- `dry_run` ← `Some(self.dry_run)` (tab toggle, default `true`).
+- `allow_advanced` ← `Some(self.advanced)` (tab toggle, default `false`).
+
+**Intercept (`InterceptTab` impl):**
+- `listen_host` + `listen_port` ← split once from `listen_addr()` via new `parse_listen_addr()` (typed `(Option<String>, Option<u16>)`, no silent coercion of missing pieces). Previously only `listen_port` was extracted with ad-hoc inline parsing.
+- `target` ← `self.primary_target()`, unchanged (falls back to `listen_addr` when no session is attached — documented empty-session semantic, not a new default).
+- `dry_run` ← `Some(self.dry_run)` (tab field, default `true`).
+- `max_flows` ← `Some(self.max_flows())` (tab field, default `100`).
+
+**C2 (`C2Tab` impl):**
+- `target`, `profile` ← unchanged (target + campaign inputs).
+- `dry_run` ← `None` (the tab exposes no dry-run control; absence lets the canonical executor apply its documented safe default `dry_run.unwrap_or(true)`). Documented in code and test.
+
+No permissive/safety-relevant runtime value was invented to satisfy compilation.
+
+### Bonus fix found by the new sweep
+
+The new TUI sweep caught a **pre-existing** compile failure unrelated to the three reported builders: `cargo check -p eggsec-tui --features vuln-management` failed with `E0433: cannot find type AppState` in `crates/eggsec-tui/src/app/state_update.rs` because the `use crate::tabs::AppState` import gate listed `database`, `external-integrations`, and `finding-workflow` but omitted `vuln-management` (which also uses `AppState::Completed`). Fixed by adding `vuln-management` to the `#[cfg(any(...))]` gate. This validates the sweep's value: TUI-only feature combinations previously had zero automated coverage.
+
+### TUI feature count swept individually
+
+18 declared TUI features (every entry in `crates/eggsec-tui/Cargo.toml` other than `default`/`full`), each compiled at its minimum activation set, plus the `full` aggregate — 19 TUI profiles total:
+
+`advanced-hunting`, `c2`, `compliance`, `database`, `db-pentest`, `external-integrations`, `finding-workflow`, `headless-browser`, `mobile`, `nse`, `packet-inspection`, `rest-api`, `stress-testing`, `tool-api`, `vuln-management`, `web-proxy`, `wireless`, `wireless-advanced`, + `full`.
+
+All 18 individual TUI profiles PASS. The orphan guard (mechanical `Cargo.toml` enumeration compared against the swept list) ensures a newly added TUI feature cannot silently escape the sweep.
+
+### `full` aggregate result
+
+`cargo check -p eggsec-tui --features full` — **PASS** (0 errors). Verified to need no system prerequisites beyond the Rust toolchain on a supported host: `pnet` is pure-Rust (no libpcap link at compile time), `openssl` is vendored via `eggsec-nse`, and `wireless-tools` is runtime-only. Deep Checks already installs `ripgrep protobuf-compiler libpcap-dev libssl-dev libssh2-dev pkg-config`, which is more than sufficient — **no `.github/workflows/deep-checks.yml` changes were required**.
+
+**Gate decision:** `full` stays a **Deep Checks gate** (weekly/manual via `make check-features-individual`), not a routine push-CI gate, because it pulls the heaviest compile closure (nse vendored openssl, pnet, all domain tabs) and would materially slow every push. The broad dependency-light profile below is the routine fast gate.
+
+### Broad routine profile result
+
+`make check-feature-profiles` now includes:
+
+```text
+cargo check -p eggsec-tui --features db-pentest,web-proxy,c2
+cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast
+```
+
+**PASS** — check clean (0 errors), 936 lib tests passed. This exercises exactly the three repaired builders plus adjacent tabs for fast cross-feature compile-drift detection between weekly deep sweeps.
+
+### Full command/test results (exact, local)
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all -- --check` | PASS |
+| `cargo check -p eggsec-tui --features db-pentest,web-proxy,c2` | PASS (0 errors) |
+| `cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast` | PASS (936 passed) |
+| `cargo test -p eggsec-tui --lib --no-fail-fast` (default features) | PASS (874 passed) |
+| `cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib app::task_management` | PASS (12 passed: listen-addr parsing, db/intercept/c2 builder semantics, canonical round trips, surface pinning, scheme detection) |
+| `cargo check -p eggsec-tui --features full` | PASS (0 errors) |
+| `make check-feature-profiles` | PASS (exit 0) |
+| `make check-features-individual` | **PASS: 85, SKIP: 4, FAIL: 0** → `RESULT: OK` |
+| `make test-architecture-guards` | PASS (all 98 checks, including new Check 98) |
+| `make check` | PASS (exit 0) |
+| `make check-python` | PASS (exit 0) |
+
+Focused semantic tests added (`app::task_management::tests`): `parse_listen_addr_handles_typical_and_partial_inputs`, `db_pentest_builder_maps_ui_state_to_runtime_dto`, `db_pentest_builder_refuses_unknown_target_scheme`, `db_pentest_builder_omits_optional_inputs_when_blank_or_unparseable`, `db_pentest_builder_round_trips_through_canonical_conversion`, `intercept_builder_maps_ui_state_to_runtime_dto`, `intercept_builder_preserves_partial_listen_addr_components`, `intercept_builder_dry_run_default_is_preserved_as_some_true`, `c2_builder_maps_ui_state_to_runtime_dto`, `c2_builder_round_trips_through_canonical_conversion`, `builder_results_carry_tui_manual_surface`, `detect_db_type_from_target_recognizes_known_schemes`. These assert `TaskKind` variant, canonical operation ID (`db-pentest` / `proxy-intercept` / `c2`), target/listen identity, `TuiManual` surface, canonical-conversion success, TUI-controlled safety-field preservation, and documented absence behavior for unexposed fields. The pre-existing `c2.rs` builder tests (`test_build_run_request_*`) remain green.
+
+Existing frontend/runtime convergence suites remain green via `make check` (approval binding, canonical dispatch ownership, TUI surface parity, runtime contract closure, cancellation/lifecycle). No duplicate operation/target/alias/executor mapping was introduced.
+
+### Hosted CI/Deep Checks evidence
+
+Local verification only at completion time; hosted `ci.yml` (push) and scheduled `deep-checks.yml` evidence to be recorded after push. Deep Checks needs no prerequisite changes (see above).
+
+### Intentional prerequisite SKIPs (local host)
+
+4 SKIPs, all pre-existing engine/domain gates (this host lacks `libpcap-dev` and `libssh2-dev`):
+
+- `eggsec/nse-ssh2` (libssh2-dev)
+- `eggsec/packet-inspection` (libpcap-dev)
+- `eggsec/stress-testing` (libpcap-dev)
+- `eggsec-nse/nse-ssh2` (libssh2-dev)
+
+No TUI profile was skipped: TUI `stress-testing`/`packet-inspection` compile without libpcap (pure-Rust `pnet`), TUI `nse` uses vendored openssl, and TUI `full` was verified to build on this unprovisioned host — so the TUI sweep applies no SKIP gates. A Rust compile failure in any TUI profile is always FAIL, never SKIP.
+
+### Remaining debt
+
+None introduced by this pass. Pre-existing warnings in `full` builds (unused imports in feature-conditional tabs, deprecated `Table::highlight_style`, `sqlx-postgres` future-incompat) are untouched and out of scope. Promoting `eggsec-nse` from warn-only to `-D warnings` in `make clippy-domain` remains tracked future work (pre-existing, noted in the Makefile).
+
+### Files touched
+
+- `crates/eggsec-tui/src/app/task_management.rs` — repaired three builders, added `parse_listen_addr()` + `detect_db_type_from_target()` helpers and 12 semantic tests.
+- `crates/eggsec-tui/src/app/state_update.rs` — added `vuln-management` to the `AppState` import gate (pre-existing bug found by the new sweep).
+- `scripts/check-features-individual.sh` — new TUI enumeration section (mechanical `Cargo.toml` read), TUI orphan guard, `eggsec-tui/full` aggregate check.
+- `Makefile` — broad TUI profile (`db-pentest,web-proxy,c2` check + lib tests) in `check-feature-profiles`.
+- `scripts/check-architecture-guards.sh` — new Check 98 (TUI feature-profile verification: sweep section, mechanical enumeration, `full` aggregate, broad profile).
+- `docs/CI_ARCHITECTURE_GUARDS.md` — broad-TUI profile row; sweep/TUI-profile currency bullets.
+- `docs/VERIFICATION.md` — sweep/profile descriptions now name TUI coverage.
+- `AGENTS.md` — TUI `full` vs broad-profile gate split; TUI-sweep requirement for `eggsec-tui/Cargo.toml` changes.
+- `architecture/tui.md` — builder semantics, `parse_listen_addr`/`detect_db_type_from_target` contracts, feature-profile verification section.
+- `.opencode/skills/eggsec-tui/SKILL.md` — builder rules, TUI profile commands, sweep/orphan-guard notes.
+- This plan file — completion record.
+
+Acceptance criteria 1–10 all satisfied.

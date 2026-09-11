@@ -2,9 +2,9 @@
 # Individual per-feature compilation sweep (Phase B, workstream 3).
 #
 # Compiles every declared engine feature in its minimum dependency set, plus
-# domain-crate, daemon/CLI, and Python-crate profiles. This is the exhaustive
-# oracle: the `full` aggregate is curated (28 pinned members) and therefore
-# not sufficient on its own.
+# TUI features, domain-crate, daemon/CLI, and Python-crate profiles. This is
+# the exhaustive oracle: the `full` aggregates are curated and therefore not
+# sufficient on their own.
 #
 # Cadence: weekly/manual via `deep-checks.yml`, or locally via
 #   make check-features-individual
@@ -128,6 +128,64 @@ echo "  (all engine features have a sweep profile)"
 echo ""
 echo "--- Aggregate: full ---"
 run_check "eggsec/full" cargo check -p eggsec --features full
+
+# ── 2b. TUI features, minimum activation sets ────────────────────────────
+# Mechanically enumerates every declared eggsec-tui feature (other than
+# `default` and `full`) so a new TUI feature cannot silently escape the
+# sweep. Feature dependencies already expressed in Cargo (e.g.
+# `wireless-advanced` includes `wireless`) are respected automatically by
+# Cargo; the shell does not duplicate them.
+#
+# TUI features are dependency-light by design (pure Rust or vendored deps):
+# - `stress-testing` / `packet-inspection` use pnet (pure Rust, no libpcap
+#   link required for compilation). They are NOT gated on libpcap here
+#   because the TUI profiles compile without it; a Rust compile failure is
+#   always FAIL, never SKIP.
+# - `nse` uses vendored openssl via eggsec-nse; no system libssl-dev gate.
+# - `wireless` / `wireless-advanced` need wireless-tools only at runtime
+#   (root/hardware for real scans), not for compilation.
+# If a future TUI feature gains a real build-time system prerequisite, gate
+# it explicitly with the PASS/FAIL/SKIP discipline used for engine features.
+echo ""
+echo "--- TUI features (crates/eggsec-tui) ---"
+TUI_FEATURES=$(python3 -c "
+import tomllib
+with open('crates/eggsec-tui/Cargo.toml','rb') as f:
+    feats = tomllib.load(f)['features']
+for name in sorted(feats):
+    if name not in ('default','full'):
+        print(name)
+")
+
+while IFS= read -r feat; do
+  [ -z "$feat" ] && continue
+  run_check "eggsec-tui/$feat" cargo check -p eggsec-tui --features "$feat"
+done <<< "$TUI_FEATURES"
+
+# Orphan guard: every TUI feature must be swept above. Adding a feature to
+# crates/eggsec-tui/Cargo.toml without it appearing here is a FAIL.
+echo ""
+echo "--- Orphan guard: sweep covers every TUI feature ---"
+MISSING_TUI_SWEEP=$(python3 -c "
+import tomllib
+with open('crates/eggsec-tui/Cargo.toml','rb') as f:
+    feats = set(tomllib.load(f)['features']) - {'default','full'}
+print(' '.join(sorted(feats)))
+")
+for feat in $MISSING_TUI_SWEEP; do
+  if ! printf '%s\n' "$TUI_FEATURES" | grep -qx "$feat"; then
+    note_fail "orphan TUI feature without sweep profile: $feat"
+  fi
+done
+echo "  (all TUI features have a sweep profile)"
+
+# TUI full aggregate: maximum capability (every tab and control). Verified
+# to compile without system prerequisites beyond the standard Rust toolchain
+# (pnet is pure Rust, openssl is vendored, wireless-tools is runtime-only),
+# so no SKIP gate — a compile failure here is always FAIL.
+echo ""
+echo "--- Aggregate: eggsec-tui/full ---"
+run_check "eggsec-tui/full" cargo check -p eggsec-tui --features full
 
 # ── 3. Domain crates ─────────────────────────────────────────────────────
 echo ""

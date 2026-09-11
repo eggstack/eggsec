@@ -2188,6 +2188,41 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Runtime-contract closure tests exist."
 fi
 
+# 98. TUI feature-profile verification is maintained.
+# The frontend/runtime TUI full-profile corrective pass established three
+# durable invariants: (a) the individual-feature sweep mechanically covers
+# every declared eggsec-tui feature, (b) the eggsec-tui/full aggregate is
+# compiled in the deep sweep, (c) a broad dependency-light TUI profile lives
+# in `make check-feature-profiles` for fast drift detection. Do NOT grep for
+# individual DTO field names here; Rust compilation and the semantic builder
+# tests (app::task_management) own that contract.
+echo ""
+echo "--- Check 98: TUI feature-profile verification is maintained ---"
+SECTION_FAIL=0
+if ! rg -q 'eggsec-tui' scripts/check-features-individual.sh 2>/dev/null; then
+  echo "FAIL: check-features-individual.sh has no eggsec-tui section."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'TUI_FEATURES|crates/eggsec-tui/Cargo.toml' scripts/check-features-individual.sh 2>/dev/null; then
+  echo "FAIL: TUI sweep does not mechanically enumerate crates/eggsec-tui/Cargo.toml features."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'eggsec-tui/full' scripts/check-features-individual.sh 2>/dev/null; then
+  echo "FAIL: deep sweep does not compile the eggsec-tui/full aggregate."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'eggsec-tui --features db-pentest,web-proxy,c2' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile check-feature-profiles lacks the broad TUI profile (db-pentest,web-proxy,c2)."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI feature-profile verification is maintained."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

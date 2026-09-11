@@ -267,7 +267,9 @@ lives in `[project.optional-dependencies]` of
 `crates/eggsec-python/pyproject.toml`; system-dependent ones need
 libpcap/libssl/wireless-tools/Chromium at build or run time.
 
-Aggregates: engine `full` = curated 28-member lab set (pinned in `FULL_MEMBERS`, `crates/eggsec/src/config/feature_registry.rs`; not exhaustive — the oracle is `make check-features-individual`). Python `full-no-system` = `websocket` + `git-secrets` + `sbom` + `container` only. Neither is conservative/production.
+Aggregates: engine `full` = curated 28-member lab set (pinned in `FULL_MEMBERS`, `crates/eggsec/src/config/feature_registry.rs`; not exhaustive — the oracle is `make check-features-individual`). TUI `full` = every tab/control (maximum capability; Deep Checks gate, not routine push CI — the routine fast gate is the broad `db-pentest,web-proxy,c2` profile in `make check-feature-profiles`). Python `full-no-system` = `websocket` + `git-secrets` + `sbom` + `container` only. Neither is conservative/production.
+
+TUI feature changes (`crates/eggsec-tui/Cargo.toml`) require running the TUI sweep: the individual-feature script mechanically enumerates every declared TUI feature plus `full`, and `make check-feature-profiles` covers the broad `db-pentest,web-proxy,c2` builders. Guard 98 enforces this.
 
 ## Key Patterns
 

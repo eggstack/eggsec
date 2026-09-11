@@ -270,6 +270,25 @@ cargo test --lib -p eggsec-tui tui::
 cargo test -p eggsec-tui --features nse -- nse_report_view
 ```
 
+### Feature-gated builders and TUI profiles
+
+`TaskBuilder::build_run_request()` in `app/task_management.rs` maps tab state to
+runtime DTOs (`DbPentestParams`, `InterceptParams`, `C2Params`). Map TUI-exposed
+safety controls explicitly; leave unexposed optionals as `None` so the engine
+applies its documented safe default. Never invent a permissive value to satisfy
+compilation. Builder semantic tests live in `app/task_management.rs` (`mod tests`).
+
+```bash
+cargo check -p eggsec-tui --features db-pentest,web-proxy,c2
+cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast
+cargo check -p eggsec-tui --features full
+```
+
+`make check-feature-profiles` covers the broad `db-pentest,web-proxy,c2` builders;
+`make check-features-individual` mechanically sweeps every declared TUI feature
+plus `full` (orphan guard fails if a new Cargo feature escapes the sweep).
+Guard 98 pins these invariants. TUI profiles need no system prerequisites.
+
 ### Visual Regression Tests
 ```rust
 let backend = TestBackend::new(80, 24);

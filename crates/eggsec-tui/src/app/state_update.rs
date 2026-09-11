@@ -2,7 +2,8 @@ use crate::app::tab_error::TabError;
 #[cfg(any(
     feature = "database",
     feature = "external-integrations",
-    feature = "finding-workflow"
+    feature = "finding-workflow",
+    feature = "vuln-management"
 ))]
 use crate::tabs::AppState;
 use eggsec::dispatch::TaskResult;
