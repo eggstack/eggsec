@@ -17,11 +17,11 @@ The bridge is the **only** place where runtime DTOs are converted to enforcement
 | File | Lines | Purpose |
 |------|-------|---------|
 | `mod.rs` | 35 | Module root; re-exports all public types; documents invariants |
-| `surface.rs` | 149 | `RuntimeSurface` → `ExecutionSurface` conversion; `RuntimeBridgeError` enum (7 variants) |
-| `descriptor.rs` | 459 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` |
+| `surface.rs` | ~210 | Bidirectional surface conversion (`RuntimeSurface` ↔ `ExecutionSurface`, exhaustive; `Unknown` rejected wire → engine); `RuntimeBridgeError` enum (7 variants) |
+| `descriptor.rs` | 459 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` delegates to the single wire-side match |
 | `manual.rs` | 438 | `preflight_run_request()` and `approve_run_request()` entry points |
 | `bundle.rs` | ~340 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
-| `executor.rs` | ~440 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; `task_result_to_outcome()` conversion; shared cancel race |
+| `executor.rs` | ~300 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; envelope via engine-owned `dispatch::task_result_envelope`; cancellation via shared `race_with_cancel` |
 
 ## Key Types
 
@@ -59,8 +59,9 @@ RuntimeSurface + RunRequest
         │
         ▼
   descriptor_for_run_request()              [descriptor.rs:15]
-  (TaskKind → operation_id → metadata → OperationDescriptor)
-  (27 mapped, 2 unsupported: PacketTraceroute, PacketSend)
+  (TaskKind → operation_id → metadata → OperationDescriptor; all 29 kinds map
+  to an operation, target-less/interface families fail explicitly downstream
+  as InvalidTarget; packet traceroute/send share the `packet` family)
         │
         ▼
   EnforcementContext::evaluate() / approve() [crate::config]
@@ -75,8 +76,9 @@ RuntimeSurface + RunRequest
   (re-resolve descriptor → exact match → canonical execute_approved())
         │
         ▼
-  TaskResult → task_result_to_outcome()     [executor.rs:120]
-  → TaskOutcome (kind + summary envelope)
+  TaskResult → dispatch::task_result_envelope()  [canonical_execution.rs]
+  → TaskOutcome::Result(envelope) (stable wire kind + summary; single owner —
+  TUI and daemon adapters consume it, never a parallel TaskResult match)
 ```
 
 ### Surface Conversion (`surface.rs:44–59`)
@@ -223,9 +225,14 @@ pub struct EggsecRuntimeExecutor {
 4. Call `approve_run_request_bundle()` for full enforcement
 5. Log approved operation for audit
 6. Spawn progress forwarder task
-7. Call `dispatch_approved_runtime_request()` racing against cancellation via `tokio::select!` (same shared semantics as the embedded adapter: `eggsec-runtime::race_with_cancel` contract)
+7. Call `dispatch_approved_runtime_request()` through the shared
+   `eggsec-runtime::race_with_cancel` primitive (same primitive as the embedded
+   TUI adapter — terminal/cancel semantics match by construction; the progress
+   forwarder drains on success and is aborted when cancellation wins)
 8. Forward progress from `mpsc` channel to `RuntimeEventSink`
-9. Convert `TaskResult` → `TaskOutcome` via `task_result_to_outcome()`
+9. Convert `TaskResult` → `TaskOutcome::Result(envelope)` via the single
+   engine-owned `dispatch::task_result_envelope()` mapping (no parallel
+   `TaskResult` match in the executor)
 
 The `resolve_loaded_scope()` method (`executor.rs:62–113`) determines scope resolution strategy:
 - If session has explicit scope with a path → loads from disk via `crate::config::load_scope()`
@@ -246,9 +253,10 @@ The `resolve_loaded_scope()` method (`executor.rs:62–113`) determines scope re
 1. **`RuntimeSurface::Unknown` is never executable** — always errors (`surface.rs:57`).
 2. **Manual surfaces retain operator-directed semantics** (even daemon-backed) — `CliManual` and `TuiManual` use `approve_manual()` (`manual.rs:59–64`).
 3. **Automated surfaces never honor manual overrides** — rejected with `ManualOverrideRejected` before enforcement evaluation (`manual.rs:66–69`).
-4. **Any new `RuntimeSurface` variant must update conversion tests** — `surface.rs:61–148`.
+4. **Any new `RuntimeSurface` variant must update conversion tests** — `surface.rs` unit tests plus the `runtime_contract_closure` integration test (both fail until mapped).
 5. **`dispatch_approved_runtime_request` validates both operation ID and target** — mismatches are rejected with explicit errors (`bundle.rs:95–110`).
 6. **`EggsecRuntimeExecutor` must not hardcode `CliManual` or `default_empty` scope** — architecture guards enforce actual session context usage.
+7. **Phase 3 closure (2026-09-11)**: `RuntimeSurface` is a wire DTO with an exhaustive bidirectional bridge (`Unknown` rejected wire → engine); engine operation-ID/target adapters delegate to the single wire-side `TaskKind` match (guard 94); envelope conversion is single-owned (`dispatch::task_result_envelope`, guard 95); both adapters route through `race_with_cancel` with no ad-hoc select (guard 86). Closure tests: `crates/eggsec/tests/runtime_contract_closure.rs` (guard 97).
 
 ## Architecture Guards
 
@@ -266,8 +274,9 @@ The bridge module has extensive test coverage across all files:
 - **Descriptor resolution** (`descriptor.rs:77–459`): Tests every `TaskKind` variant individually, verifies unsupported kinds error, checks `requires_explicit_scope` for agent-exposable ops.
 - **Preflight & approval** (`manual.rs:88–438`): Tests preflight/approve paths for CLI/TUI manual, strict, MCP, REST, gRPC, CI, SecurityAgent surfaces; override rejection; daemon-backed manual surfaces remain manual.
 - **Bundle & dispatch** (`bundle.rs`): Tests bundle capture, strict surface rejection, operation mismatch detection, target mismatch detection, surface preservation.
-- **Executor** (`executor.rs`): Tests `task_result_to_outcome()` conversion for port scan, error, and load test variants.
+- **Executor** (`executor.rs`): Tests envelope conversion for port scan, error, and load test variants (via the single engine-owned mapping).
 - **Application boundary** (`crates/eggsec/tests/canonical_dispatch_ownership.rs`, mandatory path): per-family normalization/identity/binding/route equivalence plus daemon-bundle cancel race.
+- **Runtime-contract closure** (`crates/eggsec/tests/runtime_contract_closure.rs`, guard 97): surface round-trips, wire-identity agreement across all 29 `TaskKind` variants, wire JSON stability, no-target family failures, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression.
 
 ## See Also
 
@@ -278,4 +287,4 @@ The bridge module has extensive test coverage across all files:
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Section 4.8 (Daemon / Runtime execution flow)
 
-*Last verified against source: 2026-09-10*
+*Last verified against source: 2026-09-11 (Phase 3 closure)*

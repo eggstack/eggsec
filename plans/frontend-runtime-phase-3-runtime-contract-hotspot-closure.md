@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: Ready for handoff.
+Status: Executed 2026-09-11 (closure record below; roadmap status updated).
 
 Depends on: Phases 0–2 complete and green.
 
@@ -298,3 +298,96 @@ When this phase is complete, append a closure section to this file or create a d
 9. known residual debt with owner/removal criterion.
 
 Do not mark the roadmap executed solely because code compiles. Closure requires the parity/mapping tests, runtime lifecycle evidence, and documentation reconciliation described above.
+
+## Completion record (Phase 3 executed 2026-09-11)
+
+Baseline: `585b4fec` (Phases 0–2 executed); final: commit containing this record.
+
+### Workstream disposition
+
+- **3.1 Surface ownership** — Acceptable option taken (wire DTO + exhaustive bridge), because guard 22 forbids `eggsec-runtime` depending on engine/domain crates (a shared enum in `eggsec-core` would violate runtime isolation). `RuntimeSurface` documented as serialization-compat state, not a semantic owner; removed the "later phases can implement conversion" comment; added infallible `execution_surface_to_runtime_surface` + round-trip tests (unit + `runtime_contract_closure` integration). Guard 96 pins bidirectionality.
+- **3.2 TaskKind as wire adapter** — Engine `operation_id_for_task_kind`/`target_for_task_kind` (29-arm parallel tables) replaced with thin delegates to the single wire-side `TaskKind::operation_id()`/`canonical_target()` (runtime cannot depend on the engine, so the wire match is the base and the engine wrappers agree by construction). The engine-side typed conversion `CanonicalOperationRequest::from_task_kind` is unchanged and remains the canonical request owner. Removed the duplicate `TaskResult`→envelope matches in the daemon executor and the TUI dispatcher; both consume the new single engine-owned `dispatch::task_result_envelope` (stable wire kinds preserved: `waf`, `traceroute`, etc.). Unsupported wire kinds still fail explicitly (`InvalidTarget`/`FeatureUnavailable`); unknown serde tags are rejected. Guard 94/95 pin delegation and single ownership.
+- **3.3 Conversion tests** — New `crates/eggsec/tests/runtime_contract_closure.rs` (16 tests): surface round-trips, 29-kind identity/target/route agreement, wire JSON stability + unknown-tag rejection, no-target/interface family `InvalidTarget` failures, multiplexer family sharing, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression. No wire representation changed, so no protocol-version bump was needed.
+- **3.4 Lifecycle equivalence** — Both adapters now route through the shared `eggsec-runtime::race_with_cancel` primitive (no ad-hoc `cancel.cancelled()` select in adapter code; guard 86 enforces). Pre-cancelled tasks never start detached work; mid-execution cancellation drops the dispatch future and releases senders; the daemon progress forwarder drains on success and aborts when cancellation wins. Terminal semantics (exactly-once delivery, stale-completion guard, reconnect-does-not-re-execute via session snapshots, transport-vs-engine error distinction) are covered by the pre-existing `eggsec-runtime` lifecycle suite (105 tests) plus the new seam-equivalence test. Timing/progress granularity may differ; terminal semantics and outcome classification do not.
+- **3.5 Progress/event transport** — `ExecutionSink` (bounded 100, coalescing with explicit drop counter; findings/terminal always deliver) and `RuntimeEventSink`/broadcast (lag recoverable, critical terminal events warn on drop) were already frontend-neutral and remain the boundary. Documented the backpressure contract in `architecture/runtime.md`. Removed engine comments calling the TUI executor path TUI-only where the behavior is shared (`bundle.rs`/`executor.rs` dispatch-path docs corrected to `execute_approved`).
+- **3.6 Matrix gaps** — No ambiguous items: `frontend_surface_matrix.rs` and `parity.rs` contain zero TODO/FIXME/ambiguous markers; every entry is classified (operation-backed/multiplexer/helper/lifecycle + explicit exception lists). No new offensive functionality added.
+- **3.7 Hotspots** — Targeted decomposition (duplicate matches deleted, see measurements) instead of fragmenting large cohesive files. Retained hotspots recorded with rationale below.
+- **3.8 Guards** — New checks 94 (adapter delegation), 95 (single envelope owner), 96 (bidirectional surface conversion), 97 (closure tests wired); check 86 strengthened (adapters must use `race_with_cancel`, ad-hoc select fails).
+- **3.9 Docs** — `AGENTS.md` (invariant 10 + runtime-mapping bullet + dispatch-flow line), `architecture/runtime_bridge.md`, `architecture/dispatch.md` (Phase 3 closure record), `architecture/runtime.md`, `docs/ARCHITECTURE.md` (§4.8 flow), skills `eggsec-tui`/`eggsec-daemon`, stale transitional comments converted (`request.rs`, `runtime.rs`, `bundle.rs`, `executor.rs`, `dispatch/mod.rs`, `canonical_execution.rs` non-goals, TUI `state.rs`/`task_runtime.rs`). README has no runtime-internals content (verified — nothing to prune).
+- **3.10 Measurements** — Below.
+
+### Before/after: independently maintained mappings
+
+| Mapping | Before | After |
+|---|---|---|
+| Operation-ID tables | `TaskKind::operation_id()` (runtime) + `operation_id_for_task_kind()` 29-arm match (engine) + `CanonicalOperationRequest::operation_id()` (engine typed) | Wire-side single match; engine adapter delegates (`Some(kind.operation_id())`); typed conversion unchanged (different type, legitimate owner) |
+| Target tables | `TaskKind::canonical_target()` + `target_for_task_kind()` 29-arm match | Delegation (`kind.canonical_target()`) |
+| Result→envelope | `task_result_to_outcome()` private match (executor, ~150 lines) + `task_result_to_envelope()` private match (TUI, ~150 lines) | `dispatch::task_result_envelope()` single owner; both adapters consume it |
+| Surface conversion | Wire→engine only (`runtime_surface_to_execution_surface`), "later phases" comment | Bidirectional + round-trip tests; wire-DTO documentation |
+| Cancellation | Shared primitive in daemon path; TUI pre-check + ad-hoc select; daemon select | Both adapters route through `race_with_cancel`; ad-hoc select fails guard 86 |
+| Manual alias matches | 0 (Phase 2) | 0 (unchanged) |
+
+### Line counts (hotspot files, before → after)
+
+| File | Before | After | Note |
+|---|---|---|---|
+| `eggsec-tui/.../task_dispatcher.rs` | 559 | 399 | Duplicate envelope match deleted; consumes engine helper |
+| `eggsec/.../runtime_bridge/executor.rs` | 441 | 294 | Duplicate outcome match deleted; `race_with_cancel` |
+| `eggsec/.../operation_request.rs` | 646 | 589 | Parallel tables → 2 delegating fns |
+| `eggsec/.../dispatch/canonical_execution.rs` | 1835 | ~2000 | + single-owned envelope mapping + docs |
+| `eggsec/.../runtime_bridge/surface.rs` | 149 | ~210 | + reverse conversion + round-trip tests |
+| `eggsec-runtime/.../request.rs` | 523 | 544 | + wire-DTO docs |
+| `eggsec-tui/.../task_runtime.rs` | 453 | 445 | Ad-hoc select → shared primitive |
+| `eggsec-tui/.../tabs/core.rs` | 2886 | 2886 | Retained: per-tab render/input impls; splitting would fragment tab cohesion |
+| `eggsec/.../commands/handlers/mod.rs` | 1634 | 1634 | Retained: single-owned CLI route table (guard 84); scattering would weaken ownership |
+| `eggsec-tui/.../tabs/spec.rs` | 1387 | 1387 | Retained: single surface owner (guard 81); already decomposed via `surface.rs`/`palette.rs` (Phase 2) |
+| `eggsec-tui/.../app/help_config.rs` | 1078 | 1078 | Retained: help prose keyed by `Tab`, pinned 1:1 by test |
+| `eggsec-tui/.../app/command.rs` | 961 | 961 | Retained: delegates alias lookup to single owner (guard 89) |
+| `eggsec/.../dispatch/security.rs` | 731 | 731 | Retained: feature-gated security family workers |
+| `eggsec-tui/.../app/apply.rs` `export.rs` `enforcement.rs` | 676/589/672 | unchanged | Retained: stable Phase 2 boundaries (reducer/effects/presentation) |
+
+Net: ~360 lines of parallel semantic matches removed; ~170 lines added as the single engine-owned mapping plus ~60 lines of bridge conversion/tests. New: `runtime_contract_closure.rs` (16 tests), guards 94–97.
+
+### Support-matrix summary and intentional asymmetries
+
+- Canonical operations: 34 (`ALL_OPERATION_METADATA`); compat aliases: 42 (input/wire boundary only, resolved before approval/execution).
+- `TaskKind`: 29 variants, all mapped; `RuntimeSurface`: 9 known + `Unknown` (rejected).
+- TUI: 33 tabs (25 operation-backed canonical, 1 multiplexer, 3 helper, 1 lifecycle, 3 UI-only) — unchanged from Phase 2.
+- Intentional asymmetries (unchanged): Stress/Packet tabs are always-visible availability shells; `reload-scope` is restart-required info only; fuzz uses `--http-session`; storage/integrations/workflow/wireless/interface families carry no canonical target and fail explicitly in daemon paths.
+
+### Approval-binding regression evidence
+
+- `runtime_contract_closure::bundle_binding_predicate_rejects_approve_one_dispatch_another` (integration, public boundary): cross-operation and cross-target descriptors fail `matches_descriptor`.
+- `bundle.rs` unit tests: dispatch rejects operation/target mismatch with granular diagnostics.
+- `canonical_dispatch_ownership.rs` (41 tests incl. matrix): binding rejections green.
+- Full engine lib suite: 1750 passed.
+
+### Embedded/daemon equivalence evidence
+
+- Both adapters call `race_with_cancel` (guard 86 + `task_runtime.rs` cancel-contract tests + `cancel.rs` primitive tests: pre-cancelled never starts work, cancel releases senders, pass-through).
+- `embedded_and_daemon_paths_resolve_the_same_canonical_operation`: all 29 kinds agree on operation/target across `from_task_kind` (embedded) and `descriptor_for_run_request` (daemon).
+- Runtime lifecycle suite (105 tests): stale-completion guard, timeout, cancel, close-session semantics green.
+
+### Verification commands and results (local, before push)
+
+- `cargo fmt --all`: pass.
+- `scripts/check-architecture-guards.sh`: ALL PASSED (incl. new 94–97, strengthened 86).
+- `cargo test -p eggsec-runtime`: 105 passed.
+- `cargo test -p eggsec --lib`: 1750 passed.
+- `cargo test -p eggsec-tui`: 873 passed, 12 ignored.
+- `cargo test -p eggsec --features rest-api --test runtime_contract_closure --test frontend_surface_matrix --test canonical_dispatch_ownership`: 57 passed (16 new + 41 existing).
+- `make check`: pass (EXIT=0; fmt, no-default workspace check, clippy `-D warnings`, doc tests, no-default package tests, full `--features rest-api` package suite, output tests, TUI lib tests, guards).
+- `make check-python`: pass (EXIT=0; no Python-facing contracts changed — engine/runtime/TUI-only phase).
+- `make check-feature-profiles`: pass (EXIT=0; incl. `compliance`/`finding-workflow`/`vuln-management` marker profiles that pin `TaskResult` match-arm coverage).
+- `make test-feature-matrix`: pass (EXIT=0; 26 passed).
+- `cargo test -p eggsec-daemon`: 74 passed. `cargo check -p eggsec-cli --no-default-features`: pass.
+- Targeted gated profiles (envelope arms): `stress-testing,packet-inspection`, `db-pentest,web-proxy,wireless`, `c2,advanced-hunting,headless-browser`, `database,external-integrations` — all `cargo check` clean.
+- `cargo check -p eggsec-tui --features full`: fails with E0063 in `task_management.rs` (missing `InterceptParams`/`C2Params`/`DbPentestParams` fields) — identical failure documented on clean base HEAD in the Phase 2 record; file untouched by this phase; pre-existing, out of scope. The exhaustive per-feature sweep (`make check-features-individual`) remains the remote deep-checks oracle.
+
+### Known residual debt (owner / removal criterion)
+
+1. `ExecutionSink.legacy_tx` (`u64,u64`) bridge for domain workers — engine dispatch owner; remove when a worker changes its progress contract for an unrelated reason.
+2. `dispatch_inner`/`dispatch_task` legacy manual shims — engine dispatch owner; remove when no manual-surface caller remains (currently `dispatch_task` is the manual-compat entry).
+3. `ExecutorRegistry` tool-path adapter — tool owner; unify onto `execute_canonical` when the tool dispatch path is next touched.
+4. Large hotspot files listed above — respective area owners; split only when a cohesive boundary (not forwarding boilerplate) emerges.
+5. `RuntimeSurface` vs `ExecutionSurface` two-type shape — bridge owner; reunify only if guard 22 (runtime isolation) is ever lifted, which is not planned.

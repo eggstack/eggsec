@@ -1,5 +1,5 @@
 use eggsec_runtime::dispatcher::TaskDispatcher;
-use eggsec_runtime::event::{TaskOutcome, TaskResultEnvelope};
+use eggsec_runtime::event::TaskOutcome;
 use eggsec_runtime::request::RunRequest;
 use eggsec_runtime::RuntimeError;
 
@@ -9,11 +9,15 @@ use std::sync::Arc;
 
 /// TUI-side task dispatcher: shallow adapter onto the canonical engine boundary.
 ///
-/// Phase 1 convergence: converts `TaskKind` → canonical operation request and
-/// delegates to the single engine executor owner
-/// (`dispatch::execute_canonical`). It owns no independent operation→executor
-/// mapping beyond this explicit conversion; packet multiplexers select their
-/// canonical request before execution, and unsupported tasks fail explicitly.
+/// Converts `TaskKind` → canonical operation request and delegates to the
+/// single engine executor owner (`dispatch::execute_canonical`). It owns no
+/// independent operation→executor mapping beyond this explicit conversion;
+/// packet multiplexers select their canonical request before execution, and
+/// unsupported tasks fail explicitly.
+///
+/// Result/envelope conversion is engine-owned
+/// (`eggsec::dispatch::task_result_envelope`); this adapter consumes it
+/// rather than maintaining a parallel `TaskResult` match (Phase 3 closure).
 ///
 /// Enforcement for TUI manual actions happens at the action layer via
 /// `EnforcementFacade` (exact descriptor binding, Phase 0); this dispatcher
@@ -61,8 +65,9 @@ impl TaskDispatcher for TuiTaskDispatcher {
                     )),
                 })?;
 
-            // Convert to envelope before sending, since TaskResult is not Clone.
-            let envelope = task_result_to_envelope(&task_result);
+            // Convert to envelope via the single engine-owned mapping
+            // (no parallel TaskResult match here), since TaskResult is not Clone.
+            let envelope = eggsec::dispatch::task_result_envelope(&task_result);
 
             // Send typed result through the channel for TUI rendering.
             if let Err(error) = result_tx.send(task_result).await {
@@ -73,171 +78,6 @@ impl TaskDispatcher for TuiTaskDispatcher {
             // (daemon, REST, MCP) also receive useful completion data.
             Ok(TaskOutcome::Result(envelope))
         })
-    }
-}
-
-/// Convert an `eggsec::dispatch::TaskResult` into a `TaskResultEnvelope`.
-///
-/// Extracts a kind discriminator and summary from each variant. Domain-specific
-/// payloads are returned as empty JSON — the TUI uses typed `TaskResult`
-/// channels for rich rendering. Non-TUI frontends get the kind + summary.
-pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> TaskResultEnvelope {
-    use eggsec::dispatch::TaskResult;
-
-    let (kind, summary) = match result {
-        TaskResult::LoadTest(r) => (
-            "load-test".into(),
-            Some(format!("{} requests completed", r.total_requests)),
-        ),
-        TaskResult::PortScan(r) => (
-            "port-scan".into(),
-            Some(format!("{} ports scanned", r.ports_scanned)),
-        ),
-        TaskResult::EndpointScan(r) => (
-            "endpoint-scan".into(),
-            Some(format!("{} endpoints found", r.endpoints_found)),
-        ),
-        TaskResult::Fingerprint(r) => (
-            "fingerprint".into(),
-            Some(format!("{} services identified", r.services_identified)),
-        ),
-        TaskResult::WafDetection(r) => (
-            "waf".into(),
-            Some(format!(
-                "WAF: {}",
-                r.waf_name.as_deref().unwrap_or("unknown")
-            )),
-        ),
-        TaskResult::Recon(r) => ("recon".into(), Some(format!("target: {}", r.target))),
-        TaskResult::Fuzz(r) => ("fuzz".into(), Some(format!("{} findings", r.findings))),
-        TaskResult::GraphQl(r) => (
-            "graphql".into(),
-            Some(format!("{} findings", r.injection_findings.len())),
-        ),
-        TaskResult::OAuth(r) => (
-            "oauth".into(),
-            Some(format!(
-                "redirect: {}, scope: {}, state: {}",
-                r.redirect_vulnerabilities.len(),
-                r.scope_vulnerabilities.len(),
-                r.state_vulnerabilities.len()
-            )),
-        ),
-        TaskResult::Auth(r) => (
-            "auth-test".into(),
-            Some(format!("{} findings", r.findings.len())),
-        ),
-        TaskResult::Pipeline(r) => (
-            "pipeline".into(),
-            Some(format!("{} stages", r.stage_results.len())),
-        ),
-        TaskResult::PacketTraceroute { hops } => {
-            ("traceroute".into(), Some(format!("{} hops", hops.len())))
-        }
-        TaskResult::PacketCapture {
-            packets_captured, ..
-        } => (
-            "packet-capture".into(),
-            Some(format!("{packets_captured} packets captured")),
-        ),
-        TaskResult::PacketSend {
-            packets_sent,
-            bytes_sent,
-        } => (
-            "packet-send".into(),
-            Some(format!("{packets_sent} packets, {bytes_sent} bytes")),
-        ),
-        TaskResult::WafBypass { bypasses, .. } => (
-            "waf-bypass".into(),
-            Some(format!("{} bypasses found", bypasses.len())),
-        ),
-        TaskResult::WafStress(bypasses) => (
-            "waf-stress".into(),
-            Some(format!("{} bypasses found", bypasses.len())),
-        ),
-        TaskResult::Error(msg) => ("error".into(), Some(msg.clone())),
-        // Feature-gated variants: kind + summary only
-        #[cfg(feature = "stress-testing")]
-        TaskResult::StressTest { target, .. } => {
-            ("stress-test".into(), Some(format!("stress-test: {target}")))
-        }
-        #[cfg(feature = "nse")]
-        TaskResult::Nse(r) => (
-            "nse".into(),
-            Some(format!(
-                "NSE {}: {}",
-                r.script,
-                if r.success { "ok" } else { "failed" }
-            )),
-        ),
-        #[cfg(feature = "advanced-hunting")]
-        TaskResult::Hunt(r) => (
-            "hunt".into(),
-            Some(format!("{} findings", r.total_findings)),
-        ),
-        #[cfg(feature = "headless-browser")]
-        TaskResult::Browser(r) => (
-            "browser".into(),
-            Some(format!("{} findings", r.total_findings)),
-        ),
-        #[cfg(feature = "compliance")]
-        TaskResult::Compliance(r) => ("compliance".into(), Some(format!("{}", r.framework))),
-        #[cfg(feature = "database")]
-        TaskResult::Storage => ("storage".into(), Some("storage operation".into())),
-        #[cfg(feature = "database")]
-        TaskResult::StorageListScans { scans } => (
-            "storage".into(),
-            Some(format!("{} stored scans", scans.len())),
-        ),
-        #[cfg(feature = "database")]
-        TaskResult::StorageListFindings { findings } => (
-            "storage".into(),
-            Some(format!("{} stored findings", findings.len())),
-        ),
-        #[cfg(feature = "external-integrations")]
-        TaskResult::Integrations => ("integration".into(), Some("integration operation".into())),
-        #[cfg(feature = "external-integrations")]
-        TaskResult::IntegrationsCreateIssue { .. } => {
-            ("integration".into(), Some("issue created".into()))
-        }
-        #[cfg(feature = "external-integrations")]
-        TaskResult::IntegrationsSearchIssues { issues } => (
-            "integration".into(),
-            Some(format!("{} issues found", issues.len())),
-        ),
-        #[cfg(feature = "finding-workflow")]
-        TaskResult::Workflow(r) => (
-            "workflow".into(),
-            Some(format!("{} total findings", r.total_findings)),
-        ),
-        #[cfg(feature = "vuln-management")]
-        TaskResult::Vuln(r) => (
-            "vuln".into(),
-            Some(format!("{} findings", r.prioritized_findings.len())),
-        ),
-        #[cfg(feature = "wireless")]
-        TaskResult::Wireless(r) => (
-            "wireless".into(),
-            Some(format!("{} networks", r.networks.len())),
-        ),
-        #[cfg(feature = "wireless-advanced")]
-        TaskResult::WirelessActive(r) => (
-            "wireless-active".into(),
-            Some(format!("{} frames sent", r.frames_sent)),
-        ),
-        #[cfg(feature = "db-pentest")]
-        TaskResult::DbPentest(r) => ("db-pentest".into(), Some(format!("{}", r.db_type))),
-        #[cfg(feature = "web-proxy")]
-        TaskResult::Intercept(r) => ("intercept".into(), Some(format!("{} flows", r.flows.len()))),
-        #[cfg(feature = "c2")]
-        TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.campaign.mitre_profile))),
-    };
-
-    TaskResultEnvelope {
-        kind,
-        summary,
-        payload: serde_json::json!({}),
-        artifacts: vec![],
     }
 }
 
@@ -265,7 +105,7 @@ mod tests {
     #[test]
     fn envelope_error_has_kind_and_message() {
         let result = TaskResult::Error("connection refused".into());
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "error");
         assert_eq!(envelope.summary.as_deref(), Some("connection refused"));
     }
@@ -273,7 +113,7 @@ mod tests {
     #[test]
     fn envelope_task_outcome_is_result_variant() {
         let result = TaskResult::Error("test".into());
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         let outcome = TaskOutcome::Result(envelope);
         assert!(matches!(outcome, TaskOutcome::Result(_)));
         if let TaskOutcome::Result(env) = outcome {
@@ -288,7 +128,7 @@ mod tests {
             packets_captured: 42,
             output_file: Some("/tmp/capture.pcap".into()),
         };
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "packet-capture");
         assert!(envelope.summary.is_some());
         assert!(envelope.summary.unwrap().contains("42"));
@@ -297,7 +137,7 @@ mod tests {
     #[test]
     fn envelope_packet_traceroute_has_hop_count() {
         let result = TaskResult::PacketTraceroute { hops: vec![] };
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "traceroute");
         assert!(envelope.summary.is_some());
         assert!(envelope.summary.unwrap().contains("0 hops"));
@@ -309,7 +149,7 @@ mod tests {
             packets_sent: 10,
             bytes_sent: 640,
         };
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "packet-send");
         assert!(envelope.summary.is_some());
         let summary = envelope.summary.unwrap();
@@ -320,7 +160,7 @@ mod tests {
     #[test]
     fn envelope_waf_stress_has_count() {
         let result = TaskResult::WafStress(vec![]);
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "waf-stress");
         assert!(envelope.summary.is_some());
         assert!(envelope.summary.unwrap().contains("0 bypasses"));
@@ -329,14 +169,14 @@ mod tests {
     #[test]
     fn envelope_artifacts_are_empty_by_default() {
         let result = TaskResult::Error("test".into());
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert!(envelope.artifacts.is_empty());
     }
 
     #[test]
     fn envelope_payload_is_empty_json() {
         let result = TaskResult::Error("test".into());
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.payload, serde_json::json!({}));
     }
 
@@ -351,7 +191,7 @@ mod tests {
             duration_ms: 500,
             spoof_stats: None,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "port-scan");
         assert!(envelope.summary.unwrap().contains("1000"));
     }
@@ -362,7 +202,7 @@ mod tests {
             target: "example.com".into(),
             ..Default::default()
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "recon");
         assert!(envelope.summary.unwrap().contains("example.com"));
     }
@@ -387,7 +227,7 @@ mod tests {
             status_codes: FxHashMap::default(),
             errors: vec![],
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "load-test");
         assert!(envelope.summary.unwrap().contains("500"));
     }
@@ -404,7 +244,7 @@ mod tests {
             errors: 0,
             duration_ms: 1000,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "graphql");
         assert!(envelope.summary.unwrap().contains("1"));
     }
@@ -419,7 +259,7 @@ mod tests {
             duration_ms: 300,
             results: vec![],
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "fingerprint");
         assert!(envelope.summary.unwrap().contains("5"));
     }
@@ -435,7 +275,7 @@ mod tests {
             duration_ms: 2000,
             results: vec![],
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "endpoint-scan");
         assert!(envelope.summary.unwrap().contains("12"));
     }
@@ -452,7 +292,7 @@ mod tests {
             server_header: None,
             status_code: 403,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "waf");
         assert!(envelope.summary.unwrap().contains("Cloudflare"));
     }
@@ -469,7 +309,7 @@ mod tests {
             server_header: None,
             status_code: 200,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "waf");
         assert!(envelope.summary.unwrap().contains("unknown"));
     }
@@ -490,7 +330,7 @@ mod tests {
             total_attempts: 0,
             findings: vec![],
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "auth-test");
         assert!(envelope.summary.unwrap().contains("0"));
     }
@@ -507,7 +347,7 @@ mod tests {
             errors: 0,
             duration_ms: 1500,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "oauth");
         let summary = envelope.summary.unwrap();
         assert!(summary.contains("redirect: 1"));
@@ -531,7 +371,7 @@ mod tests {
             detection,
             bypasses: vec![],
         };
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "waf-bypass");
         assert!(envelope.summary.unwrap().contains("0 bypasses"));
     }
@@ -552,7 +392,7 @@ mod tests {
             #[cfg(feature = "web-proxy")]
             web_proxy_report: None,
         });
-        let envelope = task_result_to_envelope(&result);
+        let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "pipeline");
         assert!(envelope.summary.unwrap().contains("0 stages"));
     }

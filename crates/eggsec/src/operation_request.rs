@@ -160,81 +160,24 @@ pub mod runtime_adapters {
 
     /// Canonical operation ID for a runtime task kind.
     ///
-    /// Exhaustive over `TaskKind`: adding a variant without updating this
-    /// function is a compile error. Unsupported wire-only kinds return `None`
-    /// and must fail explicitly at the bridge (never fall through aliases).
+    /// Phase 3 closure: thin delegation to `TaskKind::operation_id()` — the
+    /// single wire-side match lives in `eggsec-runtime` (which cannot depend
+    /// on the engine without creating an architectural cycle). No parallel
+    /// match here; adding a `TaskKind` variant without updating the runtime
+    /// method is a compile error there, and this wrapper agrees by
+    /// construction. The engine-side canonical identity for a converted
+    /// request is `CanonicalOperationRequest::operation_id()`.
     pub fn operation_id_for_task_kind(kind: &TaskKind) -> Option<&'static str> {
-        match kind {
-            TaskKind::LoadTest(_) => Some("load-test"),
-            TaskKind::StressTest(_) => Some("stress-test"),
-            TaskKind::PortScan(_) => Some("scan-ports"),
-            TaskKind::EndpointScan(_) => Some("scan-endpoints"),
-            TaskKind::Fingerprint(_) => Some("fingerprint"),
-            TaskKind::Fuzz(_) => Some("fuzz"),
-            TaskKind::Waf(_) => Some("waf-detect"),
-            TaskKind::WafStress(_) => Some("waf-stress"),
-            TaskKind::Pipeline(_) => Some("pipeline"),
-            TaskKind::Recon(_) => Some("recon"),
-            TaskKind::PacketCapture(_) => Some("packet"),
-            // Packet traceroute/send are distinct wire kinds that share the
-            // `packet` operation family; they map explicitly rather than
-            // falling through string aliases.
-            TaskKind::PacketTraceroute(_) => Some("packet"),
-            TaskKind::PacketSend(_) => Some("packet"),
-            TaskKind::GraphQl(_) => Some("graphql"),
-            TaskKind::OAuth(_) => Some("oauth"),
-            TaskKind::AuthTest(_) => Some("auth-test"),
-            TaskKind::Nse(_) => Some("nse"),
-            TaskKind::Hunt(_) => Some("hunt"),
-            TaskKind::Browser(_) => Some("browser"),
-            TaskKind::Compliance(_) => Some("compliance"),
-            TaskKind::Storage(_) => Some("storage"),
-            TaskKind::Integrations(_) => Some("integrations"),
-            TaskKind::Workflow(_) => Some("workflow"),
-            TaskKind::Vuln(_) => Some("vuln"),
-            TaskKind::Wireless(_) => Some("wireless"),
-            TaskKind::WirelessActive(_) => Some("wireless"),
-            TaskKind::DbPentest(_) => Some("db-pentest"),
-            TaskKind::Intercept(_) => Some("proxy-intercept"),
-            TaskKind::C2(_) => Some("c2"),
-        }
+        Some(kind.operation_id())
     }
 
     /// Canonical target for a runtime task kind (`None` for `NoTarget`
     /// operations such as storage/integrations/workflow and interface-bound
     /// packet/wireless/intercept tasks).
+    ///
+    /// Phase 3 closure: thin delegation to `TaskKind::canonical_target()`.
     pub fn target_for_task_kind(kind: &TaskKind) -> Option<String> {
-        match kind {
-            TaskKind::LoadTest(p) => Some(p.target.clone()),
-            TaskKind::StressTest(p) => Some(p.target.clone()),
-            TaskKind::PortScan(p) => Some(p.target.clone()),
-            TaskKind::EndpointScan(p) => Some(p.target.clone()),
-            TaskKind::Fingerprint(p) => Some(p.target.clone()),
-            TaskKind::Fuzz(p) => Some(p.target.clone()),
-            TaskKind::Waf(p) => Some(p.target.clone()),
-            TaskKind::WafStress(p) => Some(p.target.clone()),
-            TaskKind::Pipeline(p) => Some(p.target.clone()),
-            TaskKind::Recon(p) => Some(p.target.clone()),
-            TaskKind::PacketCapture(_) => None,
-            TaskKind::PacketTraceroute(p) => Some(p.target.clone()),
-            TaskKind::PacketSend(p) => Some(p.target.clone()),
-            TaskKind::GraphQl(p) => Some(p.target.clone()),
-            TaskKind::OAuth(p) => Some(p.target.clone()),
-            TaskKind::AuthTest(p) => Some(p.target.clone()),
-            TaskKind::Nse(p) => Some(p.target.clone()),
-            TaskKind::Hunt(p) => Some(p.target.clone()),
-            TaskKind::Browser(p) => Some(p.target.clone()),
-            TaskKind::Compliance(p) => Some(p.target.clone()),
-            TaskKind::Storage(_) => None,
-            TaskKind::Integrations(_) => None,
-            TaskKind::Workflow(_) => None,
-            TaskKind::Vuln(p) => Some(p.target.clone()),
-            TaskKind::Wireless(_) => None,
-            TaskKind::WirelessActive(_) => None,
-            TaskKind::DbPentest(p) => Some(p.target.clone()),
-            TaskKind::Intercept(p) => p.target.clone(),
-            TaskKind::C2(p) => p.target.clone(),
-        }
+        kind.canonical_target()
     }
 
     /// Convert runtime port-scan params into the canonical request.

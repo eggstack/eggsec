@@ -4,7 +4,8 @@
 //! the [`RunRequest`] it was derived from. This makes it structurally difficult
 //! to approve one operation and dispatch another: the dispatch wrapper validates
 //! that the approved descriptor still matches the request before routing to
-//! `dispatch_inner()`.
+//! [`crate::dispatch::execute_approved`] (the single canonical execution
+//! boundary).
 //!
 //! # Trust model
 //!

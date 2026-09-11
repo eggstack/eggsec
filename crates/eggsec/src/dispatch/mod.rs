@@ -46,7 +46,7 @@ mod types;
 
 pub use canonical_execution::{
     execute_approved, execute_canonical, executor_route_for, is_feature_available, outcome_kind,
-    CanonicalOperationRequest, ExecutionError, ExecutionEvent, ExecutionSink,
+    task_result_envelope, CanonicalOperationRequest, ExecutionError, ExecutionEvent, ExecutionSink,
 };
 pub use types::{
     GraphQlResults, NseResults, OAuthResults, ReconOptions, TaskResult, TracerouteHopResult,
@@ -121,8 +121,8 @@ fn load_test_parameters(p: &eggsec_runtime::request::LoadTestParams) -> (u64, us
 /// `ManualPermissive` context supports operator-directed overrides). Strict
 /// surfaces (REST/MCP/agent/gRPC) must never call it directly — route through
 /// `EnforcementContext::evaluate()` and `EnforcedDispatcher::dispatch_checked()`.
-/// Kept `pub` because `eggsec-tui`'s dispatcher is a sanctioned caller during
-/// the Phase 1 migration.
+/// Kept `pub` because `dispatch_task()` (manual-surface compatibility entry
+/// point) delegates to it.
 #[doc(hidden)]
 pub async fn dispatch_inner(
     request: RunRequest,

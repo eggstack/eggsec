@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use eggsec_runtime::event::{LogLevel, TaskOutcome, TaskResultEnvelope};
+use eggsec_runtime::event::{LogLevel, TaskOutcome};
 use eggsec_runtime::request::RunRequest;
 use eggsec_runtime::{RuntimeError, RuntimeEventSink, RuntimeTaskExecutor, TaskId};
 use tokio::sync::mpsc;
@@ -20,8 +20,11 @@ use super::bundle::approve_run_request_bundle;
 /// 1. Uses the **actual** session surface and scope from the runtime context
 ///    (never hardcoded permissive defaults).
 /// 2. Runs enforcement via `approve_run_request()`.
-/// 3. Dispatches through `eggsec::dispatch::dispatch_inner()`.
-/// 4. Converts `TaskResult` → `TaskOutcome` for the runtime lifecycle.
+/// 3. Dispatches through the approved bundle
+///    (`dispatch_approved_runtime_request` → `execute_approved`, the single
+///    canonical execution boundary shared with embedded TUI execution).
+/// 4. Converts `TaskResult` → `TaskOutcome` via the single engine-owned
+///    envelope mapping for the runtime lifecycle.
 ///
 /// # Trust boundary
 ///
@@ -114,169 +117,11 @@ impl EggsecRuntimeExecutor {
 
     /// Convert a `TaskResult` into a `TaskOutcome` for the runtime lifecycle.
     ///
-    /// Extracts a kind discriminator and summary from each variant. The full
-    /// typed result is not serialized — clients receive structured envelope
-    /// metadata (kind + summary) rather than the raw domain payload.
+    /// Phase 3 closure: thin delegation to the single engine-owned
+    /// [`crate::dispatch::task_result_envelope`] mapping. No parallel
+    /// `TaskResult` match here.
     fn task_result_to_outcome(result: &TaskResult) -> TaskOutcome {
-        let (kind, summary) = match result {
-            TaskResult::LoadTest(r) => (
-                "load-test".into(),
-                Some(format!("{} requests completed", r.total_requests)),
-            ),
-            TaskResult::PortScan(r) => (
-                "port-scan".into(),
-                Some(format!("{} ports scanned", r.ports_scanned)),
-            ),
-            TaskResult::EndpointScan(r) => (
-                "endpoint-scan".into(),
-                Some(format!("{} endpoints found", r.endpoints_found)),
-            ),
-            TaskResult::Fingerprint(r) => (
-                "fingerprint".into(),
-                Some(format!("{} services identified", r.services_identified)),
-            ),
-            TaskResult::WafDetection(r) => (
-                "waf".into(),
-                Some(format!(
-                    "WAF: {}",
-                    r.waf_name.as_deref().unwrap_or("unknown")
-                )),
-            ),
-            TaskResult::Recon(r) => ("recon".into(), Some(format!("target: {}", r.target))),
-            TaskResult::Fuzz(r) => ("fuzz".into(), Some(format!("{} findings", r.findings))),
-            TaskResult::GraphQl(r) => (
-                "graphql".into(),
-                Some(format!("{} findings", r.injection_findings.len())),
-            ),
-            TaskResult::OAuth(r) => (
-                "oauth".into(),
-                Some(format!(
-                    "redirect: {}, scope: {}, state: {}",
-                    r.redirect_vulnerabilities.len(),
-                    r.scope_vulnerabilities.len(),
-                    r.state_vulnerabilities.len()
-                )),
-            ),
-            TaskResult::Auth(r) => (
-                "auth-test".into(),
-                Some(format!("{} findings", r.findings.len())),
-            ),
-            TaskResult::Pipeline(r) => (
-                "pipeline".into(),
-                Some(format!("{} stages", r.stage_results.len())),
-            ),
-            TaskResult::PacketTraceroute { hops } => {
-                ("traceroute".into(), Some(format!("{} hops", hops.len())))
-            }
-            TaskResult::PacketCapture {
-                packets_captured, ..
-            } => (
-                "packet-capture".into(),
-                Some(format!("{packets_captured} packets captured")),
-            ),
-            TaskResult::PacketSend {
-                packets_sent,
-                bytes_sent,
-            } => (
-                "packet-send".into(),
-                Some(format!("{packets_sent} packets, {bytes_sent} bytes")),
-            ),
-            TaskResult::WafBypass { bypasses, .. } => (
-                "waf-bypass".into(),
-                Some(format!("{} bypasses found", bypasses.len())),
-            ),
-            TaskResult::WafStress(bypasses) => (
-                "waf-stress".into(),
-                Some(format!("{} bypasses found", bypasses.len())),
-            ),
-            TaskResult::Error(msg) => ("error".into(), Some(msg.clone())),
-            // Feature-gated variants
-            #[cfg(feature = "stress-testing")]
-            TaskResult::StressTest { target, .. } => {
-                ("stress-test".into(), Some(format!("stress-test: {target}")))
-            }
-            #[cfg(feature = "nse")]
-            TaskResult::Nse(r) => (
-                "nse".into(),
-                Some(format!(
-                    "NSE {}: {}",
-                    r.script,
-                    if r.success { "ok" } else { "failed" }
-                )),
-            ),
-            #[cfg(feature = "advanced-hunting")]
-            TaskResult::Hunt(r) => (
-                "hunt".into(),
-                Some(format!("{} findings", r.total_findings)),
-            ),
-            #[cfg(feature = "headless-browser")]
-            TaskResult::Browser(r) => (
-                "browser".into(),
-                Some(format!("{} findings", r.total_findings)),
-            ),
-            #[cfg(feature = "compliance")]
-            TaskResult::Compliance(r) => ("compliance".into(), Some(format!("{}", r.framework))),
-            #[cfg(feature = "database")]
-            TaskResult::Storage => ("storage".into(), Some("storage operation".into())),
-            #[cfg(feature = "database")]
-            TaskResult::StorageListScans { scans } => (
-                "storage".into(),
-                Some(format!("{} stored scans", scans.len())),
-            ),
-            #[cfg(feature = "database")]
-            TaskResult::StorageListFindings { findings } => (
-                "storage".into(),
-                Some(format!("{} stored findings", findings.len())),
-            ),
-            #[cfg(feature = "external-integrations")]
-            TaskResult::Integrations => {
-                ("integration".into(), Some("integration operation".into()))
-            }
-            #[cfg(feature = "external-integrations")]
-            TaskResult::IntegrationsCreateIssue { .. } => {
-                ("integration".into(), Some("issue created".into()))
-            }
-            #[cfg(feature = "external-integrations")]
-            TaskResult::IntegrationsSearchIssues { issues } => (
-                "integration".into(),
-                Some(format!("{} issues found", issues.len())),
-            ),
-            #[cfg(feature = "finding-workflow")]
-            TaskResult::Workflow(r) => (
-                "workflow".into(),
-                Some(format!("{} total findings", r.total_findings)),
-            ),
-            #[cfg(feature = "vuln-management")]
-            TaskResult::Vuln(r) => (
-                "vuln".into(),
-                Some(format!("{} findings", r.prioritized_findings.len())),
-            ),
-            #[cfg(feature = "wireless")]
-            TaskResult::Wireless(r) => (
-                "wireless".into(),
-                Some(format!("{} networks", r.networks.len())),
-            ),
-            #[cfg(feature = "wireless-advanced")]
-            TaskResult::WirelessActive(r) => (
-                "wireless-active".into(),
-                Some(format!("{} frames sent", r.frames_sent)),
-            ),
-            #[cfg(feature = "db-pentest")]
-            TaskResult::DbPentest(r) => ("db-pentest".into(), Some(format!("{}", r.db_type))),
-            #[cfg(feature = "web-proxy")]
-            TaskResult::Intercept(r) => {
-                ("intercept".into(), Some(format!("{} flows", r.flows.len())))
-            }
-            #[cfg(feature = "c2")]
-            TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.campaign.mitre_profile))),
-        };
-
-        TaskOutcome::Result(TaskResultEnvelope {
-            kind,
-            summary,
-            payload: serde_json::json!({}),
-            artifacts: vec![],
-        })
+        TaskOutcome::Result(crate::dispatch::task_result_envelope(result))
     }
 }
 
@@ -336,7 +181,11 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
                 ),
             );
 
-            // Dispatch through the engine, racing against cancellation.
+            // Dispatch through the engine, racing against cancellation via
+            // the shared primitive (same as the embedded TUI adapter, so
+            // terminal/cancel semantics match by construction). The progress
+            // forwarder drains on success and is aborted when cancellation
+            // wins, so no detached task survives.
             let (progress_tx, mut progress_rx) = mpsc::channel(16);
 
             // Spawn a task to forward dispatch progress to runtime events.
@@ -349,13 +198,17 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
 
             let dispatch_fut =
                 super::bundle::dispatch_approved_runtime_request(bundle, progress_tx);
-            let task_result = tokio::select! {
-                result = dispatch_fut => {
-                    result.map_err(|e| RuntimeError::DispatchFailed(format!("task execution failed: {e}")))?
-                }
-                _ = cancel.cancelled() => {
+            let dispatch_mapped = async move {
+                dispatch_fut.await.map_err(|e| {
+                    RuntimeError::DispatchFailed(format!("task execution failed: {e}"))
+                })
+            };
+            let task_result = match eggsec_runtime::race_with_cancel(dispatch_mapped, cancel).await
+            {
+                Ok(task_result) => task_result,
+                Err(cancelled) => {
                     progress_forwarder.abort();
-                    return Err(RuntimeError::DispatchFailed("task cancelled during execution".into()));
+                    return Err(cancelled);
                 }
             };
 

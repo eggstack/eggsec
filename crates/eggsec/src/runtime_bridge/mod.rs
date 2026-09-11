@@ -18,7 +18,8 @@
 //! - Automated surfaces (`McpServer`, `RestApi`, `GrpcApi`, `SecurityAgent`, `Ci`)
 //!   never honor manual overrides.
 //! - Any new [`RuntimeSurface`](eggsec_runtime::RuntimeSurface) variant must update
-//!   the conversion tests in the private `surface` module.
+//!   the conversion tests in the `surface` module and the
+//!   `runtime_contract_closure` integration test (both fail until mapped).
 
 mod bundle;
 mod descriptor;
@@ -32,4 +33,6 @@ pub use bundle::{
 pub use descriptor::descriptor_for_run_request;
 pub use executor::EggsecRuntimeExecutor;
 pub use manual::{approve_run_request, preflight_run_request};
-pub use surface::{runtime_surface_to_execution_surface, RuntimeBridgeError};
+pub use surface::{
+    execution_surface_to_runtime_surface, runtime_surface_to_execution_surface, RuntimeBridgeError,
+};

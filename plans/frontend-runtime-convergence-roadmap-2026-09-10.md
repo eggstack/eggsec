@@ -2,7 +2,8 @@
 
 ## Status
 
-Status: Ready for handoff.
+Status: Executed 2026-09-11 (Phases 0–3 complete; closure evidence in
+[`frontend-runtime-phase-3-runtime-contract-hotspot-closure.md`](frontend-runtime-phase-3-runtime-contract-hotspot-closure.md)).
 
 Baseline audited: `main` at `f48b3f37a273e1e53735d98acbb0cb0bcd607260`.
 

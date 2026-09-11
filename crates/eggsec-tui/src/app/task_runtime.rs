@@ -24,9 +24,11 @@ pub(crate) struct TuiDispatcherContext {
 
 /// Real executor for `eggsec_runtime::Runtime`.
 ///
-/// Replaces the Phase 2 `TuiStubExecutor`. Uses a `TuiTaskDispatcher`
-/// to map `RunRequest` to engine calls, sending typed `TaskResult`
-/// through channels for TUI consumption.
+/// Uses a `TuiTaskDispatcher` to map `RunRequest` to engine calls, sending
+/// typed `TaskResult` through channels for TUI consumption. Cancellation
+/// races through the shared `eggsec_runtime::race_with_cancel` primitive —
+/// the same primitive as the daemon-backed `EggsecRuntimeExecutor` — so
+/// embedded and daemon modes share terminal/cancel semantics by construction.
 pub(crate) struct TuiExecutor {
     context: Arc<ArcSwap<TuiDispatcherContext>>,
 }
@@ -51,22 +53,12 @@ impl RuntimeTaskExecutor for TuiExecutor {
         let context = self.context.clone();
 
         Box::pin(async move {
-            // Fail fast on pre-cancelled tasks so no detached work starts.
-            // Mirrors EggsecRuntimeExecutor (daemon path) for equivalent
-            // cancellation semantics across embedded and daemon-backed adapters.
-            if cancel.is_cancelled() {
-                return Err(RuntimeError::DispatchFailed("task cancelled".into()));
-            }
+            // Shared cancellation primitive (same as the daemon-backed
+            // adapter): pre-cancelled tasks never start detached work, and
+            // mid-execution cancellation drops the dispatch future, releasing
+            // senders so forwarders drain instead of leaking.
             let dispatcher = TuiTaskDispatcher::new(context);
-            let dispatch_fut = dispatcher.dispatch(request);
-            tokio::select! {
-                result = dispatch_fut => result,
-                _ = cancel.cancelled() => {
-                    Err(RuntimeError::DispatchFailed(
-                        "task cancelled during execution".into(),
-                    ))
-                }
-            }
+            eggsec_runtime::race_with_cancel(dispatcher.dispatch(request), cancel).await
         })
     }
 }
@@ -209,9 +201,9 @@ impl super::App {
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
 
-            // Phase 4: register task-tab mapping in the runtime adapter.
-            // The adapter routes lifecycle events (progress, completion, failure)
-            // to the correct tab regardless of which tab is currently focused.
+            // Task-tab mapping lives in the runtime adapter: lifecycle events
+            // (progress, completion, failure) route to the originating tab
+            // regardless of which tab is currently focused.
 
             // Update the executor context with new channel senders.
             // The executor reads this via ArcSwap before dispatching.

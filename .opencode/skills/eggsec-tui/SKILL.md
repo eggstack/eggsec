@@ -73,16 +73,19 @@ crates/eggsec-tui/src/
 ### Runtime Event Reducer (Phase 4)
 `TuiRuntimeAdapter` in `app/runtime_adapter/` maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()`. Unknown task IDs and duplicate terminal events are silently ignored (no panic). `TaskResultEnvelope` (from `eggsec-runtime`) is the protocol-neutral result wrapper returned by `TuiTaskDispatcher::dispatch()` for lifecycle tracking. Typed `TaskResult` still flows through `result_rx` for tab-specific rendering.
 
-### Canonical execution (Phase 1)
+### Canonical execution (Phase 1, closed Phase 3)
 `TuiTaskDispatcher` is a shallow adapter onto the single engine executor owner:
 `TaskKind → CanonicalOperationRequest::from_task_kind → dispatch::execute_canonical`.
 It owns no operation→executor mapping; packet multiplexers select their canonical
-request before execution. Enforcement for manual actions happens at the action layer
+request before execution. Result/envelope conversion is engine-owned
+(`dispatch::task_result_envelope`) — the dispatcher consumes it, never a parallel
+`TaskResult` match. Enforcement for manual actions happens at the action layer
 via `EnforcementFacade` (exact `matches_descriptor` binding); the dispatcher owns
 lifecycle conversion only. `TuiExecutor` races dispatch against the runtime
-cancellation token with the same shared primitive as the daemon path
-(`eggsec-runtime::race_with_cancel`). Daemon-backed execution reaches the same
-executor owner via `runtime_bridge` bundle → `execute_approved`.
+cancellation token through the shared primitive (`eggsec-runtime::race_with_cancel`,
+no ad-hoc select) — the same primitive as the daemon-backed `EggsecRuntimeExecutor`.
+Daemon-backed execution reaches the same executor owner via `runtime_bridge` bundle
+→ `execute_approved`.
 
 ### Remote Attach Mode (Phase 8)
 The TUI supports two runtime backends via the `TuiRuntimeClient` trait:

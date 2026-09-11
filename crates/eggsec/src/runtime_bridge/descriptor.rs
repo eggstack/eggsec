@@ -32,8 +32,8 @@ pub fn descriptor_for_run_request(
 
 /// Resolve the canonical operation ID and optional target from a [`TaskKind`].
 ///
-/// Phase C convergence: delegates to the exhaustive
-/// `TaskKind::operation_id` / `TaskKind::canonical_target` mapping so runtime
+/// Phase 3 closure: delegates to the single wire-side exhaustive mapping
+/// (`TaskKind::operation_id` / `TaskKind::canonical_target`) so runtime
 /// semantics cannot silently diverge from the canonical path. Returns
 /// `(operation_id, target)` where `target` is `None` for operations with
 /// `NoTarget` policy or interface-bound tasks.

@@ -51,7 +51,7 @@ Local lifecycle smoke test: `bash scripts/smoke-daemon-local.sh [socket-path]` (
 
 ## Runtime Bridge
 
-`crates/eggsec/src/runtime_bridge/` converts runtime DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) into engine enforcement types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `preflight_run_request()` previews policy; `approve_run_request()` produces the pre-dispatch authorization bundle. Phase 1: the bundle dispatches via the single canonical boundary (`dispatch::execute_approved` over `CanonicalOperationRequest::from_task_kind`), sharing executor selection with embedded TUI execution (`execute_canonical`). Cancellation races use the shared `eggsec-runtime::race_with_cancel` primitive in both adapters.
+`crates/eggsec/src/runtime_bridge/` converts runtime DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) into engine enforcement types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `preflight_run_request()` previews policy; `approve_run_request()` produces the pre-dispatch authorization bundle. Phase 1: the bundle dispatches via the single canonical boundary (`dispatch::execute_approved` over `CanonicalOperationRequest::from_task_kind`), sharing executor selection with embedded TUI execution (`execute_canonical`). Phase 3 closure: `RuntimeSurface` is a wire DTO with exhaustive bidirectional conversion (`Unknown` rejected); engine operation-ID/target adapters delegate to the wire-side `TaskKind` match (no parallel tables); `TaskResult`→envelope conversion is engine-owned (`dispatch::task_result_envelope`); both adapters route cancellation through the shared `eggsec-runtime::race_with_cancel` primitive (no ad-hoc select). Closure tests: `crates/eggsec/tests/runtime_contract_closure.rs`.
 
 ## Testing
 

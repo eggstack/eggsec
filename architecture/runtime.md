@@ -260,6 +260,7 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 9. **CancellationToken re-exported** — `pub use tokio_util::sync::CancellationToken` at crate root
 10. **Default timeout**: 300s (5 minutes); session override takes precedence over runtime default
 11. **Broadcast channel capacity**: 256 (configurable via `RuntimeConfig::event_channel_capacity`)
+12. **Phase 3 closure (2026-09-11)**: runtime types answer transport/session questions; engine contracts answer operation questions. `RuntimeSurface` is a wire DTO (canonical owner: `eggsec::config::ExecutionSurface`; exhaustive bidirectional bridge in `runtime_bridge::surface`). `TaskKind::operation_id()`/`canonical_target()` is the single wire-side match (engine adapters delegate). `race_with_cancel` (`cancel.rs`) is the shared cancellation primitive for both executors. Backpressure: broadcast lag is recoverable (receiver logs + continues); `ExecutionSink` coalesces non-critical progress with an explicit counter while findings/terminal outcomes always deliver.
 
 ## See Also
 
@@ -270,4 +271,4 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-09-09 (Phase D: runtime_config/runtime_sink split)*
+*Last verified against source: 2026-09-11 (Phase 3 closure)*

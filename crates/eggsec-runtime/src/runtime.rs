@@ -20,8 +20,19 @@ pub(crate) use super::runtime_sink::{emit_event, emit_event_critical};
 pub use super::runtime_sink::{RuntimeEventReceiver, RuntimeEventSink};
 
 /// Trait for task executors. Implementations bridge the runtime to actual tool
-/// execution. In Phase 2 the TUI provides an executor that wraps the existing
-/// worker path; in Phase 3 the executor moves into the runtime.
+/// execution.
+///
+/// Phase 3 closure: the runtime owns transport/session/lifecycle (request IDs,
+/// serialization, session attachment, task state, cancellation transport,
+/// progress/outcome transport); the engine owns operation semantics (canonical
+/// identity, normalization/defaults, target semantics, policy, executor
+/// selection, result semantics). Executors live in engine/TUI crates and are
+/// plugged into the runtime — never the reverse, since `eggsec-runtime` must
+/// stay isolated from engine/domain crates. The embedded `TuiExecutor` and the
+/// daemon-backed `EggsecRuntimeExecutor` both race dispatch through
+/// [`crate::cancel::race_with_cancel`] and convert results through the single
+/// engine-owned envelope mapping, so terminal/cancel semantics match by
+/// construction.
 ///
 /// The executor receives a [`RuntimeExecutionContext`] carrying the session's
 /// trust boundary (surface, scope). Executors must use this context — not

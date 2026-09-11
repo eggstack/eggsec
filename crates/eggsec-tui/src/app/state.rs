@@ -64,7 +64,9 @@ pub struct TaskState {
     /// Which tab initiated the active task.
     pub tab: Option<Tab>,
     /// Channel receivers bridging `eggsec::dispatch` progress to the TUI.
-    /// These will be replaced by `RuntimeEventReceiver` in Phase 4.
+    /// Compatibility bridge: runtime lifecycle events flow through
+    /// `TuiRuntimeAdapter`/`RuntimeEventReceiver`; these typed channels carry
+    /// rich `TaskResult` values for TUI rendering.
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<eggsec::dispatch::TaskResult>>,
     pub paused: bool,

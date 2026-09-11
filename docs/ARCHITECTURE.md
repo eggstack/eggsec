@@ -275,7 +275,8 @@ DaemonClient → Runtime::submit(RunRequest)
         → validates descriptor match (exact matches_descriptor)
         → CanonicalOperationRequest::from_task_kind() → execute_approved()
         → (same single executor owner as embedded TUI) → TaskResult
-      → task_result_to_outcome() → TaskOutcome
+      → dispatch::task_result_envelope() → TaskOutcome::Result(envelope)
+      (single engine-owned mapping; cancellation via shared race_with_cancel)
 ```
 
 **Surface**: Derived from `RuntimeExecutionContext.surface` (session-bound) → `ExecutionSurface` (engine type). Request surface is normalized to session surface before storage/emission — `RunRequest.surface` is informational only and must not influence enforcement. `Unknown` maps to error.

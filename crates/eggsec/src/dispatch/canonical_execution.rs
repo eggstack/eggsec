@@ -39,8 +39,10 @@
 //!
 //! Domain worker signatures still take the legacy `(u64, u64)` progress sender.
 //! The sink bridges legacy progress into [`ExecutionEvent`] via a forwarder
-//! task. Migrating every worker to take `ExecutionSink` directly is Phase 2/3
-//! work; the ownership guarantee (one executor match) already holds here.
+//! task. Migrating every worker to take `ExecutionSink` directly is residual
+//! polish (owner/removal criterion: a worker changes its progress contract for
+//! an unrelated reason); the ownership guarantee (one executor match) already
+//! holds here, and the bridge preserves backpressure semantics.
 
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -809,6 +811,175 @@ pub fn outcome_kind(result: &TaskResult) -> String {
         TaskResult::Error(_) => "error".to_string(),
         #[allow(unreachable_patterns)]
         _ => "unknown".to_string(),
+    }
+}
+
+/// Convert a [`TaskResult`] into a frontend-neutral [`TaskResultEnvelope`].
+///
+/// Phase 3 closure: this is the single engine-owned result/envelope mapping.
+/// Both the embedded TUI adapter and the daemon-backed `EggsecRuntimeExecutor`
+/// consume it; neither maintains a parallel `TaskResult` match. The `kind`
+/// strings are stable wire discriminators (e.g. `waf` for detection,
+/// `traceroute` for the packet-traceroute result) and must not be changed
+/// without a protocol-compatibility fixture. Summaries are human-readable
+/// diagnostics; the TUI renders rich detail from its typed `TaskResult`
+/// channel, while non-TUI frontends consume kind + summary.
+pub fn task_result_envelope(result: &TaskResult) -> eggsec_runtime::TaskResultEnvelope {
+    use eggsec_runtime::TaskResultEnvelope;
+
+    let (kind, summary): (String, Option<String>) = match result {
+        TaskResult::LoadTest(r) => (
+            "load-test".into(),
+            Some(format!("{} requests completed", r.total_requests)),
+        ),
+        TaskResult::PortScan(r) => (
+            "port-scan".into(),
+            Some(format!("{} ports scanned", r.ports_scanned)),
+        ),
+        TaskResult::EndpointScan(r) => (
+            "endpoint-scan".into(),
+            Some(format!("{} endpoints found", r.endpoints_found)),
+        ),
+        TaskResult::Fingerprint(r) => (
+            "fingerprint".into(),
+            Some(format!("{} services identified", r.services_identified)),
+        ),
+        TaskResult::WafDetection(r) => (
+            "waf".into(),
+            Some(format!(
+                "WAF: {}",
+                r.waf_name.as_deref().unwrap_or("unknown")
+            )),
+        ),
+        TaskResult::Recon(r) => ("recon".into(), Some(format!("target: {}", r.target))),
+        TaskResult::Fuzz(r) => ("fuzz".into(), Some(format!("{} findings", r.findings))),
+        TaskResult::GraphQl(r) => (
+            "graphql".into(),
+            Some(format!("{} findings", r.injection_findings.len())),
+        ),
+        TaskResult::OAuth(r) => (
+            "oauth".into(),
+            Some(format!(
+                "redirect: {}, scope: {}, state: {}",
+                r.redirect_vulnerabilities.len(),
+                r.scope_vulnerabilities.len(),
+                r.state_vulnerabilities.len()
+            )),
+        ),
+        TaskResult::Auth(r) => (
+            "auth-test".into(),
+            Some(format!("{} findings", r.findings.len())),
+        ),
+        TaskResult::Pipeline(r) => (
+            "pipeline".into(),
+            Some(format!("{} stages", r.stage_results.len())),
+        ),
+        TaskResult::PacketTraceroute { hops } => {
+            ("traceroute".into(), Some(format!("{} hops", hops.len())))
+        }
+        TaskResult::PacketCapture {
+            packets_captured, ..
+        } => (
+            "packet-capture".into(),
+            Some(format!("{packets_captured} packets captured")),
+        ),
+        TaskResult::PacketSend {
+            packets_sent,
+            bytes_sent,
+        } => (
+            "packet-send".into(),
+            Some(format!("{packets_sent} packets, {bytes_sent} bytes")),
+        ),
+        TaskResult::WafBypass { bypasses, .. } => (
+            "waf-bypass".into(),
+            Some(format!("{} bypasses found", bypasses.len())),
+        ),
+        TaskResult::WafStress(bypasses) => (
+            "waf-stress".into(),
+            Some(format!("{} bypasses found", bypasses.len())),
+        ),
+        TaskResult::Error(msg) => ("error".into(), Some(msg.clone())),
+        #[cfg(feature = "stress-testing")]
+        TaskResult::StressTest { target, .. } => {
+            ("stress-test".into(), Some(format!("stress-test: {target}")))
+        }
+        #[cfg(feature = "nse")]
+        TaskResult::Nse(r) => (
+            "nse".into(),
+            Some(format!(
+                "NSE {}: {}",
+                r.script,
+                if r.success { "ok" } else { "failed" }
+            )),
+        ),
+        #[cfg(feature = "advanced-hunting")]
+        TaskResult::Hunt(r) => (
+            "hunt".into(),
+            Some(format!("{} findings", r.total_findings)),
+        ),
+        #[cfg(feature = "headless-browser")]
+        TaskResult::Browser(r) => (
+            "browser".into(),
+            Some(format!("{} findings", r.total_findings)),
+        ),
+        #[cfg(feature = "compliance")]
+        TaskResult::Compliance(r) => ("compliance".into(), Some(format!("{}", r.framework))),
+        #[cfg(feature = "database")]
+        TaskResult::Storage => ("storage".into(), Some("storage operation".into())),
+        #[cfg(feature = "database")]
+        TaskResult::StorageListScans { scans } => (
+            "storage".into(),
+            Some(format!("{} stored scans", scans.len())),
+        ),
+        #[cfg(feature = "database")]
+        TaskResult::StorageListFindings { findings } => (
+            "storage".into(),
+            Some(format!("{} stored findings", findings.len())),
+        ),
+        #[cfg(feature = "external-integrations")]
+        TaskResult::Integrations => ("integration".into(), Some("integration operation".into())),
+        #[cfg(feature = "external-integrations")]
+        TaskResult::IntegrationsCreateIssue { .. } => {
+            ("integration".into(), Some("issue created".into()))
+        }
+        #[cfg(feature = "external-integrations")]
+        TaskResult::IntegrationsSearchIssues { issues } => (
+            "integration".into(),
+            Some(format!("{} issues found", issues.len())),
+        ),
+        #[cfg(feature = "finding-workflow")]
+        TaskResult::Workflow(r) => (
+            "workflow".into(),
+            Some(format!("{} total findings", r.total_findings)),
+        ),
+        #[cfg(feature = "vuln-management")]
+        TaskResult::Vuln(r) => (
+            "vuln".into(),
+            Some(format!("{} findings", r.prioritized_findings.len())),
+        ),
+        #[cfg(feature = "wireless")]
+        TaskResult::Wireless(r) => (
+            "wireless".into(),
+            Some(format!("{} networks", r.networks.len())),
+        ),
+        #[cfg(feature = "wireless-advanced")]
+        TaskResult::WirelessActive(r) => (
+            "wireless-active".into(),
+            Some(format!("{} frames sent", r.frames_sent)),
+        ),
+        #[cfg(feature = "db-pentest")]
+        TaskResult::DbPentest(r) => ("db-pentest".into(), Some(format!("{}", r.db_type))),
+        #[cfg(feature = "web-proxy")]
+        TaskResult::Intercept(r) => ("intercept".into(), Some(format!("{} flows", r.flows.len()))),
+        #[cfg(feature = "c2")]
+        TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.campaign.mitre_profile))),
+    };
+
+    TaskResultEnvelope {
+        kind,
+        summary,
+        payload: serde_json::json!({}),
+        artifacts: vec![],
     }
 }
 

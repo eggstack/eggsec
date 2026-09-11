@@ -172,7 +172,7 @@ CLI handler
 TUI action
     → EnforcementFacade (exact matches_descriptor binding)
     → TuiTaskDispatcher: TaskKind → canonical → execute_canonical()
-    → envelope + typed TaskResult rendering
+    → envelope (dispatch::task_result_envelope, single owner) + typed TaskResult rendering
 ```
 
 ### 2. Strict Protocol Surfaces (REST/MCP/gRPC/Agent)
@@ -269,14 +269,15 @@ Daemon/Runtime
 | Severity | File:Line | Issue |
 |----------|-----------|-------|
 | LOW | `executors/registry.rs:12` | Uses `std::collections::HashMap` instead of `FxHashMap` for operation→executor mapping. Not performance-critical (built once, queried per-dispatch) but inconsistent with workspace convention (`AGENTS.md` key patterns). |
-| LOW | `runtime_bridge/executor.rs:344` | Spawned `progress_forwarder` tokio task has no explicit timeout wrapper. However, it is bounded by the `dispatch_approved_runtime_request` lifetime and `CancellationToken` — the task will be aborted via `progress_forwarder.abort()` on cancellation (`:357`). Acceptable but not explicit. |
+| LOW | `runtime_bridge/executor.rs` | Spawned `progress_forwarder` tokio task has no explicit timeout wrapper. However, it is bounded by the `dispatch_approved_runtime_request` lifetime and `CancellationToken` — the task drains on success and is aborted when the shared `race_with_cancel` reports cancellation. Acceptable but not explicit. |
 
 ## Testing
 
 Boundary tests live in three mandatory-path suites:
 
-- **`canonical_execution` unit tests** — canonical IDs (no aliases), packet-family sharing, `from_task_kind` exhaustiveness, executor routes, sink coalescing/drop-counting, binding rejections.
+- **`canonical_execution` unit tests** — canonical IDs (no aliases), packet-family sharing, `from_task_kind` exhaustiveness, executor routes, sink coalescing/drop-counting, binding rejections, envelope kind stability.
 - **`crates/eggsec/tests/canonical_dispatch_ownership.rs`** (26 tests) — per-family CLI/runtime/tool normalization equivalence, identity/binding/route agreement, feature-gate consistency, error/outcome classification, `CommandRoute` ownership, daemon-bundle cancel race.
+- **`crates/eggsec/tests/runtime_contract_closure.rs`** (16 tests, Phase 3) — surface round-trips, wire-identity agreement across all 29 `TaskKind` variants, wire JSON stability, no-target family failures, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression.
 - **`dispatch/mod.rs` tests** — channel plumbing, legacy shim behavior, executor-registry coverage (retained adapter registry).
 - **`runtime_bridge/bundle.rs` tests** — anti-tamper checks (operation/target mismatch).
 - **TUI `task_runtime`/`task_dispatcher` tests** — embedded cancel contract (shared primitive).
@@ -288,6 +289,22 @@ Boundary tests live in three mandatory-path suites:
 - [config.md](config.md) — `EnforcementContext`, `ExecutionPolicy`, `OperationMetadata`
 - [tool/dispatcher.rs](../crates/eggsec/src/tool/dispatcher.rs) — `EnforcedDispatcher::dispatch_checked()` for strict surfaces
 - [overview.md](overview.md) — System-wide architecture, enforcement model
+
+## Phase 3 Closure Record (2026-09-11)
+
+Starting SHA `585b4fec` (Phases 0–2 executed). Removed the last duplicate
+semantic mappings: engine `operation_id_for_task_kind`/`target_for_task_kind`
+29-arm tables (now thin delegates to the single wire-side `TaskKind` match);
+daemon-executor and TUI private `TaskResult`→envelope matches (now the single
+engine-owned `dispatch::task_result_envelope`); ad-hoc `cancel.cancelled()`
+selects in both runtime adapters (now `race_with_cancel` by construction).
+`RuntimeSurface` documented as a wire DTO with an exhaustive bidirectional
+bridge (`Unknown` rejected). Retained (boundary conversions, not duplicate
+ownership): `TaskKind` wire enum + params (serialization compat);
+`CanonicalOperationRequest::from_task_kind` (typed engine conversion);
+`ExecutionSink` legacy `(u64, u64)` bridge for domain workers (residual polish
+when a worker changes its progress contract); large hotspot files with
+rationale (see the Phase 3 plan closure record).
 
 ## Phase 1 Completion Record (2026-09-10)
 
@@ -303,4 +320,4 @@ conversion (explicit, exhaustive); `ExecutorRegistry` adapter registry (tool-pat
 composition, validation converges via shared canonical contracts); helper/lifecycle
 routes (explicit non-operation); compatibility aliases at input/wire boundaries only.
 
-*Last verified against source: 2026-09-10*
+*Last verified against source: 2026-09-11 (Phase 3 closure)*

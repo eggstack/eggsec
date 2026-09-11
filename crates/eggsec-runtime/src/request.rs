@@ -2,10 +2,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::ClientId;
 
-/// Frontend-neutral execution surface, mirroring `eggsec::config::ExecutionSurface`.
+/// Frontend-neutral execution surface for wire transport.
 ///
-/// This is a local serializable mirror. Later phases can implement conversion
-/// to/from `eggsec::config::ExecutionSurface`.
+/// This is a serializable wire DTO for protocol compatibility (session
+/// attachment, request transport, audit labels). It is NOT a second semantic
+/// owner: the canonical enforcement identity is
+/// `eggsec::config::ExecutionSurface`, owned by the engine. Conversion in both
+/// directions lives exhaustively in `eggsec::runtime_bridge::surface`
+/// (`runtime_surface_to_execution_surface` /
+/// `execution_surface_to_runtime_surface`); `Unknown` is rejected at the
+/// boundary rather than silently mapped. Adding a variant without updating
+/// that conversion is a compile/test failure by design.
+///
+/// `eggsec-runtime` must stay isolated from engine/domain crates (see
+/// architecture guard 22), so the canonical enum cannot live here; the wire
+/// DTO plus exhaustive bridge conversion is the stable boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum RuntimeSurface {
     CliManual,
@@ -365,10 +376,12 @@ pub struct C2Params {
 }
 
 impl TaskKind {
-    /// Return the capability name string for this task kind variant.
+    /// Wire capability name for this task kind variant.
     ///
     /// This name must match the entries in [`RuntimeCapabilities::task_kinds`]
-    /// for the task to be supported by a given runtime configuration.
+    /// for the task to be supported by a given runtime configuration. It is
+    /// transport metadata, not the canonical operation identity (see
+    /// [`Self::operation_id`]).
     pub fn capability_name(&self) -> &'static str {
         match self {
             TaskKind::LoadTest(_) => "load-test",
@@ -403,13 +416,20 @@ impl TaskKind {
         }
     }
 
-    /// Canonical engine operation ID for this task kind.
+    /// Canonical engine operation ID for this task kind (wire-compat accessor).
     ///
-    /// Phase C convergence: this mapping is exhaustive (no wildcard). Adding
-    /// a new `TaskKind` variant without updating this function is a compile
-    /// error, which satisfies the requirement that adding a canonical
-    /// operation intended for runtime produces a compile/test failure until
-    /// runtime mapping is supplied.
+    /// This is the single wire-side match for operation identity. Engine
+    /// adapters (`operation_id_for_task_kind`, `descriptor_for_run_request`,
+    /// `CanonicalOperationRequest::from_task_kind`) delegate to this method
+    /// rather than maintaining parallel matches, so the wire representation
+    /// cannot silently diverge. The engine-side canonical identity for an
+    /// already-converted request is
+    /// `CanonicalOperationRequest::operation_id()`; this method exists so
+    /// telemetry/capability checks before engine conversion derive from the
+    /// same exhaustive table.
+    ///
+    /// Exhaustive (no wildcard): adding a `TaskKind` variant without updating
+    /// this function is a compile error.
     ///
     /// Wire-only packet capture/traceroute/send kinds share the `packet`
     /// operation family explicitly (they do not fall through string aliases).
@@ -451,7 +471,8 @@ impl TaskKind {
     }
 
     /// Canonical target for this task kind (`None` for `NoTarget` or
-    /// interface-bound operations).
+    /// interface-bound operations). Wire-compat accessor; engine adapters
+    /// delegate to this method (see [`Self::operation_id`]).
     ///
     /// Exhaustive for the same compile-failure guarantee as
     /// [`Self::operation_id`].

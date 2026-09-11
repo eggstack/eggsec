@@ -1910,9 +1910,12 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Runtimes share the canonical executor."
 fi
 
-# 86. Cancellation semantics are shared (Phase 1.6).
-# The shared primitive lives in eggsec-runtime::cancel; both adapters race
-# dispatch against the token with identical messages.
+# 86. Cancellation semantics are shared (Phase 1.6, closed Phase 3).
+# The shared primitive lives in eggsec-runtime::cancel; both adapters
+# (embedded TUI executor, daemon-backed engine executor) route dispatch
+# through race_with_cancel so terminal/cancel semantics match by
+# construction. Ad hoc `tokio::select!` on `cancel.cancelled()` in adapter
+# code would reintroduce divergent semantics.
 echo ""
 echo "--- Check 86: Cancellation semantics are shared ---"
 SECTION_FAIL=0
@@ -1926,12 +1929,20 @@ elif ! rg -q 'race_with_cancel' crates/eggsec-runtime/src/cancel.rs 2>/dev/null;
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 for f in "crates/eggsec/src/runtime_bridge/executor.rs" "crates/eggsec-tui/src/app/task_runtime.rs"; do
-  if ! rg -q 'cancelled during execution' "$f" 2>/dev/null; then
-    echo "FAIL: $f missing shared cancel-race semantics."
+  if ! rg -q 'race_with_cancel' "$f" 2>/dev/null; then
+    echo "FAIL: $f does not route through the shared race_with_cancel primitive."
     FAIL=$((FAIL + 1))
     SECTION_FAIL=$((SECTION_FAIL + 1))
   fi
 done
+# No ad hoc cancel select in adapter execute paths (the primitive owns it).
+ADHOC=$(rg -n 'cancel\.cancelled\(\)' crates/eggsec-tui/src/app/task_runtime.rs crates/eggsec/src/runtime_bridge/executor.rs 2>/dev/null || true)
+if [[ -n "$ADHOC" ]]; then
+  echo "$ADHOC"
+  echo "FAIL: Adapter code races cancel.cancelled() directly. Route through race_with_cancel."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Cancellation semantics are shared."
 fi
@@ -2063,6 +2074,118 @@ for f in "crates/eggsec-tui/src/tabs/surface.rs" "crates/eggsec-tui/src/app/pale
 done
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: TUI surface modules are decomposed."
+fi
+
+# 94. Runtime operation-ID/target tables are single-owned (Phase 3.2).
+# The wire-side match lives in eggsec-runtime (TaskKind::operation_id /
+# canonical_target); engine adapters delegate instead of maintaining parallel
+# matches. A parallel `TaskKind::Variant(_) =>` table here would silently
+# diverge, so it fails the guard.
+echo ""
+echo "--- Check 94: Engine adapters delegate to the wire match ---"
+SECTION_FAIL=0
+if ! rg -q 'kind\.operation_id\(\)' crates/eggsec/src/operation_request.rs 2>/dev/null; then
+  echo "FAIL: operation_request.rs does not delegate to TaskKind::operation_id()."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'kind\.canonical_target\(\)' crates/eggsec/src/operation_request.rs 2>/dev/null; then
+  echo "FAIL: operation_request.rs does not delegate to TaskKind::canonical_target()."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+PARALLEL_OPS=$(rg -n 'TaskKind::[A-Za-z]+\(_\) =>' crates/eggsec/src/operation_request.rs 2>/dev/null || true)
+if [[ -n "$PARALLEL_OPS" ]]; then
+  echo "$PARALLEL_OPS"
+  echo "FAIL: operation_request.rs owns a parallel TaskKind match. Delegate to the wire-side methods."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Engine adapters delegate to the wire match."
+fi
+
+# 95. Result/envelope conversion is single-owned (Phase 3.5).
+# The TaskResult → envelope match lives in
+# dispatch/canonical_execution.rs (task_result_envelope). Neither the
+# daemon-backed executor nor the TUI dispatcher may own a parallel match;
+# both consume the engine helper.
+echo ""
+echo "--- Check 95: Envelope conversion is single-owned ---"
+SECTION_FAIL=0
+if ! rg -q 'pub fn task_result_envelope' crates/eggsec/src/dispatch/canonical_execution.rs 2>/dev/null; then
+  echo "FAIL: canonical_execution.rs missing pub fn task_result_envelope."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'task_result_envelope' crates/eggsec/src/runtime_bridge/executor.rs 2>/dev/null; then
+  echo "FAIL: runtime_bridge/executor.rs does not consume task_result_envelope."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'dispatch::task_result_envelope' crates/eggsec-tui/src/app/task_dispatcher.rs 2>/dev/null; then
+  echo "FAIL: TUI dispatcher does not consume eggsec::dispatch::task_result_envelope."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TUI_DUP=$(rg -n 'fn task_result_to_envelope|fn task_result_to_outcome' crates/eggsec-tui/src/app/task_dispatcher.rs 2>/dev/null || true)
+if [[ -n "$TUI_DUP" ]]; then
+  echo "$TUI_DUP"
+  echo "FAIL: TUI dispatcher reintroduces a parallel TaskResult conversion fn."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+EXEC_DUP=$(rg -n 'match result \{' crates/eggsec/src/runtime_bridge/executor.rs 2>/dev/null || true)
+if [[ -n "$EXEC_DUP" ]]; then
+  echo "$EXEC_DUP"
+  echo "FAIL: runtime_bridge/executor.rs owns a TaskResult match. Delegate to task_result_envelope."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Envelope conversion is single-owned."
+fi
+
+# 96. Surface conversion is exhaustive in both directions (Phase 3.1).
+# RuntimeSurface is a wire DTO; the bridge owns the conversion table.
+# Unknown is rejected wire → engine; engine → wire is infallible.
+echo ""
+echo "--- Check 96: Surface conversion is bidirectional ---"
+SECTION_FAIL=0
+if ! rg -q 'pub fn execution_surface_to_runtime_surface' crates/eggsec/src/runtime_bridge/surface.rs 2>/dev/null; then
+  echo "FAIL: surface.rs missing execution_surface_to_runtime_surface."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'Later phases can implement conversion' crates/eggsec-runtime/src/request.rs 2>/dev/null; then
+  :
+else
+  echo "FAIL: stale transitional conversion comment still present in eggsec-runtime/src/request.rs."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'match surface \{' crates/eggsec/src/runtime_bridge/surface.rs 2>/dev/null; then
+  :
+else
+  echo "FAIL: surface.rs lost its exhaustive surface match."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Surface conversion is bidirectional."
+fi
+
+# 97. Runtime-contract closure tests are wired (Phase 3).
+echo ""
+echo "--- Check 97: Runtime-contract closure tests exist ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec/tests/runtime_contract_closure.rs" ]]; then
+  echo "FAIL: missing closure test: crates/eggsec/tests/runtime_contract_closure.rs"
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Runtime-contract closure tests exist."
 fi
 
 echo ""
