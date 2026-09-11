@@ -14,29 +14,46 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Frontend/runtime convergence (active)
+## TUI full-profile corrective closure (active)
+
+Corrective pass:
+[`frontend-runtime-tui-full-profile-corrective-pass.md`](frontend-runtime-tui-full-profile-corrective-pass.md)
+
+This bounded pass closes the remaining frontend/runtime verification gap after
+Phases 0-3: `eggsec-tui --features full` is advertised as the maximum-capability
+TUI aggregate but currently fails to compile because several feature-gated task
+builders lag the runtime DTO contract. The same pass adds mechanical TUI feature
+coverage to the individual-feature sweep and a dependency-light broad TUI
+profile to routine verification so the defect cannot silently recur.
+
+It does not reopen canonical request, approval-binding, dispatch ownership,
+TUI surface-model, or runtime-contract architecture unless implementation
+uncovers a concrete regression in those completed invariants.
+
+## Frontend/runtime convergence (executed)
 
 Roadmap:
 [`frontend-runtime-convergence-roadmap-2026-09-10.md`](frontend-runtime-convergence-roadmap-2026-09-10.md)
 
-This is a post-convergence corrective pass against the executed 2026-09-08
+This was a post-convergence corrective pass against the executed 2026-09-08
 architecture roadmap. Canonical typed operation requests/defaults/validation
-remain in place; this work targets residual dispatch ownership overlap, CLI/TUI
+remain in place; the work resolved residual dispatch ownership overlap, CLI/TUI
 metadata and feature drift, runtime wire/domain mirrors, approval-cache binding,
-and remaining frontend maintenance hotspots.
+and frontend/runtime maintenance hotspots.
 
-Ordered implementation plans:
+Ordered implementation plans (all executed; Phase 3 contains the closure record):
 
 1. [`frontend-runtime-phase-0-binding-and-parity-guards.md`](frontend-runtime-phase-0-binding-and-parity-guards.md)
 2. [`frontend-runtime-phase-1-canonical-dispatch-ownership.md`](frontend-runtime-phase-1-canonical-dispatch-ownership.md)
 3. [`frontend-runtime-phase-2-tui-surface-wiring-convergence.md`](frontend-runtime-phase-2-tui-surface-wiring-convergence.md)
 4. [`frontend-runtime-phase-3-runtime-contract-hotspot-closure.md`](frontend-runtime-phase-3-runtime-contract-hotspot-closure.md)
 
-Phase 0 converts the current surface/binding assumptions into executable guards.
-Phase 1 establishes one engine-owned operation execution seam. Phase 2 completes
-TUI metadata/action/feature wiring against that seam. Phase 3 resolves runtime
-wire/domain ownership, proves embedded/daemon lifecycle parity, decomposes stable
-hotspots, and records closure evidence.
+Phase 0 converted surface/binding assumptions into executable guards. Phase 1
+established one engine-owned operation execution seam. Phase 2 completed TUI
+metadata/action/feature wiring against that seam. Phase 3 resolved runtime
+wire/domain ownership, proved embedded/daemon lifecycle parity, removed parallel
+semantic mappings, and recorded closure evidence. The active corrective pass
+above addresses the one remaining TUI feature-profile verification defect.
 
 ## Architecture convergence and capability maturity (executed)
 
@@ -99,7 +116,8 @@ This pass corrected dispatch and tool-API pipeline construction to use
 `Pipeline::from_profile()` as the canonical parser-independent constructor,
 ensuring `ScanProfile` is the single source of truth for stage selection, risk
 budget, and profile-specific validation. The historical roadmap is closed; the
-active frontend/runtime convergence roadmap above addresses newly confirmed
-residual maintenance, wiring, and runtime-contract work.
+completed frontend/runtime convergence roadmap above addresses the later
+maintenance, wiring, and runtime-contract work, while the active TUI full-profile
+corrective pass closes its remaining feature-verification gap.
 
 Package publication and release cadence remain manual maintainer actions.
