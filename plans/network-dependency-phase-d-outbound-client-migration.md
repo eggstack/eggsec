@@ -1,6 +1,6 @@
 # Phase D — Outbound client migration and dependency consolidation
 
-Status: Ready for handoff
+Status: Executed (increment 1, 2026-09-12 — interfaces + boundaries; backend cutover per consumer pending)
 
 Date: 2026-09-11
 
@@ -181,3 +181,45 @@ Run all transport parity/security fixtures from Phases A-C.
 - process-host/composition wiring that constructs the Eggfetch adapter;
 - parity/architecture tests and documentation;
 - this plan completion record.
+
+## Completion record (increment 1, 2026-09-12)
+
+**Scope delivered:** consumer interfaces + module boundaries + feature
+pruning + remaining-owner dispositions. Backend cutover (wiring production
+traffic through `EggfetchTransport`) proceeds per consumer with focused
+parity tests; the adapter still has no production backend consumers
+(guards 102 + 103).
+
+- WS1 agent: `LifecycleManager<T: HttpTransport>` injects transport +
+  authority; `reqwest`/`rustls` removed from `eggsec-agent`
+  (`cargo tree` 257 → 153 lines); 24 tests green (2 new fake-based).
+- WS2 engine: removed `apply_auth_context_to_request` +
+  `AiClient::apply_auth` (shared APIs carry no `RequestBuilder`); fuzzer/AI
+  translate via canonical helpers locally. Full per-subsystem backend
+  migration (webhook/trackers/scanner/fuzzer/cookies/SOCKS/blocking/http2)
+  pending with disposition in `architecture/network_dependency_baseline.md` §7.2.
+- WS3 NSE: new `http_capability.rs` narrow script capability (pure DTO +
+  profile-gated TLS + 8-method allowlist, 6 tests); Lua dispatch still on
+  `blocking` reqwest behind `check_network_tcp` (async-Lua + authority
+  binding pending); `openssl`/`native-tls` stay feature-gated for compat.
+- WS4 proxy: new `outbound.rs` A/B boundary (intercept never touches client
+  contract); direct-probe builder added; proxy-routing probes stay on minimal
+  reqwest (adapter has no authorized proxy routing).
+- WS5 pruning: web-proxy reqwest cut to `rustls-no-provider` + `socks`;
+  adapter features unchanged (minimal); engine keeps its full set (every
+  feature has call sites — corrects the Phase A form/query note).
+- WS6 dispositions: `architecture/network_dependency_baseline.md` §7.2 table
+  (engine pending, NSE blocking/compat, proxy split, python pending, adapter
+  intentional, daemon tests-only).
+- Guards: new Check 103 (agent/compat-removal/NSE/proxy/pruning boundaries);
+  Checks 99–102 still green. Docs: baseline §7, `transport.md` Phase D
+  section, `transport_eggfetch.md` status, `auth_context.md` compat removal,
+  `AGENTS.md`/`README.md`/`overview.md`/`CI_ARCHITECTURE_GUARDS.md`/config
+  skill updated; this plan marked executed (increment 1).
+
+**Next increments:** engine webhook/tracker execution via transport;
+NSE Lua backend cutover (async story + `ScopeAuthority` binding); proxy
+routing backend or direct-probe migration; python surfaces; per-consumer
+`cargo tree` consolidation proofs. Each step must pass focused
+parity/security tests + dependency-graph checks before the old
+implementation is removed (per this plan's migration order).

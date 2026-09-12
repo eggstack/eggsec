@@ -2,7 +2,11 @@
 //!
 //! This crate owns the registry, scheduling, lifecycle, communication,
 //! delegation, and aggregation implementations extracted from `eggsec`.
-//! The lifecycle manager uses `reqwest` for callback health checks.
+//! The lifecycle manager performs callback health checks through the
+//! scope-aware [`eggsec_transport::HttpTransport`] contract: the owning
+//! process injects the transport plus its [`eggsec_transport::NetworkAuthority`]
+//! at composition time, so this crate never constructs an unrestricted HTTP
+//! client (Phase D migration).
 
 pub mod aggregator;
 pub mod communication;

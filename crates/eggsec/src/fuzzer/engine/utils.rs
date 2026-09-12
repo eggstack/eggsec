@@ -17,6 +17,31 @@ use super::core::FuzzEngine;
 
 const WAF_BLOCKED_STATUS_CODES: &[u16] = &crate::constants::waf::BLOCKED_STATUS_CODES;
 
+/// Apply an auth-context entry to a concrete reqwest builder via the
+/// canonical transport-neutral map helper.
+///
+/// Phase D removed `auth_context::apply_auth_context_to_request` (no
+/// `RequestBuilder` in shared APIs). Fuzzer dispatch still runs on the
+/// pre-migration reqwest backend (full transport migration pending — needs
+/// cookie-jar, SOCKS/proxy, and streaming parity), so this narrow local
+/// helper translates the canonical map output onto the builder. Semantics
+/// stay single-owned by `apply_auth_context_to_map`; no new shared
+/// `RequestBuilder` API is introduced.
+fn apply_auth_context_to_builder(
+    mut request: reqwest::RequestBuilder,
+    entry: &crate::auth_context::AuthContextEntry,
+) -> reqwest::RequestBuilder {
+    let mut headers = std::collections::HashMap::new();
+    let cookie = crate::auth_context::apply_auth_context_to_map(&mut headers, None, entry);
+    for (k, v) in &headers {
+        request = request.header(k, v);
+    }
+    if let Some(cookie_value) = cookie {
+        request = request.header("Cookie", cookie_value);
+    }
+    request
+}
+
 impl FuzzEngine {
     pub(crate) fn mutate_payloads(&self, payloads: &[Payload]) -> Vec<Payload> {
         let mut mutated = Vec::new();
@@ -93,7 +118,7 @@ impl FuzzEngine {
                 .get(&self.args.url)
                 .header("User-Agent", &self.user_agent);
             if let Some(ref entry) = self.auth_context_entry {
-                request = crate::auth_context::apply_auth_context_to_request(request, entry);
+                request = apply_auth_context_to_builder(request, entry);
             }
             let response = request.send().await?;
 
@@ -138,7 +163,7 @@ impl FuzzEngine {
                     request = request.bearer_auth(bearer);
                 }
                 if let Some(ref entry) = self.auth_context_entry {
-                    request = crate::auth_context::apply_auth_context_to_request(request, entry);
+                    request = apply_auth_context_to_builder(request, entry);
                 }
 
                 if let Ok(resp) = request.send().await {
@@ -234,7 +259,7 @@ pub(crate) async fn send_payload_async(
     let mut request = client.request(http_method, url.clone());
     request = request.header("User-Agent", user_agent);
     if let Some(entry) = auth_context_entry {
-        request = crate::auth_context::apply_auth_context_to_request(request, entry);
+        request = apply_auth_context_to_builder(request, entry);
     }
 
     let response = request.send().await;

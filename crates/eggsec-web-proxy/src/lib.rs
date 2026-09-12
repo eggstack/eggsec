@@ -13,6 +13,7 @@ pub mod http_connect;
 pub mod intercept;
 #[cfg(feature = "web-proxy-mcp")]
 pub mod mcp;
+pub mod outbound;
 pub mod pool;
 pub mod rotator;
 pub mod socks;

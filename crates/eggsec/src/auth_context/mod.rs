@@ -134,41 +134,13 @@ pub fn get_context_entry<'a>(ctx: &'a AuthContext, role: &str) -> Result<&'a Aut
     })
 }
 
-/// Compatibility wrapper: apply an auth context entry to a reqwest builder.
-///
-/// Retained temporarily for the pre-migration (Phase B) concrete backend.
-/// New code must use [`apply_auth_context_to_transport`] (HeaderMap) or
-/// [`apply_auth_context_to_map`] (pure maps) instead — those are the
-/// canonical shared APIs and carry no concrete client types.
-///
-/// Semantics match the canonical path: headers overwrite, cookies are merged
-/// with any pre-existing `Cookie` header (auth-context wins on collision).
-/// Note: the pre-Phase-B implementation *replaced* the `Cookie` header; the
-/// canonical behavior is a true merge (see [`apply_auth_context_to_map`]).
-pub fn apply_auth_context_to_request(
-    request: reqwest::RequestBuilder,
-    entry: &AuthContextEntry,
-) -> reqwest::RequestBuilder {
-    let mut req = request;
-    for (key, value) in &entry.headers {
-        req = req.header(key, value);
-    }
-    if !entry.cookies.is_empty() {
-        req = req.header("Cookie", merge_cookies(entry));
-    }
-    req
-}
-
-/// Merge auth-context cookies (compatibility helper for the reqwest wrapper).
-///
-/// Returns a `"; "`-joined cookie string where auth-context cookies take
-/// precedence. New code should use [`apply_auth_context_to_map`] or
-/// `eggsec_transport::merge_cookie_header` for true merge semantics with an
-/// existing `Cookie` header.
-fn merge_cookies(entry: &AuthContextEntry) -> String {
-    // Deterministic ordering via the transport helper (sorted by name).
-    eggsec_transport::merge_cookie_header(None, &entry.cookies)
-}
+/// Phase D: the pre-migration `reqwest::RequestBuilder` compatibility wrapper
+/// (`apply_auth_context_to_request`) was removed. Shared APIs carry no
+/// concrete client types; callers use [`apply_auth_context_to_transport`]
+/// (HeaderMap) or [`apply_auth_context_to_map`] (pure maps) and translate
+/// onto their backend locally (see `fuzzer::engine::utils::
+/// apply_auth_context_to_builder` for the narrow reqwest-backend adapter
+/// pending full transport migration).
 
 #[cfg(test)]
 mod tests {

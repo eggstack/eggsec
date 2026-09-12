@@ -26,7 +26,7 @@ For the full capability matrix with risk tiers, feature gates, surface exposure,
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 39 normative invariants. See [`architecture/network_dependency_baseline.md`](architecture/network_dependency_baseline.md) for the retained per-artifact dependency baseline, concrete-client inventory, migration parity matrix, and security-policy state (Phase A, measurement only; no HTTP client migration). See [`architecture/transport.md`](architecture/transport.md) for the scope-aware outbound HTTP contract (Phase B: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake; no backend migration yet). See [`architecture/transport_eggfetch.md`](architecture/transport_eggfetch.md) for the Phase C `HttpTransport` adapter over published `eggfetch-core` (approved-IP pinning, manual authorized redirect loop, parity/adversarial fixtures; no production consumers yet — migration is Phase D).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 39 normative invariants. See [`architecture/network_dependency_baseline.md`](architecture/network_dependency_baseline.md) for the retained per-artifact dependency baseline, concrete-client inventory, migration parity matrix, and security-policy state (Phase A measurement + Phase D increment-1 addendum with remaining-owner dispositions). See [`architecture/transport.md`](architecture/transport.md) for the scope-aware outbound HTTP contract (Phase B DTOs/authority/binding/fake + Phase D increment 1: agent injection, shared-helper cleanup, NSE capability, proxy boundary). See [`architecture/transport_eggfetch.md`](architecture/transport_eggfetch.md) for the Phase C `HttpTransport` adapter over published `eggfetch-core` (approved-IP pinning, manual authorized redirect loop, parity/adversarial fixtures; still no production backend consumers — Phase D wires per consumer).
 
 Protocol adapters (REST/MCP/gRPC/OpenAI/OpenResponses) and the autonomous agent depend on narrow engine service traits (`OperationCatalog`, `CheckedExecutor`, `PreflightService`/`AgentExecutionService`), not on concrete registry/dispatcher construction. Authorization stays in `EnforcementContext`; adapters perform only checked dispatch under an `ApprovedOperation` token.
 
@@ -81,9 +81,9 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
 | `eggsec-cli` | CLI binary entry point |
 | `eggsec-output` | Report formatting (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
-| `eggsec-agent` | Agent coordination primitives |
+| `eggsec-agent` | Agent coordination primitives (callback health via injected `HttpTransport`, no direct HTTP stack) |
 | `eggsec-db-lab` | Database pentesting domain crate |
-| `eggsec-web-proxy` | Web proxy and MITM interception domain crate |
+| `eggsec-web-proxy` | Web proxy and MITM interception domain crate (intercept/server TLS split from outbound probes; reqwest minimal) |
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate |
 | `eggsec-daemon` | Long-running daemon host for persistent sessions |
 | `eggsec-daemon-protocol` | Daemon IPC protocol types and client registry |
@@ -91,7 +91,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
 | `eggsec-python` | Python bindings (PyO3/maturin) |
 | `eggsec-transport` | Scope-aware outbound HTTP contract (neutral DTOs, mandatory authority, recording fake) |
-| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` (pinned binding, authorized redirects; no production use yet) |
+| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` (pinned binding, authorized redirects; no production backend consumers yet) |
 
 ### Build and Run
 

@@ -2004,14 +2004,14 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "eggsec-core",
- "reqwest",
+ "eggsec-transport",
  "rustc-hash",
- "rustls 0.23.43",
  "serde",
  "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
+ "url",
  "uuid",
 ]
 
@@ -2143,6 +2143,7 @@ dependencies = [
  "des",
  "eggsec-core",
  "eggsec-output",
+ "eggsec-transport",
  "flate2",
  "hex",
  "hickory-resolver",
@@ -2330,6 +2331,7 @@ dependencies = [
  "dashmap",
  "eggsec-core",
  "eggsec-output",
+ "eggsec-transport",
  "flate2",
  "futures",
  "h2",

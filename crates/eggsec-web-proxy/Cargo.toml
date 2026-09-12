@@ -17,6 +17,9 @@ categories = ["command-line-utilities", "development-tools::testing"]
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
 # Output bridge (for ScanReportData, FindingData)
 eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
+# Scope-aware outbound HTTP contract (outbound side only; interception/server
+# TLS in intercept/ never depends on it — see outbound.rs boundary).
+eggsec-transport = { workspace = true }
 
 # TLS / certificate generation
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
@@ -38,8 +41,11 @@ prost-types = { version = "0.14", optional = true }
 # Async runtime
 tokio = { workspace = true }
 
-# HTTP client (health checks)
-reqwest = { version = "0.13", features = ["json", "rustls-no-provider", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }
+# HTTP client (proxy health probes only: plain GET over SOCKS/HTTP proxy
+# routing; no JSON/form/query bodies, no blocking API, no cookie jar, no
+# client-side HTTP/2 — those reqwest features stay off so this domain does
+# not widen the artifact graph. See outbound.rs boundary.)
+reqwest = { version = "0.13", features = ["rustls-no-provider", "socks"], default-features = false }
 
 # Concurrent collections
 dashmap.workspace = true

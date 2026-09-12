@@ -80,10 +80,9 @@ pub fn header_map_from_pairs(pairs: &HashMap<String, String>) -> Result<HeaderMa
 
 /// Apply auth-context headers and cookies to a transport-neutral [`HeaderMap`].
 ///
-/// This is the canonical replacement for the engine's concrete-client
-/// compatibility wrapper (`auth_context::apply_auth_context_to_request`).
-/// It is a pure transformation: no concrete HTTP client types appear in
-/// its signature.
+/// This is the canonical shared API (Phase D removed the engine's former
+/// concrete-client compatibility wrapper). It is a pure transformation: no
+/// concrete HTTP client types appear in its signature.
 ///
 /// - `headers`: each entry overwrites any existing header with the same name.
 /// - `cookies`: merged with any existing `Cookie` header via

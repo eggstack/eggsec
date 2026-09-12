@@ -180,4 +180,42 @@ they are enabled in Cargo.
 6. Deny/Audit/Actions/update policy recorded without changing policy → §5.
 7. No HTTP client migration in this phase → no `src/` transport changes; only docs, tests, and Check 99 guard.
 
+## 7. Phase D first increment addendum (2026-09-12)
+
+Status: interfaces + boundaries migrated; backend cutover pending per consumer.
+Guard: Check 103 (`scripts/check-architecture-guards.sh`). Plan record:
+`plans/network-dependency-phase-d-outbound-client-migration.md` (increment 1).
+
+### 7.1 What migrated
+
+| Workstream | Change | Evidence |
+|---|---|---|
+| WS1 agent | `eggsec-agent` owns no direct ordinary HTTP stack. `LifecycleManager<T: HttpTransport>` injects transport + `NetworkAuthority` at composition; probes are GET with 5s timeout, `SameHostOnly{5}`, verified TLS. Tests use `RecordingFakeTransport` (deterministic, no I/O). | `cargo tree -p eggsec-agent`: 257 → 153 lines; no `reqwest`/`rustls`/`hyper` in tree. `cargo test -p eggsec-agent` 24 passed (incl. 2 new transport success/failure tests). Manifest: `reqwest`/`rustls` removed, `eggsec-transport` + `url` added. |
+| WS2 shared helpers | Removed `auth_context::apply_auth_context_to_request` and `AiClient::apply_auth` compat wrappers (no `RequestBuilder` in shared APIs). Fuzzer 3 call sites translate via canonical `apply_auth_context_to_map` locally (`fuzzer::engine::utils::apply_auth_context_to_builder`); AI call site loops `auth_headers()` directly. | `rg RequestBuilder auth_context/mod.rs` = docs only (removed fn). `cargo test -p eggsec --lib ai/auth_context/fuzzer` green. |
+| WS3 NSE capability | New narrow script capability `eggsec-nse/src/http_capability.rs` (pure DTO builder + profile-gated TLS + 8-method allowlist, no I/O). Existing Lua libs unchanged (still `blocking` + `check_network_tcp` preflight); full backend cutover deferred pending async-Lua story + engine `ScopeAuthority` binding. | `cargo test -p eggsec-nse --features nse http_capability` 6 passed (incl. boundary self-scan). `eggsec-nse` gains `eggsec-transport` (types only, no backend). |
+| WS4 proxy boundary | New `eggsec-web-proxy/src/outbound.rs` documents side A (intercept/server TLS, never touches client contract) vs side B (outbound probes). Direct-probe builder added; proxy-testing `health.rs` stays on `reqwest` (needs SOCKS/HTTP routing; adapter fails closed on proxy). | `outbound.rs` tests 4 passed (incl. boundary scan). Guard asserts `intercept/`/`socks.rs`/`http_connect.rs` contain no `eggsec_transport`. |
+| WS5 pruning | `eggsec-web-proxy` reqwest pruned to `["rustls-no-provider", "socks"]` (dropped unused `json`/`http2`/`form`/`query`/`blocking`/`cookies`). Adapter features unchanged (still minimal: `http1` + `tls-rustls` + `proxy`-for-SNI only). Engine `form`/`query`/`blocking`/`cookies`/`socks`/`http2` retained (all have call sites — corrects §4's "no explicit `.form()`/`.query()`" note: `waf/detector/compare.rs` uses `.query()`, `fuzzer/payloads/oauth.rs` uses `.form()`). | `cargo check -p eggsec-web-proxy --features web-proxy` green. `cargo tree -e features` shows no cookie/multipart/compression/http3 in proxy reqwest. |
+
+### 7.2 Remaining owners and dispositions (WS6)
+
+`cargo tree -i` after increment 1 (see §1 commands to reproduce):
+
+| Owner | Dependency | Disposition |
+|---|---|---|
+| `eggsec` engine | `reqwest` (json/socks/http2/form/query/blocking/cookies), `rustls`, `tokio-rustls`, `hickory-resolver`, `webpki-roots` | **Pending per-subsystem.** OOHTTP sites (§3) still dispatch on reqwest; `distributed/io.rs` + `waf/bypass/smuggling.rs` own raw TLS (`TLS/SRV` + `RAWNET`, remain specialized); `packet`/`recon`/`scanner` DNS stays on hickory/`lookup_host` (`RAWNET`, canonical resolver impl is engine `HostResolver`, not the transport). Next: migrate webhook/notifier + tracker clients one subsystem at a time with fake-based parity tests. |
+| `eggsec-nse` | `reqwest` (json/blocking), `rustls`, `hickory-resolver`; `openssl`/`native-tls` (feature-gated `nse`), `ssh2` (`nse-ssh2`) | **Remain specialized (blocking + compat).** 10+ Lua libs use `blocking::Client` inside sync closures (guard 52/67 pattern; async-Lua story pending). `dns.rs`/`dnsbl.rs` hickory + `socket.rs` `lookup_host` are `RAWNET`. `openssl`/`native-tls` (feature-gated) + `des` serve `sslcert`/`openssl` protocol libs (compatibility island, never for ordinary HTTP aesthetics). New code uses `http_capability.rs`. |
+| `eggsec-web-proxy` | `reqwest` (minimal: rustls-no-provider + socks), `rustls` + `tokio-rustls` (MITM `TlsAcceptor`), `rcgen`, `h2`/`http`/`prost` (optional, interception) | **Split.** Side A (intercept/server TLS/H2/WS/gRPC, `lookup_host` RAWNET) remains. Side B proxy-routing probes remain on minimal reqwest (adapter has no authorized proxy routing). `reqwest` removed only when proxy routing gains a scoped backend or probes go direct. |
+| `eggsec-python` | `reqwest` (HTTP/DNS surface) | **Pending.** Python `http_client`/`probes`/`network` OOHTTP + `lookup_host` RAWNET; migrate behind the same transport seam with `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` fixtures. |
+| `eggsec-transport-eggfetch` | `eggfetch-core 0.1` (http1 + tls-rustls + proxy-for-SNI; no http3/cookies/multipart/compression), `bytes`/`http`/`url`/`tracing` | **Intentional owner.** Sole concrete-backend binding; still no production consumers (agent/NSE/proxy depend on `eggsec-transport` types only; engine dev-dep for parity tests). Production wiring happens per consumer with focused parity tests (guard 102). |
+| `eggsec-daemon` | `reqwest` in `#[cfg(test)]` only + ring init | **Compat (tests only).** No production HTTP stack. |
+| Transitive | `hyper`/`hyper-rustls`/`rustls-platform-verifier` (via reqwest/eggfetch), duplicate `webpki-roots 0.26/1.0` | **Accepted duplicates.** Both stacks needed for separate roles (ordinary reqwest clients vs pinned eggfetch backend); `deny.toml` bans `aws-lc-rs` (ring-only) unchanged. |
+
+No domain-facing shared API exposes `reqwest`/`eggfetch` builder types after
+increment 1: `apply_auth_context_to_request` and `AiClient::apply_auth`
+removed; `integrations::common::send_with_retry` is `pub(crate)` (compat,
+not domain-facing); `fuzzer::advanced::fuzz(&reqwest::Client)` trait and
+`utils::client_pool::ClientPool` remain as documented pending full backend
+migration (next increments), with no *new* `RequestBuilder` boundary allowed
+(guard 103).
+
 *Last verified against source: 2026-09-12*

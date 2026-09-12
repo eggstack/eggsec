@@ -135,24 +135,10 @@ impl AiClient {
             .unwrap_or(self.provider.default_model())
     }
 
-    /// Compatibility wrapper: apply provider auth to a reqwest builder.
-    ///
-    /// Retained for the pre-migration concrete backend. New code must use
-    /// [`Self::auth_headers`] (pure pairs) or [`Self::apply_auth_to_transport`]
-    /// (transport-neutral HeaderMap) instead.
-    pub fn apply_auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        // Delegate to the canonical pair computation to keep semantics single-owned.
-        let mut req = request;
-        for (k, v) in self.auth_headers() {
-            req = req.header(k, v);
-        }
-        req
-    }
-
     /// Canonical transport-neutral provider auth (pure pairs, no concrete types).
     ///
     /// Returns `(name, value)` pairs to set (overwrite semantics). Single
-    /// source of truth for [`Self::apply_auth`] and
+    /// source of truth for request construction and
     /// [`Self::apply_auth_to_transport`].
     pub fn auth_headers(&self) -> Vec<(String, String)> {
         let Some(key) = &self.config.api_key else {
@@ -229,7 +215,12 @@ impl AiClient {
             request_builder = request_builder.header("anthropic-version", "2023-06-01");
         }
 
-        let request = self.apply_auth(request_builder);
+        // Canonical auth pairs applied directly (no concrete-builder wrapper;
+        // Phase D removed `apply_auth`). Semantics owned by `auth_headers`.
+        let mut request = request_builder;
+        for (k, v) in self.auth_headers() {
+            request = request.header(k, v);
+        }
 
         match request.send().await {
             Ok(response) => {
@@ -570,15 +561,19 @@ mod tests {
     #[test]
     fn test_apply_auth_with_key() {
         let client = create_client_with_key("test-api-key");
-        let request = client.apply_auth(reqwest::Client::new().post("http://example.com"));
-        let _ = request;
+        let headers = client.auth_headers();
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "Authorization" && v == "Bearer test-api-key"),
+            "bearer auth pair missing: {headers:?}"
+        );
     }
 
     #[test]
     fn test_apply_auth_without_key() {
         let client = create_client_without_key();
-        let request = client.apply_auth(reqwest::Client::new().post("http://example.com"));
-        let _ = request;
+        assert!(client.auth_headers().is_empty());
     }
 
     #[test]

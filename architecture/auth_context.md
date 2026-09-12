@@ -53,9 +53,9 @@ Both structs use `#[serde(deny_unknown_fields)]` (`:13,19`) — extra YAML keys 
 
 ### Functions
 
-Phase B canonical paths are transport-neutral (no concrete client types).
-The `reqwest` wrapper is a temporary compatibility shim for the
-pre-migration backend.
+Canonical paths are transport-neutral (no concrete client types). Phase D
+removed the former `reqwest` compat wrapper — shared APIs carry no
+`RequestBuilder`; backends translate via the canonical helpers locally.
 
 | Function | Signature | Canonical? | Purpose |
 |----------|-----------|------------|---------|
@@ -63,7 +63,7 @@ pre-migration backend.
 | `apply_auth_context()` | `(headers: &mut HashMap, entry: &AuthContextEntry)` | Yes (headers only) | Apply context headers to a header map |
 | `apply_auth_context_to_transport()` | `(&mut HeaderMap, &AuthContextEntry) -> Result<(), String>` | Yes | Apply headers (overwrite) + cookies (true merge) to `eggsec_transport::HeaderMap` |
 | `apply_auth_context_to_map()` | `(&mut HashMap, Option<&str>, &AuthContextEntry) -> Option<String>` | Yes | Pure-map headers + merged `Cookie` value |
-| `apply_auth_context_to_request()` | `(RequestBuilder, &AuthContextEntry) -> RequestBuilder` | Compat only | Temporary concrete-backend wrapper; delegates to canonical merge |
+| ~~`apply_auth_context_to_request()`~~ | removed in Phase D | — | Former concrete-backend wrapper; callers translate locally (see `fuzzer::engine::utils::apply_auth_context_to_builder`) |
 | `load_auth_context_file()` | `(path: &Path) -> Result<AuthContext>` | Yes | Load + parse from file path |
 | `get_context_entry()` | `(&AuthContext, role: &str) -> Result<&AuthContextEntry>` | Yes | Lookup by role; error with available roles on miss |
 | `list_context_names()` | `(&AuthContext) -> Vec<String>` | Yes | List all role names |
@@ -89,7 +89,7 @@ Canonical (`apply_auth_context_to_transport` / `_to_map` via
 
 **History note**: the pre-Phase-B concrete wrapper *replaced* the `Cookie`
 header (auth-context cookies only). The canonical behavior is a true merge;
-the wrapper now delegates to the canonical merge helper. See
+Phase D removed the wrapper entirely. See
 [transport.md](transport.md) for the contract.
 
 ## Behavior / Flow
@@ -126,7 +126,7 @@ apply_auth_context_to_map(headers, existing_cookie?, entry)
 | Consumer | How It Uses Auth Context |
 |----------|--------------------------|
 | Fuzzer engine | Loads auth context file, gets entry by role |
-| Fuzzer HTTP utils | Applies entry via compat `apply_auth_context_to_request()` (pre-migration); new code uses `apply_auth_context_to_transport()` |
+| Fuzzer HTTP utils | Translates entry via canonical `apply_auth_context_to_map()` onto the pre-migration reqwest backend locally (`apply_auth_context_to_builder`); new code uses `apply_auth_context_to_transport()` |
 | Transport contract | Canonical `apply_auth_context_to_transport()` / `_to_map()` + `eggsec_transport::apply_auth_headers()` / `merge_cookie_header()` |
 | (Future) CLI scanner | Could load auth context for authenticated scans |
 | (Future) REST/MCP tools | Could apply auth context to tool requests |
@@ -147,7 +147,7 @@ All tests are in `auth_context/mod.rs`. Test count: 12 tests total
 4. **Headers override, not merge** — Auth context headers replace existing headers with the same name.
 5. **Cookies truly merge (Phase B)** — Auth-context cookies win on collision, unrelated existing cookies preserved, sorted order.
 6. **Fail-closed on unknown roles** — `get_context_entry()` returns an error listing available roles.
-7. **Canonical is transport-neutral** — New code uses `HeaderMap`/pure-map helpers; the concrete wrapper is compat-only.
+7. **Canonical is transport-neutral** — Shared APIs use `HeaderMap`/pure-map helpers only; the former concrete wrapper was removed in Phase D (no `RequestBuilder` in shared APIs).
 
 ### Gotchas
 

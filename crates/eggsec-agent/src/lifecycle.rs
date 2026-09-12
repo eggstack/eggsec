@@ -1,5 +1,7 @@
 use crate::registry::{AgentRegistry, AgentStatus};
-use reqwest::Client;
+use eggsec_transport::{
+    HttpTransport, Method, NetworkAuthority, RedirectPolicy, ScopedHttpRequest, TimeoutPolicy,
+};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -66,43 +68,56 @@ pub enum LifecycleEventType {
     ForcedShutdown,
 }
 
-#[derive(Clone)]
-pub struct LifecycleManager {
+pub struct LifecycleManager<T: HttpTransport> {
     config: LifecycleConfig,
     agent_registry: AgentRegistry,
     health_status: Arc<RwLock<FxHashMap<Uuid, AgentHealth>>>,
     event_tx: mpsc::Sender<LifecycleEvent>,
-    client: Client,
+    transport: Arc<T>,
+    authority: Arc<dyn NetworkAuthority>,
 }
 
-impl LifecycleManager {
+impl<T: HttpTransport> Clone for LifecycleManager<T> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            agent_registry: self.agent_registry.clone(),
+            health_status: Arc::clone(&self.health_status),
+            event_tx: self.event_tx.clone(),
+            transport: Arc::clone(&self.transport),
+            authority: Arc::clone(&self.authority),
+        }
+    }
+}
+
+impl<T: HttpTransport + 'static> LifecycleManager<T> {
+    /// Canonical constructor (Phase D): the owning process injects a
+    /// scope-aware [`HttpTransport`] plus the operation's
+    /// [`NetworkAuthority`]. The manager never constructs an unrestricted
+    /// HTTP client itself; every callback probe executes through the
+    /// mandatory authority checkpoints (initial-url → host → dns → socket →
+    /// tls-consistency → proxy → dispatch → redirect).
+    ///
+    /// Timeouts stay explicit: each callback probe carries a 5s
+    /// per-request timeout (parity with the pre-migration client) and each
+    /// monitor pass is bounded by 60s. Redirects follow same-host targets
+    /// only (up to 5 hops); cross-host 3xx responses surface as unhealthy
+    /// rather than following out-of-scope hosts.
     pub fn new(
         agent_registry: AgentRegistry,
         config: LifecycleConfig,
+        transport: Arc<T>,
+        authority: Arc<dyn NetworkAuthority>,
     ) -> (Self, mpsc::Receiver<LifecycleEvent>) {
         let (event_tx, event_rx) = mpsc::channel(100);
-        if rustls::crypto::ring::default_provider()
-            .install_default()
-            .is_err()
-        {
-            tracing::debug!("rustls default provider already installed; keeping existing");
-        }
-        let client = Client::builder()
-            .timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(eggsec_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(
-                eggsec_core::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .tcp_nodelay(true)
-            .build()
-            .unwrap_or_else(|_| Client::new());
         (
             Self {
                 config,
                 agent_registry,
                 health_status: Arc::new(RwLock::new(FxHashMap::default())),
                 event_tx,
-                client,
+                transport,
+                authority,
             },
             event_rx,
         )
@@ -131,7 +146,8 @@ impl LifecycleManager {
         let agent_registry = self.agent_registry.clone();
         let config = self.config.clone();
         let event_tx = self.event_tx.clone();
-        let client = self.client.clone();
+        let transport = Arc::clone(&self.transport);
+        let authority = Arc::clone(&self.authority);
 
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(config.health_check_interval_secs));
@@ -148,7 +164,8 @@ impl LifecycleManager {
                                 &agent_registry,
                                 &config,
                                 &event_tx,
-                                &client,
+                                transport.as_ref(),
+                                authority.as_ref(),
                             ),
                         )
                         .await
@@ -165,13 +182,27 @@ impl LifecycleManager {
         })
     }
 
-    async fn check_agent_callback_health_static(client: &Client, callback_url: &str) -> bool {
-        client
-            .get(callback_url)
-            .send()
-            .await
-            .map(|resp| resp.status().is_success())
-            .unwrap_or(false)
+    async fn check_agent_callback_health_static(
+        transport: &T,
+        authority: &dyn NetworkAuthority,
+        callback_url: &str,
+    ) -> bool {
+        let request = match ScopedHttpRequest::new_with_url(Method::GET, callback_url) {
+            Ok(req) => req
+                .with_timeout(TimeoutPolicy::with_request_timeout(5))
+                .with_redirect(RedirectPolicy::SameHostOnly { max_redirects: 5 }),
+            Err(e) => {
+                tracing::debug!(url = %callback_url, error = %e, "callback URL rejected");
+                return false;
+            }
+        };
+        match transport.execute(authority, request).await {
+            Ok(resp) => resp.status.is_success(),
+            Err(e) => {
+                tracing::debug!(url = %callback_url, error = %e, "callback health probe failed");
+                false
+            }
+        }
     }
 
     async fn perform_health_check(
@@ -179,7 +210,8 @@ impl LifecycleManager {
         agent_registry: &AgentRegistry,
         config: &LifecycleConfig,
         event_tx: &mpsc::Sender<LifecycleEvent>,
-        client: &Client,
+        transport: &T,
+        authority: &dyn NetworkAuthority,
     ) {
         let agents = agent_registry.list().await;
         let now = std::time::SystemTime::now()
@@ -240,7 +272,8 @@ impl LifecycleManager {
             let mut results = Vec::new();
             for agent in &agents {
                 let callback_unhealthy = if let Some(ref callback_url) = agent.callback_url {
-                    !Self::check_agent_callback_health_static(client, callback_url).await
+                    !Self::check_agent_callback_health_static(transport, authority, callback_url)
+                        .await
                 } else {
                     false
                 };
@@ -485,7 +518,150 @@ impl LifecycleManager {
 mod lifecycle_tests {
     use super::*;
     use crate::AgentInfo;
+    use eggsec_transport::{
+        CannedResponse, InMemoryResolver, PolicyCheckpoint, RecordingFakeTransport, StatusCode,
+        TransportError,
+    };
+    use std::net::IpAddr;
+    use url::Url;
     use uuid::Uuid;
+
+    /// Test-only permissive authority: approves every checkpoint.
+    ///
+    /// Production callers must supply the operation's real authority
+    /// (canonically `eggsec::config::ScopeAuthority`); this helper exists
+    /// only so unit tests can exercise health logic deterministically
+    /// through the recording fake without network I/O.
+    #[derive(Debug, Default)]
+    struct AllowAllAuthority;
+
+    impl NetworkAuthority for AllowAllAuthority {
+        fn authorize_initial_url(&self, _url: &Url) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_host(
+            &self,
+            _host: &str,
+            _port: Option<u16>,
+            _is_ip_literal: bool,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_resolved(
+            &self,
+            _host: &str,
+            candidates: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            Ok(candidates.to_vec())
+        }
+        fn authorize_socket(
+            &self,
+            _host: &str,
+            _addr: IpAddr,
+            _port: u16,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_redirect(&self, _from: &Url, _to: &Url) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_proxy(
+            &self,
+            _proxy_endpoint: &Url,
+            _ultimate: &Url,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn check_tls_consistency(
+            &self,
+            _request_host: &str,
+            _sni_override: Option<&str>,
+            _host_override: Option<&str>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    /// Denying authority for failure-path tests (callback probes fail closed
+    /// with no hop recorded, mirroring unreachable-host behavior).
+    #[derive(Debug, Default)]
+    struct DenyAllAuthority;
+
+    impl NetworkAuthority for DenyAllAuthority {
+        fn authorize_initial_url(&self, _url: &Url) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::InitialUrl,
+                "deny-all test authority",
+            ))
+        }
+        fn authorize_host(
+            &self,
+            _host: &str,
+            _port: Option<u16>,
+            _is_ip_literal: bool,
+        ) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::Host,
+                "deny-all test authority",
+            ))
+        }
+        fn authorize_resolved(
+            &self,
+            _host: &str,
+            _candidates: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::Dns,
+                "deny-all test authority",
+            ))
+        }
+        fn authorize_socket(
+            &self,
+            _host: &str,
+            _addr: IpAddr,
+            _port: u16,
+        ) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::Socket,
+                "deny-all test authority",
+            ))
+        }
+        fn authorize_redirect(&self, _from: &Url, _to: &Url) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::Redirect,
+                "deny-all test authority",
+            ))
+        }
+        fn authorize_proxy(
+            &self,
+            _proxy_endpoint: &Url,
+            _ultimate: &Url,
+        ) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::Proxy,
+                "deny-all test authority",
+            ))
+        }
+        fn check_tls_consistency(
+            &self,
+            _request_host: &str,
+            _sni_override: Option<&str>,
+            _host_override: Option<&str>,
+        ) -> Result<(), TransportError> {
+            Err(TransportError::denied(
+                PolicyCheckpoint::TlsConsistency,
+                "deny-all test authority",
+            ))
+        }
+    }
+
+    fn test_transport() -> (Arc<RecordingFakeTransport>, Arc<AllowAllAuthority>) {
+        let resolver = InMemoryResolver::new()
+            .with("example.com", vec!["93.184.216.34"])
+            .shared();
+        let fake = Arc::new(RecordingFakeTransport::new(resolver));
+        (fake, Arc::new(AllowAllAuthority))
+    }
 
     fn make_test_agent(
         id: Uuid,
@@ -516,24 +692,12 @@ mod lifecycle_tests {
         }
     }
 
-    fn make_healthy_agent(agent_id: Uuid) -> AgentHealth {
-        AgentHealth {
-            agent_id,
-            is_healthy: true,
-            consecutive_failures: 0,
-            last_health_check: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-                .as_secs(),
-            issues: vec![],
-        }
-    }
-
     #[tokio::test]
     async fn test_health_issue_tracking_prevents_duplicate_events() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config, transport, authority);
 
         let agent_id = Uuid::new_v4();
 
@@ -563,7 +727,8 @@ mod lifecycle_tests {
     async fn test_recovery_clears_callback_issue() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, mut rx) = LifecycleManager::new(registry.clone(), config);
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config, transport, authority);
 
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
@@ -605,7 +770,8 @@ mod lifecycle_tests {
     async fn test_record_task_start_not_blocked_by_slow_callback() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config, transport, authority);
 
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
@@ -628,7 +794,8 @@ mod lifecycle_tests {
     async fn test_record_task_success_not_blocked_by_slow_callback() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config, transport, authority);
 
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
@@ -652,7 +819,18 @@ mod lifecycle_tests {
     async fn test_callback_failure_emits_one_stale_event() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, mut rx) = LifecycleManager::new(registry.clone(), config.clone());
+        // Denying authority models the pre-migration unreachable-host case
+        // (connection refused → probe fails → exactly one stale event).
+        // No hop is recorded on denial (fail-closed before dispatch).
+        let resolver = InMemoryResolver::new().shared();
+        let transport = Arc::new(RecordingFakeTransport::new(resolver));
+        let authority: Arc<dyn NetworkAuthority> = Arc::new(DenyAllAuthority);
+        let (manager, mut rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
 
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
@@ -674,7 +852,8 @@ mod lifecycle_tests {
             &registry,
             &config,
             &manager.event_tx,
-            &manager.client,
+            transport.as_ref(),
+            authority.as_ref(),
         )
         .await;
 
@@ -700,13 +879,22 @@ mod lifecycle_tests {
             .issues
             .iter()
             .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
+        assert_eq!(transport.hop_count(), 0, "denied probes must not dispatch");
     }
 
     #[tokio::test]
     async fn test_healthy_callback_after_failure_emits_recovery_event() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, mut rx) = LifecycleManager::new(registry.clone(), config.clone());
+        let resolver = InMemoryResolver::new().shared();
+        let transport = Arc::new(RecordingFakeTransport::new(resolver));
+        let authority: Arc<dyn NetworkAuthority> = Arc::new(DenyAllAuthority);
+        let (manager, mut rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
 
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
@@ -728,7 +916,8 @@ mod lifecycle_tests {
             &registry,
             &config,
             &manager.event_tx,
-            &manager.client,
+            transport.as_ref(),
+            authority.as_ref(),
         )
         .await;
 
@@ -740,7 +929,7 @@ mod lifecycle_tests {
         registry.update_status(agent_id, AgentStatus::Active).await;
         registry.heartbeat(agent_id).await;
 
-        let old_callback_url = registry.get(agent_id).await.unwrap().callback_url.clone();
+        let _old_callback_url = registry.get(agent_id).await.unwrap().callback_url.clone();
         registry.update_status(agent_id, AgentStatus::Idle).await;
 
         {
@@ -756,7 +945,8 @@ mod lifecycle_tests {
             &registry,
             &config,
             &manager.event_tx,
-            &manager.client,
+            transport.as_ref(),
+            authority.as_ref(),
         )
         .await;
 
@@ -778,10 +968,125 @@ mod lifecycle_tests {
     }
 
     #[tokio::test]
+    async fn test_transport_success_marks_callback_healthy() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let resolver = InMemoryResolver::new()
+            .with("callbacks.example", vec!["93.184.216.34"])
+            .shared();
+        let transport = Arc::new(RecordingFakeTransport::new(resolver).with_canned(
+            "http://callbacks.example/health",
+            CannedResponse::ok(b"ok".to_vec()),
+        ));
+        let authority: Arc<dyn NetworkAuthority> = Arc::new(AllowAllAuthority);
+        let (manager, _rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+            .as_secs();
+        registry
+            .register(make_test_agent(
+                agent_id,
+                "test-agent",
+                Some("http://callbacks.example/health".to_string()),
+                now,
+            ))
+            .await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            transport.as_ref(),
+            authority.as_ref(),
+        )
+        .await;
+
+        assert_eq!(transport.hop_count(), 1, "healthy probe dispatches once");
+        let hop = transport.hops().pop().expect("hop");
+        assert_eq!(hop.host, "callbacks.example");
+        assert_eq!(hop.request_timeout_secs, 5);
+        assert_eq!(hop.redirect_max, 5);
+        assert!(!hop.uses_proxy);
+        assert!(hop.tls_verified);
+        let health = manager.get_agent_health(agent_id).await.expect("health");
+        assert!(health.is_healthy);
+    }
+
+    #[tokio::test]
+    async fn test_transport_non_success_marks_callback_unhealthy() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let resolver = InMemoryResolver::new()
+            .with("callbacks.example", vec!["93.184.216.34"])
+            .shared();
+        let transport = Arc::new(RecordingFakeTransport::new(resolver).with_canned(
+            "http://callbacks.example/health",
+            CannedResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                location: None,
+                body: b"boom".to_vec(),
+            },
+        ));
+        let authority: Arc<dyn NetworkAuthority> = Arc::new(AllowAllAuthority);
+        let (manager, _rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+            .as_secs();
+        registry
+            .register(make_test_agent(
+                agent_id,
+                "test-agent",
+                Some("http://callbacks.example/health".to_string()),
+                now,
+            ))
+            .await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            transport.as_ref(),
+            authority.as_ref(),
+        )
+        .await;
+
+        let health = manager.get_agent_health(agent_id).await.expect("health");
+        assert!(!health.is_healthy);
+        assert!(health
+            .issues
+            .iter()
+            .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
+    }
+
+    #[tokio::test]
     async fn test_future_heartbeat_does_not_panic() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config.clone());
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
 
         let agent_id = Uuid::new_v4();
         let future_time = u64::MAX;
@@ -795,7 +1100,8 @@ mod lifecycle_tests {
             &registry,
             &config,
             &manager.event_tx,
-            &manager.client,
+            transport.as_ref(),
+            authority.as_ref(),
         )
         .await;
 
@@ -812,7 +1118,8 @@ mod lifecycle_tests {
             health_check_interval_secs: 60,
             ..LifecycleConfig::default()
         };
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config, transport, authority);
 
         let token = CancellationToken::new();
         let handle = manager.start_health_monitor_with_token(token.clone());
@@ -830,7 +1137,13 @@ mod lifecycle_tests {
     async fn test_stale_agent_status_is_offline_not_idle() {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
-        let (manager, _rx) = LifecycleManager::new(registry.clone(), config.clone());
+        let (transport, authority) = test_transport();
+        let (manager, _rx) = LifecycleManager::new(
+            registry.clone(),
+            config.clone(),
+            transport.clone(),
+            authority.clone(),
+        );
 
         let agent_id = Uuid::new_v4();
         let old_heartbeat = std::time::SystemTime::now()
@@ -848,7 +1161,8 @@ mod lifecycle_tests {
             &registry,
             &config,
             &manager.event_tx,
-            &manager.client,
+            transport.as_ref(),
+            authority.as_ref(),
         )
         .await;
 

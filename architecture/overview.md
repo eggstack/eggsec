@@ -264,9 +264,9 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Error | `crates/eggsec/src/error/` | `EggsecError` with **23 variants** spanning config/target/network/http/parse/policy/proxy domains, ergonomic `From` impls | [error.md](error.md) |
 | Logging | `crates/eggsec/src/logging/` | tracing init: Pretty/Json/Compact formats (`LogFormat`); subscriber/appender setup also ships as the portable `logging-subscriber` feature for process hosts | [logging.md](logging.md) |
 | Utils | `crates/eggsec/src/utils/` | **20 utility sub-modules**: HTTP client, caching, circuit breaker, client pool, rate limiter, redaction, stealth, service detection, target/validation helpers, formatting (`strip_controls`), privilege (gated) | [utils.md](utils.md) |
-| Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; canonical transport-neutral header/cookie application + concrete compat wrapper | [auth_context.md](auth_context.md) |
+| Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; canonical transport-neutral header/cookie application (former `RequestBuilder` compat wrapper removed in Phase D) | [auth_context.md](auth_context.md) |
 | Transport | `crates/eggsec-transport/` | Scope-aware outbound HTTP contract: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake | [transport.md](transport.md) |
-| Transport/Eggfetch | `crates/eggsec-transport-eggfetch/` | `HttpTransport` over published `eggfetch-core` (approved-IP pinning, manual authorized redirect loop; no production consumers yet) | [transport_eggfetch.md](transport_eggfetch.md) |
+| Transport/Eggfetch | `crates/eggsec-transport-eggfetch/` | `HttpTransport` over published `eggfetch-core` (approved-IP pinning, manual authorized redirect loop; still no production backend consumers — Phase D wires per consumer) | [transport_eggfetch.md](transport_eggfetch.md) |
 | Constants | `crates/eggsec/src/constants.rs` | Facade over `eggsec-core` constants + compile-time validation (`SUPPORTED_WAF_COUNT` = 34 asserted at compile time) | [constants.md](constants.md) |
 | Audit | `crates/eggsec/src/audit.rs` | `EnforcementAuditEvent` (15 fields) normalized audit record for every enforcement/preflight decision; `AuditOutcome` (5 variants) | [audit.md](audit.md) |
 | Generated | `crates/eggsec/src/generated/` | Checked-in protobuf/gRPC code, regenerated via `build.rs` (protoc needed only for descriptor set) | [generated.md](generated.md) |
@@ -471,7 +471,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-output        (report formats, envelope, dedup, trends)
     ├── eggsec-agent         (agent registry, scheduler, lifecycle)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
-    ├── eggsec-transport-eggfetch (HttpTransport over eggfetch-core; no production consumers yet)
+    ├── eggsec-transport-eggfetch (HttpTransport over eggfetch-core; no production backend consumers yet — Phase D wires per consumer)
     │
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑

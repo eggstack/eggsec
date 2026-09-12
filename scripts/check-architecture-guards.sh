@@ -2461,6 +2461,111 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 103. Phase D first migration increment (agent + shared helpers + NSE
+# capability + proxy boundary + feature pruning).
+# - eggsec-agent owns no direct ordinary HTTP stack (transport injection only).
+# - Shared compat wrappers exposing RequestBuilder are removed (auth_context,
+#   ai); fuzzer translates via the canonical map helper locally.
+# - NSE exposes a narrow transport-neutral script capability with no concrete
+#   clients in its code path.
+# - web-proxy documents the outbound vs interception boundary; intercept/
+#   never touches the client contract; outbound reqwest stays minimal
+#   (proxy-routing only, no blocking/cookies/multipart/compression/http3).
+echo ""
+echo "--- Check 103: Phase D first increment boundaries hold ---"
+SECTION_FAIL=0
+# WS1: agent has no concrete HTTP stack.
+if rg -q 'reqwest|rustls' crates/eggsec-agent/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-agent/Cargo.toml still depends on reqwest/rustls."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+HITS=$(rg -n 'reqwest::|rustls::|Client::builder' crates/eggsec-agent/src/ 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-agent/src uses concrete HTTP client types. Inject HttpTransport instead."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'HttpTransport' crates/eggsec-agent/src/lifecycle.rs 2>/dev/null; then
+  echo "FAIL: lifecycle.rs does not inject HttpTransport."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# WS2: shared RequestBuilder wrappers removed (code, not docs).
+if rg -q 'pub fn apply_auth_context_to_request' crates/eggsec/src/auth_context/mod.rs 2>/dev/null; then
+  echo "FAIL: auth_context still exposes apply_auth_context_to_request."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'pub fn apply_auth\(' crates/eggsec/src/ai/client.rs 2>/dev/null; then
+  echo "FAIL: ai/client.rs still exposes apply_auth(RequestBuilder)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for sym in "apply_auth_context_to_transport" "apply_auth_context_to_map" "auth_headers" "apply_auth_to_transport"; do
+  if ! rg -q "$sym" crates/eggsec/src/auth_context/mod.rs crates/eggsec/src/ai/client.rs 2>/dev/null; then
+    :
+  fi
+done
+if ! rg -q 'apply_auth_context_to_map' crates/eggsec/src/fuzzer/engine/utils.rs 2>/dev/null; then
+  echo "FAIL: fuzzer/engine/utils.rs does not translate via the canonical map helper."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# WS3: NSE narrow capability exists with no concrete clients in code
+# (scan only above the #[cfg(test)] module so test string fixtures don't match).
+NSE_CAP="crates/eggsec-nse/src/http_capability.rs"
+if [[ ! -f "$NSE_CAP" ]]; then
+  echo "FAIL: missing NSE script capability: $NSE_CAP"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  NSE_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' "$NSE_CAP" | head -n -1)
+  for pat in 'reqwest::' 'eggfetch_core' 'eggfetch::' 'rustls::' 'tokio_rustls::' 'hickory_resolver::' 'RequestBuilder' 'Client::builder'; do
+    if echo "$NSE_CODE" | grep -qF "$pat"; then
+      echo "FAIL: $NSE_CAP code mentions concrete client pattern '$pat'."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  for sym in "pub fn build_scoped_request" "pub fn tls_policy_for_context" "pub fn nse_method"; do
+    if ! rg -q "$sym" "$NSE_CAP" 2>/dev/null; then
+      echo "FAIL: $NSE_CAP missing required symbol: $sym"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+# WS4: proxy boundary documented; intercept never touches the client contract.
+if [[ ! -f "crates/eggsec-web-proxy/src/outbound.rs" ]]; then
+  echo "FAIL: missing proxy boundary module: crates/eggsec-web-proxy/src/outbound.rs"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! rg -q 'pub fn build_direct_probe_request' crates/eggsec-web-proxy/src/outbound.rs 2>/dev/null; then
+    echo "FAIL: outbound.rs missing build_direct_probe_request."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+HITS=$(rg -n 'eggsec_transport' crates/eggsec-web-proxy/src/intercept/ crates/eggsec-web-proxy/src/socks.rs crates/eggsec-web-proxy/src/http_connect.rs 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: interception/server code depends on the client transport contract. Keep it in outbound/ only."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# WS5: outbound reqwest stays minimal (proxy routing only).
+PROXY_REQWEST=$(rg -n 'reqwest = ' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null || true)
+if [[ -z "$PROXY_REQWEST" ]]; then
+  echo "FAIL: web-proxy manifest has no reqwest dependency line (expected minimal). "
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if echo "$PROXY_REQWEST" | rg -q 'blocking|cookies|multipart|compression|http3|form|query|http2|json'; then
+    echo "$PROXY_REQWEST"
+    echo "FAIL: web-proxy reqwest enables a pruned feature (blocking/cookies/multipart/compression/http3/form/query/http2/json)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! echo "$PROXY_REQWEST" | rg -q 'socks'; then
+    echo "FAIL: web-proxy reqwest must keep 'socks' (proxy-routing probes)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Phase D first increment boundaries hold."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

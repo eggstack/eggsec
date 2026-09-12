@@ -1,7 +1,12 @@
 # Eggfetch Transport Adapter (Phase C)
 
 Status: adapter implemented 2026-09-12 (`eggsec-transport-eggfetch`).
-No production EggSec consumer uses it yet — migration is Phase D.
+Phase D increment 1 (2026-09-12) migrated consumer *interfaces* to the
+contract (`eggsec-agent` injection, shared-helper cleanup, NSE capability,
+proxy boundary) but wired no production backend yet — this crate still has
+no production consumers (guard Checks 102 + 103). Migration proceeds per
+consumer with focused parity tests; see
+[network_dependency_baseline.md](network_dependency_baseline.md) §7.
 
 ## Role & Responsibilities
 
@@ -185,11 +190,13 @@ upstream ships the hook.
    cookies, proxies: disabled in config *and* per request.
 5. **Secrets never in `Debug`** — `EggfetchTransport` debugs as an opaque
    struct; request/response redaction comes from the contract types.
-6. **No production wiring** — Check 102 fails on any non-dev dependency
-   from another crate; Phase D owns migration order.
+6. **No production wiring** — Checks 102/103 fail on any non-dev dependency
+   from another crate; Phase D owns migration order (increment 1 migrated
+   interfaces only — agent/NSE/proxy depend on `eggsec-transport` types,
+   never on this backend crate).
 
 ---
 
-See also: [transport.md](transport.md) (Phase B contract), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement), [overview.md](overview.md)
+See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
 *Last verified against source: 2026-09-12*

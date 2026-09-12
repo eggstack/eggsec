@@ -191,6 +191,44 @@ execution fails closed, and no production consumer is wired to it yet
 fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
 interop tests through `ScopeAuthority`).
 
+## Phase D first increment (interfaces + boundaries; backend wiring pending)
+
+`plans/network-dependency-phase-d-outbound-client-migration.md` (increment 1,
+2026-09-12; guard Check 103). Consumer backends still dispatch on their
+pre-migration stacks; what migrated is the interface boundary so no new
+concrete-client leakage is possible:
+
+- **Agent (WS1):** `eggsec-agent::LifecycleManager<T: HttpTransport>` injects
+  transport + `NetworkAuthority` at composition (no `reqwest`/`rustls` in
+  manifest or sources; `cargo tree -p eggsec-agent` 257 → 153 lines).
+  Callback probes are GET/5s/`SameHostOnly{5}`/verified-TLS through the
+  mandatory checkpoints; tests use the recording fake (24 agent tests green).
+- **Shared helpers (WS2):** `auth_context::apply_auth_context_to_request`
+  and `AiClient::apply_auth` compat wrappers removed — shared APIs carry no
+  `RequestBuilder`. Fuzzer translates via canonical
+  `apply_auth_context_to_map` locally; AI loops `auth_headers()` directly.
+  Remaining `pub` concrete surfaces (`fuzzer::advanced::fuzz`,
+  `utils::client_pool::ClientPool`, crate-internal `send_with_retry`) are
+  documented pending full backend migration; no new boundary allowed.
+- **NSE capability (WS3):** `eggsec-nse/src/http_capability.rs` is the narrow
+  script capability (pure 8-method DTO builder + profile-gated TLS, no I/O,
+  no concrete clients). Lua dispatch still runs on `blocking` reqwest behind
+  `check_network_tcp` preflight (async-Lua story + `ScopeAuthority` binding
+  pending); `openssl`/`native-tls` stay feature-gated for protocol compat.
+- **Proxy boundary (WS4):** `eggsec-web-proxy/src/outbound.rs` owns the
+  A/B split (intercept/server TLS never touches the client contract;
+  proxy-routing probes stay on minimal reqwest until the adapter supports
+  authorized proxy routing). Direct-probe builder added for non-proxied paths.
+- **Pruning (WS5):** web-proxy reqwest cut to `rustls-no-provider` + `socks`
+  (unused json/http2/form/query/blocking/cookies dropped). Adapter features
+  unchanged (still minimal). Engine keeps its full reqwest set — every
+  feature has call sites (corrects the Phase A "no `.form()`/`.query()`"
+  note).
+- **Remaining owners (WS6):** see
+  [network_dependency_baseline.md](network_dependency_baseline.md) §7.2 for
+  the per-owner disposition table (engine per-subsystem pending, NSE
+  blocking/compat, proxy split, python pending, adapter intentional).
+
 ## Invariants & Gotchas
 
 1. **No unchecked dispatch** — `execute` without an authority does not exist.
@@ -204,6 +242,6 @@ interop tests through `ScopeAuthority`).
 
 ---
 
-See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement), [auth_context.md](auth_context.md) (canonical vs compat), [overview.md](overview.md), [config.md](config.md)
+See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
 *Last verified against source: 2026-09-12*
