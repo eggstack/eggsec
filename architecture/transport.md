@@ -124,9 +124,12 @@ to them. No new `RequestBuilder` boundary-crossing APIs.
 caller authority + injected resolver, records each `RecordedHop` (method,
 redacted URL, host/port, selected + approved addresses, timeout/redirect/
 proxy/TLS propagation, auth-presence bits, checkpoint order), and returns
-canned responses (including redirect chains). No I/O, no tasks, no clock:
-timeouts are recorded, not elapsed. Dropping the future cancels (no
-background work).
+canned responses (including redirect chains). Hostname hops after the first
+authorize via `authorize_reresolution` (checkpoint `reresolution`) rather
+than `authorize_resolved`, mirroring real backends; IP literals keep
+`authorize_resolved` on every hop (the literal is its own fact). No I/O,
+no tasks, no clock: timeouts are recorded, not elapsed. Dropping the
+future cancels (no background work).
 
 Tests assert: exact destination + binding, redirect order (same-host follows,
 cross-host stops without dispatch), header/cookie presence without values,
@@ -137,11 +140,12 @@ policy propagation, and fail-closed denial (no hop recorded).
 ```text
 ScopedHttpRequest
   → authorize_initial_url → authorize_host
-  → resolver.resolve → authorize_resolved → validate_binding
+  → resolver.resolve → authorize_resolved (first hop) /
+    authorize_reresolution (later hops) → validate_binding
   → authorize_socket → check_tls_consistency
   → authorize_proxy (+ proxy DNS/socket binding when proxied)
   → dispatch (fake: canned; Phase D: backend dials approved addr only)
-  → 3xx? authorize_redirect → re-run host/dns/socket per hop
+  → 3xx? authorize_redirect → re-run host/dns-or-reresolution/socket per hop
 ```
 
 ## Public API
@@ -169,8 +173,8 @@ Engine: `eggsec::config::ScopeAuthority`.
 
 ## Testing
 
-- `cargo test -p eggsec-transport` (16 unit tests: redaction, cookie merge, redirect policy, TLS consistency, resolver ordering, binding, fake destination/redirect/denial).
-- `cargo test -p eggsec --features rest-api --test transport_contract` (11 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, userinfo, secret redaction, direct IP, proxy distinctness, TLS orthogonality, invented-address rejection).
+- `cargo test -p eggsec-transport` (18 unit tests: redaction, cookie merge, redirect policy, TLS consistency, resolver ordering, binding, fake destination/redirect/denial, later-hop re-resolution + binding-checkpoint mapping).
+- `cargo test -p eggsec --features rest-api --test transport_contract` (12 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, later-hop re-resolution order, userinfo, secret redaction, direct IP, proxy distinctness, TLS orthogonality, invented-address rejection).
 - Phase A `network_policy_invariants.rs` (12 behaviors) remains the measurement baseline; the contract suite proves the same behaviors through the new layer.
 
 ## Phase C adapter (no production migration)

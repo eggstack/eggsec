@@ -92,17 +92,18 @@ the stripped state. Only Eggfetch-followable statuses (301/302/303/307/308)
 count as redirects; 300/304/305 and friends surface verbatim. Hop caps
 surface the last redirect response (same as the fake), never error.
 
-### Checkpoint order (mirrors the fake)
+### Checkpoint order (mirrors the fake exactly)
 
 initial-URL → host → DNS/re-resolution → socket → TLS-consistency → proxy
-→ dispatch → redirect. Two deliberate deltas from the fake, both toward the
-contract text:
-
-- Hops after the first call `authorize_reresolution` (checkpoint 6) instead
-  of `authorize_resolved`; the default delegation keeps `ScopeAuthority`
-  verdicts identical while custom authorities can audit distinctly.
-- A failed `validate_binding` maps to `Reresolution` denial on later hops
-  (the fake always reports `Dns`).
+→ dispatch → redirect. Hostname hops after the first call
+`authorize_reresolution` (checkpoint `reresolution`); the default
+delegation keeps `ScopeAuthority` verdicts identical while custom
+authorities can audit distinctly. A failed `validate_binding` maps to the
+same hop's DNS checkpoint (`dns` first hop, `reresolution` later). IP
+literals always use `authorize_resolved` (nothing re-resolves). One
+intentional divergence remains: the fake simulates proxy-endpoint DNS and
+binding while the adapter fails closed on any proxy (deferred past
+Phase C) — there is no backend proxy behavior to mirror.
 
 ### TLS policy parity (WS4)
 
@@ -164,6 +165,12 @@ proxy, SOCKS, and HTTP/3 connectors) plus a pre-follow redirect callback
 would let a future adapter revision drop IP-literal rewriting in favor of
 direct approved-address binding. Recorded here so Phase D/G can evaluate
 it against a released `eggfetch-core` with the hook.
+
+Re-evaluated 2026-09-12: latest released `eggfetch-core` is still `0.1.3`
+(`cargo search`; workspace lockfile pins `0.1.3`) — no resolver hook or
+pre-follow callback exists in any release, so there is nothing to adopt.
+The adapter-level binding + manual loop stand unchanged; re-evaluate when
+upstream ships the hook.
 
 ## Invariants & Gotchas
 

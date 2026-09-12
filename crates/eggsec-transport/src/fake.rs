@@ -2,16 +2,25 @@
 //!
 //! Available when `cfg(test)` or the `test-util` feature is enabled so
 //! production builds never carry it. The fake performs the full checkpoint
-//! sequence (initial → host → DNS → socket → TLS → proxy, plus per-hop
-//! redirect/re-resolution) against the caller-supplied authority and an
-//! injected [`crate::TransportResolver`], records each hop, and returns
-//! canned responses — letting tests assert:
+//! sequence (initial → host → DNS/re-resolution → socket → TLS → proxy,
+//! plus `authorize_redirect` per redirect target) against the
+//! caller-supplied authority and an injected [`crate::TransportResolver`],
+//! records each hop, and returns canned responses — letting tests assert:
 //!
 //! - exact authorized destination (host, port, selected socket address);
 //! - redirect authorization order;
 //! - header/cookie redaction (recorded headers never leak via `Debug`);
 //! - timeout / proxy / TLS policy propagation;
 //! - cancellation (dropping the future performs no further hops).
+//!
+//! Checkpoint parity with real backends: hostname hops after the first call
+//! [`NetworkAuthority::authorize_reresolution`] (checkpoint
+//! [`PolicyCheckpoint::Reresolution`]) instead of
+//! [`NetworkAuthority::authorize_resolved`], exactly like conforming
+//! backend implementations. IP literals always use `authorize_resolved`
+//! (the literal is its own fact — nothing re-resolves), and proxy-endpoint
+//! DNS keeps `authorize_resolved` (conformant backends fail closed before
+//! proxy DNS, so there is no backend behavior to mirror there).
 //!
 //! The fake performs no I/O, spawns no tasks, and honors no real clock:
 //! timeouts are recorded, not elapsed.
@@ -163,6 +172,7 @@ impl RecordingFakeTransport {
         authority: &dyn NetworkAuthority,
         request: &ScopedHttpRequest,
         url: &Url,
+        hop_index: u8,
     ) -> Result<RecordedHop, TransportError> {
         let mut order = Vec::new();
 
@@ -179,6 +189,17 @@ impl RecordingFakeTransport {
         // 2. Host.
         authority.authorize_host(host, Some(port), is_literal)?;
         order.push(PolicyCheckpoint::Host);
+
+        // Hops after the first re-resolve: hostname hops then authorize via
+        // `authorize_reresolution` (checkpoint `Reresolution`), mirroring
+        // real backends. IP literals carry their own fact and never
+        // re-resolve, so they keep `authorize_resolved` on every hop.
+        let reresolves = hop_index > 0 && !is_literal;
+        let dns_checkpoint = if reresolves {
+            PolicyCheckpoint::Reresolution
+        } else {
+            PolicyCheckpoint::Dns
+        };
 
         // 3/4. DNS + socket (literals skip resolution, still authorize socket).
         let (approved, selected) = if is_literal {
@@ -208,15 +229,19 @@ impl RecordingFakeTransport {
                     reason: "no addresses".to_string(),
                 });
             }
-            let approved = authority.authorize_resolved(host, &candidates.addresses)?;
+            let approved = if reresolves {
+                authority.authorize_reresolution(host, &candidates.addresses)?
+            } else {
+                authority.authorize_resolved(host, &candidates.addresses)?
+            };
             let binding =
                 validate_binding(host, &candidates.addresses, &approved).map_err(|e| match e {
                     TransportError::InvalidBinding { host, reason } => {
-                        TransportError::denied(PolicyCheckpoint::Dns, format!("{host}: {reason}"))
+                        TransportError::denied(dns_checkpoint, format!("{host}: {reason}"))
                     }
                     other => other,
                 })?;
-            order.push(PolicyCheckpoint::Dns);
+            order.push(dns_checkpoint);
             let mut bound = binding;
             bound.port = port;
             authority.authorize_socket(host, bound.primary(), port)?;
@@ -317,10 +342,10 @@ impl HttpTransport for RecordingFakeTransport {
         let max = request.redirect.max_redirects();
 
         for hop_index in 0..=max {
-            let hop = self.authorize_one_hop(authority, &request, &current_url)?;
+            let hop = self.authorize_one_hop(authority, &request, &current_url, hop_index)?;
 
             let canned = self
-                .canned_for(&current_url.to_string())
+                .canned_for(current_url.as_str())
                 .unwrap_or(CannedResponse::ok(format!("fake hop {hop_index}")));
 
             let is_redirect = canned.status.is_redirection() && canned.location.is_some();
@@ -390,8 +415,9 @@ impl HttpTransport for RecordingFakeTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryResolver, RequestBody};
+    use crate::{InMemoryResolver, RedirectPolicy, RequestBody};
     use http::Method;
+    use std::sync::Mutex;
 
     struct AllowAll;
 
@@ -486,6 +512,161 @@ mod tests {
         Arc::new(InMemoryResolver::new().with("example.com", vec!["93.184.216.34"]))
     }
 
+    /// Allow-all authority that records which resolution method each hop used.
+    struct RecordingResolution {
+        calls: Mutex<Vec<&'static str>>,
+    }
+
+    impl RecordingResolution {
+        fn new() -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn calls(&self) -> Vec<&'static str> {
+            self.calls.lock().expect("lock").clone()
+        }
+    }
+
+    impl NetworkAuthority for RecordingResolution {
+        fn authorize_initial_url(&self, url: &Url) -> Result<(), TransportError> {
+            crate::request::reject_url_userinfo(url)
+        }
+        fn authorize_host(
+            &self,
+            _h: &str,
+            _p: Option<u16>,
+            _l: bool,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_resolved(
+            &self,
+            _h: &str,
+            c: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            self.calls.lock().expect("lock").push("resolved");
+            Ok(c.to_vec())
+        }
+        fn authorize_reresolution(
+            &self,
+            _h: &str,
+            c: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            self.calls.lock().expect("lock").push("reresolution");
+            Ok(c.to_vec())
+        }
+        fn authorize_socket(&self, _h: &str, _a: IpAddr, _p: u16) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_redirect(&self, _f: &Url, t: &Url) -> Result<(), TransportError> {
+            self.authorize_initial_url(t)
+        }
+        fn authorize_proxy(&self, _p: &Url, _u: &Url) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn check_tls_consistency(
+            &self,
+            _h: &str,
+            _s: Option<&str>,
+            _o: Option<&str>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    /// Approves the first resolution but returns an empty set on
+    /// re-resolution (invalid binding on later hops only).
+    struct EmptyOnReresolution;
+
+    /// Returns an empty approval set on every resolution (invalid binding
+    /// on the first hop).
+    struct EmptyApproval;
+
+    impl NetworkAuthority for EmptyOnReresolution {
+        fn authorize_initial_url(&self, url: &Url) -> Result<(), TransportError> {
+            crate::request::reject_url_userinfo(url)
+        }
+        fn authorize_host(
+            &self,
+            _h: &str,
+            _p: Option<u16>,
+            _l: bool,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_resolved(
+            &self,
+            _h: &str,
+            c: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            Ok(c.to_vec())
+        }
+        fn authorize_reresolution(
+            &self,
+            _h: &str,
+            _c: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            Ok(Vec::new())
+        }
+        fn authorize_socket(&self, _h: &str, _a: IpAddr, _p: u16) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_redirect(&self, _f: &Url, t: &Url) -> Result<(), TransportError> {
+            self.authorize_initial_url(t)
+        }
+        fn authorize_proxy(&self, _p: &Url, _u: &Url) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn check_tls_consistency(
+            &self,
+            _h: &str,
+            _s: Option<&str>,
+            _o: Option<&str>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
+    impl NetworkAuthority for EmptyApproval {
+        fn authorize_initial_url(&self, url: &Url) -> Result<(), TransportError> {
+            crate::request::reject_url_userinfo(url)
+        }
+        fn authorize_host(
+            &self,
+            _h: &str,
+            _p: Option<u16>,
+            _l: bool,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_resolved(
+            &self,
+            _h: &str,
+            _c: &[IpAddr],
+        ) -> Result<Vec<IpAddr>, TransportError> {
+            Ok(Vec::new())
+        }
+        fn authorize_socket(&self, _h: &str, _a: IpAddr, _p: u16) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn authorize_redirect(&self, _f: &Url, t: &Url) -> Result<(), TransportError> {
+            self.authorize_initial_url(t)
+        }
+        fn authorize_proxy(&self, _p: &Url, _u: &Url) -> Result<(), TransportError> {
+            Ok(())
+        }
+        fn check_tls_consistency(
+            &self,
+            _h: &str,
+            _s: Option<&str>,
+            _o: Option<&str>,
+        ) -> Result<(), TransportError> {
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn fake_records_destination_and_policies() {
         let fake = RecordingFakeTransport::new(resolver());
@@ -557,5 +738,87 @@ mod tests {
         let resp = fake.execute(&AllowAll, req).await.expect("exec");
         assert_eq!(resp.status, StatusCode::FOUND);
         assert_eq!(fake.hop_count(), 1, "cross-host must not dispatch");
+    }
+
+    #[tokio::test]
+    async fn fake_uses_reresolution_on_later_hops() {
+        let fake = RecordingFakeTransport::new(resolver()).with_canned(
+            "http://example.com/a",
+            CannedResponse::redirect(StatusCode::FOUND, "/b"),
+        );
+        let auth = RecordingResolution::new();
+        let req = ScopedHttpRequest::new_with_url(Method::GET, "http://example.com/a")
+            .expect("req")
+            .with_redirect(RedirectPolicy::AuthorityChecked { max_redirects: 5 });
+        let resp = fake.execute(&auth, req).await.expect("exec");
+        assert_eq!(resp.status, StatusCode::OK);
+        assert_eq!(fake.hop_count(), 2);
+        assert_eq!(
+            auth.calls(),
+            vec!["resolved", "reresolution"],
+            "first hop resolves, later hops re-resolve"
+        );
+        let hops = fake.hops();
+        assert_eq!(
+            hops[0].checkpoint_order,
+            vec![
+                PolicyCheckpoint::InitialUrl,
+                PolicyCheckpoint::Host,
+                PolicyCheckpoint::Dns,
+                PolicyCheckpoint::Socket,
+                PolicyCheckpoint::TlsConsistency,
+            ]
+        );
+        assert_eq!(
+            hops[1].checkpoint_order,
+            vec![
+                PolicyCheckpoint::InitialUrl,
+                PolicyCheckpoint::Host,
+                PolicyCheckpoint::Reresolution,
+                PolicyCheckpoint::Socket,
+                PolicyCheckpoint::TlsConsistency,
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn fake_maps_binding_failure_to_hop_checkpoint() {
+        // Empty approval on the first hop denies at `dns`.
+        let fake = RecordingFakeTransport::new(resolver());
+        let req =
+            ScopedHttpRequest::new_with_url(Method::GET, "http://example.com/a").expect("req");
+        let err = fake.execute(&EmptyApproval, req).await.unwrap_err();
+        assert!(
+            matches!(
+                err,
+                TransportError::PolicyDenied {
+                    checkpoint: PolicyCheckpoint::Dns,
+                    ..
+                }
+            ),
+            "first-hop binding failure denies at dns: {err:?}"
+        );
+        assert!(fake.hops().is_empty(), "denied hop must not record");
+
+        // Empty approval on re-resolution denies at `reresolution`.
+        let fake = RecordingFakeTransport::new(resolver()).with_canned(
+            "http://example.com/a",
+            CannedResponse::redirect(StatusCode::FOUND, "/b"),
+        );
+        let req = ScopedHttpRequest::new_with_url(Method::GET, "http://example.com/a")
+            .expect("req")
+            .with_redirect(RedirectPolicy::AuthorityChecked { max_redirects: 5 });
+        let err = fake.execute(&EmptyOnReresolution, req).await.unwrap_err();
+        assert!(
+            matches!(
+                err,
+                TransportError::PolicyDenied {
+                    checkpoint: PolicyCheckpoint::Reresolution,
+                    ..
+                }
+            ),
+            "later-hop binding failure denies at reresolution: {err:?}"
+        );
+        assert_eq!(fake.hop_count(), 1, "denied hop must not record");
     }
 }

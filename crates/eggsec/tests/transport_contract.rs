@@ -143,6 +143,43 @@ async fn same_host_redirect_follows_and_cross_host_stops() {
     assert_eq!(fake.hop_count(), 1, "cross-host must not dispatch");
 }
 
+#[tokio::test]
+async fn later_redirect_hops_authorize_reresolution() {
+    let mut scope = Scope::new();
+    scope
+        .allowed_targets
+        .push(ScopeRule::with_cidr("93.184.216.0/24".to_string()).expect("cidr"));
+    let auth = ScopeAuthority::new(&scope);
+    let fake = RecordingFakeTransport::new(resolver())
+        .with_canned(
+            "http://a.example.com/a",
+            CannedResponse::redirect(StatusCode::FOUND, "/b"),
+        )
+        .with_canned("http://a.example.com/b", CannedResponse::ok("done"));
+    let req = get("http://a.example.com/a")
+        .with_redirect(RedirectPolicy::AuthorityChecked { max_redirects: 5 });
+    let resp = fake.execute(&auth, req).await.expect("follows");
+    assert_eq!(resp.status, StatusCode::OK);
+    let hops = fake.hops();
+    assert_eq!(hops.len(), 2);
+    assert!(
+        hops[0].checkpoint_order.contains(&PolicyCheckpoint::Dns),
+        "first hop resolves: {:?}",
+        hops[0].checkpoint_order
+    );
+    assert_eq!(
+        hops[1].checkpoint_order,
+        vec![
+            PolicyCheckpoint::InitialUrl,
+            PolicyCheckpoint::Host,
+            PolicyCheckpoint::Reresolution,
+            PolicyCheckpoint::Socket,
+            PolicyCheckpoint::TlsConsistency,
+        ],
+        "later hops re-resolve (adapter parity)"
+    );
+}
+
 #[test]
 fn redirect_to_out_of_scope_host_denied_by_authority() {
     let scope = scope_with_patterns(&["a.example.com"]);

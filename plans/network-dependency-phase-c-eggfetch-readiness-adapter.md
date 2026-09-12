@@ -284,3 +284,30 @@ Phase A (12) + Phase B (11) suites remain green and unmodified.
   `ScopeAuthority`).
 - Verified-TLS-success e2e awaits a custom-CA policy row only if a
   consumer ever needs it.
+
+### Follow-up (2026-09-12, Phase D/G input resolved)
+
+- **Fake/adapter checkpoint alignment: landed.** `RecordingFakeTransport`
+  now threads the hop index through `authorize_one_hop`: hostname hops
+  after the first call `authorize_reresolution` (checkpoint
+  `reresolution`) and map binding failures to that hop's DNS checkpoint,
+  exactly like `EggfetchTransport::authorize_hop`. IP literals keep
+  `authorize_resolved` on every hop (nothing re-resolves); proxy-endpoint
+  DNS keeps `authorize_resolved` (the adapter fails closed before proxy
+  DNS, so there is no backend behavior to mirror). New tests:
+  `fake_uses_reresolution_on_later_hops` +
+  `fake_maps_binding_failure_to_hop_checkpoint` (fake unit) and
+  `later_redirect_hops_authorize_reresolution` (engine contract through
+  `ScopeAuthority`). Behavior under all existing authorities is unchanged
+  (default delegation); only the recorded checkpoint label and the
+  invoked method on later hops changed. `architecture/transport.md`
+  (fake + flow + test counts) and `architecture/transport_eggfetch.md`
+  (checkpoint section) updated.
+- **Upstream hooks re-evaluation: nothing to adopt.** Latest released
+  `eggfetch-core` is still `0.1.3` (`cargo search 2026-09-12`; lockfile
+  pins `0.1.3`) — no `DnsResolver` trait or pre-follow redirect callback
+  exists in any release. Adapter-level binding + manual loop stand
+  unchanged; re-evaluate when upstream ships the hook.
+- **Verified-TLS-success e2e: still deferred.** No consumer needs a
+  custom-CA policy row (no production migration in this pass either);
+  remains conditional future work.
