@@ -14,6 +14,35 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Network dependency and supply-chain hardening (active)
+
+Roadmap:
+[`network-dependency-hardening-roadmap-2026-09-11.md`](network-dependency-hardening-roadmap-2026-09-11.md)
+
+This is a post-convergence dependency/capability pass. It does not reopen the
+completed A-J dependency roadmap or frontend/runtime convergence. It targets
+residual duplicate outbound HTTP/TLS ownership, establishes a scope-aware
+transport seam, evaluates `eggfetch` as the shared HTTP substrate and narrow
+`eggress` reuse, narrows process/runtime capability inheritance, and hardens
+Cargo/GitHub Actions supply-chain policy.
+
+Ordered implementation plans:
+
+1. [`network-dependency-phase-a-baseline-invariants.md`](network-dependency-phase-a-baseline-invariants.md)
+2. [`network-dependency-phase-b-scoped-transport-contract.md`](network-dependency-phase-b-scoped-transport-contract.md)
+3. [`network-dependency-phase-c-eggfetch-readiness-adapter.md`](network-dependency-phase-c-eggfetch-readiness-adapter.md)
+4. [`network-dependency-phase-d-outbound-client-migration.md`](network-dependency-phase-d-outbound-client-migration.md)
+5. [`network-dependency-phase-e-egress-and-capability-segregation.md`](network-dependency-phase-e-egress-and-capability-segregation.md)
+6. [`network-dependency-phase-f-supply-chain-ci-hardening.md`](network-dependency-phase-f-supply-chain-ci-hardening.md)
+7. [`network-dependency-phase-g-closure-measurement.md`](network-dependency-phase-g-closure-measurement.md)
+
+Phases A-C establish the baseline, mandatory scoped transport contract, and
+Eggfetch resolver/redirect hooks before production consumers migrate. Phase D
+moves ordinary outbound clients while retaining specialized interception and
+protocol ownership. Phase E makes measured Egress adopt/reject decisions and
+narrows CLI/Tokio/crate capability boundaries. Phase F hardens dependency and
+CI supply-chain policy. Phase G is the final measurement/security closure pass.
+
 ## TUI full-profile corrective closure (active)
 
 Corrective pass:
