@@ -2266,6 +2266,102 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 100. Phase B scoped transport contract exists and stays dependency-light.
+# The transport crate owns the checkpoint shape; concrete clients must not
+# appear in its dependency graph or code. Authority is mandatory for dispatch,
+# DNS results bind to the connection path, and secrets are redacted.
+echo ""
+echo "--- Check 100: Scoped transport contract is dependency-light ---"
+SECTION_FAIL=0
+if ! rg -q 'crates/eggsec-transport' Cargo.toml 2>/dev/null; then
+  echo "FAIL: workspace Cargo.toml does not list crates/eggsec-transport."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec-transport/Cargo.toml" ]]; then
+  echo "FAIL: missing crate manifest: crates/eggsec-transport/Cargo.toml"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if rg -q 'reqwest|hyper|rustls|tokio-rustls|hickory-resolver|eggfetch|eggress' crates/eggsec-transport/Cargo.toml 2>/dev/null; then
+    echo "FAIL: crates/eggsec-transport/Cargo.toml gained a concrete network dependency."
+    rg -n 'reqwest|hyper|rustls|tokio-rustls|hickory-resolver|eggfetch|eggress' crates/eggsec-transport/Cargo.toml 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ ! -d "crates/eggsec-transport/src" ]]; then
+  echo "FAIL: missing transport sources: crates/eggsec-transport/src"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  HITS=$(rg -n 'reqwest::|hyper::|rustls::|tokio_rustls::|hickory_resolver::|eggfetch|eggress' crates/eggsec-transport/src/ 2>/dev/null || true)
+  if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: eggsec-transport/src uses concrete network client types."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  for sym in "trait HttpTransport" "authority: &dyn NetworkAuthority" "trait NetworkAuthority" "authorize_initial_url" "authorize_resolved" "authorize_socket" "authorize_redirect" "authorize_proxy" "check_tls_consistency" "validate_binding" "ApprovedBinding" "REDACTED|redacted_headers_debug" "RecordingFakeTransport"; do
+    if ! rg -q "$sym" crates/eggsec-transport/src/ 2>/dev/null; then
+      echo "FAIL: eggsec-transport/src missing required contract symbol: $sym"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+for f in "crates/eggsec/src/config/scope_transport.rs" "crates/eggsec/tests/transport_contract.rs"; do
+  if [[ ! -f "$f" ]]; then
+    echo "FAIL: missing Phase B binding/test: $f"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'impl.*NetworkAuthority for ScopeAuthority' crates/eggsec/src/config/scope_transport.rs 2>/dev/null; then
+  echo "FAIL: scope_transport.rs does not implement NetworkAuthority for ScopeAuthority."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+RB_LEAK=$(rg -n 'RequestBuilder' crates/eggsec/src/config/scope_transport.rs crates/eggsec-transport/src/ 2>/dev/null || true)
+if [[ -n "$RB_LEAK" ]]; then
+  echo "$RB_LEAK"
+  echo "FAIL: scope_transport or transport crate mentions RequestBuilder (boundary leak)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Scoped transport contract is dependency-light."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 101. Shared/auth helpers expose transport-neutral canonical APIs (Phase B WS4).
+# Concrete-builder wrappers may remain as documented compat, but the canonical
+# path must be pure/transport-neutral. No second scope language.
+echo ""
+echo "--- Check 101: Transport-neutral canonical helpers exist ---"
+SECTION_FAIL=0
+for sym in "apply_auth_context_to_transport" "apply_auth_context_to_map"; do
+  if ! rg -q "$sym" crates/eggsec/src/auth_context/mod.rs 2>/dev/null; then
+    echo "FAIL: auth_context/mod.rs missing canonical helper: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for sym in "auth_headers" "apply_auth_to_transport"; do
+  if ! rg -q "$sym" crates/eggsec/src/ai/client.rs 2>/dev/null; then
+    echo "FAIL: ai/client.rs missing canonical helper: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for sym in "should_retry_status" "backoff_for_attempt"; do
+  if ! rg -q "$sym" crates/eggsec/src/integrations/common.rs 2>/dev/null; then
+    echo "FAIL: integrations/common.rs missing canonical helper: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for f in "crates/eggsec/src/auth_context/mod.rs" "crates/eggsec/src/ai/client.rs" "crates/eggsec/src/integrations/common.rs"; do
+  if ! rg -qi 'compatibility wrapper|canonical' "$f" 2>/dev/null; then
+    echo "FAIL: $f does not label compat vs canonical paths."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Transport-neutral canonical helpers exist."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

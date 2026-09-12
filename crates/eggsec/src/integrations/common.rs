@@ -38,6 +38,28 @@ fn truncate_utf8(s: &str, max_bytes: usize) -> &str {
     }
 }
 
+/// Canonical transport-neutral retry policy (pure, no concrete client types).
+///
+/// Single source of truth for [`send_with_retry`]: retry on 429/5xx and on
+/// transport errors, up to [`MAX_RETRIES`], with exponential backoff
+/// (`BASE_BACKOFF_MS * 2^attempt`) or `Retry-After` seconds when present.
+pub(crate) fn should_retry_status(status: u16) -> bool {
+    status == 429 || (500..600).contains(&status)
+}
+
+/// Backoff for `attempt` (0-based) with optional `Retry-After` seconds.
+pub(crate) fn backoff_for_attempt(attempt: u32, retry_after_secs: u64) -> Duration {
+    if retry_after_secs > 0 {
+        Duration::from_millis(retry_after_secs.saturating_mul(1000))
+    } else {
+        Duration::from_millis(BASE_BACKOFF_MS * 2u64.pow(attempt))
+    }
+}
+
+/// Compatibility wrapper over the concrete reqwest backend (pre-migration).
+///
+/// New retry logic must consult [`should_retry_status`] /
+/// [`backoff_for_attempt`] instead of reimplementing thresholds.
 pub(crate) async fn send_with_retry(
     req: reqwest::RequestBuilder,
     provider: &str,
@@ -49,7 +71,7 @@ pub(crate) async fn send_with_retry(
         })?;
         match req_clone.send().await {
             Ok(resp) if resp.status().is_success() => return Ok(resp),
-            Ok(resp) if resp.status().as_u16() == 429 || resp.status().is_server_error() => {
+            Ok(resp) if should_retry_status(resp.status().as_u16()) => {
                 let status = resp.status();
                 let retry_after = resp
                     .headers()
@@ -57,36 +79,32 @@ pub(crate) async fn send_with_retry(
                     .and_then(|v| v.to_str().ok())
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(0);
-                let backoff_ms = if retry_after > 0 {
-                    retry_after.saturating_mul(1000)
-                } else {
-                    BASE_BACKOFF_MS * 2u64.pow(attempt)
-                };
+                let backoff = backoff_for_attempt(attempt, retry_after);
                 tracing::warn!(
                     "{}: got {} on attempt {}/{}, retrying in {}ms",
                     provider,
                     status,
                     attempt + 1,
                     MAX_RETRIES,
-                    backoff_ms
+                    backoff.as_millis()
                 );
-                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                tokio::time::sleep(backoff).await;
                 last_status = Some(status);
             }
             Ok(resp) => {
                 return handle_response_error(resp, provider).await;
             }
             Err(e) => {
-                let backoff = BASE_BACKOFF_MS * 2u64.pow(attempt);
+                let backoff = backoff_for_attempt(attempt, 0);
                 tracing::warn!(
                     "{}: request error on attempt {}/{}, retrying in {}ms: {}",
                     provider,
                     attempt + 1,
                     MAX_RETRIES,
-                    backoff,
+                    backoff.as_millis(),
                     e
                 );
-                tokio::time::sleep(Duration::from_millis(backoff)).await;
+                tokio::time::sleep(backoff).await;
             }
         }
     }

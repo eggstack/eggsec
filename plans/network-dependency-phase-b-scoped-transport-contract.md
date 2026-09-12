@@ -1,10 +1,18 @@
 # Phase B — Scope-aware outbound transport contract
 
-Status: Ready for handoff
+Status: Executed 2026-09-12
 
 Date: 2026-09-11
 
 Depends on: Phase A
+
+Execution record: `eggsec-transport` crate created (neutral DTOs, mandatory
+`NetworkAuthority`, TOCTOU-closed binding, recording fake behind `test-util`);
+engine binding via `config::ScopeAuthority`; canonical transport-neutral
+header/auth helpers with compat wrappers; closure tests in
+`crates/eggsec/tests/transport_contract.rs`; guards Check 100/101;
+docs (`architecture/transport.md`, README, AGENTS.md, CI guards, skill)
+updated. No backend migration (Phase D).
 
 ## Purpose
 

@@ -98,6 +98,7 @@ eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
 eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }
 eggsec-agent = { path = "../eggsec-agent", version = "0.1.0" }
+eggsec-transport = { workspace = true }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }
@@ -420,6 +421,8 @@ wiremock = "0.6"
 tempfile = "3"
 criterion = "0.5"
 proptest = "1"
+eggsec-transport = { workspace = true, features = ["test-util"] }
+http = { workspace = true }
 
 [[bench]]
 name = "proxy_benchmarks"

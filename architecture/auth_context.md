@@ -53,15 +53,21 @@ Both structs use `#[serde(deny_unknown_fields)]` (`:13,19`) — extra YAML keys 
 
 ### Functions
 
-| Function | Line | Signature | Purpose |
-|----------|------|-----------|---------|
-| `parse_auth_context()` | `:47` | `(content: &str) -> Result<AuthContext>` | Parse YAML, validate version, interpolate env vars |
-| `apply_auth_context()` | `:71` | `(headers: &mut HashMap, entry: &AuthContextEntry)` | Apply context headers to a header map |
-| `apply_auth_context_to_request()` | `:107` | `(RequestBuilder, &AuthContextEntry) -> RequestBuilder` | Apply headers and cookies to reqwest request |
-| `load_auth_context_file()` | `:83` | `(path: &Path) -> Result<AuthContext>` | Load + parse from file path |
-| `get_context_entry()` | `:91` | `(&AuthContext, role: &str) -> Result<&AuthContextEntry>` | Lookup by role; error with available roles on miss |
-| `list_context_names()` | `:78` | `(&AuthContext) -> Vec<String>` | List all role names |
-| `interpolate_env_vars()` | `:33` | `(input: &str) -> String` | Replace `${VAR}` / `${VAR:-default}` patterns |
+Phase B canonical paths are transport-neutral (no concrete client types).
+The `reqwest` wrapper is a temporary compatibility shim for the
+pre-migration backend.
+
+| Function | Signature | Canonical? | Purpose |
+|----------|-----------|------------|---------|
+| `parse_auth_context()` | `(content: &str) -> Result<AuthContext>` | Yes | Parse YAML, validate version, interpolate env vars |
+| `apply_auth_context()` | `(headers: &mut HashMap, entry: &AuthContextEntry)` | Yes (headers only) | Apply context headers to a header map |
+| `apply_auth_context_to_transport()` | `(&mut HeaderMap, &AuthContextEntry) -> Result<(), String>` | Yes | Apply headers (overwrite) + cookies (true merge) to `eggsec_transport::HeaderMap` |
+| `apply_auth_context_to_map()` | `(&mut HashMap, Option<&str>, &AuthContextEntry) -> Option<String>` | Yes | Pure-map headers + merged `Cookie` value |
+| `apply_auth_context_to_request()` | `(RequestBuilder, &AuthContextEntry) -> RequestBuilder` | Compat only | Temporary concrete-backend wrapper; delegates to canonical merge |
+| `load_auth_context_file()` | `(path: &Path) -> Result<AuthContext>` | Yes | Load + parse from file path |
+| `get_context_entry()` | `(&AuthContext, role: &str) -> Result<&AuthContextEntry>` | Yes | Lookup by role; error with available roles on miss |
+| `list_context_names()` | `(&AuthContext) -> Vec<String>` | Yes | List all role names |
+| `interpolate_env_vars()` | `(input: &str) -> String` | Yes | Replace `${VAR}` / `${VAR:-default}` patterns |
 
 ### Environment Variable Interpolation (`:33`)
 
@@ -71,15 +77,20 @@ The regex `\$\{([^}:]+)(?::-([^}]*))?\}` (`:30`) matches:
 
 Interpolation is applied to **all header and cookie values** during `parse_auth_context()` (`:58-65`). It is resolved at parse time from the process environment.
 
-### Cookie Merge Semantics (`:107-119`)
+### Cookie Merge Semantics (Phase B canonical: true merge)
 
-`apply_auth_context_to_request()` applies credentials to a `reqwest::RequestBuilder`:
+Canonical (`apply_auth_context_to_transport` / `_to_map` via
+`eggsec_transport::merge_cookie_header`):
 
-1. **Headers**: Each auth context header is set via `req.header(key, value)` (`:112-114`). This **overwrites** any existing header with the same name (standard `reqwest::RequestBuilder::header` semantics).
+1. **Headers**: overwrite same-named headers.
+2. **Cookies**: true merge with any existing `Cookie` header — auth-context
+   values win on name collision, unrelated existing cookies preserved,
+   deterministic (sorted) order.
 
-2. **Cookies**: If the auth context has any cookies, `merge_cookies()` (`:125`) produces a `"; "`-joined string from auth context cookies only, set as the `Cookie` header (`:116`). This **replaces** any pre-existing `Cookie` header entirely.
-
-**Important implementation note**: The `merge_cookies()` function (`:125-132`) only produces cookies from the `AuthContextEntry` — it does not read or merge with the request's existing `Cookie` header. The `reqwest::RequestBuilder::header()` call overwrites any prior `Cookie` header. The doc comment at `:104-106` states "auth context cookies are merged with any existing Cookie header" but the current implementation replaces rather than merges. In practice this is typically the desired behavior (auth context credentials take precedence), but callers with pre-existing cookies on the request should be aware.
+**History note**: the pre-Phase-B concrete wrapper *replaced* the `Cookie`
+header (auth-context cookies only). The canonical behavior is a true merge;
+the wrapper now delegates to the canonical merge helper. See
+[transport.md](transport.md) for the contract.
 
 ## Behavior / Flow
 
@@ -87,21 +98,21 @@ Interpolation is applied to **all header and cookie values** during `parse_auth_
 
 ```
 YAML content
-  → serde_yaml_neo::from_str()           (:48)
-  → version check (must == 1)             (:50-56)
-  → interpolate env vars in all values    (:58-65)
+  → serde_yaml_neo::from_str()
+  → version check (must == 1)
+  → interpolate env vars in all values
   → return AuthContext
 ```
 
-### Apply Flow (to reqwest RequestBuilder)
+### Apply Flow (canonical transport-neutral)
 
 ```
-apply_auth_context_to_request(request, entry)
-  → set each header from entry.headers    (:112-114)
-  → if cookies non-empty:
-      → merge_cookies(entry)              (:125)
-      → set "Cookie" header               (:116)
-  → return modified RequestBuilder
+apply_auth_context_to_transport(map, entry)
+  → eggsec_transport::apply_auth_headers(map, headers, cookies)
+  → headers overwrite; cookies merged (auth wins on collision)
+
+apply_auth_context_to_map(headers, existing_cookie?, entry)
+  → headers overwrite; return merged Cookie value
 ```
 
 ### Error Handling
@@ -112,49 +123,40 @@ apply_auth_context_to_request(request, entry)
 
 ## Integration Points
 
-| Consumer | File:Line | How It Uses Auth Context |
-|----------|-----------|--------------------------|
-| Fuzzer engine | `fuzzer/engine/core.rs:184-185` | Loads auth context file, gets entry by role |
-| Fuzzer HTTP utils | `fuzzer/engine/utils.rs:96,141,237` | Applies entry to fuzz requests via `apply_auth_context_to_request()` |
-| (Future) CLI scanner | CLI handler code | Could load auth context for authenticated scans |
-| (Future) REST/MCP tools | Tool protocol code | Could apply auth context to tool requests |
+| Consumer | How It Uses Auth Context |
+|----------|--------------------------|
+| Fuzzer engine | Loads auth context file, gets entry by role |
+| Fuzzer HTTP utils | Applies entry via compat `apply_auth_context_to_request()` (pre-migration); new code uses `apply_auth_context_to_transport()` |
+| Transport contract | Canonical `apply_auth_context_to_transport()` / `_to_map()` + `eggsec_transport::apply_auth_headers()` / `merge_cookie_header()` |
+| (Future) CLI scanner | Could load auth context for authenticated scans |
+| (Future) REST/MCP tools | Could apply auth context to tool requests |
 
 ## Testing
 
-All tests are in `auth_context/mod.rs:134-275`. Test count: 10 tests total.
-
-| Test | Line | What It Verifies |
-|------|------|------------------|
-| `parse_auth_context_works` | `:152` | Parses sample YAML, 2 contexts |
-| `context_descriptions_are_parsed` | `:161` | Description field extraction |
-| `env_var_interpolation_with_default` | `:170` | `${VAR:-fallback}` with missing var |
-| `env_var_interpolation_with_real_var` | `:178` | `${VAR}` with set env var |
-| `apply_auth_context_to_headers` | `:187` | Header insertion |
-| `test_list_context_names` | `:206` | Context name listing |
-| `parse_auth_context_with_cookies` | `:214` | Cookie parsing, static + env-var |
-| `unsupported_version_is_rejected` | `:234` | Version 2 → error |
-| `deny_unknown_fields_rejects_extra_keys` | `:249` | Top-level unknown key → error |
-| `deny_unknown_fields_rejects_extra_entry_keys` | `:263` | Entry-level unknown key → error |
+All tests are in `auth_context/mod.rs`. Test count: 12 tests total
+(10 original + `transport_map_merges_cookies_and_overwrites_headers`,
+`transport_headermap_applies_without_concrete_types`).
 
 ## Invariants & Gotchas
 
 ### Invariants
 
-1. **Version 1 only** — Files with `version != 1` are rejected at parse time (`:50-56`).
+1. **Version 1 only** — Files with `version != 1` are rejected at parse time.
 2. **Strict deserialization** — `#[serde(deny_unknown_fields)]` rejects unexpected YAML keys.
 3. **Env var interpolation at parse time** — `${VAR}` patterns are resolved once during parsing, not at apply time.
 4. **Headers override, not merge** — Auth context headers replace existing headers with the same name.
-5. **Fail-closed on unknown roles** — `get_context_entry()` returns an error listing available roles.
-6. **Regex is static** — `ENV_VAR_RE` is `LazyLock<Regex>` (`:29`), compiled once, no per-call cost.
+5. **Cookies truly merge (Phase B)** — Auth-context cookies win on collision, unrelated existing cookies preserved, sorted order.
+6. **Fail-closed on unknown roles** — `get_context_entry()` returns an error listing available roles.
+7. **Canonical is transport-neutral** — New code uses `HeaderMap`/pure-map helpers; the concrete wrapper is compat-only.
 
 ### Gotchas
 
-- **`ENV_VAR_RE` uses `expect()` on compilation** (`:30`): `Regex::new(...).expect("valid env var regex")`. This panics if the regex is invalid. The regex is a compile-time constant and has been validated by tests, but a future modification to the regex pattern could cause a panic at first use.
-- **Cookie merge is not a true merge**: `merge_cookies()` (`:125`) only produces auth context cookies. It does not incorporate existing cookies from the request. The `Cookie` header is replaced entirely.
+- **`ENV_VAR_RE` uses `expect()` on compilation**: `Regex::new(...).expect("valid env var regex")`. This panics if the regex is invalid. The regex is a compile-time constant and has been validated by tests, but a future modification to the regex pattern could cause a panic at first use.
 - **`interpolate_env_vars` is not URL-aware**: If an env var value contains special characters (spaces, semicolons), they are passed through verbatim. Callers are responsible for encoding.
-- **`apply_auth_context` (HashMap variant) vs `apply_auth_context_to_request`**: The HashMap variant (`:71`) only applies headers, not cookies. The reqwest variant (`:107`) applies both headers and cookies. Callers must use the correct function.
-- **`HashMap` iteration order**: Cookie header order depends on `HashMap` iteration order (random). If cookie order matters (some servers are order-sensitive), this could be an issue.
+- **`apply_auth_context` (HashMap headers-only) vs canonical**: The legacy HashMap variant only applies headers, not cookies. Use `apply_auth_context_to_transport()` / `_to_map()` for headers + cookies.
 
 ---
 
-*Last verified against source: 2026-08-25*
+See also: [transport.md](transport.md), [network_dependency_baseline.md](network_dependency_baseline.md)
+
+*Last verified against source: 2026-09-12*

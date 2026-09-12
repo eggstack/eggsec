@@ -38,7 +38,7 @@ Every number in this document was verified against source on 2026-09-11. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 16 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with 17 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -70,8 +70,9 @@ nor hosted CI publishes a package.
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
+| `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` only). |
 
-**Dependency direction**: Leaf crates have no internal workspace dependencies (except where noted above). The main `eggsec` crate is the composition root. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
+**Dependency direction**: Leaf crates have no internal workspace dependencies (except where noted above). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
 ---
 
@@ -263,7 +264,8 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Error | `crates/eggsec/src/error/` | `EggsecError` with **23 variants** spanning config/target/network/http/parse/policy/proxy domains, ergonomic `From` impls | [error.md](error.md) |
 | Logging | `crates/eggsec/src/logging/` | tracing init: Pretty/Json/Compact formats (`LogFormat`); subscriber/appender setup also ships as the portable `logging-subscriber` feature for process hosts | [logging.md](logging.md) |
 | Utils | `crates/eggsec/src/utils/` | **20 utility sub-modules**: HTTP client, caching, circuit breaker, client pool, rate limiter, redaction, stealth, service detection, target/validation helpers, formatting (`strip_controls`), privilege (gated) | [utils.md](utils.md) |
-| Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; applies credentials to requests | [auth_context.md](auth_context.md) |
+| Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; canonical transport-neutral header/cookie application + concrete compat wrapper | [auth_context.md](auth_context.md) |
+| Transport | `crates/eggsec-transport/` | Scope-aware outbound HTTP contract: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake | [transport.md](transport.md) |
 | Constants | `crates/eggsec/src/constants.rs` | Facade over `eggsec-core` constants + compile-time validation (`SUPPORTED_WAF_COUNT` = 34 asserted at compile time) | [constants.md](constants.md) |
 | Audit | `crates/eggsec/src/audit.rs` | `EnforcementAuditEvent` (15 fields) normalized audit record for every enforcement/preflight decision; `AuditOutcome` (5 variants) | [audit.md](audit.md) |
 | Generated | `crates/eggsec/src/generated/` | Checked-in protobuf/gRPC code, regenerated via `build.rs` (protoc needed only for descriptor set) | [generated.md](generated.md) |
@@ -467,6 +469,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-tool-core     (ToolRequest/Response/Finding/Error DTOs)
     ├── eggsec-output        (report formats, envelope, dedup, trends)
     ├── eggsec-agent         (agent registry, scheduler, lifecycle)
+    ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
     │
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
@@ -479,7 +482,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-mobile-lab    (mobile analysis domain)
     ├── eggsec-nse           (Nmap NSE/Lua VM)
     │
-    └── eggsec               (ALL above — main engine, lib only)
+    └── eggsec               (ALL above incl. transport — main engine, lib only)
             ↑
             ├── eggsec-tui    (engine + runtime + daemon-protocol + ui-model)
             ├── eggsec-cli    (engine + runtime + ui-model; optional: tui + daemon)
@@ -570,7 +573,7 @@ Complete catalog of component deep-dives in this directory:
 | Category | Documents |
 |----------|-----------|
 | **Core & Config** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [domain_contract.md](domain_contract.md), [feature_matrix.md](feature_matrix.md) |
-| **Enforcement & Dispatch** | [dispatch.md](dispatch.md), [runtime_bridge.md](runtime_bridge.md), [audit.md](audit.md), [auth_context.md](auth_context.md) |
+| **Enforcement & Dispatch** | [dispatch.md](dispatch.md), [runtime_bridge.md](runtime_bridge.md), [audit.md](audit.md), [auth_context.md](auth_context.md), [transport.md](transport.md) |
 | **Discovery** | [recon.md](recon.md), [scanner.md](scanner.md), [probe.md](probe.md), [networking.md](networking.md), [wireless.md](wireless.md) |
 | **Security Testing** | [fuzzer.md](fuzzer.md), [api_schema.md](api_schema.md), [waf.md](waf.md), [auth.md](auth.md), [hunt.md](hunt.md), [browser.md](browser.md), [websocket.md](websocket.md), [evasion.md](evasion.md) |
 | **Load & Stress** | [loadtest.md](loadtest.md), [stress.md](stress.md) |
@@ -582,7 +585,7 @@ Complete catalog of component deep-dives in this directory:
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
 | **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
-| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
+| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [transport.md](transport.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
 
 Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md).
 

@@ -1,0 +1,27 @@
+[package]
+name = "eggsec-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Scope-aware outbound HTTP transport contract for Eggsec (Phase B)"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "http", "transport", "scope"]
+categories = ["development-tools"]
+
+[dependencies]
+bytes = { workspace = true }
+http = { workspace = true }
+url = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = []
+test-util = []
+
+[dev-dependencies]
+tokio = { workspace = true }

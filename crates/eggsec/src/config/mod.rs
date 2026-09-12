@@ -49,6 +49,7 @@ mod scope;
 mod scope_address;
 mod scope_resolver;
 mod scope_spec;
+mod scope_transport;
 mod settings;
 
 pub use feature_registry::{
@@ -92,6 +93,7 @@ pub use scope_spec::{
     is_parsed_target_allowed_by_scope_and_spec, is_target_allowed_by_scope_and_spec,
     is_target_allowed_by_scope_and_spec_with_resolver, scope_from_spec, ScopeSpecError,
 };
+pub use scope_transport::ScopeAuthority;
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
     ConfigError, EggsecConfig, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig,

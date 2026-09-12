@@ -31,7 +31,7 @@ test-slow:
 # Run clippy (routine: engine + dependency-light leaf crates)
 clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
-	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -- -D warnings
+	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -- -D warnings
 
 # Lint domain/platform crates with their relevant features (deep checks only:
 # heavier closures, may need system prerequisites like libssl-dev).

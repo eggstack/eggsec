@@ -135,20 +135,57 @@ impl AiClient {
             .unwrap_or(self.provider.default_model())
     }
 
+    /// Compatibility wrapper: apply provider auth to a reqwest builder.
+    ///
+    /// Retained for the pre-migration concrete backend. New code must use
+    /// [`Self::auth_headers`] (pure pairs) or [`Self::apply_auth_to_transport`]
+    /// (transport-neutral HeaderMap) instead.
     pub fn apply_auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        if let Some(key) = &self.config.api_key {
-            match self.provider {
-                Provider::Azure => request
-                    .header("api-key", key.expose_secret().to_string())
-                    .header("Content-Type", "application/json"),
-                _ if self.provider.supports_bearer_auth() => {
-                    request.bearer_auth(key.expose_secret().to_string())
-                }
-                _ => request,
-            }
-        } else {
-            request
+        // Delegate to the canonical pair computation to keep semantics single-owned.
+        let mut req = request;
+        for (k, v) in self.auth_headers() {
+            req = req.header(k, v);
         }
+        req
+    }
+
+    /// Canonical transport-neutral provider auth (pure pairs, no concrete types).
+    ///
+    /// Returns `(name, value)` pairs to set (overwrite semantics). Single
+    /// source of truth for [`Self::apply_auth`] and
+    /// [`Self::apply_auth_to_transport`].
+    pub fn auth_headers(&self) -> Vec<(String, String)> {
+        let Some(key) = &self.config.api_key else {
+            return Vec::new();
+        };
+        let secret = key.expose_secret().to_string();
+        match self.provider {
+            Provider::Azure => vec![
+                ("api-key".to_string(), secret),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            _ if self.provider.supports_bearer_auth() => {
+                vec![("Authorization".to_string(), format!("Bearer {secret}"))]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Canonical transport-neutral application to an EggSec-owned HeaderMap.
+    pub fn apply_auth_to_transport(
+        &self,
+        headers: &mut eggsec_transport::HeaderMap,
+    ) -> Result<(), String> {
+        for (k, v) in self.auth_headers() {
+            let name: eggsec_transport::HeaderName = k
+                .parse()
+                .map_err(|e| format!("bad auth header '{k}': {e}"))?;
+            let value: eggsec_transport::HeaderValue = v
+                .parse()
+                .map_err(|e| format!("bad auth value for '{k}': {e}"))?;
+            headers.insert(name, value);
+        }
+        Ok(())
     }
 
     async fn chat_completion(

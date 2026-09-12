@@ -26,7 +26,7 @@ For the full capability matrix with risk tiers, feature gates, surface exposure,
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 39 normative invariants. See [`architecture/network_dependency_baseline.md`](architecture/network_dependency_baseline.md) for the retained per-artifact dependency baseline, concrete-client inventory, migration parity matrix, and security-policy state (Phase A, measurement only; no HTTP client migration).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 39 normative invariants. See [`architecture/network_dependency_baseline.md`](architecture/network_dependency_baseline.md) for the retained per-artifact dependency baseline, concrete-client inventory, migration parity matrix, and security-policy state (Phase A, measurement only; no HTTP client migration). See [`architecture/transport.md`](architecture/transport.md) for the scope-aware outbound HTTP contract (Phase B: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake; no backend migration yet).
 
 Protocol adapters (REST/MCP/gRPC/OpenAI/OpenResponses) and the autonomous agent depend on narrow engine service traits (`OperationCatalog`, `CheckedExecutor`, `PreflightService`/`AgentExecutionService`), not on concrete registry/dispatcher construction. Authorization stays in `EnforcementContext`; adapters perform only checked dispatch under an `ApprovedOperation` token.
 
@@ -90,6 +90,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management |
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
 | `eggsec-python` | Python bindings (PyO3/maturin) |
+| `eggsec-transport` | Scope-aware outbound HTTP contract (neutral DTOs, mandatory authority, recording fake) |
 
 ### Build and Run
 

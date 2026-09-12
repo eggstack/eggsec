@@ -74,6 +74,42 @@ pub fn apply_auth_context(headers: &mut HashMap<String, String>, entry: &AuthCon
     }
 }
 
+/// Canonical transport-neutral auth-context application (Phase B).
+///
+/// Applies headers (overwrite) and cookies (true merge: auth-context values
+/// win on name collision, unrelated existing cookies preserved) to an
+/// EggSec-owned [`eggsec_transport::HeaderMap`]. Prefer this over the
+/// `reqwest` compatibility wrapper below. Pure transformation — no concrete
+/// HTTP client types.
+pub fn apply_auth_context_to_transport(
+    headers: &mut eggsec_transport::HeaderMap,
+    entry: &AuthContextEntry,
+) -> Result<(), String> {
+    eggsec_transport::apply_auth_headers(headers, &entry.headers, &entry.cookies)
+        .map_err(|e| e.to_string())
+}
+
+/// Canonical pure-map auth-context application (no concrete client types).
+///
+/// - `headers`: auth-context headers overwrite same-named entries.
+/// - Returns the merged `Cookie` header value (`None` when neither existing
+///   nor auth-context cookies exist). Auth-context cookies win on name
+///   collision; unrelated existing cookies are preserved.
+pub fn apply_auth_context_to_map(
+    headers: &mut HashMap<String, String>,
+    existing_cookie: Option<&str>,
+    entry: &AuthContextEntry,
+) -> Option<String> {
+    apply_auth_context(headers, entry);
+    if entry.cookies.is_empty() && existing_cookie.is_none_or(|s| s.is_empty()) {
+        return None;
+    }
+    Some(eggsec_transport::merge_cookie_header(
+        existing_cookie,
+        &entry.cookies,
+    ))
+}
+
 /// Get list of available context names
 pub fn list_context_names(ctx: &AuthContext) -> Vec<String> {
     ctx.contexts.keys().cloned().collect()
@@ -98,12 +134,17 @@ pub fn get_context_entry<'a>(ctx: &'a AuthContext, role: &str) -> Result<&'a Aut
     })
 }
 
-/// Apply an auth context entry's headers and cookies to a reqwest request builder.
+/// Compatibility wrapper: apply an auth context entry to a reqwest builder.
 ///
-/// Auth context headers override any existing headers with the same name.
-/// Auth context cookies are **merged** with any existing Cookie header rather
-/// than replacing it. If a cookie name from the auth context already exists in
-/// the current Cookie header, the auth context value wins.
+/// Retained temporarily for the pre-migration (Phase B) concrete backend.
+/// New code must use [`apply_auth_context_to_transport`] (HeaderMap) or
+/// [`apply_auth_context_to_map`] (pure maps) instead — those are the
+/// canonical shared APIs and carry no concrete client types.
+///
+/// Semantics match the canonical path: headers overwrite, cookies are merged
+/// with any pre-existing `Cookie` header (auth-context wins on collision).
+/// Note: the pre-Phase-B implementation *replaced* the `Cookie` header; the
+/// canonical behavior is a true merge (see [`apply_auth_context_to_map`]).
 pub fn apply_auth_context_to_request(
     request: reqwest::RequestBuilder,
     entry: &AuthContextEntry,
@@ -118,17 +159,15 @@ pub fn apply_auth_context_to_request(
     req
 }
 
-/// Merge auth-context cookies with any existing Cookie header value.
+/// Merge auth-context cookies (compatibility helper for the reqwest wrapper).
 ///
 /// Returns a `"; "`-joined cookie string where auth-context cookies take
-/// precedence over pre-existing cookies with the same name.
+/// precedence. New code should use [`apply_auth_context_to_map`] or
+/// `eggsec_transport::merge_cookie_header` for true merge semantics with an
+/// existing `Cookie` header.
 fn merge_cookies(entry: &AuthContextEntry) -> String {
-    entry
-        .cookies
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>()
-        .join("; ")
+    // Deterministic ordering via the transport helper (sorted by name).
+    eggsec_transport::merge_cookie_header(None, &entry.cookies)
 }
 
 #[cfg(test)]
@@ -271,5 +310,51 @@ contexts:
 "#;
         let result = parse_auth_context(yaml);
         assert!(result.is_err());
+    }
+
+    fn transport_entry() -> AuthContextEntry {
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer t".to_string());
+        let mut cookies = HashMap::new();
+        cookies.insert("session".to_string(), "new".to_string());
+        AuthContextEntry {
+            description: None,
+            headers,
+            cookies,
+        }
+    }
+
+    #[test]
+    fn transport_map_merges_cookies_and_overwrites_headers() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Keep".to_string(), "1".to_string());
+        let merged = apply_auth_context_to_map(
+            &mut headers,
+            Some("keep=1; session=old"),
+            &transport_entry(),
+        );
+        assert_eq!(headers.get("Authorization").unwrap(), "Bearer t");
+        let cookie = merged.expect("cookie");
+        assert!(cookie.contains("keep=1"), "lost: {cookie}");
+        assert!(cookie.contains("session=new"), "missing: {cookie}");
+        assert!(!cookie.contains("session=old"), "stale: {cookie}");
+    }
+
+    #[test]
+    fn transport_headermap_applies_without_concrete_types() {
+        let mut map = eggsec_transport::HeaderMap::new();
+        apply_auth_context_to_transport(&mut map, &transport_entry()).expect("apply");
+        assert!(map.contains_key(http_like_authorization()));
+        assert!(map.contains_key(http_like_cookie()));
+        let dbg = eggsec_transport::redacted_headers_debug(&map);
+        assert!(!dbg.contains("Bearer t"), "leak: {dbg}");
+    }
+
+    fn http_like_authorization() -> eggsec_transport::HeaderName {
+        "authorization".parse().expect("name")
+    }
+
+    fn http_like_cookie() -> eggsec_transport::HeaderName {
+        "cookie".parse().expect("name")
     }
 }
