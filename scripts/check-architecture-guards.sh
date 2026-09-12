@@ -2362,6 +2362,105 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 102. Eggfetch adapter stays narrow and unmigrated (Phase C).
+# The adapter crate owns the eggfetch binding: minimal published features
+# (http1 + rustls + proxy-for-SNI only; never http3/cookies/multipart/
+# compression), no concrete client types in its sources, no eggfetch types
+# in its public surface, and no production consumer may depend on it yet
+# (Phase D migrates consumers one at a time; the engine test dev-dep is
+# the only sanctioned wiring).
+echo ""
+echo "--- Check 102: Eggfetch adapter stays narrow and unmigrated ---"
+SECTION_FAIL=0
+if ! rg -q 'crates/eggsec-transport-eggfetch' Cargo.toml 2>/dev/null; then
+  echo "FAIL: workspace Cargo.toml does not list crates/eggsec-transport-eggfetch."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec-transport-eggfetch/Cargo.toml" ]]; then
+  echo "FAIL: missing adapter manifest: crates/eggsec-transport-eggfetch/Cargo.toml"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  DEP_LINE=$(rg -n 'eggfetch-core = ' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null || true)
+  if [[ -z "$DEP_LINE" ]]; then
+    echo "FAIL: adapter manifest has no eggfetch-core dependency."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  else
+    if ! echo "$DEP_LINE" | rg -q 'default-features = false'; then
+      echo "FAIL: adapter must pin eggfetch-core default-features = false."
+      echo "$DEP_LINE"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+    if echo "$DEP_LINE" | rg -q 'http3|cookies|multipart|compression'; then
+      echo "FAIL: adapter enables a deferred eggfetch feature (http3/cookies/multipart/compression)."
+      echo "$DEP_LINE"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  fi
+  # Only the [dependencies] section is scanned (comments stripped):
+  # dev-dependencies may carry fixture-only TLS/test tooling (rcgen,
+  # tokio-rustls, ipnetwork).
+  DEPS_SECTION=$(sed -n '/^\[dependencies\]/,/^\[/p' crates/eggsec-transport-eggfetch/Cargo.toml | head -n -1 | rg -v '^\s*#')
+  if echo "$DEPS_SECTION" | rg -q 'reqwest|hyper|rustls|tokio-rustls|hickory|eggress'; then
+    # `tls-rustls` is the eggfetch feature name, not a direct dependency;
+    # anything else matching here is a concrete-client leak.
+    LEAKS=$(echo "$DEPS_SECTION" | rg -n 'reqwest|^hyper|[^s-]rustls|tokio-rustls|hickory|eggress' || true)
+    if [[ -n "$LEAKS" ]]; then
+      echo "$LEAKS"
+      echo "FAIL: adapter [dependencies] gained a concrete network dependency."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  fi
+fi
+if [[ ! -d "crates/eggsec-transport-eggfetch/src" ]]; then
+  echo "FAIL: missing adapter sources: crates/eggsec-transport-eggfetch/src"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  HITS=$(rg -n 'reqwest::|hyper::|rustls::|tokio_rustls::|hickory_resolver::' crates/eggsec-transport-eggfetch/src/ 2>/dev/null || true)
+  if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: adapter src uses concrete network client types directly."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  for sym in "pub struct EggfetchTransport" "impl HttpTransport for EggfetchTransport" "without_proxy" "Http1Only" "validate_binding" "authorize_reresolution" "build_redirect_request"; do
+    if ! rg -q "$sym" crates/eggsec-transport-eggfetch/src/ 2>/dev/null; then
+      echo "FAIL: adapter src missing required symbol: $sym"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+if [[ ! -f "crates/eggsec-transport-eggfetch/tests/parity.rs" ]]; then
+  echo "FAIL: missing adapter parity suite: crates/eggsec-transport-eggfetch/tests/parity.rs"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "architecture/transport_eggfetch.md" ]]; then
+  echo "FAIL: missing adapter doc: architecture/transport_eggfetch.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# No production consumer may depend on the adapter yet. The engine crate
+# may reference it only under [dev-dependencies] (parity tests).
+REFS=$(rg -l 'eggsec-transport-eggfetch' crates/*/Cargo.toml 2>/dev/null || true)
+for ref in $REFS; do
+  case "$ref" in
+    crates/eggsec-transport-eggfetch/Cargo.toml) ;;
+    crates/eggsec/Cargo.toml)
+      SECTION_TEXT=$(sed -n '/^\[dev-dependencies\]/,/^\[/p' crates/eggsec/Cargo.toml)
+      if ! echo "$SECTION_TEXT" | rg -q 'eggsec-transport-eggfetch'; then
+        echo "FAIL: crates/eggsec references the adapter outside [dev-dependencies] (production migration needs Phase D)."
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+      ;;
+    *)
+      echo "FAIL: unexpected adapter consumer: $ref (production migration needs Phase D)."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      ;;
+  esac
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Eggfetch adapter stays narrow and unmigrated."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

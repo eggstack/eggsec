@@ -1,6 +1,6 @@
 # Phase C — Eggfetch readiness and EggSec adapter
 
-Status: Ready for handoff
+Status: Executed 2026-09-12
 
 Date: 2026-09-11
 
@@ -183,3 +183,104 @@ EggSec repository:
 - new `crates/eggsec-transport-eggfetch/`;
 - integration fixtures/tests;
 - architecture documentation and this completion record.
+
+## Completion record (Executed 2026-09-12)
+
+EggSec SHAs: baseline `ae9a3aa9` (Phase B head) through Phase C commit
+(recorded in `git log`; no production-consumer migration in this phase).
+
+### Workstream disposition
+
+- **WS1 (resolver/connection hook): no upstream change required.**
+  Probed `eggfetch-core 0.1.3` (crates.io): every connector resolves
+  internally via `tokio::net::lookup_host` with no authorization hook,
+  and the SNI-direct path builds a TLS connector only with the `proxy`
+  or `http3` features enabled. Instead of an upstream change, the
+  adapter binds through public APIs: resolve via the injected
+  `TransportResolver` → `authorize_resolved`/`authorize_reresolution` →
+  `validate_binding` → `authorize_socket` → rewrite the wire URL host to
+  the approved IP literal (connector self-resolves the literal; `Host`
+  header + TLS SNI preserve the logical hostname). One authoritative
+  path; IP literals skip resolution entirely. A generic upstream
+  `DnsResolver` trait + pre-follow redirect callback is recorded as
+  optional hardening in `architecture/transport_eggfetch.md`, not a
+  prerequisite.
+- **WS2 (redirect authorization): adapter-level manual loop** (the
+  plan-anticipated fallback). Auto-follow is doubly disabled (client +
+  per-request); each hop reuses the public
+  `redirect::build_redirect_request` primitive (method rewrite, header
+  stripping, body-replay rules stay upstream) and passes
+  `authorize_redirect` + the full checkpoint sequence before dispatch.
+- **WS3 (`eggsec-transport-eggfetch`): implemented.** Published
+  `eggfetch-core 0.1` with `default-features = false` +
+  `["http1", "tls-rustls", "proxy"]` (`proxy` solely for the SNI-direct
+  TLS connector; routing forcibly disabled via `without_proxy` + no
+  configured proxy). No `eggfetch` types in the public API
+  (`EggfetchTransport::new(resolver)` + `HttpTransport` only).
+- **WS4 (TLS parity): implemented per table in
+  `architecture/transport_eggfetch.md`.** Verified = WebPKI-only roots
+  (Reqwest-default parity); insecure = separate warn-logged client;
+  SNI = logical host; HTTP/1.1 pinned. Fixtures: self-signed rejection,
+  insecure acceptance (+SNI metadata), hostname-mismatch rejection.
+  Verified-success e2e has no local fixture (no custom-CA row in
+  `TlsPolicy`; Phase A confirms it is unused) — documented gap.
+- **WS5 (parity/adversarial suite): implemented.** 33 adapter tests
+  (`crates/eggsec-transport-eggfetch/tests/parity.rs`, local plain+TLS
+  loopback fixtures) covering every mandatory adversarial case
+  (DNS-change-between-hops, allowed→denied redirect, userinfo/unsupported
+  redirects, cross-origin stripping, credential redaction, verbatim
+  compression, non-replayable N/A, connect/read/total timeouts,
+  cancellation) + 5 engine interop tests through `ScopeAuthority`
+  (`crates/eggsec/tests/transport_eggfetch_parity.rs`).
+
+### Cross-repository handoff
+
+- No `eggfetch` change landed or consumed: adapter pins crates.io
+  `eggfetch-core 0.1` (resolving to `0.1.3` in `Cargo.lock`), no branch
+  or git reference; `eggfetch` remains independent of EggSec.
+- Dependency delta: `+eggfetch-core 0.1.3` (+ its Hyper/Rustls closure,
+  ring-only) in the workspace lockfile; ordinary builds gain no new
+  system dependencies.
+
+### Verification (all local, before push)
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --no-default-features
+cargo clippy -p eggsec-transport-eggfetch --all-targets -- -D warnings
+cargo test -p eggsec-transport-eggfetch            # 8 unit + 33 parity
+cargo test -p eggsec --features rest-api --test transport_eggfetch_parity  # 5 interop
+cargo tree -p eggsec-transport-eggfetch -e features
+make check                  # full mandatory contract incl. new Check 102
+make test-architecture-guards
+```
+
+Phase A (12) + Phase B (11) suites remain green and unmodified.
+
+### Acceptance mapping
+
+1. Approved-resolution binding proven via pinning (adversarial
+   DNS-change + mixed-answer + panicking-resolver tests). ✅
+2. Every redirect hop authorized before dispatch (manual loop,
+   auto-follow doubly disabled). ✅
+3. Re-resolution re-invokes authorization (`authorize_reresolution` on
+   hops > 0; tested). ✅
+4. HTTP/3 never constructed (feature off + `Http1Only`); remote-DNS
+   proxy unreachable (feature-gated routing disabled + non-Direct
+   intents fail closed at `proxy`). ✅
+5. Phase B contract implemented with no `eggfetch` leakage (Check 102). ✅
+6. TLS/timeout/redirect/auth-cookie/body/proxy semantics pass parity
+   fixtures (38 tests). ✅
+7. `eggfetch` independent of EggSec (no upstream change). ✅
+8. No production consumer migrated (Check 102 fails otherwise). ✅
+
+### Residual debt (Phase D/G input)
+
+- Upstream `DnsResolver`/pre-follow hooks remain optional hardening;
+  evaluate against a released `eggfetch-core` before Phase D widens use.
+- `RecordingFakeTransport` still reports `Dns` (not `Reresolution`) on
+  later hops while the adapter uses `authorize_reresolution`; optional
+  Phase G alignment (behavioral verdicts identical under
+  `ScopeAuthority`).
+- Verified-TLS-success e2e awaits a custom-CA policy row only if a
+  consumer ever needs it.

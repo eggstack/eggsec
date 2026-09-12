@@ -31,8 +31,9 @@ The package-level test commands automatically include all integration tests. New
 |---------|-------------|----------------|
 | `cargo fmt --all --check` | Style inconsistency | Mechanical; blocks clean diffs |
 | `cargo check --workspace --no-default-features` | Missing feature gates, broken no-default build | Catches regressions in optional-feature boundaries |
-| `make clippy` (engine lib + `eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
+| `make clippy` (engine lib + `eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
 | `cargo test -p eggsec --features rest-api --tests` | Behavioral regressions across all integration tests | Exercises MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more |
+| `cargo test -p eggsec-transport-eggfetch --tests` | Adapter parity/adversarial regressions (33 local-fixture tests) | Proves approved-IP pinning, authorized redirects, TLS/timeout mapping without production wiring |
 | `cargo test -p eggsec-output --tests` | Report envelope roundtrip | Output crate is leaf; distinct defect class |
 | `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
 

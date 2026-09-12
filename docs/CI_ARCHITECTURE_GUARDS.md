@@ -117,12 +117,13 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - CLI TUI dependency is feature-gated.
 - TUI has no canonical `TaskConfig`/`TaskResult` enums or `match task_kind` execution dispatchers.
 
-### Network-Dependency Baseline + Transport-Contract Invariants (Phases A–B, no backend migration)
+### Network-Dependency Baseline + Transport-Contract Invariants (Phases A–C, no production migration yet)
 - Leaf crates (`eggsec-runtime`, `eggsec-tool-core`, `eggsec-output`, `eggsec-ui-model`, `eggsec-daemon-protocol`) have no `reqwest`/`rustls`/`tokio-rustls`/`hickory-resolver` dependencies or uses (guard Check 99).
 - Concrete `reqwest::RequestBuilder` appears only in the enumerated compatibility wrappers (`auth_context::apply_auth_context_to_request`, `ai::apply_auth`, `integrations::send_with_retry`); new occurrences fail the guard (Check 99).
 - Scoped transport contract (guard Check 100): `eggsec-transport` exists, stays dependency-light (`bytes`/`http`/`url`/`thiserror` only, no concrete clients in manifest or `::` uses), exposes mandatory-authority `HttpTransport`, full `NetworkAuthority` checkpoints, TOCTOU-closed `validate_binding`/`ApprovedBinding`, redacted secrets, and the recording fake; engine binding is `config::ScopeAuthority`; closure tests live in `crates/eggsec/tests/transport_contract.rs`.
 - Canonical helpers (guard Check 101): `apply_auth_context_to_transport`/`_to_map`, `AiClient::auth_headers`/`apply_auth_to_transport`, `should_retry_status`/`backoff_for_attempt` exist and compat wrappers are labeled canonical-vs-compat.
-- Retained baseline: `architecture/network_dependency_baseline.md` (per-artifact deps, leakage inventory, parity matrix, policy state). Scoped contract: `architecture/transport.md`. Executable invariants: `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors, local fixtures only) + `crates/eggsec/tests/transport_contract.rs` (11 closure tests through the fake).
+- Eggfetch adapter (guard Check 102): `eggsec-transport-eggfetch` implements `HttpTransport` over published `eggfetch-core` with minimal features (`http1` + `tls-rustls` + `proxy`-for-SNI only; never `http3`/`cookies`/`multipart`/compression), no direct concrete-client uses, approved-IP pinning + manual authorized redirect loop, and **no production consumer** (only the engine test dev-dep); parity suites are `crates/eggsec-transport-eggfetch/tests/parity.rs` + `crates/eggsec/tests/transport_eggfetch_parity.rs`.
+- Retained baseline: `architecture/network_dependency_baseline.md` (per-artifact deps, leakage inventory, parity matrix, policy state). Scoped contract: `architecture/transport.md`. Adapter: `architecture/transport_eggfetch.md`. Executable invariants: `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors, local fixtures only) + `crates/eggsec/tests/transport_contract.rs` (11 closure tests through the fake).
 
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.

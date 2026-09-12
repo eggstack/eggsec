@@ -12,14 +12,14 @@ make check-python           # only when Python bindings/stubs/docs/scripts chang
 ```
 
 - `make test` = `cargo test --lib -p eggsec` only. Full suite: `make test-ci` (`-p eggsec --features rest-api`).
-- `make clippy` covers engine lib + leaf crates (`eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`). Domain/platform lint is `make clippy-domain` (deep checks only).
+- `make clippy` covers engine lib + leaf crates (`eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`). Domain/platform lint is `make clippy-domain` (deep checks only).
 - Guards need `ripgrep` (`rg`): `bash scripts/check-architecture-guards.sh`. No `cargo-nextest` required.
 - `make check-python` builds into `.venv-ci/` (override: `EGGSEC_PYTHON_VENV`); pytest excludes `network`-marked tests by default.
 - `make check-full` / `make check-features-individual` are deep-checks only, not per-PR. Contract details: `docs/VERIFICATION.md`.
 
 ## Workspace
 
-17 crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`; CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
+18 crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`; CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
 
 | Crate | Purpose |
 |-------|---------|
@@ -30,6 +30,7 @@ make check-python           # only when Python bindings/stubs/docs/scripts chang
 | `eggsec-output`, `eggsec-agent` | reports, agent coordination |
 | `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse` | domain crates (never authorize — caller enforces) |
 | `eggsec-transport` | scope-aware outbound HTTP contract (neutral DTOs, mandatory `NetworkAuthority`, recording fake; `bytes`/`http`/`url`/`thiserror` only) |
+| `eggsec-transport-eggfetch` | `HttpTransport` over published `eggfetch-core` (approved-IP pinning, manual authorized redirects; no production consumers yet — Phase D migrates) |
 | `eggsec-python` | PyO3/maturin bindings (`maturin develop` from `crates/eggsec-python/`) |
 
 ```bash
@@ -60,7 +61,7 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 - TUI: `TabSpec` (`tabs/spec.rs`) owns surface definitions; alias lookup via `resolve_palette_command()`; palette/keys via `app/palette.rs`. `copy-cli` builds an argv vector (`cli_argv()`, quoting only at boundary) and must emit only flags the real Clap tree accepts. Fuzz HTTP-session flag is `--http-session` (`--session` is the daemon attach ID).
 - Dependency boundaries (guard-enforced): `eggsec-runtime` stays light (serde/serde_json, thiserror, tokio, tokio-util, tracing, uuid); `eggsec-output` depends only on `eggsec-core`; `eggsec-daemon` default deps are `eggsec-runtime` + `eggsec-daemon-protocol` only (engine behind `full-executor`, transport behind `http-api`, no TUI deps); `eggsec-transport` stays light (`bytes`/`http`/`url`/`thiserror` only, no concrete clients).
 - TLS: ring-only everywhere. `rustls`/`tokio-rustls` with `default-features = false` + `["ring", ...]`; `reqwest` with `rustls-no-provider`, never `rustls`.
-- Network-dependency baseline (Phase A measurement + Phase B contract, no backend migration): retained baseline is `architecture/network_dependency_baseline.md` (per-artifact deps, concrete-client inventory, parity matrix, policy state); scoped contract is `architecture/transport.md` (`eggsec-transport` DTOs + mandatory `NetworkAuthority` + TOCTOU-closed binding + recording fake; engine binding via `config::ScopeAuthority`); executable invariants are `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors) + `crates/eggsec/tests/transport_contract.rs` (11 closure tests through the fake); durable boundaries are guards Check 99 (Phase A) + 100/101 (Phase B). Canonical header/auth paths are transport-neutral (`apply_auth_context_to_transport`/`_to_map`, `AiClient::auth_headers`, `should_retry_status`); concrete-builder wrappers are compat-only.
+- Network-dependency baseline (Phase A measurement + Phase B contract + Phase C adapter, no production migration): retained baseline is `architecture/network_dependency_baseline.md` (per-artifact deps, concrete-client inventory, parity matrix, policy state); scoped contract is `architecture/transport.md` (`eggsec-transport` DTOs + mandatory `NetworkAuthority` + TOCTOU-closed binding + recording fake; engine binding via `config::ScopeAuthority`); eggfetch adapter is `architecture/transport_eggfetch.md` (`eggsec-transport-eggfetch` over published `eggfetch-core` with approved-IP pinning + manual authorized redirect loop, HTTP/3 off, proxy deferred); executable invariants are `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors) + `crates/eggsec/tests/transport_contract.rs` (11 closure tests through the fake) + `crates/eggsec-transport-eggfetch/tests/parity.rs` (33 adapter tests over local fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine interop tests); durable boundaries are guards Check 99 (Phase A) + 100/101 (Phase B) + 102 (Phase C: minimal eggfetch features, no direct concrete clients, no production consumers). Canonical header/auth paths are transport-neutral (`apply_auth_context_to_transport`/`_to_map`, `AiClient::auth_headers`, `should_retry_status`); concrete-builder wrappers are compat-only.
 
 ## Gotchas
 

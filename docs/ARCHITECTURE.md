@@ -60,6 +60,8 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec-runtime` | Frontend-neutral runtime | No | No | No | Yes | Task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor`) for daemon architecture. |
 | `eggsec-daemon` | Persistent daemon host | No | No | **Yes** | Yes | Unix socket server, session lifecycle, RBAC, persistence. Depends only on `eggsec-runtime`. |
 | `eggsec-ui-model` | Frontend view DTOs | No | No | No | Yes | View model types for TUI/daemon event rendering. |
+| `eggsec-transport` | Scope-aware outbound HTTP contract | No | No | No | Yes | Neutral DTOs, mandatory `NetworkAuthority`, recording fake. No concrete clients. |
+| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` | No | No | No | Yes | Approved-IP pinning, manual authorized redirects. No production consumers yet. |
 | `eggsec-python` | Python bindings | No | No | No | Yes | PyO3/maturin. Depends on `eggsec` + `eggsec-core`. Engine/AsyncEngine entry points, scope enforcement, OperationRegistry, EnforcementContext, event protocol, callbacks/sinks, domain registry, 1.0 readiness. |
 
 **Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-output`, `eggsec-agent`) have no internal workspace dependencies. The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.

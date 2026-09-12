@@ -173,6 +173,20 @@ Engine: `eggsec::config::ScopeAuthority`.
 - `cargo test -p eggsec --features rest-api --test transport_contract` (11 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, userinfo, secret redaction, direct IP, proxy distinctness, TLS orthogonality, invented-address rejection).
 - Phase A `network_policy_invariants.rs` (12 behaviors) remains the measurement baseline; the contract suite proves the same behaviors through the new layer.
 
+## Phase C adapter (no production migration)
+
+The contract is implemented against a real backend in
+`crates/eggsec-transport-eggfetch/` ([transport_eggfetch.md](transport_eggfetch.md)):
+`EggfetchTransport` enforces this checkpoint order over published
+`eggfetch-core` via approved-IP pinning (the connector only ever sees the
+authorized literal) and a manual redirect loop (auto-follow doubly
+disabled; each hop authorized before dispatch). HTTP/3 is off, proxied
+execution fails closed, and no production consumer is wired to it yet
+(guard Check 102). Parity evidence:
+`crates/eggsec-transport-eggfetch/tests/parity.rs` (33 tests over local
+fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
+interop tests through `ScopeAuthority`).
+
 ## Invariants & Gotchas
 
 1. **No unchecked dispatch** — `execute` without an authority does not exist.

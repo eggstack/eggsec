@@ -31,7 +31,7 @@ test-slow:
 # Run clippy (routine: engine + dependency-light leaf crates)
 clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
-	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -- -D warnings
+	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -p eggsec-transport-eggfetch -- -D warnings
 
 # Lint domain/platform crates with their relevant features (deep checks only:
 # heavier closures, may need system prerequisites like libssl-dev).
@@ -85,6 +85,7 @@ check:
 	cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 	cargo test -p eggsec --features rest-api --tests --no-fail-fast
 	cargo test -p eggsec-output --tests
+	cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
 	cargo test -p eggsec-tui --lib --no-fail-fast
 	bash scripts/check-architecture-guards.sh
 

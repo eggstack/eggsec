@@ -422,6 +422,7 @@ tempfile = "3"
 criterion = "0.5"
 proptest = "1"
 eggsec-transport = { workspace = true, features = ["test-util"] }
+eggsec-transport-eggfetch = { workspace = true }
 http = { workspace = true }
 
 [[bench]]

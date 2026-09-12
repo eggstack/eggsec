@@ -17,6 +17,7 @@ members = [
     "crates/eggsec-ui-model",
     "crates/eggsec-python",
     "crates/eggsec-transport",
+    "crates/eggsec-transport-eggfetch",
 ]
 resolver = "2"
 
@@ -63,6 +64,7 @@ eggsec-daemon-protocol = { path = "crates/eggsec-daemon-protocol", version = "0.
 bytes = "1"
 http = "1"
 eggsec-transport = { path = "crates/eggsec-transport", version = "0.1.0" }
+eggsec-transport-eggfetch = { path = "crates/eggsec-transport-eggfetch", version = "0.1.0" }
 
 [profile.release]
 lto = true

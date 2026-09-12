@@ -1,0 +1,37 @@
+[package]
+name = "eggsec-transport-eggfetch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Scope-aware outbound HTTP transport over eggfetch-core (Phase C, no production consumers yet)"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "http", "transport", "scope"]
+categories = ["development-tools"]
+
+[dependencies]
+eggsec-transport = { workspace = true }
+# Minimal eggfetch surface: HTTP/1 + rustls only, plus `proxy` for one
+# narrow reason: without it the SNI-direct connector path builds no TLS
+# connector at all, and the adapter needs that path (pinned-IP URL + SNI =
+# logical hostname) for verified HTTPS. Proxy *routing* stays disabled by
+# construction (no proxy is ever configured and every request sets
+# `without_proxy`); see `adapter.rs`. Deliberately NOT enabled: http3
+# (separate QUIC resolution path), cookies (jar semantics bypass per-hop
+# authorization), compression codecs (bomb-limit parity), multipart.
+eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls", "proxy"] }
+bytes = { workspace = true }
+http = { workspace = true }
+url = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+ipnetwork = { workspace = true }
+rcgen = { version = "0.14" }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
