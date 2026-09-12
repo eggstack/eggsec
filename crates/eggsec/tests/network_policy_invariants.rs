@@ -184,6 +184,9 @@ async fn same_origin_redirect_inside_scope_succeeds() {
         .is_target_allowed_with_resolver(&url_b, &*sys)
         .unwrap());
 
+    // `reqwest` with `rustls-no-provider` requires an installed crypto
+    // provider before `ClientBuilder::build` (fail-closed otherwise).
+    eggsec::install_tls_provider();
     let client = reqwest::Client::builder()
         .redirect(eggsec::utils::http::same_host_redirect_policy(10))
         .build()
@@ -241,6 +244,7 @@ async fn redirect_to_out_of_scope_host_is_stopped_before_dispatch() {
         .is_target_allowed_with_resolver("evil.invalid", &resolver)
         .unwrap());
 
+    eggsec::install_tls_provider();
     let client = reqwest::Client::builder()
         .redirect(eggsec::utils::http::same_host_redirect_policy(10))
         .build()
@@ -315,6 +319,7 @@ async fn cross_origin_redirect_forwards_no_secrets() {
         .mount(&second)
         .await;
 
+    eggsec::install_tls_provider();
     let client = reqwest::Client::builder()
         .redirect(eggsec::utils::http::same_host_redirect_policy(10))
         .build()
