@@ -582,7 +582,7 @@ Complete catalog of component deep-dives in this directory:
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
 | **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
-| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
+| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
 
 Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md).
 

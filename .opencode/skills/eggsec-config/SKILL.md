@@ -39,6 +39,8 @@ Target restrictions for security compliance.
 - `TargetScope::parse_with_resolver(target, resolver)` - Full DNS resolution
 - `TargetScope::evaluate_addresses(allowed, excluded)` - All-address scope check
 
+**Phase A network baseline (measurement only, no migration):** retained baseline is `architecture/network_dependency_baseline.md` (per-artifact deps, concrete-client inventory incl. `auth_context::apply_auth_context_to_request`, parity matrix, policy state); executable invariants are `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors: DNS/mixed/re-resolution, same-origin + cross-host redirects, userinfo, secret forwarding, direct IP, proxy-vs-target, insecure-TLS orthogonality; local fixtures only); durable boundary is guard Check 99. Do not migrate HTTP clients in this phase; do not invent a second scope model.
+
 ### Config Loading (`loader.rs`)
 ```rust
 let config = load_config(None)?;  // Auto-discovers config file
@@ -217,6 +219,8 @@ For full config management, use CLI commands or edit config files directly when 
 
 - `crates/eggsec/src/config/AGENTS.override.md` - Detailed config patterns
 - `architecture/config.md` - Architecture documentation
+- `architecture/network_dependency_baseline.md` - Phase A dependency/parity/policy baseline
+- `crates/eggsec/tests/network_policy_invariants.rs` - 12 outbound authorization invariants
 
 ## Phase D Hotspot Modules (2026-09-09)
 

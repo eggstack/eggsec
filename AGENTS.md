@@ -59,6 +59,7 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 - TUI: `TabSpec` (`tabs/spec.rs`) owns surface definitions; alias lookup via `resolve_palette_command()`; palette/keys via `app/palette.rs`. `copy-cli` builds an argv vector (`cli_argv()`, quoting only at boundary) and must emit only flags the real Clap tree accepts. Fuzz HTTP-session flag is `--http-session` (`--session` is the daemon attach ID).
 - Dependency boundaries (guard-enforced): `eggsec-runtime` stays light (serde/serde_json, thiserror, tokio, tokio-util, tracing, uuid); `eggsec-output` depends only on `eggsec-core`; `eggsec-daemon` default deps are `eggsec-runtime` + `eggsec-daemon-protocol` only (engine behind `full-executor`, transport behind `http-api`, no TUI deps).
 - TLS: ring-only everywhere. `rustls`/`tokio-rustls` with `default-features = false` + `["ring", ...]`; `reqwest` with `rustls-no-provider`, never `rustls`.
+- Network-dependency baseline (Phase A, measurement only): retained baseline is `architecture/network_dependency_baseline.md` (per-artifact deps, concrete-client inventory incl. `auth_context::apply_auth_context_to_request`, parity matrix, policy state); executable invariants are `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors, local fixtures, no Internet); durable boundary is guard Check 99. No HTTP client migration in Phase A.
 
 ## Gotchas
 

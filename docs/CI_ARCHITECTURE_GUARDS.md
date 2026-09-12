@@ -117,6 +117,11 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - CLI TUI dependency is feature-gated.
 - TUI has no canonical `TaskConfig`/`TaskResult` enums or `match task_kind` execution dispatchers.
 
+### Network-Dependency Baseline Invariants (Phase A, measurement only)
+- Leaf crates (`eggsec-runtime`, `eggsec-tool-core`, `eggsec-output`, `eggsec-ui-model`, `eggsec-daemon-protocol`) have no `reqwest`/`rustls`/`tokio-rustls`/`hickory-resolver` dependencies or uses (guard Check 99).
+- Concrete `reqwest::RequestBuilder` appears only in the single enumerated `auth_context::apply_auth_context_to_request` compatibility function (Phase B migration checklist); new occurrences fail the guard.
+- Retained baseline: `architecture/network_dependency_baseline.md` (per-artifact deps, leakage inventory, parity matrix, policy state). Executable invariants: `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors, local fixtures only, no migration).
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

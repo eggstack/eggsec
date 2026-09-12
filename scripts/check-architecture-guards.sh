@@ -2223,6 +2223,49 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: TUI feature-profile verification is maintained."
 fi
 
+# 99. Network-dependency Phase A baseline invariants (measurement only).
+# Durable forbidden-boundary patterns only — not every implementation detail:
+# (a) dependency-light leaf crates must not gain concrete network clients;
+# (b) concrete RequestBuilder must not spread beyond the single enumerated
+# compatibility function in auth_context (migration checklist for Phase B);
+# (c) the retained baseline doc and invariant tests must exist.
+echo ""
+echo "--- Check 99: Network concrete-client boundary is contained ---"
+SECTION_FAIL=0
+for crate in eggsec-runtime eggsec-tool-core eggsec-output eggsec-ui-model eggsec-daemon-protocol; do
+  if rg -q 'reqwest|rustls|tokio-rustls|hickory-resolver|hickory_resolver' "crates/$crate/Cargo.toml" 2>/dev/null; then
+    echo "FAIL: crates/$crate/Cargo.toml gained a concrete network dependency."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  HITS=$(rg -n 'reqwest::|rustls::|tokio_rustls::|hickory_resolver::' "crates/$crate/src/" 2>/dev/null || true)
+  if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: crates/$crate/src uses concrete network client types."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# Only the enumerated compatibility function may mention RequestBuilder in
+# auth_context; a second occurrence means the boundary spread.
+RB_COUNT=$(rg -c 'RequestBuilder' crates/eggsec/src/auth_context/mod.rs 2>/dev/null || echo 0)
+if [[ "$RB_COUNT" -gt 3 ]]; then
+  echo "FAIL: auth_context/mod.rs mentions RequestBuilder $RB_COUNT times (expected <= 3 for the single enumerated fn + docs)."
+  rg -n 'RequestBuilder' crates/eggsec/src/auth_context/mod.rs 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "architecture/network_dependency_baseline.md" ]]; then
+  echo "FAIL: missing retained baseline: architecture/network_dependency_baseline.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec/tests/network_policy_invariants.rs" ]]; then
+  echo "FAIL: missing invariant tests: crates/eggsec/tests/network_policy_invariants.rs"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Network concrete-client boundary is contained."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
