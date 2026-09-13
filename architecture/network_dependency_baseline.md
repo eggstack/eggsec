@@ -1,6 +1,8 @@
 # Network Dependency Baseline — Phase A (measurement only)
 
-Status: Baseline recorded 2026-09-12. No HTTP client migration in this phase.
+Status: Baseline recorded 2026-09-12; Phase D increment-1 addendum §7
+(2026-09-12); Phase E closure addendum §8 (2026-09-13, no HTTP client
+migration in Phase A, no egress/new-crate additions in Phase E).
 
 This is the retained per-artifact dependency baseline, concrete-client
 inventory summary, migration parity matrix, and security-policy state for the
@@ -218,4 +220,74 @@ not domain-facing); `fuzzer::advanced::fuzz(&reqwest::Client)` trait and
 migration (next increments), with no *new* `RequestBuilder` boundary allowed
 (guard 103).
 
-*Last verified against source: 2026-09-12*
+## 8. Phase E closure addendum (2026-09-13)
+
+Status: egress decided (all rejected), engine default empty, Tokio narrowed,
+no new crates. Guards: Checks 104–108 (`scripts/check-architecture-guards.sh`).
+Decision records: `architecture/egress_reuse_decision.md` (WS1) +
+`architecture/capability_segregation.md` (WS2–WS4). Plan record:
+`plans/network-dependency-phase-e-egress-and-capability-segregation.md`
+(marked Executed).
+
+### 8.1 Egress (WS1)
+
+`eggress-uri 1.0.6` / `eggress-routing 1.0.6` / `eggress-core 1.0.6` evaluated
+in an isolated probe (checksums in the decision record). URI alone is 10
+packages (net-new 1); routing is 62 packages (net-new ≥5: routing + core + URI
++ `ipnet v2` — a second CIDR family beside workspace `ipnetwork` — +
+`fastrand`). `eggfetch-core` has no `eggress` edge (`cargo tree -i` no match),
+so adoption adds conversion layers without deleting code. `ProtocolSpec` (14
+variants) imports 11 unrelated protocols into HTTP/SOCKS policy; EggSec
+`ProxyIntent` (`Direct`/`Http`/`All` with endpoint≠ultimate) plus fail-closed
+userinfo rejection is stricter than parse-and-redact. Routing would add a
+second policy language beside `Scope`/`TargetScope` + `NetworkAuthority`
+(EggSec authorization stays authoritative; route selection ≠ authorization).
+Disposition: **all rejected**, no workspace edge, lockfile unchanged in this
+respect (workspace totals §8.4).
+
+### 8.2 Library default (WS2)
+
+`crates/eggsec/Cargo.toml` `default = ["cli"]` → `default = []`. `cli`
+(`dep:clap` + `dep:clap_complete`) retained for process hosts: binary shell
+and TUI depend on the engine with explicit `features = ["cli"]`; daemon
+`full-executor = ["dep:eggsec", "eggsec/cli"]` (its `runtime_bridge` use is
+cli-gated); Python already builds with `default-features = false`.
+`make check` now runs `cargo check -p eggsec`, `cargo check -p eggsec-cli`,
+and `cargo check -p eggsec-cli --no-default-features` explicitly; clippy lints
+the engine both empty-default and with `cli`; integration suites request `cli`
+explicitly (`--features rest-api,cli`); `feature_matrix.rs` +
+`check-feature-docs.py` + `docs/FEATURE_MATRIX.md` + `docs/extending/features.md`
+assert `[]`.
+
+### 8.3 Tokio (WS3)
+
+Workspace baseline was 11 features (`rt-multi-thread`, `net`, `sync`, `time`,
+`macros`, `fs`, `process`, `io-util`, `io-std`, `signal`, `test-util`); now
+`tokio = { version = "1", default-features = false }` with per-crate
+`features = [...]`. `test-util` enabled nowhere (no paused-time sites).
+DTO crates (`core`, `tool-core`, `ui-model`, `daemon-protocol`) carry no Tokio;
+`output` keeps `io-util` only; `transport`/`eggfetch` keep Tokio in dev-deps
+only; engine keeps the broadest set (all except `test-util`); process hosts
+keep `rt-multi-thread` + `signal` as needed. Full feature matrix re-run
+(unification cannot hide missing declarations).
+
+### 8.4 Workspace totals (Phase E)
+
+`cargo metadata --locked` reports 591 packages (was 587 in §2; delta is prior
+Phase C/D additions already in the tree, not Phase E — Phase E adds zero
+packages: no `eggress`, no new crates). `cargo tree -p
+eggsec-transport-eggfetch --edges normal` = 216 lines;
+`cargo tree -p eggsec-transport --edges normal` = 87 lines (both unchanged by
+Phase E by design).
+
+### 8.5 Capability extraction (WS4)
+
+All rejected (see `capability_segregation.md` for the one-page records):
+`eggsec-net` (no clean boundary; transport facts vs engine verdicts stay
+split), web-client split (clients already live in the engine; non-proxy builds
+already avoid `rcgen`/`h2`/WS/gRPC via optional `web-proxy`), evidence crypto
+(webhook HMAC vs bundle HMAC are unrelated policies; centralizing saves one
+dep line at the cost of a false abstraction). No `crates/eggsec-net`,
+`crates/eggsec-web-client`, `crates/eggsec-evidence`/`*-signing`.
+
+*Last verified against source: 2026-09-13*

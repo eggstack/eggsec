@@ -13,5 +13,5 @@ serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 
-[dev-dependencies]
-tokio = { workspace = true }
+# Phase E WS3: DTO-only crate — no Tokio in production or tests.
+

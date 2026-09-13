@@ -267,6 +267,8 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; canonical transport-neutral header/cookie application (former `RequestBuilder` compat wrapper removed in Phase D) | [auth_context.md](auth_context.md) |
 | Transport | `crates/eggsec-transport/` | Scope-aware outbound HTTP contract: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake | [transport.md](transport.md) |
 | Transport/Eggfetch | `crates/eggsec-transport-eggfetch/` | `HttpTransport` over published `eggfetch-core` (approved-IP pinning, manual authorized redirect loop; still no production backend consumers — Phase D wires per consumer) | [transport_eggfetch.md](transport_eggfetch.md) |
+| Egress Decision | — | Phase E WS1: `eggress-uri`/`eggress-routing`/stacks all rejected with measured graphs (no `eggress` edge; direction preserved) | [egress_reuse_decision.md](egress_reuse_decision.md) |
+| Capability Segregation | — | Phase E WS2–WS4: empty library default, per-crate Tokio, all extraction candidates rejected (`eggsec-net`, web-client split, evidence crypto) | [capability_segregation.md](capability_segregation.md) |
 | Constants | `crates/eggsec/src/constants.rs` | Facade over `eggsec-core` constants + compile-time validation (`SUPPORTED_WAF_COUNT` = 34 asserted at compile time) | [constants.md](constants.md) |
 | Audit | `crates/eggsec/src/audit.rs` | `EnforcementAuditEvent` (15 fields) normalized audit record for every enforcement/preflight decision; `AuditOutcome` (5 variants) | [audit.md](audit.md) |
 | Generated | `crates/eggsec/src/generated/` | Checked-in protobuf/gRPC code, regenerated via `build.rs` (protoc needed only for descriptor set) | [generated.md](generated.md) |
@@ -410,7 +412,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities. 
 | `config-watch` | config hot-reload | File watching (notify + debouncer) |
 | `full` | Curated set (28 pinned) | Developer/lab aggregate; exclusions reasoned in `FULL_EXCLUDED_WITH_REASON`, exhaustive oracle is `make check-features-individual` |
 
-Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-schema`, `git-secrets`, `cloud`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `wireless`, `evasion`, `postex`, `daemon-client`, and `test-helpers`; feature-coupled markers (`*-mcp` exposure markers, `wireless-advanced`, `transparent-proxy`, `dynamic-plugins`) reference a base feature. Engine default is `default = ["cli"]`. See [feature_matrix.md](feature_matrix.md) for dependency edges and [../docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical inventory.
+Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-schema`, `git-secrets`, `cloud`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `wireless`, `evasion`, `postex`, `daemon-client`, and `test-helpers`; feature-coupled markers (`*-mcp` exposure markers, `wireless-advanced`, `transparent-proxy`, `dynamic-plugins`) reference a base feature. Engine default is `default = []` (empty library default, Phase E WS2; `cli` is opt-in). See [feature_matrix.md](feature_matrix.md) for dependency edges and [../docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical inventory.
 
 ---
 
@@ -587,7 +589,7 @@ Complete catalog of component deep-dives in this directory:
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
 | **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
-| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [transport.md](transport.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
+| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [transport.md](transport.md), [transport_eggfetch.md](transport_eggfetch.md), [egress_reuse_decision.md](egress_reuse_decision.md), [capability_segregation.md](capability_segregation.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
 
 Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md).
 

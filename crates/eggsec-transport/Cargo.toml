@@ -24,4 +24,5 @@ default = []
 test-util = []
 
 [dev-dependencies]
-tokio = { workspace = true }
+# Phase E WS3: recording-fake unit tests only (#[tokio::test], current-thread).
+tokio = { workspace = true, features = ["rt", "macros"] }

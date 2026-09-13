@@ -38,8 +38,9 @@ http = { version = "1", optional = true }
 prost = { version = "0.14", optional = true }
 prost-types = { version = "0.14", optional = true }
 
-# Async runtime
-tokio = { workspace = true }
+# Async runtime (Phase E WS3: intercept/server + net/io/sync/time + select!).
+# No fs/process/signal/io-std; MITM cert gen goes through rcgen (ring).
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
 
 # HTTP client (proxy health probes only: plain GET over SOCKS/HTTP proxy
 # routing; no JSON/form/query bodies, no blocking API, no cookie jar, no

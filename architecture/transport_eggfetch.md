@@ -199,4 +199,4 @@ upstream ships the hook.
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-12*
+*Last verified against source: 2026-09-13 (Phase E preserves the adapter; still no production consumers)*

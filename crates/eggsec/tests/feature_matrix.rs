@@ -771,10 +771,11 @@ fn platform_and_backend_features_are_explicitly_classified() {
     }
 }
 
-/// The engine default feature set is `["cli"]` and docs must agree.
+/// The engine default feature set is `[]` (empty library default) and docs must agree.
 ///
-/// Guards the Phase B residual where docs claimed an empty default while
-/// Cargo declared `default = ["cli"]`.
+/// Phase E WS2: the engine is a normal library with no process-host
+/// capability by default. CLI types/dispatch are opt-in via `cli`
+/// (enabled explicitly by `eggsec-cli`, `eggsec-tui`, daemon `full-executor`).
 #[test]
 fn docs_default_feature_matches_cargo() {
     let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
@@ -788,20 +789,20 @@ fn docs_default_feature_matches_cargo() {
     let defaults: Vec<&str> = default_val.iter().filter_map(|v| v.as_str()).collect();
     assert_eq!(
         defaults,
-        vec!["cli"],
-        "engine default must be [\"cli\"] — update this test with the contract"
+        Vec::<&str>::new(),
+        "engine default must be [] (empty library default) — update this test with the contract"
     );
 
     let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let matrix = std::fs::read_to_string(workspace_root.join("docs/FEATURE_MATRIX.md"))
         .expect("docs/FEATURE_MATRIX.md must exist");
     assert!(
-        matrix.contains("default = [\"cli\"]"),
-        "docs/FEATURE_MATRIX.md must state the engine default as default = [\"cli\"]"
+        matrix.contains("default = []"),
+        "docs/FEATURE_MATRIX.md must state the engine default as default = []"
     );
     assert!(
-        !matrix.contains("default = []"),
-        "docs/FEATURE_MATRIX.md must not claim an empty default feature set"
+        !matrix.contains("default = [\"cli\"]"),
+        "docs/FEATURE_MATRIX.md must not claim default = [\"cli\"] (Phase E WS2: empty default)"
     );
 }
 

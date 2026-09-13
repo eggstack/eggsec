@@ -244,4 +244,4 @@ concrete-client leakage is possible:
 
 See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
-*Last verified against source: 2026-09-12*
+*Last verified against source: 2026-09-13 (Phase E preserves the contract; no DTO/authority/binding changes)*

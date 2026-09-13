@@ -1,10 +1,38 @@
 # Phase E — Egress reuse decision and capability segregation
 
-Status: Ready for handoff
+Status: Executed 2026-09-13
 
 Date: 2026-09-11
 
 Depends on: Phases A-D
+
+## Completion record
+
+All five workstreams executed with no workspace graph widening:
+
+- WS1 (egress): `eggress-uri 1.0.6` / `eggress-routing 1.0.6` / stacks all
+  REJECTED with measured before/after graphs — record:
+  `architecture/egress_reuse_decision.md` (no `eggress` edge; guard Check 106).
+- WS2 (library default): `eggsec` `default = ["cli"]` → `default = []`;
+  explicit opt-in in binary shell, TUI, daemon `full-executor`; `make check`
+  + clippy + integration suites updated; guard Check 104.
+- WS3 (Tokio): workspace baseline 11 features → `default-features = false`
+  with per-crate `features`; `test-util` nowhere; DTO crates carry no Tokio;
+  guard Check 105.
+- WS4 (extraction): `eggsec-net` / web-client split / evidence crypto all
+  REJECTED with one-page records — see `architecture/capability_segregation.md`
+  (also documents WS2/WS3); guard Check 107.
+- WS5 (guards): Checks 104–108 added (empty default, per-crate Tokio, no
+  eggress, no new crates, manifest-graph direction via `python3`+`tomllib`);
+  Check 71 oracle (`scripts/check-feature-docs.py`) and Check 87 (`rest-api`
+  wiring) updated for the empty default; guard Check 108.
+
+Retained baseline §8 (`architecture/network_dependency_baseline.md`),
+`docs/VERIFICATION.md`, `docs/FEATURE_MATRIX.md`, `docs/CI_ARCHITECTURE_GUARDS.md`,
+`architecture/overview.md` (Module + Deep-Dive indexes), `README.md`,
+`AGENTS.md`, `.opencode/skills/eggsec-config/SKILL.md`, and
+`docs/extending/features.md` updated; `make check` green locally (see below).
+No new crates; workspace 591 packages (Phase C/D delta, zero from Phase E).
 
 ## Purpose
 

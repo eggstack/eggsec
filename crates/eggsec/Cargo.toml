@@ -28,7 +28,10 @@ exclude = [
 ]
 
 [dependencies]
-tokio = { workspace = true }
+# Phase E WS3: engine owns the broadest capability set (all except `test-util`,
+# which has no call sites). MCP stdio needs `io-std`; file outputs need `fs`;
+# remote/cluster needs `process`; agent shutdown needs `signal`.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal"] }
 tokio-util = "0.7"
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
@@ -260,12 +263,15 @@ version = "0.14"
 optional = true
 
 [features]
-default = ["cli"]
+default = []
 
 # Test helpers - exposes internal constructors for integration testing
 test-helpers = []
 
-# CLI types and command dispatch (clap-based). Enable only in process-host crates.
+# CLI types and command dispatch (clap-based). Enable only in process-host
+# crates (binary shell, terminal UI, daemon executor). The engine library
+# default is empty (Phase E WS2): a normal library build carries no
+# process-host capability.
 cli = ["dep:clap", "dep:clap_complete"]
 
 # Tool abstraction layer (always enabled - no extra deps)

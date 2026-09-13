@@ -39,7 +39,11 @@ thiserror = "2"
 tracing = "0.1"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal", "test-util"] }
+# Phase E WS3: narrowest safe workspace baseline (no features). Each crate
+# declares only the Tokio capabilities it uses via
+# `tokio = { workspace = true, features = [...] }`. `test-util` is enabled
+# nowhere (no paused-time call sites).
+tokio = { version = "1", default-features = false }
 parking_lot = "0.12"
 rand = { version = "0.8", features = ["std_rng"] }
 base64 = "0.22"

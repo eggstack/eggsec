@@ -25,8 +25,9 @@ All main-crate features live in `crates/eggsec/Cargo.toml` under `[features]`.
 
 ```toml
 [features]
-# Engine default is default = ["cli"]; shown here is a minimal new-feature stanza.
-default = ["cli"]
+# Engine default is default = [] (empty library default, Phase E WS2);
+# shown here is a minimal new-feature stanza.
+default = []
 
 # My new feature
 my-new-feature = ["dep:some-crate", "other-feature"]
@@ -347,7 +348,8 @@ Membership is pinned in `FULL_MEMBERS`
 `make check-features-individual`.
 It is intended for development, integration testing, and explicit lab builds.
 Never recommend `full` as a default or production build profile. The engine
-default feature set is `default = ["cli"]`.
+default feature set is `default = []` (empty library default; `cli` is opt-in
+for process-host crates).
 
 **Feature-gated metadata still exists; availability and execution are separate
 concerns.** Enabling a feature makes code compile and metadata visible to

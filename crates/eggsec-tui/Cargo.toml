@@ -24,7 +24,9 @@ eggsec-ui-model = { path = "../eggsec-ui-model" }
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["event-stream"] }
 
-tokio = { workspace = true }
+# Phase E WS3: TUI task runtime (Runtime::new + net/io/sync/time + spawn).
+# No fs/process/signal/io-std; engine/CLI own those.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
 tokio-util = "0.7"
 serde = { workspace = true }
 serde_json = { workspace = true }

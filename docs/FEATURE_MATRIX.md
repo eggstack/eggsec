@@ -126,8 +126,10 @@ Categories:
 
 ### 1.3 Defaults
 
-The engine default feature set is `default = ["cli"]` (CLI types and command
-dispatch only). The `full` meta-feature is a curated developer/lab aggregate
+The engine default feature set is `default = []` (empty library default,
+Phase E WS2: no process-host capability). CLI types and command dispatch are
+opt-in via `cli` (enabled explicitly by `eggsec-cli`, `eggsec-tui`, and daemon
+`full-executor`). The `full` meta-feature is a curated developer/lab aggregate
 of 28 pinned members — not an exhaustive "enable everything" flag. Its exact
 membership is declared once in `FULL_MEMBERS`
 (`crates/eggsec/src/config/feature_registry.rs`) and checked against the

@@ -25,4 +25,5 @@ unicode-normalization = { workspace = true }
 lru = { workspace = true }
 uuid = { workspace = true }
 hostname = { workspace = true }
-tokio = { workspace = true }
+# Phase E WS3: async CSV writer only (AsyncWrite/BufWriter). No runtime/timers.
+tokio = { workspace = true, features = ["io-util"] }

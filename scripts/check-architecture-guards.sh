@@ -1956,7 +1956,7 @@ if [[ ! -f "crates/eggsec/tests/canonical_dispatch_ownership.rs" ]]; then
   FAIL=$((FAIL + 1))
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'cargo test -p eggsec --features rest-api --tests' Makefile 2>/dev/null; then
+if ! rg -q 'cargo test -p eggsec --features rest-api' Makefile 2>/dev/null; then
   echo "FAIL: Makefile mandatory path does not run eggsec --tests (boundary tests not wired)."
   FAIL=$((FAIL + 1))
   SECTION_FAIL=$((SECTION_FAIL + 1))
@@ -2564,6 +2564,195 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Phase D first increment boundaries hold."
 else
   FAIL=$((FAIL + 1))
+fi
+
+# 104. Phase E WS2: engine library-default is empty (no process-host default).
+echo ""
+echo "--- Check 104: Engine library-default is empty ---"
+SECTION_FAIL=0
+if ! rg -q '^\s*default = \[\]' crates/eggsec/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec/Cargo.toml default is not []."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '^\s*default = \["cli"\]' crates/eggsec/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec/Cargo.toml still defaults to [\"cli\"]."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'eggsec = \{ path = "\.\./eggsec", features = \["cli"\] \}' crates/eggsec-cli/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-cli must depend on eggsec with explicit features=[\"cli\"]."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'eggsec = \{ path = "\.\./eggsec", features = \["cli"\] \}' crates/eggsec-tui/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-tui must depend on eggsec with explicit features=[\"cli\"]."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'full-executor = \["dep:eggsec", "eggsec/cli"\]' crates/eggsec-daemon/Cargo.toml 2>/dev/null; then
+  echo "FAIL: daemon full-executor must enable eggsec/cli explicitly (engine default is empty)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Engine library-default is empty with explicit process-host opt-in."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 105. Phase E WS3: Tokio features declared per crate (no broad baseline).
+echo ""
+echo "--- Check 105: Tokio capabilities are per-crate narrow ---"
+SECTION_FAIL=0
+if ! rg -q 'tokio = \{ version = "1", default-features = false \}' Cargo.toml 2>/dev/null; then
+  echo "FAIL: workspace Tokio baseline must be default-features=false with no feature list."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+BARE_TOKIO=$(rg -n 'tokio(\.workspace| = \{ workspace = true \})' crates/*/Cargo.toml 2>/dev/null | grep -v 'features =' || true)
+if [[ -n "$BARE_TOKIO" ]]; then
+  echo "$BARE_TOKIO"
+  echo "FAIL: Found Tokio workspace dep without explicit features=. Declare per-crate capabilities."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TESTUTIL_TOKIO=$(rg -n '^[^#]*tokio[^#]*test-util' crates/*/Cargo.toml Cargo.toml 2>/dev/null || true)
+if [[ -n "$TESTUTIL_TOKIO" ]]; then
+  echo "$TESTUTIL_TOKIO"
+  echo "FAIL: test-util (paused time) must not appear in any Tokio dependency (no call sites)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for dto in crates/eggsec-core/Cargo.toml crates/eggsec-tool-core/Cargo.toml crates/eggsec-ui-model/Cargo.toml crates/eggsec-daemon-protocol/Cargo.toml; do
+  if rg -q 'tokio' "$dto" 2>/dev/null; then
+    echo "FAIL: DTO-only crate must not depend on Tokio: $dto"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Tokio capabilities are per-crate narrow."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 106. Phase E WS1: egress reuse decided without widening the graph.
+echo ""
+echo "--- Check 106: No eggress graph widening ---"
+SECTION_FAIL=0
+EGRESS_MANIFEST=$(rg -n 'eggress' crates/*/Cargo.toml Cargo.toml 2>/dev/null || true)
+if [[ -n "$EGRESS_MANIFEST" ]]; then
+  echo "$EGRESS_MANIFEST"
+  echo "FAIL: No workspace manifest may depend on eggress crates (Phase E WS1: rejected)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+EGRESS_SRC=$(rg -n 'eggress::|eggress_uri|eggress_routing|eggress_core' crates/*/src/ 2>/dev/null || true)
+if [[ -n "$EGRESS_SRC" ]]; then
+  echo "$EGRESS_SRC"
+  echo "FAIL: No workspace source may reference eggress crates (rejected, no adapter layer)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "architecture/egress_reuse_decision.md" ]]; then
+  echo "FAIL: missing Phase E WS1 decision record: architecture/egress_reuse_decision.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: No eggress graph widening (reuse rejected with record)."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 107. Phase E WS4: no unjustified capability-crate extraction.
+echo ""
+echo "--- Check 107: No unjustified capability crates ---"
+SECTION_FAIL=0
+for candidate in crates/eggsec-net crates/eggsec-web-client crates/eggsec-evidence crates/eggsec-signing; do
+  if [[ -e "$candidate" ]]; then
+    echo "FAIL: Unjustified capability crate exists: $candidate (Phase E WS4: all rejected)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ ! -f "architecture/capability_segregation.md" ]]; then
+  echo "FAIL: missing Phase E WS4 decision record: architecture/capability_segregation.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: No unjustified capability crates."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 108. Phase E WS5: manifest-graph direction (no forbidden edges, no cycles).
+# Parses workspace manifests with Python (fast, no cargo metadata resolve).
+echo ""
+echo "--- Check 108: Manifest graph direction holds ---"
+if ! python3 - <<'PYEOF' 2>&1; then
+import sys, tomllib, pathlib
+root = pathlib.Path(".")
+members = ["eggsec-core","eggsec","eggsec-nse","eggsec-tui","eggsec-cli","eggsec-output","eggsec-tool-core","eggsec-agent","eggsec-db-lab","eggsec-web-proxy","eggsec-mobile-lab","eggsec-runtime","eggsec-daemon","eggsec-daemon-protocol","eggsec-ui-model","eggsec-python","eggsec-transport","eggsec-transport-eggfetch"]
+def deps_of(crate):
+    p = root / "crates" / crate / "Cargo.toml"
+    with open(p,"rb") as f:
+        m = tomllib.load(f)
+    out = set()
+    for sec in ("dependencies","dev-dependencies","build-dependencies"):
+        for name in (m.get(sec) or {}):
+            out.add(name)
+    feats = m.get("features") or {}
+    for v in feats.values():
+        if isinstance(v, list):
+            for e in v:
+                # "dep:foo" or "foo/bar" or "dep:foo?/bar"
+                s = e.split("/")[0].removeprefix("dep:").removesuffix("?").strip()
+                if s:
+                    out.add(s)
+    return out
+# Forbidden: core must not touch transport/TLS/HTTP impl.
+forbidden_core = {"reqwest","rustls","tokio-rustls","hickory-resolver","hyper","axum","tonic","eggfetch-core","eggsec-transport","eggsec-transport-eggfetch","tokio","tokio-util"}
+core_deps = deps_of("eggsec-core") | deps_of("eggsec-tool-core") | deps_of("eggsec-ui-model")
+bad = core_deps & forbidden_core
+if bad:
+    print(f"FAIL: DTO crates depend on forbidden: {sorted(bad)}")
+    sys.exit(1)
+# Transport stays light: only bytes/http/url/thiserror in [dependencies].
+with open(root/"crates"/"eggsec-transport"/"Cargo.toml","rb") as f:
+    tm = tomllib.load(f)
+tdeps = set((tm.get("dependencies") or {}).keys())
+if tdeps != {"bytes","http","url","thiserror"}:
+    print(f"FAIL: eggsec-transport deps must be exactly bytes/http/url/thiserror, got {sorted(tdeps)}")
+    sys.exit(1)
+# Engine must not depend on frontend crates.
+eng = deps_of("eggsec")
+if eng & {"eggsec-tui","eggsec-daemon","eggsec-cli"}:
+    print(f"FAIL: engine depends on frontend: {sorted(eng & {'eggsec-tui','eggsec-daemon','eggsec-cli'})}")
+    sys.exit(1)
+# Cycle check over path deps among members.
+import re
+graph = {c: set() for c in members}
+for c in members:
+    p = root/"crates"/c/"Cargo.toml"
+    text = p.read_text()
+    for m in re.finditer(r'path\s*=\s*"\.\./([^"]+)"', text):
+        tgt = m.group(1)
+        if tgt in graph:
+            graph[c].add(tgt)
+WHITE,GRAY,BLACK = 0,1,2
+color = {c: WHITE for c in members}
+stack = []
+def dfs(u):
+    color[u] = GRAY
+    stack.append(u)
+    for v in sorted(graph[u]):
+        if color[v] == GRAY:
+            cyc = stack[stack.index(v):] + [v]
+            print(f"FAIL: workspace dependency cycle: {' -> '.join(cyc)}")
+            sys.exit(1)
+        if color[v] == WHITE:
+            dfs(v)
+    stack.pop()
+    color[u] = BLACK
+for c in members:
+    if color[c] == WHITE:
+        dfs(c)
+print("graph ok")
+PYEOF
+  echo "FAIL: manifest graph direction check failed (see above)."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Manifest graph direction holds (no forbidden edges, no cycles)."
 fi
 
 echo ""

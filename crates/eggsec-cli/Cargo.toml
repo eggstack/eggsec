@@ -20,7 +20,9 @@ eggsec-tui = { path = "../eggsec-tui", optional = true }
 eggsec-runtime = { path = "../eggsec-runtime" }
 eggsec-ui-model = { path = "../eggsec-ui-model" }
 
-tokio = { workspace = true }
+# Phase E WS3: process host (multi-thread main + ctrl_c + timers + select!).
+# No direct fs/net/process/io; engine owns those capabilities.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "signal", "time"] }
 anyhow = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"

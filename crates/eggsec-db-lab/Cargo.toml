@@ -32,8 +32,8 @@ chrono.workspace = true
 # Compression (evidence bundles)
 flate2.workspace = true
 
-# Async runtime
-tokio.workspace = true
+# Async runtime (Phase E WS3: file baselines + net probes + task spawn only)
+tokio = { workspace = true, features = ["rt", "macros", "net", "fs"] }
 
 # Tracing
 tracing.workspace = true

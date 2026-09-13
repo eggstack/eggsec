@@ -62,19 +62,19 @@ def main() -> int:
     cargo_features = sorted(n for n in engine if n != "default")
     cargo_full = sorted(engine.get("full", []))
 
-    # ── 1. Default feature set ──────────────────────────────────────────
-    if default == ["cli"]:
-        ok('engine default is ["cli"]')
+    # ── 1. Default feature set (Phase E WS2: empty library default) ──────
+    if default == []:
+        ok('engine default is [] (empty library default)')
     else:
-        fail(f'engine default is {default}, expected ["cli"]')
+        fail(f'engine default is {default}, expected []')
 
     matrix = (REPO / "docs/FEATURE_MATRIX.md").read_text()
-    if 'default = ["cli"]' in matrix:
-        ok('docs/FEATURE_MATRIX.md states default = ["cli"]')
+    if 'default = []' in matrix:
+        ok('docs/FEATURE_MATRIX.md states default = []')
     else:
-        fail('docs/FEATURE_MATRIX.md must state default = ["cli"]')
-    if "default = []" in matrix:
-        fail('docs/FEATURE_MATRIX.md must not claim "default = []"')
+        fail('docs/FEATURE_MATRIX.md must state default = []')
+    if 'default = ["cli"]' in matrix:
+        fail('docs/FEATURE_MATRIX.md must not claim default = ["cli"] (Phase E WS2)')
 
     # ── 2. Curated `full`: forbidden exhaustive claims ──────────────────
     forbidden = [

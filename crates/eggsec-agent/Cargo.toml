@@ -19,7 +19,9 @@ eggsec-transport = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-tokio = { workspace = true }
+# Phase E WS3: task lifecycle only (spawn/sync/time + macros for select!/test).
+# No net/fs/process/signal/io-std; transport goes through `eggsec-transport`.
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
 tokio-util = "0.7"
 uuid = { version = "1", features = ["v4", "serde"] }
 rustc-hash = { workspace = true }

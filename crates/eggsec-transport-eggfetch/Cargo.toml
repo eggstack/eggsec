@@ -30,7 +30,8 @@ url = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+# Phase E WS3: local-fixture parity suite (TcpListener/timeout/spawn + test).
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util"] }
 ipnetwork = { workspace = true }
 rcgen = { version = "0.14" }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }

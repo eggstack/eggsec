@@ -161,7 +161,7 @@ impl AiClient {
     pub fn apply_auth_to_transport(
         &self,
         headers: &mut eggsec_transport::HeaderMap,
-    ) -> Result<(), String> {
+    ) -> std::result::Result<(), String> {
         for (k, v) in self.auth_headers() {
             let name: eggsec_transport::HeaderName = k
                 .parse()
