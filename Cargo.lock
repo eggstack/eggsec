@@ -1964,7 +1964,7 @@ dependencies = [
  "serde_yaml_neo",
  "sha2 0.10.9",
  "smallvec",
- "socket2 0.5.10",
+ "socket2",
  "spdx 0.10.9",
  "sqlx",
  "ssh2",
@@ -3334,7 +3334,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -3576,7 +3576,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d40460c0ce33d6ce4b0630ad68ff63d6661961c48b6dba35e5a4d81cfb48222"
 dependencies = [
- "socket2 0.6.5",
+ "socket2",
  "widestring",
  "windows-registry",
  "windows-result",
@@ -3963,7 +3963,7 @@ dependencies = [
  "percent-encoding",
  "quoted_printable",
  "rustls 0.23.43",
- "socket2 0.6.5",
+ "socket2",
  "tokio",
  "tokio-rustls 0.26.4",
  "tracing",
@@ -4449,7 +4449,7 @@ dependencies = [
  "serde_with",
  "sha1 0.11.0",
  "sha2 0.11.0",
- "socket2 0.6.5",
+ "socket2",
  "stringprep",
  "strsim",
  "take_mut",
@@ -5974,7 +5974,7 @@ dependencies = [
  "pin-project-lite",
  "ryu",
  "sha1_smol",
- "socket2 0.6.5",
+ "socket2",
  "tokio",
  "tokio-util",
  "url",
@@ -6793,16 +6793,6 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
@@ -7191,7 +7181,7 @@ dependencies = [
  "parking_lot",
  "pnet_packet 0.34.0",
  "rand 0.9.5",
- "socket2 0.6.5",
+ "socket2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -7579,7 +7569,7 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.6.5",
+ "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
 ]
@@ -7731,7 +7721,7 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "socket2 0.6.5",
+ "socket2",
  "sync_wrapper",
  "tokio",
  "tokio-stream",
