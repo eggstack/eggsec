@@ -197,8 +197,9 @@ coverage, but add companion sets or prerequisite gates in
 ### Deep checks (weekly/manual)
 
 These run weekly via `.github/workflows/deep-checks.yml` or locally via
-`make check-full`. They run `cargo deny check` (advisories, licenses, bans) and
-representative feature profiles.
+`make check-full`. Dependency policy (`make check-deps`: advisories, licenses,
+bans, sources) runs on every PR via `make check` and the `dependency-policy`
+job — not in deep checks — plus representative feature profiles in deep checks.
 
 **Features that belong only in deep checks:**
 

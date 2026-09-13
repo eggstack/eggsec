@@ -159,7 +159,7 @@ they are enabled in Cargo.
 | Retry / replayability | `HttpConfig.max_retries` / `retry_delay_ms`, `DEFAULT_MAX_RETRIES 3` / `RETRY_DELAY 1000ms`; retry in `recon/whois.rs`; `replay_flow` in web-proxy MCP | No reqwest-level auto-retry middleware | Unknown | `direct` (EggSec owns retry) |
 | Connection metadata for scanners | `request_id` UUID per daemon IPC; status/headers/body carried in scanner results | Status + headers + body + request id | Unknown | `adapter` (envelope fields must survive) |
 
-## 5. Security policy state (Phase F input — recorded, not changed)
+## 5. Security policy state (Phase A input; closed by Phase F §9 — this table is historical)
 
 | Area | Current state |
 |---|---|
@@ -291,3 +291,105 @@ dep line at the cost of a false abstraction). No `crates/eggsec-net`,
 `crates/eggsec-web-client`, `crates/eggsec-evidence`/`*-signing`.
 
 *Last verified against source: 2026-09-13*
+
+## 9. Phase F supply-chain hardening addendum (2026-09-13)
+
+Status: dependency and workflow supply-chain policy enforceable on pull
+requests. Guards: Checks 109–112
+(`scripts/check-architecture-guards.sh`). Plan record:
+`plans/network-dependency-phase-f-supply-chain-ci-hardening.md` (marked
+Executed).
+
+### 9.1 Dependency policy is a PR gate (WS1/WS8)
+
+`cargo deny check` moved from scheduled/manual-only (`deep-checks.yml` +
+local `make check-full`) into the required PR contract:
+
+- New `make check-deps` target runs `cargo deny --workspace
+  --all-features check` (+ per-check advisories/bans/licenses/sources).
+  Fails closed when `cargo-deny` is absent (never silently skips).
+- `make check` runs `$(MAKE) check-deps` before clippy/tests/guards, so the
+  `ci.yml` `rust` job enforces policy on every PR/push.
+- New independent `ci.yml` `dependency-policy` job runs the same
+  `make check-deps` as a dedicated gate signal.
+- `make check-full` no longer runs `cargo deny check` directly (covered via
+  `check`); it adds domain lint + feature profiles only.
+- `deny.toml [graph] all-features = true` so even bare `cargo deny check`
+  covers optional closures. Default-feature-only checks hid real advisories
+  (lopdf via `printpdf`, sqlx/rsa via `db-pentest`, webpki via `tiberius`);
+  the all-features gate re-surfaced 10 errors, all now documented in
+  `docs/DEPENDENCY_EXCEPTIONS.md` (see §9.2).
+
+### 9.2 Deny canonical, audit removed (WS2)
+
+Cargo Deny is the canonical policy source. `.cargo/audit.toml` (24 stale
+ignores, most for already-fixed advisories, no owner metadata) was deleted;
+`cargo audit` is diagnostic/non-canonical and runs in no workflow or Makefile
+target. Historical ignores are never retained "just in case."
+
+`docs/DEPENDENCY_EXCEPTIONS.md` (reviewed 2026-09-13, review-by 2026-12-12)
+now carries 12 advisory ignores with full fields (ID, path, feature, API use,
+exploitability, compensating control, owner, created/review-by, blocker):
+
+- Unmaintained (transitive, no upstream fix): `RUSTSEC-2025-0057` (fxhash via
+  scraper), `RUSTSEC-2025-0119` (number_prefix via indicatif),
+  `RUSTSEC-2024-0384` (instant via notify — documented before but missing from
+  `deny.toml`, now added), `RUSTSEC-2024-0436` (paste via sqlx-macros,
+  build-time only), `RUSTSEC-2025-0134` (rustls-pemfile via tiberius),
+  `RUSTSEC-2026-0192` (ttf-parser via printpdf, generation-only).
+- Vulnerabilities (blocked upgrades): `RUSTSEC-2026-0187` (lopdf, printpdf
+  0.7→0.12 breaking bump; generation-only so unparsable input never reaches
+  `load*`), `RUSTSEC-2023-0071` (rsa, no fixed upgrade; lab-only),
+  `RUSTSEC-2026-0104`/`-0099`/`-0098` (rustls-webpki via tiberius 0.12.3
+  latest; lab-only), `RUSTSEC-2024-0363` (sqlx 0.8.0; ≥0.8.1 blocked by
+  `libsqlite3-sys` links conflict with daemon `rusqlite`).
+- License: `MIT-0` added to the global allow list (OSI-approved permissive);
+  `auto_generate_cdp` (GPL-3.0-or-later, build-time codegen for
+  `headless_chrome`) allowed via per-crate exception with owner/review-by.
+- Yanked `libssh2-sys` 0.3.2 stays a warning (upgrade signal, not suppression).
+
+Phase E "resolved" claims for lopdf/webpki/sqlx/paste/ttf-parser were
+default-closure artifacts and are superseded (documented in the exceptions
+doc); genuinely fixed IDs (rand, crossbeam-epoch, idna, lettre, reqwest, pyo3,
+quick-xml, anyhow) stay resolved under the all-features gate.
+
+### 9.3 Sources fail closed, wildcards denied (WS3)
+
+- `[sources] unknown-registry = "deny"`, `unknown-git = "deny"`,
+  `required-git-spec = "rev"`. `Cargo.lock` verified registry-only + path (no
+  git/alternate-registry deps); any new git dep fails until pinned to a full
+  commit rev and documented with owner/removal criteria.
+- `wildcards = "deny"` (was `"allow"`). No `version = "*"` existed; 21
+  workspace path deps without `version` (in `eggsec-tui`, `eggsec-cli`,
+  `eggsec-python`) were pinned to explicit `version = "0.1.0"` so the lint
+  fires only on real wildcards. `multiple-versions = "warn"` retained.
+
+### 9.4 Actions pinned, least privilege, deterministic toolchain (WS4/WS7)
+
+All `uses:` in `ci.yml` + `deep-checks.yml` pinned to full-length commit SHAs
+with version comments: `actions/checkout` v4.4.0, `dtolnay/rust-toolchain`
+stable/master HEADs, `Swatinem/rust-cache` v2.9.2 (peel commit),
+`actions/setup-python` v5.6.0, `taiki-e/install-action` cargo-deny ref,
+`actions/dependency-review-action` v4.8.3. `cargo-deny` installs at pinned
+`0.19.0` via the SHA-pinned install-action (both `rust` and
+`dependency-policy` jobs, plus deep `deep` job). Top-level
+`permissions: contents: read` in both workflows, repeated per job; no write
+permissions anywhere (no release/publication jobs exist — releases are
+manual). Normal CI tracks documented stable; MSRV 1.88 stays explicit
+(`msrv` job + `make check-msrv`).
+
+### 9.5 Maintenance automation (WS5/WS6)
+
+- `.github/dependabot.yml` (new): weekly Monday updates for `cargo` (grouped
+  patch+minor, limit 10, `chore(deps)`) and `github-actions` (limit 10,
+  `chore(actions)`). No auto-merge — updates must pass the full CI/security
+  contract.
+- `ci.yml` `dependency-review` job (PR-only, read-only, SHA-pinned v4.8.3):
+  fails on `moderate`+ vulnerabilities; Cargo Deny/RustSec stays authoritative
+  for Rust advisories. No separate license allowlist (deny.toml owns license
+  policy; contradictory lists are a violation). No `pull-requests: write`.
+  Hosted-platform limitation: none encountered — the job is standard for
+  public repos; if it ever cannot run, that is recorded here, never compensated
+  by weakening Deny.
+
+*Last verified against source: 2026-09-13 (Phase F)*

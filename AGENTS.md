@@ -7,11 +7,13 @@ Guidelines for AI agents working on this codebase.
 ## Verification (run before claiming correctness)
 
 ```bash
-make check                  # mandatory Rust contract: fmt, no-default check, clippy, tests, guards
+make check                  # mandatory Rust contract: fmt, no-default check, check-deps (deny), clippy, tests, guards
+make check-deps             # dependency policy only: cargo deny --workspace --all-features check
 make check-python           # only when Python bindings/stubs/docs/scripts change
 ```
 
 - `make test` = `cargo test --lib -p eggsec` only (empty library default). Full suite: `make test-ci` (`-p eggsec --features rest-api,cli`).
+- `make check-deps` is the Phase F supply-chain gate (advisories + bans + licenses + sources over the all-features closure; `deny.toml` canonical, `.cargo/audit.toml` removed — do not reintroduce). Fails closed when `cargo-deny` is absent.
 - `make clippy` covers engine lib (empty default + `cli`) + leaf crates (`eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`). Domain/platform lint is `make clippy-domain` (deep checks only).
 - Guards need `ripgrep` (`rg`): `bash scripts/check-architecture-guards.sh`. No `cargo-nextest` required.
 - `make check-python` builds into `.venv-ci/` (override: `EGGSEC_PYTHON_VENV`); pytest excludes `network`-marked tests by default.

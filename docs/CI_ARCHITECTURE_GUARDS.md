@@ -12,10 +12,16 @@ These checks run on every pull request and push to `main`. They cover core archi
 |-------|---------|---------|
 | Formatting | `cargo fmt --all --check` | Code style consistency |
 | No-default build | `cargo check --workspace --no-default-features` | Workspace compiles without optional features |
+| Dependency policy | `make check-deps` (`cargo deny --workspace --all-features check`) | Advisories, licenses, bans, sources over the full feature closure |
 | Clippy | `make clippy` (engine lib + leaf crates, `-D warnings`) | Code quality on engine and leaf crates |
 | Package tests | `cargo test -p eggsec --features rest-api --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
 | Report envelope | `cargo test -p eggsec-output --tests` | Output crate report/evidence envelope roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
+
+In CI these run as three jobs in `ci.yml`: `rust` (full `make check`,
+including `check-deps`), `dependency-policy` (independent `make check-deps`
+gate signal), and `dependency-review` (PR-only moderate+ vulnerability gate).
+Python changes additionally run the `python` job (`make check-python`).
 
 ### Local Reproduction
 
@@ -63,18 +69,24 @@ These checks are not required for PR merge. They run in the optional `deep-check
 
 | Check | Command | Notes |
 |-------|---------|-------|
-| Advisory/license/ban policy | `cargo deny check` | Enforced via `deny.toml` |
 | Domain/platform lint | `make clippy-domain` | Lint extracted implementation crates (part of `make check-full`) |
 | Representative feature profiles | `make check-feature-profiles` | Coherent profile compilation |
 | Exhaustive per-feature sweep | `make check-features-individual` | Every feature in its minimum set; `full` is curated, not exhaustive |
+
+Dependency policy (`cargo deny`) is a mandatory PR gate, not an optional deep
+check — see Security tool ownership below. Deep Checks retains the weekly
+oracle role (domain lint, per-feature sweep, MSRV, portability,
+platform-integration) but is no longer the first place advisories are found.
 
 ### Security tool ownership
 
 | Defect class | Primary tool | Config |
 |-------------|-------------|--------|
-| Known advisories | `cargo deny check advisories` | `deny.toml` + `docs/DEPENDENCY_EXCEPTIONS.md` |
-| Disallowed licenses | `cargo deny check licenses` | `deny.toml` |
-| Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` |
+| Known advisories | `cargo deny check advisories` | `deny.toml` + `docs/DEPENDENCY_EXCEPTIONS.md` (canonical; PR gate) |
+| Disallowed licenses | `cargo deny check licenses` | `deny.toml` (allow list + `auto_generate_cdp` build-time exception; PR gate) |
+| Banned/duplicate dependencies | `cargo deny check bans` | `deny.toml` (deny `aws-lc-rs`/wildcards, warn multiples; PR gate) |
+| Unexpected sources | `cargo deny check sources` | `deny.toml` (unknown-registry/git deny, git rev required; PR gate) |
+| Manifest diff vulnerabilities | GitHub Dependency Review | `ci.yml` `dependency-review` job (fail on moderate+, read-only; deny/RustSec authoritative for Rust) |
 | Secret introduction | GitHub-native secret scanning | Repository settings |
 
 ## Architecture Drift Guards
@@ -126,6 +138,13 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Phase D increment 1 (guard Check 103): agent has no `reqwest`/`rustls` (generic `LifecycleManager<T: HttpTransport>` injection); NSE `http_capability.rs` + proxy `outbound.rs` boundary modules exist with no concrete clients in code; `intercept/` never touches the client contract; web-proxy reqwest is minimal (`rustls-no-provider` + `socks` only).
 - Phase E closure (guards Checks 104–108): engine library-default is empty (`default = []`, `cli` opt-in via process-host crates + daemon `full-executor` → `eggsec/cli`; Check 104); workspace Tokio baseline is `default-features = false` with per-crate `features = [...]` (`test-util` nowhere, DTO crates carry no Tokio; Check 105); no `eggress` manifest/source edge with `architecture/egress_reuse_decision.md` record (Check 106); no `eggsec-net`/web-client/evidence crates with `architecture/capability_segregation.md` record (Check 107); manifest-graph direction holds via `python3`+`tomllib` (DTO crates touch no transport/TLS/HTTP impl, `eggsec-transport` stays exactly `bytes`/`http`/`url`/`thiserror`, engine touches no frontend crates, path-dependency graph acyclic; Check 108).
 - Retained baseline: `architecture/network_dependency_baseline.md` (per-artifact deps, leakage inventory, parity matrix, policy state + §7 increment-1 addendum + §8 Phase E closure). Scoped contract: `architecture/transport.md`. Adapter: `architecture/transport_eggfetch.md`. Egress/capability records: `architecture/egress_reuse_decision.md` + `architecture/capability_segregation.md`. Executable invariants: `crates/eggsec/tests/network_policy_invariants.rs` (12 behaviors, local fixtures only) + `crates/eggsec/tests/transport_contract.rs` (11 closure tests through the fake).
+
+### Supply-Chain Hardening Invariants (Phase F, guards Checks 109–112)
+- Cargo Deny is canonical (`deny.toml` with `[graph] all-features`, fail-closed `[sources]`, `wildcards = "deny"`); `.cargo/audit.toml` must not exist; `make check-deps` exists and `make check` runs it (guard Check 109).
+- Every `uses:` in `.github/workflows/*.yml` is pinned to a full-length commit SHA with a version comment; no mutable tags (`@v4`, `@stable`, `@master`, `@v2`, `@v5`, `@cargo-deny`) remain as refs (guard Check 110).
+- Workflows declare least-privilege permissions (`contents: read` at top level and per job; no `write-all`) (guard Check 111).
+- `.github/dependabot.yml` automates `cargo` + `github-actions` updates (weekly, no auto-merge); `ci.yml` owns `dependency-policy` (`make check-deps`) and PR-only `dependency-review` (moderate+, read-only, no separate license allowlist) jobs (guard Check 112).
+- Retained record: `docs/DEPENDENCY_EXCEPTIONS.md` (per-exception owner/review-by/blocker + license exception + yanked notice + Phase E supersession note). Policy history: `architecture/network_dependency_baseline.md` §5 (Phase A input) + §9 (Phase F closure).
 
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.

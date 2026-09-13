@@ -208,7 +208,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For the full
 
 ## Verification
 
-Run `make check` before submitting Rust changes. Python-facing changes also
-require `make check-python`; release preparation uses `make check-full` and
-`make release-check`. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for
-the complete contract.
+Run `make check` before submitting Rust changes (includes `make check-deps`:
+Cargo Deny advisory/license/ban/source policy over the full feature closure).
+Python-facing changes also require `make check-python`; release preparation
+uses `make check-full` and `make release-check`. Dependency exceptions live in
+[`docs/DEPENDENCY_EXCEPTIONS.md`](docs/DEPENDENCY_EXCEPTIONS.md) (Cargo Deny is
+canonical; `cargo audit` is diagnostic only). See
+[`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the complete contract.

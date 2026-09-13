@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-deps check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -81,6 +81,20 @@ check-msrv:
 	cargo +1.88 check --workspace --no-default-features
 	cargo +1.88 check -p eggsec-cli --no-default-features
 
+# Dependency advisory/license/source policy (Phase F supply-chain hardening).
+# Canonical gate: `deny.toml` via cargo-deny over the full workspace closure
+# (`--workspace --all-features`; deny.toml also sets [graph] all-features).
+# Fails closed when cargo-deny is absent — install with
+# `cargo install cargo-deny` (CI installs a SHA-pinned version). Never silently
+# skip: a missing tool is a failed check, not a pass.
+check-deps:
+	@command -v cargo-deny >/dev/null 2>&1 || (echo "FAIL: cargo-deny not found. Install with 'cargo install cargo-deny' (CI uses a SHA-pinned install-action)." >&2; exit 1)
+	cargo deny --workspace --all-features check
+	cargo deny --workspace --all-features check advisories
+	cargo deny --workspace --all-features check bans
+	cargo deny --workspace --all-features check licenses
+	cargo deny --workspace --all-features check sources
+
 # Full mandatory Rust CI contract (no cargo-nextest required)
 check:
 	cargo fmt --all --check
@@ -88,6 +102,7 @@ check:
 	cargo check -p eggsec
 	cargo check -p eggsec-cli
 	cargo check -p eggsec-cli --no-default-features
+	$(MAKE) check-deps
 	$(MAKE) clippy
 	cargo test -p eggsec --doc
 	cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
@@ -98,8 +113,9 @@ check:
 	bash scripts/check-architecture-guards.sh
 
 # Optional broad validation (pre-release, not required for merge)
+# Note: dependency policy (`check-deps`) already runs inside `check`; this
+# target adds domain lint and representative feature profiles only.
 check-full: check
-	cargo deny check
 	$(MAKE) clippy-domain
 	$(MAKE) check-feature-profiles
 
@@ -149,7 +165,8 @@ check-python:
 # Help
 help:
 	@echo "Primary (run these):"
-	@echo "  make check           - Full mandatory Rust CI contract (format, lint, test, guards)"
+	@echo "  make check           - Full mandatory Rust CI contract (format, lint, test, guards, deps)"
+	@echo "  make check-deps      - Dependency advisory/license/source policy (cargo deny)"
 	@echo "  make check-python    - Python CI check (one build, all checks)"
 	@echo "  make test            - Unit tests only (default)"
 	@echo "  make check-full      - Optional broad validation (pre-release)"

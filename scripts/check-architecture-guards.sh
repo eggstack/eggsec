@@ -2579,12 +2579,12 @@ if rg -q '^\s*default = \["cli"\]' crates/eggsec/Cargo.toml 2>/dev/null; then
   echo "FAIL: crates/eggsec/Cargo.toml still defaults to [\"cli\"]."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'eggsec = \{ path = "\.\./eggsec", features = \["cli"\] \}' crates/eggsec-cli/Cargo.toml 2>/dev/null; then
-  echo "FAIL: eggsec-cli must depend on eggsec with explicit features=[\"cli\"]."
+if ! rg -q 'eggsec = \{ path = "\.\./eggsec", version = "0\.1\.0", features = \["cli"\] \}' crates/eggsec-cli/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-cli must depend on eggsec with explicit version + features=[\"cli\"]."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'eggsec = \{ path = "\.\./eggsec", features = \["cli"\] \}' crates/eggsec-tui/Cargo.toml 2>/dev/null; then
-  echo "FAIL: eggsec-tui must depend on eggsec with explicit features=[\"cli\"]."
+if ! rg -q 'eggsec = \{ path = "\.\./eggsec", version = "0\.1\.0", features = \["cli"\] \}' crates/eggsec-tui/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-tui must depend on eggsec with explicit version + features=[\"cli\"]."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if ! rg -q 'full-executor = \["dep:eggsec", "eggsec/cli"\]' crates/eggsec-daemon/Cargo.toml 2>/dev/null; then
@@ -2753,6 +2753,139 @@ PYEOF
   FAIL=$((FAIL + 1))
 else
   echo "PASS: Manifest graph direction holds (no forbidden edges, no cycles)."
+fi
+
+# 109. Phase F: Cargo Deny is the canonical dependency-policy gate.
+# deny.toml must enforce the all-features closure, fail-closed sources, and
+# wildcard denial; cargo audit must not exist as a second exception surface;
+# make check-deps must exist and make check must run it.
+echo ""
+echo "--- Check 109: Cargo Deny is the canonical PR policy gate ---"
+SECTION_FAIL=0
+if ! rg -q 'all-features = true' deny.toml 2>/dev/null; then
+  echo "FAIL: deny.toml missing [graph] all-features = true (optional closures hide advisories)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for key in 'unknown-registry = "deny"' 'unknown-git = "deny"' 'required-git-spec = "rev"'; do
+  if ! rg -Fq "$key" deny.toml 2>/dev/null; then
+    echo "FAIL: deny.toml missing fail-closed source policy: $key"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'wildcards = "deny"' deny.toml 2>/dev/null; then
+  echo "FAIL: deny.toml must deny wildcard requirements (workspace path deps carry explicit versions)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ -f ".cargo/audit.toml" ]]; then
+  echo "FAIL: .cargo/audit.toml exists (Phase F removed it; deny.toml is canonical, audit is diagnostic)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q '^check-deps:' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile missing check-deps target."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q '\$\(MAKE\) check-deps' Makefile 2>/dev/null; then
+  echo "FAIL: Makefile check does not run check-deps (policy must be in the mandatory contract)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'dependency-policy' .github/workflows/ci.yml 2>/dev/null; then
+  echo "FAIL: ci.yml missing the dependency-policy job (independent PR gate signal)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Cargo Deny is the canonical PR policy gate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 110. Phase F: all GitHub Actions pinned to immutable full SHAs.
+# Every `uses:` must reference @<40-hex> with a version comment; mutable refs
+# (@v4, @stable, @master, @v2, @v5, @cargo-deny) must not remain as refs.
+echo ""
+echo "--- Check 110: GitHub Actions are SHA-pinned ---"
+SECTION_FAIL=0
+MUTABLE_USES=$(rg -n 'uses:\s*\S+@(v[0-9]+|stable|master|cargo-deny)(\s|$|#)' .github/workflows/*.yml 2>/dev/null || true)
+if [[ -n "$MUTABLE_USES" ]]; then
+  echo "$MUTABLE_USES"
+  echo "FAIL: Found mutable action refs. Pin to full-length commit SHAs with version comments."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+UNPINNED=$(rg -n '^\s*-\s*uses:' .github/workflows/*.yml 2>/dev/null | rg -v '@[0-9a-f]{40}' || true)
+if [[ -n "$UNPINNED" ]]; then
+  echo "$UNPINNED"
+  echo "FAIL: Found uses: lines without a 40-hex SHA pin."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: GitHub Actions are SHA-pinned."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 111. Phase F: workflow least privilege.
+# Both workflows must declare `permissions: contents: read` (top-level and per
+# job); no job may request write-all or write permissions (no
+# release/publication jobs exist).
+echo ""
+echo "--- Check 111: Workflows are least-privilege ---"
+SECTION_FAIL=0
+for wf in .github/workflows/ci.yml .github/workflows/deep-checks.yml; do
+  if ! rg -q 'permissions:' "$wf" 2>/dev/null; then
+    echo "FAIL: $wf declares no permissions (expected contents: read)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -q 'write-all|permissions:\s*write|contents:\s*write|actions:\s*write|pull-requests:\s*write' "$wf" 2>/dev/null; then
+    echo "FAIL: $wf grants write permissions (least privilege is contents: read)."
+    rg -n 'write' "$wf" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Workflows are least-privilege."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 112. Phase F: pin/dependency maintenance automation.
+# Dependabot must cover cargo + github-actions (weekly, no auto-merge);
+# ci.yml must own the PR-only dependency-review job (moderate+, read-only, no
+# separate license allowlist contradicting deny.toml).
+echo ""
+echo "--- Check 112: Pin maintenance is automated ---"
+SECTION_FAIL=0
+if [[ ! -f ".github/dependabot.yml" ]]; then
+  echo "FAIL: missing .github/dependabot.yml."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for eco in "cargo" "github-actions"; do
+    if ! rg -q "package-ecosystem: $eco" .github/dependabot.yml 2>/dev/null; then
+      echo "FAIL: dependabot.yml missing package-ecosystem: $eco."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # Ignore comment lines: documentation mentions the forbidden pattern by name.
+  if rg -v '^\s*#' .github/dependabot.yml 2>/dev/null | rg -q 'auto-merge|automerge'; then
+    echo "FAIL: dependabot.yml must not configure auto-merge (updates pass CI first)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if ! rg -q 'dependency-review' .github/workflows/ci.yml 2>/dev/null; then
+  echo "FAIL: ci.yml missing the dependency-review job."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'fail-on-severity: moderate' .github/workflows/ci.yml 2>/dev/null; then
+  echo "FAIL: dependency-review must fail on moderate+ (documented security-project default)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Ignore comment lines: ci.yml documents why no separate license list exists.
+if rg -v '^\s*#' .github/workflows/ci.yml 2>/dev/null | rg -q 'deny-licenses|allow-licenses'; then
+  echo "FAIL: dependency-review maintains a license allowlist contradicting deny.toml (deny owns licenses)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Pin maintenance is automated."
+else
+  FAIL=$((FAIL + 1))
 fi
 
 echo ""

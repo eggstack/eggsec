@@ -1,5 +1,16 @@
-# Cargo deny configuration for Eggsec
-# Run with: cargo deny check
+# Cargo deny configuration for Eggsec — canonical dependency-policy source.
+# Run locally with: make check-deps
+# CI gate: .github/workflows/ci.yml `dependency-policy` job (PRs + main).
+# `cargo audit` is diagnostic only (see docs/DEPENDENCY_EXCEPTIONS.md); it must
+# not suppress advisories beyond this file. `.cargo/audit.toml` was removed in
+# Phase F — do not reintroduce historical ignores "just in case".
+
+[graph]
+# Cover optional-feature dependency closures (pdf, db-pentest, mssql, nse-ssh2).
+# Default-feature-only checks hide real advisories (e.g. lopdf via printpdf,
+# sqlx/rsa via db-pentest). The check-deps target always passes
+# --workspace --all-features; this section documents that intent for readers.
+all-features = true
 
 [advisories]
 db-path = "advisory-db"
@@ -7,29 +18,31 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "transitive"
 unsound = "transitive"
 
-# Dependency advisory exceptions — reviewed 2026-08-11.
-# PyO3 upgraded to 0.29.2; quick-xml upgraded to 0.41.0.
-# Remaining exceptions are documented in docs/DEPENDENCY_EXCEPTIONS.md.
-#
-# Required fields per exception:
-#   - advisory ID
-#   - dependency path (direct/transitive)
-#   - affected feature/artifact
-#   - API usage assessment
-#   - exploitability for Eggsec
-#   - compensating control
-#   - owner / subsystem
-#   - created / review-by date
-#   - upgrade blocker
+# Dependency advisory exceptions — reviewed 2026-09-13 (Phase F).
+# Cargo Deny is the canonical policy source; each ignore links to the full
+# record in docs/DEPENDENCY_EXCEPTIONS.md (advisory ID, path, feature, API use,
+# exploitability, compensating control, owner, created/review-by, blocker).
 ignore = [
     # --- Transitive: unmaintained crates with no upstream fix ---
-    { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
-    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17. No safe upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper (recon/js, nse/httpspider). Internal hash map, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17 (progress bars). Internal formatting, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify-types->notify v7 (file watching). Internal timing shim, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; transitive via sqlx-macros (db-pentest, build-time proc-macro only, no runtime). See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile unmaintained; transitive via rustls-native-certs->tiberius (mssql marker only). Thin wrapper over rustls-pki-types, no vuln. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via owned_ttf_parser->printpdf (pdf feature, generation-only, builtin Helvetica, never parses untrusted fonts). See docs/DEPENDENCY_EXCEPTIONS.md." },
+    # --- Vulnerabilities with no safe upgrade or blocked upgrade ---
+    { id = "RUSTSEC-2026-0187", reason = "lopdf stack overflow via nested PDF objects; transitive via printpdf v0.7 (pdf feature, generation-only, never parses untrusted PDFs). Upgrade to printpdf>=0.8/lopdf>=0.42 is a breaking major bump. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2023-0071", reason = "rsa Marvin timing sidechannel; transitive via sqlx-mysql (db-pentest lab-only, operator-initiated connections to authorized targets). No fixed upgrade available. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL panic; transitive via rustls 0.21->tokio-rustls 0.24->tiberius (mssql marker only, lab-only TLS to authorized servers). tiberius 0.12.3 is latest; no safe upgrade. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki wildcard name-constraint bypass; same tiberius path as RUSTSEC-2026-0104. Requires misissued certs; lab-only. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki URI name-constraint bypass; same tiberius path as RUSTSEC-2026-0104. Library has no URI-name API; lab-only. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0363", reason = "sqlx Binary Protocol misinterpretation (truncating casts); direct optional dep sqlx 0.8.0 (db-pentest lab-only). Upgrade to >=0.8.1 blocked by libsqlite3-sys links conflict with rusqlite (daemon). See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 
 [licenses]
 allow = [
     "MIT",
+    "MIT-0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
@@ -45,9 +58,29 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
+# Per-crate license exceptions (Phase F). Prefer allow-list additions for
+# permissive licenses; use exceptions only for scope-limited copyleft that
+# cannot be upgraded away. Each entry is documented in
+# docs/DEPENDENCY_EXCEPTIONS.md with owner and review-by date.
+exceptions = [
+    # auto_generate_cdp is a build-time codegen tool for headless_chrome
+    # (headless-browser feature, lab-only DOM XSS/SPA crawling). GPL-3.0-or-later
+    # comes from its LICENSE.txt (no Cargo license field). It runs at build
+    # time only and is not linked into shipped binaries.
+    { allow = ["GPL-3.0-or-later"], crate = "auto_generate_cdp" },
+]
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"
+wildcards = "deny"
 highlight = "all"
 deny = ["aws-lc-rs"]
+
+[sources]
+# Fail closed for unexpected registries/git sources (Phase F WS3).
+# crates.io is the default allowed registry; no custom registries are used.
+# No git dependencies exist in Cargo.lock — any new git dep fails until it is
+# explicitly allowed here with an owner and removal criterion.
+unknown-registry = "deny"
+unknown-git = "deny"
+required-git-spec = "rev"

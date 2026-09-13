@@ -13,12 +13,12 @@ name = "eggsec"
 path = "src/main.rs"
 
 [dependencies]
-eggsec = { path = "../eggsec", features = ["cli"] }
-eggsec-daemon = { path = "../eggsec-daemon", optional = true }
-eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol", optional = true }
-eggsec-tui = { path = "../eggsec-tui", optional = true }
-eggsec-runtime = { path = "../eggsec-runtime" }
-eggsec-ui-model = { path = "../eggsec-ui-model" }
+eggsec = { path = "../eggsec", version = "0.1.0", features = ["cli"] }
+eggsec-daemon = { path = "../eggsec-daemon", version = "0.1.0", optional = true }
+eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol", version = "0.1.0", optional = true }
+eggsec-tui = { path = "../eggsec-tui", version = "0.1.0", optional = true }
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
+eggsec-ui-model = { path = "../eggsec-ui-model", version = "0.1.0" }
 
 # Phase E WS3: process host (multi-thread main + ctrl_c + timers + select!).
 # No direct fs/net/process/io; engine owns those capabilities.

@@ -49,15 +49,15 @@ ai-integration = ["eggsec/ai-integration"]
 full-no-system = ["websocket", "git-secrets", "sbom", "container"]
 
 [dependencies]
-eggsec = { path = "../eggsec", default-features = false }
-eggsec-core = { path = "../eggsec-core" }
-eggsec-tool-core = { path = "../eggsec-tool-core" }
-eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
-eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
-eggsec-mobile-lab = { path = "../eggsec-mobile-lab", optional = true }
-eggsec-nse = { path = "../eggsec-nse", optional = true }
-eggsec-daemon = { path = "../eggsec-daemon", optional = true }
-eggsec-runtime = { path = "../eggsec-runtime", optional = true }
+eggsec = { path = "../eggsec", version = "0.1.0", default-features = false }
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }
+eggsec-db-lab = { path = "../eggsec-db-lab", version = "0.1.0", optional = true }
+eggsec-web-proxy = { path = "../eggsec-web-proxy", version = "0.1.0", optional = true }
+eggsec-mobile-lab = { path = "../eggsec-mobile-lab", version = "0.1.0", optional = true }
+eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }
+eggsec-daemon = { path = "../eggsec-daemon", version = "0.1.0", optional = true }
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0", optional = true }
 pyo3 = { version = "0.29" }
 chrono = { workspace = true }
 serde = { workspace = true }

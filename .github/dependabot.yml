@@ -1,0 +1,42 @@
+# Phase F supply-chain hardening: automated pin/dependency maintenance.
+# Weekly cadence, grouped patch/minor to reduce churn, security updates stay
+# visible. No auto-merge — every update must pass the full CI/security
+# contract (ci.yml rust + dependency-policy + dependency-review jobs and
+# deep-checks.yml weekly oracle).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Group compatible patch/minor bumps; keep security updates visible.
+    groups:
+      patch-and-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+    # Never auto-merge; the dependency-policy gate must pass first.
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - supply-chain
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Action pins are immutable SHAs with version comments (see ci.yml,
+    # deep-checks.yml). Dependabot proposes SHA bumps; maintainers verify the
+    # upstream tag before merging. No auto-merge.
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - supply-chain
+    commit-message:
+      prefix: "chore(actions)"

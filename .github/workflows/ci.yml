@@ -1,5 +1,10 @@
 name: CI
 
+# Phase F supply-chain hardening: least-privilege default for all jobs.
+# Jobs that need more must declare it explicitly (none currently do).
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -10,6 +15,7 @@ on:
       - 'scripts/**'
       - 'docs/**'
       - '.github/workflows/**'
+      - 'deny.toml'
   pull_request:
     branches: [main]
 
@@ -17,30 +23,79 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   CARGO_BUILD_JOBS: 2
+  # Normal CI tracks stable (documented policy); MSRV 1.88 stays explicit in
+  # deep-checks.yml `msrv` job and `make check-msrv`. Pinned action SHAs below
+  # are immutable; the human-readable tag follows each SHA in a comment.
+  # Dependabot (`.github/dependabot.yml`) proposes SHA updates weekly.
 
 jobs:
   rust:
     name: Rust
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install cargo-deny (SHA-pinned)
+        uses: taiki-e/install-action@c02248eec042a8a90b2335f60bb37dc287b54068 # cargo-deny
+        with:
+          tool: cargo-deny@0.19.0
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Full mandatory Rust CI contract
         run: make check
 
+  dependency-policy:
+    name: Dependency policy (cargo deny)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install cargo-deny (SHA-pinned)
+        uses: taiki-e/install-action@c02248eec042a8a90b2335f60bb37dc287b54068 # cargo-deny
+        with:
+          tool: cargo-deny@0.19.0
+      - name: Advisory/license/source policy over full workspace closure
+        run: make check-deps
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    # Only pull requests have a base/head diff to review; skip on pushes.
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Dependency review (vulnerabilities, moderate+ fails)
+        uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803 # v4.8.3
+        with:
+          # Security project default: fail on moderate and above.
+          # Cargo Deny/RustSec remains authoritative for Rust advisories;
+          # this gate catches manifest-scope regressions the Rust closure
+          # may miss. License policy is owned by deny.toml (allow list +
+          # auto_generate_cdp build-time exception); this job does not
+          # maintain a separate license allowlist, so no deny-licenses is
+          # set here — contradictory allowlists are a Phase F violation.
+          fail-on-severity: moderate
+
   python:
     name: Python
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - name: Install system dependencies

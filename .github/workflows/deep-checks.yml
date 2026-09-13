@@ -1,5 +1,9 @@
 name: Deep Checks
 
+# Phase F supply-chain hardening: least-privilege default for all jobs.
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   schedule:
@@ -13,14 +17,18 @@ jobs:
   deep:
     name: Deep Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ripgrep protobuf-compiler libpcap-dev libssl-dev libssh2-dev pkg-config
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@cargo-deny
+      - name: Install cargo-deny (SHA-pinned)
+        uses: taiki-e/install-action@c02248eec042a8a90b2335f60bb37dc287b54068 # cargo-deny
+        with:
+          tool: cargo-deny@0.19.0
       - name: Optional broad validation
         run: make check-full
       - name: Exhaustive per-feature compilation sweep
@@ -29,12 +37,14 @@ jobs:
   msrv:
     name: MSRV (1.88)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master (toolchain input pins 1.88)
         with:
           toolchain: "1.88"
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: msrv
       - name: Verify workspace compiles with declared MSRV
@@ -49,10 +59,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: portability-${{ matrix.os }}
       - name: Check compilation
@@ -65,10 +77,12 @@ jobs:
   platform-integration:
     name: Platform integration (fixtures + live probes)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: platform-integration
       - name: Install system dependencies
