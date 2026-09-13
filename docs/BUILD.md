@@ -14,7 +14,7 @@ behavior, and reason for retention.
 | `libpcap` | `packet-inspection` | Linux, macOS | Yes (`libpcap-dev`) | Yes | Compilation fails without dev package | Live packet capture requires pcap bindings |
 | `wireless-tools` | `wireless` | Linux | No | Yes (`iwlist`) | WiFi scan commands fail | WiFi scanning needs `iwlist` scanner |
 | `libssl-dev` | `nse` | All | Yes | No | NSE TLS scripts fail at runtime | OpenSSL needed for NSE TLS protocol scripts |
-| `libssh2-dev` | `nse-ssh2` | All | Yes | No | NSE SSH scripts fail at compile time | libssh2 needed for NSE SSH2 support |
+| `libssh2-1-dev` | `nse-ssh2` | All | Yes | No | NSE SSH scripts fail at compile time | libssh2 needed for NSE SSH2 support (Ubuntu noble package name; `libssh2-dev` does not exist there) |
 | `protobuf-compiler` | `grpc-api` | All | Yes (descriptor only) | No | tonic-reflection descriptor not generated | protoc generates reflection descriptor set; Rust code is checked-in |
 | `ring` | `rustls` (via tokio-rustls) | All | Yes (Rust) | No | TLS compilation fails | Rust TLS library; pure Rust with assembly |
 | `aws-lc-rs` | (not used) | — | — | — | — | Explicitly excluded; ring-only TLS policy |
@@ -45,12 +45,12 @@ when the proto schema changes (a maintainer task).
 | `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) | Linux + `CAP_NET_ADMIN`/root + managed/up lab interface; `--dry-run` needs nothing |
 | `mobile-dynamic` | Android SDK platform-tools (`adb`) | SDK platform-tools | Lab AVD/device you own; fixture (mock ADB) needs nothing; see `scripts/setup_android_emulator.sh --check` |
 | `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` | none (local fixtures) |
-| `nse-ssh2` | `libssh2-dev` | `sudo apt-get install libssh2-dev` | none beyond `nse` |
+| `nse-ssh2` | `libssh2-1-dev` | `sudo apt-get install libssh2-1-dev` | none beyond `nse` |
 | `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) | none |
 
 ```bash
 # Ubuntu/Debian (all features)
-sudo apt-get install libpcap-dev libssl-dev wireless-tools libssh2-dev protobuf-compiler
+sudo apt-get install libpcap-dev libssl-dev wireless-tools libssh2-1-dev protobuf-compiler
 
 # Fedora/RHEL
 sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protobuf-compiler

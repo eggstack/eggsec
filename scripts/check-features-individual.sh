@@ -83,7 +83,7 @@ declare -A ENGINE_SETS=(
 # System-prerequisite-gated engine features (SKIP when the prerequisite is
 # absent; FAIL on real compile errors when present).
 PREREQ_GRPC_API="protobuf-compiler (protoc)"
-PREREQ_NSE_SSH2="libssh2-dev"
+PREREQ_NSE_SSH2="libssh2-1-dev"
 PREREQ_PACKET="libpcap-dev"
 PREREQ_STRESS="libpcap-dev"
 
