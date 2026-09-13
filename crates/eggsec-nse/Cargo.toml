@@ -44,7 +44,7 @@ scraper.workspace = true
 mlua = { version = "0.11.6", features = ["async"], optional = true }
 mlua-luau-scheduler = { version = "0.2", optional = true }
 openssl = { version = "0.10", features = ["vendored"], optional = true }
-des = { version = "0.8", optional = true }
+des = { version = "0.9", optional = true }
 ssh2 = { version = "0.9", optional = true }
 ipnetwork.workspace = true
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
