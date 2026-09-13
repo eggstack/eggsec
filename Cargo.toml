@@ -46,7 +46,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", default-features = false }
 parking_lot = "0.12"
 rand = { version = "0.8", features = ["std_rng"] }
-base64 = "0.22"
+base64 = "0.23"
 flate2 = "1"
 url = "2"
 urlencoding = "2.1"
