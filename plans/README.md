@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Network dependency and supply-chain hardening (active)
+## Network dependency and supply-chain hardening (executed 2026-09-13)
 
 Roadmap:
 [`network-dependency-hardening-roadmap-2026-09-11.md`](network-dependency-hardening-roadmap-2026-09-11.md)
@@ -42,6 +42,13 @@ moves ordinary outbound clients while retaining specialized interception and
 protocol ownership. Phase E makes measured Egress adopt/reject decisions and
 narrows CLI/Tokio/crate capability boundaries. Phase F hardens dependency and
 CI supply-chain policy. Phase G is the final measurement/security closure pass.
+
+All seven phases are executed (each plan carries its completion record).
+Retained closure report:
+[`../architecture/network_dependency_closure.md`](../architecture/network_dependency_closure.md)
+(final graphs, fixture results, remaining-owner dispositions, debt, acceptance
+mapping); measurement addendum is §10 of
+[`../architecture/network_dependency_baseline.md`](../architecture/network_dependency_baseline.md).
 
 ## TUI full-profile corrective closure (active)
 

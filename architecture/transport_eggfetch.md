@@ -153,7 +153,7 @@ consumer needs it.
 - `cargo test -p eggsec --features rest-api --test transport_eggfetch_parity`
   — 5 engine interop tests through `ScopeAuthority`.
 - Phase A `network_policy_invariants.rs` (12) and Phase B
-  `transport_contract.rs` (11) remain green and unmodified.
+  `transport_contract.rs` (12) remain green and unmodified.
 
 ## Upstream assessment (WS1–WS2 handoff input)
 
@@ -199,4 +199,4 @@ upstream ships the hook.
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-13 (Phase E preserves the adapter; still no production consumers)*
+*Last verified against source: 2026-09-13 (Phase G closure: 33 parity + 5 interop green; retained report in [network_dependency_closure.md](network_dependency_closure.md))*

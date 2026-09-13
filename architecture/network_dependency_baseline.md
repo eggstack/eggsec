@@ -2,7 +2,9 @@
 
 Status: Baseline recorded 2026-09-12; Phase D increment-1 addendum §7
 (2026-09-12); Phase E closure addendum §8 (2026-09-13, no HTTP client
-migration in Phase A, no egress/new-crate additions in Phase E).
+migration in Phase A, no egress/new-crate additions in Phase E); Phase F
+supply-chain addendum §9 (2026-09-13); Phase G measurement closure §10
+(2026-09-13, retained report in `network_dependency_closure.md`).
 
 This is the retained per-artifact dependency baseline, concrete-client
 inventory summary, migration parity matrix, and security-policy state for the
@@ -393,3 +395,30 @@ manual). Normal CI tracks documented stable; MSRV 1.88 stays explicit
   by weakening Deny.
 
 *Last verified against source: 2026-09-13 (Phase F)*
+
+## 10. Phase G closure addendum (2026-09-13)
+
+Status: roadmap executed; measurement only, no `src/` or manifest changes.
+Plan record: `plans/network-dependency-phase-g-closure-measurement.md`
+(marked Executed). Retained closure report:
+`architecture/network_dependency_closure.md` (baseline/final SHA, eggfetch
+`0.1.3`, egress rejection, per-crate removals, remaining-owner dispositions,
+before/after graphs, fixture results, policy state, debt + acceptance
+mapping).
+
+Final re-measurement (code SHA `f4ba2198`; same §1 commands): `cargo metadata
+--locked` 592 packages (574 registry + 18 path, 0 git); `eggsec
+--no-default-features` 59 normal-edge direct deps (+ agent edge + transport
+leaf vs 55 at baseline); `cargo tree -d` 16 top-level duplicate families
+(method-dependent recount; TLS-relevant dup unchanged); transport 87 /
+eggfetch-adapter 217 normal-edge lines; `reqwest` owners `eggsec`/`nse`/
+`python`/`web-proxy` (+ daemon tests only) — agent removed; `rustls`/
+`tokio-rustls`/`hickory-resolver` ownership narrowed identically;
+`openssl`/`native-tls`/`eggress-*`/`quinn` match no default-closure package;
+engine `default = []`; Tokio per-crate with `test-util` nowhere in
+production. Fixtures: transport 18 + contract 12 + parity 33+8 + interop 5 +
+invariants 12 + agent 24, all green. Gates: `make check`, `check-deps`,
+`clippy-domain`, `check-feature-profiles`, `check-features-individual`,
+`check-python`, `check-msrv` (1.88) all exit 0; guards ALL PASSED (99–112).
+
+*Last verified against source: 2026-09-13 (Phase G closure)*

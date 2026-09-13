@@ -1,6 +1,6 @@
 # Phase G — Verification, measurement, and closure
 
-Status: Ready for handoff
+Status: Executed 2026-09-13
 
 Date: 2026-09-11
 
@@ -191,3 +191,55 @@ remaining debt
 ```
 
 Link that report from this plan's completion record and from the relevant architecture documentation.
+
+## Completion record (2026-09-13)
+
+Retained report: `architecture/network_dependency_closure.md` (kept at the
+top-level `architecture/` directory per repository convention instead of the
+`docs/architecture/` path named above; that directory does not exist).
+Linked from the baseline §10 addendum, `architecture/transport.md`,
+`architecture/transport_eggfetch.md`, `architecture/overview.md`
+(Process & Reference index), `docs/CI_ARCHITECTURE_GUARDS.md`, `README.md`,
+`AGENTS.md`, and the `eggsec-config` skill.
+
+- Baseline SHA `06a7c2c4`; final code SHA `f4ba2198` (closure commit is
+  docs/plans only, no graph change); `eggfetch-core 0.1.3`
+  (`43a7c72c…272d9c`); egress all rejected (no edge).
+- Files changed: `architecture/network_dependency_closure.md` (new),
+  `architecture/network_dependency_baseline.md` (§10 + header),
+  `architecture/transport.md` + `transport_eggfetch.md` (`Last verified` +
+  11→12 contract-test count correction),
+  `architecture/capability_segregation.md` (11→12 correction),
+  `architecture/overview.md` (closure index entry),
+  `docs/CI_ARCHITECTURE_GUARDS.md` (Phases A–G header, §9/§10 + closure
+  links, 11→12 correction), `README.md` (closure link), `AGENTS.md`
+  (11→12 correction, Phase F + G summary, 65→66 doc count),
+  `.opencode/skills/eggsec-config/SKILL.md` (11→12 corrections ×2, Phase F +
+  G summary), `plans/README.md` (roadmap marked executed), this plan
+  (Status + this record). No `src/` or manifest changes.
+- Dependency removals/additions: none in this phase by design (Phase G is
+  measurement only). Final ownership confirmed: agent has no
+  `reqwest`/`rustls`; engine/NSE/proxy/python residuals documented with
+  dispositions; `openssl`/`native-tls`/`eggress-*`/`quinn` absent from the
+  default closure.
+- Verification (all local, exit 0): `make check`; `make check-deps`
+  (deny advisories/bans/licenses/sources ok); `make clippy-domain`;
+  `make check-feature-profiles`; `make check-features-individual`;
+  `make check-python`; `make check-msrv` (1.88); `cargo check -p eggsec-tui
+  --features full`; focused suites — transport 18, contract 12, parity
+  33+8, interop 5, invariants 12, agent 24, NSE lib 195, web-proxy lib 383,
+  TUI broad 936, daemon lib 74; guards ALL PASSED (99–112). Hosted CI
+  recorded on push (see below).
+- Upstream: no Eggfetch/Egress release adopted (`eggfetch-core` stays
+  `0.1.3`; no resolver hook exists to adopt).
+- Intentional exceptions/deferred items: release binary size + build timing
+  still unrecorded (supporting evidence only, never a gate); engine
+  per-subsystem backend cutover, NSE async-Lua, proxy side-B routing, and
+  Python migration remain future Phase D increments with owners/criteria in
+  the closure report.
+- WS6 egress outcome re-confirmed (rejected/deferred with measured graphs in
+  `architecture/egress_reuse_decision.md`); no unresolved "maybe later" claim
+  remains (re-evaluation triggers are recorded per candidate).
+
+All 13 acceptance criteria map to evidence in the closure report
+(`architecture/network_dependency_closure.md` §Acceptance mapping).

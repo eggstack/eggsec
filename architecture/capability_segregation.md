@@ -55,7 +55,7 @@ covers WS4 extraction evaluations with the required decision fields.
   on transport; adding engine → net → transport lengthens the chain with no
   isolation gain (DNS is not a privilege boundary; scope policy is).
 - Migration cost: move `TargetScope`, `HostResolver`, `SystemResolver`,
-  `ScopeAuthority`, plus 12 invariant + 11 contract tests; re-gate every
+   `ScopeAuthority`, plus 12 invariant + 12 contract tests; re-gate every
   `lookup_host`/hickory call site; high churn, zero dep removal.
 - Rejected alternative (chosen): keep Phase B split (transport owns
   checkpoint shape + facts; engine owns policy verdicts). No `eggsec-net`.
