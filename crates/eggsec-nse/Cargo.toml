@@ -52,7 +52,7 @@ eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-transport = { workspace = true }
 
 [dev-dependencies]
-toml = "0.8"
+toml = "1.1"
 
 [features]
 default = []

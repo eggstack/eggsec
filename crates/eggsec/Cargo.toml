@@ -43,7 +43,7 @@ clap_complete = { version = "4", optional = true }
 serde = { workspace = true }
 serde_json.workspace = true
 serde_yaml_neo = "0.11"
-toml = "0.8"
+toml = "1.1"
 anyhow.workspace = true
 thiserror.workspace = true
 hdrhistogram = "7"
