@@ -136,7 +136,7 @@ features = ["net", "socket"]
 optional = true
 
 [dependencies.surge-ping]
-version = "0.8"
+version = "0.9"
 optional = true
 
 [dependencies.axum]
