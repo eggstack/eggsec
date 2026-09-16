@@ -6,6 +6,9 @@
 //!
 //! Most output types and renderers live in the `eggsec-output` crate and are
 //! re-exported here for backward compatibility (`pub use eggsec_output::*`).
+//! Report/evidence data contracts are canonically owned by
+//! `eggsec-report-model`; `eggsec-output` re-exports them, so they remain
+//! available through this facade as well.
 //! Scheduling/cron lives in `eggsec-agent::cron`; legacy tab-state session
 //! persistence was removed (Phase A) as superseded by daemon/runtime sessions.
 //!

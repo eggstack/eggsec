@@ -293,8 +293,8 @@ pub fn format_mobile_report(report: &MobileScanReport) -> String {
 }
 
 /// Convert a MobileScanReport into the unified ScanReportData for JSON/SARIF/JUnit/etc.
-pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_output::convert::ScanReportData {
-    use eggsec_output::convert::FindingData;
+pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_report_model::ScanReportData {
+    use eggsec_report_model::FindingData;
 
     let findings: Vec<FindingData> = result
         .findings
@@ -311,7 +311,7 @@ pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_output::convert:
         })
         .collect();
 
-    eggsec_output::convert::ScanReportData {
+    eggsec_report_model::ScanReportData {
         target: result.target.clone(),
         scan_type: result.scan_type.clone(),
         timestamp: result.timestamp.clone(),
@@ -329,8 +329,8 @@ pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_output::convert:
 /// This produces the new normalized envelope alongside the existing `to_scan_report_data()`
 /// bridge. Domain-specific details (platform, app_id, version) are preserved in the
 /// findings' category strings and evidence items.
-pub fn to_report_envelope(result: &MobileScanReport) -> eggsec_output::envelope::ReportEnvelope {
-    use eggsec_output::envelope::{
+pub fn to_report_envelope(result: &MobileScanReport) -> eggsec_report_model::ReportEnvelope {
+    use eggsec_report_model::{
         EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState,
     };
 
@@ -393,10 +393,10 @@ pub fn to_report_envelope(result: &MobileScanReport) -> eggsec_output::envelope:
     .with_location(&result.target);
     findings.push(metadata_finding);
 
-    let mut envelope = eggsec_output::envelope::ReportEnvelope::new("mobile-static")
+    let mut envelope = eggsec_report_model::ReportEnvelope::new("mobile-static")
         .with_domain_id("mobile-static")
         .with_target(&result.target)
-        .with_tool_metadata(eggsec_output::envelope::ToolMetadata {
+        .with_tool_metadata(eggsec_report_model::ToolMetadata {
             tool_name: "eggsec-mobile-lab".to_string(),
             tool_version: result.version.clone(),
             eggsec_version: None,
@@ -493,7 +493,7 @@ mod tests {
 
         // serde roundtrip of bridged data
         let json = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&json).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&json).unwrap();
         assert_eq!(back.findings.len(), 2);
         assert_eq!(back.findings[0].category, "mobile-ios-transport");
     }

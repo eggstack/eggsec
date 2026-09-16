@@ -2092,7 +2092,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "eggsec-core",
- "eggsec-output",
+ "eggsec-report-model",
  "flate2",
  "futures",
  "mongodb",
@@ -2114,7 +2114,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "eggsec-core",
- "eggsec-output",
+ "eggsec-report-model",
  "flate2",
  "plist",
  "quick-xml",
@@ -2141,7 +2141,7 @@ dependencies = [
  "dashmap",
  "des",
  "eggsec-core",
- "eggsec-output",
+ "eggsec-report-model",
  "eggsec-transport",
  "flate2",
  "hex",
@@ -2177,6 +2177,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "eggsec-core",
+ "eggsec-report-model",
  "hostname",
  "lru",
  "quick-xml",
@@ -2214,6 +2215,17 @@ dependencies = [
  "tokio-tungstenite 0.27.0",
  "tracing",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "eggsec-report-model"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "eggsec-core",
+ "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -2329,7 +2341,7 @@ dependencies = [
  "criterion",
  "dashmap",
  "eggsec-core",
- "eggsec-output",
+ "eggsec-report-model",
  "eggsec-transport",
  "flate2",
  "futures",

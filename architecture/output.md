@@ -2,7 +2,9 @@
 
 ## Purpose
 
-The Output module handles formatting, deduplication, trend analysis, baseline comparison, and export of security findings into standardized formats. It is split across two crate boundaries: `eggsec-output` (17 source files, dependency-light, no engine/runtime deps) and the engine crate `eggsec`'s `output/` (8 source files, depends on engine-internal types). Guard-enforced invariant: `eggsec-output` depends only on `eggsec-core` — no engine or runtime dependencies.
+The Output module handles formatting, deduplication, trend analysis, baseline comparison, and export of security findings into standardized formats. It is split across three crate boundaries: `eggsec-report-model` (stable serializable report/evidence data contracts, dependency-light, no rendering/I-O/runtime), `eggsec-output` (rendering/conversion/analysis over the model, dependency-light, no engine/runtime deps) and the engine crate `eggsec`'s `output/` (8 source files, depends on engine-internal types). Guard-enforced invariant: `eggsec-output` depends on `eggsec-core` + `eggsec-report-model` — never the reverse, no engine or runtime dependencies (Checks 23, 118–119).
+
+Ownership note (Phase B, 2026-09-16): report/evidence DTOs (`ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData`, the `ReportEnvelope` envelope family, `PolicySummary`, `DiffSummary`) are canonically owned by `eggsec-report-model`. Domain crates (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on the model, not the renderer (Check 120). `eggsec-output` re-exports the moved DTOs so existing `eggsec_output::...` paths keep working. Retained in output: `load_scan_report`, all `convert_to_*` functions, renderer builders, `BaselineComparison`, `ResultComparator`/`TrendAnalyzer` (+ LRU history), `AuditSummary` aggregation, and the `From<&AgentFinding>` conversions (they couple the contract to output-side types, which the model must not import).
 
 Ownership note (Phase A, 2026-09-16): scan scheduling/cron/queue behavior no longer lives here. Cron parsing/matching lives in `eggsec-agent::cron` (only durable consumer is autonomous-agent scheduling); the generic queue is `eggsec-agent::TaskScheduler`. The duplicate scheduler-local `RateLimiter` was removed (canonical owner is engine `utils::rate_limiter`). Legacy tab-state session persistence (`ScanSession`) was removed as superseded by daemon/runtime durable sessions plus frontend `AppState` — it had zero production consumers.
 
@@ -21,7 +23,7 @@ Ownership note (Phase A, 2026-09-16): scan scheduling/cron/queue behavior no lon
 
 ### `crates/eggsec-output/src/` (17 files)
 
-Always compiled. Dependencies: `eggsec-core`, `serde`, `serde_json`, `chrono`, `rustc-hash`, `quick-xml`, `unicode-normalization`, `lru`, `uuid`, `hostname`, `tokio`.
+Always compiled. Dependencies: `eggsec-core`, `eggsec-report-model`, `serde`, `serde_json`, `chrono`, `rustc-hash`, `quick-xml`, `unicode-normalization`, `lru`, `uuid`, `hostname`, `tokio`. Canonical data contracts live in `eggsec-report-model` (deps: `eggsec-core`, `serde`, `serde_json`, `chrono`, `uuid` only).
 
 | File | Lines | Tests | Purpose |
 |------|-------|-------|---------|
@@ -30,16 +32,16 @@ Always compiled. Dependencies: `eggsec-core`, `serde`, `serde_json`, `chrono`, `
 | `ai_schema.rs` | 237 | 9 | `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` — typed AI consumption output |
 | `audit_summary.rs` | 82 | 2 | `AuditSummary` — aggregated enforcement decision counts from JSON audit events |
 | `baseline.rs` | 192 | 10 | `BaselineComparison` — finding-level new/resolved/unchanged classification by `id` matching |
-| `convert.rs` | 367 | 3 | `ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData`; conversion functions `load_scan_report`, `convert_to_*` |
+| `convert.rs` | 367 | 3 | Conversion functions `load_scan_report`, `convert_to_*` over model DTOs; re-exports `ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData` from `eggsec-report-model` (canonical owner) |
 | `csv.rs` | 163 | 0 | `CsvExporter` — finding/port/endpoint CSV export; streaming async variant |
 | `dedup.rs` | 163 | 6 | `DedupEngine`, `DedupStrategy` (Strict/Fuzzy/Disabled) |
-| `diff.rs` | 27 | 1 | `DiffSummary` — numeric diff envelope for `RunManifest` |
-| `envelope.rs` | 770 | 11 | `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` |
+| `diff.rs` | 27 | 1 | Re-exports `DiffSummary` from `eggsec-report-model` (canonical owner) — numeric diff envelope for `RunManifest` |
+| `envelope.rs` | 770 | 11 | Compatibility facade: re-exports `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` from `eggsec-report-model` (canonical owner) + `From<&AgentFinding>` conversion (stays: couples contract to output-side type) |
 | `escape.rs` | 81 | 4 | `escape_html()`, `escape_csv()` (NFKC + formula injection protection), `escape_xml()` |
 | `html.rs` | 325 | 0 | `HtmlReport` — styled HTML with dark/light themes, Chart.js doughnut |
 | `junit.rs` | 407 | 2 | `JUnitBuilder`, `JUnitReport` — JUnit XML via `quick_xml::Writer` (write-only, XXE-safe) |
 | `markdown.rs` | 141 | 0 | `MarkdownReport` — markdown-formatted report generation |
-| `policy_summary.rs` | 54 | 2 | `PolicySummary` — policy decision metadata for report envelopes |
+| `policy_summary.rs` | 54 | 2 | Re-exports `PolicySummary` from `eggsec-report-model` (canonical owner) — policy decision metadata for report envelopes |
 | `sarif.rs` | 276 | 1 | `SarifBuilder`, `SarifReport` — SARIF 2.1.0 JSON via `serde_json` (no XML parsing, XXE-safe) |
 | `trend.rs` | 539 | 15 | `TrendAnalyzer`, `ResultComparator`, `TrendAnalysis`, `TrendDirection`, `ComparisonResult`, `ScanResult` |
 

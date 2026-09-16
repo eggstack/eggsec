@@ -48,7 +48,8 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 |-------|------|:---:|:---:|:---:|:---:|-------|
 | `eggsec-core` | Shared primitives | No | No | No | Yes | `Severity`, `SensitiveString`, constants. Zero internal deps. |
 | `eggsec-tool-core` | Protocol-neutral DTOs | No | No | No | Yes | `ToolRequest`, `ToolResponse`, `ToolError`, history types. |
-| `eggsec-output` | Report formatting | No | Output adapters | No | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown. Portable adapters. |
+| `eggsec-output` | Report rendering | No | Output adapters | No | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown over `eggsec-report-model`. Portable adapters. |
+| `eggsec-report-model` | Report data contracts | No | No | No | Yes | `ScanReportData`, `ReportEnvelope`, evidence/summary DTOs. Data only; zero workspace deps except `eggsec-core`. |
 | `eggsec-agent` | Agent coordination | No | Coordination only | No | Yes | Registry, scheduler, lifecycle, cron. Depends only on `eggsec-core`. |
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
@@ -64,7 +65,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` | No | No | No | Yes | Approved-IP pinning, manual authorized redirects. No production consumers yet. |
 | `eggsec-python` | Python bindings | No | No | No | Yes | PyO3/maturin. Depends on `eggsec` + `eggsec-core`. Engine/AsyncEngine entry points, scope enforcement, OperationRegistry, EnforcementContext, event protocol, callbacks/sinks, domain registry, 1.0 readiness. |
 
-**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-output`, `eggsec-agent`) have no internal workspace dependencies. The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.
+**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-agent`) have no engine/runtime dependencies (`eggsec-report-model` depends only on `eggsec-core`; `eggsec-output` renders over the model, never the reverse). The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.
 
 ## 3. Enforcement Model
 

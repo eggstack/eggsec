@@ -38,7 +38,7 @@ Every number in this document was verified against source on 2026-09-11. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 18 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with 19 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -56,7 +56,8 @@ nor hosted CI publishes a package.
 |-------|------|:---:|-------|
 | `eggsec-core` | Shared primitives | Yes | `Severity` (5 levels), `SensitiveString` (zeroize + constant-time eq), constants. Zero internal deps. |
 | `eggsec-tool-core` | Protocol-neutral DTOs | Yes | `ToolRequest`, `ToolResponse`, `ToolError`, history/rate-limit types. Depends only on `eggsec-core`. |
-| `eggsec-output` | Report formatting | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, envelope, dedup, trends, diff. No engine/runtime deps. PDF lives in the engine crate, not here. Scheduling/session removed in Phase A (cron in `eggsec-agent::cron`). |
+| `eggsec-report-model` | Report data contracts | Yes | `ScanReportData`, `ReportEnvelope`, evidence/summary DTOs. Data only; depends only on `eggsec-core`. Domain DTO owner (Phase B). |
+| `eggsec-output` | Report rendering | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, dedup, trends, diff over `eggsec-report-model` (never the reverse). No engine/runtime deps. PDF lives in the engine crate, not here. Scheduling/session removed in Phase A (cron in `eggsec-agent::cron`). |
 | `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation, cron. Internal deps: `eggsec-core` only. |
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
@@ -72,7 +73,7 @@ nor hosted CI publishes a package.
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
 | `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` only). |
 
-**Dependency direction**: Leaf crates have no internal workspace dependencies (except where noted above). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
+**Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on the model, not the renderer. The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
 ---
 
@@ -190,7 +191,7 @@ Configuration, persistence, reporting, and supporting infrastructure.
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Config | `crates/eggsec/src/config/` | TOML/YAML config loading, scope model (`Scope`/`LoadedScope`/`TargetScope`/`AddressClass`), policy model (`OperationMetadata`, `EnforcementContext`), budgets, presets, feature registry | [config.md](config.md) |
-| Output | `crates/eggsec-output/src/` + `crates/eggsec/src/output/` | Report generation: JSON, CSV, HTML, SARIF, JUnit, Markdown from `eggsec-output`; PDF via printpdf lives in the engine crate behind the `pdf` feature. Envelope wrapping, dedup, trend/baseline/diff analysis | [output.md](output.md) |
+| Output | `crates/eggsec-report-model/src/` + `crates/eggsec-output/src/` + `crates/eggsec/src/output/` | Report data contracts (model crate) and generation: JSON, CSV, HTML, SARIF, JUnit, Markdown from `eggsec-output`; PDF via printpdf lives in the engine crate behind the `pdf` feature. Envelope wrapping, dedup, trend/baseline/diff analysis | [output.md](output.md) |
 | Proxy | `crates/eggsec/src/proxy/` | Facade over `eggsec-web-proxy`: pool/rotator/health-check for SOCKS4/SOCKS5/HTTP/HTTPS/Tor (`ProxyType`, 5 variants); stubs when `web-proxy` disabled | [proxy.md](proxy.md) |
 | Web Proxy | `crates/eggsec-web-proxy/` | MITM web proxy domain: HTTP/HTTPS/WebSocket/HTTP2/gRPC interception, on-the-fly TLS cert generation (`CertGenerator`), evidence bundles, RBAC rules; feature-gated: `web-proxy` | [web_proxy.md](web_proxy.md) |
 | Storage | `crates/eggsec/src/storage/` | SQLx PostgreSQL persistence for findings/scan history (`PgPool`); feature-gated: `database` | [storage.md](storage.md) |
@@ -470,7 +471,9 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 eggsec-core (leaf — no workspace deps)
     ↑
     ├── eggsec-tool-core     (ToolRequest/Response/Finding/Error DTOs)
-    ├── eggsec-output        (report formats, envelope, dedup, trends)
+    ├── eggsec-report-model  (report/evidence DTOs — ScanReportData, ReportEnvelope; data only)
+    │       ↑
+    │       └── eggsec-output (report formats, dedup, trends over the model — never the reverse)
     ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
     ├── eggsec-transport-eggfetch (HttpTransport over eggfetch-core; no production backend consumers yet — Phase D wires per consumer)
@@ -498,10 +501,11 @@ eggsec-core (leaf — no workspace deps)
 Enforced by `scripts/check-architecture-guards.sh`:
 
 - `eggsec-core` has no workspace crate dependencies (leaf crate)
+- `eggsec-report-model` has no Tokio/filesystem/renderer/engine deps and never references `eggsec-output` (Checks 118–119)
+- `eggsec-output` depends on `eggsec-report-model` (facades re-export it, DTOs are never redefined) and has no engine or runtime dependencies (Checks 23, 119)
 - `eggsec-runtime` has no TUI, transport, persistence, or engine dependencies
-- `eggsec-output` has no engine or runtime dependencies
 - `eggsec-daemon` has no non-optional TUI/engine dependencies; transport deps only behind `http-api`
-- Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend only on core + output
+- Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend on `eggsec-report-model` for DTOs, never on `eggsec-output` (Check 120)
 - Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine
 
 ### Intra-Engine Dependencies

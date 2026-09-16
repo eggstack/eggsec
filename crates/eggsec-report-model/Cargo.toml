@@ -1,0 +1,22 @@
+[package]
+name = "eggsec-report-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Stable serializable report/evidence data contracts for Eggsec (no rendering, I/O, or runtime)"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["reporting", "output", "sarif", "json", "security"]
+categories = ["development-tools"]
+
+[dependencies]
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

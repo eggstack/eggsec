@@ -15,7 +15,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 | Dependency policy | `make check-deps` (`cargo deny --workspace --all-features check`) | Advisories, licenses, bans, sources over the full feature closure |
 | Clippy | `make clippy` (engine lib + leaf crates, `-D warnings`) | Code quality on engine and leaf crates |
 | Package tests | `cargo test -p eggsec --features rest-api --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
-| Report envelope | `cargo test -p eggsec-output --tests` | Output crate report/evidence envelope roundtrip |
+| Report envelope | `cargo test -p eggsec-output --tests` + `cargo test -p eggsec-report-model --tests` | Output rendering tests + model contract roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
 In CI these run as three jobs in `ci.yml`: `rust` (full `make check`,
@@ -39,6 +39,7 @@ cargo check --workspace --no-default-features
 make clippy
 cargo test -p eggsec --features rest-api --tests --no-fail-fast
 cargo test -p eggsec-output --tests
+cargo test -p eggsec-report-model --tests
 bash scripts/check-architecture-guards.sh
 ```
 
@@ -152,6 +153,11 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - No Reqwest multi-client pool abstraction: no `utils/client_pool.rs`, no `ClientPool`/`OptimizedClientPool` types or imports; canonical path is one cloned shared client (Check 115).
 - No second token-bucket in output/frontend crates: no `struct RateLimiter` in `eggsec-output`/`eggsec-tui`/`eggsec-cli`/`eggsec-daemon`; canonical owner is engine `utils::rate_limiter` (Check 116).
 - No utils/common catch-all crate: no `eggsec-utils`/`eggsec-common`/`eggsec-shared`/`eggsec-helpers` references, no new catch-all modules, and removed `output`/`progress`/`stealth`/`privilege` utils do not reappear (Check 117).
+
+### Crate-Boundary Consolidation Invariants (Phase B, guards Checks 118–120)
+- `eggsec-report-model` stays data-only: crate exists with no `tokio`/`quick-xml`/`hostname`/`lru`/`reqwest`/`rustls`/`axum`/`tonic`/`clap`/`ratatui`/`eggsec-output`/engine deps and no filesystem/runtime/renderer uses in `src/` (Check 118).
+- `eggsec-output` depends on the model, never the reverse: output manifests `eggsec-report-model`, model never references output, moved DTOs are not redefined in output, and convert/envelope/policy_summary/diff facades re-export the model (Check 119).
+- DTO-only domain crates use the model, not the renderer: `eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, and `eggsec-nse` manifest `eggsec-report-model`, carry no `eggsec-output` dependency, and contain no `eggsec_output::` imports in `src/`/`tests/` (Check 120).
 
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.

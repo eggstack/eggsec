@@ -4,7 +4,7 @@
 
 There is no single "diff module." Finding comparison, response diffing, and diff summaries are spread across three separate module trees: `output`, `fuzzer`, and `waf`. The output crate provides finding-level comparison and a numeric summary envelope. The fuzzer provides HTTP response-level diffing with anomaly scoring. The WAF provides a separate response comparison type for detection.
 
-**Note on overview.md**: The overview lists Diff with source `(in eggsec-output + engine)`. This is accurate — the finding-level comparison and summary struct live in `eggsec-output`, while the HTTP response diff engine lives in the engine crate (`fuzzer/diff.rs`). The WAF's `ResponseDiff` is unrelated.
+**Note on overview.md**: The overview lists Diff with source `(in eggsec-output + engine)`. Finding-level comparison (`BaselineComparison`) and the `From` conversions live in `eggsec-output`, while the HTTP response diff engine lives in the engine crate (`fuzzer/diff.rs`). The numeric summary struct (`DiffSummary`) is canonically owned by `eggsec-report-model` (Phase B) and re-exported by `eggsec-output/src/diff.rs`. The WAF's `ResponseDiff` is unrelated.
 
 ---
 
@@ -70,7 +70,7 @@ Uses `FxHashSet` of finding `id` fields:
 
 ## 2. Output Diff Summary
 
-**File:** `crates/eggsec-output/src/diff.rs` (27 lines)
+**File:** `crates/eggsec-report-model/src/summary.rs` (canonical owner; re-exported by `crates/eggsec-output/src/diff.rs`)
 
 A minimal numeric summary struct for attaching diff results to pipeline run manifests. This is a data envelope, not a comparison engine.
 
@@ -195,7 +195,7 @@ A completely separate `ResponseDiff` type for WAF detection, comparing normal vs
 
 ```
 eggsec-output/src/baseline.rs  → AgentFinding (finding-level comparison by id)
-eggsec-output/src/diff.rs      → DiffSummary (numeric summary for RunManifest)
+eggsec-report-model/src/summary.rs → DiffSummary (numeric summary for RunManifest; re-exported by eggsec-output/src/diff.rs)
 output/run_manifest.rs          → uses DiffSummary
 fuzzer/diff.rs                  → ResponseDiffer (HTTP response-level comparison)
 fuzzer/engine/core.rs           → uses ResponseDiffer

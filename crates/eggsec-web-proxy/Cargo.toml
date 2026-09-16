@@ -15,8 +15,8 @@ categories = ["command-line-utilities", "development-tools::testing"]
 [dependencies]
 # Shared types from core
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
-# Output bridge (for ScanReportData, FindingData)
-eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
+# Report/evidence data contracts (Phase B: DTO-only, no rendering dependency)
+eggsec-report-model = { path = "../eggsec-report-model", version = "0.1.0" }
 # Scope-aware outbound HTTP contract (outbound side only; interception/server
 # TLS in intercept/ never depends on it — see outbound.rs boundary).
 eggsec-transport = { workspace = true }

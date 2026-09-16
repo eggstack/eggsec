@@ -1,10 +1,17 @@
 # Adding Report and Evidence Output with the Normalized Report Envelope
 
 This guide explains how to produce structured, normalized report and evidence
-output using the `ReportEnvelope` contract defined in `eggsec-output::envelope`.
+output using the `ReportEnvelope` contract defined in `eggsec-report-model`.
 Every domain crate that produces findings or evidence should convert its
 domain-specific types into a `ReportEnvelope` rather than inventing its own
 report schema.
+
+> Ownership note (Phase B): `eggsec-report-model` is the canonical owner of
+> report/evidence data contracts. `eggsec_output::envelope` re-exports the
+> same types for backward compatibility, so older `use eggsec_output::...`
+> imports in this guide's history still resolve — but new code must import
+> from `eggsec_report_model` and domain crates must depend on the model, not
+> the renderer.
 
 See also:
 
@@ -13,12 +20,15 @@ See also:
 - [architecture/report_envelope.md](../../architecture/report_envelope.md) for
   the architecture-level contract and conversion pattern.
 
-## 1. What Belongs in eggsec-output
+## 1. What Belongs in eggsec-report-model
 
-The `eggsec-output` crate owns all shared report, finding, and evidence types.
-Domain crates depend on `eggsec-output` but never depend on each other for
-report types. The `envelope` module (`crates/eggsec-output/src/envelope.rs`)
-defines:
+The `eggsec-report-model` crate owns all shared report, finding, and evidence
+data contracts. Domain crates depend on `eggsec-report-model` but never depend
+on each other for report types — and they no longer depend on `eggsec-output`
+(renderer) just to exchange DTOs. Rendering, format conversion, filesystem
+loading, and trend/baseline analysis stay in `eggsec-output`, which depends on
+the model (never the reverse). The `envelope` module
+(`crates/eggsec-report-model/src/envelope.rs`) defines:
 
 | Type | Purpose |
 |------|---------|
@@ -36,7 +46,7 @@ defines:
 Domain-specific report types (e.g., `MobileScanReport`, `DbPentestReport`,
 `WebProxySessionReport`) live in their own crates. They are internal to the
 domain. The only types that cross the crate boundary into output consumers are
-the normalized types in `eggsec-output::envelope`.
+the normalized types in `eggsec_report_model`.
 
 ## 2. How to Use the Report Envelope
 
@@ -46,7 +56,7 @@ Every envelope requires an operation ID. Use the operation ID from your
 `DomainDescriptor` or `OperationMetadata`:
 
 ```rust
-use eggsec_output::envelope::ReportEnvelope;
+use eggsec_report_model::ReportEnvelope;
 
 let envelope = ReportEnvelope::new("db-pentest")
     .with_domain_id("db-pentest")
@@ -58,7 +68,7 @@ let envelope = ReportEnvelope::new("db-pentest")
 Convert each domain finding into a `FindingRecord` and attach it:
 
 ```rust
-use eggsec_output::envelope::{EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState};
+use eggsec_report_model::{EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState};
 use eggsec_core::types::Severity;
 
 let record = FindingRecord::new(
@@ -197,7 +207,7 @@ envelope.refresh_evidence_manifest();
 If the domain supports baseline comparison, populate a `BaselineSummary`:
 
 ```rust
-use eggsec_output::envelope::BaselineSummary;
+use eggsec_report_model::BaselineSummary;
 
 let mut baseline = BaselineSummary::new("db-pentest");
 baseline.added = 1;
@@ -392,7 +402,13 @@ fn report_envelope_full_roundtrip() {
 
 ### 6.2 Running Tests
 
-Run the envelope integration tests:
+Run the model contract round-trip tests (independent of rendering):
+
+```bash
+cargo test -p eggsec-report-model
+```
+
+Run the envelope integration tests (via the output re-export facade):
 
 ```bash
 cargo test -p eggsec-output --test report_envelope
@@ -416,4 +432,4 @@ When adding a new domain bridge, verify:
 - [ ] `ToolMetadata` is populated with crate name and version.
 - [ ] Category strings use the domain prefix convention.
 - [ ] The existing `to_scan_report_data()` bridge is unchanged.
-- [ ] `cargo clippy -p eggsec-output` produces no new warnings.
+- [ ] `cargo clippy -p eggsec-report-model` produces no new warnings.

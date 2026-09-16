@@ -99,7 +99,7 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 
 ## Integration with Reporting Pipeline
 
-`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use. An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`) converts to the canonical `ScanReportData` used by `eggsec-output` converters (SARIF, JUnit, HTML, Markdown, CSV, JSON roundtrip, trend, etc.).
+`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use. An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`) converts to the canonical `ScanReportData` (owned by `eggsec-report-model`, re-exported by output) used by `eggsec-output` converters (SARIF, JUnit, HTML, Markdown, CSV, JSON roundtrip, trend, etc.).
 
 - Use the native types for lab-specific flows, regression on `Mobile*` shapes, or when you do not need unified consumers.
 - Use `--json` + `eggsec report convert` (or call `to_scan_report_data` in your own tooling) when you want SARIF/JUnit/etc. or to feed into `report trend` / other unified consumers.

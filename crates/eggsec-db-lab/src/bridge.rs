@@ -4,7 +4,7 @@
 //! Phase 4: includes correlation metadata in the info finding description.
 
 use crate::types::DbPentestReport;
-use eggsec_output::convert::{FindingData, ScanReportData};
+use eggsec_report_model::{FindingData, ScanReportData};
 
 pub fn to_scan_report_data_db(result: &DbPentestReport) -> ScanReportData {
     let findings: Vec<FindingData> = result
@@ -78,8 +78,8 @@ pub fn to_scan_report_data_db(result: &DbPentestReport) -> ScanReportData {
 /// This produces the new normalized envelope alongside the existing `to_scan_report_data_db()`
 /// bridge. DB-specific details (db_type, dry_run, queries_executed, correlation, compliance)
 /// are preserved in findings' evidence items and the envelope's metadata.
-pub fn to_report_envelope(result: &DbPentestReport) -> eggsec_output::envelope::ReportEnvelope {
-    use eggsec_output::envelope::{
+pub fn to_report_envelope(result: &DbPentestReport) -> eggsec_report_model::ReportEnvelope {
+    use eggsec_report_model::{
         BaselineSummary, EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState,
     };
 
@@ -174,10 +174,10 @@ pub fn to_report_envelope(result: &DbPentestReport) -> eggsec_output::envelope::
     .with_location(&result.target);
     findings.push(metadata_finding);
 
-    let mut envelope = eggsec_output::envelope::ReportEnvelope::new("db-pentest")
+    let mut envelope = eggsec_report_model::ReportEnvelope::new("db-pentest")
         .with_domain_id("db-pentest")
         .with_target(&result.target)
-        .with_tool_metadata(eggsec_output::envelope::ToolMetadata {
+        .with_tool_metadata(eggsec_report_model::ToolMetadata {
             tool_name: "eggsec-db-lab".to_string(),
             tool_version: None,
             eggsec_version: None,

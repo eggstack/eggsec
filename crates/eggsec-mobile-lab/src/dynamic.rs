@@ -1508,8 +1508,8 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
 /// Categories follow the documented convention: mobile-dynamic-android-*
 pub fn to_scan_report_data_dynamic(
     result: &DynamicMobileReport,
-) -> eggsec_output::convert::ScanReportData {
-    use eggsec_output::convert::FindingData;
+) -> eggsec_report_model::ScanReportData {
+    use eggsec_report_model::FindingData;
 
     let findings: Vec<FindingData> = result
         .findings
@@ -1601,7 +1601,7 @@ pub fn to_scan_report_data_dynamic(
     let mut all_findings = findings;
     all_findings.extend(extra_findings);
 
-    eggsec_output::convert::ScanReportData {
+    eggsec_report_model::ScanReportData {
         target: result.target.clone(),
         scan_type: result.scan_type.clone(),
         timestamp: result.timestamp.clone(),
@@ -1984,7 +1984,7 @@ mod tests {
         );
         // roundtrip
         let j = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&j).unwrap();
         assert_eq!(back.findings.len(), 2);
     }
 
@@ -2182,7 +2182,7 @@ W/PackageManager: permission denied: READ_SMS
             .any(|f| f.category == "mobile-dynamic-android-permission-state"));
         // roundtrip the bridged data
         let j = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back
             .findings
             .iter()
@@ -2460,7 +2460,7 @@ W/PackageManager: permission denied: READ_SMS
             .any(|f| f.category == "mobile-dynamic-android-frida-instrumentation"));
         // roundtrip
         let j = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back
             .findings
             .iter()
@@ -2497,7 +2497,7 @@ W/PackageManager: permission denied: READ_SMS
             == "mobile-dynamic-android-frida-instrumentation"
             && f.description.contains("structured=1")));
         let j = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back
             .findings
             .iter()
@@ -2670,7 +2670,7 @@ W/PackageManager: permission denied: READ_SMS
                 .any(|f| f.category == format!("mobile-dynamic-android-{}", c)));
         }
         let j = serde_json::to_string(&data).unwrap();
-        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        let back: eggsec_report_model::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back.findings.len() >= 3);
     }
 

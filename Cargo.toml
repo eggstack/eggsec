@@ -6,6 +6,7 @@ members = [
     "crates/eggsec-tui",
     "crates/eggsec-cli",
     "crates/eggsec-output",
+    "crates/eggsec-report-model",
     "crates/eggsec-tool-core",
     "crates/eggsec-agent",
     "crates/eggsec-db-lab",

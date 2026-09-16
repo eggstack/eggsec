@@ -1,6 +1,6 @@
 # Phase B — Report model extraction
 
-Status: Ready for handoff
+Status: Executed (2026-09-16). All workstreams implemented; see Completion record below.
 
 Date: 2026-09-16
 
@@ -316,3 +316,158 @@ Append after execution:
 - Package/release graph changes
 - Commands/results
 - Residual model/output ownership debt
+
+## Completion record
+
+Executed 2026-09-16.
+
+- Baseline SHA: `ee0bffe124c7573016bd3ef9f71561fb7cc07d55` (Phase A
+  implementation head; working tree clean at start).
+  Final implementation SHA: recorded in the commit history for this plan
+  (implementation commit + this record; `git log --oneline --
+  plans/crate-boundary-consolidation-phase-b-report-model-extraction.md`).
+  Workspace member count 18 -> 19 (no other member added/removed).
+- Gate B0 payoff (verified by `rg`, not assumed): every `eggsec-output`
+  import in the four domain crates classified as pure report/evidence DTO —
+  zero rendering/conversion (`load_scan_report`, `convert_to_*`), zero
+  baseline/trend/dedup, zero persistence/I-O imports:
+  - `eggsec-db-lab/src/bridge.rs`: `convert::{FindingData, ScanReportData}` +
+    `envelope::{BaselineSummary, EvidenceItem, EvidenceKind, EvidenceSource,
+    FindingRecord, RedactionState, ReportEnvelope, ToolMetadata}`;
+  - `eggsec-mobile-lab/src/{lib,dynamic}.rs`: `convert::{FindingData,
+    ScanReportData}` + `envelope::{EvidenceItem, EvidenceKind,
+    EvidenceSource, FindingRecord, RedactionState, ReportEnvelope,
+    ToolMetadata}`;
+  - `eggsec-web-proxy/src/intercept/bridge.rs`:
+    `convert::{FindingData, ScanReportData}`;
+  - `eggsec-nse/src/bridge.rs` (+ `tests/{bridge,evidence}_tests.rs`):
+    `envelope::{EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord,
+    RedactionState, ReportEnvelope, ToolMetadata}`.
+  All four proceed to the model; none retains an `eggsec-output` edge.
+- Exact types moved (verbatim, same serde attrs) into
+  `crates/eggsec-report-model/src/`:
+  - `report.rs`: `ScanReportData`, `FindingData`, `PortData`, `ServiceData`,
+    `WirelessNetworkReportData` (from `eggsec-output::convert`; conversion
+    functions, `load_scan_report`, and all `From` impls stay in output);
+  - `envelope.rs`: `EvidenceKind` (+ intrinsic `Display`), `EvidenceSource`,
+    `RedactionState`, `RedactionPolicy`, `EvidenceItem`, `EvidenceManifest`,
+    `FindingRecord`, `BaselineSummary`, `ToolMetadata`, `ReportEnvelope`
+    (the `From<&AgentFinding> for FindingRecord` impl stays in output — it
+    couples the contract to an output-side type the model must not import);
+  - `summary.rs`: `PolicySummary`, `DiffSummary` (pure DTOs only).
+  - Deliberately NOT moved (minimal extraction per WS3): `agent.rs` wholesale
+    (`AgentFinding` family stays; output-local + engine consumers only),
+    `baseline::BaselineComparison`, `trend::{ResultComparator,
+    TrendAnalyzer}` (+ LRU history and all trend DTOs — no external producer
+    needs them independently), `audit_summary` struct + aggregation (kept
+    together to avoid splitting struct from behavior; no domain consumer).
+- Dependencies of `eggsec-report-model` (direct, depth-1 `cargo tree`):
+  `chrono`, `eggsec-core`, `serde`, `serde_json`, `uuid` only. No `tokio`,
+  `quick-xml`, `hostname`, `lru`, `rustc-hash`, `unicode-normalization`,
+  `reqwest`/`rustls`, frontend, engine, or `eggsec-output` edge.
+  `serde_json` is used for the canonical in-memory `to_json`/`from_json`
+  helpers (no `serde_json::Value` fields, no file loading); `chrono`/`uuid`
+  back the already-present `DateTime<Utc>` fields and `new()`/`Default`
+  constructors (report identity/timestamps are intrinsic to the DTO, not
+  host/environment discovery — no `hostname`/fs/env behavior moved).
+  `BaselineSummary::severity_deltas` uses `std::collections::HashMap`
+  (no `rustc-hash` leak into the stable contract).
+- Consumer edge before -> after:
+  - `eggsec-db-lab`: `eggsec-output` -> `eggsec-report-model` (dep removed).
+  - `eggsec-mobile-lab`: `eggsec-output` -> `eggsec-report-model` (dep removed).
+  - `eggsec-web-proxy`: `eggsec-output` -> `eggsec-report-model` (dep removed).
+  - `eggsec-nse`: `eggsec-output` -> `eggsec-report-model` (dep removed).
+  - `eggsec-output`: + `eggsec-report-model` (correct direction; never reverse).
+  - `eggsec` (engine): unchanged (`eggsec-output` only; DTOs flow through the
+    re-export facade — no new edge, no cycle).
+- Transitive dependency deltas (depth-1 `cargo tree` before -> after):
+  - `eggsec-db-lab` loses `eggsec-output` and with it the transitive
+    `hostname`, `lru`, `quick-xml`, `rustc-hash`, `unicode-normalization`,
+    `uuid` renderer-only surface (keeps its own direct `chrono`/`tokio`/etc.).
+  - `eggsec-mobile-lab` loses the `eggsec-output` edge (`hostname`, `lru`,
+    `unicode-normalization`, `rustc-hash` via output gone; keeps its own
+    direct `quick-xml` for manifest parsing).
+  - `eggsec-web-proxy`, `eggsec-nse`: `eggsec-output` edge gone (DTOs now via
+    the 5-dep model instead of the 11-dep renderer).
+  - `cargo tree -d` shows no new duplicate-version conflicts attributable to
+    this phase (model reuses the workspace `chrono`/`uuid`/`serde` pins).
+- Serialization compatibility evidence:
+  - Temporary `eggsec-output` example dumped representative fixtures BEFORE
+    the move (scan report with evidence/remediation/CWE, ports, services,
+    wireless, policy summary; `cve_ids` alias probe; envelope with evidence +
+    policy + baseline + tool metadata + redaction policy; diff + audit
+    shapes) to `/tmp/phase-b-before.txt`; re-ran the identical dumper AFTER
+    the move (paths resolve to the model via re-exports) to
+    `/tmp/phase-b-after.txt`: `diff` reports FIXTURES IDENTICAL
+    (byte-equivalent). Example deleted after verification (not retained).
+  - New `crates/eggsec-report-model/tests/roundtrip.rs` (11 tests,
+    independent of `eggsec-output`): full report shape + skip rules,
+    `cve_ids` alias, wireless `#[serde(default)]` flags, policy/diff
+    round-trips, `snake_case` enum renames, intrinsic `Display`, builder APIs,
+    severity preservation, manifest redaction counts, baseline flags,
+    manifest refresh.
+  - Existing `eggsec-output` unit + `tests/report_envelope.rs` suites pass
+    unchanged through the re-export facade (93 tests across model+output).
+- Compatibility re-exports/API changes (all pre-1.0; dependency-safe, no
+  cycle): `eggsec_output::{convert,envelope,policy_summary,diff}` modules
+  `pub use` the model types, so `eggsec_output::ScanReportData`,
+  `eggsec_output::convert::ScanReportData`, `eggsec::output::*` and all
+  envelope paths keep resolving. `RedactionPolicy` was previously reachable
+  only via `eggsec_output::envelope::` (never root-re-exported) — unchanged.
+  No engine public-path change except a doc comment. Domain-bridge function
+  signatures are unchanged apart from the canonical type paths.
+- Package/release graph changes: root workspace members +1
+  (`crates/eggsec-report-model`); `python
+  scripts/release-package-graph.py validate` passes; `order` is acyclic with
+  `eggsec-report-model` before all consumers (`core, agent, report-model,
+  db-lab, mobile-lab, nse, output, runtime, daemon-protocol, tool-core,
+  transport, transport-eggfetch, ui-model, web-proxy, eggsec, daemon`).
+  `docs/RELEASING.md` validated order refreshed (also fixed pre-existing
+  drift: transport crates were missing from the list). `cargo package -p
+  eggsec-report-model --no-verify` is not locally runnable for ANY leaf
+  crate (fails identically for pre-existing `eggsec-tool-core`: unpublished
+  path dep `eggsec-core`); workspace packaging is validated by
+  `make release-check` on the clean tree instead.
+- Architecture guard changes (`scripts/check-architecture-guards.sh`, Checks
+  118–120; `docs/CI_ARCHITECTURE_GUARDS.md` documents them):
+  - 118: model crate exists, manifests none of
+    `tokio`/renderers/TLS/frontend/engine/`eggsec-output` deps, and `src/`
+    has no `std::fs`/`tokio::`/`reqwest::`/`quick_xml`/`hostname::`/`LruCache`
+    uses (code-structure match; doc prose may name the consumer).
+  - 119: output manifests the model, model never references output, no moved
+    DTO is redefined under `eggsec-output/src/`, facades re-export the model.
+  - 120: all four domain crates manifest the model, carry no `eggsec-output`
+    dep, and contain no `eggsec_output::` imports in `src/`/`tests/`.
+- Commands/results (all green locally before commit):
+  - `cargo fmt --all --check` — pass (after `cargo fmt --all`).
+  - `make check` (exit 0): fmt, `--workspace --no-default-features`,
+    `-p eggsec`, `-p eggsec-cli` (+ `--no-default-features`), `check-deps`
+    (deny ×5), `clippy` (now incl. `-p eggsec-report-model`, `-D warnings`),
+    engine doc tests (21), `tool_registration`+`loadtest_tests` (29), engine
+    `rest-api,cli` suite, `eggsec-output` (82) + `eggsec-report-model` (11),
+    `transport-eggfetch`, `eggsec-tui --lib`, guards ALL PASSED (99–120).
+  - `cargo test -p eggsec-db-lab -p eggsec-mobile-lab -p eggsec-web-proxy` —
+    525 passed, 1 ignored.
+  - `cargo test -p eggsec-nse --features nse --tests` — 554 passed.
+  - `make check-feature-profiles` — pass (incl. 936 TUI profile tests).
+  - `make release-check` — run on the clean post-commit tree (see below).
+  - `make check-features-individual` is deep-checks-only per `AGENTS.md` and
+    was not run per-PR (same precedent as Phase A).
+  - `make check-python` not run: no Python bindings/stubs/docs/scripts
+    changed (engine diff is a doc comment; `AGENTS.md` scopes it to Python
+    changes).
+- Residual model/output ownership debt:
+  - `trend::{ScanResult, ResultSummary, Finding, ComparisonResult,
+    TrendAnalysis}` DTOs stay in output with the analyzer (no independent
+    producer; revisit only with consumer evidence).
+  - `AuditSummary` struct stays with its aggregation in output (same reason).
+  - `From<&AgentFinding>` conversions stay in output (model must not import
+    output-side types); if `AgentFinding` is ever canonicalized, revisit.
+  - `eggsec` engine still reaches DTOs via the output facade rather than a
+    direct model edge (no payoff to a direct edge today; revisit if the
+    engine sheds its output dependency).
+  - Pre-existing stale notes untouched as out of scope:
+    `architecture/api_extraction_boundary.md:292` ("CronScheduler already in
+    eggsec-output" — moved to `eggsec-agent::cron` in Phase A) and the
+    `schedule.rs`/`session.rs` rows in
+    `crates/eggsec/src/output/AGENTS.override.md` (ditto).

@@ -1,28 +1,10 @@
-use serde::{Deserialize, Serialize};
+//! Policy summary DTO (compatibility facade).
+//!
+//! The canonical [`PolicySummary`] owner is `eggsec-report-model` (Phase B).
+//! This module re-exports it so existing `eggsec_output::policy_summary::*`
+//! and `eggsec_output::PolicySummary` paths keep working.
 
-/// Summary of policy decisions for a scan run.
-///
-/// This is a standalone struct that can be populated by the `eggsec` crate
-/// from its internal `PolicyDecision` types. It lives in `eggsec-output`
-/// so that report formats can include policy context without depending on
-/// the engine crate.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PolicySummary {
-    /// The operation mode (e.g. "standard-assessment", "defense-lab").
-    pub operation_mode: String,
-    /// The maximum risk tier allowed (e.g. "safe-active", "intrusive").
-    pub max_risk: String,
-    /// Total number of policy decisions evaluated.
-    pub total_decisions: usize,
-    /// Number of decisions that resulted in denial.
-    pub denied_count: usize,
-    /// Number of decisions that generated warnings.
-    pub warning_count: usize,
-    /// Reasons for any denials.
-    pub denied_reasons: Vec<String>,
-    /// Warning messages from policy evaluation.
-    pub warnings: Vec<String>,
-}
+pub use eggsec_report_model::PolicySummary;
 
 #[cfg(test)]
 mod tests {

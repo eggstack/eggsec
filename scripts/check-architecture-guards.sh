@@ -3012,6 +3012,97 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 118. Phase B: eggsec-report-model is data-only (no rendering/I-O/runtime deps).
+echo ""
+echo "--- Check 118: report-model stays data-only ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec-report-model/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-report-model/src/lib.rs missing (canonical report DTO owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for dep in 'tokio' 'quick-xml' 'hostname' 'lru' 'reqwest' 'rustls' 'axum' 'tonic' 'clap' 'ratatui' 'crossterm' 'eggsec-output' 'eggsec ='; do
+  if rg -q "^${dep}([ =]|$)|^${dep} =" crates/eggsec-report-model/Cargo.toml 2>/dev/null; then
+    echo "FAIL: eggsec-report-model/Cargo.toml references forbidden dep '$dep'."
+    rg -n "$dep" crates/eggsec-report-model/Cargo.toml 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -q 'eggsec_output|eggsec-output' crates/eggsec-report-model/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-report-model/Cargo.toml references eggsec-output (direction must be output -> model)."
+  rg -n 'eggsec_output|eggsec-output' crates/eggsec-report-model/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Code-only check: doc prose (`//`) may name eggsec-output as the consumer,
+# but no `use`/path may reference it (mirrors Phase A checks matching code
+# structure, not docs prose).
+if rg -n 'eggsec_output' crates/eggsec-report-model/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-report-model/src references eggsec_output in code (direction must be output -> model)."
+  rg -n 'eggsec_output' crates/eggsec-report-model/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'std::fs|tokio::|reqwest::|quick_xml|hostname::|LruCache' crates/eggsec-report-model/src/ 2>/dev/null; then
+  echo "FAIL: eggsec-report-model/src uses filesystem/runtime/renderer behavior."
+  rg -n 'std::fs|tokio::|reqwest::|quick_xml|hostname::|LruCache' crates/eggsec-report-model/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: report-model stays data-only."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 119. Phase B: eggsec-output depends on the model, never the reverse; DTO
+# facades stay re-exports (no second struct definition).
+echo ""
+echo "--- Check 119: output depends on model (facades, no forks) ---"
+SECTION_FAIL=0
+if ! rg -q '^eggsec-report-model' crates/eggsec-output/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-output/Cargo.toml does not depend on eggsec-report-model."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for ty in 'pub struct ScanReportData' 'pub struct FindingData' 'pub struct PortData' 'pub struct ServiceData' 'pub struct WirelessNetworkReportData' 'pub struct PolicySummary' 'pub struct DiffSummary' 'pub struct ReportEnvelope' 'pub struct FindingRecord' 'pub struct EvidenceItem' 'pub struct EvidenceManifest' 'pub enum EvidenceKind' 'pub enum RedactionState' 'pub enum RedactionPolicy' 'pub struct BaselineSummary' 'pub struct ToolMetadata'; do
+  if rg -q "$ty" crates/eggsec-output/src/ 2>/dev/null; then
+    echo "FAIL: $ty redefined in eggsec-output (canonical owner is eggsec-report-model; re-export it)."
+    rg -n "$ty" crates/eggsec-output/src/ 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'pub use eggsec_report_model' crates/eggsec-output/src/convert.rs crates/eggsec-output/src/envelope.rs crates/eggsec-output/src/policy_summary.rs crates/eggsec-output/src/diff.rs 2>/dev/null; then
+  echo "FAIL: expected model re-exports in output convert/envelope/policy_summary/diff facades."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: output depends on model (facades, no forks)."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 120. Phase B: DTO-only domain crates depend on the model, not the renderer.
+echo ""
+echo "--- Check 120: domain DTO consumers use the model, not output ---"
+SECTION_FAIL=0
+for crate in eggsec-db-lab eggsec-mobile-lab eggsec-web-proxy eggsec-nse; do
+  if rg -q '^eggsec-output' "crates/${crate}/Cargo.toml" 2>/dev/null; then
+    echo "FAIL: crates/${crate}/Cargo.toml still depends on eggsec-output (use eggsec-report-model for DTOs)."
+    rg -n '^eggsec-output' "crates/${crate}/Cargo.toml" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q '^eggsec-report-model' "crates/${crate}/Cargo.toml" 2>/dev/null; then
+    echo "FAIL: crates/${crate}/Cargo.toml does not depend on eggsec-report-model."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -q 'eggsec_output::' "crates/${crate}/src/" "crates/${crate}/tests/" 2>/dev/null; then
+    echo "FAIL: crates/${crate} still imports eggsec_output paths."
+    rg -n 'eggsec_output::' "crates/${crate}/src/" "crates/${crate}/tests/" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: domain DTO consumers use the model, not output."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

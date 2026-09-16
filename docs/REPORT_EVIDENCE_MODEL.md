@@ -4,22 +4,36 @@ Comprehensive inventory of report, finding, and evidence types across the Eggsec
 
 ## Current Report Types
 
-### eggsec-output Crate Types
+> Ownership note (Phase B, 2026-09-16): the shared data contracts below are
+> canonically owned by `eggsec-report-model` (`crates/eggsec-report-model/src/`);
+> `eggsec-output` re-exports them for backward compatibility, and domain crates
+> depend on the model directly (guards Checks 118–120).
 
-| Type | File | Line | Purpose |
-|------|------|------|---------|
-| `ScanReportData` | `crates/eggsec-output/src/convert.rs` | 8 | Main report data structure. Fields: target, scan_type, timestamp, findings, open_ports, services, duration_ms, wireless_networks, policy_summary. |
-| `FindingData` | `crates/eggsec-output/src/convert.rs` | 23 | Lightweight finding for serialization. Fields: title, severity (`String`), category, description, location, evidence (`Option<String>`), remediation (`Option<String>`), cwe_ids. |
-| `AgentFinding` | `crates/eggsec-output/src/agent.rs` | 73 | Rich finding type. Fields: id, tool_id, vulnerability_type, severity (`Severity`), title, description, evidence (`Evidence`), remediation (`Remediation`), confidence, cvss, cwe_ids, target, endpoint, parameter, timestamp, attack_surface, status. |
-| `Evidence` | `crates/eggsec-output/src/agent.rs` | 303 | Agent evidence struct. Fields: request, response_snippet, diff_indicator, matched_pattern, timing_ms, status_code. |
-| `Remediation` | `crates/eggsec-output/src/agent.rs` | 344 | Agent remediation struct. Fields: summary, references, code_example, priority, effort. |
-| `Confidence` | `crates/eggsec-output/src/agent.rs` | 6 | Enum: Confirmed, Likely, Possible, Unlikely. |
-| `AttackSurface` | `crates/eggsec-output/src/agent.rs` | 40 | Enum: Web, Api, Network, Authentication, Session, FileSystem, Internal, Cloud, Cdn, Database. |
-| `FindingStatus` | `crates/eggsec-output/src/agent.rs` | 93 | Enum: New, Confirmed, FalsePositive, Ignored, Remediated. |
-| `FindingSummary` | `crates/eggsec-output/src/agent.rs` | 390 | Aggregated summary with `risk_score()`. |
-| `PolicySummary` | `crates/eggsec-output/src/policy_summary.rs` | 9 | Policy enforcement summary. Fields: operation_mode, max_risk, total_decisions, denied_count, warning_count, denied_reasons, warnings. |
-| `BaselineComparison` | `crates/eggsec-output/src/baseline.rs` | 4 | Baseline diff. Fields: new_findings, resolved_findings, unchanged_findings (all `Vec<AgentFinding>`). |
-| `DiffSummary` | `crates/eggsec-output/src/diff.rs` | 4 | Diff statistics. Fields: total_new, total_resolved, total_escalated, total_deescalated, net_change. |
+### eggsec-report-model Crate Types (canonical data contracts)
+
+| Type | File | Purpose |
+|------|------|---------|
+| `ScanReportData` | `crates/eggsec-report-model/src/report.rs` | Main report data structure. Fields: target, scan_type, timestamp, findings, open_ports, services, duration_ms, wireless_networks, policy_summary. |
+| `FindingData` | `crates/eggsec-report-model/src/report.rs` | Lightweight finding for serialization. Fields: title, severity (`String`), category, description, location, evidence (`Option<String>`), remediation (`Option<String>`), cwe_ids. |
+| `ReportEnvelope` | `crates/eggsec-report-model/src/envelope.rs` | Normalized top-level report container (findings, evidence manifest, policy/baseline summaries, tool metadata). |
+| `FindingRecord` | `crates/eggsec-report-model/src/envelope.rs` | Normalized finding record with evidence items, remediation, references, category, location. |
+| `EvidenceItem` / `EvidenceManifest` / `EvidenceKind` / `EvidenceSource` | `crates/eggsec-report-model/src/envelope.rs` | Evidence taxonomy, provenance, manifests, redaction state/policy. |
+| `BaselineSummary` / `ToolMetadata` | `crates/eggsec-report-model/src/envelope.rs` | Baseline comparison summary; tool/version metadata. |
+| `PolicySummary` | `crates/eggsec-report-model/src/summary.rs` | Policy enforcement summary. Fields: operation_mode, max_risk, total_decisions, denied_count, warning_count, denied_reasons, warnings. |
+| `DiffSummary` | `crates/eggsec-report-model/src/summary.rs` | Diff statistics. Fields: total_new, total_resolved, total_escalated, total_deescalated, net_change. |
+
+### eggsec-output Crate Types (rendering/analysis over the model)
+
+| Type | File | Purpose |
+|------|------|---------|
+| `AgentFinding` | `crates/eggsec-output/src/agent.rs` | Rich finding type. Fields: id, tool_id, vulnerability_type, severity (`Severity`), title, description, evidence (`Evidence`), remediation (`Remediation`), confidence, cvss, cwe_ids, target, endpoint, parameter, timestamp, attack_surface, status. |
+| `Evidence` | `crates/eggsec-output/src/agent.rs` | Agent evidence struct. Fields: request, response_snippet, diff_indicator, matched_pattern, timing_ms, status_code. |
+| `Remediation` | `crates/eggsec-output/src/agent.rs` | Agent remediation struct. Fields: summary, references, code_example, priority, effort. |
+| `Confidence` | `crates/eggsec-output/src/agent.rs` | Enum: Confirmed, Likely, Possible, Unlikely. |
+| `AttackSurface` | `crates/eggsec-output/src/agent.rs` | Enum: Web, Api, Network, Authentication, Session, FileSystem, Internal, Cloud, Cdn, Database. |
+| `FindingStatus` | `crates/eggsec-output/src/agent.rs` | Enum: New, Confirmed, FalsePositive, Ignored, Remediated. |
+| `FindingSummary` | `crates/eggsec-output/src/agent.rs` | Aggregated summary with `risk_score()`. |
+| `BaselineComparison` | `crates/eggsec-output/src/baseline.rs` | Baseline diff. Fields: new_findings, resolved_findings, unchanged_findings (all `Vec<AgentFinding>`). |
 
 ### eggsec-core Types
 

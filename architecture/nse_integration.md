@@ -1367,7 +1367,7 @@ Phase 04 introduces structured evidence extraction from NSE run reports, bridgin
 
 **Report envelope bridge** (in `bridge.rs`):
 - `to_report_envelope()` — converts `NseRunReport` → `ReportEnvelope` following the db-pentest bridge pattern
-- Maps `NseEvidenceKind` → `eggsec_output::envelope::EvidenceKind` and `eggsec_core::Severity`
+- Maps `NseEvidenceKind` → `eggsec_report_model::EvidenceKind` and `eggsec_core::Severity`
 - Attaches `ToolMetadata { tool_name: "eggsec-nse", ... }`
 - Calls `envelope.refresh_evidence_manifest()` before return
 

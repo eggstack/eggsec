@@ -15,6 +15,9 @@ categories = ["development-tools"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+# Canonical report/evidence data contracts (Phase B). This crate owns
+# rendering/conversion/analysis over the model, never the reverse.
+eggsec-report-model = { path = "../eggsec-report-model", version = "0.1.0" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

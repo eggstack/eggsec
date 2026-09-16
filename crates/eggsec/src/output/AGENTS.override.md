@@ -2,7 +2,7 @@
 
 Specialized guidance for the report generation module.
 
-> **Note**: Most output code has moved to the `eggsec-output` crate (`crates/eggsec-output/src/`). This module retains only the core engine-coupled components: `pdf`, `template`, `run_manifest`, `attack_graph`, `report`, and `report_summary`. For format conversion, deduplication, trend analysis, and session persistence, see `crates/eggsec-output/src/`.
+> **Note**: Most output code has moved to the `eggsec-output` crate (`crates/eggsec-output/src/`). Report/evidence data contracts (`ScanReportData`, `ReportEnvelope` family, `PolicySummary`, `DiffSummary`) are canonically owned by `eggsec-report-model` (`crates/eggsec-report-model/src/`), which domain crates depend on directly; `eggsec-output` re-exports them. This module retains only the core engine-coupled components: `pdf`, `template`, `run_manifest`, `attack_graph`, `report`, and `report_summary`. For format conversion, deduplication, trend analysis, and session persistence, see `crates/eggsec-output/src/`.
 
 ## Key Types
 
@@ -10,9 +10,9 @@ Specialized guidance for the report generation module.
 |------|----------|---------|
 | `AgentFinding` | `agent.rs` | Core finding type with evidence, remediation, confidence |
 | `Severity` | `types.rs` | Re-exported via `output::agent::Severity` and `output::trend::Severity` |
-| `ScanReportData` | `convert.rs` | Intermediate format for format conversions |
+| `ScanReportData` | `eggsec-report-model::report` (re-exported via `convert.rs`) | Intermediate format for format conversions |
 | `FindingSummary` | `agent.rs` | Aggregated finding statistics by severity/confidence/type |
-| `DiffSummary` | `diff.rs` | Lightweight diff envelope for run manifests (fields: `total_new`, `total_resolved`, `total_escalated`, `total_deescalated`, `net_change`) |
+| `DiffSummary` | `eggsec-report-model::summary` (re-exported via `diff.rs`) | Lightweight diff envelope for run manifests (fields: `total_new`, `total_resolved`, `total_escalated`, `total_deescalated`, `net_change`) |
 | `TrendAnalysis` | `trend.rs` | Historical trend analysis with direction |
 | `TrendAnalyzer` | `trend.rs:147` | Uses `LruCache<String, ScanResult>` with `NonZeroUsize::new(1000)` |
 | `ReportSummary` | `report_summary.rs` | Summary with `risk_narrative: String` field |

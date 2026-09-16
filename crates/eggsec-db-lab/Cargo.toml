@@ -15,8 +15,8 @@ categories = ["command-line-utilities", "development-tools::testing"]
 [dependencies]
 # Shared types from core
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
-# Output bridge (for ScanReportData)
-eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
+# Report/evidence data contracts (Phase B: DTO-only, no rendering dependency)
+eggsec-report-model = { path = "../eggsec-report-model", version = "0.1.0" }
 
 # Serialization
 serde = { workspace = true }

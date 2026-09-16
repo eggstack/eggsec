@@ -5,7 +5,7 @@
 //! and `web-traffic-summary` categories.
 
 use super::types::WebProxySessionReport;
-use eggsec_output::convert::{FindingData, ScanReportData};
+use eggsec_report_model::{FindingData, ScanReportData};
 
 pub fn to_scan_report_data_proxy(report: &WebProxySessionReport) -> ScanReportData {
     let findings: Vec<FindingData> = report

@@ -1,13 +1,11 @@
-use serde::{Deserialize, Serialize};
+//! Diff summary DTO (compatibility facade).
+//!
+//! The canonical [`DiffSummary`] owner is `eggsec-report-model` (Phase B).
+//! Comparison behavior that consumes engine-internal reports stays in the
+//! engine (`output::run_manifest`); this module only preserves the
+//! `eggsec_output::diff::DiffSummary` import path.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DiffSummary {
-    pub total_new: usize,
-    pub total_resolved: usize,
-    pub total_escalated: usize,
-    pub total_deescalated: usize,
-    pub net_change: i32,
-}
+pub use eggsec_report_model::DiffSummary;
 
 #[cfg(test)]
 mod tests {

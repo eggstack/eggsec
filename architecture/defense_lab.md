@@ -246,7 +246,7 @@ A defense-lab run produces structured output suitable for regression analysis. T
 | `baseline_id` | Reference to baseline run, if comparing |
 | `diff_summary` | Summary of differences against baseline (uses `DiffSummary` from `output::diff`) |
 
-The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type in `crates/eggsec-output/src/diff.rs` and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
+The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type (canonically `crates/eggsec-report-model/src/summary.rs`, re-exported by `crates/eggsec-output/src/diff.rs`) and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
 
 Mobile dynamic (under `mobile-dynamic` feature) is a standalone defense-lab surface (CLI + local reports + optional `to_scan_report_data_dynamic` bridge; MCP/agent/TUI/pipeline absent). Phase 4c (2026-06-12) added partial supply-chain observation (native-load builtin + correlation), regression enrichment, bundle manifest, and a pure workflow helper; all dry-run safe. See architecture/mobile.md + docs/MOBILE.md.
 

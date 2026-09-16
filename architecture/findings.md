@@ -86,7 +86,7 @@ Always compiled. No feature gating. Dependencies: `chrono`, `serde`, `serde_json
 
 `HttpRequest`, `HttpResponse`, `Header`, `BodySnippet`, `Timing`, `Diff`, `Banner`, `DnsRecord`, `Certificate`, `PortState`, `Screenshot`, `FilePath`, `LogLine`
 
-**Note**: This is distinct from the envelope's `EvidenceKind` (20 variants) in `eggsec-output/src/envelope.rs:32`. The findings module defines the canonical evidence schema; the envelope defines a broader protocol-neutral taxonomy for cross-domain reports.
+**Note**: This is distinct from the envelope's `EvidenceKind` (20 variants) in `eggsec-report-model/src/envelope.rs` (re-exported by `eggsec-output/src/envelope.rs`). The findings module defines the canonical evidence schema; the envelope defines a broader protocol-neutral taxonomy for cross-domain reports.
 
 ### FindingType Variants (9, `mod.rs:207-217`)
 

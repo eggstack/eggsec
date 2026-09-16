@@ -1,7 +1,8 @@
 //! Output and report generation module
 //!
 //! Provides report generation, format conversion, trend analysis, and finding
-//! management. This crate owns report data contracts and rendering only.
+//! management. Report/evidence data contracts live in `eggsec-report-model`
+//! (Phase B); this crate owns rendering, conversion, and analysis over them.
 //!
 //! Ownership note (Phase A): scan scheduling/cron/queue behavior lives in
 //! `eggsec-agent` (`cron` + generic `TaskScheduler`); autonomous-agent
@@ -9,6 +10,12 @@
 //! persistence (`ScanSession`) was removed as superseded by daemon/runtime
 //! durable sessions plus frontend `AppState` — it had zero production
 //! consumers.
+//!
+//! Ownership note (Phase B): `convert::{ScanReportData, FindingData,
+//! PortData, ServiceData, WirelessNetworkReportData}`, the `envelope` report
+//! envelope, `PolicySummary`, and `DiffSummary` are re-exports of
+//! `eggsec-report-model`. Domain crates depend on the model directly; only
+//! rendering/conversion/analysis behavior lives here.
 //!
 //! ## Key Components
 //!

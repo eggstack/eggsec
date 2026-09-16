@@ -80,7 +80,8 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-nse` | Optional Nmap NSE compatibility runtime |
 | `eggsec-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
 | `eggsec-cli` | CLI binary entry point |
-| `eggsec-output` | Report formatting (JSON, CSV, HTML, SARIF, JUnit, Markdown; no scheduling/session) |
+| `eggsec-output` | Report rendering/conversion/analysis over `eggsec-report-model` (JSON, CSV, HTML, SARIF, JUnit, Markdown; no scheduling/session) |
+| `eggsec-report-model` | Stable serializable report/evidence data contracts (no rendering, I/O, or runtime); domain DTO owner |
 | `eggsec-agent` | Agent coordination primitives (registry, scheduler, lifecycle, cron; callback health via injected `HttpTransport`, no direct HTTP stack) |
 | `eggsec-db-lab` | Database pentesting domain crate |
 | `eggsec-web-proxy` | Web proxy and MITM interception domain crate (intercept/server TLS split from outbound probes; reqwest minimal) |

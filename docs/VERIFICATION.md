@@ -24,6 +24,7 @@ cargo test -p eggsec --doc
 cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests --no-fail-fast
 cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast
 cargo test -p eggsec-output --tests
+cargo test -p eggsec-report-model --tests
 bash scripts/check-architecture-guards.sh
 ```
 
@@ -36,10 +37,11 @@ The package-level test commands automatically include all integration tests. New
 | `cargo fmt --all --check` | Style inconsistency | Mechanical; blocks clean diffs |
 | `cargo check --workspace --no-default-features` | Missing feature gates, broken no-default build | Catches regressions in optional-feature boundaries |
 | `make check-deps` (`cargo deny --workspace --all-features check`: advisories + bans + licenses + sources) | Known advisories, disallowed licenses, banned/wildcard deps, unexpected sources | Supply-chain policy must fail PRs, not weekly jobs; all-features closure covers optional deps (pdf, db-pentest, mssql) |
-| `make clippy` (engine lib empty-default + `cli` + `eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
+| `make clippy` (engine lib empty-default + `cli` + `eggsec-core`, `eggsec-tool-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
 | `cargo test -p eggsec --features rest-api,cli --tests` | Behavioral regressions across all integration tests | Exercises MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more |
 | `cargo test -p eggsec-transport-eggfetch --tests` | Adapter parity/adversarial regressions (33 local-fixture tests) | Proves approved-IP pinning, authorized redirects, TLS/timeout mapping without production wiring |
-| `cargo test -p eggsec-output --tests` | Report envelope roundtrip | Output crate is leaf; distinct defect class |
+| `cargo test -p eggsec-output --tests` | Report rendering/conversion regressions | Output crate is leaf; distinct defect class |
+| `cargo test -p eggsec-report-model --tests` | Report contract roundtrip | Model crate is leaf; JSON shape is the cross-domain contract |
 | `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
 
 ## Mandatory Python contributor contract

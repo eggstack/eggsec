@@ -9,15 +9,21 @@ Report generation module workflows and patterns for exporting scan results.
 
 ## Crate Location
 
-Most output types and renderers live in `crates/eggsec-output/`. The `eggsec` crate
-re-exports them via `pub use eggsec_output::*` in `crates/eggsec/src/output/mod.rs`.
+Report/evidence data contracts live in `crates/eggsec-report-model/` (canonical
+owner: `ScanReportData` family, `ReportEnvelope` family, `PolicySummary`,
+`DiffSummary`; data only, no rendering/I-O/runtime). Most renderers live in
+`crates/eggsec-output/`, which depends on the model and re-exports the moved
+DTOs for backward compatibility. The `eggsec` crate re-exports them via
+`pub use eggsec_output::*` in `crates/eggsec/src/output/mod.rs`.
 Engine-coupled modules (`report`, `report_summary`, `run_manifest`)
 remain in `crates/eggsec/src/output/`.
 
 ## Key Types and Patterns
 
 ### Normalized Report Envelope
-The `envelope` module (`eggsec_output::envelope`) provides protocol-neutral report types for cross-domain report unification. Domain crates convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. This module is always available (no feature gate).
+The `envelope` types (`eggsec_report_model`, re-exported via `eggsec_output::envelope` for compatibility) provide protocol-neutral report types for cross-domain report unification. Domain crates (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on `eggsec-report-model` directly — never on the renderer — and convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. This module is always available (no feature gate).
+
+New contract code goes in `crates/eggsec-report-model/src/` (data only: no `std::fs`, Tokio, renderers, or LRU). `From<&AgentFinding>`-style conversions that couple the contract to output-side types stay in `crates/eggsec-output/src/`.
 
 Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `BaselineSummary`, `ToolMetadata`, `EvidenceKind`, `EvidenceSource`, `RedactionState`, `RedactionPolicy`.
 
@@ -44,6 +50,8 @@ Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`
 - `diff.rs` - `DiffEngine::compare()`
 
 Ownership note (Phase A): scheduling/cron lives in `eggsec-agent::cron` and the generic queue is `eggsec-agent::TaskScheduler` — not in output. Legacy `session.rs` tab-state persistence was removed (daemon/runtime sessions are canonical).
+
+Ownership note (Phase B): report/evidence DTOs are canonically owned by `eggsec-report-model`. Never redefine a model DTO in `eggsec-output` (guard Check 119 fails closed); re-export it. Run `cargo test -p eggsec-report-model` for contract tests.
 
 ```rust
 use rustc_hash::FxHashMap;
@@ -83,6 +91,7 @@ Both SARIF and JUnit modules are immune to XXE attacks:
 
 ### Running Output Tests
 ```bash
+cargo test -p eggsec-report-model
 cargo test -p eggsec-output
 cargo test --lib -p eggsec output::
 ```
