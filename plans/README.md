@@ -14,6 +14,27 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Load-test authorization and transport corrective pass (ready for handoff)
+
+Corrective pass:
+[`loadtest-authorization-transport-corrective-pass-2026-09-16.md`](loadtest-authorization-transport-corrective-pass-2026-09-16.md)
+
+This bounded post-crate-boundary pass closes the security debt exposed by the
+Phase D load-test decoupling. It removes the wildcard scope fallback, carries
+the approval scope snapshot through strict/canonical/tool execution, makes the
+temporary Reqwest backend fail closed, adds physical proxy-peer checkpoints to
+the shared transport contract, and makes the existing Eggfetch adapter the
+production direct load-test backend after H1/H2/performance qualification.
+
+Full proxy migration is release-gated rather than reimplemented locally:
+Eggfetch `main` has completed and qualified pinned proxy-peer plus pinned
+CONNECT/SOCKS5 destination routing, but those APIs are newer than the latest
+published `eggfetch-core v0.1.4`. The pass must consume a published qualifying
+release or leave unsupported proxied load-test routes fail-closed; it must not
+add a floating sibling Git dependency. The same pass reconciles Eggsec's
+workspace MSRV with Eggfetch's Rust 1.89 requirement and closes the remaining
+Python load-test result parity/documentation guards.
+
 ## Crate-boundary consolidation (executed 2026-09-16)
 
 Roadmap:
