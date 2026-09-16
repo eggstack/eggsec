@@ -14,7 +14,7 @@ pub async fn handle_load(ctx: &CommandContext, mut args: crate::cli::LoadArgs) -
     ctx.notify_manager
         .notify_scan_started(&scan_id, &target)
         .await;
-    match crate::loadtest::run_cli(args, &ctx.config)
+    match crate::loadtest::run_cli_with_scope(args, &ctx.config, ctx.scope.clone())
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
     {

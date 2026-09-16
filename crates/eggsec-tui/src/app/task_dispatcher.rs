@@ -226,6 +226,7 @@ mod tests {
             latency_p99_ms: 150.0,
             status_codes: FxHashMap::default(),
             errors: vec![],
+            error_kinds: FxHashMap::default(),
         });
         let envelope = eggsec::dispatch::task_result_envelope(&result);
         assert_eq!(envelope.kind, "load-test");

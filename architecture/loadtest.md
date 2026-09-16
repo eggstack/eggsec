@@ -2,242 +2,207 @@
 
 ## Overview
 
-The load testing module provides HTTP performance benchmarking — measuring server throughput, latency percentiles, and error rates under controlled concurrency. Unlike the [stress module](stress.md) (which generates raw network floods for defense-lab DoS simulation), loadtest issues real HTTP requests through `reqwest` and collects precise latency histograms via `hdrhistogram`.
+The load testing module provides HTTP performance benchmarking — measuring server throughput, latency percentiles, and error rates under controlled concurrency. Unlike the [stress module](stress.md) (which generates raw network floods for defense-lab DoS simulation), loadtest issues real HTTP requests and collects precise latency histograms via `hdrhistogram`.
 
-**Feature gate:** None on the module itself (always compiled). The CLI entry point `run_cli()` is gated behind the `cli` feature (`mod.rs:62`).
+**Phase D (2026-09-16):** the module was decoupled into a transport-neutral core (`plan` + `executor` + `metrics` + `progress`) with engine adaptation above it (`adapter`) and a scope-aware Reqwest backend (`backend`) behind the `eggsec-transport` seam. The core constructs no Reqwest client, owns no Clap/TUI/indicatif/config-file behavior, and never prints. `LoadTestRunner`/`LoadTestRunConfig` remain as compatibility facades. No `eggsec-loadtest` crate was created (Gate D1: rejected — single consumer, thin dependency payoff; see [capability_segregation.md](capability_segregation.md)).
 
-**Role:** HTTP performance testing — RPS, latency percentiles (p50/p90/p95/p99), status code distribution, error tracking.
+**Feature gate:** None on the module itself (always compiled). The CLI entry points `run_cli()`/`run_cli_with_scope()` are gated behind the `cli` feature (`mod.rs`).
+
+**Role:** HTTP performance testing — RPS, latency percentiles (p50/p90/p95/p99), status code distribution, transport-error categorization.
 
 ## Module Structure
 
-| File | Lines | Feature-gated | Purpose |
-|------|-------|---------------|---------|
-| `mod.rs` | 108 | `cli` (for `run_cli()`) | Module entry, `run_cli()` CLI entry point |
-| `runner.rs` | 522 | no | `LoadTestRunner` — worker/concurrency model, rate limiting, request execution |
-| `metrics.rs` | 142 | no | `Metrics` + `LoadTestResults` — hdrhistogram latency tracking, percentile extraction |
-
-**Total:** 3 files (+ `AGENTS.override.md`), 772 lines (code only).
+| File | Purpose |
+|------|---------|
+| `mod.rs` | Module entry, `run_cli()` / `run_cli_with_scope()` CLI entry points (own the only `indicatif` progress widget) |
+| `plan.rs` | `LoadTestPlan`, `RatePolicy` — transport-neutral plan (no Clap/config/Reqwest/indicatif) |
+| `executor.rs` | `LoadTestExecutor<T: HttpTransport>` — generic executor, per-worker sharded metrics, CAS global pacer |
+| `metrics.rs` | `Metrics` (pure single-threaded accumulator + `merge`) + `LoadTestResults` + `LoadTestErrorKind` |
+| `progress.rs` | `LoadTestEvent`, `LoadTestProgress`, `ProgressSink` (`NoopSink`, `FnSink`, `ChannelSink`), `SharedProgress` |
+| `adapter.rs` | `RequestTemplate` + `plan_from_adapter()` — engine translation above the core (no `CommonHttpArgs` in the plan) |
+| `backend.rs` | `ReqwestTransport` (scope-aware Reqwest `HttpTransport`) + `OwnedScopeAuthority` (`'static` scope handle) |
+| `runner.rs` | `LoadTestRunner` / `LoadTestRunConfig` compatibility facades (retain `tui_mode` for source compat; ignored) |
 
 ## Key Types
 
-### `LoadTestRunner`
+### `LoadTestPlan` (`plan.rs`)
 
-Main executor (`runner.rs:76-90`):
+Transport-neutral reusable primitive:
 
 ```rust
-pub struct LoadTestRunner {
-    url: String,
-    total_requests: u64,
-    concurrency: usize,
-    timeout: Duration,
-    method: Method,
-    body: Option<Bytes>,
-    headers: Vec<(String, String)>,
-    insecure: bool,
-    proxy: Option<String>,
-    proxy_auth: Option<String>,
-    user_agent: String,
-    rate_limit: Option<u32>,
-    tui_mode: bool,
+pub struct LoadTestPlan {
+    pub url: String,              // validated: http/https, host present, no userinfo
+    pub total_requests: u64,
+    pub concurrency: usize,
+    pub timeout: Duration,        // per-request, never zero
+    pub method: String,           // one of the 8 parity verbs (normalized)
+    pub body: Option<Vec<u8>>,    // replayable bytes
+    pub headers: Vec<(String, String)>, // auth already applied by the adapter
+    pub rate: RatePolicy,         // Unlimited | PerSecond(n)
 }
 ```
 
-#### Constructors
+Validation rejects zero concurrency/requests/timeout, userinfo URLs, and non-http(s) schemes. Unknown methods normalize to `GET` with a warning (at the adapter layer).
 
-| Method | Purpose |
-|--------|---------|
-| `new(url, total, concurrency, timeout)` | Basic constructor with validation (`runner.rs:93-100`) |
-| `new_with_tui_mode(...)` | Constructor with explicit TUI mode flag (`runner.rs:102-140`) |
-| `from_config(cfg)` | From plain `LoadTestRunConfig` (`runner.rs:156-158`) |
-| `from_config_with_mode(cfg, tui_mode)` | `LoadTestRunConfig` with TUI mode (`runner.rs:162-185`) |
-| `from_config_with_engine(cfg, config)` | `LoadTestRunConfig` merged with `EggsecConfig` — used by pipeline (`runner.rs:191-204`) |
-| `from_args_with_config(args, config)` | CLI `LoadArgs` merged with `EggsecConfig` (`runner.rs:148-153`) |
-| `from_args_with_tui_mode(args, tui_mode)` | CLI args with TUI mode (`runner.rs:143-145`) |
+### `LoadTestExecutor<T: HttpTransport>` (`executor.rs`)
 
-**Important:** Use `from_config_with_engine()` for pipeline integration to ensure config file settings (proxy, TLS verification, rate limits) are properly merged (`runner.rs:191-204`).
+Generic executor composed of plan + template + transport + authority + cancellation token:
 
-#### Validation
+- Workers pull indices via an atomic counter; count is `min(concurrency, total_requests)`.
+- Each worker owns a private `Metrics`; the run merges them at the end — hot-path recording never touches a shared async mutex.
+- Global pacing uses a CAS slot allocator (`GlobalPacer`, no mutex across sleeps); aggregate throughput matches the configured rate at any worker count. Cancellation preempts waits.
+- Dispatch races the transport future against the cancellation token (dropping the future performs no further hops per the transport contract).
+- Transport errors map to `LoadTestErrorKind` without exposing backend types.
 
-The constructor validates (`runner.rs:109-123`):
-- `concurrency > 0`
-- `total_requests > 0`
-- `timeout > 0`
+### `LoadTestResults` (`metrics.rs`)
 
-The `apply_common()` method validates (`runner.rs:250-263`):
-- `rate_limit > 0` (0 is ignored with a warning)
-- Rate limit > 100,000 logs a warning about potential ineffectiveness
-
-### `LoadTestRunConfig`
-
-Plain configuration type (no Clap derives) for engine/pipeline/Python consumers (`runner.rs:26-57`):
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `url` | `String` | — | Target URL |
-| `requests` | `u64` | — | Total request count |
-| `concurrency` | `usize` | — | Max concurrent workers |
-| `timeout` | `Duration` | — | Per-request timeout |
-| `method` | `String` | `"GET"` | HTTP method |
-| `body` | `Option<String>` | `None` | Request body |
-| `headers` | `Vec<String>` | `[]` | Raw header strings |
-| `common` | `CommonHttpArgs` | default | Proxy, TLS, auth, rate-limit, user-agent |
-| `tui_mode` | `bool` | `false` | Suppress progress bar |
-
-### `LoadTestResults`
-
-Serializable output (`metrics.rs:7-24`):
+Serializable output; `error_kinds` (added in Phase D, `#[serde(default)]` so pre-Phase-D payloads still deserialize) counts per-category transport failures:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `target_url` | `String` | Target URL |
-| `total_requests` | `u64` | Total issued |
+| `total_requests` | `u64` | Total issued (saturating) |
 | `successful_requests` | `u64` | HTTP 2xx/3xx |
-| `failed_requests` | `u64` | HTTP 4xx/5xx or transport errors |
+| `failed_requests` | `u64` | HTTP 4xx/5xx, transport errors, cancellations |
 | `total_duration_ms` | `u64` | Wall-clock duration |
 | `requests_per_second` | `f64` | Total / duration_secs |
 | `latency_min_ms` | `f64` | Histogram minimum |
 | `latency_max_ms` | `f64` | Histogram maximum |
 | `latency_mean_ms` | `f64` | Histogram mean |
-| `latency_p50_ms` | `f64` | 50th percentile (`metrics.rs:134`) |
-| `latency_p90_ms` | `f64` | 90th percentile (`metrics.rs:135`) |
-| `latency_p95_ms` | `f64` | 95th percentile (`metrics.rs:136`) |
-| `latency_p99_ms` | `f64` | 99th percentile (`metrics.rs:137`) |
+| `latency_p50_ms` | `f64` | 50th percentile |
+| `latency_p90_ms` | `f64` | 90th percentile |
+| `latency_p95_ms` | `f64` | 95th percentile |
+| `latency_p99_ms` | `f64` | 99th percentile |
 | `status_codes` | `FxHashMap<u16, u64>` | Status code distribution |
 | `errors` | `Vec<String>` | Error messages (capped at 1000) |
+| `error_kinds` | `FxHashMap<String, u64>` | `http_status` / `policy_denied` / `dns` / `timeout` / `connect` / `invalid_request` / `backend` / `cancelled` |
 
-Implements `Display` (`metrics.rs:26-63`) with sorted status codes and first-5 error display.
+Implements `Display` with sorted status codes, sorted error kinds, and first-5 error display. Implements `Report` trait (`runner.rs`) with `title() -> "Load Test Report"` and `to_json()`.
 
-Implements `Report` trait (`runner.rs:499-507`) with `title() -> "Load Test Report"` and `to_json()`.
+### `RequestTemplate` (`adapter.rs`)
+
+Transport-neutral request template derived from CLI/config/auth input. `scoped_request(&plan)` builds the per-request `ScopedHttpRequest` DTO (method/URL/headers/body + timeout/redirect/proxy/TLS/hints). Auth-flag shapes (`user:pass`, bearer, cookie merge, `Name:value` API keys) are parsed at this boundary and applied through the canonical `eggsec_transport::merge_cookie_header` semantics — never reimplemented in the executor.
+
+### `ReqwestTransport` (`backend.rs`)
+
+Scope-aware Reqwest backend implementing `HttpTransport`. Owns the only `reqwest::Client` contact point for load testing (verified + insecure base clients, cached proxied clients per endpoint). Per-hop checkpoint order mirrors the recording fake (initial-URL → host → DNS/re-resolution → socket → TLS-consistency → proxy → dispatch; redirects re-authorized per hop with the redirect-policy gate). Responses are drained for connection reuse. `reqwest::Error` maps to `TransportError::Backend` with stable classifiable prefixes (no secret material).
+
+TOCTOU note: Reqwest re-resolves hostnames internally, so this backend cannot pin the connector to the exact approved address the way the Eggfetch adapter does. It closes the gap as far as the Reqwest API allows (fresh resolve + full candidate authorization + binding validation + socket re-verification on every hop). Full IP pinning arrives with the Eggfetch migration (which currently defers proxied execution); proxied load tests stay on this backend meanwhile.
+
+### `ProgressSink` (`progress.rs`)
+
+- `NoopSink` — library/Python/daemon default.
+- `FnSink` — closure-backed (CLI indicatif renderer is driven from `mod.rs`, never from the core).
+- `ChannelSink` — `mpsc`-backed structured consumer (TUI/daemon; `try_send` so slow consumers never block workers).
+- `tui_mode` is **not** part of the core contract. The facade retains the flag for source compat but ignores it.
 
 ## Behavior & Flow
 
-### Request execution flow (`runner.rs:332-496`)
+### Request execution flow
 
-1. **TLS provider installation:** `crate::install_tls_provider()` (`runner.rs:333`).
-2. **Client construction:** Builds `reqwest::Client` with timeout, TLS settings, optional proxy (`runner.rs:340-357`).
-3. **Metrics init:** `Metrics::new(url)` creates hdrhistogram with precision 3 (`runner.rs:359`).
-4. **Progress bar:** Created unless `tui_mode` is true (`runner.rs:361-372`).
-5. **Rate limit semaphore:** If configured, spawns background task that adds 1 permit every `1/rate` seconds (`runner.rs:379-397`).
-6. **Worker spawning:** `worker_count = min(concurrency, total_requests)` workers spawned into `JoinSet` (`runner.rs:399-475`).
-7. **Worker loop:** Each worker:
-   - Checks `CancellationToken` (`runner.rs:418-419`)
-   - Acquires atomic request index (`runner.rs:422-424`)
-   - Acquires rate limit permit if configured (`runner.rs:427-434`)
-   - Records request start time (`runner.rs:436`)
-   - Sends request with headers, body, user-agent (`runner.rs:438-449`)
-   - On success: drains response body (connection pool reuse), records latency + status (`runner.rs:452-461`)
-   - On failure: records latency + error (`runner.rs:463-467`)
-   - Increments progress bar (`runner.rs:470-472`)
-8. **Join:** Workers joined via `JoinSet::join_next()` with panic/error logging (`runner.rs:477-485`).
-9. **Cleanup:** Cancel rate-limit task, finish progress bar, compute results (`runner.rs:487-495`).
+1. **Adaptation** (`adapter.rs`): CLI/`EggsecConfig`/auth input → `(LoadTestPlan, RequestTemplate)`; timeout falls back to `config.http.timeout_secs`; TLS/proxy/rate/user-agent merge with config defaults; auth applied canonically.
+2. **Composition**: `LoadTestExecutor::new(plan, template, transport, authority, cancellation)` — CLI passes `ctx.scope` via `run_cli_with_scope`; the facade default scope is permissive `["*"]` (pre-Phase-D behavior preserved) while every request still traverses the authority seam.
+3. **Worker loop** (`executor.rs`): atomic index → global pace slot → build scoped request → race transport dispatch vs cancellation → record locally → emit structured event.
+4. **Merge**: per-worker `Metrics` merged (histogram `add` + saturating counters); error list capped at 1000 across workers.
+5. **Presentation** (process-host only): CLI drives its indicatif bar from channel events in `mod.rs`; `Display`/`Report` render results.
 
-### Worker/concurrency model
+### Rate pacing algorithm
 
-- Workers are `tokio::task::JoinSet` tasks (`runner.rs:400`).
-- Each worker independently pulls work via atomic counter (`AtomicU64`, `Ordering::Relaxed`) — no work stealing.
-- Worker count is bounded by `min(concurrency, total_requests)` (`runner.rs:399`).
-- Graceful shutdown via `CancellationToken` checked at loop top (`runner.rs:418-419`). Token is cancelled after all workers complete (`runner.rs:487`).
-
-### Histogram recording & percentile extraction
-
-- `hdrhistogram::Histogram<u64>` with 3 significant figures (`metrics.rs:78`).
-- Latency recorded in milliseconds: `latency.as_millis() as u64` (`metrics.rs:89,106`).
-- `record()` errors logged with `tracing::warn!` (never suppressed) (`metrics.rs:90-92,107-109`).
-- Percentile extraction at `metrics.rs:134-137`:
-  ```rust
-  latency_p50_ms: self.histogram.value_at_percentile(50.0) as f64,
-  latency_p90_ms: self.histogram.value_at_percentile(90.0) as f64,
-  latency_p95_ms: self.histogram.value_at_percentile(95.0) as f64,
-  latency_p99_ms: self.histogram.value_at_percentile(99.0) as f64,
-  ```
-- Min/max/mean extracted from histogram (`metrics.rs:131-133`).
-- Status codes tracked via `FxHashMap<u16, u64>` for performance (`metrics.rs:70`).
-- Error messages capped at 1000 entries (`metrics.rs:99,112`).
-
-### Rate limiting algorithm
-
-Semaphore token bucket approach (`runner.rs:379-397`):
-
-1. A semaphore starts with **0 permits** (`Semaphore::new(0)`).
-2. A background task adds 1 permit every `min_interval` (`1/rate` seconds) using `tokio::select!` with `CancellationToken` for clean shutdown.
-3. Worker acquires a permit via `acquire().await` and calls `forget()` to **permanently consume** it (`runner.rs:428-429`).
-4. If no permits available, worker blocks until one is added (backpressure).
-
-Using `forget()` is critical — returning the permit would allow immediate reacquisition, defeating rate limiting. This ensures RPS stays close to the configured limit even under high concurrency without lock contention.
+CAS slot allocator (`GlobalPacer` in `executor.rs`): workers claim issue slots via `compare_exchange` on an atomic nanos counter. Aggregate throughput equals the configured rate at any worker count; no mutex is held across sleeps; waits are cancellation-preemptible. Zero rate means unlimited (logged at the adapter layer).
 
 ### Response body handling
 
-All response bodies (success and error) are consumed before returning connections to the pool (`runner.rs:457-459`). This prevents HTTP client connection pool starvation where a connection has an unread body waiting.
+All response bodies are drained (`response.bytes().await`) before recording, preserving connection reuse. Body-read failures map to transport errors (classified, never panicking).
 
 ### Warm-up
 
-**Note:** The overview.md module index mentions "warm-up" but no warm-up phase is implemented in the current source. Requests are issued at full concurrency from the first iteration. There is no ramp-up period.
+No warm-up phase is implemented. Requests are issued at full concurrency from the first iteration (paced runs ramp via the slot allocator from t=0).
 
 ## Safety & Authorization
 
-Unlike the [stress module](stress.md), loadtest does not require scope authorization, root privileges, or explicit feature flags. It is a standard HTTP client tool.
+Loadtest dispatches through the scoped transport contract: every request passes the destination/scope checkpoints under the caller-supplied authority, redirects are transport-controlled and re-authorized per hop, and proxy/TLS intent travels as transport DTOs. CLI pre-dispatch policy (`evaluate_and_enforce_operation` in `handle_load`) is unchanged; per-request authorization uses the same scope (`ctx.scope`).
 
 Built-in safety measures:
-1. **Constructor validation:** Rejects `concurrency == 0`, `total_requests == 0`, `timeout == 0` (`runner.rs:109-123`).
-2. **Per-request timeout:** `reqwest::Client` configured with `timeout` (`runner.rs:341`).
-3. **Rate limit validation:** 0 is ignored with warning; > 100,000 logs ineffectiveness warning (`runner.rs:250-263`).
-4. **Error caps:** Error message list capped at 1000 entries (`metrics.rs:99,112`).
-5. **TUI mode:** Progress bar suppressed when running inside TUI to avoid terminal conflicts (`runner.rs:361-362`).
+1. **Constructor validation:** Rejects `concurrency == 0`, `total_requests == 0`, `timeout == 0`, userinfo URLs, non-http(s) schemes.
+2. **Per-request timeout:** carried as `TimeoutPolicy` on every scoped request.
+3. **Rate limit validation:** 0 is unlimited with a warning; > 100,000 logs an ineffectiveness warning.
+4. **Error caps:** Error message list capped at 1000 entries; counters saturate (never wrap).
+5. **No terminal output in core:** progress is structured events; only `mod.rs` (CLI) owns a progress widget.
 
 ## Probe Risk & Pipeline Integration
 
-Load testing is tagged with `ProbeIntent::LoadBearing` and `ProbeRisk::Stress` (risk level 4) in the shared probe classification system (`crates/eggsec/src/probe.rs`, `architecture/probe.md:20-21,33,46`). This means:
+Load testing is tagged with `ProbeIntent::LoadBearing` and `ProbeRisk::Stress` (risk level 4) in the shared probe classification system (`crates/eggsec/src/probe.rs`, `architecture/probe.md`). Defense-lab profiles must explicitly include load-bearing probes and budget for `Stress`-level risk.
 
-- **Defense-lab profiles** must explicitly include load-bearing probes and budget for `Stress`-level risk.
-- **Pipeline scheduling** enforces feature gates and scope requirements for load test stages.
+## Performance (Phase D WS3 guard)
+
+Loopback fixture (`wiremock`, no-default-features, release-equal debug build):
+
+```text
+cargo test -p eggsec --no-default-features --test loadtest_tests
+```
+
+Measured with a temporary probe (removed before commit; exact commands in the Phase D completion record):
+
+- IP literal, 200 req / 10 workers: ~24k RPS, p50 0ms, wall 0.02s
+- IP literal, 1000 req / 50 workers: ~17k RPS, p50 2ms, p95 2ms, p99 17ms, wall 0.07s
+- Hostname (`localhost`, DNS-checkpoint path), 500 req / 25 workers: ~19k RPS, p50 1ms, wall 0.03s
+
+The scoped seam adds no measurable overhead versus raw dispatch at these levels: authority checks are in-memory scope matching on the IP-literal fast path, clients are shared per run (no per-request construction), and drained bodies preserve keep-alive reuse. CPU/allocation profiling was not run (criterion: acceptable throughput + reuse evidence, both met).
 
 ## Public API
 
 ```rust
-// Basic usage
+// Facade (compat): unchanged construction sites keep compiling.
 let runner = LoadTestRunner::new(url, 1000, 50, Duration::from_secs(30))?;
 let results = runner.run().await?;
 
-// With config merge (pipeline)
-let runner = LoadTestRunner::from_config_with_engine(cfg, &config)?;
+// New composition (explicit authority + structured progress):
+let executor = LoadTestExecutor::new(plan, template, transport, authority, token);
+let results = executor.run(&sink).await?;
 
-// With auth
-runner.set_method("POST".to_string());
-runner.set_body("{}".to_string());
-runner.add_header("Content-Type".to_string(), "application/json".to_string());
-runner.set_common(common_args);
+// CLI with scope:
+run_cli_with_scope(args, &config, scope).await?;
 ```
 
 ## Integration Points
 
-- **CLI:** `run_cli()` (`mod.rs:63-107`) — parses `LoadArgs`, creates runner via `from_config_with_engine()`, executes, outputs results.
-- **TUI:** `LoadTestRunner` with `tui_mode: true` suppresses progress bar.
-- **Pipeline:** `from_config_with_engine()` merges `EggsecConfig` defaults (proxy, TLS, headers).
-- **Distributed:** Worker processes return load test results in JSON (`architecture/distributed.md`).
-- **Report trait:** `LoadTestResults` implements `Report` for JSON export (`runner.rs:499-507`).
-- **Dispatch:** `LoadTest` task kind dispatched via `runtime_bridge` from daemon/runtime surfaces (`architecture/runtime_bridge.md`).
+- **CLI:** `run_cli()` / `run_cli_with_scope()` (`mod.rs`) — parses `LoadArgs`, merges `EggsecConfig`, attaches scope, drives indicatif from channel events, writes output.
+- **Handler:** `handle_load` passes `ctx.scope` so per-request authorization matches the pre-dispatch verdict.
+- **TUI:** consumes `LoadTestResults` (new `error_kinds` defaults empty for stored payloads); dispatch progress forwards structured events to the legacy channel.
+- **Pipeline/tool/distributed/Python:** unchanged facade paths (`from_config_with_engine` + `run`); Python pre-checks scope via `scope.enforce_target` as before.
+- **Dispatch:** `run_load_test` forwards executor events to `progress_tx` via a non-blocking sink.
+- **Report trait:** `LoadTestResults` implements `Report` for JSON export.
 
 ## Testing
 
 ```bash
 cargo test --test loadtest_tests -p eggsec
+cargo test --lib -p eggsec loadtest
 cargo clippy --lib -p eggsec
 ```
 
+Unit coverage: plan validation/rate/method, adapter auth/proxy/timeout shapes, metrics accounting/distribution/categorization/percentiles/cancellation/merge/zero-one/saturation/cap/legacy-serde, executor success/denial/cancellation/progress through the fake, progress sinks.
+
 ## Invariants & Gotchas
 
-1. **No warm-up phase:** Requests start at full concurrency immediately. No ramp-up.
-2. **Latency = time-to-first-byte:** Measured from request send to response headers received, not full body transfer.
-3. **Error classification:** HTTP 2xx/3xx = successful; 4xx/5xx = failed (`metrics.rs:95-102`). Transport errors are also failures.
-4. **FxHashMap for status codes:** Uses `rustc_hash::FxHashMap` for performance over `std::collections::HashMap` (`metrics.rs:3,70`).
-5. **Histogram precision:** 3 significant figures — sufficient for ms-level latency tracking but not sub-microsecond.
-6. **Spawned-task timeouts:** Worker tasks in the `JoinSet` are bounded by the atomic request counter, `CancellationToken`, and per-request timeouts rather than explicit `tokio::time::timeout` wrappers. The rate-limit background task is guarded: `runner.rs:493-501` awaits its handle with a 5s timeout and aborts on stall instead of detaching it.
+1. **No warm-up phase:** requests start at full concurrency immediately.
+2. **Latency = time-to-first-byte plus body drain:** measured from dispatch start to response completion (headers + drained body), recorded for successful and failed requests alike.
+3. **Error classification:** HTTP 2xx/3xx = successful; 4xx/5xx = failed (`http_status` kind); transport denials/failures map to neutral kinds without backend types.
+4. **FxHashMap for status codes/kinds:** performance over `std::collections::HashMap`.
+5. **Histogram precision:** 3 significant figures; merged across workers with `add` (exact).
+6. **No global mutex on the hot path:** per-worker accumulators + CAS pacer; the only mutex in the backend is a short non-async lock for proxied-client cache clone-or-insert (never across I/O).
+7. **`tui_mode` is facade-only:** setting it changes nothing about execution; use a sink for progress.
+8. **Facade default scope is permissive:** `LoadTestRunner` without `with_scope`/`set_scope` authorizes against `["*"]` (pre-Phase-D behavior). Production CLI supplies the real scope.
 
 ## See Also
 
 - [overview.md](overview.md) — system-wide module index
 - [probe.md](probe.md) — shared probe intent/risk vocabulary
 - [defense_lab.md](defense_lab.md) — defense-lab profiles and risk budgets
-- [stress.md](stress.md) — raw network flood testing (SYN/UDP/ICMP/HTTP DoS simulation)
+- [stress.md](stress.md) — raw network flood testing
+- [transport.md](transport.md) — scoped transport contract
+- [transport_eggfetch.md](transport_eggfetch.md) — Eggfetch backend (full IP pinning; proxy deferred)
+- [capability_segregation.md](capability_segregation.md) — Gate D1/D2 rejection records
+- [utils.md](utils.md) — engine utility ownership (Phase D `cache` removal)
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-16 (Phase D decoupling)*

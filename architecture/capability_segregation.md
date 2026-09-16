@@ -1,8 +1,11 @@
-# Capability Segregation Decisions (Phase E WS2–WS4 + Phase C policy extraction)
+# Capability Segregation Decisions (Phase E WS2–WS4 + Phase C policy extraction + Phase D loadtest/resilience closure)
 
 Status: Phase E decided 2026-09-13 (no new crates; all WS4 candidates rejected).
 Phase C (crate-boundary consolidation, 2026-09-16) extracts `eggsec-policy`
 below; `eggsec-net` / web-client / evidence rejections remain in force.
+Phase D (crate-boundary consolidation, 2026-09-16) decouples load testing
+internally and rejects both `eggsec-loadtest` and `eggsec-resilience`
+(see Phase D section below).
 WS2 (empty library default) and WS3 (per-crate Tokio) implemented; this record
 covers WS4 extraction evaluations with the required decision fields.
 
@@ -175,6 +178,39 @@ tokens, evaluation over explicit inputs).
   config deserializes/re-exports policy types without duplication; policy
   tests run isolated with a narrower graph; ownership is unambiguous.
 
+## Phase D — loadtest decoupling + `eggsec-loadtest` / `eggsec-resilience`: REJECT both
+
+Load testing was decoupled internally (`plan` / `executor` / `metrics` /
+`progress` core + `adapter` above it + `backend` Reqwest `HttpTransport`
+behind the `eggsec-transport` seam; `indicatif` only in CLI `run_cli`;
+`tui_mode` removed from the core contract; per-worker sharded metrics with a
+CAS global pacer). The decoupling is retained; the crate extractions were
+evaluated against the roadmap's decision rule and rejected:
+
+- Gate D1 (`eggsec-loadtest`): REJECT. The core still touches engine-owned
+  helpers (`utils::parse_headers`, `utils::http::tool_user_agent`,
+  `utils::formatting::preserve_all`, `install_tls_provider`, `constants`,
+  `Scope`/`policy_bridge` in the backend); the only dependency that would
+  leave the engine closure is `hdrhistogram` (`indicatif` stays for
+  scanner/fuzzer/pipeline/stress regardless). Single consumer (the engine);
+  no independent library surface or second consumer; package/versioning cost
+  unjustified. Criteria 4–5 of Gate D1 fail; an internal boundary is
+  sufficient.
+- Gate D2 (`eggsec-resilience`): REJECT. Rate-control/circuit-breaker
+  consumers are all inside the `eggsec` crate (`waf`, `ai`, tool protocol);
+  no second crate or sibling project demonstrated; extracting would create
+  adapters around existing implementations rather than removing duplication.
+  Primitives stay in `utils::{rate_limiter, circuit_breaker}` with explicit
+  semantics and tests. `fuzzer::rate_limit` (lock-free consecutive-error
+  limiter) and the loadtest `GlobalPacer` (CAS slot allocator, no mutex on
+  the hot path) are intentionally operation-local, not duplicates: the shared
+  token buckets would serialize (`SharedRateLimiter`) or mismatch semantics.
+- `eggsec-transport` remains the reference leaf boundary (unchanged, not
+  renamed); `eggsec-policy` reuse discussion is deferred (no non-Eggsec
+  consumer; API stays as extracted in Phase C).
+- Incidental cleanup: `utils::cache::ApiCache` (zero production consumers,
+  flagged in Phase A) removed.
+
 ## Guards
 
 - Check 107 fails if `crates/eggsec-net`, `crates/eggsec-web-client`,
@@ -189,5 +225,9 @@ tokens, evaluation over explicit inputs).
   feature queries, no resolver/authority behavior); engine → policy one-way
   with transport independent; engine policy modules stay facades (no
   redefined core types).
+- Checks 124–126 (Phase D): loadtest core owns no Reqwest/indicatif/Clap/
+  config (core files import none; `indicatif` only in `cli`-gated `run_cli`);
+  no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
+  `utils::cache` stays removed.
 
-*Last verified against source: 2026-09-16 (Phase C extraction)*
+*Last verified against source: 2026-09-16 (Phase D closure)*

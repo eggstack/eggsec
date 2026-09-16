@@ -14,6 +14,34 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Crate-boundary consolidation (executed 2026-09-16)
+
+Roadmap:
+[`crate-boundary-consolidation-roadmap-2026-09-16.md`](crate-boundary-consolidation-roadmap-2026-09-16.md)
+
+This is a bounded ownership pass over the already substantially decomposed
+workspace: it fixes `eggsec-output` report-DTO/formatter ownership, separates
+policy/enforcement semantics from configuration loading, shrinks the `utils`
+catch-all, decouples load testing behind the scoped transport seam, and
+promotes code to a new crate only on measured dependency payoff.
+
+Ordered implementation plans (all executed; each plan carries its completion
+record):
+
+1. [`crate-boundary-consolidation-phase-a-ownership-and-primitive-cleanup.md`](crate-boundary-consolidation-phase-a-ownership-and-primitive-cleanup.md)
+2. [`crate-boundary-consolidation-phase-b-report-model-extraction.md`](crate-boundary-consolidation-phase-b-report-model-extraction.md)
+3. [`crate-boundary-consolidation-phase-c-policy-enforcement-extraction.md`](crate-boundary-consolidation-phase-c-policy-enforcement-extraction.md)
+4. [`crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md`](crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md)
+
+Phase A creates no crate (scheduling/session leave `eggsec-output`,
+rate-limit/circuit-breaker semantics hardened, Reqwest pool removed). Phase B
+extracts `eggsec-report-model` (four domain crates drop `eggsec-output`).
+Phase C extracts `eggsec-policy` (deterministic kernel + engine bridge).
+Phase D decouples load testing internally (transport-neutral core, scoped
+Reqwest backend, structured progress) and rejects both `eggsec-loadtest`
+(single consumer) and `eggsec-resilience` (no second consumer), closing the
+roadmap with no new members in this phase.
+
 ## Network dependency and supply-chain hardening (executed 2026-09-13)
 
 Roadmap:

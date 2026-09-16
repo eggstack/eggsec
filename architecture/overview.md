@@ -522,7 +522,7 @@ Within the `eggsec` crate:
 | `waf` | `config`, `error`, `fuzzer` (WafConfig) — deliberate two-way type sharing, both always compiled |
 | `recon` | `config`, `error`, `types` |
 | `auth` | `config`, `error`, `types`, `scanner` |
-| `loadtest` | `config`, `error`, `types` |
+| `loadtest` | `config` (facade scope type), `error`, `types` (adapter input only), `policy_bridge` (authority), `eggsec-transport` (seam) |
 | `pipeline` | `scanner`, `fuzzer`, `waf`, `recon`, `loadtest` |
 | `dispatch` | all security modules (per-domain workers) |
 | `tool` | all security modules (via `ToolRegistry`) |

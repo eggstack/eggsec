@@ -3204,6 +3204,97 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 124. Phase D: loadtest core owns no concrete HTTP client, terminal UI, or
+# surface-adapter types. Reqwest/indicatif/Clap/config-file ownership lives
+# only in the backend (ReqwestTransport), the cli-gated run_cli renderer,
+# and the adapter/facade respectively — never in plan/executor/metrics/
+# progress.
+echo ""
+echo "--- Check 124: loadtest core stays transport-neutral ---"
+SECTION_FAIL=0
+for f in crates/eggsec/src/loadtest/plan.rs crates/eggsec/src/loadtest/executor.rs crates/eggsec/src/loadtest/metrics.rs crates/eggsec/src/loadtest/progress.rs; do
+  if [[ ! -f "$f" ]]; then
+    echo "FAIL: missing Phase D core module: $f"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+CORE_HITS=$(rg -n 'reqwest::|indicatif::|CommonHttpArgs|EggsecConfig|LoadArgs|ProgressBar|RequestBuilder|Client::builder' crates/eggsec/src/loadtest/plan.rs crates/eggsec/src/loadtest/executor.rs crates/eggsec/src/loadtest/metrics.rs crates/eggsec/src/loadtest/progress.rs crates/eggsec/src/loadtest/adapter.rs 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true)
+if [[ -n "$CORE_HITS" ]]; then
+  echo "$CORE_HITS"
+  echo "FAIL: loadtest core/adapter touches concrete client, terminal UI, or surface-adapter types."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'HttpTransport' crates/eggsec/src/loadtest/executor.rs 2>/dev/null; then
+  echo "FAIL: executor.rs does not dispatch through HttpTransport."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'impl HttpTransport for ReqwestTransport' crates/eggsec/src/loadtest/backend.rs 2>/dev/null; then
+  echo "FAIL: backend.rs does not implement HttpTransport for ReqwestTransport."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'ProgressSink' crates/eggsec/src/loadtest/executor.rs crates/eggsec/src/loadtest/progress.rs 2>/dev/null; then
+  echo "FAIL: structured progress sink missing from executor/progress."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'tui_mode' crates/eggsec/src/loadtest/plan.rs crates/eggsec/src/loadtest/executor.rs crates/eggsec/src/loadtest/metrics.rs crates/eggsec/src/loadtest/progress.rs crates/eggsec/src/loadtest/adapter.rs crates/eggsec/src/loadtest/backend.rs 2>/dev/null; then
+  echo "FAIL: tui_mode leaked into the loadtest core (facade-only compat)."
+  rg -n 'tui_mode' crates/eggsec/src/loadtest/plan.rs crates/eggsec/src/loadtest/executor.rs crates/eggsec/src/loadtest/metrics.rs crates/eggsec/src/loadtest/progress.rs crates/eggsec/src/loadtest/adapter.rs crates/eggsec/src/loadtest/backend.rs 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: loadtest core stays transport-neutral."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 125. Phase D: no unjustified loadtest/resilience/utils crate extraction.
+echo ""
+echo "--- Check 125: no unjustified loadtest/resilience crates ---"
+SECTION_FAIL=0
+for candidate in crates/eggsec-loadtest crates/eggsec-resilience crates/eggsec-utils; do
+  if [[ -e "$candidate" ]]; then
+    echo "FAIL: Unjustified crate exists: $candidate (Phase D Gates D1/D2 rejected; Phase A rejected utils)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -qi 'eggsec-loadtest|eggsec-resilience' Cargo.toml crates/*/Cargo.toml 2>/dev/null; then
+  echo "FAIL: loadtest/resilience crate reference found in manifests."
+  rg -ni 'eggsec-loadtest|eggsec-resilience' Cargo.toml crates/*/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "architecture/capability_segregation.md" ]]; then
+  echo "FAIL: missing decision record: architecture/capability_segregation.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no unjustified loadtest/resilience crates."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 126. Phase D: removed utils::cache stays removed (zero-consumer dead code).
+echo ""
+echo "--- Check 126: removed utils::cache stays removed ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec/src/utils/cache.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/utils/cache.rs reappeared (Phase D removed ApiCache: zero consumers)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'pub mod cache' crates/eggsec/src/utils/mod.rs 2>/dev/null; then
+  echo "FAIL: utils/mod.rs re-exposes cache module."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'struct ApiCache' crates/eggsec/src/ 2>/dev/null; then
+  echo "FAIL: ApiCache type reappeared under engine src."
+  rg -n 'struct ApiCache' crates/eggsec/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: removed utils::cache stays removed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

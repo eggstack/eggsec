@@ -1,28 +1,36 @@
 ---
 name: eggsec-loadtest
-description: "HTTP load testing and performance benchmarking - use when working with LoadTestRunner, concurrent workers, latency percentiles, rate limiting, or hdrhistogram metrics."
+description: "HTTP load testing and performance benchmarking - use when working with LoadTestRunner, LoadTestPlan, LoadTestExecutor, concurrent workers, latency percentiles, rate limiting, or hdrhistogram metrics."
 ---
 
 # Eggsec Loadtest Skill
 
-HTTP load testing module workflows and patterns.
+HTTP load testing module workflows and patterns (Phase D: transport-neutral core).
 
 ## Key Types and Patterns
 
-### LoadTestRunner (`loadtest/runner.rs`)
-Main load test executor that manages concurrent HTTP request workers.
+### LoadTestPlan (`loadtest/plan.rs`)
+Transport-neutral reusable primitive: target, request template, budgets, explicit `RatePolicy`. No Clap args, `EggsecConfig`, Reqwest, or indicatif.
+
+### LoadTestExecutor<T: HttpTransport> (`loadtest/executor.rs`)
+Generic executor over the scoped transport seam. Each worker owns a private `Metrics` (merged at end — no shared mutex); global pacing via CAS slot allocator (`GlobalPacer`); cancellation races transport dispatch.
+
+### ReqwestTransport (`loadtest/backend.rs`)
+Scope-aware Reqwest `HttpTransport` — the only `reqwest::Client` contact point for load testing. Per-hop authority checkpoints mirror the recording fake; redirects re-authorized per hop.
+
+### RequestTemplate (`loadtest/adapter.rs`)
+Engine adaptation above the core: CLI/config/auth → plan + transport-neutral template. Auth applied through canonical transport helpers, never reimplemented in the executor.
 
 ### Metrics (`loadtest/metrics.rs`)
-Real-time metrics collection using `hdrhistogram` for latency percentiles.
+Pure single-threaded accumulator (`merge` for sharded workers) + `LoadTestResults` + `LoadTestErrorKind` categorization (`error_kinds`).
 
-### LoadTestResults (`loadtest/metrics.rs`)
-Aggregated results with percentiles (p50, p90, p95, p99).
+### LoadTestRunner / LoadTestRunConfig (`loadtest/runner.rs`)
+Compatibility facades. `tui_mode` is retained for source compat but **ignored** — progress is structured events (`progress.rs`: `NoopSink`, `FnSink`, `ChannelSink`).
 
 ### Worker Model
-- Uses `tokio::task::JoinSet` for concurrent workers
 - `worker_count = min(concurrency, total_requests)`
 - Each worker loops, fetching `request_index = issued_requests.fetch_add(1, Ordering::Relaxed)`
-- Rate limiting via optional `rate_limit` (requests/sec)
+- Global pacing via CAS allocator (aggregate rate holds at any worker count; no mutex on hot path)
 
 ## Testing
 
@@ -36,19 +44,20 @@ cargo test --lib -p eggsec loadtest
 Follow existing patterns in `tests/loadtest_tests.rs`:
 - Use `create_test_server()` + `mock_ok()` from test helpers
 - Test basic, concurrency, error handling, validation
+- Unit tests use `RecordingFakeTransport` (no network): see `executor.rs` tests
 
 ## Common Tasks
 
 ### Adding a New Load Test Configuration Option
 1. Add field to `LoadArgs` in `cli/http.rs`
-2. Handle in `LoadTestRunner::from_args*` methods
-3. Apply in `run()` method
-4. Add tests for new option
+2. Thread through `AdapterInput` in `loadtest/adapter.rs` (never store `CommonHttpArgs` in `LoadTestPlan`)
+3. Apply in `RequestTemplate` / `plan_from_adapter`
+4. Add adapter unit tests + integration tests for new option
 
 ### Adding a New Metric
-1. Add field to `LoadTestResults` in `metrics.rs`
-2. Track in `Metrics` struct
-3. Populate in `to_results()`
+1. Add field to `LoadTestResults` in `metrics.rs` (use `#[serde(default)]` for back-compat)
+2. Track in `Metrics` struct (saturating counters)
+3. Populate in `to_results()`, merge in `merge()`
 4. Display in `Display` impl and serialize in `Serialize` impl
 
 ## CLI Usage
@@ -74,47 +83,27 @@ eggsec load https://example.com -n 1000 -c 50 -o results.json
 
 - `total_requests` - Total requests sent
 - `successful_requests` - 2xx-3xx responses
-- `failed_requests` - 4xx-5xx + network errors
+- `failed_requests` - 4xx-5xx + transport errors + cancellations
 - `requests_per_second` - Throughput
 - `latency_min_ms`, `latency_mean_ms`, `latency_max_ms` - Latency stats
 - `latency_p50_ms`, `latency_p90_ms`, `latency_p95_ms`, `latency_p99_ms` - Percentiles
 - `status_codes` - Map of HTTP status code to count
-- `errors` - Error messages (first 5 displayed)
+- `error_kinds` - Transport-error category counts (policy_denied/dns/timeout/connect/...)
+- `errors` - Error messages (first 5 displayed, capped at 1000 stored)
 
 ## Code Conventions
 
-- Use `rustc_hash::FxHashMap` for `status_codes` maps (not `std::collections::HashMap`)
+- Use `rustc_hash::FxHashMap` for `status_codes`/`error_kinds` maps (not `std::collections::HashMap`)
 - Histogram uses `hdrhistogram::Histogram<u64>` with 3 significant figures
-- Suppress histogram errors with `let _ = self.histogram.record(...)` not `.ok()`
-- Auth headers handled via `apply_auth_headers()` helper
-- Non-success response bodies are consumed to avoid memory leaks in the connection pool
-- Rate limiting uses a global lock with proper interval calculation to avoid drift
-
-## Bugs Fixed
-
-### 2026-05-28 (Wave 1 & 2)
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `runner.rs:275-281` | Rate limiting initial burst | Changed `now() - min_interval` to `now() + min_interval` |
-| `runner.rs:306-317` | Rate limit lock contention | Replaced `Arc<Mutex<TokioInstant>>` with `tokio::sync::Semaphore` token bucket |
-| `runner.rs:322-333` | Missing request cancellation on timeout | Added `CancellationToken` checked each loop iteration |
-
-## Implementation Notes
-
-### Response Body Handling
-When a non-success response is received (4xx, 5xx), the response body is consumed before recording the metrics. This prevents the underlying HTTP client connection from being closed prematurely and returned to the pool in an inconsistent state.
-
-### Rate Limiting Algorithm
-Rate limiting uses a lock-protected token bucket approach:
-1. Worker acquires lock on `next_allowed_at`
-2. If `now < next`, sleep until `next`
-3. Update `next = now_after_sleep + interval` (not `next + interval`) to maintain correct rate
-
-### Dead Code
-`Metrics::record_success()` exists for external callers but is not used internally by `LoadTestRunner`. It does not check HTTP status codes - it blindly records as successful. Prefer `record_http_response()` which correctly distinguishes 2xx-3xx as success.
+- Histogram record/merge failures log with `tracing::warn!` — never `let _ =` or silent suppression
+- Auth headers handled via canonical transport helpers (`merge_cookie_header` semantics)
+- All response bodies are drained before recording (connection reuse)
+- Rate pacing uses the CAS `GlobalPacer` (no shared mutex on the hot path)
+- Core never touches `indicatif`, `reqwest`, Clap, or `EggsecConfig` — presentation lives in `run_cli`, HTTP in `backend.rs`
+- No `eggsec-loadtest` crate (Gate D1 rejected: single consumer); no `eggsec-resilience` crate (Gate D2 rejected: no second consumer)
 
 ## Resources
 - `crates/eggsec/src/loadtest/` - Module source
 - `architecture/loadtest.md` - Architecture documentation
+- `architecture/capability_segregation.md` - Gate D1/D2 rejection records
 - `AGENTS.md` - General project guidelines

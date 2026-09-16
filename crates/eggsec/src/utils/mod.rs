@@ -1,10 +1,10 @@
-//! Engine-internal utility helpers (Phase A ownership cleanup).
+//! Engine-internal utility helpers (Phase A ownership cleanup, Phase D closure).
 //!
 //! Remaining modules are engine infrastructure shared by several domains but
 //! not yet stable enough for a crate. Domain-specific helpers have moved to
 //! their owners: service tables to `scanner::service_data`, privilege gates to
 //! `platform`, cron to `eggsec-agent::cron`. Dead presentation/pool/evasion
-//! helpers (`output`, `progress`, `client_pool`, `stealth`) were removed.
+//! helpers (`output`, `progress`, `client_pool`, `stealth`) were removed in Phase A; the unused `cache` (`ApiCache`, zero production consumers) was removed in Phase D.
 //!
 //! ## Key Components
 //!
@@ -29,7 +29,6 @@
 //! ```
 
 pub mod auth;
-pub mod cache;
 pub mod circuit_breaker;
 pub mod error;
 pub mod formatting;

@@ -164,6 +164,11 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Engine depends one-way on the policy kernel with transport independent: engine manifests `eggsec-policy`, policy never references transport (either direction), workspace lists the member (Check 122).
 - Engine policy modules stay facades with no redefined core types: no `pub enum/struct` forks of the kernel vocabulary/descriptor/catalog/decision/scope types in `config/policy*.rs`/`scope*.rs`; config facades re-export `eggsec_policy` and `policy_bridge/` owns the adapters (Check 123).
 
+### Crate-Boundary Consolidation Invariants (Phase D, guards Checks 124–126)
+- Loadtest core stays transport-neutral: `plan`/`executor`/`metrics`/`progress`/`adapter` contain no `reqwest::`/`indicatif::`/`RequestBuilder`/`Client::builder`/`ProgressBar`/`CommonHttpArgs`/`EggsecConfig`/`LoadArgs` code uses (doc prose excluded); executor dispatches through `HttpTransport`, backend implements it for `ReqwestTransport`, progress flows through `ProgressSink`, and `tui_mode` appears only in the facade (Check 124).
+- No unjustified loadtest/resilience crates: no `crates/eggsec-loadtest`, `crates/eggsec-resilience`, or `crates/eggsec-utils` paths and no such manifest references; Gates D1/D2 rejection recorded in `architecture/capability_segregation.md` (Check 125).
+- Removed `utils::cache` stays removed: no `utils/cache.rs`, no `pub mod cache`, no `struct ApiCache` under engine src (Check 126).
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

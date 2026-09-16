@@ -1,6 +1,7 @@
 # Crate boundary and reusable-library consolidation roadmap
 
-Status: Ready for handoff
+Status: Executed (2026-09-16). All four phases implemented; see each phase
+plan's completion record (Phase D closes the roadmap).
 
 Date: 2026-09-16
 

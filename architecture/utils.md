@@ -7,32 +7,33 @@ Engine-internal runtime helpers shared by several domains but not yet stable eno
 ## Location & Feature Gating
 
 **Path**: `crates/eggsec/src/utils/`
-**Module root**: `mod.rs` — 14 declared sub-modules, all unconditional (no feature gates)
+**Module root**: `mod.rs` — 13 declared sub-modules, all unconditional (no feature gates)
 
 Every number in this document was verified against source on 2026-09-16.
 
-## Sub-Module Inventory (14 declared)
+## Sub-Module Inventory (13 declared)
 
 | # | Module | File | Purpose |
 |---|--------|------|---------|
 | 1 | `auth` | `auth.rs` | `constant_time_eq()` — timing-safe string comparison via `subtle::ConstantTimeEq` |
-| 2 | `cache` | `cache.rs` | `ApiCache` — async TTL cache (`FxHashMap` + `RwLock`), default TTL 3600s, max 10k entries |
-| 3 | `circuit_breaker` | `circuit_breaker.rs` | `CircuitBreaker`, `CircuitState` — consecutive-failure breaker, single half-open probe |
-| 4 | `error` | `error.rs` | Error message sanitization — strips stack traces, paths, panics; truncates to 200 chars |
-| 5 | `formatting` | `formatting.rs` | `strip_controls()`, `preserve_all()`, `truncate_only()` — string truncation helpers |
-| 6 | `http` | `http.rs` | HTTP client creation family + `tool_user_agent()`; single shared clients, same-host redirects |
-| 7 | `logging` | `logging.rs` | `sanitize_for_logging()` — ANSI escape/control char stripping, 500-char truncation |
-| 8 | `network` | `network.rs` | TCP connect with `TCP_NODELAY` (Nagle disabled) |
-| 9 | `parsing` | `parsing.rs` | URL/header/port parsing, host resolution, `contains_ignore_case()` |
-| 10 | `rate_limiter` | `rate_limiter.rs` | `RateLimiter` (burst=1s token bucket), `AdaptiveRateLimiter`, `PerTargetRateLimiter`, `JitterConfig`, `SharedRateLimiter` |
-| 11 | `redaction` | `redaction.rs` | `redact_sensitive()`, `redact_json()` — evidence redaction for findings |
-| 12 | `target` | `target.rs` | Target extraction, normalization, socket address parsing |
-| 13 | `urlencoding` | `urlencoding.rs` | URL percent-encoding/decoding with UTF-8 support |
-| 14 | `validation` | `validation.rs` | Input validation — concurrency, timeout, rate limit, path traversal, URL |
+| 2 | `circuit_breaker` | `circuit_breaker.rs` | `CircuitBreaker`, `CircuitState` — consecutive-failure breaker, single half-open probe |
+| 3 | `error` | `error.rs` | Error message sanitization — strips stack traces, paths, panics; truncates to 200 chars |
+| 4 | `formatting` | `formatting.rs` | `strip_controls()`, `preserve_all()`, `truncate_only()` — string truncation helpers |
+| 5 | `http` | `http.rs` | HTTP client creation family + `tool_user_agent()`; single shared clients, same-host redirects |
+| 6 | `logging` | `logging.rs` | `sanitize_for_logging()` — ANSI escape/control char stripping, 500-char truncation |
+| 7 | `network` | `network.rs` | TCP connect with `TCP_NODELAY` (Nagle disabled) |
+| 8 | `parsing` | `parsing.rs` | URL/header/port parsing, host resolution, `contains_ignore_case()` |
+| 9 | `rate_limiter` | `rate_limiter.rs` | `RateLimiter` (burst=1s token bucket), `AdaptiveRateLimiter`, `PerTargetRateLimiter`, `JitterConfig`, `SharedRateLimiter` |
+| 10 | `redaction` | `redaction.rs` | `redact_sensitive()`, `redact_json()` — evidence redaction for findings |
+| 11 | `target` | `target.rs` | Target extraction, normalization, socket address parsing |
+| 12 | `urlencoding` | `urlencoding.rs` | URL percent-encoding/decoding with UTF-8 support |
+| 13 | `validation` | `validation.rs` | Input validation — concurrency, timeout, rate limit, path traversal, URL |
 
 Removed in Phase A (see completion record in `plans/crate-boundary-consolidation-phase-a-ownership-and-primitive-cleanup.md`): `client_pool` (single shared client is canonical), `output` (dead terminal printers; engine returns values), `progress` (dead `indicatif` styles; frontends own presentation), `service_detection` (moved to `scanner::service_data`), `stealth` (dead evasion semantics; only live `tool_user_agent()` moved to `http`), `privilege` (moved to `platform::check_privileged`/`require_root`/`is_root`).
 
-**Verified count**: 14 `pub mod` declarations in `mod.rs` (all unconditional).
+Removed in Phase D (see completion record in `plans/crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md`): `cache` (`ApiCache`, zero production consumers; the `ai::cache::AiCache` used by AI code is a separate module and is unaffected).
+
+**Verified count**: 13 `pub mod` declarations in `mod.rs` (all unconditional).
 
 ## Key Re-exports
 
@@ -163,7 +164,7 @@ Service fingerprint knowledge lives in `scanner::service_data` (Phase A), not he
 | `waf/` | `redaction`, `http` |
 | `stress/` | `network`, `rate_limiter`, `platform::check_privileged` |
 | `packet/` | `network`, `platform::check_privileged` |
-| `loadtest/` | `rate_limiter`, `http` (`tool_user_agent`) |
+| `loadtest/` | `parsing` (`parse_headers`), `http` (`tool_user_agent`), `formatting` (`preserve_all` in results `Display`); pacing is operation-local (`GlobalPacer`, intentionally distinct from the shared token buckets — see Phase D record) |
 | `proxy/` | `http`, `redaction` |
 | `config/` | `validation` |
 | `output/` | `formatting` |

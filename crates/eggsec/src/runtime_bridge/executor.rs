@@ -281,6 +281,7 @@ mod tests {
             latency_p99_ms: 250.0,
             status_codes: Default::default(),
             errors: vec![],
+            error_kinds: Default::default(),
         });
         let outcome = EggsecRuntimeExecutor::task_result_to_outcome(&result);
         match outcome {

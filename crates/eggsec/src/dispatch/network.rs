@@ -15,17 +15,53 @@ pub async fn run_load_test(
     timeout: Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::loadtest::runner::LoadTestRunner;
+    use crate::loadtest::{LoadTestRunner, ProgressSink};
 
     let runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
 
     send_progress(&progress_tx, 0, requests).await;
 
+    // Structured progress: forward executor events to the legacy
+    // (completed, total) channel without blocking workers.
+    struct ForwardSink {
+        tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+    }
+    impl ProgressSink for ForwardSink {
+        fn on_event(&self, event: crate::loadtest::LoadTestEvent) {
+            let (completed, total) = match event {
+                crate::loadtest::LoadTestEvent::RequestCompleted { completed, total }
+                | crate::loadtest::LoadTestEvent::Finished { completed, total } => {
+                    (completed, total)
+                }
+            };
+            if self.tx.try_send((completed, total)).is_err() {
+                tracing::trace!("loadtest dispatch progress channel full/closed");
+            }
+        }
+    }
+    let sink = ForwardSink {
+        tx: progress_tx.clone(),
+    };
+
     let batches = requests / concurrency.max(1) as u64;
     let estimated_secs = batches * timeout.as_secs();
     let load_test_timeout = Duration::from_secs(estimated_secs.clamp(300, 3600));
-    let results = match tokio::time::timeout(load_test_timeout, runner.run()).await {
+    let transport = std::sync::Arc::new(crate::loadtest::ReqwestTransport::with_system_resolver());
+    let authority: std::sync::Arc<dyn eggsec_transport::NetworkAuthority> = std::sync::Arc::new(
+        crate::loadtest::OwnedScopeAuthority::new(runner.scope().clone()),
+    );
+    let results = match tokio::time::timeout(
+        load_test_timeout,
+        runner.run_with(
+            transport,
+            authority,
+            tokio_util::sync::CancellationToken::new(),
+            &sink,
+        ),
+    )
+    .await
+    {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
             tracing::error!("Load test failed: {}", e);

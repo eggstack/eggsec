@@ -228,6 +228,21 @@ impl ProxyCredential {
             password: password.into(),
         }
     }
+
+    /// Expose the username (secret-bearing; never log or include in errors).
+    ///
+    /// Added for the load-test Reqwest backend (Phase D), which must
+    /// translate the neutral intent onto a concrete proxy builder. Callers
+    /// must not log, format with `{:?}` (redacted), or embed these values in
+    /// error strings.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Expose the password (secret-bearing; never log or include in errors).
+    pub fn password(&self) -> &str {
+        &self.password
+    }
 }
 
 impl fmt::Debug for ProxyCredential {

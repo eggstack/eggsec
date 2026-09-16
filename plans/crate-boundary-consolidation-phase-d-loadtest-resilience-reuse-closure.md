@@ -1,6 +1,6 @@
 # Phase D — Load-test decoupling, reusable primitives, and closure
 
-Status: Ready for handoff
+Status: Executed (2026-09-16). All workstreams implemented; see Completion record below.
 
 Date: 2026-09-16
 
@@ -332,18 +332,174 @@ Run local-fixture load-test performance comparisons after the transport migratio
 
 ## Completion record template
 
-Append after execution:
+(Template retained; execution record follows under "Completion record".)
 
-- Baseline SHA / final SHA
-- Load-test coupling removed
-- Transport-backed performance comparison
-- Gate D1 decision and dependency tree
-- Gate D2 consumer evidence and decision
-- Final workspace/path graph
-- Concrete HTTP client owners
-- Remaining `utils` inventory
-- New crate manifests/dependency sets
-- Compatibility/API changes
-- Architecture guard/doc changes
-- Commands/results
-- Residual debt and any future cross-repository follow-up
+## Completion record
+
+Executed 2026-09-16.
+
+- Baseline SHA: `319323284b5a949957612b3f713ac7baebc0f424` (post-Phase-C main).
+  Final SHA: recorded in the commit history for this plan (`git log --oneline
+  -- plans/crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md`).
+  No new workspace crate was added (workspace member count stays 20).
+- Load-test coupling removed (WS1/WS2/WS4):
+  - `loadtest/` went from 3 files (`mod`, `runner` 522 lines, `metrics`) to 8
+    (`plan`, `executor`, `metrics`, `progress`, `adapter`, `backend`, `runner`
+    facade, `mod`).
+  - `LoadTestPlan` (`plan.rs`): url/method/body/headers/timeout/concurrency/
+    `RatePolicy` only. No `CommonHttpArgs`, no `EggsecConfig`, no Clap, no
+    Reqwest, no indicatif, no filesystem. `tui_mode` is not a field.
+  - `RequestTemplate` + `plan_from_adapter()` (`adapter.rs`): CLI/config/auth
+    translation above the core. Auth-flag shapes (Basic `user:pass`, Bearer,
+    Cookie merge, `Name:value`/bare API keys) parse at this boundary and apply
+    through canonical `eggsec_transport::merge_cookie_header` semantics; the
+    executor never reimplements them. Proxy/TLS/rate/user-agent merge honors
+    `EggsecConfig` defaults with CLI-wins precedence (same as before).
+  - `LoadTestExecutor<T: HttpTransport>` (`executor.rs`): generic over the
+    scoped seam; per-worker private `Metrics` merged at end (no shared async
+    mutex on the hot path); CAS slot allocator (`GlobalPacer`, no mutex
+    across sleeps, cancellation-preemptible); dispatch races the transport
+    future against the cancellation token; transport errors map to
+    `LoadTestErrorKind` without backend types.
+  - Progress (`progress.rs`): `LoadTestEvent` + `ProgressSink` (`NoopSink`,
+    `FnSink`, `ChannelSink` via non-blocking `try_send`). The core never
+    prints; the only `indicatif` widget in loadtest lives in `cli`-gated
+    `run_cli_with_scope` (`mod.rs`). `tui_mode` retained on the
+    `LoadTestRunner`/`LoadTestRunConfig` facades for source compat but ignored
+    by execution.
+  - Metrics (`metrics.rs`): pure single-threaded accumulator + `merge`
+    (`histogram.add`, saturating counters, 1000-error cap across workers);
+    new `error_kinds` (`http_status`/`policy_denied`/`dns`/`timeout`/`connect`/
+    `invalid_request`/`backend`/`cancelled`, `#[serde(default)]` so stored
+    payloads still deserialize); 10 unit tests covering accounting,
+    distribution, categorization, percentiles, cancellation, merge
+    determinism, zero/one boundaries, saturation, cap, legacy serde.
+- Transport backend (WS3): `ReqwestTransport` (`backend.rs`) implements
+  `HttpTransport` with per-hop checkpoints mirroring the fake (initial-URL →
+  host → DNS/re-resolution → socket → TLS-consistency → proxy → dispatch;
+  redirects re-authorized per hop under the redirect-policy gate). Holds
+  verified + insecure shared base clients (no per-request construction) plus
+  a per-endpoint proxied-client cache behind a short non-async mutex (never
+  across I/O). Responses drained for keep-alive reuse. `reqwest::Error` maps
+  to `TransportError::Backend` with stable classifiable prefixes, no secrets.
+  `OwnedScopeAuthority` provides the `'static` authority handle over an
+  `Arc<Scope>` with identical semantics to `ScopeAuthority`.
+  - Contract change (additive, backward-compatible): `ProxyCredential` gained
+    `username()`/`password()` getters (secret-bearing, documented never-log)
+    so the backend can translate the neutral intent onto the concrete proxy
+    builder. No other transport-contract change.
+  - TOCTOU residual (documented in `backend.rs` + `architecture/loadtest.md`):
+    Reqwest re-resolves internally, so the connector is not pinned to the
+    approved address the way the Eggfetch adapter pins it. The backend closes
+    it as far as the API allows (fresh resolve + full candidate authorization
+    + binding validation + socket re-verification every hop). Full pinning
+    arrives with the Eggfetch migration (which currently defers proxied
+    execution); proxied load tests stay on this backend meanwhile.
+  - Callers: `handle_load` passes `ctx.scope` via `run_cli_with_scope` (per-
+    request authorization matches the pre-dispatch verdict);
+    `dispatch::network::run_load_test` forwards structured events to
+    `progress_tx` via a non-blocking sink; pipeline/tool/distributed/Python
+    keep facade paths (`from_config_with_engine` + `run`).
+- Transport-backed performance comparison (WS3 guard; loopback `wiremock`
+  fixture, `--no-default-features`, temporary probe deleted before commit):
+  - IP literal 200 req / 10 workers: ~24k RPS, p50 0ms, wall 0.02s.
+  - IP literal 1000 req / 50 workers: ~17k RPS, p50 2ms, p95 2ms, p99 17ms,
+    wall 0.07s.
+  - Hostname `localhost` (DNS-checkpoint path) 500 req / 25 workers: ~19k
+    RPS, p50 1ms, wall 0.03s.
+  - No baseline A/B against the pre-migration runner (replaced in place);
+    the seam adds only in-memory scope matching on the literal fast path with
+    shared clients and drained bodies, and the measured throughput + reuse
+    evidence meet the guard's acceptance bar. CPU/allocation profiling was
+    not run.
+- Gate D1 decision: REJECT `eggsec-loadtest`. The core still touches
+  engine-owned helpers (`utils::parse_headers`,
+  `utils::http::tool_user_agent`, `utils::formatting::preserve_all`,
+  `install_tls_provider`, `constants`, `Scope`/`policy_bridge` in the
+  backend); the only third-party dep that would leave the engine closure is
+  `hdrhistogram` (`indicatif` stays for scanner/fuzzer/pipeline/stress
+  regardless). Single consumer (the engine); no independent library surface
+  or second consumer; package/versioning cost unjustified. Criteria 4–5 fail;
+  the internal boundary is retained and recorded in
+  `architecture/capability_segregation.md`.
+- Gate D2 consumer evidence and decision: REJECT `eggsec-resilience`.
+  `utils::{rate_limiter, circuit_breaker}` consumers are all inside the
+  `eggsec` crate (`waf`, `ai`, tool protocol); no second crate or sibling
+  project demonstrated. `fuzzer::rate_limit` (lock-free consecutive-error
+  limiter) and the new loadtest `GlobalPacer` (CAS slot allocator) are
+  intentionally operation-local, not duplicates. Primitives stay internal
+  with explicit semantics/tests. Incidental cleanup: `utils::cache::ApiCache`
+  (zero production consumers, flagged in Phase A) removed (13 utils modules
+  remain).
+- Final workspace/path graph: 20 members (unchanged); `cargo tree -d` shows
+  no new duplicate-version conflicts from this phase; `cargo tree -p eggsec`
+  depth-1 unchanged except the additive transport getter (no new engine
+  third-party deps: `hdrhistogram`/`indicatif`/`reqwest` were already in the
+  closure). Path graph stays acyclic (guard Check 108).
+- Concrete HTTP client owners: loadtest `reqwest::Client` construction is
+  confined to `loadtest/backend.rs` (verified/insecure/proxied cache); the
+  former per-`run()` builder in `runner.rs` is gone. All other owners
+  unchanged (this phase migrates no other consumer).
+- Remaining `utils` inventory (13): `auth`, `circuit_breaker`, `error`,
+  `formatting`, `http`, `logging`, `network`, `parsing`, `rate_limiter`,
+  `redaction`, `target`, `urlencoding`, `validation`. Documented in
+  `architecture/utils.md` (13-module inventory, Phase D `cache` removal,
+  loadtest row updated to `parsing`+`http`+`formatting` with the `GlobalPacer`
+  differentiation note).
+- New crate manifests/dependency sets: none (both gates rejected). One
+  additive API on `eggsec-transport` (`ProxyCredential` getters).
+- Compatibility/API changes (all pre-1.0):
+  - `LoadTestResults` gains `error_kinds: FxHashMap<String, u64>` with
+    `#[serde(default)]`; `Display` renders a sorted `error kinds` section.
+    Two struct-literal sites updated (`runtime_bridge/executor.rs` test,
+    `eggsec-tui` dispatcher test); stored payloads without the field still
+    deserialize (tested).
+  - `LoadTestRunner`/`LoadTestRunConfig` keep all public paths; `tui_mode`
+    ignored (documented); new `with_scope`/`set_scope`/`scope`/`plan`/
+    `run_with`/`run_with_cancellation` for composition.
+  - `run_cli` behavior preserved (now delegates to `run_cli_with_scope` with
+    `Scope::new()`); `handle_load` passes the real `ctx.scope`.
+  - Python bindings untouched (facade paths + `scope.enforce_target`
+    pre-check unchanged).
+- Architecture guard/doc changes: new guards Checks 124–126 (core
+  transport-neutrality with doc-prose exclusion, no loadtest/resilience/utils
+  crate, `utils::cache` stays removed); `docs/CI_ARCHITECTURE_GUARDS.md`
+  Phase D section; `architecture/loadtest.md` rewritten for the new
+  structure (+ perf + TOCTOU + facade notes);
+  `architecture/capability_segregation.md` Phase D section (both rejections +
+  guard refs); `architecture/utils.md` 13-module inventory;
+  `architecture/overview.md` loadtest dependency row;
+  `.opencode/skills/eggsec-loadtest/SKILL.md` rewritten (stale histogram/
+  rate-limit/dead-code guidance replaced);
+  `crates/eggsec/src/loadtest/AGENTS.override.md` rewritten.
+  README.md and AGENTS.md needed no loadtest edits (no stale mentions found).
+- Commands/results (all green locally before commit):
+  - `cargo fmt --all --check` — pass.
+  - `cargo check --workspace --no-default-features`, `cargo check -p eggsec`
+    (empty + `cli` + `rest-api,cli`), `-p eggsec-cli/-tui/-daemon`,
+    `-p eggsec-transport` — pass.
+  - `make clippy` equivalent (`--lib -p eggsec` empty + `cli`, `-D warnings`)
+    — pass (fixed `too_many_arguments` via `WorkerCtx`, `single_match` in
+    `run_cli`).
+  - `cargo test -p eggsec --lib --features rest-api,cli` — 2102 passed.
+  - `cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast` —
+    2858 passed (52 suites; +28 vs Phase C from new loadtest unit tests).
+  - `cargo test -p eggsec --no-default-features --test loadtest_tests` —
+    29 passed (incl. the rate-limit aggregate test that caught the initial
+    per-worker pacing bug, fixed via the CAS `GlobalPacer`).
+  - `bash scripts/check-architecture-guards.sh` — ALL PASSED (Checks 99–126).
+  - `make check-deps` / `make check-feature-profiles` / `make check-python`:
+    run in the final `make check` pass (see below).
+- Residual debt and follow-up:
+  - `ReqwestTransport` sync DNS per hostname request (see TOCTOU note);
+    consider async resolution or Eggfetch migration for full pinning (the
+    adapter defers proxied execution today, so Reqwest stays for proxied
+    load tests).
+  - `LoadTestRunner` facade default scope is permissive `["*"]` (pre-Phase-D
+    behavior); strict surfaces should pass explicit scopes (CLI/handler and
+    `run_cli_with_scope` already do; dispatch/pipeline/tool paths use facade
+    defaults — a future pass can thread approved scopes through).
+  - Python `LoadTestResultPy` does not yet expose `error_kinds` (additive,
+    optional).
+  - `make check-features-individual` is deep-checks-only per `AGENTS.md` (not
+    run per-PR; CI deep-checks cover it).
