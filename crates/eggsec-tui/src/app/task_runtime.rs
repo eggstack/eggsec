@@ -217,7 +217,7 @@ impl super::App {
             let runtime = self.runtime_binding.runtime.clone();
             let session_id = self.runtime_binding.session_id;
             let session_scope: eggsec_runtime::SessionScope =
-                self.enforcement_state.loaded_scope().into();
+                eggsec::config::session_scope_from_loaded(self.enforcement_state.loaded_scope());
             let pending_session_id =
                 Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
             let pending_session_id_clone = pending_session_id.clone();

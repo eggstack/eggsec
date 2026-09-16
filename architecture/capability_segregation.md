@@ -1,6 +1,8 @@
-# Capability Segregation Decisions (Phase E WS2–WS4)
+# Capability Segregation Decisions (Phase E WS2–WS4 + Phase C policy extraction)
 
-Status: Decided 2026-09-13. No new crates (all extraction candidates rejected).
+Status: Phase E decided 2026-09-13 (no new crates; all WS4 candidates rejected).
+Phase C (crate-boundary consolidation, 2026-09-16) extracts `eggsec-policy`
+below; `eggsec-net` / web-client / evidence rejections remain in force.
 WS2 (empty library default) and WS3 (per-crate Tokio) implemented; this record
 covers WS4 extraction evaluations with the required decision fields.
 
@@ -117,6 +119,62 @@ covers WS4 extraction evaluations with the required decision fields.
   crates share bundle-signing semantics with identical envelope/key-erasure
   policy (threshold not met).
 
+## Phase C — `eggsec-policy` (authorization/enforcement semantics): ACCEPT
+
+`eggsec-net` (above) remains rejected. `eggsec-policy` is a different
+boundary: not a network middle layer, but the complete deterministic
+authorization semantic domain (policy vocabulary, execution policy,
+descriptors, catalog, scope data + pure matching, decisions, approval
+tokens, evaluation over explicit inputs).
+
+- Dependency delta: +1 crate (`crates/eggsec-policy`), +1 edge
+  (`eggsec` → `eggsec-policy`). Removed edges: engine `config` no longer
+  owns policy semantics (facades only); `scope_spec.rs` no longer duplicates
+  matching logic (delegates to `evaluate_facts`); lab-report conversion is an
+  engine free function (orphan-rule-forced, same behavior). No removed
+  third-party deps (policy needs `serde`/`serde_json`/`thiserror`/`url`/
+  `ipnetwork`/`sha2`/`uuid`/`hex`/`rustc-hash`, all already in the lockfile).
+- API boundary: `eggsec-policy` owns `OperationRisk`/`OperationMode`/
+  `ExecutionProfile`/`ExecutionSurface`/`IntendedUse`/`Capability`/
+  `DenialClass`, `ExecutionPolicy`, `OperationDescriptor`, `OperationTarget`
+  + `normalize_target`, `OperationMetadata` catalog, `Scope`/`TargetScope`/
+  `ScopeRule`/`ScopeSource`/`LoadedScope` + `evaluate_facts`/
+  `evaluate_addresses`, `AddressClass`/`classify_address`, `PolicyDecision`/
+  `EnforcementOutcome`/`EnforcementError`/`ConfirmationClass`/
+  `ManualOverride`/`PreflightResult`, `ApprovedOperation`, `EnabledFeatures`,
+  and pure `evaluate_operation_policy`/`evaluate_enforcement`/
+  `EnforcementContext` (explicit features + supplied `TargetScope` facts).
+  Engine keeps config loading, `feature_registry` → `EnabledFeatures`
+  mapping, DNS acquisition, `ScopeAuthority`, `ScopeSpec` conversion, and an
+  I/O-enabled `EnforcementContext` facade (same call signatures; resolves
+  then delegates). `eggsec::config::*` paths remain compatibility facades.
+- Why not an internal module: the policy cluster (~10k lines across 10
+  modules) is now larger than ordinary config code, has an independent
+  test story (80 kernel tests run with a 9-crate closure vs the engine's
+  full closure), and is the only authorization owner — the same rationale
+  that justified `eggsec-report-model` (Phase B). An internal boundary would
+  not remove the engine's ownership ambiguity or the duplicate-matching risk.
+- Cycle analysis: `eggsec-policy` → nothing workspace (leaf). Engine →
+  policy one-way. `eggsec-transport` ↔ policy: no edge either direction
+  (guard Check 122). Workspace path graph stays acyclic (Check 108).
+- Migration cost: moved 8 modules (~4.5k non-test lines) + 80 pure tests;
+  updated ~30 call sites (trait imports, bridge functions, 3 TUI session
+  conversions, 2 Python modules); deleted 2 orphan-violating impls
+  (`From<&PolicyDecision>`, `TryFrom<&ScopeSpec>` → free functions).
+  Approval-token construction sites unchanged in behavior (guard Check 76
+  allowlists the kernel).
+- Measured effect: `cargo tree -p eggsec-policy` shows 9 direct deps, zero
+  forbidden (no Tokio/HTTP/TLS/filesystem/frontend/engine); `cargo test -p
+  eggsec-policy` 80 passed in isolation; `make check` green (2830 engine
+  tests + guards Checks 121–123).
+- Retained engine bridges: `policy_bridge/{features,resolver,transport}`
+  (`current_enabled_features`, `resolve_target_facts*`,
+  `ScopeResolution`, `ScopeAuthority`, `load_scope_from_file`).
+- Extraction gates (C0/C1): all passed — pure set compiles without engine/
+  transport/Tokio/HTTP/filesystem/frontend deps; one-way engine dependency;
+  config deserializes/re-exports policy types without duplication; policy
+  tests run isolated with a narrower graph; ownership is unambiguous.
+
 ## Guards
 
 - Check 107 fails if `crates/eggsec-net`, `crates/eggsec-web-client`,
@@ -126,5 +184,10 @@ covers WS4 extraction evaluations with the required decision fields.
   direction: DTO crates touch no transport/TLS/HTTP impl; `eggsec-transport`
   stays exactly `bytes`/`http`/`url`/`thiserror`; engine touches no frontend
   crates; path-dependency graph is acyclic.
+- Checks 121–123 (Phase C): `eggsec-policy` stays dependency-light (no
+  Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!`
+  feature queries, no resolver/authority behavior); engine → policy one-way
+  with transport independent; engine policy modules stay facades (no
+  redefined core types).
 
-*Last verified against source: 2026-09-13*
+*Last verified against source: 2026-09-16 (Phase C extraction)*

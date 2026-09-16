@@ -194,7 +194,7 @@ async fn attach_daemon_session(
 
     let target_session = if *new_session {
         let scope: eggsec_runtime::session::SessionScope =
-            app.enforcement_state.loaded_scope().into();
+            eggsec::config::session_scope_from_loaded(app.enforcement_state.loaded_scope());
         let sid = client
             .create_session(
                 eggsec_runtime::RuntimeSurface::TuiManual,
@@ -253,7 +253,7 @@ async fn attach_daemon_session(
         None => {
             // No sessions exist; create a new one.
             let scope: eggsec_runtime::session::SessionScope =
-                app.enforcement_state.loaded_scope().into();
+                eggsec::config::session_scope_from_loaded(app.enforcement_state.loaded_scope());
             let sid = client
                 .create_session(
                     eggsec_runtime::RuntimeSurface::TuiManual,

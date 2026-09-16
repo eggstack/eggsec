@@ -1,5 +1,6 @@
 use crate::config::{normalize_target, ApprovedOperation, OperationTarget};
 use crate::error::EggsecError;
+use crate::policy_bridge::resolver::ScopeResolution;
 use crate::tool::response::{ResponseMetadata, ResponseStatus};
 use crate::tool::{ToolRegistry, ToolRequest, ToolResponse};
 use parking_lot::RwLock;

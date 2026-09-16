@@ -126,6 +126,10 @@ pub mod operation_request;
 pub mod output;
 pub mod pipeline;
 pub mod platform;
+/// Engine-owned adapters between the pure `eggsec-policy` kernel and
+/// I/O: feature-availability mapping, DNS acquisition, and the
+/// `NetworkAuthority` transport bridge (Phase C).
+pub mod policy_bridge;
 pub mod probe;
 pub mod proxy;
 pub mod recon;

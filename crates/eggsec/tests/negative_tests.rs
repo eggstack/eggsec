@@ -3,7 +3,7 @@
 //! Tests error handling and edge cases to ensure the codebase handles
 //! invalid inputs gracefully.
 
-use eggsec::config::{Scope, ScopeRule};
+use eggsec::config::{Scope, ScopeResolution, ScopeRule};
 use eggsec::utils::parsing::{parse_ports, resolve_host};
 use eggsec::utils::target::{extract_domain, normalize_url};
 

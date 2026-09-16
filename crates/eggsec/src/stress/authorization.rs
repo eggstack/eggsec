@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::config::{load_scope, Scope};
+use crate::policy_bridge::resolver::ScopeResolution;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StressScope {

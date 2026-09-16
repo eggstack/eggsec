@@ -61,13 +61,10 @@ impl McpConstraintContext {
         if self.allowed_targets.is_empty() {
             return true;
         }
-        let target_scope = crate::config::TargetScope::parse(target).unwrap_or_else(|_| {
-            crate::config::TargetScope {
-                host: target.to_string(),
-                ip: None,
-                resolved_addresses: Vec::new(),
-            }
-        });
+        let target_scope = crate::policy_bridge::resolver::resolve_target_facts(target)
+            .unwrap_or_else(|_| {
+                crate::config::TargetScope::for_host_without_addresses(target.to_string())
+            });
 
         // A hostname target that failed to resolve carries no addresses, so
         // address-based (CIDR) rules cannot evaluate against it. Fail closed

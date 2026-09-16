@@ -2,6 +2,18 @@
 
 Specialized guidance for the configuration module.
 
+## Phase C ownership (2026-09-16)
+
+Authorization semantics live in the `eggsec-policy` crate (pure kernel).
+Files `policy.rs`, `policy_target.rs`, `policy_catalog.rs`,
+`policy_approval.rs`, `policy_decision.rs`, `scope.rs`, `scope_address.rs`,
+`scope_resolver.rs`, `scope_transport.rs` under `config/` are compatibility
+facades over `eggsec-policy` / `crate::policy_bridge`. New code imports
+policy types from `eggsec_policy` directly; engine adapters
+(feature/resolver/transport) live in `crate::policy_bridge/`. Never add
+DNS, Tokio, transport, or `cfg!(feature)` logic to the kernel (guards
+Checks 121–123).
+
 ## EggsecConfig
 
 `config::load_config()` returns the main configuration.

@@ -224,6 +224,15 @@ For full config management, use CLI commands or edit config files directly when 
 - `crates/eggsec/tests/network_policy_invariants.rs` - 12 outbound authorization invariants
 - `crates/eggsec/tests/transport_contract.rs` - 12 contract closure tests through the fake
 
+## Phase C Policy Extraction (2026-09-16)
+
+Canonical owner of authorization semantics is the `eggsec-policy` crate (pure data + deterministic algorithms; no I/O, Tokio, network, filesystem, frontends, or engine deps). `crates/eggsec/src/config/policy*.rs` and `scope*.rs` are compatibility facades (`pub use eggsec_policy::...`); new code imports policy types from `eggsec_policy` directly.
+
+- **Feature availability is explicit input**: pure evaluation takes `&EnabledFeatures` (constructed by the engine via `policy_bridge::features::current_enabled_features()` from `config::feature_registry`). Never call `cfg!(feature = ...)` from policy code; the same operation evaluates against different sets without recompiling the kernel.
+- **Scope evaluation consumes facts**: pure `Scope::evaluate_facts(&TargetScope)` / `TargetScope::evaluate_addresses()` perform no DNS. Engine bridges acquire facts first (`policy_bridge::resolver::{resolve_target_facts_with, ScopeResolution}`); the `NetworkAuthority` adapter is `policy_bridge::transport::ScopeAuthority`. Never move DNS/transport into the policy crate.
+- **Engine `EnforcementContext` facade** (`config::policy_decision`) preserves legacy signatures (snapshots features, resolves per evaluation); pure `eggsec_policy::EnforcementContext::{evaluate, approve, approve_manual}` takes `Option<&TargetScope>` facts.
+- Guards Checks 121–123 enforce the leaf/manifest/facade boundaries. This is not the rejected `eggsec-net` middle layer (see `architecture/capability_segregation.md`): policy owns no network stack, only authorization semantics.
+
 ## Phase D Hotspot Modules (2026-09-09)
 
 Policy/target/catalog/approval: `config/policy.rs` (facade) + `policy_target.rs` + `policy_catalog.rs` + `policy_approval.rs`. Scope: `scope.rs` (facade) + `scope_address.rs` + `scope_resolver.rs`. Public paths stable via re-exports; new code imports from the cohesive module. `ApprovedOperation::new` only in `policy_approval.rs` (definition) + `policy_decision.rs` (enforcement call sites); adapters obtain tokens via `approve()`.

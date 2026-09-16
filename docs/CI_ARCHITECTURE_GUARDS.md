@@ -159,6 +159,11 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - `eggsec-output` depends on the model, never the reverse: output manifests `eggsec-report-model`, model never references output, moved DTOs are not redefined in output, and convert/envelope/policy_summary/diff facades re-export the model (Check 119).
 - DTO-only domain crates use the model, not the renderer: `eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, and `eggsec-nse` manifest `eggsec-report-model`, carry no `eggsec-output` dependency, and contain no `eggsec_output::` imports in `src/`/`tests/` (Check 120).
 
+### Crate-Boundary Consolidation Invariants (Phase C, guards Checks 121–123)
+- `eggsec-policy` stays dependency-light: crate exists with no Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!(feature)` queries, and no resolver/authority behavior in `src/` (Check 121).
+- Engine depends one-way on the policy kernel with transport independent: engine manifests `eggsec-policy`, policy never references transport (either direction), workspace lists the member (Check 122).
+- Engine policy modules stay facades with no redefined core types: no `pub enum/struct` forks of the kernel vocabulary/descriptor/catalog/decision/scope types in `config/policy*.rs`/`scope*.rs`; config facades re-export `eggsec_policy` and `policy_bridge/` owns the adapters (Check 123).
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

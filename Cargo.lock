@@ -1909,6 +1909,7 @@ dependencies = [
  "eggsec-mobile-lab",
  "eggsec-nse",
  "eggsec-output",
+ "eggsec-policy",
  "eggsec-runtime",
  "eggsec-tool-core",
  "eggsec-transport",
@@ -2186,6 +2187,21 @@ dependencies = [
  "serde_json",
  "tokio",
  "unicode-normalization",
+ "uuid",
+]
+
+[[package]]
+name = "eggsec-policy"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "ipnetwork 0.21.1",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "url",
  "uuid",
 ]
 

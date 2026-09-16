@@ -1,4 +1,6 @@
-use eggsec::config::{EggsecConfig, Scope, ScopeRule, TargetScope};
+use eggsec::config::{
+    resolve_target_facts, EggsecConfig, Scope, ScopeResolution, ScopeRule, TargetScope,
+};
 
 #[test]
 fn test_config_default() {
@@ -141,5 +143,5 @@ fn test_scope_default_allows_all() {
 }
 
 fn parse_target(host: &str) -> eggsec::config::TargetScope {
-    eggsec::config::TargetScope::parse(host).unwrap()
+    resolve_target_facts(host).unwrap()
 }

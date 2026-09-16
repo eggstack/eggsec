@@ -2,7 +2,7 @@
 //!
 //! Tests that verify scope checks are enforced before network activity.
 
-use eggsec::config::{Scope, ScopeRule};
+use eggsec::config::{Scope, ScopeResolution, ScopeRule};
 
 #[test]
 fn test_scope_bypass_with_url_path() {
@@ -48,7 +48,7 @@ fn test_scope_bypass_with_at_symbol() {
 
 #[test]
 fn test_scope_enforcement_via_api() {
-    use eggsec::config::{Scope, ScopeRule};
+    use eggsec::config::{Scope, ScopeResolution, ScopeRule};
 
     let mut scope = Scope::default();
     scope

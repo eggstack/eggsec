@@ -77,15 +77,15 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `ExecutionProfile` | `config/policy.rs` | Trust boundary. 5 variants: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`. |
 | `OperationRisk` | `config/policy.rs` | Risk tier ordering. 15 variants from `Passive` to `AgentAutonomous`. |
 | `OperationMode` | `config/policy.rs` | Semantic mode: `StandardAssessment`, `DefenseLab`, `HazardousLab`. |
-| `Capability` | `config/policy.rs` | Fine-grained capability declarations. 19 variants. |
-| `OperationDescriptor` | `config/policy.rs` | The unit of policy evaluation. Bundles operation name, mode, risk, target, required features, capabilities, and scope requirements. |
-| `OperationMetadata` | `config/policy.rs` | Static registry entry. 32 operations + 33 aliases. Single source of truth for all surfaces. |
-| `ExecutionPolicy` | `config/policy.rs` | TOML-deserialized config controlling which risk tiers and capabilities are allowed. |
-| `LoadedScope` | `config/scope.rs` | Scope with provenance. `is_explicit_manifest()` distinguishes "no scope" from "explicitly empty scope". |
-| `EnforcementContext` | `config/policy_decision.rs` | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope`. Created once per execution path. |
-| `EnforcementOutcome` | `config/policy_decision.rs` | Profile-aware result: `Allow`, `Warn`, `RequireConfirmation`, `Deny`. |
-| `ManualOverride` | `config/policy_decision.rs` | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
-| `ApprovedOperation` | `config/policy_approval.rs` | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
+| `Capability` | `eggsec-policy` (`config/policy.rs` facade) | Fine-grained capability declarations. 19 variants. |
+| `OperationDescriptor` | `eggsec-policy` (`config/policy.rs` facade) | The unit of policy evaluation. Bundles operation name, mode, risk, target, required features, capabilities, and scope requirements. |
+| `OperationMetadata` | `eggsec-policy` (`config/policy.rs` facade) | Static registry entry. 32 operations + 33 aliases. Single source of truth for all surfaces. |
+| `ExecutionPolicy` | `eggsec-policy` (`config/policy.rs` facade) | TOML-deserialized config controlling which risk tiers and capabilities are allowed. |
+| `LoadedScope` | `eggsec-policy` (`config/scope.rs` facade) | Scope with provenance. `is_explicit_manifest()` distinguishes "no scope" from "explicitly empty scope". |
+| `EnforcementContext` | `eggsec-policy` (`config/policy_decision.rs` facade) | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope` + explicit `EnabledFeatures`. Created once per execution path. |
+| `EnforcementOutcome` | `eggsec-policy` (`config/policy_decision.rs` facade) | Profile-aware result: `Allow`, `Warn`, `RequireConfirmation`, `Deny`. |
+| `ManualOverride` | `eggsec-policy` (`config/policy_decision.rs` facade) | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
+| `ApprovedOperation` | `eggsec-policy` (`config/policy_approval.rs` facade) | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
 | `EnforcedDispatcher` | `tool/dispatcher.rs` | Wraps `ToolDispatcher` requiring `ApprovedOperation` before dispatch. Type-level enforcement gate. |
 | `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |
 | `McpEngineBridge` | `tool/protocol/mcp/bridge.rs` | Narrow MCP bridge (wire/profile/session stay adapter-owned) |
@@ -379,10 +379,10 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 
 | Concept | File |
 |---------|------|
-| `ExecutionSurface`, `ExecutionProfile` | `crates/eggsec/src/config/policy.rs` |
-| `OperationDescriptor`, `OperationMetadata` | `crates/eggsec/src/config/policy.rs` |
-| `EnforcementContext`, `ApprovedOperation` | `crates/eggsec/src/config/policy_decision.rs` |
-| `LoadedScope`, `Scope` | `crates/eggsec/src/config/scope.rs` |
+| `ExecutionSurface`, `ExecutionProfile` | `crates/eggsec-policy/src/policy.rs` (facade: `crates/eggsec/src/config/policy.rs`) |
+| `OperationDescriptor`, `OperationMetadata` | `crates/eggsec-policy/src/policy.rs` + `catalog.rs` (facade: `crates/eggsec/src/config/policy.rs`) |
+| `EnforcementContext`, `ApprovedOperation` | `crates/eggsec-policy/src/decision.rs` + `approval.rs` (facade: `crates/eggsec/src/config/policy_decision.rs`; engine DNS/feature adapters in `crates/eggsec/src/policy_bridge/`) |
+| `LoadedScope`, `Scope` | `crates/eggsec-policy/src/scope.rs` (facade: `crates/eggsec/src/config/scope.rs`) |
 | `ScopeSpec` (declarative), `scope_from_spec`, intersection | `crates/eggsec-tool-core/src/request.rs`, `crates/eggsec/src/config/scope_spec.rs` |
 | `EnforcedDispatcher` | `crates/eggsec/src/tool/dispatcher.rs` |
 | `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |

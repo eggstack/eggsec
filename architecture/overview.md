@@ -38,7 +38,7 @@ Every number in this document was verified against source on 2026-09-11. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 19 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with 20 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -72,8 +72,9 @@ nor hosted CI publishes a package.
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
 | `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` only). |
+| `eggsec-policy` | Authorization semantics | Yes | `ExecutionPolicy`, descriptors, catalog, scope data + pure matching, decisions, approval tokens, evaluation over explicit `EnabledFeatures` + `TargetScope` facts. No I/O/runtime/transport/frontend/engine deps. Engine bridges DNS/features/authority via `policy_bridge/` (Phase C). |
 
-**Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on the model, not the renderer. The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
+**Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); `eggsec-policy` owns authorization semantics (engine `config` stays a facade; `policy_bridge/` owns the feature/resolver/`NetworkAuthority` adapters; never `policy` → `transport`); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on the model, not the renderer. The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
 ---
 
@@ -477,6 +478,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
     ├── eggsec-transport-eggfetch (HttpTransport over eggfetch-core; no production backend consumers yet — Phase D wires per consumer)
+    ├── eggsec-policy         (authorization semantics — pure data + algorithms; engine bridges DNS/features/authority)
     │
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
@@ -506,6 +508,7 @@ Enforced by `scripts/check-architecture-guards.sh`:
 - `eggsec-runtime` has no TUI, transport, persistence, or engine dependencies
 - `eggsec-daemon` has no non-optional TUI/engine dependencies; transport deps only behind `http-api`
 - Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend on `eggsec-report-model` for DTOs, never on `eggsec-output` (Check 120)
+- `eggsec-policy` has no Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!` feature queries, no resolver/authority behavior (Check 121); engine → policy one-way with transport independent of policy (Check 122); engine policy modules stay facades with no redefined core types (Check 123)
 - Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine
 
 ### Intra-Engine Dependencies

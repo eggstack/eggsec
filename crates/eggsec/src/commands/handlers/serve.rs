@@ -1,5 +1,6 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::{LoadedScope, Scope, ScopeSource};
+use crate::config::{LoadedScope, ScopeSource};
+use crate::policy_bridge::resolver::load_scope_from_file;
 use anyhow::Result;
 
 /// Resolve the loaded scope for REST API execution.
@@ -16,7 +17,7 @@ fn resolve_rest_loaded_scope(
     args: &crate::cli::ServeArgs,
 ) -> Result<LoadedScope> {
     if let Some(ref scope_file) = args.scope_file {
-        let scope = Scope::from_file(scope_file)?;
+        let scope = load_scope_from_file(scope_file)?;
         Ok(LoadedScope {
             scope,
             source: ScopeSource::CliScopeFile,

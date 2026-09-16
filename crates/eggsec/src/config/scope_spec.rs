@@ -27,6 +27,7 @@ use eggsec_tool_core::ScopeSpec;
 use ipnetwork::IpNetwork;
 
 use crate::config::scope::{HostResolver, Scope, ScopeError, ScopeRule, TargetScope};
+use crate::policy_bridge::resolver::ScopeResolution;
 
 /// Error from converting a `ScopeSpec` into an engine `Scope`.
 ///
@@ -132,13 +133,11 @@ pub fn scope_from_spec(spec: &ScopeSpec) -> Result<Scope, ScopeSpecError> {
     })
 }
 
-impl TryFrom<&ScopeSpec> for Scope {
-    type Error = ScopeSpecError;
-
-    fn try_from(spec: &ScopeSpec) -> Result<Self, Self::Error> {
-        scope_from_spec(spec)
-    }
-}
+// NOTE (Phase C): the pre-extraction `impl TryFrom<&ScopeSpec> for Scope`
+// was removed. Both types are now owned outside this crate
+// (`eggsec-tool-core` and `eggsec-policy`), so the trait impl would violate
+// orphan rules. Use the [`scope_from_spec`] free function instead, which
+// preserves the exact conversion behavior.
 
 fn allowed_rules_for_pattern(
     pattern: &str,
@@ -284,66 +283,10 @@ pub fn is_parsed_target_allowed_by_scope_and_spec(
 }
 
 fn scope_allows_parsed(scope: &Scope, target: &TargetScope) -> bool {
-    // Mirror Scope::is_target_allowed_with_resolver evaluation for an already
-    // parsed target: exclusions first, then allowlist, then non-public
-    // fallback when no allowlist is configured.
-    if is_explicitly_excluded(scope, target) {
-        return false;
-    }
-    if scope.allowed_targets.is_empty() {
-        if scope.require_explicit_scope {
-            return false;
-        }
-        use crate::config::scope::{classify_address, AddressClass};
-        return !target
-            .resolved_addresses
-            .iter()
-            .map(classify_address)
-            .any(|class| class != AddressClass::Loopback && class.is_non_public());
-    }
-    if !target.resolved_addresses.is_empty() {
-        let (all_allowed, any_excluded, _) =
-            target.evaluate_addresses(&scope.allowed_targets, &scope.excluded_targets);
-        return all_allowed && !any_excluded;
-    }
-    scope
-        .allowed_targets
-        .iter()
-        .any(|rule| rule.matches(target))
-}
-
-fn is_explicitly_excluded(scope: &Scope, target: &TargetScope) -> bool {
-    if scope
-        .excluded_targets
-        .iter()
-        .any(|rule| rule.matches(target))
-    {
-        return true;
-    }
-    if !target.resolved_addresses.is_empty() {
-        for addr in &target.resolved_addresses {
-            let excluded = scope.excluded_targets.iter().any(|rule| {
-                rule.cidr
-                    .as_ref()
-                    .and_then(|cidr| {
-                        IpNetwork::from_str(cidr)
-                            .ok()
-                            .map(|net| net.contains(*addr))
-                    })
-                    .unwrap_or(false)
-                    || (!rule.pattern.is_empty()
-                        && rule.pattern.contains('/')
-                        && IpNetwork::from_str(&rule.pattern)
-                            .ok()
-                            .map(|net| net.contains(*addr))
-                            .unwrap_or(false))
-            });
-            if excluded {
-                return true;
-            }
-        }
-    }
-    false
+    // Pure kernel evaluation over already-parsed facts (Phase C): exclusions
+    // first, then allowlist, then non-public fallback when no allowlist is
+    // configured. `evaluate_facts` is infallible in practice; deny on error.
+    scope.evaluate_facts(target).unwrap_or(false)
 }
 
 #[cfg(test)]

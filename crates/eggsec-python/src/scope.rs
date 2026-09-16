@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
+use eggsec::policy_bridge::resolver::ScopeResolution;
+
 use crate::error::{EnforcementError, ScopeError};
 
 /// PathLike helper — accepts str or pathlib.Path.
@@ -141,7 +143,7 @@ impl Scope {
         let path_str = path_buf
             .to_str()
             .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Path is not valid UTF-8"))?;
-        let scope = eggsec::config::Scope::from_file(path_str)
+        let scope = eggsec::policy_bridge::resolver::load_scope_from_file(path_str)
             .map_err(|e| ScopeError::new_err(e.to_string()))?;
         Ok(Self { inner: scope })
     }

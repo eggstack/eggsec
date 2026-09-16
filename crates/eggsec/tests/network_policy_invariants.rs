@@ -9,7 +9,9 @@
 //! design stops a risky flow at the HTTP-client layer (same-host redirect
 //! policy), the test proves the stop instead of pretending scope re-runs.
 
-use eggsec::config::{HostResolver, ResolutionResult, Scope, ScopeRule, TargetScope};
+use eggsec::config::{
+    resolve_target_facts_with, HostResolver, ResolutionResult, Scope, ScopeResolution, ScopeRule,
+};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -86,7 +88,7 @@ fn authorized_hostname_with_authorized_ip_succeeds() {
 fn hostname_resolving_only_to_out_of_scope_ip_rejected_pre_connection() {
     let resolver = FakeResolver::default().with("example.com", vec!["203.0.113.5"]);
     let scope = scope_with_cidr("93.184.216.0/24");
-    let parsed = TargetScope::parse_with_resolver("example.com", &resolver).expect("target parses");
+    let parsed = resolve_target_facts_with("example.com", &resolver).expect("target parses");
     assert_eq!(
         parsed.resolved_addresses,
         vec![public_ip("203.0.113.5")],
@@ -286,7 +288,7 @@ fn url_userinfo_rejected_and_never_leaks_to_diagnostics() {
         "managed navigation must reject embedded userinfo"
     );
     let resolver = FakeResolver::default().with("example.com", vec!["93.184.216.34"]);
-    let parsed = TargetScope::parse_with_resolver("http://user:s3cr3t-pw@example.com/", &resolver)
+    let parsed = resolve_target_facts_with("http://user:s3cr3t-pw@example.com/", &resolver)
         .expect("scope parse extracts host");
     assert_eq!(parsed.host, "example.com");
     let debug = format!("{parsed:?}");

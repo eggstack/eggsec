@@ -12,6 +12,7 @@ use crate::InputMode;
 
 use crate::tabs::{spec_for, TabRiskGroup};
 use eggsec::config::EnforcementOutcome;
+use eggsec::policy_bridge::resolver::ScopeResolution;
 
 pub fn draw_tabs(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     use crate::tabs::{Tab, TabWindow};

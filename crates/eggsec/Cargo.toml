@@ -97,6 +97,10 @@ ed25519-dalek = "2"
 
 # Workspace crates
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+# Canonical authorization/enforcement semantics (Phase C). The engine owns
+# config loading, feature discovery, DNS acquisition, and the transport
+# bridge; pure evaluation lives here.
+eggsec-policy = { path = "../eggsec-policy", version = "0.1.0" }
 eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
 eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }
@@ -266,7 +270,7 @@ optional = true
 default = []
 
 # Test helpers - exposes internal constructors for integration testing
-test-helpers = []
+test-helpers = ["eggsec-policy/test-helpers"]
 
 # CLI types and command dispatch (clap-based). Enable only in process-host
 # crates (binary shell, terminal UI, daemon executor). The engine library

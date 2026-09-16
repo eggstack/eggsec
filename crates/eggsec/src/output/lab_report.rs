@@ -114,17 +114,21 @@ impl LabDefenseReportSection {
     }
 }
 
-impl From<&PolicyDecision> for PolicySummary {
-    fn from(decision: &PolicyDecision) -> Self {
-        Self {
-            operation_mode: decision.operation_mode.to_string(),
-            max_risk: decision.operation_risk.to_string(),
-            total_decisions: 1,
-            denied_count: if decision.allowed { 0 } else { 1 },
-            warning_count: decision.warnings.len(),
-            denied_reasons: decision.denied_reasons.clone(),
-            warnings: decision.warnings.clone(),
-        }
+/// Map a policy decision to its report-model summary (Phase C WS7).
+///
+/// Engine/output-owned conversion above the policy kernel: policy returns
+/// typed decisions, output code maps them to `PolicySummary`. Free function
+/// (not a `From` impl) because both types are owned elsewhere
+/// (`eggsec-policy` and `eggsec-report-model`).
+pub fn policy_summary_from_decision(decision: &PolicyDecision) -> PolicySummary {
+    PolicySummary {
+        operation_mode: decision.operation_mode.to_string(),
+        max_risk: decision.operation_risk.to_string(),
+        total_decisions: 1,
+        denied_count: if decision.allowed { 0 } else { 1 },
+        warning_count: decision.warnings.len(),
+        denied_reasons: decision.denied_reasons.clone(),
+        warnings: decision.warnings.clone(),
     }
 }
 

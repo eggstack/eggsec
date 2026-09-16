@@ -171,7 +171,7 @@ Missing metadata for an externally executable tool triggers a runtime warning (R
 
 Phase 4 added regression tests to protect manual CLI/TUI discretion from agent-grade strictness leaking into default operation. Tests cover:
 
-- **Policy-level outcomes** (`config::policy_decision::tests`): 48 tests verifying `evaluate_enforcement` produces correct outcomes (Allow/Warn/RequireConfirmation/Deny) for each profile, risk level, and scope configuration.
+- **Policy-level outcomes** (`eggsec-policy` kernel tests + `config` facade suites): pure evaluation tests verifying `evaluate_enforcement` produces correct outcomes (Allow/Warn/RequireConfirmation/Deny) for each profile, risk level, and scope configuration, evaluated over explicit `EnabledFeatures` and supplied `TargetScope` facts (Phase C; legacy `config::policy_decision::tests` paths remain facades).
 - **CommandContext override wiring** (`commands::handlers::tests`): 48 tests verifying CLI flags map correctly to `ManualOverride`, error messages list exact flags needed, strict profiles ignore overrides, and audit fields are recorded.
 
 Key invariants locked by tests:
@@ -257,9 +257,9 @@ Phase 12 hardened enforcement from convention (call sites expected to evaluate f
 
 ### Core Types
 
-**`ApprovedOperation`** (`config/policy_decision.rs`): Proof-of-enforcement token with private fields. Produced exclusively by `EnforcementContext::approve()` or `approve_manual()`. Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`. Cannot be constructed outside enforcement code.
+**`ApprovedOperation`** (`eggsec-policy::approval`; facade at `config/policy_decision.rs`): Proof-of-enforcement token with private fields. Produced exclusively by `EnforcementContext::approve()` or `approve_manual()`. Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`. Cannot be constructed outside enforcement code.
 
-**`EnforcementError`** (`config/policy_decision.rs`): Structured error from `approve()`/`approve_manual()`:
+**`EnforcementError`** (`eggsec-policy::decision`; facade at `config/policy_decision.rs`): Structured error from `approve()`/`approve_manual()`:
 - `Denied { decision }` - Policy denied the operation (`Deny` and `Warn` on strict surfaces).
 - `ConfirmationRequired { decision, required_classes }` - Manual confirmation needed.
 - `ManualOverrideUnavailable { surface, decision }` - Override not supported on this surface.

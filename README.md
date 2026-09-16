@@ -93,6 +93,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-python` | Python bindings (PyO3/maturin) |
 | `eggsec-transport` | Scope-aware outbound HTTP contract (neutral DTOs, mandatory authority, recording fake) |
 | `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` (pinned binding, authorized redirects; no production backend consumers yet) |
+| `eggsec-policy` | Deterministic authorization/enforcement semantics (no I/O, runtime, or transport); engine bridges DNS/features/authority |
 
 ### Build and Run
 

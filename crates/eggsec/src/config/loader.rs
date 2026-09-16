@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use super::scope::{LoadedScope, Scope, ScopeSource};
 use super::settings::EggsecConfig;
 use crate::constants::{PROJECT_NAME, PROJECT_QUALIFIER};
+use crate::policy_bridge::resolver::load_scope_from_file;
 use crate::types::check_config_file_permissions;
 
 pub const DEFAULT_CONFIG_NAME: &str = "eggsec.toml";
@@ -84,8 +85,8 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
             canonical_path
         )
     })?;
-    let scope =
-        Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    let scope = load_scope_from_file(path_str)
+        .map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
     scope
         .validate()
         .map_err(|e| anyhow::anyhow!("Scope validation failed: {}", e))?;
@@ -136,8 +137,8 @@ pub fn load_scope_with_source(scope_path: Option<&str>) -> Result<LoadedScope> {
             canonical_path
         )
     })?;
-    let scope =
-        Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    let scope = load_scope_from_file(path_str)
+        .map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
     scope
         .validate()
         .map_err(|e| anyhow::anyhow!("Scope validation failed: {}", e))?;

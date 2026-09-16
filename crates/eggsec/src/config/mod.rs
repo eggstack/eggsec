@@ -71,23 +71,29 @@ pub use policy::{
 };
 pub use policy_decision::{
     classify_denial_reasons, confirmation_class_strings, confirmation_classes_for,
-    evaluate_enforcement, evaluate_operation_policy, may_downgrade_to_warning, preflight_operation,
-    ApprovedOperation, ConfirmationClass, EnforcementContext, EnforcementError, EnforcementOutcome,
-    ManualOverride, PolicyDecision, PreflightOutcomeKind, PreflightResult,
+    evaluate_enforcement, evaluate_operation_policy, is_feature_enabled, is_known_feature,
+    may_downgrade_to_warning, preflight_operation, ApprovedOperation, ConfirmationClass,
+    EnforcementContext, EnforcementError, EnforcementOutcome, ManualOverride, PolicyDecision,
+    PreflightOutcomeKind, PreflightResult,
 };
 pub use presets::DefenseLabPreset;
 
+/// Explicit feature-availability input (canonical owner: `eggsec-policy`).
+pub use eggsec_policy::EnabledFeatures;
 pub use policy::{
     all_operation_metadata, metadata_for_tool_id, operation_matches_tool_id, operation_metadata,
     OperationMetadata, TargetPolicyKind, ALL_OPERATION_METADATA, ALL_OPERATION_METADATA_ALIASES,
 };
+pub use policy_catalog::derive_operation_integration;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,
 };
 pub use scope::{
-    classify_address, default_resolver, is_private_ip, AddressClass, HostResolver, LoadedScope,
-    ResolutionResult, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope,
+    classify_address, default_resolver, is_private_ip, resolve_hostname_facts,
+    resolve_hostname_facts_with, resolve_target_facts, resolve_target_facts_with,
+    session_scope_from_loaded, AddressClass, HostResolver, LoadedScope, ResolutionResult, Scope,
+    ScopeError, ScopeResolution, ScopeRule, ScopeSource, SystemResolver, TargetScope,
 };
 pub use scope_spec::{
     is_parsed_target_allowed_by_scope_and_spec, is_target_allowed_by_scope_and_spec,

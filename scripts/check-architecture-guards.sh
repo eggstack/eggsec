@@ -1675,7 +1675,10 @@ fi
 # `ApprovedOperation::new`. Adapters/agents must obtain tokens via approve().
 echo ""
 echo "--- Check 76: Approval token construction is controlled ---"
-HITS=$(rg -n 'ApprovedOperation::new' crates/ --glob='*.rs' 2>/dev/null | rg -v 'config/policy_approval.rs' | rg -v 'config/policy_decision.rs' || true)
+# Phase C: the pure kernel (eggsec-policy/src/decision.rs) is a legitimate
+# construction site alongside the engine facades; adapters must still obtain
+# tokens via approve()/approve_manual().
+HITS=$(rg -n 'ApprovedOperation::new' crates/ --glob='*.rs' 2>/dev/null | rg -v 'config/policy_approval.rs' | rg -v 'config/policy_decision.rs' | rg -v 'eggsec-policy/src/decision.rs' | rg -v 'eggsec-policy/src/approval.rs' || true)
 if [[ -n "$HITS" ]]; then
   echo "$HITS"
   echo "FAIL: ApprovedOperation::new outside enforcement modules."
@@ -2304,17 +2307,20 @@ else
     fi
   done
 fi
-for f in "crates/eggsec/src/config/scope_transport.rs" "crates/eggsec/tests/transport_contract.rs"; do
+# Phase C: the binding implementation lives in the engine policy bridge
+# (policy_bridge/transport.rs); config/scope_transport.rs remains as a
+# compatibility facade re-exporting ScopeAuthority.
+for f in "crates/eggsec/src/policy_bridge/transport.rs" "crates/eggsec/src/config/scope_transport.rs" "crates/eggsec/tests/transport_contract.rs"; do
   if [[ ! -f "$f" ]]; then
-    echo "FAIL: missing Phase B binding/test: $f"
+    echo "FAIL: missing Phase B/C binding/test: $f"
     SECTION_FAIL=$((SECTION_FAIL + 1))
   fi
 done
-if ! rg -q 'impl.*NetworkAuthority for ScopeAuthority' crates/eggsec/src/config/scope_transport.rs 2>/dev/null; then
-  echo "FAIL: scope_transport.rs does not implement NetworkAuthority for ScopeAuthority."
+if ! rg -q 'impl.*NetworkAuthority for ScopeAuthority' crates/eggsec/src/policy_bridge/transport.rs 2>/dev/null; then
+  echo "FAIL: policy_bridge/transport.rs does not implement NetworkAuthority for ScopeAuthority."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-RB_LEAK=$(rg -n 'RequestBuilder' crates/eggsec/src/config/scope_transport.rs crates/eggsec-transport/src/ 2>/dev/null || true)
+RB_LEAK=$(rg -n 'RequestBuilder' crates/eggsec/src/policy_bridge/transport.rs crates/eggsec/src/config/scope_transport.rs crates/eggsec-transport/src/ 2>/dev/null || true)
 if [[ -n "$RB_LEAK" ]]; then
   echo "$RB_LEAK"
   echo "FAIL: scope_transport or transport crate mentions RequestBuilder (boundary leak)."
@@ -3099,6 +3105,101 @@ for crate in eggsec-db-lab eggsec-mobile-lab eggsec-web-proxy eggsec-nse; do
 done
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: domain DTO consumers use the model, not output."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 121. Phase C: eggsec-policy stays a dependency-light semantic kernel.
+echo ""
+echo "--- Check 121: eggsec-policy stays dependency-light ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec-policy/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-policy/src/lib.rs missing (canonical policy owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for dep in 'tokio' 'reqwest' 'hyper' 'rustls' 'axum' 'tonic' 'clap' 'ratatui' 'crossterm' 'rusqlite' 'sqlx' 'hickory-resolver' 'eggsec-transport' 'eggsec-runtime' 'eggsec-output' 'eggsec-report-model' 'eggsec =' 'eggsec-core'; do
+  if rg -q "^${dep}([ =]|$)|^${dep} =" crates/eggsec-policy/Cargo.toml 2>/dev/null; then
+    echo "FAIL: eggsec-policy/Cargo.toml references forbidden dep '$dep'."
+    rg -n "$dep" crates/eggsec-policy/Cargo.toml 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -q 'eggsec_transport|eggsec-transport' crates/eggsec-policy/Cargo.toml crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-policy references eggsec_transport in code (bridge lives in the engine)."
+  rg -n 'eggsec_transport|eggsec-transport' crates/eggsec-policy/Cargo.toml crates/eggsec-policy/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'std::fs|tokio::|reqwest::|hickory|lookup_host|to_socket_addrs' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-policy/src uses filesystem/runtime/resolver behavior."
+  rg -n 'std::fs|tokio::|reqwest::|hickory|lookup_host|to_socket_addrs' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -n 'cfg!\(feature' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-policy/src queries Cargo features (availability must be explicit input)."
+  rg -n 'cfg!\(feature' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -n 'HostResolver|SystemResolver|ScopeAuthority' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-policy/src owns resolver/authority behavior (bridges live in the engine)."
+  rg -n 'HostResolver|SystemResolver|ScopeAuthority' crates/eggsec-policy/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: eggsec-policy stays dependency-light."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 122. Phase C: engine depends one-way on the policy kernel; transport stays
+# independent of policy implementation.
+echo ""
+echo "--- Check 122: engine -> policy one-way; transport independent ---"
+SECTION_FAIL=0
+if ! rg -q '^eggsec-policy' crates/eggsec/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec/Cargo.toml does not depend on eggsec-policy."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'eggsec-transport' crates/eggsec-policy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: eggsec-policy depends on eggsec-transport (bridge lives in the engine)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'eggsec-policy|eggsec_policy' crates/eggsec-transport/Cargo.toml crates/eggsec-transport/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' | grep -q .; then
+  echo "FAIL: eggsec-transport references policy implementation (contract stays neutral)."
+  rg -n 'eggsec-policy|eggsec_policy' crates/eggsec-transport/Cargo.toml crates/eggsec-transport/src/ 2>/dev/null | grep -v '^\s*[^:]*:[^:]*:\s*//' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'crates/eggsec-policy' Cargo.toml 2>/dev/null; then
+  echo "FAIL: workspace root Cargo.toml does not list crates/eggsec-policy."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: engine -> policy one-way; transport independent."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 123. Phase C: no second policy language in the engine; config policy/scope
+# modules stay facades over the kernel (no redefined core types).
+echo ""
+echo "--- Check 123: engine policy modules stay facades (no forks) ---"
+SECTION_FAIL=0
+for ty in 'pub enum OperationRisk' 'pub enum OperationMode' 'pub enum ExecutionProfile' 'pub enum ExecutionSurface' 'pub enum Capability' 'pub enum DenialClass' 'pub struct ExecutionPolicy' 'pub struct OperationDescriptor' 'pub enum OperationTarget' 'pub struct OperationMetadata' 'pub struct PolicyDecision' 'pub enum EnforcementOutcome' 'pub enum EnforcementError' 'pub struct ManualOverride' 'pub struct Scope(' 'pub struct Scope ' 'pub struct ScopeRule' 'pub struct TargetScope' 'pub enum AddressClass' 'pub struct LoadedScope'; do
+  if rg -q "$ty" crates/eggsec/src/config/policy.rs crates/eggsec/src/config/policy_target.rs crates/eggsec/src/config/policy_catalog.rs crates/eggsec/src/config/policy_decision.rs crates/eggsec/src/config/policy_approval.rs crates/eggsec/src/config/scope.rs crates/eggsec/src/config/scope_address.rs 2>/dev/null; then
+    echo "FAIL: $ty redefined in eggsec config (canonical owner is eggsec-policy; re-export it)."
+    rg -n "$ty" crates/eggsec/src/config/policy.rs crates/eggsec/src/config/policy_target.rs crates/eggsec/src/config/policy_catalog.rs crates/eggsec/src/config/policy_decision.rs crates/eggsec/src/config/policy_approval.rs crates/eggsec/src/config/scope.rs crates/eggsec/src/config/scope_address.rs 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'pub use eggsec_policy' crates/eggsec/src/config/policy.rs crates/eggsec/src/config/scope.rs crates/eggsec/src/config/policy_decision.rs 2>/dev/null; then
+  echo "FAIL: expected eggsec_policy re-exports in config policy/scope/decision facades."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -d "crates/eggsec/src/policy_bridge" ]]; then
+  echo "FAIL: crates/eggsec/src/policy_bridge missing (engine-owned resolver/feature/transport adapters)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: engine policy modules stay facades (no forks)."
 else
   FAIL=$((FAIL + 1))
 fi

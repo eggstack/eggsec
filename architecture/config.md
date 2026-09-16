@@ -5,6 +5,31 @@ Deep-dive into the configuration, scope enforcement, and policy evaluation syste
 > Parent: [overview.md](overview.md)
 > Related: [runtime_bridge.md](runtime_bridge.md), [dispatch.md](dispatch.md), [audit.md](audit.md)
 
+## Phase C ownership (2026-09-16): `eggsec-policy` + engine bridge
+
+The authorization semantic kernel lives in the `eggsec-policy` crate
+(pure data + deterministic algorithms; no I/O, Tokio, network, filesystem,
+frontends, or engine deps). The `config` module keeps configuration loading
+and exposes the kernel through compatibility facades (`pub use
+eggsec_policy::...`) so existing `crate::config::*` paths keep working; new
+engine code imports policy types from `eggsec-policy` directly.
+
+Engine-owned adapters live in `crates/eggsec/src/policy_bridge/`:
+
+| Bridge module | Owns |
+|---------------|------|
+| `features.rs` | `current_enabled_features()`: engine `feature_registry` → explicit `EnabledFeatures` input (policy never queries `cfg!`) |
+| `resolver.rs` | `HostResolver`/`SystemResolver`/`ResolutionResult`, `resolve_target_facts*` / `resolve_hostname_facts*`, `load_scope_from_file`, `ScopeResolution` extension trait (`is_target_allowed*`, `is_excluded`, `validate_url`) |
+| `transport.rs` | `ScopeAuthority`: `eggsec-transport::NetworkAuthority` over the canonical scope model (TOCTOU-closed; transport supplies facts) |
+
+Pure evaluation takes explicit inputs: `evaluate_operation_policy` /
+`evaluate_enforcement` / `EnforcementContext::{evaluate, approve,
+approve_manual}` accept `&EnabledFeatures` plus caller-resolved
+`Option<&TargetScope>`. The engine `EnforcementContext` facade preserves the
+legacy call signatures by snapshotting features at construction and resolving
+facts per evaluation (including the legacy `InvalidTarget` hard denial for
+unresolvable targets / CIDR-without-IP).
+
 ## Role & Responsibilities
 
 The `config` module owns all configuration loading/validation and the **mandatory pre-dispatch enforcement gate** that every execution surface must pass before running an operation.
@@ -40,14 +65,15 @@ All source files live under `crates/eggsec/src/config/`:
 | File | Lines | Feature Gate | Purpose |
 |------|-------|:---:|---------|
 | `mod.rs` | 127 | — | Re-exports, `ENV_PREFIX`, default config template |
-| `policy.rs` | ~1000 | — | Facade + types: `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor` (re-exports target/catalog) |
-| `policy_target.rs` | ~220 | — | `TargetHint`, `OperationTarget`, `normalize_target()`, `TargetPolicyKind`, `DescriptorError` |
-| `policy_catalog.rs` | ~1270 | — | `OperationMetadata`, `ALL_OPERATION_METADATA`, `ALL_OPERATION_METADATA_ALIASES`, lookup helpers + catalog tests |
-| `policy_approval.rs` | ~150 | — | `ApprovedOperation` issuance/binding (private `new`, `for_test` shim) |
-| `policy_decision.rs` | ~3700 | — | Facade: `PolicyDecision`, `EnforcementOutcome`, `EnforcementContext`, `ConfirmationClass` (8), `ManualOverride`, `PreflightResult`, `EnforcementError`, evaluation fns (re-exports `ApprovedOperation` from `policy_approval.rs`) |
-| `scope.rs` | ~1430 | — | Facade: `Scope`, `ScopeRule`, `ScopeSource` (4), `LoadedScope`, `TargetScope` (re-exports address/resolver) |
-| `scope_address.rs` | ~175 | — | `AddressClass` (7), `classify_address()`, `is_private_ip()` + facts tests |
-| `scope_resolver.rs` | ~130 | — | `ResolutionResult`, `HostResolver` trait, `SystemResolver`, `default_resolver()` + facts tests |
+| `policy.rs` | facade | — | Re-exports `eggsec-policy` vocabulary: `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor` (plus target/catalog re-exports) |
+| `policy_target.rs` | facade | — | Re-exports `TargetHint`, `OperationTarget`, `normalize_target()`, `TargetPolicyKind`, `DescriptorError` |
+| `policy_catalog.rs` | facade | — | Re-exports `OperationMetadata`, `ALL_OPERATION_METADATA`, `ALL_OPERATION_METADATA_ALIASES`, lookup helpers; plus engine-only `derive_operation_integration` extension |
+| `policy_approval.rs` | facade | — | Re-exports `ApprovedOperation` |
+| `policy_decision.rs` | facade | — | Re-exports pure decision types + I/O-enabled `EnforcementContext` wrapper (same signatures; resolves facts, snapshots features) and compatibility `evaluate_*` / `preflight_operation` / `is_feature_enabled` fns |
+| `scope.rs` | facade | — | Re-exports `Scope`, `ScopeRule`, `ScopeSource` (4), `LoadedScope`, `TargetScope`, address/resolver re-exports; plus `session_scope_from_loaded()` free fn |
+| `scope_address.rs` | facade | — | Re-exports `AddressClass` (7), `classify_address()`, `is_private_ip()` |
+| `scope_resolver.rs` | facade | — | Re-exports bridge `ResolutionResult`, `HostResolver`, `SystemResolver`, `default_resolver()`, resolve fns, `ScopeResolution` |
+| `scope_transport.rs` | facade | — | Re-exports bridge `ScopeAuthority` |
 | `scope_spec.rs` | — | — | `scope_from_spec()`, `ScopeSpecError`, `is_target_allowed_by_scope_and_spec[_with_resolver]()`, `is_parsed_target_allowed_by_scope_and_spec()` — conservative `ScopeSpec`→`Scope` conversion plus intersection evaluation |
 | `settings.rs` | 744 | — | `EggsecConfig`, `ScanConfig`, `HttpConfig`, `OutputConfig`, `NotificationConfig`, `AiConfig`, `ReconConfig`, `RemoteConfig`, `SearchConfig`, `AlertChannelsConfig`, `ProxyConfigEntry`, `ConfigError`, validation impls |
 | `loader.rs` | 478 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |

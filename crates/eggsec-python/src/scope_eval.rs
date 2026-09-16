@@ -1,5 +1,7 @@
 use pyo3::prelude::*;
 
+use eggsec::policy_bridge::resolver::{resolve_hostname_facts, ScopeResolution};
+
 use crate::error::ScopeError;
 
 /// Provenance of a loaded scope manifest.
@@ -231,7 +233,7 @@ impl LoadedScopePy {
         let mut matched_rules: Vec<String> = Vec::new();
 
         for rule in &scope.allowed_targets {
-            let target_scope = match eggsec::config::TargetScope::parse_hostname_only(target) {
+            let target_scope = match resolve_hostname_facts(target) {
                 Ok(ts) => ts,
                 Err(e) => {
                     return Ok(ScopeExplanationPy {
@@ -275,7 +277,7 @@ impl LoadedScopePy {
         let mut exclusion_reason: Option<String> = None;
 
         for rule in &scope.excluded_targets {
-            let target_scope = match eggsec::config::TargetScope::parse_hostname_only(target) {
+            let target_scope = match resolve_hostname_facts(target) {
                 Ok(ts) => ts,
                 Err(_) => continue,
             };
