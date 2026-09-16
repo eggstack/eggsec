@@ -488,8 +488,11 @@ Executed 2026-09-16.
     29 passed (incl. the rate-limit aggregate test that caught the initial
     per-worker pacing bug, fixed via the CAS `GlobalPacer`).
   - `bash scripts/check-architecture-guards.sh` — ALL PASSED (Checks 99–126).
-  - `make check-deps` / `make check-feature-profiles` / `make check-python`:
-    run in the final `make check` pass (see below).
+  - `make check` (exit 0) and `make check-feature-profiles` (exit 0) — pass.
+- Post-push CI verification (commit `1a3f3b39`, branch `main`):
+  - CI run 35152709048 — success (Rust, Python, Dependency policy success;
+    Dependency review skipped as PR-only).
+  - Code Quality run 35152708651 — success.
 - Residual debt and follow-up:
   - `ReqwestTransport` sync DNS per hostname request (see TOCTOU note);
     consider async resolution or Eggfetch migration for full pinning (the
