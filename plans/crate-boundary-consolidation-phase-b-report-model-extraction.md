@@ -450,12 +450,20 @@ Executed 2026-09-16.
     525 passed, 1 ignored.
   - `cargo test -p eggsec-nse --features nse --tests` — 554 passed.
   - `make check-feature-profiles` — pass (incl. 936 TUI profile tests).
-  - `make release-check` — run on the clean post-commit tree (see below).
+  - `make release-check` on the clean post-commit tree — pass (exit 0:
+    16 Cargo archives generated/parsed/inspected including the new
+    `eggsec-report-model` crate; Python wheel/sdist + fresh-wheel smoke pass;
+    nothing published).
+  - `make check-msrv` (rustup 1.88 toolchain) — pass (exit 0).
   - `make check-features-individual` is deep-checks-only per `AGENTS.md` and
     was not run per-PR (same precedent as Phase A).
   - `make check-python` not run: no Python bindings/stubs/docs/scripts
     changed (engine diff is a doc comment; `AGENTS.md` scopes it to Python
     changes).
+- Post-push CI verification (commit `1e8a48ac`, branch `main`):
+  - CI run 35129282515 — success (Rust, Python, Dependency policy all
+    success; Dependency review skipped as PR-only).
+  - Code Quality run 35129281658 — success.
 - Residual model/output ownership debt:
   - `trend::{ScanResult, ResultSummary, Finding, ComparisonResult,
     TrendAnalysis}` DTOs stay in output with the analyzer (no independent
