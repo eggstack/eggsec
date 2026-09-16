@@ -2,29 +2,63 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::time::Duration;
 
-use super::client_pool::ClientPool;
 use crate::constants;
 
-static HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> = std::sync::LazyLock::new(|| {
-    ClientPool::new(
-        10,
-        Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS),
-        false,
-        None,
-        None,
-    )
+/// Honest tool identification (not evasion).
+///
+/// Moved from the removed `utils::stealth` module (Phase A): the only live
+/// use was this identifier in loadtest/fuzzer. Evasion semantics
+/// (`StealthConfig`, rotating user-agents, browser/TLS fingerprints) were dead
+/// code and were removed rather than relocated.
+pub fn tool_user_agent() -> String {
+    format!("Eggsec/{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn build_shared_client(insecure: bool) -> Option<Client> {
+    let mut builder = Client::builder()
+        .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+        .pool_idle_timeout(Duration::from_secs(
+            constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+        ))
+        .tcp_nodelay(true)
+        .redirect(super::same_host_redirect_policy(
+            constants::http::DEFAULT_MAX_REDIRECTS as usize,
+        ));
+    if insecure {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    builder.build().ok()
+}
+
+// Phase A WS6: single long-lived cloned client. Each `reqwest::Client` already
+// manages its own internal connection pool; the removed N-client round-robin
+// pool sharded reusable connections/TLS state with identical per-client config
+// (same timeout/UA/proxy), providing no isolation property.
+static SHARED_HTTP_CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    crate::install_tls_provider();
+    build_shared_client(false).unwrap_or_else(|| {
+        tracing::warn!(
+            "Failed to create shared HTTP client with full options, using minimal client"
+        );
+        Client::new()
+    })
 });
 
-static INSECURE_HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
-    std::sync::LazyLock::new(|| {
-        ClientPool::new(
-            10,
-            Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS),
-            true,
-            None,
-            None,
-        )
-    });
+static SHARED_INSECURE_HTTP_CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
+    crate::install_tls_provider();
+    build_shared_client(true).unwrap_or_else(|| {
+            tracing::warn!(
+                "Failed to create insecure HTTP client with full options, using minimal client"
+            );
+            Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap_or_else(|e| {
+                    tracing::error!(error = %e, "Failed to create insecure fallback HTTP client; using verified client");
+                    Client::new()
+                })
+        })
+});
 
 pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
     crate::install_tls_provider();
@@ -41,23 +75,7 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
 
 pub fn get_shared_http_client() -> Client {
     crate::install_tls_provider();
-    HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
-        // First try with full options
-        if let Ok(client) = Client::builder()
-            .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(
-                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .tcp_nodelay(true)
-            .build()
-        {
-            return client;
-        }
-
-        // Fallback to minimal client
-        tracing::warn!("Failed to create HTTP client with full options, using minimal client");
-        Client::new()
-    })
+    SHARED_HTTP_CLIENT.clone()
 }
 
 pub fn get_shared_insecure_http_client() -> Client {
@@ -65,32 +83,7 @@ pub fn get_shared_insecure_http_client() -> Client {
     tracing::warn!(
         "Using shared HTTP client with disabled TLS certificate verification; use get_shared_http_client for verified TLS"
     );
-    INSECURE_HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
-        // First try with full options
-        if let Ok(client) = Client::builder()
-            .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(
-                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .tcp_nodelay(true)
-            .danger_accept_invalid_certs(true)
-            .build()
-        {
-            return client;
-        }
-
-        // Fallback to minimal insecure client
-        tracing::warn!(
-            "Failed to create insecure HTTP client with full options, using minimal client"
-        );
-        Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap_or_else(|e| {
-                tracing::error!(error = %e, "Failed to create insecure fallback HTTP client; using verified client");
-                Client::new()
-            })
-    })
+    SHARED_INSECURE_HTTP_CLIENT.clone()
 }
 
 /// Creates an HTTP client that accepts invalid TLS certificates.

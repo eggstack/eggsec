@@ -2888,6 +2888,130 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 113. Phase A: scheduling/session no longer owned by eggsec-output.
+# Cron lives in eggsec-agent::cron (only durable consumer is autonomous-agent
+# scheduling); legacy tab-state session format was removed as superseded by
+# daemon/runtime sessions. Path + module checks, not line matching.
+echo ""
+echo "--- Check 113: eggsec-output owns no scheduling/session ---"
+SECTION_FAIL=0
+for f in crates/eggsec-output/src/schedule.rs crates/eggsec-output/src/session.rs; do
+  if [[ -f "$f" ]]; then
+    echo "FAIL: $f exists (Phase A removed it; cron lives in eggsec-agent::cron)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -q 'pub mod (schedule|session)' crates/eggsec-output/src/lib.rs 2>/dev/null; then
+  echo "FAIL: eggsec-output/src/lib.rs still exposes schedule/session modules."
+  rg -n 'pub mod (schedule|session)' crates/eggsec-output/src/lib.rs 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'struct (ScanQueue|ScanSession|SessionInfo|TabSessionState|ScheduledScan)|enum (ScheduleStatus|ScanType)' crates/eggsec-output/src/ 2>/dev/null; then
+  echo "FAIL: eggsec-output still contains queue/session types."
+  rg -n 'struct (ScanQueue|ScanSession|SessionInfo|TabSessionState|ScheduledScan)|enum (ScheduleStatus|ScanType)' crates/eggsec-output/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec-agent/src/cron.rs" ]]; then
+  echo "FAIL: crates/eggsec-agent/src/cron.rs missing (canonical cron owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub (use|mod) cron' crates/eggsec-agent/src/lib.rs 2>/dev/null; then
+  echo "FAIL: eggsec-agent/src/lib.rs does not expose cron module."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: eggsec-output owns no scheduling/session."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 114. Phase A: scanner service knowledge stays scanner-owned.
+echo ""
+echo "--- Check 114: service-detection stays scanner-owned ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec/src/utils/service_detection.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/utils/service_detection.rs reappeared (owner is scanner::service_data)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null; then
+  echo "FAIL: utils::service_detection reference reappeared."
+  rg -n '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "crates/eggsec/src/scanner/service_data.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/scanner/service_data.rs missing (canonical owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: service-detection stays scanner-owned."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 115. Phase A: no Reqwest multi-client pool abstraction.
+echo ""
+echo "--- Check 115: no Reqwest client-pool abstraction ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec/src/utils/client_pool.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/utils/client_pool.rs reappeared (single shared client is canonical)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'struct (ClientPool|OptimizedClientPool)' crates/ --type rust 2>/dev/null; then
+  echo "FAIL: ClientPool/OptimizedClientPool type reappeared."
+  rg -n 'struct (ClientPool|OptimizedClientPool)' crates/ --type rust 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'utils::client_pool|client_pool::(ClientPool|OptimizedClientPool)' crates/ --type rust 2>/dev/null; then
+  echo "FAIL: client_pool import reappeared."
+  rg -n 'utils::client_pool|client_pool::(ClientPool|OptimizedClientPool)' crates/ --type rust 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no Reqwest client-pool abstraction."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 116. Phase A: no second token-bucket in output/frontend crates.
+echo ""
+echo "--- Check 116: no second token-bucket in output/frontend ---"
+SECTION_FAIL=0
+if rg -q 'struct RateLimiter' crates/eggsec-output/src/ crates/eggsec-tui/src/ crates/eggsec-cli/src/ crates/eggsec-daemon/src/ 2>/dev/null; then
+  echo "FAIL: RateLimiter implementation in output/frontend crates (canonical owner is engine utils::rate_limiter)."
+  rg -n 'struct RateLimiter' crates/eggsec-output/src/ crates/eggsec-tui/src/ crates/eggsec-cli/src/ crates/eggsec-daemon/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no second token-bucket in output/frontend."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 117. Phase A: no utils/common catch-all crate.
+echo ""
+echo "--- Check 117: no utils/common catch-all crate ---"
+SECTION_FAIL=0
+if rg -qi 'eggsec-utils|eggsec-common|eggsec-shared|eggsec-helpers' Cargo.toml crates/*/Cargo.toml 2>/dev/null; then
+  echo "FAIL: utils/common catch-all crate reference found."
+  rg -ni 'eggsec-utils|eggsec-common|eggsec-shared|eggsec-helpers' Cargo.toml crates/*/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '^\s*pub mod (common|shared|helpers)\s*;' crates/eggsec/src/utils/mod.rs crates/eggsec/src/lib.rs 2>/dev/null; then
+  echo "FAIL: new catch-all module under engine root."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for dead in crates/eggsec/src/utils/output.rs crates/eggsec/src/utils/progress.rs crates/eggsec/src/utils/stealth.rs crates/eggsec/src/utils/privilege.rs; do
+  if [[ -f "$dead" ]]; then
+    echo "FAIL: $dead reappeared (Phase A removed it)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no utils/common catch-all crate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

@@ -1,6 +1,6 @@
 # Phase A — Ownership and primitive cleanup
 
-Status: Ready for handoff
+Status: Executed (2026-09-16). All workstreams implemented; see Completion record below.
 
 Date: 2026-09-16
 
@@ -226,3 +226,82 @@ Append after execution:
 - Commands/results
 - Public API changes
 - Residual debt / Phase B blockers
+
+## Completion record
+
+Executed 2026-09-16.
+
+- Baseline SHA: `992839ee552ffa100c529c5bebeb00c495e74a6b` (plan handoff head).
+  Final implementation SHA: recorded in the commit history for this plan
+  (implementation commit + this record; `git log --oneline -- plans/crate-boundary-consolidation-phase-a-ownership-and-primitive-cleanup.md`).
+  No new workspace crate was added (acceptance criterion 1 holds;
+  `cargo metadata` member count unchanged at 18).
+- Ownership table before -> after (call sites verified by `rg`, not assumptions):
+
+  | Module / type | Before | After |
+  |---|---|---|
+  | `CronExpression` / `CronScheduler` | `eggsec-output::schedule` (report crate owning orchestration) | `eggsec-agent::cron` (only durable consumer is autonomous-agent scheduling); engine uses `eggsec::agent::{CronExpression, CronScheduler}` re-export |
+  | `ScanQueue` / `ScheduledScan` / `ScanType` / `ScanOptions` / `Priority` (output copy) / `ScheduleStatus` | `eggsec-output::schedule`, zero external consumers | Removed. Canonical queue is `eggsec-agent::TaskScheduler` (strict superset: priority, delayed execution via `scheduled_for`, retry via `retry_count`/`max_retries`, leasing + lease reclamation, cancellation, outcomes). Scan DTOs were dead code; per the plan they were not moved into `eggsec-agent` |
+  | `eggsec-output::schedule::RateLimiter` | second token bucket in output crate | Removed (acceptance criterion 3) |
+  | `ScanSession` / `SessionInfo` / `TabSessionState` / `InputFieldState` | `eggsec-output::session`, zero external consumers | Removed. Superseded by daemon/runtime durable sessions (`SessionId`, persisted snapshots) + frontend `AppState`; no second session model is preserved |
+  | `utils::service_detection` | global utility bucket | `scanner::service_data` (tables, banner heuristics, classifiers); `scanner::ports` updated, `scanner/mod.rs` re-exports |
+  | `utils::progress` (`indicatif` styles) | global utilities, zero production consumers | Removed (dead); frontends own presentation |
+  | `utils::output` (`print_*`) | global utilities, zero production consumers | Removed (dead); engine returns values/errors, CLI/TUI own presentation |
+  | `utils::privilege` | feature-gated utilities | `platform::{is_root, check_privileged, require_root}` (read-only/fail-closed; `is_root` already lived there dependency-light); callers in `stress/{udp,utils}`, `scanner/ports/spoofed`, `eggsec-tui` packet tab migrated; feature gate removed |
+  | `utils::stealth` | global utilities | Removed. `StealthConfig`/`BrowserFingerprint`/`TlsFingerprint`/`default_user_agents` were dead (only `tool_user_agent()` was used, by loadtest + fuzzer). Honest identifier moved to `utils::http::tool_user_agent()`; evasion semantics not relocated |
+  | `utils::{cache, circuit_breaker, rate_limiter, redaction}` + parsing/target/validation | mixed bucket | Kept engine-internal as engine infrastructure (documented in `utils/mod.rs` header + `architecture/utils.md`); no crate boundary manufactured in Phase A |
+  | `Agent::scheduler: CronScheduler` field | stored but never read (helpers ignored it via `_scheduler`) | Removed; `cron_should_run_for`/`cron_should_run_target` are stateless over the schedule string + `last_scan` |
+- Removed duplicate implementations:
+  - `ScanQueue` (vs `TaskScheduler` superset, see above).
+  - `eggsec-output::schedule::RateLimiter` (vs `utils::rate_limiter::RateLimiter`; burst semantics now single-sourced: token bucket burst = 1s).
+  - `utils::service_detection` copy owned by scanner (single owner now).
+  - `ClientPool` / `OptimizedClientPool` (see below).
+  - `fuzzer::rate_limit` (lock-free consecutive-error limiter + non-blocking token bucket) intentionally retained as operation-specific mapping per WS5 layering; reconsidered only in Phase D with consumer evidence.
+- Reqwest client-pool disposition and measurements:
+  - Removed `utils::client_pool::{ClientPool, OptimizedClientPool}` entirely.
+  - Production consumers enumerated: only `utils::http` static pools (both `ClientPool::new(10, …)` with identical config) + bench. No consumer relied on isolated cookie/auth/pool state — all pooled clients shared timeout/UA/proxy, so no isolation property existed to preserve.
+  - Replaced with single long-lived cloned clients (`SHARED_HTTP_CLIENT`, `SHARED_INSECURE_HTTP_CLIENT`) built with the same pool settings + `same_host_redirect_policy`. Each `reqwest::Client` already manages its own internal connection pool; the N-client round-robin sharded reusable connections/TLS state without benefit.
+  - No benchmark-behavior evidence was required for retention because the identical-config inspection shows no property a shared client lacks; the bench now measures shared-client clone cost instead of pool construction. No new direct Reqwest consumers were introduced (acceptance criterion 9).
+- Limiter semantic decisions (`utils::rate_limiter`):
+  - `PerTargetRateLimiter` no longer awaits while holding the global map lock (acceptance criterion 4): map stores `Arc<Mutex<AdaptiveRateLimiter>>` per target; `limiter_for()` clones the `Arc` under a short lock, then awaits the per-target mutex. Added `test_per_target_isolation` + concurrent-targets test (run 3x).
+  - Success does NOT immediately clear failure history: one failure halves the rate + arms 5s cooldown; one success does not restore it; 10 fast successes raise the rate and reset both counters (tested).
+  - Burst is explicit: `RateLimiter` burst = `permits_per_second` (1s); `new(0)` clamps to 1 (never indefinite sleep); high-rate saturation tested (`u32::MAX`).
+  - Cancellation: all `acquire` paths use bounded Tokio sleeps and are drop-cancellable; callers must race via `eggsec-runtime::race_with_cancel` / `tokio::select!`. Tested via `tokio::time::timeout` preemption for both `SharedRateLimiter` and `AdaptiveRateLimiter`.
+  - DTO separation: `RateLimitStatus` conversion isolated in a `status_adapter` block; core `acquire`/`refill`/`record_response` never take DTO types.
+  - `SharedRateLimiter::acquire` releases the inner lock while sleeping (previously held across sleep).
+- Circuit-breaker semantic decisions (`utils::circuit_breaker`, engine-local):
+  - Consecutive (not cumulative) failures while Closed: Closed-state success resets `failure_count` (tested, including the 2-fail/success/2-fail-stays-closed/3rd-fail-opens sequence).
+  - Half-open probe concurrency limited to 1 via `AtomicBool` CAS: timeout expiry admits a single probe; concurrent `is_available()` calls while a probe is in flight are rejected (tested, including 10-task race admitting exactly 1).
+  - Rejected calls are not counted (`total_calls`/`total_failures` only for admitted check-then-record calls; tested).
+  - HalfOpen failure re-opens immediately and resets probe count; `success_threshold` successes close (tested, including repeated open->half-open->open cycles).
+  - Time stays `std::time::Instant` only; tests use short real timeouts (20–40ms), no Tokio `test-util` (acceptance criterion 5).
+- Architecture guard changes (`scripts/check-architecture-guards.sh`, Checks 113–117; `docs/CI_ARCHITECTURE_GUARDS.md` documents them):
+  - 113: `eggsec-output` owns no scheduling/session (no `schedule.rs`/`session.rs`, no `pub mod`, no queue/session types; `eggsec-agent::cron` exists and is exported).
+  - 114: service knowledge stays scanner-owned (no `utils/service_detection.rs`, no `use/mod …service_detection`; `scanner::service_data` exists).
+  - 115: no Reqwest pool abstraction (no `utils/client_pool.rs`, no `ClientPool` types/imports).
+  - 116: no second token bucket in output/frontend crates.
+  - 117: no `eggsec-utils`/`common`/`shared`/`helpers` crate or catch-all module; removed `output`/`progress`/`stealth`/`privilege` utils do not reappear.
+  - Checks match code structure (`struct`/`use`/`mod`/paths), not docs prose, so ownership notes in comments do not trip them.
+- Commands/results (all green locally before commit):
+  - `cargo fmt --all --check` — pass.
+  - `cargo check --workspace --no-default-features`, `cargo check -p eggsec`, `cargo check -p eggsec-cli`, `cargo check -p eggsec-cli --no-default-features` — pass.
+  - `make check-deps` (`cargo deny --workspace --all-features check` ×5) — pass after `cargo update -p rustls@0.23.43 --precise 0.23.45` (RUSTSEC-2026-0285, new since Phase F review) + `cargo update -p libssh2-sys` (yanked 0.3.2 → 0.3.3); `Cargo.lock` delta is limited to those two upgrades.
+  - `make clippy` (engine empty + `cli` + 8 leaf crates) — pass, `-D warnings`.
+  - `cargo test -p eggsec --doc` — 21 passed.
+  - `cargo test -p eggsec --no-default-features --test tool_registration --test loadtest_tests` — 29 passed.
+  - `cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast` — 3005 passed (52 suites).
+  - `cargo test -p eggsec-output --tests` — 82 passed; `cargo test -p eggsec-transport-eggfetch --tests` — 41 passed; `cargo test -p eggsec-tui --lib` — 874 passed; `cargo test -p eggsec-agent` — 30 passed.
+  - Limiter (17) + circuit-breaker (11) tests each run 3x consecutively — stable.
+  - `bash scripts/check-architecture-guards.sh` — ALL PASSED (Checks 99–117).
+  - `make check-feature-profiles` — pass. `make check-features-individual` is deep-checks-only per `AGENTS.md` and was not run per-PR.
+- Public API changes (all pre-1.0; no compatibility shims — shims would have inverted dependencies, e.g. making `eggsec-output` depend upward on `eggsec-agent`):
+  - Removed `eggsec_output::{schedule, session}` modules and `CronExpression`, `CronScheduler`, `Priority`, `ScanOptions`, `ScanQueue`, `ScanType`, `ScanSession`, `SessionInfo` paths. Canonical cron path is `eggsec_agent::{CronExpression, CronScheduler}` (also re-exported as `eggsec::agent::{CronExpression, CronScheduler}`).
+  - Removed `eggsec::output::schedule` / `eggsec::output::session` paths (were `pub use eggsec_output::*` re-exports).
+  - Removed `eggsec::utils::{client_pool::{ClientPool, OptimizedClientPool}, output::{print_*}, progress::*, service_detection::*, stealth::*, privilege::*}`. Replacements: `eggsec::scanner::service_data::*`, `eggsec::platform::{is_root, check_privileged, require_root}`, `eggsec::utils::http::tool_user_agent()`, `eggsec::utils::{get_shared_http_client, get_shared_insecure_http_client}` (same signatures, single-client backend).
+  - `RateLimiter::new(0)` now clamps to 1 (was indefinite sleep); `SharedRateLimiter` gained `try_acquire()`; `PerTargetRateLimiter::new(0)` clamps; `CircuitBreaker::new` clamps thresholds to ≥1 and Closed success resets failures (previously cumulative).
+- Residual debt / Phase B blockers:
+  - `fuzzer::rate_limit` vs `utils::rate_limiter` coexistence is intentional for now (operation-specific vs generic); Phase D owns the reuse decision with consumer evidence.
+  - `utils::cache::ApiCache` has zero production consumers (found during inventory); left in place as engine infrastructure but flagged as a removal candidate for Phase D.
+  - `eggsec-agent::cron::CronScheduler` aggregation (`should_run`/`next_run` over an expression list) is lightly used by the engine (which matches statelessly per portfolio string); Phase D may simplify it further.
+  - `Cargo.lock` carries the rustls/libssh2-sys patch upgrades noted above; no `deny.toml` exception was added (both were fixable by upgrade, per `docs/DEPENDENCY_EXCEPTIONS.md` policy).
+  - Phase B (report-model extraction) is unblocked: `eggsec-output` is now reports-only with no scheduling/session edges.

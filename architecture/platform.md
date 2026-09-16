@@ -10,6 +10,7 @@ Parent overview: [overview.md](overview.md). Related: [mobile.md](mobile.md), [n
 
 - **Single prerequisite matrix**: per-domain `DomainPrerequisites` plus fixture-vs-hardware guidance for `mobile-dynamic`, `packet-inspection`, `wireless`, and other hardware/privilege-gated domains.
 - **Read-only detection**: `has_binary`, `has_cap_net_admin`, `has_cap_net_raw`, `is_root`, `list_interfaces`, `current_os/arch/kernel` — best-effort facts, never side-effecting.
+- **Fail-closed privilege gates** (Phase A, moved from `utils::privilege`): `check_privileged(operation)` (`io::Result`) and `require_root(operation)` (`anyhow::Result`) — read-only, never acquire privilege; used by stress/spoofed/TUI paths.
 - **Consistent skip reasons**: `skip_reason_for()` gives test harnesses the canonical "which prerequisite is absent" message, so skipped live tests are self-explanatory.
 - **Doctor parity**: `capabilities_summary()` / `report_for()` feed `eggsec doctor` and `scripts/check_platform.sh` (both hermetic — no root/hardware required).
 
@@ -52,6 +53,7 @@ Re-exported from `platform/mod.rs:13-17`:
 - `all_domain_ids()`, `capabilities_summary()`, `report_for(domain)`
 - `current_os()`, `current_arch()`, `current_kernel()`
 - `has_binary(name)`, `has_cap_net_admin()`, `has_cap_net_raw()`, `is_root()`, `list_interfaces()`
+- `check_privileged(operation)`, `require_root(operation)` — fail-closed gates (Phase A owner; formerly `utils::privilege`)
 - `skip_reason_for(domain)` — canonical skip message for test harnesses
 
 ## Behavior / Flow

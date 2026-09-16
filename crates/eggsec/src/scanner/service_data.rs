@@ -1,3 +1,9 @@
+//! Scanner-owned service fingerprint knowledge (Phase A ownership cleanup).
+//!
+//! Port/service tables, banner heuristics, and service classifiers live with
+//! the scanner/fingerprinting domain that owns their semantics — not in a
+//! global utility bucket. Moved from `utils::service_detection`.
+
 use rustc_hash::FxHashMap;
 use std::sync::LazyLock;
 

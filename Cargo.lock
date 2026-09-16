@@ -1871,7 +1871,7 @@ dependencies = [
  "pem-rfc7468 0.1.1",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
  "thiserror 2.0.20",
  "tokio",
@@ -1955,7 +1955,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rustc-hash",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "scraper",
  "semver",
@@ -2064,7 +2064,7 @@ dependencies = [
  "futures",
  "reqwest",
  "rusqlite",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -2158,7 +2158,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rustc-hash",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "scraper",
  "serde",
  "serde_json",
@@ -2265,7 +2265,7 @@ dependencies = [
  "http",
  "ipnetwork 0.21.1",
  "rcgen",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "tokio",
  "tokio-rustls 0.26.4",
  "tracing",
@@ -2344,7 +2344,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rustc-hash",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -3296,7 +3296,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "log",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
  "tokio",
  "tokio-rustls 0.26.4",
@@ -3869,7 +3869,7 @@ dependencies = [
  "k8s-openapi",
  "kube-core",
  "pem",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-platform-verifier",
  "secrecy",
  "serde",
@@ -3962,7 +3962,7 @@ dependencies = [
  "nom 8.0.0",
  "percent-encoding",
  "quoted_printable",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "socket2 0.6.5",
  "tokio",
  "tokio-rustls 0.26.4",
@@ -4008,9 +4008,9 @@ dependencies = [
 
 [[package]]
 name = "libssh2-sys"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c04141a07bb0c0bc461cb657808764de571702a59bc5c726c400ac9a7625e3ab"
+checksum = "0f5eb74291e8691cab524a01274a1b1e7742b1a94f29d8b101d8aadc8372c1cd"
 dependencies = [
  "cc",
  "libc",
@@ -4443,7 +4443,7 @@ dependencies = [
  "percent-encoding",
  "rand 0.9.5",
  "rustc_version_runtime",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "serde",
  "serde_bytes",
  "serde_with",
@@ -6094,7 +6094,7 @@ dependencies = [
  "log",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "rustls-platform-verifier",
  "serde",
@@ -6227,15 +6227,15 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.43"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.13",
+ "rustls-webpki 0.103.15",
  "subtle",
  "zeroize",
 ]
@@ -6293,10 +6293,10 @@ dependencies = [
  "jni",
  "log",
  "once_cell",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.13",
+ "rustls-webpki 0.103.15",
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
@@ -6321,9 +6321,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -7611,7 +7611,7 @@ version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
 dependencies = [
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "tokio",
 ]
 
@@ -7634,7 +7634,7 @@ checksum = "489a59b6730eda1b0171fcfda8b121f4bee2b35cba8645ca35c5f7ba3eb736c1"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
  "rustls-pki-types",
  "tokio",
@@ -7945,7 +7945,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.5",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "sha1 0.10.7",
  "thiserror 2.0.20",
@@ -8096,7 +8096,7 @@ dependencies = [
  "flate2",
  "log",
  "percent-encoding",
- "rustls 0.23.43",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "socks",
  "ureq-proto",

@@ -1,6 +1,14 @@
 //! Output and report generation module
 //!
-//! Provides report generation, format conversion, trend analysis, and scan session management.
+//! Provides report generation, format conversion, trend analysis, and finding
+//! management. This crate owns report data contracts and rendering only.
+//!
+//! Ownership note (Phase A): scan scheduling/cron/queue behavior lives in
+//! `eggsec-agent` (`cron` + generic `TaskScheduler`); autonomous-agent
+//! scheduling is the only durable cron consumer. Legacy tab-state session
+//! persistence (`ScanSession`) was removed as superseded by daemon/runtime
+//! durable sessions plus frontend `AppState` — it had zero production
+//! consumers.
 //!
 //! ## Key Components
 //!
@@ -8,8 +16,6 @@
 //! - [`dedup`] - Finding deduplication engine
 //! - [`trend`] - Trend analysis across multiple scans
 //! - [`baseline`] - Baseline comparison for regression detection
-//! - [`session`] - Scan session persistence
-//! - [`schedule`] - Scheduled scan management
 //! - [`ai_schema`] - AI-compatible output schema
 //!
 //! ## Supported Output Formats
@@ -38,8 +44,6 @@ pub mod junit;
 pub mod markdown;
 pub mod policy_summary;
 pub mod sarif;
-pub mod schedule;
-pub mod session;
 pub mod trend;
 
 pub use agent::AttackSurface;
@@ -63,8 +67,6 @@ pub use envelope::{
 pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
 pub use policy_summary::PolicySummary;
 pub use sarif::{SarifBuilder, SarifReport};
-pub use schedule::{CronExpression, CronScheduler, Priority, ScanOptions, ScanQueue, ScanType};
-pub use session::{ScanSession, SessionInfo};
 pub use trend::{
     ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,
     Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,

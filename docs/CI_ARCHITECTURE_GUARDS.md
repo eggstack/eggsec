@@ -131,7 +131,7 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 
 ### Network-Dependency Baseline + Transport-Contract Invariants (Phases A–G, roadmap executed 2026-09-13)
 - Leaf crates (`eggsec-runtime`, `eggsec-tool-core`, `eggsec-output`, `eggsec-ui-model`, `eggsec-daemon-protocol`) have no `reqwest`/`rustls`/`tokio-rustls`/`hickory-resolver` dependencies or uses (guard Check 99).
-- Shared `reqwest::RequestBuilder` wrappers removed in Phase D increment 1: `auth_context::apply_auth_context_to_request` and `AiClient::apply_auth` are gone (callers translate via canonical helpers locally); `integrations::send_with_retry` is `pub(crate)` compat (not domain-facing); remaining `pub` concrete surfaces (`fuzzer` trait, `ClientPool`) are documented pending with no new boundary allowed (Checks 99 + 103).
+- Shared `reqwest::RequestBuilder` wrappers removed in Phase D increment 1: `auth_context::apply_auth_context_to_request` and `AiClient::apply_auth` are gone (callers translate via canonical helpers locally); `integrations::send_with_retry` is `pub(crate)` compat (not domain-facing). Phase A (2026-09-16) removed the `ClientPool`/`OptimizedClientPool` N-client round-robin abstraction (single shared cloned client is canonical; Checks 103 + 115).
 - Scoped transport contract (guard Check 100): `eggsec-transport` exists, stays dependency-light (`bytes`/`http`/`url`/`thiserror` only, no concrete clients in manifest or `::` uses), exposes mandatory-authority `HttpTransport`, full `NetworkAuthority` checkpoints, TOCTOU-closed `validate_binding`/`ApprovedBinding`, redacted secrets, and the recording fake; engine binding is `config::ScopeAuthority`; closure tests live in `crates/eggsec/tests/transport_contract.rs`.
 - Canonical helpers (guard Check 101): `apply_auth_context_to_transport`/`_to_map`, `AiClient::auth_headers`/`apply_auth_to_transport`, `should_retry_status`/`backoff_for_attempt` exist and are the single source of truth (former compat wrappers removed, not merely labeled).
 - Eggfetch adapter (guard Check 102): `eggsec-transport-eggfetch` implements `HttpTransport` over published `eggfetch-core` with minimal features (`http1` + `tls-rustls` + `proxy`-for-SNI only; never `http3`/`cookies`/`multipart`/compression), no direct concrete-client uses, approved-IP pinning + manual authorized redirect loop, and **no production backend consumer** (only the engine test dev-dep; agent/NSE/proxy depend on `eggsec-transport` types only); parity suites are `crates/eggsec-transport-eggfetch/tests/parity.rs` + `crates/eggsec/tests/transport_eggfetch_parity.rs`.
@@ -145,6 +145,13 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Workflows declare least-privilege permissions (`contents: read` at top level and per job; no `write-all`) (guard Check 111).
 - `.github/dependabot.yml` automates `cargo` + `github-actions` updates (weekly, no auto-merge); `ci.yml` owns `dependency-policy` (`make check-deps`) and PR-only `dependency-review` (moderate+, read-only, no separate license allowlist) jobs (guard Check 112).
 - Retained record: `docs/DEPENDENCY_EXCEPTIONS.md` (per-exception owner/review-by/blocker + license exception + yanked notice + Phase E supersession note). Policy history: `architecture/network_dependency_baseline.md` §5 (Phase A input) + §9 (Phase F closure).
+
+### Crate-Boundary Consolidation Invariants (Phase A, guards Checks 113–117)
+- `eggsec-output` owns no scheduling/session: `schedule.rs`/`session.rs` gone, no `pub mod schedule|session`, no queue/session types; canonical cron owner is `eggsec-agent::cron` (Check 113).
+- Scanner service knowledge stays scanner-owned: no `utils/service_detection.rs`, no `utils::service_detection` uses; canonical owner is `scanner::service_data` (Check 114).
+- No Reqwest multi-client pool abstraction: no `utils/client_pool.rs`, no `ClientPool`/`OptimizedClientPool` types or imports; canonical path is one cloned shared client (Check 115).
+- No second token-bucket in output/frontend crates: no `struct RateLimiter` in `eggsec-output`/`eggsec-tui`/`eggsec-cli`/`eggsec-daemon`; canonical owner is engine `utils::rate_limiter` (Check 116).
+- No utils/common catch-all crate: no `eggsec-utils`/`eggsec-common`/`eggsec-shared`/`eggsec-helpers` references, no new catch-all modules, and removed `output`/`progress`/`stealth`/`privilege` utils do not reappear (Check 117).
 
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.

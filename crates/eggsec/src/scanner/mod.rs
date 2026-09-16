@@ -85,6 +85,7 @@ pub mod endpoints;
 pub mod fingerprint;
 pub mod fingerprint_types;
 pub mod ports;
+pub mod service_data;
 pub mod spoof;
 pub mod templates;
 pub mod timing;
@@ -94,13 +95,16 @@ pub mod wordlist;
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;
 
-pub use crate::utils::service_detection::COMMON_PORTS;
 pub use endpoints::{scan_endpoints, EndpointResult, EndpointScanConfig, EndpointScanResults};
 pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerprint};
 pub use fingerprint_types::{
     EnhancedFingerprint, EvidenceType, FingerprintConfidence, FingerprintEvidence, ServiceIdentity,
 };
 pub use ports::{scan_ports, PortResult, PortScanConfig, PortScanResults, MAX_SCAN_RESULTS};
+pub use service_data::{
+    get_service_by_port, get_service_name, guess_service, guess_service_from_banner, is_database,
+    is_mail_service, is_web_service, COMMON_PORTS, PORT_SERVICE_MAP,
+};
 pub use spoof::{format_spoof_warning, random_ip_from_cidr, SpoofConfig, SpoofStats};
 pub use timing::{PortPriority, TimingConfig, TimingPreset};
 pub use udp_fingerprint::{

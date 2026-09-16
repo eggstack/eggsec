@@ -32,7 +32,7 @@ use std::time::Duration;
 use crate::cli::PortScanArgs;
 #[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
-use crate::utils::service_detection::get_service_name as get_service_name_from_utils;
+use crate::scanner::service_data::get_service_name as get_service_name_from_utils;
 
 pub const MAX_SCAN_RESULTS: usize = 10000;
 
@@ -672,7 +672,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::service_detection::COMMON_PORTS;
+    use crate::scanner::service_data::COMMON_PORTS;
 
     #[test]
     fn test_get_service_name_known_ports() {

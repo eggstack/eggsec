@@ -38,11 +38,12 @@ Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`
 **Important**: Use `FxHashMap`/`FxHashSet` instead of `std::collections::HashMap` for performance:
 - `trend.rs` - `ResultComparator::compare()`, `TrendAnalyzer::get_findings_by_category()`, `TrendAnalyzer::get_most_common_findings()`
 - `agent.rs` - `FindingSummary::from_findings()`
-- `session.rs` - `ScanSession::tab_states`, `ScanSession::results`
 - `sarif.rs` - `SarifResult::properties`
 - `junit.rs` - `JUnitBuilder::test_suites`
 - `dedup.rs` - `DedupEngine::seen`
 - `diff.rs` - `DiffEngine::compare()`
+
+Ownership note (Phase A): scheduling/cron lives in `eggsec-agent::cron` and the generic queue is `eggsec-agent::TaskScheduler` — not in output. Legacy `session.rs` tab-state persistence was removed (daemon/runtime sessions are canonical).
 
 ```rust
 use rustc_hash::FxHashMap;

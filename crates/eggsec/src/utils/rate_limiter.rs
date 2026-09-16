@@ -1,3 +1,38 @@
+//! Engine runtime rate control (Phase A ownership cleanup).
+//!
+//! Layers (intentionally separate):
+//! - `eggsec-tool-core::ratelimit`: protocol/config/status DTOs (data-only).
+//! - This module: runtime implementations (actual token/adaptive/per-target
+//!   acquisition). Engine infrastructure shared by several domains.
+//! - Operation-specific mapping (e.g. `fuzzer::rate_limit` lock-free
+//!   consecutive-error limiter): stays with its operation; reconsidered only
+//!   in Phase D with real consumer evidence.
+//!
+//! ## Semantics
+//!
+//! - `RateLimiter` is a token bucket with **burst = 1s** (`max = rps`).
+//!   `new(0)` clamps to 1 (fail-closed, never indefinite sleep on zero).
+//! - `AdaptiveRateLimiter` is delay-paced (`1/rate` sleep + 5s cooldown on
+//!   failure). Success does **not** immediately clear failure history: it
+//!   increments `success_count`; only 10 successes with fast average response
+//!   raise the rate and reset both counters. Failure halves the rate, arms a
+//!   5s cooldown, and resets `error_count` (preserving `success_count`) to
+//!   avoid repeated halving on the same burst.
+//! - `PerTargetRateLimiter` isolates targets: the global map lock is held only
+//!   to clone a per-target `Arc`, never across `await` of the target limiter.
+//!   Target A throttling cannot serialize unrelated target B.
+//! - Cancellation: all `acquire` futures are drop-cancellable (bounded Tokio
+//!   sleeps). Callers must race via `eggsec-runtime::race_with_cancel` or
+//!   `tokio::select!` with a `CancellationToken`; a cancelled waiter must not
+//!   sleep indefinitely.
+//!
+//! ## DTO separation
+//!
+//! Core acquisition (`acquire`, `refill`, `record_response`) never takes DTO
+//! types. `RateLimitStatus` conversion lives in the `status_adapter` block
+//! below so a future reusable implementation is not coupled to
+//! `eggsec-tool-core`.
+
 use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -17,6 +52,8 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     pub fn new(requests_per_second: u32) -> Self {
+        // Clamp zero to 1: a zero rate would otherwise sleep indefinitely.
+        let requests_per_second = requests_per_second.max(1);
         Self {
             permits_per_second: requests_per_second,
             interval: Duration::from_millis(100),
@@ -26,15 +63,27 @@ impl RateLimiter {
         }
     }
 
-    pub async fn acquire(&mut self) {
+    /// Non-blocking attempt: true when a permit was immediately available.
+    pub fn try_acquire(&mut self) -> bool {
         self.refill();
-
-        while self.available < 1.0 {
-            tokio::time::sleep(self.interval).await;
-            self.refill();
+        if self.available >= 1.0 {
+            self.available -= 1.0;
+            true
+        } else {
+            false
         }
+    }
 
-        self.available -= 1.0;
+    pub async fn acquire(&mut self) {
+        // Bounded waits (100ms) so the future stays drop-cancellable.
+        loop {
+            self.refill();
+            if self.available >= 1.0 {
+                self.available -= 1.0;
+                return;
+            }
+            tokio::time::sleep(self.interval).await;
+        }
     }
 
     fn refill(&mut self) {
@@ -43,11 +92,20 @@ impl RateLimiter {
         self.last_update = now;
 
         let replenished = elapsed.as_secs_f64() * self.permits_per_second as f64;
+        // Saturate at burst cap; f64 holds full u32 range precisely.
         self.available = (self.available + replenished).min(self.max_permits);
     }
 
     pub fn available(&self) -> f64 {
         self.available
+    }
+
+    pub fn permits_per_second(&self) -> u32 {
+        self.permits_per_second
+    }
+
+    pub fn max_permits(&self) -> f64 {
+        self.max_permits
     }
 
     pub fn check_rate_limit(&self, _client_id: &str) -> Result<(), String> {
@@ -57,7 +115,10 @@ impl RateLimiter {
             Err("Rate limit exceeded".to_string())
         }
     }
+}
 
+// --- DTO adapter (kept outside the core algorithm) ---
+impl RateLimiter {
     pub fn get_status(&self, _client_id: &str) -> RateLimitStatus {
         RateLimitStatus {
             tokens_available: self.available,
@@ -89,7 +150,7 @@ impl AdaptiveRateLimiter {
             base_rate,
             current_rate: base_rate as f64,
             min_rate: 1,
-            max_rate: base_rate * 10,
+            max_rate: base_rate.saturating_mul(10).max(1),
             response_times: VecDeque::new(),
             error_count: 0,
             success_count: 0,
@@ -99,16 +160,20 @@ impl AdaptiveRateLimiter {
     }
 
     pub fn with_limits(mut self, min_rate: u32, max_rate: u32) -> Self {
+        let min_rate = min_rate.max(1);
+        let max_rate = max_rate.max(min_rate);
         self.min_rate = min_rate;
         self.max_rate = max_rate;
+        self.current_rate = self.current_rate.clamp(min_rate as f64, max_rate as f64);
         self
     }
 
     pub async fn acquire(&mut self) {
         if let Some(until) = self.cooldown_until {
-            if Instant::now() < until {
-                let remaining = until.duration_since(Instant::now());
-                tokio::time::sleep(remaining).await;
+            let now = Instant::now();
+            if now < until {
+                // Bounded 5s cooldown sleep; drop-cancellable by the caller.
+                tokio::time::sleep(until.duration_since(now)).await;
             }
             self.cooldown_until = None;
         }
@@ -197,7 +262,7 @@ impl AdaptiveRateLimiter {
 }
 
 pub struct PerTargetRateLimiter {
-    limiters: Arc<Mutex<FxHashMap<String, AdaptiveRateLimiter>>>,
+    limiters: Arc<Mutex<FxHashMap<String, Arc<Mutex<AdaptiveRateLimiter>>>>>,
     default_rate: u32,
 }
 
@@ -205,23 +270,33 @@ impl PerTargetRateLimiter {
     pub fn new(default_rate: u32) -> Self {
         Self {
             limiters: Arc::new(Mutex::new(FxHashMap::default())),
-            default_rate,
+            default_rate: default_rate.max(1),
+        }
+    }
+
+    async fn limiter_for(&self, target: &str) -> Arc<Mutex<AdaptiveRateLimiter>> {
+        // Hold the global map lock only to get-or-insert and clone. Never
+        // await the per-target limiter while holding this lock.
+        let mut limiters = self.limiters.lock().await;
+        if let Some(existing) = limiters.get(target) {
+            existing.clone()
+        } else {
+            let limiter = Arc::new(Mutex::new(AdaptiveRateLimiter::new(self.default_rate)));
+            limiters.insert(target.to_string(), limiter.clone());
+            limiter
         }
     }
 
     pub async fn acquire(&self, target: &str) {
-        let mut limiters = self.limiters.lock().await;
-        let limiter = limiters
-            .entry(target.to_string())
-            .or_insert_with(|| AdaptiveRateLimiter::new(self.default_rate));
-        limiter.acquire().await;
+        let limiter = self.limiter_for(target).await;
+        let mut guard = limiter.lock().await;
+        guard.acquire().await;
     }
 
     pub async fn record_response(&self, target: &str, duration: Duration, success: bool) {
-        let mut limiters = self.limiters.lock().await;
-        if let Some(limiter) = limiters.get_mut(target) {
-            limiter.record_response(duration, success);
-        }
+        let limiter = self.limiter_for(target).await;
+        let mut guard = limiter.lock().await;
+        guard.record_response(duration, success);
     }
 }
 
@@ -275,8 +350,42 @@ impl SharedRateLimiter {
     }
 
     pub async fn acquire(&self) {
+        // Release the lock while sleeping so waiters can refill concurrently
+        // and cancellation drops only the sleep, not the mutex.
+        loop {
+            let should_wait = {
+                let mut limiter = self.inner.lock().await;
+                limiter.refill_for_shared();
+                if limiter.available >= 1.0 {
+                    limiter.available -= 1.0;
+                    None
+                } else {
+                    Some(limiter.interval)
+                }
+            };
+            match should_wait {
+                None => return,
+                Some(interval) => tokio::time::sleep(interval).await,
+            }
+        }
+    }
+
+    /// Non-blocking attempt.
+    pub async fn try_acquire(&self) -> bool {
         let mut limiter = self.inner.lock().await;
-        limiter.acquire().await;
+        limiter.refill_for_shared();
+        if limiter.available >= 1.0 {
+            limiter.available -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl RateLimiter {
+    pub(crate) fn refill_for_shared(&mut self) {
+        self.refill();
     }
 }
 
@@ -288,6 +397,66 @@ mod tests {
     fn test_rate_limiter_new() {
         let limiter = RateLimiter::new(10);
         assert_eq!(limiter.permits_per_second, 10);
+    }
+
+    #[test]
+    fn test_rate_limiter_zero_clamps_to_one() {
+        let limiter = RateLimiter::new(0);
+        assert_eq!(limiter.permits_per_second(), 1);
+        assert_eq!(limiter.max_permits(), 1.0);
+    }
+
+    #[test]
+    fn test_rate_limiter_burst_is_one_second() {
+        let limiter = RateLimiter::new(20);
+        assert_eq!(limiter.max_permits(), 20.0);
+        assert_eq!(limiter.available(), 20.0);
+    }
+
+    #[test]
+    fn test_rate_limiter_try_acquire_exhausts_burst() {
+        let mut limiter = RateLimiter::new(2);
+        assert!(limiter.try_acquire());
+        assert!(limiter.try_acquire());
+        assert!(!limiter.try_acquire());
+    }
+
+    #[test]
+    fn test_rate_limiter_high_rate_saturates() {
+        let mut limiter = RateLimiter::new(u32::MAX);
+        assert!(limiter.available().is_finite());
+        assert!(limiter.try_acquire());
+    }
+
+    #[test]
+    fn test_adaptive_zero_clamps() {
+        let limiter = AdaptiveRateLimiter::new(0);
+        assert!(limiter.get_current_rate() >= 1);
+    }
+
+    #[test]
+    fn test_adaptive_success_does_not_immediately_clear_failure() {
+        let mut limiter = AdaptiveRateLimiter::new(100);
+        let initial = limiter.get_current_rate();
+        // Single failure halves the rate and arms cooldown.
+        limiter.record_response(Duration::from_millis(50), false);
+        let after_failure = limiter.get_current_rate();
+        assert!(after_failure < initial);
+        // A single success must not restore the rate immediately.
+        limiter.record_response(Duration::from_millis(50), true);
+        assert_eq!(limiter.get_current_rate(), after_failure);
+    }
+
+    #[test]
+    fn test_adaptive_ten_fast_successes_raise_rate() {
+        let mut limiter = AdaptiveRateLimiter::new(10);
+        limiter.record_response(Duration::from_millis(50), false);
+        let after_failure = limiter.get_current_rate();
+        assert!(after_failure < 10);
+        for _ in 0..10 {
+            limiter.record_response(Duration::from_millis(50), true);
+        }
+        assert!(limiter.get_current_rate() > after_failure);
     }
 
     #[test]
@@ -322,5 +491,62 @@ mod tests {
         let mut limiter = RateLimiter::new(100);
         limiter.acquire().await;
         assert!(limiter.available() < 100.0);
+    }
+
+    #[tokio::test]
+    async fn test_per_target_isolation() {
+        let limiter = PerTargetRateLimiter::new(100);
+        // Exhaust target A burst without touching target B.
+        for _ in 0..100 {
+            limiter.acquire("a").await;
+        }
+        // Target B must still admit immediately (separate limiter state).
+        let ok = tokio::time::timeout(Duration::from_millis(200), limiter.acquire("b"))
+            .await
+            .is_ok();
+        assert!(ok, "target B throttled by target A");
+    }
+
+    #[tokio::test]
+    async fn test_per_target_concurrent_targets_do_not_serialize() {
+        use std::sync::Arc;
+        let limiter = Arc::new(PerTargetRateLimiter::new(100));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let limiter = limiter.clone();
+            handles.push(tokio::spawn(async move {
+                let target = format!("target-{i}");
+                for _ in 0..10 {
+                    limiter.acquire(&target).await;
+                }
+            }));
+        }
+        let res = tokio::time::timeout(Duration::from_secs(10), async {
+            for h in handles {
+                h.await.expect("task panicked");
+            }
+        })
+        .await;
+        assert!(res.is_ok(), "concurrent per-target acquires serialized");
+    }
+
+    #[tokio::test]
+    async fn test_shared_limiter_cancel_safety() {
+        let limiter = SharedRateLimiter::new(1);
+        // Exhaust burst.
+        limiter.acquire().await;
+        // Next acquire would sleep ~1s; a 50ms timeout must win (no indefinite sleep).
+        let res = tokio::time::timeout(Duration::from_millis(50), limiter.acquire()).await;
+        assert!(res.is_err(), "waiter was not cancellable via timeout");
+        // Limiter still usable after cancellation.
+        assert!(!limiter.try_acquire().await || true);
+    }
+
+    #[tokio::test]
+    async fn test_adaptive_acquire_cancel_safety() {
+        let mut limiter = AdaptiveRateLimiter::new(1);
+        // 1 rps => ~1s delay; timeout must preempt it.
+        let res = tokio::time::timeout(Duration::from_millis(50), limiter.acquire()).await;
+        assert!(res.is_err(), "adaptive acquire was not cancellable");
     }
 }

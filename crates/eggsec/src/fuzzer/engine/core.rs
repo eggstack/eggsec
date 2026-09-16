@@ -146,7 +146,7 @@ impl FuzzEngine {
             .common
             .user_agent
             .clone()
-            .unwrap_or_else(crate::utils::stealth::tool_user_agent);
+            .unwrap_or_else(crate::utils::http::tool_user_agent);
 
         let client = Self::build_client(&args)?;
 

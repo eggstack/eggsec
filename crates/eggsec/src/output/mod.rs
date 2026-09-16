@@ -1,11 +1,13 @@
 //! Output and report generation module
 //!
-//! Provides report generation, format conversion, trend analysis, and scan session management.
+//! Provides report generation, format conversion, and trend analysis.
 //!
 //! # Re-export shim (intentionally stable)
 //!
 //! Most output types and renderers live in the `eggsec-output` crate and are
 //! re-exported here for backward compatibility (`pub use eggsec_output::*`).
+//! Scheduling/cron lives in `eggsec-agent::cron`; legacy tab-state session
+//! persistence was removed (Phase A) as superseded by daemon/runtime sessions.
 //!
 //! **Local modules** — depend on engine-internal types (`PipelineReport`, etc.)
 //! and could not be moved to `eggsec-output`:
@@ -16,8 +18,8 @@
 //! traits that bridge engine-internal `PipelineReport` into eggsec-output builders.
 
 // Re-export everything from eggsec-output (agent, ai_schema, baseline, convert,
-// csv, dedup, diff, escape, html, junit, markdown, sarif, schedule, session,
-// trend and all their public types).
+// csv, dedup, diff, escape, html, junit, markdown, sarif, trend and all their
+// public types).
 pub use eggsec_output::*;
 
 // Local modules that depend on engine-internal types and could not be moved.

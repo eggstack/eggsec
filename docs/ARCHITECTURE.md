@@ -49,7 +49,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec-core` | Shared primitives | No | No | No | Yes | `Severity`, `SensitiveString`, constants. Zero internal deps. |
 | `eggsec-tool-core` | Protocol-neutral DTOs | No | No | No | Yes | `ToolRequest`, `ToolResponse`, `ToolError`, history types. |
 | `eggsec-output` | Report formatting | No | Output adapters | No | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown. Portable adapters. |
-| `eggsec-agent` | Agent coordination | No | Coordination only | No | Yes | Registry, scheduler, lifecycle. Depends only on `eggsec-core`. |
+| `eggsec-agent` | Agent coordination | No | Coordination only | No | Yes | Registry, scheduler, lifecycle, cron. Depends only on `eggsec-core`. |
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
 | `eggsec-tui` | TUI frontend | No | No | **Yes** | No | 33 tabs, enforcement toggle, packaged themes. |

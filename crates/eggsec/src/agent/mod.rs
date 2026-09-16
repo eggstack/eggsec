@@ -42,7 +42,6 @@ use crate::config::preflight_operation;
 use crate::config::EggsecConfig;
 use crate::config::EnforcementError;
 use crate::config::ExecutionSurface;
-use crate::output::schedule::CronScheduler;
 use crate::tool::{
     create_default_registry, EnforcedDispatcher, ToolDispatcher, ToolRegistry, ToolRequest,
     ToolResponse,
@@ -66,6 +65,10 @@ pub use events::{EventHandler, SecurityEvent};
 pub use memory::LongitudinalMemory;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 pub use services::AgentExecutionService;
+// Canonical cron owner (Phase A): autonomous-agent scheduling is the only
+// durable consumer, so `eggsec-agent::cron` owns parsing/matching. Re-exported
+// here for engine-internal convenience; `eggsec-output::schedule` is removed.
+pub use eggsec_agent::{CronExpression, CronScheduler};
 
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoadResult, SkillLoader, SkillRegistry};
@@ -206,7 +209,6 @@ pub struct Agent {
     execution_services: Option<std::sync::Arc<dyn AgentExecutionService>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
-    scheduler: CronScheduler,
     portfolio: TargetPortfolio,
     memory: LongitudinalMemory,
     alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
@@ -334,7 +336,6 @@ impl Agent {
             execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
-            scheduler: CronScheduler::new(),
             portfolio,
             memory,
             alert_router,
@@ -429,7 +430,6 @@ impl Agent {
             execution_services: Some(execution_services),
             #[cfg(feature = "ai-integration")]
             ai_client: None,
-            scheduler: CronScheduler::new(),
             portfolio,
             memory,
             alert_router,
@@ -479,7 +479,6 @@ impl Agent {
             execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
-            scheduler: CronScheduler::new(),
             portfolio,
             memory,
             alert_router,
@@ -533,7 +532,6 @@ impl Agent {
             execution_services: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
-            scheduler: CronScheduler::new(),
             portfolio,
             memory,
             alert_router,
@@ -793,7 +791,7 @@ impl Agent {
 
         for (target_id, config) in targets {
             if let Some(ref schedule) = config.schedule {
-                if cron_should_run_target(&self.scheduler, schedule, config.last_scan, &now) {
+                if cron_should_run_target(schedule, config.last_scan, &now) {
                     if let Some(ref window) = config.off_peak_window {
                         if !window.is_in_window(&now) {
                             tracing::debug!("Skipping {} - outside off-peak window", target_id);
@@ -1570,8 +1568,8 @@ fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::S
     }
 }
 
-fn cron_should_run_for(_scheduler: &CronScheduler, schedule: &str, now: &DateTime<Utc>) -> bool {
-    if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
+fn cron_should_run_for(schedule: &str, now: &DateTime<Utc>) -> bool {
+    if let Ok(expr) = CronExpression::parse(schedule) {
         expr.matches(now)
     } else {
         false
@@ -1580,13 +1578,12 @@ fn cron_should_run_for(_scheduler: &CronScheduler, schedule: &str, now: &DateTim
 
 /// Check if a scheduled target should run, considering last_scan to prevent duplicates in same window
 fn cron_should_run_target(
-    scheduler: &CronScheduler,
     schedule: &str,
     last_scan: Option<DateTime<Utc>>,
     now: &DateTime<Utc>,
 ) -> bool {
     // First check if cron matches now
-    if !cron_should_run_for(scheduler, schedule, now) {
+    if !cron_should_run_for(schedule, now) {
         return false;
     }
 
@@ -1818,23 +1815,21 @@ mod tests {
 
     #[test]
     fn test_cron_scheduler_should_run_for_valid_expression() {
-        let scheduler = CronScheduler::new();
         let test_time = chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
             .unwrap()
             .and_hms_opt(12, 0, 0)
             .unwrap()
             .and_utc();
         assert!(
-            cron_should_run_for(&scheduler, "0 * * * *", &test_time),
+            cron_should_run_for("0 * * * *", &test_time),
             "At minute 0 should match"
         );
     }
 
     #[test]
     fn test_cron_scheduler_should_not_run_for_invalid_expression() {
-        let scheduler = CronScheduler::new();
         let now = chrono::Utc::now();
-        assert!(!cron_should_run_for(&scheduler, "invalid", &now));
+        assert!(!cron_should_run_for("invalid", &now));
     }
 
     #[test]
@@ -2050,7 +2045,6 @@ mod tests {
     // Phase 4: Idempotent scheduling tests
     #[test]
     fn test_should_run_target_first_time() {
-        let scheduler = CronScheduler::new();
         // Fixed time with minute 0 to match cron expression
         let now = chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
             .unwrap()
@@ -2060,26 +2054,20 @@ mod tests {
         let schedule = "0 * * * *"; // Minute 0
         let last_scan = None;
 
-        assert!(cron_should_run_target(
-            &scheduler, schedule, last_scan, &now
-        ));
+        assert!(cron_should_run_target(schedule, last_scan, &now));
     }
 
     #[test]
     fn test_should_run_target_same_minute() {
-        let scheduler = CronScheduler::new();
         let now = Utc::now();
         let schedule = "* * * * *";
         let last_scan = Some(now); // Same time
 
-        assert!(!cron_should_run_target(
-            &scheduler, schedule, last_scan, &now
-        ));
+        assert!(!cron_should_run_target(schedule, last_scan, &now));
     }
 
     #[test]
     fn test_should_run_target_next_minute() {
-        let scheduler = CronScheduler::new();
         // Fixed time with minute 30, last_scan at minute 29
         let now = chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
             .unwrap()
@@ -2089,9 +2077,7 @@ mod tests {
         let last_scan = Some(now - chrono::Duration::minutes(1));
         let schedule = "* * * * *"; // Every minute
 
-        assert!(cron_should_run_target(
-            &scheduler, schedule, last_scan, &now
-        ));
+        assert!(cron_should_run_target(schedule, last_scan, &now));
     }
 
     // Phase 4/7: Scheduled scan idempotent test

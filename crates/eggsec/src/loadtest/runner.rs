@@ -1,5 +1,5 @@
 use crate::error::{EggsecError, Result};
-use crate::utils::stealth::tool_user_agent;
+use crate::utils::http::tool_user_agent;
 use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
 use indicatif::{ProgressBar, ProgressStyle};

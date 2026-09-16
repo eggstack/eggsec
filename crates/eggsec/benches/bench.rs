@@ -2,7 +2,6 @@ use eggsec::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_END
 use eggsec::scanner::ports::{scan_ports, PortScanConfig};
 use eggsec::scanner::spoof::SpoofConfig;
 use eggsec::scanner::timing::{PortPriority, TimingConfig, TimingPreset};
-use eggsec::utils::client_pool::ClientPool;
 use std::env;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -55,23 +54,17 @@ fn benchmark_port_priority() {
     println!("  Per call: {} ns", elapsed.as_nanos() / 10000);
 }
 
-fn benchmark_client_pool() {
-    print_header("Client Pool Creation Benchmark");
+fn benchmark_shared_client() {
+    print_header("Shared Client Clone Benchmark");
 
     let start = Instant::now();
-    for _ in 0..100 {
-        let pool = ClientPool::from_config(
-            50,
-            Duration::from_secs(10),
-            false,
-            Some("TestAgent/1.0".to_string()),
-            None,
-        );
-        assert_eq!(pool.pool_size(), 50);
+    for _ in 0..10000 {
+        let client = eggsec::utils::get_shared_http_client();
+        let _ = client.clone();
     }
     let elapsed = start.elapsed();
-    println!("Create 50-client pool x100: {:?}", elapsed);
-    println!("  Per pool: {} ms", elapsed.as_millis() / 100);
+    println!("Clone shared client x10k: {:?}", elapsed);
+    println!("  Per clone: {} ns", elapsed.as_nanos() / 10000);
 }
 
 async fn benchmark_port_scan(host: &str, ports: Vec<u16>, timing: TimingConfig, name: &str) {
@@ -156,7 +149,7 @@ async fn main() {
     // CPU-bound benchmarks
     benchmark_timing_config();
     benchmark_port_priority();
-    benchmark_client_pool();
+    benchmark_shared_client();
 
     // Network benchmarks - get target from args or use default
     let args: Vec<String> = env::args().collect();

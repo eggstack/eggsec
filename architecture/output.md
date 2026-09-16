@@ -2,7 +2,9 @@
 
 ## Purpose
 
-The Output module handles formatting, deduplication, trend analysis, baseline comparison, session persistence, and export of security findings into standardized formats. It is split across two crate boundaries: `eggsec-output` (19 source files, dependency-light, no engine/runtime deps) and the engine crate `eggsec`'s `output/` (8 source files, depends on engine-internal types). Guard-enforced invariant: `eggsec-output` depends only on `eggsec-core` — no engine or runtime dependencies.
+The Output module handles formatting, deduplication, trend analysis, baseline comparison, and export of security findings into standardized formats. It is split across two crate boundaries: `eggsec-output` (17 source files, dependency-light, no engine/runtime deps) and the engine crate `eggsec`'s `output/` (8 source files, depends on engine-internal types). Guard-enforced invariant: `eggsec-output` depends only on `eggsec-core` — no engine or runtime dependencies.
+
+Ownership note (Phase A, 2026-09-16): scan scheduling/cron/queue behavior no longer lives here. Cron parsing/matching lives in `eggsec-agent::cron` (only durable consumer is autonomous-agent scheduling); the generic queue is `eggsec-agent::TaskScheduler`. The duplicate scheduler-local `RateLimiter` was removed (canonical owner is engine `utils::rate_limiter`). Legacy tab-state session persistence (`ScanSession`) was removed as superseded by daemon/runtime durable sessions plus frontend `AppState` — it had zero production consumers.
 
 ## Role & Responsibilities
 
@@ -12,14 +14,12 @@ The Output module handles formatting, deduplication, trend analysis, baseline co
 - **Trend analysis**: LRU-cached historical comparison with sliding-window delta computation
 - **Baseline comparison**: Finding-level new/resolved/unchanged classification
 - **Diff summary**: Numeric envelope (`DiffSummary`) for pipeline run manifests
-- **Session persistence**: TUI session save/load via JSON
-- **Scheduling**: Cron-based scan scheduling with priority queue
 - **AI output schema**: Typed AI-consumable finding output with risk score
 - **Policy/audit summaries**: Aggregated enforcement decision statistics
 
 ## Location & Feature Gating
 
-### `crates/eggsec-output/src/` (19 files)
+### `crates/eggsec-output/src/` (17 files)
 
 Always compiled. Dependencies: `eggsec-core`, `serde`, `serde_json`, `chrono`, `rustc-hash`, `quick-xml`, `unicode-normalization`, `lru`, `uuid`, `hostname`, `tokio`.
 
@@ -41,11 +41,9 @@ Always compiled. Dependencies: `eggsec-core`, `serde`, `serde_json`, `chrono`, `
 | `markdown.rs` | 141 | 0 | `MarkdownReport` — markdown-formatted report generation |
 | `policy_summary.rs` | 54 | 2 | `PolicySummary` — policy decision metadata for report envelopes |
 | `sarif.rs` | 276 | 1 | `SarifBuilder`, `SarifReport` — SARIF 2.1.0 JSON via `serde_json` (no XML parsing, XXE-safe) |
-| `schedule.rs` | 516 | 8 | `CronScheduler`, `CronExpression`, `ScanQueue`, `RateLimiter`, `ScheduledScan` |
-| `session.rs` | 102 | 0 | `ScanSession`, `TabSessionState`, `InputFieldState`, `SessionInfo` — TUI session persistence |
 | `trend.rs` | 539 | 15 | `TrendAnalyzer`, `ResultComparator`, `TrendAnalysis`, `TrendDirection`, `ComparisonResult`, `ScanResult` |
 
-**Test-bearing files**: 14 of 19 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, junit, policy_summary, sarif, schedule, trend).
+**Test-bearing files**: 12 of 17 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, junit, policy_summary, sarif, trend).
 
 ### `crates/eggsec/src/output/` (8 files, engine crate)
 
@@ -63,7 +61,7 @@ Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionB
 
 **Test-bearing files**: 4 of 8 (attack_graph, lab_report, pdf, report_summary, run_manifest = 5).
 
-**Combined test-bearing files**: 19 of 27 total source files.
+**Combined test-bearing files**: 17 of 25 total source files.
 
 ## Architecture
 
@@ -252,10 +250,9 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 | `junit.rs` | 2 | Builder construction, XML output validation |
 | `policy_summary.rs` | 2 | Default values, serialization |
 | `sarif.rs` | 1 | Builder construction, version/schema validation |
-| `schedule.rs` | 8 | Cron parsing, seconds, wildcard, step, next_run, queue complete/fail |
 | `trend.rs` | 15 | Comparator added/removed/no-change/same-title-different-category, risk trend, analyzer single/worsening/improving, average time, category counts, most common, default |
 
-**Total output crate tests**: 66 (verified by grep).
+**Total output crate tests**: 58 (schedule/session removed with their 8 tests; cron tests live in `eggsec-agent::cron`).
 
 ### Test Counts by File (engine output + findings)
 
@@ -272,7 +269,7 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 
 **Total engine output + findings tests**: 46.
 
-**Grand total**: 112 tests across output and findings modules.
+**Grand total**: 104 tests across output and findings modules (112 before Phase A; 8 cron/queue tests moved to `eggsec-agent::cron`).
 
 ## Invariants & Gotchas
 
@@ -283,7 +280,7 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 5. **Three separate `Confidence` enums** — known divergence documented in `findings.md`
 6. **Baseline comparison uses `AgentFinding.id`**, not fingerprint — fingerprint-based diff is not implemented
 7. **`DedupEngine` uses unbounded `FxHashSet`** — no capacity limit; could grow without bound across long sessions
-8. **`ScanSession` is NOT atomic** — writes the full JSON file; partial write on crash leaves corrupted state
+8. **Session persistence lives outside output** — daemon/runtime durable sessions + frontend `AppState`; output holds no session state (Phase A)
 9. **`TrendAnalyzer` LRU cache** — max 1000 entries; eviction is LRU, not time-based
 10. **SARIF is JSON-based** (RFC 8259), not XML — XXE does not apply
 11. **JUnit uses `quick_xml::Writer`** in write-only mode — no entity expansion, XXE-safe
@@ -291,8 +288,7 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 13. **CSV escaping** uses NFKC normalization + formula injection protection (leading `=`, `+`, `-`, `@`, `\t`, `\r`)
 14. **Markdown** does NOT escape pipe characters in finding fields — tables could break with `|` in content
 15. **PDF truncates to 30 findings** per page with a warning; no multi-page support
-16. **`ScanQueue` max size** defaults to 100; priority-based insertion
-17. **`CronScheduler::next_run()`** does linear scan up to 7 days ahead — O(7*86400) worst case
+16. **Scheduling lives in `eggsec-agent`** — `cron::CronScheduler::next_run()` scans linearly up to 7 days ahead — O(7*86400) worst case
 
 ## Security Notes
 
@@ -316,7 +312,6 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 - `agent.rs` — `FindingSummary`
 - `dedup.rs` — `DedupEngine::seen`
 - `baseline.rs` — `BaselineComparison::compare()`
-- `session.rs` — `ScanSession::tab_states`, `ScanSession::results`, `TabSessionState::options`
 - `sarif.rs` — `SarifResult::properties`
 - `junit.rs` — `JUnitBuilder::test_suites`
 - `report_summary.rs` — `ReportSummary::from_findings()` (all maps)
@@ -328,10 +323,9 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 |----------|-------|----------|
 | `dedup.rs:26` | `DedupEngine::seen: FxHashSet<String>` has **no capacity bound**. Long-running sessions with many findings could grow this set without limit. | Low |
 | `markdown.rs:196` | `escape_pipe` closure only escapes `\|` but markdown tables can also break on newlines in content. Not a security issue but could produce malformed output. | Informational |
-| `session.rs:38-44` | `ScanSession::save()` writes the full JSON file non-atomically. A crash during write leaves corrupted state. No temp-file-and-rename pattern. | Low |
 | `pdf.rs:142-205` | `generate_html()` is `#[cfg(test)]`-only test helper — its HTML output does NOT escape finding content. Safe because it's test-only, but if accidentally used in production would be an injection vector. | Informational |
 | `envelope.rs:377` | `BaselineSummary::severity_deltas` uses `std::collections::HashMap` while the rest of the output crate uses `FxHashMap`. Minor performance inconsistency. | Informational |
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-16 (Phase A: schedule/session removed; cron in `eggsec-agent::cron`)*

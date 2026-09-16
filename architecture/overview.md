@@ -56,8 +56,8 @@ nor hosted CI publishes a package.
 |-------|------|:---:|-------|
 | `eggsec-core` | Shared primitives | Yes | `Severity` (5 levels), `SensitiveString` (zeroize + constant-time eq), constants. Zero internal deps. |
 | `eggsec-tool-core` | Protocol-neutral DTOs | Yes | `ToolRequest`, `ToolResponse`, `ToolError`, history/rate-limit types. Depends only on `eggsec-core`. |
-| `eggsec-output` | Report formatting | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, envelope, dedup, trends, diff, scheduling. No engine/runtime deps. PDF lives in the engine crate, not here. |
-| `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation. Internal deps: `eggsec-core` only. |
+| `eggsec-output` | Report formatting | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, envelope, dedup, trends, diff. No engine/runtime deps. PDF lives in the engine crate, not here. Scheduling/session removed in Phase A (cron in `eggsec-agent::cron`). |
+| `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation, cron. Internal deps: `eggsec-core` only. |
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
@@ -471,7 +471,7 @@ eggsec-core (leaf — no workspace deps)
     ↑
     ├── eggsec-tool-core     (ToolRequest/Response/Finding/Error DTOs)
     ├── eggsec-output        (report formats, envelope, dedup, trends)
-    ├── eggsec-agent         (agent registry, scheduler, lifecycle)
+    ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
     ├── eggsec-transport-eggfetch (HttpTransport over eggfetch-core; no production backend consumers yet — Phase D wires per consumer)
     │

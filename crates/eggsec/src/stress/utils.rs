@@ -42,7 +42,7 @@ pub fn create_channel(
     Box<dyn datalink::DataLinkSender>,
     Box<dyn datalink::DataLinkReceiver>,
 )> {
-    crate::utils::privilege::check_privileged(label)?;
+    crate::platform::check_privileged(label)?;
     let config = Config::default();
 
     match datalink::channel(interface, config) {

@@ -12,7 +12,8 @@ Eggsec autonomous agent development — operational constraints, testable seams,
 - `crates/eggsec/src/agent/constraints/` — ConstraintChecker, OperationalConstraints
 - `crates/eggsec/src/agent/portfolio.rs` — TargetPortfolio, TargetConfig
 - `crates/eggsec/src/agent/memory.rs` — LongitudinalMemory, dedup
-- `crates/eggsec-agent/src/scheduler.rs` — TaskScheduler with lease-based model
+- `crates/eggsec-agent/src/scheduler.rs` — TaskScheduler with lease-based model (canonical queue: priority, delayed retry, leasing, cancellation)
+- `crates/eggsec-agent/src/cron.rs` — CronExpression/CronScheduler (Phase A owner; only durable consumer is autonomous-agent scheduling)
 - `crates/eggsec-agent/src/lifecycle.rs` — LifecycleManager with health monitoring
 - `crates/eggsec/src/tool/protocol/agent_routes.rs` — REST API for agents and tasks
 
@@ -20,7 +21,7 @@ Eggsec autonomous agent development — operational constraints, testable seams,
 - Add operational constraints: Update `OperationalConstraints` in `agent/constraints.rs`, use `ConstraintChecker` in scan paths.
 - Add test doubles: Use `ScanDispatcherTrait`/`AlertSenderTrait` with `Agent::new_for_test()`.
 - Fix event handling: Ensure `trigger_event` restores handlers on success/error.
-- Scheduled scans: Use `should_run_scheduled_target` helper, update `last_scan` only on success.
+- Scheduled scans: Use `cron_should_run_target` helper (stateless `CronExpression::parse` + same-minute dedup via `last_scan`), update `last_scan` only on success. Cron types live in `eggsec_agent::cron`, re-exported as `eggsec::agent::{CronExpression, CronScheduler}`.
 
 ## Scheduler Model (Lease-Based)
 

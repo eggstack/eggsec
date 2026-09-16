@@ -11,7 +11,8 @@
 mod prereqs;
 
 pub use prereqs::{
-    all_domain_ids, capabilities_summary, current_arch, current_kernel, current_os, has_binary,
-    has_cap_net_admin, has_cap_net_raw, is_root, list_interfaces, report_for, skip_reason_for,
-    DomainPrerequisites, PlatformReport, PrereqStatus, Prerequisite,
+    all_domain_ids, capabilities_summary, check_privileged, current_arch, current_kernel,
+    current_os, has_binary, has_cap_net_admin, has_cap_net_raw, is_root, list_interfaces,
+    report_for, require_root, skip_reason_for, DomainPrerequisites, PlatformReport, PrereqStatus,
+    Prerequisite,
 };

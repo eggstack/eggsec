@@ -281,6 +281,38 @@ pub fn has_cap_net_admin() -> bool {
     current_os() == "linux" && is_root()
 }
 
+/// Fail-closed privilege gate (Phase A ownership cleanup).
+///
+/// Moved from `utils::privilege`: privilege detection belongs with platform
+/// capability/prerequisite detection. Read-only and fail-closed — it reports
+/// status and never attempts to acquire privilege.
+pub fn check_privileged(operation: &str) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        if !is_root() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{operation} requires root privileges. Run with sudo or as root user."),
+            ));
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            format!("{operation} is not supported on this platform."),
+        ))
+    }
+}
+
+/// `anyhow` variant of [`check_privileged`] for callers that already use
+/// `anyhow`. Fail-closed with the same read-only semantics.
+pub fn require_root(operation: &str) -> anyhow::Result<()> {
+    check_privileged(operation)
+        .map_err(|e| anyhow::anyhow!("{operation} requires root privileges: {e}"))
+}
+
 /// True when `name` resolves via `PATH` search (no shell-out to the binary).
 pub fn has_binary(name: &str) -> bool {
     if name.is_empty() || name.contains('/') || name.contains('\\') {

@@ -10,6 +10,7 @@
 
 pub mod aggregator;
 pub mod communication;
+pub mod cron;
 pub mod delegation;
 pub mod lifecycle;
 pub mod registry;
@@ -23,6 +24,7 @@ pub use communication::{
     HealthStatus, InterAgentChannel, InterAgentError, MessageType, MultiAgentCoordinator,
     TaskStatusUpdate,
 };
+pub use cron::{CronExpression, CronScheduler};
 pub use delegation::{DelegationRequest, DelegationResponse};
 pub use lifecycle::{
     AgentHealth, HealthIssue, LifecycleConfig, LifecycleEvent, LifecycleEventType, LifecycleManager,

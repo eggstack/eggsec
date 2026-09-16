@@ -29,7 +29,7 @@ make check-python           # only when Python bindings/stubs/docs/scripts chang
 | `eggsec` | engine library |
 | `eggsec-cli` / `eggsec-tui` | binary shell / terminal UI |
 | `eggsec-runtime`, `eggsec-daemon`, `eggsec-daemon-protocol`, `eggsec-ui-model` | task lifecycle, session host, IPC types, view DTOs |
-| `eggsec-output`, `eggsec-agent` | reports, agent coordination |
+| `eggsec-output`, `eggsec-agent` | reports (no scheduling/session), agent coordination (registry, scheduler, lifecycle, cron) |
 | `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse` | domain crates (never authorize — caller enforces) |
 | `eggsec-transport` | scope-aware outbound HTTP contract (neutral DTOs, mandatory `NetworkAuthority`, recording fake; `bytes`/`http`/`url`/`thiserror` only) |
 | `eggsec-transport-eggfetch` | `HttpTransport` over published `eggfetch-core` (approved-IP pinning, manual authorized redirects; no production consumers yet — Phase D migrates) |

@@ -51,7 +51,7 @@ impl PacketTab {
             .add(InputField::new("Output File (optional)"));
 
         #[cfg(feature = "stress-testing")]
-        let is_root = eggsec::utils::privilege::is_root();
+        let is_root = eggsec::platform::is_root();
         #[cfg(not(feature = "stress-testing"))]
         let is_root = false;
         let privileges_required = true;
