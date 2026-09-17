@@ -857,3 +857,79 @@ Append after execution:
 - exact local commands/results;
 - hosted CI run IDs/results;
 - residual debt and deliberately unsupported route shapes.
+
+## Completion record (appended 2026-09-17 during follow-up pass)
+
+- Baseline SHA `a497009bb29a18dca3432f0b59bb83882ef2039f` / final SHA
+  `ea41641866b53a5c2ea7151482b32c71c1275706` (commit "Load-test
+  authorization + transport corrective pass").
+- Production entry points carry the `EnforcementContext` scope snapshot:
+  CLI `handle_load` → `run_cli_with_scope(ctx.scope)`; canonical
+  `execute_approved_execution()` / `execute_canonical_with_scope()` via
+  engine-owned `ApprovedExecution` (`approve_execution()` /
+  `approve_manual_execution()` token + scope from the same context);
+  tool dispatch via `ToolExecutionContext::execute_with_context()` through
+  `EnforcedDispatcher::dispatch_execution()`; daemon/runtime via
+  `ApprovedRunRequest` bundle; Python via `runner.set_scope()`; tests via
+  explicit `run_with(transport, authority, ...)`.
+- `ApprovedExecution { approved: ApprovedOperation, scope: Scope }`
+  constructed only through `EnforcementContext`, so a strict caller cannot
+  pair a valid token with an unrelated broader scope. Pure
+  `eggsec-policy::ApprovedOperation` remains the operation/target token;
+  no transport/DNS objects in the policy crate.
+- Wildcard removed: `default_facade_scope()` deleted;
+  `LoadTestRunner` stores `Option<Scope>` and ordinary `run()` fails
+  before I/O without scope (guard Check 127). No production
+  `ScopeRule::new("*")` replacement.
+- Reqwest fail-closed: constructors/`client_for()` return `Result` (no
+  `Client::new()` default, no verified/insecure cross-fallback, no
+  placeholder proxy, no direct-for-proxy fallback; guard Check 130);
+  proxied cache keyed by endpoint + mode + TLS + credential fingerprint
+  (guard Check 131); adversarial regressions cover proxy-no-direct-fallback,
+  invalid-proxy, credential isolation, insecure/verified non-switching.
+- `NetworkAuthority` gains `authorize_proxy_resolved` /
+  `authorize_proxy_socket` (additive, safe defaults delegating to
+  ultimate equivalents; `ScopeAuthority` retains `Proxy` provenance).
+  Strict proxy fixture requires both checkpoints, not just
+  `authorize_proxy()`.
+- Eggfetch `0.1.5` (`default-features = false`, `http1` + `http2` +
+  `tls-rustls` + `proxy`; HTTP/3 off) with `Auto { allow_http3: false }`
+  H1/H2 ALPN; approved-IP pinning + manual authorized redirect loop;
+  qualified proxy pins (`Proxy::resolved_addresses` +
+  `proxy_target_addresses`; CONNECT + SOCKS5 local supported,
+  SOCKS5H/plaintext fail closed). H1/H2 parity + performance measured on
+  loopback fixtures (see `architecture/loadtest.md`: Reqwest baseline
+  ~17–24k RPS vs Eggfetch 11–25k RPS at 1/10/50/100 concurrency with
+  identical Host/SNI/redirect/reuse semantics).
+- Proxy release consumed (not blocked): published `eggfetch-core 0.1.5`
+  contains the qualified route-pinning APIs; no Git dependency introduced.
+  Route matrix: direct + CONNECT + SOCKS5-local supported with both pins;
+  SOCKS5H + plaintext-forward fail closed (guard Check 133).
+- MSRV `1.88` → `1.89` (workspace `rust-version`; `eggfetch-core 0.1.5`
+  declares 1.89); mechanical check via `make check-msrv`
+  (`cargo +1.89 check ...`; guard Check 134).
+- Python parity: `LoadTestResults.error_kinds` exposed in the Python
+  result model (additive, serde-defaulted).
+- Guards added: Checks 127 (no wildcard), 128 (scope-propagation symbols),
+  129 (raw tool fails closed), 130 (no Reqwest fallback), 131 (cache
+  identity), 132 (Eggfetch production backend), 133 (SOCKS5H/plaintext
+  fail closed), 134 (MSRV).
+- Local verification for this landing was the repository contract at the
+  time (`make check` + `make check-deps` + MSRV per `AGENTS.md`); exact
+  per-command outputs were not recorded in this plan (record-keeping gap
+  noted here so the follow-up does not repeat it).
+- Hosted CI run IDs for this landing were not recorded in this plan
+  (record-keeping gap noted).
+- Follow-up defect (found post-landing audit, closed by
+  `plans/loadtest-multi-address-socket-binding-corrective-pass-2026-09-17.md`):
+  the new proxied route populated `proxy_peers` / `ultimate_peers` from
+  the full DNS-approved vectors after socket-authorizing only
+  `binding.primary()`, allowing backend-internal fallback to a
+  socket-unchecked candidate and untruthful `ConnectionInfo.remote_addr`.
+  Corrected to singular per-leg pins with adversarial CONNECT-proxy
+  fixtures + guard Check 135. No wildcard/scope-model change; no new
+  crate; no Eggfetch API change.
+- Residual debt: no backend-internal multi-address failover (intentional;
+  future resilience must re-authorize per attempt above the backend);
+  SOCKS5H/plaintext remain unsupported by design; custom-CA TLS row
+  future-only if a consumer needs it.

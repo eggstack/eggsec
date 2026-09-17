@@ -972,3 +972,436 @@ async fn proxy_peer_and_ultimate_are_separately_bound() {
         "direct must not touch proxy: {calls:?}"
     );
 }
+
+// --- Multi-address socket-binding corrective pass (2026-09-17) ---
+//
+// Required invariant: for every physical connection leg, every socket address
+// the concrete backend may dial must have passed the matching selected-socket
+// checkpoint. A DNS-approved set is an input to selection, never permission
+// for the backend to choose any member after a narrower socket checkpoint.
+//
+// These fixtures model two addresses per leg where the primary (first,
+// socket-authorized) cannot complete the connection and the secondary is
+// reachable but never socket-authorized. The backend must fail rather than
+// silently fall back to the secondary.
+
+/// Resolver that returns addresses in the given order (no sorting), so the
+/// test controls which candidate is primary.
+struct OrderedResolver {
+    map: std::collections::HashMap<String, Vec<IpAddr>>,
+}
+
+impl OrderedResolver {
+    fn new(pairs: Vec<(&str, Vec<&str>)>) -> Self {
+        let mut map = std::collections::HashMap::new();
+        for (host, addrs) in pairs {
+            let parsed: Vec<IpAddr> = addrs
+                .into_iter()
+                .map(|s| s.parse().expect("test IP parses"))
+                .collect();
+            map.insert(host.to_string(), parsed);
+        }
+        Self { map }
+    }
+}
+
+impl TransportResolver for OrderedResolver {
+    fn resolve(&self, host: &str) -> eggsec_transport::ResolvedCandidates {
+        match self.map.get(host) {
+            Some(addrs) => eggsec_transport::ResolvedCandidates {
+                hostname: host.to_string(),
+                addresses: addrs.clone(),
+            },
+            None => eggsec_transport::ResolvedCandidates::empty(host),
+        }
+    }
+}
+
+/// Authority that approves every candidate but records each selected-socket
+/// checkpoint distinctly, so the test can prove the secondary was never
+/// socket-authorized.
+#[derive(Debug, Default)]
+struct SocketRecorder {
+    socket_calls: std::sync::Mutex<Vec<IpAddr>>,
+    proxy_socket_calls: std::sync::Mutex<Vec<IpAddr>>,
+}
+
+impl SocketRecorder {
+    fn socket_calls(&self) -> Vec<IpAddr> {
+        self.socket_calls.lock().expect("lock").clone()
+    }
+
+    fn proxy_socket_calls(&self) -> Vec<IpAddr> {
+        self.proxy_socket_calls.lock().expect("lock").clone()
+    }
+}
+
+impl NetworkAuthority for SocketRecorder {
+    fn authorize_initial_url(&self, url: &url::Url) -> Result<(), TransportError> {
+        eggsec_transport::reject_url_userinfo(url)
+    }
+
+    fn authorize_host(
+        &self,
+        _host: &str,
+        _port: Option<u16>,
+        _is_ip_literal: bool,
+    ) -> Result<(), TransportError> {
+        Ok(())
+    }
+
+    fn authorize_resolved(
+        &self,
+        _host: &str,
+        candidates: &[IpAddr],
+    ) -> Result<Vec<IpAddr>, TransportError> {
+        Ok(candidates.to_vec())
+    }
+
+    fn authorize_socket(
+        &self,
+        _host: &str,
+        addr: IpAddr,
+        _port: u16,
+    ) -> Result<(), TransportError> {
+        self.socket_calls.lock().expect("lock").push(addr);
+        Ok(())
+    }
+
+    fn authorize_redirect(&self, _from: &url::Url, _to: &url::Url) -> Result<(), TransportError> {
+        Ok(())
+    }
+
+    fn authorize_proxy(
+        &self,
+        _proxy_endpoint: &url::Url,
+        _ultimate: &url::Url,
+    ) -> Result<(), TransportError> {
+        Ok(())
+    }
+
+    fn authorize_proxy_resolved(
+        &self,
+        _proxy_host: &str,
+        candidates: &[IpAddr],
+    ) -> Result<Vec<IpAddr>, TransportError> {
+        Ok(candidates.to_vec())
+    }
+
+    fn authorize_proxy_socket(
+        &self,
+        _proxy_host: &str,
+        addr: IpAddr,
+        _port: u16,
+    ) -> Result<(), TransportError> {
+        self.proxy_socket_calls.lock().expect("lock").push(addr);
+        Ok(())
+    }
+
+    fn check_tls_consistency(
+        &self,
+        _request_host: &str,
+        _sni_override: Option<&str>,
+        _host_override: Option<&str>,
+    ) -> Result<(), TransportError> {
+        Ok(())
+    }
+}
+
+/// Minimal HTTP CONNECT proxy fixture for the corrective pass.
+///
+/// Accepts TCP on 127.0.0.1, records each accepted peer connection and each
+/// CONNECT authority-form target, dials the requested target (so a bad
+/// ultimate fails with 502 and a good one tunnels), and relays bytes on
+/// success. Nothing leaves the host.
+struct ConnectProxy {
+    addr: std::net::SocketAddr,
+    hits: Arc<std::sync::Mutex<usize>>,
+    targets: Arc<std::sync::Mutex<Vec<String>>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for ConnectProxy {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl ConnectProxy {
+    async fn start() -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback binds");
+        let addr = listener.local_addr().expect("local addr");
+        let hits = Arc::new(std::sync::Mutex::new(0usize));
+        let targets = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let task = {
+            let hits = hits.clone();
+            let targets = targets.clone();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((mut inbound, _)) = listener.accept().await else {
+                        return;
+                    };
+                    {
+                        *hits.lock().expect("lock") += 1;
+                    }
+                    let targets = targets.clone();
+                    tokio::spawn(async move {
+                        let mut buf = Vec::new();
+                        let mut chunk = [0u8; 4096];
+                        let end = loop {
+                            match inbound.read(&mut chunk).await {
+                                Ok(0) => return,
+                                Ok(n) => {
+                                    buf.extend_from_slice(&chunk[..n]);
+                                    if buf.len() > 65536 {
+                                        return;
+                                    }
+                                    if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n")
+                                    {
+                                        break pos + 4;
+                                    }
+                                }
+                                Err(_) => return,
+                            }
+                        };
+                        let head = String::from_utf8_lossy(&buf[..end]).to_string();
+                        let first_line = head.lines().next().unwrap_or("");
+                        // CONNECT <target> HTTP/1.1
+                        let target = first_line
+                            .split_whitespace()
+                            .nth(1)
+                            .unwrap_or("")
+                            .to_string();
+                        if target.is_empty() {
+                            return;
+                        }
+                        targets.lock().expect("lock").push(target.clone());
+                        match tokio::net::TcpStream::connect(target.as_str()).await {
+                            Err(_) => {
+                                let resp = "HTTP/1.1 502 Bad Gateway\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+                                let _ = inbound.write_all(resp.as_bytes()).await;
+                            }
+                            Ok(mut upstream) => {
+                                let resp = "HTTP/1.1 200 Connection Established\r\n\r\n";
+                                if inbound.write_all(resp.as_bytes()).await.is_err() {
+                                    return;
+                                }
+                                let _ = tokio::io::copy_bidirectional(&mut inbound, &mut upstream)
+                                    .await;
+                            }
+                        }
+                    });
+                }
+            })
+        };
+        Self {
+            addr,
+            hits,
+            targets,
+            task,
+        }
+    }
+
+    fn hits(&self) -> usize {
+        *self.hits.lock().expect("lock")
+    }
+
+    fn targets(&self) -> Vec<String> {
+        self.targets.lock().expect("lock").clone()
+    }
+}
+
+fn proxied_https_request(
+    origin_host: &str,
+    origin_port: u16,
+    proxy_host: &str,
+    proxy_port: u16,
+) -> ScopedHttpRequest {
+    use eggsec_transport::{ProxyIntent, TimeoutPolicy, TlsPolicy};
+    ScopedHttpRequest::new_with_url(
+        Method::GET,
+        &format!("https://{origin_host}:{origin_port}/"),
+    )
+    .expect("request builds")
+    .with_proxy(ProxyIntent::Http {
+        endpoint: Url::parse(&format!("http://{proxy_host}:{proxy_port}/")).expect("proxy url"),
+        credential: None,
+    })
+    .with_tls(TlsPolicy::insecure())
+    .with_timeout(TimeoutPolicy {
+        request_timeout: Duration::from_secs(10),
+        connect_timeout: Some(Duration::from_secs(5)),
+    })
+}
+
+#[tokio::test]
+async fn proxy_peer_fallback_to_unsocket_authorized_secondary_is_forbidden() {
+    // Proxy candidates: primary 127.0.0.2 (no listener, refused) is the only
+    // socket-authorized peer; secondary 127.0.0.1 (real CONNECT proxy) is
+    // DNS-approved but never passes authorize_proxy_socket. The backend must
+    // fail on the primary rather than fall back to the secondary.
+    let origin = TlsFixture::start(
+        Arc::new(|incoming: &Incoming| Action::ok(incoming.body.clone())),
+        vec!["127.0.0.1".to_string()],
+    )
+    .await;
+    let proxy = ConnectProxy::start().await;
+    let bad: IpAddr = "127.0.0.2".parse().expect("ip");
+    let good: IpAddr = "127.0.0.1".parse().expect("ip");
+    let resolver: Arc<dyn TransportResolver> = Arc::new(OrderedResolver::new(vec![
+        ("proxy.local", vec!["127.0.0.2", "127.0.0.1"]),
+        ("origin.local", vec!["127.0.0.1"]),
+    ]));
+    let transport = EggfetchTransport::new(resolver);
+    let auth = SocketRecorder::default();
+    let request = proxied_https_request(
+        "origin.local",
+        origin.addr.port(),
+        "proxy.local",
+        proxy.addr.port(),
+    );
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "primary proxy failure must surface as Backend, got {err:?}"
+    );
+    assert!(!err.is_denied());
+    assert_eq!(
+        auth.proxy_socket_calls(),
+        vec![bad],
+        "only the primary may pass the proxy socket checkpoint"
+    );
+    assert!(
+        !auth.proxy_socket_calls().contains(&good),
+        "secondary must never be socket-authorized"
+    );
+    assert_eq!(
+        proxy.hits(),
+        0,
+        "no bytes may reach the secondary proxy peer"
+    );
+    assert!(
+        proxy.targets().is_empty(),
+        "no CONNECT may be issued when the only authorized peer fails"
+    );
+    assert!(
+        origin.received().is_empty(),
+        "no origin I/O after proxy-peer failure"
+    );
+}
+
+#[tokio::test]
+async fn proxied_ultimate_fallback_to_unsocket_authorized_secondary_is_forbidden() {
+    // Ultimate candidates: primary 127.0.0.2 (no TLS listener, proxy dial
+    // fails with 502) is the only socket-authorized target; secondary
+    // 127.0.0.1 (real TLS origin) is DNS-approved but never passes
+    // authorize_socket. The backend must fail on the primary rather than
+    // retry to the secondary.
+    let origin = TlsFixture::start(
+        Arc::new(|incoming: &Incoming| Action::ok(incoming.body.clone())),
+        vec!["127.0.0.1".to_string()],
+    )
+    .await;
+    let proxy = ConnectProxy::start().await;
+    let bad: IpAddr = "127.0.0.2".parse().expect("ip");
+    let good: IpAddr = "127.0.0.1".parse().expect("ip");
+    let resolver: Arc<dyn TransportResolver> = Arc::new(OrderedResolver::new(vec![
+        ("proxy.local", vec!["127.0.0.1"]),
+        ("origin.local", vec!["127.0.0.2", "127.0.0.1"]),
+    ]));
+    let transport = EggfetchTransport::new(resolver);
+    let auth = SocketRecorder::default();
+    let request = proxied_https_request(
+        "origin.local",
+        origin.addr.port(),
+        "proxy.local",
+        proxy.addr.port(),
+    );
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "primary ultimate failure must surface as Backend, got {err:?}"
+    );
+    assert!(!err.is_denied());
+    assert_eq!(
+        auth.socket_calls(),
+        vec![bad],
+        "only the primary ultimate may pass the socket checkpoint"
+    );
+    assert!(
+        !auth.socket_calls().contains(&good),
+        "secondary ultimate must never be socket-authorized"
+    );
+    let targets = proxy.targets();
+    assert_eq!(
+        targets.len(),
+        1,
+        "exactly one CONNECT target may be attempted: {targets:?}"
+    );
+    assert!(
+        targets[0].starts_with("127.0.0.2:"),
+        "CONNECT must target the socket-authorized primary, got {:?}",
+        targets[0]
+    );
+    assert!(
+        origin.received().is_empty(),
+        "secondary ultimate must receive no TLS bytes"
+    );
+}
+
+#[tokio::test]
+async fn proxied_success_reports_the_authorized_peer() {
+    // Single-address control: with one proxy peer and one ultimate target,
+    // dispatch succeeds and ConnectionInfo describes the authorized proxy
+    // peer (truthful evidence), while CONNECT targets the authorized
+    // ultimate.
+    let origin = TlsFixture::start(
+        Arc::new(|incoming: &Incoming| Action::ok(incoming.body.clone())),
+        vec!["127.0.0.1".to_string()],
+    )
+    .await;
+    let proxy = ConnectProxy::start().await;
+    let resolver: Arc<dyn TransportResolver> = Arc::new(OrderedResolver::new(vec![
+        ("proxy.local", vec!["127.0.0.1"]),
+        ("origin.local", vec!["127.0.0.1"]),
+    ]));
+    let transport = EggfetchTransport::new(resolver);
+    let auth = SocketRecorder::default();
+    let request = proxied_https_request(
+        "origin.local",
+        origin.addr.port(),
+        "proxy.local",
+        proxy.addr.port(),
+    );
+    let response = transport.execute(&auth, request).await.expect("dispatch");
+    assert_eq!(response.status, StatusCode::OK);
+    let conn = response.connection.expect("connection");
+    let expected_peer =
+        std::net::SocketAddr::new("127.0.0.1".parse().expect("ip"), proxy.addr.port());
+    assert_eq!(
+        conn.remote_addr,
+        Some(expected_peer),
+        "proxied remote_addr must be the socket-authorized proxy peer"
+    );
+    assert_eq!(
+        auth.proxy_socket_calls().len(),
+        1,
+        "exactly one proxy socket checkpoint"
+    );
+    assert_eq!(
+        auth.socket_calls().len(),
+        1,
+        "exactly one ultimate socket checkpoint"
+    );
+    let targets = proxy.targets();
+    assert_eq!(targets.len(), 1, "one CONNECT target: {targets:?}");
+    assert!(
+        targets[0].starts_with("127.0.0.1:"),
+        "CONNECT must target the authorized ultimate, got {:?}",
+        targets[0]
+    );
+    assert_eq!(origin.received().len(), 1);
+}

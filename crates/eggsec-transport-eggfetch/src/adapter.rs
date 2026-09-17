@@ -114,9 +114,13 @@ impl std::fmt::Debug for EggfetchTransport {
 /// pinned wire route the backend is allowed to see.
 ///
 /// Direct hops carry a pinned wire URL (approved-IP literal, logical Host/SNI).
-/// Proxied hops keep the logical URL on the wire and carry pinned proxy-peer
-/// and ultimate-target socket sets for `Proxy::resolved_addresses` and
-/// `proxy_target_addresses` (both independently authorized).
+/// Proxied hops keep the logical URL on the wire and carry one pinned
+/// proxy-peer plus one pinned ultimate-target socket for
+/// `Proxy::resolved_addresses` and `proxy_target_addresses` (both
+/// independently authorized). One authorization cycle selects one physical
+/// address per connection leg; a DNS-approved set is an input to selection,
+/// never permission for the backend to choose another member after the
+/// selected-socket checkpoint.
 struct AuthorizedHop {
     logical_host: String,
     port: u16,
@@ -127,11 +131,18 @@ struct AuthorizedHop {
 }
 
 /// Pinned proxy route for one hop (both legs independently authorized).
+///
+/// Singular addresses by construction: `proxy_peer` is exactly the address
+/// passed to `authorize_proxy_socket`, and `ultimate_peer` is exactly the
+/// address passed to `authorize_socket`. The backend receives one-element
+/// pin sets derived from these fields, so it cannot silently fail over to a
+/// second DNS-approved but socket-unchecked address. A retry may select
+/// another candidate only after a fresh authorization cycle.
 #[derive(Debug, Clone)]
 struct AuthorizedProxyRoute {
     endpoint: Url,
-    proxy_peers: Vec<std::net::SocketAddr>,
-    ultimate_peers: Vec<std::net::SocketAddr>,
+    proxy_peer: std::net::SocketAddr,
+    ultimate_peer: std::net::SocketAddr,
     /// `ProxyIntent` routing mode (Http vs All) for backend `Proxy` selection.
     mode_is_all: bool,
     credential: Option<eggsec_transport::ProxyCredential>,
@@ -259,16 +270,14 @@ impl EggfetchTransport {
                     other => other,
                 })?;
             authority.authorize_proxy_socket(proxy_host, proxy_binding.primary(), proxy_port)?;
-            let proxy_peers: Vec<std::net::SocketAddr> = proxy_approved
-                .iter()
-                .map(|ip| std::net::SocketAddr::new(*ip, proxy_port))
-                .collect();
-
-            // Ultimate peers use the already-authorized ultimate binding.
-            let ultimate_peers: Vec<std::net::SocketAddr> = approved
-                .iter()
-                .map(|ip| std::net::SocketAddr::new(*ip, port))
-                .collect();
+            // Single-address binding: the backend may dial only the exact
+            // address that passed the selected-socket checkpoint per leg.
+            // `binding.primary()` already passed `authorize_socket` above;
+            // `proxy_binding.primary()` just passed `authorize_proxy_socket`.
+            // Never expand from the DNS-approved sets (`approved` /
+            // `proxy_approved`): those are selection inputs, not dial permission.
+            let proxy_peer = std::net::SocketAddr::new(proxy_binding.primary(), proxy_port);
+            let ultimate_peer = std::net::SocketAddr::new(binding.primary(), port);
 
             let proxy_scheme = endpoint.scheme().to_ascii_lowercase();
             let ultimate_scheme = url.scheme().to_ascii_lowercase();
@@ -294,9 +303,11 @@ impl EggfetchTransport {
                 eggsec_transport::ProxyIntent::All { credential, .. } => (true, credential.clone()),
             };
             // Proxied hops keep the logical URL on the wire; the backend pins
-            // both legs via `Proxy::resolved_addresses` + `proxy_target_addresses`.
-            // Cross-origin pinned-route reuse fails closed unless a new authorized
-            // snapshot is constructed (per-hop authorize_hop above).
+            // both legs via `Proxy::resolved_addresses` + `proxy_target_addresses`
+            // with single-element sets derived from the socket-authorized
+            // bindings (see `send_hop`). Cross-origin pinned-route reuse fails
+            // closed unless a new authorized snapshot is constructed (per-hop
+            // authorize_hop above).
             return Ok(AuthorizedHop {
                 logical_host: host.to_string(),
                 port,
@@ -305,8 +316,8 @@ impl EggfetchTransport {
                 is_https: url.scheme() == "https",
                 proxy: Some(AuthorizedProxyRoute {
                     endpoint: endpoint.clone(),
-                    proxy_peers,
-                    ultimate_peers,
+                    proxy_peer,
+                    ultimate_peer,
                     mode_is_all,
                     credential,
                 }),
@@ -373,8 +384,10 @@ impl EggfetchTransport {
         let sni = hop.is_https.then(|| hop.logical_host.clone());
         // For direct hops the backend sees the pinned-IP wire URL with logical
         // Host/SNI and explicit direct routing. For proxied hops the backend
-        // sees the logical URL with logical Host/SNI plus pinned proxy-peer
-        // and ultimate-target sets (both authorized above).
+        // sees the logical URL with logical Host/SNI plus the single pinned
+        // proxy-peer and ultimate-target addresses (both authorized above).
+        // Single-element pin sets by construction: the connector has no
+        // authorized alternate to fail over to.
         let mut builder = builder
             .body(eggfetch_body(&logical.body))
             .timeout(eggfetch_timeout(&request.timeout, remaining_total))
@@ -392,7 +405,7 @@ impl EggfetchTransport {
                 })?
             };
             proxy = proxy
-                .resolved_addresses(proxy_route.proxy_peers.clone())
+                .resolved_addresses([proxy_route.proxy_peer])
                 .map_err(|e| {
                     TransportError::InvalidRequest(format!("invalid proxy peer pin: {e}"))
                 })?;
@@ -405,7 +418,7 @@ impl EggfetchTransport {
             }
             builder = builder
                 .proxy(&proxy)
-                .proxy_target_addresses(proxy_route.ultimate_peers.clone());
+                .proxy_target_addresses([proxy_route.ultimate_peer]);
         } else {
             // No proxy is configured on the backend clients; this per-request
             // override additionally pins direct routing so environment-style
@@ -483,11 +496,13 @@ impl EggfetchTransport {
         history: Vec<Url>,
         hop: &AuthorizedHop,
     ) -> ScopedHttpResponse {
-        // Direct hops dial the approved ultimate address. Proxied hops dial
-        // the approved proxy peer (the ultimate pin travels in the CONNECT /
-        // SOCKS command, not the TCP tuple).
+        // Direct hops dial the socket-authorized ultimate address. Proxied
+        // hops dial the socket-authorized proxy peer (the ultimate pin
+        // travels in the CONNECT / SOCKS command, not the TCP tuple).
+        // Single-address binding makes this truthful by construction: the
+        // connector has no authorized alternate peer to report instead.
         let remote_addr = if let Some(proxy) = hop.proxy.as_ref() {
-            proxy.proxy_peers.first().copied()
+            Some(proxy.proxy_peer)
         } else {
             Some(SocketAddr::new(hop.primary, hop.port))
         };

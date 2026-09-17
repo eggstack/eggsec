@@ -3447,6 +3447,55 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 135. Multi-address corrective pass: proxied backend route is singular per leg.
+# One authorization cycle selects one physical address per connection leg; the
+# backend must not receive a multi-address set expanded from the DNS-approved
+# vectors. The struct shape encodes this (singular SocketAddr fields, not
+# Vecs), and the Eggfetch boundary converts them to single-element pin sets.
+# This checks structure, not variable-name spelling, so harmless refactors
+# that keep singular fields pass while a Vec widening fails.
+echo ""
+echo "--- Check 135: Proxied backend route is single-address per leg ---"
+SECTION_FAIL=0
+ADAPTER="crates/eggsec-transport-eggfetch/src/adapter.rs"
+if [[ ! -f "$ADAPTER" ]]; then
+  echo "FAIL: missing adapter: $ADAPTER"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for sym in "proxy_peer: std::net::SocketAddr" "ultimate_peer: std::net::SocketAddr"; do
+    if ! rg -Fq "$sym" "$ADAPTER" 2>/dev/null; then
+      echo "FAIL: $ADAPTER missing singular route field: $sym"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if rg -q 'proxy_peers:\s*Vec|ultimate_peers:\s*Vec' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER reintroduces multi-address Vec route fields (must stay singular)."
+    rg -n 'proxy_peers:\s*Vec|ultimate_peers:\s*Vec' "$ADAPTER" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -Fq 'resolved_addresses([proxy_route.proxy_peer])' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER does not pin the proxy peer from the singular socket-authorized field."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -Fq 'proxy_target_addresses([proxy_route.ultimate_peer])' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER does not pin the ultimate target from the singular socket-authorized field."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # Forbid re-expansion from the DNS-approved sets at the pin site (the
+  # approved vectors remain as validate_binding inputs, but must never be
+  # iterated into backend pin sets).
+  if rg -q 'proxy_approved\.iter\(\)|approved\.iter\(\)' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER iterates DNS-approved sets into backend pins (must use singular bindings)."
+    rg -n 'proxy_approved\.iter\(\)|approved\.iter\(\)' "$ADAPTER" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Proxied backend route is single-address per leg."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

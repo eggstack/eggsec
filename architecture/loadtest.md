@@ -91,17 +91,28 @@ Scope-aware Reqwest backend implementing `HttpTransport` (verified + insecure ba
 
 TOCTOU note: Reqwest re-resolves hostnames (and proxies) internally, so this backend cannot pin the connector to the exact approved address the way the Eggfetch adapter does. Production load-test traffic uses Eggfetch for physical pinning; this backend remains for transition/adversarial parity only.
 
-### Backend route matrix (corrective pass)
+### Backend route matrix (corrective pass + 2026-09-17 singular-binding follow-up)
 
 | Route | Proxy peer pin | Ultimate pin | Disposition |
 |---|---|---|---|
-| direct HTTP/HTTPS | n/a | required (pinned wire URL) | supported via Eggfetch |
-| HTTP/HTTPS proxy → HTTPS origin (CONNECT) | required (`Proxy::resolved_addresses`) | required (`proxy_target_addresses`) | supported via Eggfetch 0.1.5 |
-| SOCKS5 local-resolution → HTTP/HTTPS | required | required | supported via Eggfetch 0.1.5 |
+| direct HTTP/HTTPS | n/a | required (pinned wire URL, single selected IP) | supported via Eggfetch |
+| HTTP/HTTPS proxy → HTTPS origin (CONNECT) | required, singular (`Proxy::resolved_addresses([proxy_peer])`) | required, singular (`proxy_target_addresses([ultimate_peer])`) | supported via Eggfetch 0.1.5 |
+| SOCKS5 local-resolution → HTTP/HTTPS | required, singular | required, singular | supported via Eggfetch 0.1.5 |
 | SOCKS5H remote-resolution | required | cannot be locally enforced | fail closed (explicit `Proxy` denial) |
 | HTTP forward proxy → plaintext HTTP | required | standard proxy cannot enforce requested IP | fail closed (explicit `Proxy` denial) |
 
-No automatic Reqwest fallback after an Eggfetch route error. Backend choice is composition, not error recovery. Redirects re-run logical authorization + physical binding per hop; cross-origin pinned-route reuse fails closed unless a new authorized snapshot is constructed.
+Single-address rule: one authorization cycle selects one physical address
+per connection leg (`proxy_peer` = the address passed to
+`authorize_proxy_socket`; `ultimate_peer` = the address passed to
+`authorize_socket`). The backend receives single-element pin sets and has
+no authorized alternate to fail over to — if the selected address fails,
+the request fails. A retry may select another candidate only after a fresh
+authorization cycle and selected-socket checkpoint (future failover must
+live above the opaque backend retry layer, never as backend-internal
+fallback). `ConnectionInfo.remote_addr` is the socket-authorized peer by
+construction (direct: ultimate; proxied: proxy peer).
+
+No automatic Reqwest fallback after an Eggfetch route error. Backend choice is composition, not error recovery. Redirects re-run logical authorization + physical binding per hop and build a fresh single-address route; cross-origin pinned-route reuse fails closed unless a new authorized snapshot is constructed.
 
 ### `ProgressSink` (`progress.rs`)
 
@@ -237,7 +248,7 @@ Unit coverage: plan validation/rate/method, adapter auth/proxy/timeout shapes, m
 6. **No global mutex on the hot path:** per-worker accumulators + CAS pacer; the only mutex in the transition Reqwest backend is a short non-async lock for proxied-client cache clone-or-insert (never across I/O), keyed by full client identity (endpoint + mode + TLS + credential fingerprint).
 7. **`tui_mode` is facade-only:** setting it changes nothing about execution; use a sink for progress.
 8. **No wildcard default:** `LoadTestRunner` without `with_scope()`/`set_scope()` fails `run()` before I/O. There is no `default_facade_scope()`; production paths attach the `EnforcementContext` snapshot.
-9. **No route fallback:** requested proxy never becomes direct; client/proxy build failures error; SOCKS5H/plaintext-forward ultimate pinning fails closed; backend choice is composition, not error recovery.
+9. **No route fallback:** requested proxy never becomes direct; client/proxy build failures error; SOCKS5H/plaintext-forward ultimate pinning fails closed; backend choice is composition, not error recovery. The Eggfetch backend never falls back across DNS-approved addresses: one cycle pins one address per leg (singular `proxy_peer` / `ultimate_peer`); failure fails the request.
 
 ## See Also
 

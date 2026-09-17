@@ -176,7 +176,7 @@ Engine: `eggsec::config::ScopeAuthority`.
 ## Testing
 
 - `cargo test -p eggsec-transport` (18 unit tests: redaction, cookie merge, redirect policy, TLS consistency, resolver ordering, binding, fake destination/redirect/denial, later-hop re-resolution + binding-checkpoint mapping).
-- `cargo test -p eggsec --features rest-api --test transport_contract` (12 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, later-hop re-resolution order, userinfo, secret redaction, direct IP, proxy distinctness, TLS orthogonality, invented-address rejection).
+- `cargo test -p eggsec --features rest-api --test transport_contract` (13 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, later-hop re-resolution order, userinfo, secret redaction, direct IP, proxy distinctness + proxy-peer provenance, TLS orthogonality, invented-address rejection).
 - Phase A `network_policy_invariants.rs` (12 behaviors) remains the measurement baseline; the contract suite proves the same behaviors through the new layer.
 
 ## Phase C adapter + corrective-pass production backend
@@ -188,10 +188,20 @@ The contract is implemented against a real backend in
 authorized literal) and a manual redirect loop (auto-follow doubly
 disabled; each hop authorized before dispatch). HTTP/3 is off, proxied
 execution fails closed for unsupported shapes; direct + supported proxied load-test traffic is wired to it (corrective pass)
-(guard Check 102). Parity evidence:
-`crates/eggsec-transport-eggfetch/tests/parity.rs` (33 tests over local
+(guards Checks 102 + 135). Parity evidence:
+`crates/eggsec-transport-eggfetch/tests/parity.rs` (39 tests over local
 fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
 interop tests through `ScopeAuthority`).
+
+The production backend is stricter than the contract minimum: one
+authorization cycle selects one physical address per connection leg
+(singular `proxy_peer` / `ultimate_peer`; single-element backend pin
+sets). A DNS-approved set is an input to selection, never permission for
+the backend to choose another member after the selected-socket checkpoint.
+If the selected address fails, the request fails; a retry may select
+another candidate only after a fresh authorization cycle. See
+[transport_eggfetch.md](transport_eggfetch.md) for the rule and its
+adversarial CONNECT-proxy fixtures.
 
 ## Phase D first increment (interfaces + boundaries; backend wiring pending)
 
@@ -235,7 +245,7 @@ concrete-client leakage is possible:
 
 1. **No unchecked dispatch** — `execute` without an authority does not exist.
 2. **No second scope language** — policy is `Scope`/`TargetScope` only.
-3. **Binding closed** — approved ⊆ candidates, non-empty, connector dials approved only.
+3. **Binding closed** — approved ⊆ candidates, non-empty, connector dials approved only. A DNS-approved set is selection input, not dial permission: the production Eggfetch backend narrows each leg to the single socket-authorized address (one address per authorization cycle; failure fails the request, no silent fallback).
 4. **Redirects stop, not follow, cross-host** under `SameHostOnly` (response surfaced).
 5. **Proxy ≠ target** — two decisions, two DNS/socket bindings.
 6. **Secrets never in `Debug`** — presence bits only in recordings.
