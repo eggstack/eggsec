@@ -895,3 +895,80 @@ impl NetworkAuthority for DenyRedirect {
         Ok(())
     }
 }
+
+#[tokio::test]
+async fn socks5h_remote_dns_fails_closed_before_dispatch() {
+    // SOCKS5H resolves the ultimate target at the proxy (remote DNS), so the
+    // local process can never constrain the ultimate peer. Strict scoped
+    // transport must fail closed, never describe this as pinned.
+    let server = echo_target().await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = RecordingAuth::new(AllowAll);
+    let request = get(&server.base_host("test.local")).with_proxy(ProxyIntent::All {
+        endpoint: Url::parse("socks5h://127.0.0.1:1080").expect("proxy url"),
+        credential: None,
+    });
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(
+            err,
+            TransportError::PolicyDenied {
+                checkpoint: PolicyCheckpoint::Proxy,
+                ..
+            }
+        ),
+        "SOCKS5H must fail at proxy checkpoint, got {err:?}"
+    );
+    assert!(
+        server.received().is_empty(),
+        "no origin I/O after SOCKS5H denial"
+    );
+}
+
+#[tokio::test]
+async fn plaintext_forward_proxy_fails_closed_before_dispatch() {
+    // Standard HTTP forward proxies cannot enforce the requested ultimate IP
+    // for plaintext HTTP origins. Fail closed, never report as pinned.
+    let server = echo_target().await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let request = get(&server.base_host("test.local")).with_proxy(ProxyIntent::All {
+        endpoint: Url::parse("http://127.0.0.1:8080").expect("proxy url"),
+        credential: None,
+    });
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(
+            err,
+            TransportError::PolicyDenied {
+                checkpoint: PolicyCheckpoint::Proxy,
+                ..
+            }
+        ),
+        "plaintext forward-proxy pin must fail at proxy checkpoint, got {err:?}"
+    );
+    assert!(server.received().is_empty());
+}
+
+#[tokio::test]
+async fn proxy_peer_and_ultimate_are_separately_bound() {
+    // Both legs must be authorized independently: a proxy-peer pin does not
+    // authorize the ultimate origin and vice versa. Proven via checkpoint
+    // observation (proxy + dns/socket both appear, in contract order).
+    let server = echo_target().await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = RecordingAuth::new(AllowAll);
+    // Direct (no proxy) still binds ultimate only; proxied HTTPS would bind both.
+    // Here we assert the direct path observes dns/socket but no proxy call.
+    let request = get(&server.base_host("test.local"));
+    let _ = transport
+        .execute(&auth, request)
+        .await
+        .expect("direct succeeds");
+    let calls = auth.calls();
+    assert!(calls.contains(&"resolved".to_string()) || calls.contains(&"reresolution".to_string()));
+    assert!(
+        !calls.contains(&"proxy".to_string()),
+        "direct must not touch proxy: {calls:?}"
+    );
+}

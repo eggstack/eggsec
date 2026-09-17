@@ -128,6 +128,32 @@ impl std::fmt::Display for ParameterType {
     }
 }
 
+/// Execution context for scope-aware tool dispatch.
+///
+/// Carries the enforcement-scope snapshot from the same
+/// [`crate::config::EnforcementContext`] that approved the operation. Only
+/// narrow, future-safe fields belong here; never transport, resolver, or
+/// policy-engine objects.
+#[derive(Debug, Clone)]
+pub struct ToolExecutionContext {
+    /// Scope snapshot that authorized the operation (per-hop authority input).
+    pub scope: crate::config::Scope,
+}
+
+impl ToolExecutionContext {
+    /// New execution context from an explicit scope snapshot.
+    pub fn new(scope: crate::config::Scope) -> Self {
+        Self { scope }
+    }
+
+    /// Execution context from an [`crate::config::ApprovedExecution`] bundle.
+    pub fn from_execution(execution: &crate::config::ApprovedExecution) -> Self {
+        Self {
+            scope: execution.scope().clone(),
+        }
+    }
+}
+
 /// Security tool interface for the Eggsec tool abstraction layer.
 ///
 /// This trait defines the contract for all security testing tools in Eggsec.
@@ -179,6 +205,20 @@ pub trait SecurityTool: Send + Sync {
     ///
     /// Returns `Ok(ToolResponse)` on success or `Err(EggsecError)` on failure.
     async fn execute(&self, request: ToolRequest) -> ToolResult<ToolResponse>;
+
+    /// Executes the tool with an explicit execution scope.
+    ///
+    /// Default delegates to [`execute`](Self::execute) so unaffected tools
+    /// need no mechanical rewrite. Scope-sensitive tools (e.g. load-test)
+    /// override this to use `context.scope` for per-hop authorization and
+    /// make raw [`execute`](Self::execute) fail closed.
+    async fn execute_with_context(
+        &self,
+        request: ToolRequest,
+        _context: &ToolExecutionContext,
+    ) -> ToolResult<ToolResponse> {
+        self.execute(request).await
+    }
 
     /// Validates the request before execution.
     ///

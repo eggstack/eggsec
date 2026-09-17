@@ -26,7 +26,7 @@ Tool abstraction layer workflows and patterns for security tool integration.
 
 ### MCP Enforcement Boundary
 
-The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` only for test/legacy constructors (always `None` under production `with_enforcement`). All MCP tool executions pass through the mandatory `EnforcementContext::approve(McpServer, descriptor)` call (Phase 12 type-level dispatch), which produces an `ApprovedOperation` token only on `Allow`. The token is then passed to `EnforcedDispatcher::dispatch_checked()` which verifies the request matches the approved descriptor before dispatch. `McpProfilePolicy` overlays. Production `create_mcp_router`/`run_stdio` take only `enforcement: EnforcementContext` (scope provenance is `enforcement.loaded_scope`).
+The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` only for test/legacy constructors (always `None` under production `with_enforcement`). All MCP tool executions pass through mandatory approval (`EnforcementContext::approve()` for scope-insensitive tools, `approve_execution()` for scope-sensitive tools like load-test), which produces an `ApprovedOperation` token (or `ApprovedExecution` bundle with the same-context scope snapshot) only on `Allow`. Tokens go to `EnforcedDispatcher::dispatch_checked()`; bundles go to `dispatch_execution()` with `ToolExecutionContext` (raw `LoadTestTool::execute()` fails closed). `McpProfilePolicy` overlays. Production `create_mcp_router`/`run_stdio` take only `enforcement: EnforcementContext` (scope provenance is `enforcement.loaded_scope`).
 
 > For MCP and autonomous-agent execution, `EnforcementContext::approve()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
@@ -173,15 +173,15 @@ Follow existing test patterns in `tool/` modules, testing trait implementations,
 
 ## Phase D Service Boundaries (2026-09-09)
 
-Adapters depend on `tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`, not on concrete `ToolRegistry`/`ToolDispatcher` construction. `CheckedExecutor` exposes only `dispatch_checked`; MCP uses `mcp::bridge::McpEngineBridge`. Only composition roots call `EngineServices::new`; adapters take it via `with_services`/`router_with_services`. Never call raw `.dispatch`, direct `tool.execute`, or `Scope::is_target_allowed` in `tool/protocol/`. Approval tokens come from `EnforcementContext::approve`, never `ApprovedOperation::new`.
+Adapters depend on `tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`, not on concrete `ToolRegistry`/`ToolDispatcher` construction. `CheckedExecutor` exposes `dispatch_checked` (scope-insensitive) + `dispatch_execution` (scope-sensitive bundle); MCP uses `mcp::bridge::McpEngineBridge` (both paths). Only composition roots call `EngineServices::new`; adapters take it via `with_services`/`router_with_services`. Never call raw `.dispatch`, direct `tool.execute` (load-test fails closed without context), or `Scope::is_target_allowed` in `tool/protocol/`. Approval bundles come from `EnforcementContext::approve_execution()` for scope-sensitive tools, tokens from `approve()` otherwise; never `ApprovedOperation::new`.
 
 ## Phase 1 Canonical Dispatch (2026-09-10)
 
-Programmatic surfaces stay behind `EnforcedDispatcher::dispatch_checked`, which
+Programmatic surfaces stay behind `EnforcedDispatcher` (`dispatch_checked` for scope-insensitive tools, `dispatch_execution` with `ApprovedExecution`/`ToolExecutionContext` for scope-sensitive like load-test), which
 validates `ToolRequest.params` through the same canonical contracts as CLI/runtime
 (`operation_request::validate_tool_request_params` → typed `normalize()`). The
-runtime/embedded execution seam is `dispatch::execute_approved` over
-`CanonicalOperationRequest` (single executor owner `execute_canonical`,
+runtime/embedded execution seam is `dispatch::execute_approved_execution` (strict scope-carrying; `execute_approved` remains for scope-insensitive) over
+`CanonicalOperationRequest` (single executor owner `execute_canonical` + `execute_canonical_with_scope` (load-test without scope fails closed),
 frontend-neutral `ExecutionEvent`/`ExecutionSink`, exact `matches_descriptor`
 binding at entry, one-layer feature check). Do not add a second operation→executor
 map in protocol/agent code; converge below surface ergonomics.

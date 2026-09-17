@@ -174,6 +174,7 @@ impl App {
             task_runtime::TuiDispatcherContext {
                 progress_tx: dummy_progress_tx,
                 result_tx: dummy_result_tx,
+                scope: None,
             },
         )));
         let executor = task_runtime::TuiExecutor::new(executor_context.clone());
@@ -279,6 +280,7 @@ impl App {
             task_runtime::TuiDispatcherContext {
                 progress_tx: dummy_progress_tx,
                 result_tx: dummy_result_tx,
+                scope: None,
             },
         )));
         let executor = task_runtime::TuiExecutor::new(executor_context.clone());

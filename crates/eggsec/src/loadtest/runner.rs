@@ -11,6 +11,12 @@
 //! is ignored by execution: the core never prints and never touches
 //! `indicatif`. CLI progress rendering lives in `run_cli` (process-host
 //! layer); TUI/library/daemon consumers use structured events.
+//!
+//! Execution scope is mandatory: the runner stores `Option<Scope>` and
+//! ordinary `run()` fails closed without an attached scope. There is no
+//! wildcard default. Attach the `EnforcementContext` scope snapshot that
+//! authorized the operation via `with_scope()`/`set_scope()`, or use
+//! `run_with(transport, authority, ...)` with a caller-supplied authority.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -85,20 +91,6 @@ impl From<crate::cli::LoadArgs> for LoadTestRunConfig {
     }
 }
 
-/// Permissive default scope for facade runs without an explicit scope.
-///
-/// Preserves pre-Phase-D behavior (the runner performed no per-request scope
-/// checks). Production CLI passes `ctx.scope` via [`LoadTestRunner::with_scope`];
-/// every request still traverses the transport authority seam, just against a
-/// permissive policy when no scope is supplied.
-fn default_facade_scope() -> crate::config::Scope {
-    let mut scope = crate::config::Scope::new();
-    scope
-        .allowed_targets
-        .push(crate::config::ScopeRule::new("*".to_string()));
-    scope
-}
-
 pub struct LoadTestRunner {
     url: String,
     total_requests: u64,
@@ -116,7 +108,11 @@ pub struct LoadTestRunner {
     bearer: Option<String>,
     cookie: Option<String>,
     api_key: Option<String>,
-    scope: crate::config::Scope,
+    /// Explicit execution scope. `None` until the caller attaches the scope
+    /// snapshot that authorized the operation. Ordinary `run()` fails closed
+    /// without it; `run_with(transport, authority, ...)` stays explicit and
+    /// never consults this field.
+    scope: Option<crate::config::Scope>,
     config_defaults: Option<ConfigDefaults>,
     /// Deprecated, ignored by execution (retained for source compat).
     #[allow(dead_code)]
@@ -171,7 +167,9 @@ impl LoadTestRunner {
             bearer: None,
             cookie: None,
             api_key: None,
-            scope: default_facade_scope(),
+            // No wildcard default: the caller must attach the scope snapshot
+            // that authorized the operation (fail-closed `run()`).
+            scope: None,
             config_defaults: None,
             tui_mode,
         })
@@ -180,19 +178,31 @@ impl LoadTestRunner {
     /// Attach an explicit scope for per-request authority checks.
     #[must_use]
     pub fn with_scope(mut self, scope: crate::config::Scope) -> Self {
-        self.scope = scope;
+        self.scope = Some(scope);
         self
     }
 
     /// Attach an explicit scope for per-request authority checks.
     pub fn set_scope(&mut self, scope: crate::config::Scope) {
-        self.scope = scope;
+        self.scope = Some(scope);
     }
 
-    /// Borrow the effective scope (facade default or `set_scope` value).
+    /// Borrow the explicit execution scope, if attached.
     #[must_use]
-    pub fn scope(&self) -> &crate::config::Scope {
-        &self.scope
+    pub fn scope(&self) -> Option<&crate::config::Scope> {
+        self.scope.as_ref()
+    }
+
+    /// Require the attached execution scope, failing closed before I/O.
+    fn require_scope(&self) -> Result<crate::config::Scope> {
+        self.scope.clone().ok_or_else(|| {
+            EggsecError::Validation(
+                "load-test execution scope is missing: attach the EnforcementContext scope \
+                 snapshot via with_scope()/set_scope() (no wildcard default; see \
+                 ApprovedExecution)"
+                    .to_string(),
+            )
+        })
     }
 
     #[cfg(feature = "cli")]
@@ -386,22 +396,30 @@ impl LoadTestRunner {
         self.build_plan()
     }
 
-    /// Run with the default (permissive-unless-scoped) authority and no
-    /// progress output. CLI presentation uses `run_cli` with an indicatif
-    /// renderer; TUI/daemon use the executor with a structured sink.
+    /// Run with the attached execution scope and no progress output.
+    /// Fails closed without a scope (no wildcard default). CLI presentation
+    /// uses `run_cli` with an indicatif renderer; TUI/daemon use the executor
+    /// with a structured sink.
     pub async fn run(&self) -> Result<super::metrics::LoadTestResults> {
         self.run_with_cancellation(CancellationToken::new()).await
     }
 
     /// Run with an explicit cancellation token (daemon/runtime composition).
+    /// Requires an attached execution scope; fails before transport creation
+    /// or I/O when missing. Direct and supported proxied routes dispatch
+    /// through the pinned Eggfetch backend; unsupported proxied shapes fail
+    /// closed (no Reqwest fallback).
     pub async fn run_with_cancellation(
         &self,
         cancellation: CancellationToken,
     ) -> Result<super::metrics::LoadTestResults> {
+        let scope = self.require_scope()?;
         let (plan, template) = self.build_plan()?;
-        let transport = Arc::new(super::backend::ReqwestTransport::with_system_resolver());
+        let transport = Arc::new(eggsec_transport_eggfetch::EggfetchTransport::new(Arc::new(
+            eggsec_transport::SystemTransportResolver,
+        )));
         let authority: Arc<dyn NetworkAuthority> =
-            Arc::new(super::backend::OwnedScopeAuthority::new(self.scope.clone()));
+            Arc::new(super::backend::OwnedScopeAuthority::new(scope));
         let executor = LoadTestExecutor::new(plan, template, transport, authority, cancellation);
         executor
             .run(&NoopSink)

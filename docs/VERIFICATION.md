@@ -58,7 +58,7 @@ This runs `scripts/check-python.sh` which builds the extension once and runs beh
 
 Rust checks run on Linux in CI (`ci.yml` `rust` job). The `msrv` and
 `portability` jobs have been moved to `deep-checks.yml` (weekly schedule or
-manual trigger) to keep routine PR CI lightweight. The declared MSRV is 1.88.
+manual trigger) to keep routine PR CI lightweight. The declared MSRV is 1.89.
 
 Platform-sensitive fixture suites are hermetic (no root/hardware) and run
 locally without privilege:
@@ -74,7 +74,7 @@ job in `deep-checks.yml` — never in routine PR CI. Real RF/hardware stays a
 maintainer procedure. See [PLATFORM.md](PLATFORM.md) for the matrix, fixture
 vs live commands, expected skips, and release-gating.
 
-- MSRV validation: `deep-checks.yml` `msrv` job (Rust 1.88, `--no-default-features`)
+- MSRV validation: `deep-checks.yml` `msrv` job (Rust 1.89, `--no-default-features`)
 - macOS/Windows portability: `deep-checks.yml` `portability` job
 
 Contributors generally need local platform testing only for platform-specific
@@ -82,7 +82,7 @@ changes.
 
 ## Code MSRV vs release-tool Cargo
 
-The declared code MSRV (1.88) is the minimum Rust compiler version for building
+The declared code MSRV (1.89) is the minimum Rust compiler version for building
 the project. The `cargo package` and `cargo publish` commands may require a
 newer Cargo version than the MSRV — these are release-tooling operations, not
 code compilation. The release-tool Cargo requirement is validated separately
@@ -205,7 +205,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
-| `make check-msrv` | MSRV compile check | Deep checks only (requires `rustup toolchain install 1.88`) |
+| `make check-msrv` | MSRV compile check | Deep checks only (requires `rustup toolchain install 1.89`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |

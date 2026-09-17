@@ -48,15 +48,18 @@ impl EggfetchTransport {
     /// Build the adapter around `resolver` (facts only; policy stays with
     /// the per-call [`NetworkAuthority`]).
     ///
-    /// Both backend clients pin HTTP/1.1, disable automatic redirects,
-    /// retries, and decompression. The verified client trusts
+    /// Both backend clients negotiate H1/H2 via ALPN
+    /// (`HttpVersionPolicy::Auto { allow_http3: false }`), disable automatic
+    /// redirects, retries, and decompression. The verified client trusts
     /// Mozilla/WebPKI roots only (parity with the current Reqwest
     /// default); the insecure client disables certificate **and**
     /// hostname verification and is only selected for requests whose
-    /// [`eggsec_transport::TlsPolicy`] is explicitly insecure.
+    /// [`eggsec_transport::TlsPolicy`] is explicitly insecure. HTTP/3 stays
+    /// disabled until the transport contract has an authorized QUIC
+    /// resolution/binding story.
     pub fn new(resolver: Arc<dyn TransportResolver>) -> Self {
         let verified = Client::builder()
-            .http_version_policy(HttpVersionPolicy::Http1Only)
+            .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
             .follow_redirects(false)
             .max_redirects(0)
             .automatic_decompression(false)
@@ -67,7 +70,7 @@ impl EggfetchTransport {
             )
             .build();
         let insecure = Client::builder()
-            .http_version_policy(HttpVersionPolicy::Http1Only)
+            .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
             .follow_redirects(false)
             .max_redirects(0)
             .automatic_decompression(false)
@@ -108,13 +111,30 @@ impl std::fmt::Debug for EggfetchTransport {
 }
 
 /// Authorized single-hop dispatch plan: the logical destination plus the
-/// pinned wire URL the backend is allowed to see.
+/// pinned wire route the backend is allowed to see.
+///
+/// Direct hops carry a pinned wire URL (approved-IP literal, logical Host/SNI).
+/// Proxied hops keep the logical URL on the wire and carry pinned proxy-peer
+/// and ultimate-target socket sets for `Proxy::resolved_addresses` and
+/// `proxy_target_addresses` (both independently authorized).
 struct AuthorizedHop {
     logical_host: String,
     port: u16,
     primary: IpAddr,
     wire_url: Url,
     is_https: bool,
+    proxy: Option<AuthorizedProxyRoute>,
+}
+
+/// Pinned proxy route for one hop (both legs independently authorized).
+#[derive(Debug, Clone)]
+struct AuthorizedProxyRoute {
+    endpoint: Url,
+    proxy_peers: Vec<std::net::SocketAddr>,
+    ultimate_peers: Vec<std::net::SocketAddr>,
+    /// `ProxyIntent` routing mode (Http vs All) for backend `Proxy` selection.
+    mode_is_all: bool,
+    credential: Option<eggsec_transport::ProxyCredential>,
 }
 
 impl EggfetchTransport {
@@ -195,17 +215,102 @@ impl EggfetchTransport {
         )?;
 
         // 7. Proxy endpoint vs ultimate destination are distinct decisions.
-        // The adapter observes the authority verdict, then fails closed:
-        // proxied execution (including remote-DNS SOCKS semantics, where
-        // the local process never sees the target IP) is deferred past
-        // Phase C, and the `proxy` feature is not compiled in, so no
-        // weaker path exists underneath.
+        // Both legs are resolved/authorized/bound independently through the
+        // proxy-peer checkpoints. Supported matrix (published eggfetch-core
+        // 0.1.5 route-pinning release):
+        // - direct HTTP/HTTPS: pinned wire URL (below);
+        // - HTTP/HTTPS proxy -> HTTPS origin (CONNECT) with both pins: supported;
+        // - SOCKS5 local-resolution -> HTTP/HTTPS with both pins: supported;
+        // - SOCKS5H remote-DNS: fail closed (ultimate IP not locally enforceable);
+        // - plaintext HTTP forward-proxy: fail closed (standard proxy cannot
+        //   enforce requested ultimate IP).
         if let Some(endpoint) = request.proxy.endpoint() {
             authority.authorize_proxy(endpoint, url)?;
-            return Err(TransportError::denied(
-                PolicyCheckpoint::Proxy,
-                "proxied execution is deferred in Phase C (direct-only adapter)",
-            ));
+            let proxy_host = endpoint.host_str().ok_or_else(|| {
+                TransportError::InvalidRequest("proxy endpoint has no host".to_string())
+            })?;
+            let proxy_port = effective_port(endpoint)?;
+            let proxy_literal = proxy_host.parse::<IpAddr>().is_ok();
+            authority.authorize_host(proxy_host, Some(proxy_port), proxy_literal)?;
+
+            let (proxy_candidates, proxy_approved) = match proxy_host.parse::<IpAddr>() {
+                Ok(lit) => {
+                    let approved = authority.authorize_proxy_resolved(proxy_host, &[lit])?;
+                    (vec![lit], approved)
+                }
+                Err(_) => {
+                    let resolved = self.resolver.resolve(proxy_host);
+                    if resolved.addresses.is_empty() {
+                        return Err(TransportError::ResolutionFailed {
+                            host: proxy_host.to_string(),
+                            reason: "proxy: no addresses".to_string(),
+                        });
+                    }
+                    let approved =
+                        authority.authorize_proxy_resolved(proxy_host, &resolved.addresses)?;
+                    (resolved.addresses, approved)
+                }
+            };
+            let proxy_binding = validate_binding(proxy_host, &proxy_candidates, &proxy_approved)
+                .map_err(|e| match e {
+                    TransportError::InvalidBinding { host, reason } => {
+                        TransportError::denied(PolicyCheckpoint::Proxy, format!("{host}: {reason}"))
+                    }
+                    other => other,
+                })?;
+            authority.authorize_proxy_socket(proxy_host, proxy_binding.primary(), proxy_port)?;
+            let proxy_peers: Vec<std::net::SocketAddr> = proxy_approved
+                .iter()
+                .map(|ip| std::net::SocketAddr::new(*ip, proxy_port))
+                .collect();
+
+            // Ultimate peers use the already-authorized ultimate binding.
+            let ultimate_peers: Vec<std::net::SocketAddr> = approved
+                .iter()
+                .map(|ip| std::net::SocketAddr::new(*ip, port))
+                .collect();
+
+            let proxy_scheme = endpoint.scheme().to_ascii_lowercase();
+            let ultimate_scheme = url.scheme().to_ascii_lowercase();
+            let is_socks = proxy_scheme == "socks5" || proxy_scheme == "socks5h";
+            if proxy_scheme == "socks5h" {
+                return Err(TransportError::denied(
+                    PolicyCheckpoint::Proxy,
+                    "SOCKS5H remote-DNS cannot be ultimate-IP-pinned; fail closed for strict scoped transport",
+                ));
+            }
+            if ultimate_scheme == "http" && !is_socks {
+                return Err(TransportError::denied(
+                    PolicyCheckpoint::Proxy,
+                    "plaintext HTTP forward-proxy ultimate pinning unsupported; fail closed for strict scoped transport",
+                ));
+            }
+
+            let (mode_is_all, credential) = match &request.proxy {
+                eggsec_transport::ProxyIntent::Direct => (true, None),
+                eggsec_transport::ProxyIntent::Http { credential, .. } => {
+                    (false, credential.clone())
+                }
+                eggsec_transport::ProxyIntent::All { credential, .. } => (true, credential.clone()),
+            };
+            // Proxied hops keep the logical URL on the wire; the backend pins
+            // both legs via `Proxy::resolved_addresses` + `proxy_target_addresses`.
+            // Cross-origin pinned-route reuse fails closed unless a new authorized
+            // snapshot is constructed (per-hop authorize_hop above).
+            return Ok(AuthorizedHop {
+                logical_host: host.to_string(),
+                port,
+                primary: binding.primary(),
+                wire_url: url.clone(),
+                is_https: url.scheme() == "https",
+                proxy: Some(AuthorizedProxyRoute {
+                    endpoint: endpoint.clone(),
+                    proxy_peers,
+                    ultimate_peers,
+                    mode_is_all,
+                    credential,
+                }),
+            });
         }
 
         // Bind: the connector only ever sees the approved IP literal.
@@ -219,6 +324,7 @@ impl EggfetchTransport {
             primary: binding.primary(),
             wire_url,
             is_https: url.scheme() == "https",
+            proxy: None,
         })
     }
 
@@ -265,19 +371,53 @@ impl EggfetchTransport {
             builder = builder.header(name.as_str(), value_str);
         }
         let sni = hop.is_https.then(|| hop.logical_host.clone());
-        let response = builder
+        // For direct hops the backend sees the pinned-IP wire URL with logical
+        // Host/SNI and explicit direct routing. For proxied hops the backend
+        // sees the logical URL with logical Host/SNI plus pinned proxy-peer
+        // and ultimate-target sets (both authorized above).
+        let mut builder = builder
             .body(eggfetch_body(&logical.body))
             .timeout(eggfetch_timeout(&request.timeout, remaining_total))
             .redirect_policy(eggfetch_core::RedirectPolicy::new(false, 0))
-            .without_retry()
-            // No proxy is ever configured on the backend clients; this
-            // per-request override additionally pins direct routing so
-            // environment-style proxy selection cannot divert a hop.
-            .without_proxy()
+            .without_retry();
+        if let Some(proxy_route) = hop.proxy.as_ref() {
+            let endpoint_str = proxy_route.endpoint.as_str();
+            let mut proxy = if proxy_route.mode_is_all {
+                eggfetch_core::Proxy::all(endpoint_str).map_err(|e| {
+                    TransportError::InvalidRequest(format!("invalid proxy endpoint: {e}"))
+                })?
+            } else {
+                eggfetch_core::Proxy::http(endpoint_str).map_err(|e| {
+                    TransportError::InvalidRequest(format!("invalid proxy endpoint: {e}"))
+                })?
+            };
+            proxy = proxy
+                .resolved_addresses(proxy_route.proxy_peers.clone())
+                .map_err(|e| {
+                    TransportError::InvalidRequest(format!("invalid proxy peer pin: {e}"))
+                })?;
+            if let Some(cred) = proxy_route.credential.as_ref() {
+                let auth = eggfetch_core::ProxyAuth::basic(cred.username(), cred.password())
+                    .map_err(|e| {
+                        TransportError::InvalidRequest(format!("invalid proxy credential: {e}"))
+                    })?;
+                proxy = proxy.auth(auth);
+            }
+            builder = builder
+                .proxy(&proxy)
+                .proxy_target_addresses(proxy_route.ultimate_peers.clone());
+        } else {
+            // No proxy is configured on the backend clients; this per-request
+            // override additionally pins direct routing so environment-style
+            // proxy selection cannot divert a hop.
+            builder = builder.without_proxy();
+        }
+        let response = builder
             .decompress(false)
             .transport_hints(eggfetch_core::TransportHints {
                 target: None,
                 sni_hostname: sni,
+                resolved_target: None,
                 trace: None,
             })
             .send()
@@ -343,6 +483,14 @@ impl EggfetchTransport {
         history: Vec<Url>,
         hop: &AuthorizedHop,
     ) -> ScopedHttpResponse {
+        // Direct hops dial the approved ultimate address. Proxied hops dial
+        // the approved proxy peer (the ultimate pin travels in the CONNECT /
+        // SOCKS command, not the TCP tuple).
+        let remote_addr = if let Some(proxy) = hop.proxy.as_ref() {
+            proxy.proxy_peers.first().copied()
+        } else {
+            Some(SocketAddr::new(hop.primary, hop.port))
+        };
         ScopedHttpResponse {
             status,
             headers,
@@ -350,7 +498,7 @@ impl EggfetchTransport {
             final_url,
             redirect_history: history,
             connection: Some(eggsec_transport::ConnectionInfo {
-                remote_addr: Some(SocketAddr::new(hop.primary, hop.port)),
+                remote_addr,
                 sni_host: hop.is_https.then(|| hop.logical_host.clone()),
             }),
         }

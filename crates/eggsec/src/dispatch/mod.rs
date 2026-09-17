@@ -45,8 +45,9 @@ mod security;
 mod types;
 
 pub use canonical_execution::{
-    execute_approved, execute_canonical, executor_route_for, is_feature_available, outcome_kind,
-    task_result_envelope, CanonicalOperationRequest, ExecutionError, ExecutionEvent, ExecutionSink,
+    execute_approved, execute_approved_execution, execute_canonical, execute_canonical_with_scope,
+    executor_route_for, is_feature_available, outcome_kind, task_result_envelope,
+    CanonicalOperationRequest, ExecutionError, ExecutionEvent, ExecutionSink,
 };
 pub use types::{
     GraphQlResults, NseResults, OAuthResults, ReconOptions, TaskResult, TracerouteHopResult,

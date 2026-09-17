@@ -723,6 +723,88 @@ pub async fn execute_approved(
     Ok(outcome)
 }
 
+/// Execute an approved canonical request with its enforcement-scope snapshot.
+///
+/// Strict surfaces must use this (with an [`crate::config::ApprovedExecution`]
+/// bundle) for scope-sensitive operations. Binding, validation, and feature
+/// checks mirror [`execute_approved`]; the load-test branch receives the
+/// scope snapshot from the same enforcement context that approved the
+/// operation, never a reloaded config or wildcard.
+pub async fn execute_approved_execution(
+    execution: &crate::config::ApprovedExecution,
+    request: CanonicalOperationRequest,
+    sink: &ExecutionSink,
+) -> Result<TaskResult, ExecutionError> {
+    let approved = execution.approved();
+    let operation_id = request.operation_id();
+
+    if approved.descriptor().operation != operation_id {
+        return Err(ExecutionError::BindingMismatch {
+            reason: format!(
+                "approved operation '{}' does not match request operation '{}' — aliases must be resolved before the execution boundary",
+                approved.descriptor().operation,
+                operation_id
+            ),
+        });
+    }
+
+    request
+        .validate()
+        .map_err(|e| ExecutionError::InvalidRequest {
+            operation_id: operation_id.to_string(),
+            reason: e.to_string(),
+        })?;
+
+    let expected = expected_descriptor_for_request(&request).map_err(|reason| {
+        ExecutionError::InvalidRequest {
+            operation_id: operation_id.to_string(),
+            reason,
+        }
+    })?;
+    if !approved.matches_descriptor(&expected) {
+        return Err(ExecutionError::BindingMismatch {
+            reason: binding_mismatch_reason(approved.descriptor(), &expected),
+        });
+    }
+
+    if let Some(metadata) = crate::config::metadata_for_tool_id(operation_id) {
+        for feature in metadata.required_features {
+            if !is_feature_available(feature) {
+                return Err(ExecutionError::FeatureUnavailable {
+                    operation_id: operation_id.to_string(),
+                    feature: feature.to_string(),
+                });
+            }
+        }
+    } else {
+        return Err(ExecutionError::InvalidRequest {
+            operation_id: operation_id.to_string(),
+            reason: "unknown canonical operation".to_string(),
+        });
+    }
+
+    sink.emit_started(operation_id).await;
+
+    let outcome = execute_canonical_with_scope(request, execution.scope().clone(), sink)
+        .await
+        .map_err(|e| match e {
+            ExecutionError::Cancelled { .. } => e,
+            ExecutionError::FeatureUnavailable { .. } => e,
+            ExecutionError::InvalidRequest { .. } => e,
+            ExecutionError::BindingMismatch { .. } => e,
+            ExecutionError::ExecutionFailed {
+                operation_id,
+                message,
+            } => ExecutionError::ExecutionFailed {
+                operation_id,
+                message,
+            },
+        })?;
+
+    sink.emit_completed(&outcome_kind(&outcome)).await;
+    Ok(outcome)
+}
+
 /// Build the expected [`crate::config::OperationDescriptor`] for a canonical
 /// request via validated metadata construction.
 fn expected_descriptor_for_request(
@@ -990,8 +1072,34 @@ pub fn task_result_envelope(result: &TaskResult) -> eggsec_runtime::TaskResultEn
 /// mapping. Feature-gated families without their feature return a typed
 /// [`ExecutionError::FeatureUnavailable`]; the legacy `dispatch_inner` shim
 /// converts that to `Ok(TaskResult::Error(..))` for backward compatibility.
+///
+/// Load testing without an execution scope fails closed here: use
+/// [`execute_canonical_with_scope`] (manual) or
+/// [`execute_approved_execution`] (strict) with the enforcement-scope
+/// snapshot. No wildcard scope is synthesized.
 pub async fn execute_canonical(
     request: CanonicalOperationRequest,
+    sink: &ExecutionSink,
+) -> Result<TaskResult, ExecutionError> {
+    execute_canonical_inner(request, None, sink).await
+}
+
+/// Scoped canonical execution (manual surfaces with an explicit scope).
+///
+/// `scope` authorizes load-test per-hop checks; other families ignore it.
+/// This keeps domain executors policy-free: only the load-test branch consumes
+/// the scope.
+pub async fn execute_canonical_with_scope(
+    request: CanonicalOperationRequest,
+    scope: crate::config::Scope,
+    sink: &ExecutionSink,
+) -> Result<TaskResult, ExecutionError> {
+    execute_canonical_inner(request, Some(scope), sink).await
+}
+
+async fn execute_canonical_inner(
+    request: CanonicalOperationRequest,
+    scope: Option<crate::config::Scope>,
     sink: &ExecutionSink,
 ) -> Result<TaskResult, ExecutionError> {
     // Bridge legacy (u64, u64) progress into frontend-neutral events. Domain
@@ -1022,12 +1130,22 @@ pub async fn execute_canonical(
                     reason: e.to_string(),
                 })?;
             let timeout = std::time::Duration::from_secs(n.duration_secs);
-            super::network::run_load_test(
+            let Some(scope) = scope else {
+                return Err(ExecutionError::InvalidRequest {
+                    operation_id: operation_id.clone(),
+                    reason: "load-test execution scope is missing: use \
+                             execute_canonical_with_scope() or execute_approved_execution() \
+                             with the EnforcementContext scope snapshot (no wildcard default)"
+                        .to_string(),
+                });
+            };
+            super::network::run_load_test_with_scope(
                 n.target,
                 n.requests,
                 n.concurrency,
                 timeout,
                 fanout_tx.clone(),
+                scope,
             )
             .await
             .map_err(|e| ExecutionError::ExecutionFailed {

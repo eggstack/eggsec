@@ -3,13 +3,23 @@ mod common;
 use common::{create_test_server, mock_not_found, mock_ok};
 use std::time::Duration;
 
+/// Loopback-allow execution scope for wiremock fixtures (127.0.0.1).
+fn loopback_scope() -> eggsec::config::Scope {
+    let mut scope = eggsec::config::Scope::new();
+    scope.allowed_targets.push(
+        eggsec::config::ScopeRule::with_cidr("127.0.0.0/8".to_string()).expect("loopback cidr"),
+    );
+    scope
+}
+
 #[tokio::test]
 async fn test_load_test_basic() {
     let server = create_test_server().await;
     mock_ok("/").mount(&server).await;
 
-    let runner =
-        eggsec::loadtest::LoadTestRunner::new(server.uri(), 10, 2, Duration::from_secs(5)).unwrap();
+    let runner = eggsec::loadtest::LoadTestRunner::new(server.uri(), 10, 2, Duration::from_secs(5))
+        .unwrap()
+        .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
 
@@ -26,7 +36,8 @@ async fn test_load_test_concurrency() {
 
     let runner =
         eggsec::loadtest::LoadTestRunner::new(server.uri(), 100, 50, Duration::from_secs(10))
-            .unwrap();
+            .unwrap()
+            .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
 
@@ -44,7 +55,8 @@ async fn test_load_test_with_errors() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
 
@@ -72,7 +84,8 @@ async fn test_load_test_error_body_consumption() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
 
@@ -109,7 +122,8 @@ async fn test_load_test_redirect_following() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 3);
@@ -135,7 +149,8 @@ async fn test_load_test_with_basic_auth() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         auth: Some("user:pass".to_string()),
         bearer: None,
@@ -175,7 +190,8 @@ async fn test_load_test_with_bearer_token() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         auth: None,
         bearer: Some("test-token-123".to_string()),
@@ -214,7 +230,8 @@ async fn test_load_test_metrics_latency_tracking() {
         5,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 20);
@@ -244,7 +261,8 @@ async fn test_load_test_with_slow_response() {
         2,
         Duration::from_secs(10),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);
@@ -291,7 +309,8 @@ async fn test_load_test_4xx_client_errors() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 5);
@@ -305,7 +324,8 @@ async fn test_load_test_with_rate_limit() {
 
     let mut runner =
         eggsec::loadtest::LoadTestRunner::new(server.uri(), 20, 5, Duration::from_secs(10))
-            .unwrap();
+            .unwrap()
+            .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         auth: None,
         bearer: None,
@@ -347,8 +367,9 @@ async fn test_load_test_from_args_with_config() {
     let config = eggsec::config::EggsecConfig::default();
     let run_config =
         eggsec::loadtest::LoadTestRunConfig::new(server.uri(), 10, 2, Duration::from_secs(5));
-    let runner =
-        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
+    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config)
+        .unwrap()
+        .with_scope(loopback_scope());
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);
     assert_eq!(results.successful_requests, 10);
@@ -361,7 +382,9 @@ async fn test_load_test_from_args_with_tui_mode() {
 
     let run_config =
         eggsec::loadtest::LoadTestRunConfig::new(server.uri(), 10, 2, Duration::from_secs(5));
-    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_mode(run_config, true).unwrap();
+    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_mode(run_config, true)
+        .unwrap()
+        .with_scope(loopback_scope());
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);
     assert_eq!(results.successful_requests, 10);
@@ -385,7 +408,8 @@ async fn test_load_test_post_method() {
         2,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_method("POST".to_string());
     runner.set_body(r#"{"key":"value"}"#.to_string());
 
@@ -414,7 +438,8 @@ async fn test_load_test_custom_headers() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.add_header("X-Custom".to_string(), "test-value".to_string());
 
     let results = runner.run().await.unwrap();
@@ -433,7 +458,8 @@ async fn test_load_test_error_cap() {
         10,
         Duration::from_secs(30),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 1500);
@@ -462,7 +488,8 @@ async fn test_load_test_options_method() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_method("OPTIONS".to_string());
 
     let results = runner.run().await.unwrap();
@@ -489,7 +516,8 @@ async fn test_load_test_with_api_key() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         api_key: Some("my-secret-key".to_string()),
         ..eggsec::types::CommonHttpArgs::default()
@@ -518,7 +546,8 @@ async fn test_load_test_with_api_key_header_format() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         api_key: Some("X-Api-Token:token-value".to_string()),
         ..eggsec::types::CommonHttpArgs::default()
@@ -547,7 +576,8 @@ async fn test_load_test_with_cookie() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         cookie: Some("session=abc123".to_string()),
         ..eggsec::types::CommonHttpArgs::default()
@@ -563,7 +593,9 @@ async fn test_load_test_rate_limit_zero_ignored() {
     mock_ok("/").mount(&server).await;
 
     let mut runner =
-        eggsec::loadtest::LoadTestRunner::new(server.uri(), 5, 2, Duration::from_secs(5)).unwrap();
+        eggsec::loadtest::LoadTestRunner::new(server.uri(), 5, 2, Duration::from_secs(5))
+            .unwrap()
+            .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         rate_limit: Some(0),
         ..eggsec::types::CommonHttpArgs::default()
@@ -592,7 +624,8 @@ async fn test_load_test_unknown_method_defaults_to_get() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_method("FOOBAR".to_string());
 
     let results = runner.run().await.unwrap();
@@ -607,7 +640,8 @@ fn test_load_test_malformed_auth_format() {
         1,
         Duration::from_secs(5),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
     runner.set_common(eggsec::types::CommonHttpArgs {
         auth: Some("no-colon-separator".to_string()),
         ..eggsec::types::CommonHttpArgs::default()
@@ -633,8 +667,9 @@ fn test_load_test_from_args_with_config_uses_config_timeout() {
 
     let run_config =
         eggsec::loadtest::LoadTestRunConfig::new("http://example.com", 1, 1, Duration::ZERO);
-    let runner =
-        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
+    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config)
+        .unwrap()
+        .with_scope(loopback_scope());
     // When timeout is None, config value (42) should be used.
     drop(runner);
 }
@@ -650,8 +685,9 @@ fn test_load_test_from_args_with_config_explicit_timeout() {
         1,
         Duration::from_secs(15),
     );
-    let runner =
-        eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config).unwrap();
+    let runner = eggsec::loadtest::LoadTestRunner::from_config_with_engine(run_config, &config)
+        .unwrap()
+        .with_scope(loopback_scope());
     // When timeout is Some(15), explicit value (15) should override config (42).
     drop(runner);
 }
@@ -667,7 +703,8 @@ async fn test_load_test_all_requests_fail_latency_still_recorded() {
         2,
         Duration::from_secs(10),
     )
-    .unwrap();
+    .unwrap()
+    .with_scope(loopback_scope());
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 10);

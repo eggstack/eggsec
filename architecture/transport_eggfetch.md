@@ -1,20 +1,14 @@
-# Eggfetch Transport Adapter (Phase C)
+# Eggfetch Transport Adapter (Phase C + corrective pass)
 
 Status: adapter implemented 2026-09-12 (`eggsec-transport-eggfetch`).
-Phase D increment 1 (2026-09-12) migrated consumer *interfaces* to the
-contract (`eggsec-agent` injection, shared-helper cleanup, NSE capability,
-proxy boundary) but wired no production backend yet — this crate still has
-no production consumers (guard Checks 102 + 103). Migration proceeds per
-consumer with focused parity tests; see
-[network_dependency_baseline.md](network_dependency_baseline.md) §7.
+Corrective pass (2026-09-17): production direct load-test backend over published
+`eggfetch-core 0.1.5` (H1/H2 via ALPN, pinned proxy peers/targets where enforceable).
 
 ## Role & Responsibilities
 
 [`EggfetchTransport`](../../../crates/eggsec-transport-eggfetch/src/adapter.rs)
 implements [`HttpTransport`](transport.md) over the **published**
-`eggfetch-core 0.1` client using only stable public APIs. It proves the
-Phase B contract can be enforced against a real backend with no upstream
-Eggfetch change and no production migration.
+`eggfetch-core 0.1.5` client using only stable public APIs.
 
 **Non-responsibilities:**
 

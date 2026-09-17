@@ -777,70 +777,18 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
 }
 
 #[allow(dead_code)]
-async fn process_load_test(task: Task) -> Result<serde_json::Value> {
-    let target = &task.target;
-    let requests: u64 = task
-        .payload
-        .get("requests")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(100);
-    let concurrency: usize = task
-        .payload
-        .get("concurrency")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10) as usize;
-    let method = task
-        .payload
-        .get("method")
-        .and_then(|v| v.as_str())
-        .unwrap_or("GET");
-
-    let auth_context_path = task
-        .payload
-        .get("auth_context_path")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let auth_role = task
-        .payload
-        .get("auth_role")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    let common = crate::types::CommonHttpArgs {
-        auth_context: auth_context_path,
-        auth_role,
-        ..Default::default()
-    };
-
-    let run_cfg = crate::loadtest::LoadTestRunConfig {
-        url: target.to_string(),
-        requests,
-        concurrency,
-        timeout: std::time::Duration::from_secs(10),
-        method: method.to_string(),
-        body: None,
-        headers: Vec::new(),
-        common,
-        tui_mode: false,
-    };
-
-    let config = crate::config::EggsecConfig::default();
-    let runner = crate::loadtest::LoadTestRunner::from_config_with_engine(run_cfg, &config)?;
-    let results = runner.run().await?;
-
-    Ok(serde_json::json!({
-        "target": target,
-        "status": "completed",
-        "total_requests": results.total_requests,
-        "successful_requests": results.successful_requests,
-        "failed_requests": results.failed_requests,
-        "requests_per_second": results.requests_per_second,
-        "total_duration_ms": results.total_duration_ms,
-        "latency_p50_ms": results.latency_p50_ms,
-        "latency_p95_ms": results.latency_p95_ms,
-        "latency_p99_ms": results.latency_p99_ms,
-        "status_codes": results.status_codes,
-    }))
+async fn process_load_test(_task: Task) -> Result<serde_json::Value> {
+    // Fail closed: distributed tasks carry no execution-scope snapshot in the
+    // current `Task` shape. Load testing without the approval scope must not
+    // synthesize wildcard authorization. Route distributed load testing
+    // through `EnforcedDispatcher::dispatch_execution()` with an
+    // `ApprovedExecution` bundle once `Task` carries scope provenance.
+    Err(EggsecError::Validation(
+        "distributed load-test execution scope is missing: Task carries no scope snapshot; \
+         use EnforcedDispatcher::dispatch_execution() with an ApprovedExecution bundle \
+         (no wildcard default)"
+            .to_string(),
+    ))
 }
 
 #[allow(dead_code)]

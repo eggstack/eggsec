@@ -27,7 +27,9 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::config::{ApprovedOperation, EnforcementOutcome, ExecutionSurface, OperationDescriptor};
+use crate::config::{
+    ApprovedExecution, ApprovedOperation, EnforcementOutcome, ExecutionSurface, OperationDescriptor,
+};
 use crate::error::EggsecError;
 use crate::tool::{ToolRequest, ToolResponse};
 
@@ -48,11 +50,25 @@ pub trait AgentExecutionService: Send + Sync {
         descriptor: OperationDescriptor,
     ) -> Result<ApprovedOperation, crate::config::EnforcementError>;
 
+    /// Strict approval with execution-scope snapshot for scope-sensitive dispatch.
+    fn approve_security_agent_execution(
+        &self,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedExecution, crate::config::EnforcementError>;
+
     /// Checked dispatch under a previously issued approval token.
     /// Fails closed on any binding mismatch. No raw dispatch exists.
     fn dispatch_checked<'a>(
         &'a self,
         approved: &'a ApprovedOperation,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>>;
+
+    /// Checked dispatch under an execution bundle (token + scope snapshot).
+    /// Scope-sensitive tools must use this.
+    fn dispatch_execution<'a>(
+        &'a self,
+        execution: &'a ApprovedExecution,
         request: ToolRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>>;
 
@@ -81,12 +97,31 @@ impl AgentExecutionService for crate::tool::service::EngineServices {
         self.approve(ExecutionSurface::SecurityAgent, descriptor)
     }
 
+    fn approve_security_agent_execution(
+        &self,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedExecution, crate::config::EnforcementError> {
+        if self.enforcement().execution_profile != crate::config::ExecutionProfile::AgentStrict {
+            let decision = self.evaluate(&descriptor).decision().clone();
+            return Err(crate::config::EnforcementError::Denied { decision });
+        }
+        self.approve_execution(ExecutionSurface::SecurityAgent, descriptor)
+    }
+
     fn dispatch_checked<'a>(
         &'a self,
         approved: &'a ApprovedOperation,
         request: ToolRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>> {
         Box::pin(self.dispatch_checked(approved, request))
+    }
+
+    fn dispatch_execution<'a>(
+        &'a self,
+        execution: &'a ApprovedExecution,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>> {
+        Box::pin(self.dispatch_execution(execution, request))
     }
 }
 
@@ -141,6 +176,18 @@ pub(crate) mod test_helpers {
                 .approve(ExecutionSurface::SecurityAgent, descriptor)
         }
 
+        fn approve_security_agent_execution(
+            &self,
+            descriptor: OperationDescriptor,
+        ) -> Result<ApprovedExecution, crate::config::EnforcementError> {
+            if self.enforcement.execution_profile != crate::config::ExecutionProfile::AgentStrict {
+                let decision = self.evaluate(&descriptor).decision().clone();
+                return Err(crate::config::EnforcementError::Denied { decision });
+            }
+            self.enforcement
+                .approve_execution(ExecutionSurface::SecurityAgent, descriptor)
+        }
+
         fn dispatch_checked<'a>(
             &'a self,
             approved: &'a ApprovedOperation,
@@ -151,6 +198,29 @@ pub(crate) mod test_helpers {
             Box::pin(async move {
                 // Prove binding awareness in the fake: reject mismatched
                 // operation IDs the same way the real dispatcher would.
+                if _request.tool != expected_operation
+                    && !crate::config::operation_matches_tool_id(
+                        &_request.tool,
+                        &expected_operation,
+                    )
+                {
+                    return Err(EggsecError::Config(format!(
+                        "fake dispatch binding failed: request '{}' != approved '{}'",
+                        _request.tool, expected_operation
+                    )));
+                }
+                Ok(response)
+            })
+        }
+
+        fn dispatch_execution<'a>(
+            &'a self,
+            execution: &'a ApprovedExecution,
+            _request: ToolRequest,
+        ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>> {
+            let response = self.response.clone();
+            let expected_operation = execution.approved().descriptor().operation.clone();
+            Box::pin(async move {
                 if _request.tool != expected_operation
                     && !crate::config::operation_matches_tool_id(
                         &_request.tool,

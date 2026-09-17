@@ -52,6 +52,11 @@ pub struct LoadTestResultPy {
     pub(crate) status_codes: HashMap<u16, u64>,
     #[pyo3(get)]
     pub errors: Vec<String>,
+    /// Transport-error category counts (`error_kinds` parity with engine
+    /// `LoadTestResults`; defaults empty so older serialized payloads still
+    /// deserialize).
+    #[serde(default)]
+    pub(crate) error_kinds: HashMap<String, u64>,
 }
 
 #[pymethods]
@@ -62,6 +67,16 @@ impl LoadTestResultPy {
         let dict = PyDict::new(py);
         for (&code, &count) in &self.status_codes {
             dict.set_item(code, count)?;
+        }
+        Ok(dict.into())
+    }
+
+    /// Transport-error category counts as a Python dict.
+    #[getter]
+    fn error_kinds(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new(py);
+        for (kind, count) in &self.error_kinds {
+            dict.set_item(kind, count)?;
         }
         Ok(dict.into())
     }
@@ -89,6 +104,11 @@ impl LoadTestResultPy {
         dict.set_item("status_codes", &status_dict)?;
         let error_list = PyList::new(py, &self.errors)?;
         dict.set_item("errors", &error_list)?;
+        let kinds_dict = PyDict::new(py);
+        for (kind, count) in &self.error_kinds {
+            kinds_dict.set_item(kind, count)?;
+        }
+        dict.set_item("error_kinds", &kinds_dict)?;
         Ok(dict.into())
     }
 
@@ -254,6 +274,7 @@ pub fn load_test_http(
 
     let url_owned = url.to_string();
     let method_owned = method.to_string();
+    let engine_scope = scope.inner.clone();
 
     let result = runtime_sync::block_on(py, async move {
         let mut runner = eggsec::loadtest::LoadTestRunner::new(
@@ -265,6 +286,9 @@ pub fn load_test_http(
         .map_pyerr()?;
 
         runner.set_method(method_owned);
+        // Carry the same scope snapshot that authorized the Python call into
+        // per-hop transport authorization (no wildcard default).
+        runner.set_scope(engine_scope);
 
         runner.run().await.map_pyerr()
     })?;
@@ -285,6 +309,7 @@ pub fn load_test_http(
         latency_p99_ms: result.latency_p99_ms,
         status_codes: result.status_codes.into_iter().collect(),
         errors: result.errors,
+        error_kinds: result.error_kinds.into_iter().collect(),
     })
 }
 
@@ -322,6 +347,7 @@ pub fn async_load_test_http(
 
     let url_owned = url.to_string();
     let method_owned = method.to_string();
+    let engine_scope = scope.inner.clone();
 
     runtime_async::spawn_async(async move {
         let mut runner = eggsec::loadtest::LoadTestRunner::new(
@@ -333,6 +359,7 @@ pub fn async_load_test_http(
         .map_pyerr()?;
 
         runner.set_method(method_owned);
+        runner.set_scope(engine_scope);
 
         let result = runner.run().await.map_pyerr()?;
 
@@ -352,6 +379,7 @@ pub fn async_load_test_http(
             latency_p99_ms: result.latency_p99_ms,
             status_codes: result.status_codes.into_iter().collect(),
             errors: result.errors,
+            error_kinds: result.error_kinds.into_iter().collect(),
         })
     })
 }

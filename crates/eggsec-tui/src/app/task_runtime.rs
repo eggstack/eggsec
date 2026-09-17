@@ -20,6 +20,10 @@ use eggsec::dispatch::TaskResult;
 pub(crate) struct TuiDispatcherContext {
     pub progress_tx: mpsc::Sender<(u64, u64)>,
     pub result_tx: mpsc::Sender<TaskResult>,
+    /// Enforcement-scope snapshot for scope-sensitive tasks (load-test).
+    /// `None` fails closed for those tasks; attach the manual enforcement
+    /// scope at submission time.
+    pub scope: Option<eggsec::config::Scope>,
 }
 
 /// Real executor for `eggsec_runtime::Runtime`.
@@ -207,9 +211,12 @@ impl super::App {
 
             // Update the executor context with new channel senders.
             // The executor reads this via ArcSwap before dispatching.
+            // Carry the manual enforcement-scope snapshot for scope-sensitive
+            // tasks (load-test per-hop authorization).
             let ctx = TuiDispatcherContext {
                 progress_tx,
                 result_tx,
+                scope: Some(self.enforcement_state.loaded_scope().scope.clone()),
             };
             self.executor_context.store(Arc::new(ctx));
 
@@ -320,6 +327,7 @@ mod tests {
                     crate::app::task_runtime::TuiDispatcherContext {
                         progress_tx: tokio::sync::mpsc::channel(1).0,
                         result_tx: tokio::sync::mpsc::channel(1).0,
+                        scope: None,
                     },
                 )),
             )),
@@ -360,6 +368,7 @@ mod tests {
                     crate::app::task_runtime::TuiDispatcherContext {
                         progress_tx: tokio::sync::mpsc::channel(1).0,
                         result_tx: tokio::sync::mpsc::channel(1).0,
+                        scope: None,
                     },
                 )),
             )),

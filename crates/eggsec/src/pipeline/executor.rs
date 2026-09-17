@@ -73,6 +73,10 @@ pub struct Pipeline {
     session_path: Option<String>,
     tui_mode: bool,
     config: Option<EggsecConfig>,
+    /// Explicit execution scope for scope-sensitive stages (load-test).
+    /// `None` fails closed for those stages; attach the enforcement-scope
+    /// snapshot via [`with_scope`](Self::with_scope).
+    scope: Option<crate::config::Scope>,
 }
 
 impl Pipeline {
@@ -91,6 +95,7 @@ impl Pipeline {
             session_path: None,
             tui_mode: false,
             config: None,
+            scope: None,
         }
     }
 
@@ -119,6 +124,7 @@ impl Pipeline {
             session_path: None,
             tui_mode: false,
             config: None,
+            scope: None,
         }
     }
 
@@ -187,6 +193,7 @@ impl Pipeline {
             session_path,
             tui_mode,
             config: config.cloned(),
+            scope: None,
         }
     }
 
@@ -217,6 +224,18 @@ impl Pipeline {
     pub fn with_config(mut self, config: EggsecConfig) -> Self {
         self.config = Some(config);
         self
+    }
+
+    /// Attach the enforcement-scope snapshot for scope-sensitive stages.
+    #[must_use]
+    pub fn with_scope(mut self, scope: crate::config::Scope) -> Self {
+        self.scope = Some(scope);
+        self
+    }
+
+    /// Attach the enforcement-scope snapshot for scope-sensitive stages.
+    pub fn set_scope(&mut self, scope: crate::config::Scope) {
+        self.scope = Some(scope);
     }
 
     pub fn add_stage(mut self, stage: Stage) -> Self {
@@ -1182,7 +1201,14 @@ impl Pipeline {
             tui_mode: self.tui_mode,
         };
 
-        let runner = crate::loadtest::LoadTestRunner::from_config_with_engine(run_cfg, config)?;
+        let mut runner = crate::loadtest::LoadTestRunner::from_config_with_engine(run_cfg, config)?;
+        let scope = self.scope.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "pipeline load-test execution scope is missing: attach the EnforcementContext \
+                 scope snapshot via Pipeline::with_scope()/set_scope() (no wildcard default)"
+            )
+        })?;
+        runner.set_scope(scope);
         let results = runner.run().await?;
 
         let mut context = self.context.lock().await;

@@ -36,9 +36,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::config::{
-    preflight_operation, ApprovedOperation, EnforcementContext, EnforcementError,
-    EnforcementOutcome, ExecutionSurface, ManualOverride, OperationDescriptor, OperationMetadata,
-    PolicyDecision, PreflightResult,
+    preflight_operation, ApprovedExecution, ApprovedOperation, EnforcementContext,
+    EnforcementError, EnforcementOutcome, ExecutionSurface, ManualOverride, OperationDescriptor,
+    OperationMetadata, PolicyDecision, PreflightResult,
 };
 use crate::error::EggsecError;
 use crate::tool::{EnforcedDispatcher, ToolRequest, ToolResponse};
@@ -91,17 +91,33 @@ impl OperationCatalog for StaticOperationCatalog {
 
 /// Checked-only execution service.
 ///
-/// This is intentionally narrow: the *only* execution method requires an
-/// [`ApprovedOperation`] token and verifies the tool+target binding before
-/// dispatch (via `validate_request_binding` inside
-/// [`EnforcedDispatcher::dispatch_checked`]). Adapters hold this trait object
-/// instead of a raw dispatcher, so unchecked execution is unrepresentable.
+/// This is intentionally narrow: the *only* execution methods require an
+/// approval token/bundle and verify the tool+target binding before dispatch
+/// (via `validate_request_binding` inside
+/// [`EnforcedDispatcher::dispatch_checked`] /
+/// [`dispatch_execution`](EnforcedDispatcher::dispatch_execution)). Adapters
+/// hold this trait object instead of a raw dispatcher, so unchecked execution
+/// is unrepresentable.
+///
+/// Strict scope-sensitive tools (load-test) must use
+/// [`dispatch_execution`](Self::dispatch_execution) with an
+/// [`ApprovedExecution`] bundle; raw [`dispatch_checked`](Self::dispatch_checked)
+/// load-test execution fails closed inside the tool.
 pub trait CheckedExecutor: Send + Sync {
     /// Dispatch `request` under `approved`, failing closed on any binding
     /// mismatch (operation, normalized target, surface).
     fn dispatch_checked<'a>(
         &'a self,
         approved: &'a ApprovedOperation,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>>;
+
+    /// Dispatch `request` under an [`ApprovedExecution`] bundle (token + scope
+    /// snapshot from the same enforcement context). Strict surfaces must use
+    /// this for scope-sensitive tools.
+    fn dispatch_execution<'a>(
+        &'a self,
+        execution: &'a ApprovedExecution,
         request: ToolRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>>;
 }
@@ -113,6 +129,14 @@ impl CheckedExecutor for EnforcedDispatcher {
         request: ToolRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>> {
         Box::pin(self.dispatch_checked(approved, request))
+    }
+
+    fn dispatch_execution<'a>(
+        &'a self,
+        execution: &'a ApprovedExecution,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ToolResponse, EggsecError>> + Send + 'a>> {
+        Box::pin(self.dispatch_execution(execution, request))
     }
 }
 
@@ -138,6 +162,16 @@ pub trait PreflightService: Send + Sync {
         descriptor: OperationDescriptor,
     ) -> Result<ApprovedOperation, EnforcementError>;
 
+    /// Approve for a strict automated surface with its execution-scope snapshot.
+    /// Strict scope-sensitive dispatch must use this bundle.
+    fn approve_execution(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedExecution, EnforcementError> {
+        self.enforcement().approve_execution(surface, descriptor)
+    }
+
     /// Approve for a manual surface with an optional override.
     fn approve_manual(
         &self,
@@ -145,6 +179,17 @@ pub trait PreflightService: Send + Sync {
         descriptor: OperationDescriptor,
         manual_override: Option<&ManualOverride>,
     ) -> Result<ApprovedOperation, EnforcementError>;
+
+    /// Manual-surface variant with execution-scope snapshot.
+    fn approve_manual_execution(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+        manual_override: Option<&ManualOverride>,
+    ) -> Result<ApprovedExecution, EnforcementError> {
+        self.enforcement()
+            .approve_manual_execution(surface, descriptor, manual_override)
+    }
 
     /// Policy preview without execution.
     fn preflight(
@@ -282,6 +327,15 @@ impl EngineServices {
         self.enforcement.approve(surface, descriptor)
     }
 
+    /// Strict approval with execution-scope snapshot for scope-sensitive dispatch.
+    pub fn approve_execution(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedExecution, EnforcementError> {
+        self.enforcement.approve_execution(surface, descriptor)
+    }
+
     /// Checked dispatch under a previously issued approval token.
     pub async fn dispatch_checked(
         &self,
@@ -289,6 +343,16 @@ impl EngineServices {
         request: ToolRequest,
     ) -> Result<ToolResponse, EggsecError> {
         self.executor.dispatch_checked(approved, request).await
+    }
+
+    /// Checked dispatch under an execution bundle (token + scope snapshot).
+    /// Strict scope-sensitive tools must use this.
+    pub async fn dispatch_execution(
+        &self,
+        execution: &ApprovedExecution,
+        request: ToolRequest,
+    ) -> Result<ToolResponse, EggsecError> {
+        self.executor.dispatch_execution(execution, request).await
     }
 
     /// Policy preview without execution.

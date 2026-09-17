@@ -35,7 +35,7 @@ Dependency envelope (`cargo tree -p eggsec-transport`):
 
 - `bytes`, `http` (Method/Status/HeaderMap types), `url`, `thiserror`
 - No `reqwest`/`hyper`/`rustls`/`tokio-rustls`/`hickory-resolver`/`eggfetch`/`eggress`
-- No `tokio`, no `serde`, no `async-trait` (native `async fn` in traits, MSRV 1.88)
+- No `tokio`, no `serde`, no `async-trait` (native `async fn` in traits, MSRV 1.89)
 
 ## Architecture
 
@@ -77,6 +77,8 @@ Checkpoint order (all fail-closed via `TransportError::PolicyDenied{checkpoint, 
 5. **redirect** — each hop (`authorize_redirect(from, to)` + re-run of host/dns/socket)
 6. **reresolution** — each retry/re-dial (defaults to `authorize_resolved`)
 7. **proxy** — endpoint **and** ultimate as separate decisions (authorizing one never authorizes the other)
+7b. **proxy-peer DNS** — `authorize_proxy_resolved(proxy_host, candidates)` (defaults to `authorize_resolved`; `ScopeAuthority` retains `Proxy` provenance)
+7c. **proxy-peer socket** — `authorize_proxy_socket(proxy_host, addr, port)` (defaults to `authorize_socket`; `ScopeAuthority` retains `Proxy` provenance)
 8. **tls-consistency** — SNI/Host override must equal the request host
 
 ### Resolver/connect binding (`resolver.rs`)
@@ -102,7 +104,7 @@ resolve host -> candidate addresses
 - Mixed authorized/unauthorized DNS answers deny (all-must-match).
 - Direct IP literals skip DNS but keep CIDR + port checks.
 - Empty `allowed_targets` + `require_explicit_scope` denies; otherwise non-public addresses blocked (loopback exempt), mirroring `Scope::is_target_allowed_with_resolver`.
-- Proxy endpoint and ultimate destination checked independently.
+- Proxy endpoint and ultimate destination checked independently (logical `authorize_proxy` plus proxy-peer DNS/socket binding through the new checkpoints, each with `Proxy` provenance).
 - Insecure TLS never changes the verdict (orthogonal).
 
 ### Canonical header/auth helpers (WS4)
@@ -177,7 +179,7 @@ Engine: `eggsec::config::ScopeAuthority`.
 - `cargo test -p eggsec --features rest-api --test transport_contract` (12 closure tests running Phase A behaviors through `ScopeAuthority` + fake: binding, out-of-scope DNS, mixed answers, same/cross-host redirects, later-hop re-resolution order, userinfo, secret redaction, direct IP, proxy distinctness, TLS orthogonality, invented-address rejection).
 - Phase A `network_policy_invariants.rs` (12 behaviors) remains the measurement baseline; the contract suite proves the same behaviors through the new layer.
 
-## Phase C adapter (no production migration)
+## Phase C adapter + corrective-pass production backend
 
 The contract is implemented against a real backend in
 `crates/eggsec-transport-eggfetch/` ([transport_eggfetch.md](transport_eggfetch.md)):
@@ -185,7 +187,7 @@ The contract is implemented against a real backend in
 `eggfetch-core` via approved-IP pinning (the connector only ever sees the
 authorized literal) and a manual redirect loop (auto-follow doubly
 disabled; each hop authorized before dispatch). HTTP/3 is off, proxied
-execution fails closed, and no production consumer is wired to it yet
+execution fails closed for unsupported shapes; direct + supported proxied load-test traffic is wired to it (corrective pass)
 (guard Check 102). Parity evidence:
 `crates/eggsec-transport-eggfetch/tests/parity.rs` (33 tests over local
 fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
@@ -244,4 +246,4 @@ concrete-client leakage is possible:
 
 See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
-*Last verified against source: 2026-09-13 (Phase G closure: contract 12 + invariants 12 green; no DTO/authority/binding changes; retained report in [network_dependency_closure.md](network_dependency_closure.md))*
+*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green)*

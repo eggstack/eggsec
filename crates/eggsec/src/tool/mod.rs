@@ -95,7 +95,7 @@ pub use session::{
     ResponseField, SessionState, SessionStatus, SessionVerification, SessionVerifier,
 };
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus as ToolSessionStatus};
-pub use traits::{AttackSurface, ToolCapability, ToolCategory, ToolResult};
+pub use traits::{AttackSurface, ToolCapability, ToolCategory, ToolExecutionContext, ToolResult};
 
 /// Creates the default tool registry with all base and feature-gated tools.
 ///

@@ -44,6 +44,7 @@ impl TaskDispatcher for TuiTaskDispatcher {
         let ctx = self.executor_context.load();
         let progress_tx = ctx.progress_tx.clone();
         let result_tx = ctx.result_tx.clone();
+        let scope = ctx.scope.clone();
 
         Box::pin(async move {
             // Shallow conversion: TaskKind → canonical request (exhaustive),
@@ -51,19 +52,24 @@ impl TaskDispatcher for TuiTaskDispatcher {
             let canonical =
                 eggsec::dispatch::CanonicalOperationRequest::from_task_kind(&request.task_kind);
             let sink = eggsec::dispatch::ExecutionSink::detached(progress_tx);
-            let task_result = eggsec::dispatch::execute_canonical(canonical, &sink)
-                .await
-                .map_err(|e| match e {
-                    eggsec::dispatch::ExecutionError::FeatureUnavailable {
-                        operation_id,
-                        feature,
-                    } => RuntimeError::DispatchFailed(format!(
-                        "unsupported task kind (feature '{feature}' not compiled for '{operation_id}')"
-                    )),
-                    other => RuntimeError::DispatchFailed(format!(
-                        "task execution failed: {other}"
-                    )),
-                })?;
+            // Scope-sensitive tasks (load-test) require the manual enforcement
+            // scope snapshot; other families ignore it. Missing scope fails
+            // closed (no wildcard).
+            let task_result = match scope {
+                Some(scope) => {
+                    eggsec::dispatch::execute_canonical_with_scope(canonical, scope, &sink).await
+                }
+                None => eggsec::dispatch::execute_canonical(canonical, &sink).await,
+            }
+            .map_err(|e| match e {
+                eggsec::dispatch::ExecutionError::FeatureUnavailable {
+                    operation_id,
+                    feature,
+                } => RuntimeError::DispatchFailed(format!(
+                    "unsupported task kind (feature '{feature}' not compiled for '{operation_id}')"
+                )),
+                other => RuntimeError::DispatchFailed(format!("task execution failed: {other}")),
+            })?;
 
             // Convert to envelope via the single engine-owned mapping
             // (no parallel TaskResult match here), since TaskResult is not Clone.
@@ -94,6 +100,7 @@ mod tests {
         let ctx = Arc::new(ArcSwap::from_pointee(TuiDispatcherContext {
             progress_tx,
             result_tx,
+            scope: None,
         }));
         let dispatcher = TuiTaskDispatcher::new(ctx);
         assert!(

@@ -2368,15 +2368,15 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 102. Eggfetch adapter stays narrow and unmigrated (Phase C).
+# 102. Eggfetch adapter stays narrow; load-test is the sanctioned production consumer.
 # The adapter crate owns the eggfetch binding: minimal published features
-# (http1 + rustls + proxy-for-SNI only; never http3/cookies/multipart/
-# compression), no concrete client types in its sources, no eggfetch types
-# in its public surface, and no production consumer may depend on it yet
-# (Phase D migrates consumers one at a time; the engine test dev-dep is
-# the only sanctioned wiring).
+# (http1 + http2 + rustls + proxy for pinned routing; never http3/cookies/
+# multipart/compression), no concrete client types in its sources, no eggfetch
+# types in its public surface, and the engine may depend on it in production
+# for pinned load-test execution only (direct + supported proxied; no Reqwest
+# fallback). Requires eggfetch-core 0.1.5+ for proxy pinning APIs.
 echo ""
-echo "--- Check 102: Eggfetch adapter stays narrow and unmigrated ---"
+echo "--- Check 102: Eggfetch adapter stays narrow; load-test production backend ---"
 SECTION_FAIL=0
 if ! rg -q 'crates/eggsec-transport-eggfetch' Cargo.toml 2>/dev/null; then
   echo "FAIL: workspace Cargo.toml does not list crates/eggsec-transport-eggfetch."
@@ -2398,6 +2398,16 @@ else
     fi
     if echo "$DEP_LINE" | rg -q 'http3|cookies|multipart|compression'; then
       echo "FAIL: adapter enables a deferred eggfetch feature (http3/cookies/multipart/compression)."
+      echo "$DEP_LINE"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+    if ! echo "$DEP_LINE" | rg -q '0\.1\.5|0\.1\.[6-9]|0\.[2-9]'; then
+      echo "FAIL: adapter must require eggfetch-core 0.1.5+ (proxy pinning APIs)."
+      echo "$DEP_LINE"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+    if ! echo "$DEP_LINE" | rg -q 'http2'; then
+      echo "FAIL: adapter must enable http2 for H1/H2 ALPN (Auto allow_http3:false)."
       echo "$DEP_LINE"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
@@ -2427,8 +2437,8 @@ else
     echo "FAIL: adapter src uses concrete network client types directly."
     SECTION_FAIL=$((SECTION_FAIL + 1))
   fi
-  for sym in "pub struct EggfetchTransport" "impl HttpTransport for EggfetchTransport" "without_proxy" "Http1Only" "validate_binding" "authorize_reresolution" "build_redirect_request"; do
-    if ! rg -q "$sym" crates/eggsec-transport-eggfetch/src/ 2>/dev/null; then
+  for sym in "pub struct EggfetchTransport" "impl HttpTransport for EggfetchTransport" "without_proxy" "allow_http3" "validate_binding" "authorize_reresolution" "build_redirect_request" "resolved_addresses" "proxy_target_addresses"; do
+    if ! rg -F -q "$sym" crates/eggsec-transport-eggfetch/src/ 2>/dev/null; then
       echo "FAIL: adapter src missing required symbol: $sym"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
@@ -2442,27 +2452,28 @@ if [[ ! -f "architecture/transport_eggfetch.md" ]]; then
   echo "FAIL: missing adapter doc: architecture/transport_eggfetch.md"
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-# No production consumer may depend on the adapter yet. The engine crate
-# may reference it only under [dev-dependencies] (parity tests).
+# The engine may depend on the adapter in production for pinned load-test
+# execution only (plus dev-deps for parity tests). No other crate may gain a
+# production dependency.
 REFS=$(rg -l 'eggsec-transport-eggfetch' crates/*/Cargo.toml 2>/dev/null || true)
 for ref in $REFS; do
   case "$ref" in
     crates/eggsec-transport-eggfetch/Cargo.toml) ;;
     crates/eggsec/Cargo.toml)
-      SECTION_TEXT=$(sed -n '/^\[dev-dependencies\]/,/^\[/p' crates/eggsec/Cargo.toml)
-      if ! echo "$SECTION_TEXT" | rg -q 'eggsec-transport-eggfetch'; then
-        echo "FAIL: crates/eggsec references the adapter outside [dev-dependencies] (production migration needs Phase D)."
+      # Production + dev wiring both sanctioned for the engine (load-test backend).
+      if ! rg -q 'eggsec-transport-eggfetch' crates/eggsec/Cargo.toml 2>/dev/null; then
+        echo "FAIL: crates/eggsec missing adapter wiring (production load-test backend)."
         SECTION_FAIL=$((SECTION_FAIL + 1))
       fi
       ;;
     *)
-      echo "FAIL: unexpected adapter consumer: $ref (production migration needs Phase D)."
+      echo "FAIL: unexpected adapter consumer: $ref (only the engine may use it in production)."
       SECTION_FAIL=$((SECTION_FAIL + 1))
       ;;
   esac
 done
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: Eggfetch adapter stays narrow and unmigrated."
+  echo "PASS: Eggfetch adapter stays narrow; load-test production backend."
 else
   FAIL=$((FAIL + 1))
 fi
@@ -3291,6 +3302,147 @@ if rg -q 'struct ApiCache' crates/eggsec/src/ 2>/dev/null; then
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: removed utils::cache stays removed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 127. Corrective pass: no wildcard load-test scope synthesis.
+echo ""
+echo "--- Check 127: no wildcard load-test scope default ---"
+SECTION_FAIL=0
+HITS=$(rg -n 'default_facade_scope|ScopeRule::new\(\"\*\"' crates/eggsec/src/loadtest/ 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: production load-test wildcard scope helper reappeared (must fail closed without scope)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  echo "PASS: no wildcard load-test scope default."
+fi
+if [[ $SECTION_FAIL -ne 0 ]]; then FAIL=$((FAIL + 1)); fi
+
+# 128. Corrective pass: strict/canonical load-test carries execution scope.
+echo ""
+echo "--- Check 128: execution-scope propagation symbols exist ---"
+SECTION_FAIL=0
+for sym in "struct ApprovedExecution" "fn approve_execution" "fn approve_manual_execution" "struct ToolExecutionContext" "fn execute_with_context" "fn dispatch_execution" "fn execute_approved_execution" "fn execute_canonical_with_scope"; do
+  if ! rg -q "$sym" crates/eggsec/src/ 2>/dev/null; then
+    echo "FAIL: missing execution-scope symbol: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: execution-scope propagation symbols exist."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 129. Corrective pass: raw load-test tool execution fails closed.
+echo ""
+echo "--- Check 129: raw LoadTestTool::execute fails closed ---"
+SECTION_FAIL=0
+if ! rg -q 'load-test tool requires execution context' crates/eggsec/src/tool/implementations/loadtest.rs 2>/dev/null; then
+  echo "FAIL: LoadTestTool::execute does not fail closed without context."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  echo "PASS: raw LoadTestTool::execute fails closed."
+fi
+if [[ $SECTION_FAIL -ne 0 ]]; then FAIL=$((FAIL + 1)); fi
+
+# 130. Corrective pass: Reqwest proxy has no direct fallback or placeholder.
+# Scans production code only (strips doc comments `///`/`//` and the
+# `#[cfg(test)]` module): docs/tests may describe the forbidden patterns to
+# prove their absence.
+echo ""
+echo "--- Check 130: Reqwest backend has no route fallback ---"
+SECTION_FAIL=0
+PROD_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' crates/eggsec/src/loadtest/backend.rs | rg -v '^\s*///' | rg -v '^\s*//')
+HITS=$(printf '%s\n' "$PROD_CODE" | rg -n 'unwrap_or_else.*base_client|unwrap_or.*base_client|Proxy::all\("http://127\.0\.0\.1:1"\)|reqwest::Client::new\(\)' || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Reqwest backend retains a semantic fallback/placeholder."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  echo "PASS: Reqwest backend has no route fallback."
+fi
+if printf '%s\n' "$PROD_CODE" | rg -q 'Client::new\(\)' 2>/dev/null; then
+  echo "FAIL: Reqwest backend uses Client::new() default fallback."
+  printf '%s\n' "$PROD_CODE" | rg -n 'Client::new\(\)' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Reqwest construction is fail-closed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 131. Corrective pass: proxy cache identity includes credentials.
+echo ""
+echo "--- Check 131: proxy cache keyed by full client identity ---"
+SECTION_FAIL=0
+if ! rg -q 'credential_fp' crates/eggsec/src/loadtest/backend.rs 2>/dev/null; then
+  echo "FAIL: proxied client cache does not partition by credential fingerprint."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'HashMap<\(String, bool\)' crates/eggsec/src/loadtest/backend.rs 2>/dev/null; then
+  echo "FAIL: proxied cache still keyed only by (endpoint, verified)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: proxy cache keyed by full client identity."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 132. Corrective pass: direct production load testing via Eggfetch.
+echo ""
+echo "--- Check 132: production load-test uses Eggfetch backend ---"
+SECTION_FAIL=0
+for f in "crates/eggsec/src/loadtest/runner.rs" "crates/eggsec/src/loadtest/mod.rs" "crates/eggsec/src/dispatch/network.rs"; do
+  if ! rg -q 'EggfetchTransport' "$f" 2>/dev/null; then
+    echo "FAIL: $f does not dispatch through EggfetchTransport."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -q 'ReqwestTransport::with_system_resolver\(\)' crates/eggsec/src/loadtest/runner.rs crates/eggsec/src/loadtest/mod.rs crates/eggsec/src/dispatch/network.rs 2>/dev/null; then
+  echo "FAIL: production load-test path still constructs ReqwestTransport directly."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: production load-test uses Eggfetch backend."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 133. Corrective pass: unsupported proxy pinning fails closed explicitly.
+echo ""
+echo "--- Check 133: SOCKS5H/plaintext proxy pinning fails closed ---"
+SECTION_FAIL=0
+for sym in "SOCKS5H remote-DNS cannot be ultimate-IP-pinned" "plaintext HTTP forward-proxy ultimate pinning unsupported"; do
+  if ! rg -q "$sym" crates/eggsec-transport-eggfetch/src/ 2>/dev/null; then
+    echo "FAIL: adapter missing explicit failure: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: unsupported proxy pinning fails closed explicitly."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 134. Corrective pass: MSRV truthful for eggfetch-core 0.1.5.
+echo ""
+echo "--- Check 134: MSRV compatible with eggfetch-core ---"
+SECTION_FAIL=0
+if ! rg -q 'rust-version = "1.89"' Cargo.toml 2>/dev/null; then
+  echo "FAIL: workspace rust-version is not 1.89 (eggfetch-core 0.1.5 declares 1.89)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'version = "0.1.5"' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
+  echo "FAIL: adapter does not require eggfetch-core 0.1.5+."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: MSRV compatible with eggfetch-core."
 else
   FAIL=$((FAIL + 1))
 fi

@@ -106,6 +106,10 @@ eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }
 eggsec-agent = { path = "../eggsec-agent", version = "0.1.0" }
 eggsec-transport = { workspace = true }
+# Production direct load-test backend (approved-IP-pinned Eggfetch transport).
+# Proxied load testing uses it where the pinned-route matrix allows; otherwise
+# it fails closed (no Reqwest fallback).
+eggsec-transport-eggfetch = { workspace = true }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }

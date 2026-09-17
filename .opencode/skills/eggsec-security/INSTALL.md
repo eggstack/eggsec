@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.88 or later (MSRV: 1.88)
+- Rust 1.89 or later (MSRV: 1.89)
 - Cargo package manager
 - Linux, macOS, or Windows
 
@@ -155,7 +155,7 @@ make clippy-domain   # domain/platform crates (deep checks)
 
 ### Build fails with Rust version error
 
-Ensure you have Rust 1.88 or later:
+Ensure you have Rust 1.89 or later:
 ```bash
 rustup update stable
 ```

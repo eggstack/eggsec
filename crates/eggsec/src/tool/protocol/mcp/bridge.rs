@@ -86,6 +86,16 @@ impl McpEngineBridge {
     ) -> Result<ToolResponse, EggsecError> {
         self.services.dispatch_checked(approved, request).await
     }
+
+    /// Checked dispatch under an execution bundle (token + scope snapshot).
+    /// Scope-sensitive tools must use this.
+    pub async fn dispatch_execution(
+        &self,
+        execution: &crate::config::ApprovedExecution,
+        request: ToolRequest,
+    ) -> Result<ToolResponse, EggsecError> {
+        self.services.dispatch_execution(execution, request).await
+    }
 }
 
 #[cfg(test)]

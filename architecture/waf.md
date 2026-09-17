@@ -16,7 +16,7 @@ The WAF module detects web application firewalls in front of target applications
 | Root | `crates/eggsec/src/waf/` |
 | Files | 20 `.rs` files (see tree below) |
 | Feature gate | **None** — always compiled |
-| MSRV | 1.88 (workspace-level) |
+| MSRV | 1.89 (workspace-level) |
 
 ```
 waf/

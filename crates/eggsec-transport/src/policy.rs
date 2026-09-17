@@ -24,8 +24,12 @@ use url::Url;
 ///
 /// Default methods: [`authorize_reresolution`] defaults to
 /// [`authorize_resolved`](Self::authorize_resolved) so authorities only
-/// override it when they need distinct retry audit. All other checkpoints
-/// are required.
+/// override it when they need distinct retry audit;
+/// [`authorize_proxy_resolved`] / [`authorize_proxy_socket`] default to the
+/// ultimate-destination equivalents so third-party authorities keep working,
+/// while [`ScopeAuthority`](https://docs.rs/eggsec/latest/eggsec/policy_bridge/transport/struct.ScopeAuthority.html)
+/// overrides them to retain proxy provenance (denials surface at
+/// [`PolicyCheckpoint::Proxy`]). All other checkpoints are required.
 pub trait NetworkAuthority: Send + Sync {
     /// Checkpoint 1 — initial URL canonicalization: parseable URL, host
     /// present, userinfo rejected, no smuggled credentials.
@@ -72,6 +76,35 @@ pub trait NetworkAuthority: Send + Sync {
     /// Checkpoint 7 — proxy/upstream endpoint **and** ultimate destination
     /// as separate concepts. Authorizing one must never imply the other.
     fn authorize_proxy(&self, proxy_endpoint: &Url, ultimate: &Url) -> Result<(), TransportError>;
+
+    /// Checkpoint 7b — proxy-peer DNS result authorization.
+    ///
+    /// The transport resolves the proxy endpoint through its
+    /// [`crate::TransportResolver`] and hands candidates here, independently
+    /// from ultimate-origin resolution. Defaults to
+    /// [`authorize_resolved`](Self::authorize_resolved) for source
+    /// compatibility; strict authorities override to retain proxy provenance.
+    fn authorize_proxy_resolved(
+        &self,
+        proxy_host: &str,
+        candidates: &[IpAddr],
+    ) -> Result<Vec<IpAddr>, TransportError> {
+        self.authorize_resolved(proxy_host, candidates)
+    }
+
+    /// Checkpoint 7c — selected proxy-peer socket authorization immediately
+    /// before connect (the proxy address actually dialed).
+    ///
+    /// Defaults to [`authorize_socket`](Self::authorize_socket) for source
+    /// compatibility; strict authorities override to retain proxy provenance.
+    fn authorize_proxy_socket(
+        &self,
+        proxy_host: &str,
+        addr: IpAddr,
+        port: u16,
+    ) -> Result<(), TransportError> {
+        self.authorize_socket(proxy_host, addr, port)
+    }
 
     /// Checkpoint 8 — TLS SNI / Host override consistency where overrides
     /// are supported. Mismatched overrides deny fail-closed.

@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Scope-aware outbound HTTP transport over eggfetch-core (Phase C, no production consumers yet)"
+description = "Scope-aware outbound HTTP transport over eggfetch-core (production direct load-test backend; proxied routes pinned where enforceable)"
 authors.workspace = true
 homepage.workspace = true
 documentation.workspace = true
@@ -15,15 +15,16 @@ categories = ["development-tools"]
 
 [dependencies]
 eggsec-transport = { workspace = true }
-# Minimal eggfetch surface: HTTP/1 + rustls only, plus `proxy` for one
-# narrow reason: without it the SNI-direct connector path builds no TLS
-# connector at all, and the adapter needs that path (pinned-IP URL + SNI =
-# logical hostname) for verified HTTPS. Proxy *routing* stays disabled by
-# construction (no proxy is ever configured and every request sets
-# `without_proxy`); see `adapter.rs`. Deliberately NOT enabled: http3
-# (separate QUIC resolution path), cookies (jar semantics bypass per-hop
-# authorization), compression codecs (bomb-limit parity), multipart.
-eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls", "proxy"] }
+# Minimal eggfetch surface: H1/H2 ALPN + rustls + proxy-routing for pinned
+# proxy peers/targets. `proxy` is required for both the SNI-direct connector
+# path (pinned-IP URL + SNI = logical hostname for verified HTTPS) and
+# pinned proxy routing. Deliberately NOT enabled: http3 (separate QUIC
+# resolution path, no authorized binding story), cookies (jar semantics
+# bypass per-hop authorization), compression codecs (bomb-limit parity),
+# multipart. Requires eggfetch-core 0.1.5+ for `Proxy::resolved_addresses`
+# and `RequestBuilder::proxy_target_addresses` (+ route/cache identity with
+# pin state, SOCKS5H/plaintext fail-closed).
+eggfetch-core = { version = "0.1.5", default-features = false, features = ["http1", "http2", "tls-rustls", "proxy"] }
 bytes = { workspace = true }
 http = { workspace = true }
 url = { workspace = true }

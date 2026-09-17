@@ -172,7 +172,7 @@ they are enabled in Cargo.
 | `Cargo.lock` sources | Registry-only + path: 827 registry, 16 path, 0 git |
 | Actions refs + permissions | `ci.yml` (push→main filtered paths + PR→main; `checkout@v4`, `dtolnay/rust-toolchain@stable`, `Swatinem/rust-cache@v2`, `setup-python@v5`; **no `permissions:` key**); `deep-checks.yml` (weekly Sunday + dispatch; adds `taiki-e/install-action@cargo-deny`; **no `permissions:` key**). No pinned SHAs |
 | Automated updates | None: no `.github/dependabot.yml`, no `renovate.json*` / `.renovaterc` |
-| PR vs scheduled | PR (`ci.yml`): fmt, `--no-default-features` check, clippy (engine+leaf), doc + integration tests, output tests, TUI lib tests, guards. Scheduled/manual (`deep-checks.yml`): `check-full` (deny + domain clippy + feature profiles), `check-features-individual`, MSRV 1.88, portability (macOS/Windows), platform-integration. `cargo deny` and per-feature sweep are **not** PR gates; `cargo audit` is not invoked by any workflow/Makefile target (by design per `VERIFICATION.md`) |
+| PR vs scheduled | PR (`ci.yml`): fmt, `--no-default-features` check, clippy (engine+leaf), doc + integration tests, output tests, TUI lib tests, guards. Scheduled/manual (`deep-checks.yml`): `check-full` (deny + domain clippy + feature profiles), `check-features-individual`, MSRV 1.89, portability (macOS/Windows), platform-integration. `cargo deny` and per-feature sweep are **not** PR gates; `cargo audit` is not invoked by any workflow/Makefile target (by design per `VERIFICATION.md`) |
 
 ## 6. Acceptance mapping
 
@@ -377,7 +377,7 @@ stable/master HEADs, `Swatinem/rust-cache` v2.9.2 (peel commit),
 `dependency-policy` jobs, plus deep `deep` job). Top-level
 `permissions: contents: read` in both workflows, repeated per job; no write
 permissions anywhere (no release/publication jobs exist — releases are
-manual). Normal CI tracks documented stable; MSRV 1.88 stays explicit
+manual). Normal CI tracks documented stable; MSRV 1.89 stays explicit
 (`msrv` job + `make check-msrv`).
 
 ### 9.5 Maintenance automation (WS5/WS6)
@@ -419,6 +419,6 @@ engine `default = []`; Tokio per-crate with `test-util` nowhere in
 production. Fixtures: transport 18 + contract 12 + parity 33+8 + interop 5 +
 invariants 12 + agent 24, all green. Gates: `make check`, `check-deps`,
 `clippy-domain`, `check-feature-profiles`, `check-features-individual`,
-`check-python`, `check-msrv` (1.88) all exit 0; guards ALL PASSED (99–112).
+`check-python`, `check-msrv` (1.89) all exit 0; guards ALL PASSED (99–112).
 
 *Last verified against source: 2026-09-13 (Phase G closure)*

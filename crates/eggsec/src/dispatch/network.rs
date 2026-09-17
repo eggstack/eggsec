@@ -9,16 +9,35 @@ use std::time::Duration;
 const PACKET_CAPTURE_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn run_load_test(
+    _target: String,
+    _requests: u64,
+    _concurrency: usize,
+    _timeout: Duration,
+    _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+) -> anyhow::Result<TaskResult> {
+    // Unscoped entry is retained for manual/legacy callers but fails closed:
+    // load testing without an execution scope must not synthesize wildcard
+    // authorization. Use `run_load_test_with_scope()` with the
+    // `ApprovedExecution` scope snapshot.
+    anyhow::bail!(
+        "load-test execution scope is missing: use run_load_test_with_scope() with the \
+         EnforcementContext scope snapshot (no wildcard default)"
+    )
+}
+
+pub async fn run_load_test_with_scope(
     target: String,
     requests: u64,
     concurrency: usize,
     timeout: Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+    scope: crate::config::Scope,
 ) -> anyhow::Result<TaskResult> {
     use crate::loadtest::{LoadTestRunner, ProgressSink};
 
     let runner =
-        LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
+        LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?
+            .with_scope(scope.clone());
 
     send_progress(&progress_tx, 0, requests).await;
 
@@ -47,10 +66,11 @@ pub async fn run_load_test(
     let batches = requests / concurrency.max(1) as u64;
     let estimated_secs = batches * timeout.as_secs();
     let load_test_timeout = Duration::from_secs(estimated_secs.clamp(300, 3600));
-    let transport = std::sync::Arc::new(crate::loadtest::ReqwestTransport::with_system_resolver());
-    let authority: std::sync::Arc<dyn eggsec_transport::NetworkAuthority> = std::sync::Arc::new(
-        crate::loadtest::OwnedScopeAuthority::new(runner.scope().clone()),
-    );
+    let transport = std::sync::Arc::new(eggsec_transport_eggfetch::EggfetchTransport::new(
+        std::sync::Arc::new(eggsec_transport::SystemTransportResolver),
+    ));
+    let authority: std::sync::Arc<dyn eggsec_transport::NetworkAuthority> =
+        std::sync::Arc::new(crate::loadtest::OwnedScopeAuthority::new(scope));
     let results = match tokio::time::timeout(
         load_test_timeout,
         runner.run_with(

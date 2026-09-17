@@ -4,7 +4,7 @@ use chrono::Utc;
 use crate::error::EggsecError;
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
-    ToolCategory,
+    ToolCategory, ToolExecutionContext,
 };
 use crate::tool::{ToolRequest, ToolResponse, ToolResult};
 
@@ -41,7 +41,24 @@ impl SecurityTool for LoadTestTool {
         "Run HTTP load tests to measure server performance and gather metrics under concurrent load."
     }
 
-    async fn execute(&self, request: ToolRequest) -> ToolResult<ToolResponse> {
+    async fn execute(&self, _request: ToolRequest) -> ToolResult<ToolResponse> {
+        // Fail closed: raw execution without an enforcement-scope snapshot
+        // cannot construct a transport authority. Strict surfaces must use
+        // `execute_with_context()` via `EnforcedDispatcher::dispatch_execution()`
+        // with an `ApprovedExecution` bundle.
+        Err(EggsecError::Validation(
+            "load-test tool requires execution context with scope: use \
+             EnforcedDispatcher::dispatch_execution() with an ApprovedExecution bundle \
+             (no wildcard default)"
+                .to_string(),
+        ))
+    }
+
+    async fn execute_with_context(
+        &self,
+        request: ToolRequest,
+        context: &ToolExecutionContext,
+    ) -> ToolResult<ToolResponse> {
         let started_at = Utc::now();
         let target = &request.target.value;
 
@@ -75,8 +92,11 @@ impl SecurityTool for LoadTestTool {
             })
             .unwrap_or_default();
 
-        let runner =
+        let mut runner =
             crate::loadtest::runner::LoadTestRunner::from_config_with_engine(run_cfg, &config)?;
+        // The scope snapshot comes from the same EnforcementContext that
+        // approved the operation — never a reloaded config or wildcard.
+        runner.set_scope(context.scope.clone());
         let results = tokio::time::timeout(std::time::Duration::from_secs(60), runner.run())
             .await
             .map_err(|e| crate::error::EggsecError::Timeout {

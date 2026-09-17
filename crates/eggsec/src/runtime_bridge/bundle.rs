@@ -20,11 +20,11 @@
 use eggsec_runtime::request::RunRequest;
 use tokio::sync::mpsc;
 
-use crate::config::ApprovedOperation;
+use crate::config::{ApprovedExecution, ApprovedOperation};
 use crate::dispatch::TaskResult;
 
 use super::descriptor::descriptor_for_run_request;
-use super::manual::approve_run_request;
+use super::manual::approve_run_request_execution;
 use super::surface::RuntimeBridgeError;
 
 /// A request bundled with its enforcement approval token.
@@ -33,10 +33,14 @@ use super::surface::RuntimeBridgeError;
 /// [`dispatch_approved_runtime_request`]. The bundle ensures the approved
 /// operation and the dispatched request are coupled — the dispatch wrapper
 /// validates consistency before routing.
+///
+/// The bundle carries the [`ApprovedExecution`] (token + scope snapshot from
+/// the same enforcement context) so per-hop transport authorization uses the
+/// approval scope, never a reloaded config or wildcard.
 #[derive(Debug)]
 pub struct ApprovedRunRequest {
-    /// The enforcement approval token.
-    approved: ApprovedOperation,
+    /// The enforcement approval + scope snapshot.
+    execution: ApprovedExecution,
     /// The original runtime request that was approved.
     request: RunRequest,
 }
@@ -44,7 +48,12 @@ pub struct ApprovedRunRequest {
 impl ApprovedRunRequest {
     /// The approval token for this bundle.
     pub fn approved(&self) -> &ApprovedOperation {
-        &self.approved
+        self.execution.approved()
+    }
+
+    /// The execution bundle (token + scope snapshot).
+    pub fn execution(&self) -> &ApprovedExecution {
+        &self.execution
     }
 
     /// The request that was approved.
@@ -54,7 +63,13 @@ impl ApprovedRunRequest {
 
     /// Consume the bundle, returning the approval token and request.
     pub fn into_parts(self) -> (ApprovedOperation, RunRequest) {
-        (self.approved, self.request)
+        let (approved, _) = self.execution.into_parts();
+        (approved, self.request)
+    }
+
+    /// Consume the bundle, returning the execution bundle and request.
+    pub fn into_execution_parts(self) -> (ApprovedExecution, RunRequest) {
+        (self.execution, self.request)
     }
 }
 
@@ -70,9 +85,10 @@ pub fn approve_run_request_bundle(
     request: RunRequest,
     manual_override: Option<&crate::config::ManualOverride>,
 ) -> Result<ApprovedRunRequest, RuntimeBridgeError> {
-    let approved = approve_run_request(surface, policy, loaded_scope, &request, manual_override)?;
+    let execution =
+        approve_run_request_execution(surface, policy, loaded_scope, &request, manual_override)?;
 
-    Ok(ApprovedRunRequest { approved, request })
+    Ok(ApprovedRunRequest { execution, request })
 }
 
 /// Dispatch an approved runtime request with validation.
@@ -94,9 +110,10 @@ pub async fn dispatch_approved_runtime_request(
     bundle: ApprovedRunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::dispatch::{execute_approved, CanonicalOperationRequest, ExecutionSink};
+    use crate::dispatch::{execute_approved_execution, CanonicalOperationRequest, ExecutionSink};
 
-    let (approved, request) = bundle.into_parts();
+    let (execution, request) = bundle.into_execution_parts();
+    let approved = execution.approved();
 
     // Re-resolve the descriptor from the current request to detect mutations.
     let current_descriptor = descriptor_for_run_request(&request)
@@ -129,16 +146,18 @@ pub async fn dispatch_approved_runtime_request(
     }
 
     // Single canonical boundary: TaskKind → canonical request (exhaustive),
-    // then approved execution (binding re-checked at executor entry).
+    // then approved execution (binding re-checked at executor entry) with the
+    // scope snapshot from the same enforcement context.
     let canonical = CanonicalOperationRequest::from_task_kind(&request.task_kind);
     let sink = ExecutionSink::detached(progress_tx);
-    execute_approved(&approved, canonical, &sink)
+    execute_approved_execution(&execution, canonical, &sink)
         .await
         .map_err(|e| anyhow::anyhow!("task execution failed: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::manual::{approve_run_request, approve_run_request_execution};
     use super::*;
     use crate::config::{ExecutionPolicy, LoadedScope};
     use eggsec_runtime::request::*;
@@ -259,7 +278,7 @@ mod tests {
         // Approve a port scan, then construct a bundle with a fuzz request
         // to verify the dispatch wrapper catches the mismatch.
         let port_req = port_scan_request("10.0.0.1");
-        let approved = approve_run_request(
+        let execution = approve_run_request_execution(
             RuntimeSurface::CliManual,
             default_policy(),
             LoadedScope::default_empty(),
@@ -271,7 +290,7 @@ mod tests {
         // Manually construct a mismatched bundle.
         let fuzz_req = fuzz_request("https://example.com");
         let bundle = ApprovedRunRequest {
-            approved,
+            execution,
             request: fuzz_req,
         };
 
@@ -289,7 +308,7 @@ mod tests {
     async fn dispatch_rejects_target_mismatch() {
         // Approve a port scan for 10.0.0.1, then swap the request target.
         let req1 = port_scan_request("10.0.0.1");
-        let approved = approve_run_request(
+        let execution = approve_run_request_execution(
             RuntimeSurface::CliManual,
             default_policy(),
             LoadedScope::default_empty(),
@@ -301,7 +320,7 @@ mod tests {
         // Create a different port scan request with a different target.
         let req2 = port_scan_request("10.0.0.2");
         let bundle = ApprovedRunRequest {
-            approved,
+            execution,
             request: req2,
         };
 

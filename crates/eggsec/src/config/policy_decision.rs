@@ -223,6 +223,42 @@ impl EnforcementContext {
             .approve_manual(surface, descriptor, facts.as_ref(), manual_override)
     }
 
+    /// Approve an operation and bind the approval token to the same
+    /// enforcement-scope snapshot for execution.
+    ///
+    /// Strict automated surfaces must use this (or
+    /// [`approve_manual_execution`](Self::approve_manual_execution)) and
+    /// dispatch via `EnforcedDispatcher::dispatch_execution()` or
+    /// `execute_approved_execution()`. The scope snapshot is cloned from this
+    /// context at approval time, so a valid token cannot be paired with an
+    /// unrelated broader scope through the normal strict API. Per-hop
+    /// `NetworkAuthority` checks must use this snapshot, not a reloaded
+    /// config or caller-selected scope.
+    #[allow(clippy::result_large_err)]
+    pub fn approve_execution(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedExecution, EnforcementError> {
+        let approved = self.approve(surface, descriptor)?;
+        let scope = self.inner.loaded_scope.scope.clone();
+        Ok(ApprovedExecution::new(approved, scope))
+    }
+
+    /// Manual-surface variant of [`approve_execution`](Self::approve_execution)
+    /// with optional override support.
+    #[allow(clippy::result_large_err)]
+    pub fn approve_manual_execution(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+        manual_override: Option<&ManualOverride>,
+    ) -> Result<ApprovedExecution, EnforcementError> {
+        let approved = self.approve_manual(surface, descriptor, manual_override)?;
+        let scope = self.inner.loaded_scope.scope.clone();
+        Ok(ApprovedExecution::new(approved, scope))
+    }
+
     /// Resolve facts for an approval path, preserving the legacy
     /// `InvalidTarget` hard denial for unresolvable targets.
     #[allow(clippy::result_large_err)]
@@ -277,6 +313,43 @@ impl EnforcementContext {
         decision.push_denial_class(DenialClass::InvalidTarget, reason);
         decision.allowed = false;
         decision
+    }
+}
+
+/// Engine-owned execution bundle: an approval token plus the scope snapshot
+/// from the same [`EnforcementContext`] that authorized it.
+///
+/// Construction occurs only through
+/// [`EnforcementContext::approve_execution`] /
+/// [`approve_manual_execution`](EnforcementContext::approve_manual_execution),
+/// so a strict caller cannot pair a valid token with an unrelated broader
+/// scope. The pure `eggsec-policy::ApprovedOperation` remains the
+/// operation/target token; this bundle supplements binding and never replaces
+/// it. Per-hop `NetworkAuthority` checks must use [`scope`](Self::scope).
+#[derive(Debug, Clone)]
+pub struct ApprovedExecution {
+    approved: ApprovedOperation,
+    scope: eggsec_policy::Scope,
+}
+
+impl ApprovedExecution {
+    fn new(approved: ApprovedOperation, scope: eggsec_policy::Scope) -> Self {
+        Self { approved, scope }
+    }
+
+    /// The approval token bound to this execution.
+    pub fn approved(&self) -> &ApprovedOperation {
+        &self.approved
+    }
+
+    /// The enforcement-scope snapshot from the approving context.
+    pub fn scope(&self) -> &eggsec_policy::Scope {
+        &self.scope
+    }
+
+    /// Consume the bundle into its parts.
+    pub fn into_parts(self) -> (ApprovedOperation, eggsec_policy::Scope) {
+        (self.approved, self.scope)
     }
 }
 

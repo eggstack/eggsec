@@ -76,6 +76,45 @@ pub fn approve_run_request(
     }
 }
 
+/// Approve a runtime request with its execution-scope snapshot.
+///
+/// Returns an [`ApprovedExecution`](crate::config::ApprovedExecution) binding
+/// the token to the scope snapshot from the same enforcement context.
+/// Strict load-test dispatch must use this (via
+/// [`approve_run_request_bundle`](super::bundle::approve_run_request_bundle));
+/// the scope snapshot authorizes per-hop transport checks.
+pub fn approve_run_request_execution(
+    surface: RuntimeSurface,
+    policy: ExecutionPolicy,
+    loaded_scope: LoadedScope,
+    request: &RunRequest,
+    manual_override: Option<&ManualOverride>,
+) -> Result<crate::config::ApprovedExecution, RuntimeBridgeError> {
+    let exec_surface = runtime_surface_to_execution_surface(surface)?;
+    let descriptor = descriptor_for_run_request(request)?;
+
+    let enforcement = EnforcementContext::for_surface(exec_surface, policy, loaded_scope);
+
+    if exec_surface.honors_manual_override() {
+        enforcement
+            .approve_manual_execution(exec_surface, descriptor, manual_override)
+            .map_err(|e| RuntimeBridgeError::EnforcementDenied {
+                reason: e.to_string(),
+            })
+    } else {
+        if manual_override.is_some() {
+            return Err(RuntimeBridgeError::ManualOverrideRejected {
+                surface: exec_surface.to_string(),
+            });
+        }
+        enforcement
+            .approve_execution(exec_surface, descriptor)
+            .map_err(|e| RuntimeBridgeError::EnforcementDenied {
+                reason: e.to_string(),
+            })
+    }
+}
+
 /// Error type for runtime bridge conversions.
 ///
 /// This extends the base `RuntimeBridgeError` with enforcement-specific variants.

@@ -19,8 +19,10 @@
 //! [`NetworkAuthority::authorize_resolved`], exactly like conforming
 //! backend implementations. IP literals always use `authorize_resolved`
 //! (the literal is its own fact — nothing re-resolves), and proxy-endpoint
-//! DNS keeps `authorize_resolved` (conformant backends fail closed before
-//! proxy DNS, so there is no backend behavior to mirror there).
+//! DNS/socket use [`NetworkAuthority::authorize_proxy_resolved`] /
+//! [`NetworkAuthority::authorize_proxy_socket`] (checkpoint `Proxy`) so a
+//! transport that calls only `authorize_proxy()` cannot satisfy the strict
+//! proxy fixture.
 //!
 //! The fake performs no I/O, spawns no tasks, and honors no real clock:
 //! timeouts are recorded, not elapsed.
@@ -260,7 +262,9 @@ impl RecordingFakeTransport {
 
         // 7. Proxy (endpoint vs ultimate as distinct decisions).
         // URL-level distinction first, then the proxy endpoint's own
-        // DNS/socket binding (same TOCTOU-closed path as the ultimate).
+        // DNS/socket binding (same TOCTOU-closed path as the ultimate, but
+        // through the proxy-peer checkpoints so a transport that calls only
+        // `authorize_proxy()` cannot satisfy the strict proxy fixture).
         if let Some(endpoint) = request.proxy.endpoint() {
             authority.authorize_proxy(endpoint, url)?;
             let proxy_host = endpoint.host_str().ok_or_else(|| {
@@ -273,7 +277,7 @@ impl RecordingFakeTransport {
                 let literal: IpAddr = proxy_host.parse().map_err(|e| {
                     TransportError::InvalidRequest(format!("bad proxy IP literal: {e}"))
                 })?;
-                let approved = authority.authorize_resolved(proxy_host, &[literal])?;
+                let approved = authority.authorize_proxy_resolved(proxy_host, &[literal])?;
                 let binding =
                     validate_binding(proxy_host, &[literal], &approved).map_err(|e| match e {
                         TransportError::InvalidBinding { host, reason } => TransportError::denied(
@@ -282,7 +286,7 @@ impl RecordingFakeTransport {
                         ),
                         other => other,
                     })?;
-                authority.authorize_socket(proxy_host, binding.primary(), proxy_port)?;
+                authority.authorize_proxy_socket(proxy_host, binding.primary(), proxy_port)?;
             } else {
                 let resolver = self.resolver()?;
                 let candidates = resolver.resolve(proxy_host);
@@ -292,7 +296,8 @@ impl RecordingFakeTransport {
                         reason: "proxy: no addresses".to_string(),
                     });
                 }
-                let approved = authority.authorize_resolved(proxy_host, &candidates.addresses)?;
+                let approved =
+                    authority.authorize_proxy_resolved(proxy_host, &candidates.addresses)?;
                 let binding = validate_binding(proxy_host, &candidates.addresses, &approved)
                     .map_err(|e| match e {
                         TransportError::InvalidBinding { host, reason } => TransportError::denied(
@@ -301,7 +306,7 @@ impl RecordingFakeTransport {
                         ),
                         other => other,
                     })?;
-                authority.authorize_socket(proxy_host, binding.primary(), proxy_port)?;
+                authority.authorize_proxy_socket(proxy_host, binding.primary(), proxy_port)?;
             }
             order.push(PolicyCheckpoint::Proxy);
         }

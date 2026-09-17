@@ -112,12 +112,14 @@ pub async fn run_cli_with_scope(
 
     let run_config: LoadTestRunConfig = args.into();
     let mut runner = LoadTestRunner::from_config_with_engine(run_config, config)?;
-    runner.set_scope(scope);
+    runner.set_scope(scope.clone());
 
     let (plan, template) = runner.plan()?;
-    let transport = Arc::new(ReqwestTransport::with_system_resolver());
+    let transport = Arc::new(eggsec_transport_eggfetch::EggfetchTransport::new(Arc::new(
+        eggsec_transport::SystemTransportResolver,
+    )));
     let authority: Arc<dyn eggsec_transport::NetworkAuthority> =
-        Arc::new(OwnedScopeAuthority::new(runner.scope().clone()));
+        Arc::new(OwnedScopeAuthority::new(scope));
     let executor = LoadTestExecutor::new(
         plan.clone(),
         template,

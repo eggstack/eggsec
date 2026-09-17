@@ -32,7 +32,7 @@ pub use bundle::{
 };
 pub use descriptor::descriptor_for_run_request;
 pub use executor::EggsecRuntimeExecutor;
-pub use manual::{approve_run_request, preflight_run_request};
+pub use manual::{approve_run_request, approve_run_request_execution, preflight_run_request};
 pub use surface::{
     execution_surface_to_runtime_surface, runtime_surface_to_execution_surface, RuntimeBridgeError,
 };

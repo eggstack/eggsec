@@ -256,6 +256,53 @@ async fn proxy_endpoint_and_target_are_distinct() {
     assert!(fake.hops().is_empty());
 }
 
+#[tokio::test]
+async fn proxy_peer_checkpoints_retain_proxy_provenance() {
+    // Proxy-peer DNS/socket denials surface at `Proxy`, not `Dns`/`Socket`,
+    // so operators distinguish proxy-peer policy from ultimate-origin policy.
+    // The fake routes proxy-endpoint binding through the new checkpoints;
+    // a transport calling only `authorize_proxy()` cannot satisfy the strict
+    // proxy fixture (proven by the fake's checkpoint order + this verdict).
+    let scope = scope_with_cidr("93.184.216.0/24");
+    let auth = ScopeAuthority::new(&scope);
+    let evil: Vec<IpAddr> = vec!["203.0.113.7".parse().expect("ip")];
+    let err = auth
+        .authorize_proxy_resolved("proxy.internal", &evil)
+        .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            TransportError::PolicyDenied {
+                checkpoint: PolicyCheckpoint::Proxy,
+                ..
+            }
+        ),
+        "proxy-peer DNS denial must surface at proxy: {err:?}"
+    );
+    let err = auth
+        .authorize_proxy_socket("proxy.internal", "203.0.113.7".parse().expect("ip"), 8080)
+        .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            TransportError::PolicyDenied {
+                checkpoint: PolicyCheckpoint::Proxy,
+                ..
+            }
+        ),
+        "proxy-peer socket denial must surface at proxy: {err:?}"
+    );
+
+    // Allowed proxy peers approve.
+    let ok: Vec<IpAddr> = vec!["93.184.216.34".parse().expect("ip")];
+    // proxy.internal resolves to 10.9.9.9 in the fixture (outside 93/24), so use
+    // example.com's address for the allowed case via direct host.
+    let approved = auth
+        .authorize_proxy_resolved("example.com", &ok)
+        .expect("allowed proxy peer approves");
+    assert_eq!(approved, ok);
+}
+
 #[test]
 fn insecure_tls_never_changes_authorization() {
     let scope = scope_with_cidr("93.184.216.0/24");

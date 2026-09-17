@@ -1,4 +1,4 @@
-use crate::config::{normalize_target, ApprovedOperation, OperationTarget};
+use crate::config::{normalize_target, ApprovedExecution, ApprovedOperation, OperationTarget};
 use crate::error::EggsecError;
 use crate::policy_bridge::resolver::ScopeResolution;
 use crate::tool::response::{ResponseMetadata, ResponseStatus};
@@ -342,6 +342,82 @@ impl EnforcedDispatcher {
             .map_err(|e| EggsecError::Config(format!("dispatch binding failed: {e}")))?;
 
         self.inner.dispatch(request).await
+    }
+
+    /// Dispatch with an [`ApprovedExecution`] bundle (strict scope-carrying path).
+    ///
+    /// Verifies request/approval binding exactly like
+    /// [`dispatch_checked`](Self::dispatch_checked), then invokes the
+    /// context-aware tool path with the scope snapshot from the same
+    /// enforcement context that approved the operation. Strict surfaces must
+    /// use this for scope-sensitive tools; raw `dispatch_checked()` load-test
+    /// execution fails closed inside the tool implementation.
+    pub async fn dispatch_execution(
+        &self,
+        execution: &ApprovedExecution,
+        request: ToolRequest,
+    ) -> Result<ToolResponse, EggsecError> {
+        validate_request_binding(execution.approved(), &request)
+            .map_err(|e| EggsecError::Config(format!("dispatch binding failed: {e}")))?;
+
+        enforce_request_scope_spec(&request)?;
+
+        let canonical_tool = crate::config::metadata_for_tool_id(&request.tool)
+            .map(|m| m.id)
+            .unwrap_or(request.tool.as_str());
+        if let Err(e) =
+            crate::operation_request::validate_tool_request_params(canonical_tool, &request.params)
+        {
+            if !e.0.starts_with("unknown operation") {
+                return Err(EggsecError::Config(format!(
+                    "invalid params for operation '{}': {e}",
+                    request.tool
+                )));
+            }
+        }
+
+        let tool = self
+            .inner
+            .registry()
+            .get(&request.tool)
+            .ok_or_else(|| EggsecError::Config(format!("Tool '{}' not found", request.tool)))?;
+
+        tool.validate(&request)?;
+
+        let context = crate::tool::traits::ToolExecutionContext::from_execution(execution);
+        let started_at = chrono::Utc::now();
+        let result = tool.execute_with_context(request.clone(), &context).await;
+        let completed_at = chrono::Utc::now();
+
+        let response = match &result {
+            Ok(resp) => resp.clone(),
+            Err(_) => ToolResponse {
+                request_id: request.id.clone(),
+                tool_id: request.tool.clone(),
+                status: ResponseStatus::Failed,
+                results: serde_json::json!({}),
+                metadata: ResponseMetadata {
+                    started_at,
+                    completed_at,
+                    duration_ms: (completed_at - started_at).num_milliseconds().max(0) as u64,
+                    targets_scanned: 0,
+                    findings_count: 0,
+                },
+                errors: vec![],
+                findings: vec![],
+            },
+        };
+
+        if let Some(ref history) = *self.inner.history.read() {
+            let capability = request
+                .params
+                .get("_capability")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            history.record(&request, &response, capability);
+        }
+
+        result
     }
 
     /// Access the underlying dispatcher (for cases where the caller has

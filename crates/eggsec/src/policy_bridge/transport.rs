@@ -294,6 +294,28 @@ impl eggsec_transport::NetworkAuthority for ScopeAuthority<'_> {
         Ok(())
     }
 
+    fn authorize_proxy_resolved(
+        &self,
+        proxy_host: &str,
+        candidates: &[IpAddr],
+    ) -> Result<Vec<IpAddr>, TransportError> {
+        // Proxy-peer DNS binding retains proxy provenance: denials surface at
+        // `Proxy`, not `Dns`, so operators can distinguish proxy-peer policy
+        // from ultimate-origin policy.
+        self.ensure_all_allowed(proxy_host, candidates, PolicyCheckpoint::Proxy)
+    }
+
+    fn authorize_proxy_socket(
+        &self,
+        proxy_host: &str,
+        addr: IpAddr,
+        port: u16,
+    ) -> Result<(), TransportError> {
+        self.check_port(Some(port), PolicyCheckpoint::Proxy)?;
+        self.ensure_all_allowed(proxy_host, &[addr], PolicyCheckpoint::Proxy)?;
+        Ok(())
+    }
+
     fn check_tls_consistency(
         &self,
         request_host: &str,

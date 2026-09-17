@@ -5,7 +5,9 @@ description: "HTTP load testing and performance benchmarking - use when working 
 
 # Eggsec Loadtest Skill
 
-HTTP load testing module workflows and patterns (Phase D: transport-neutral core).
+HTTP load testing module workflows and patterns (Phase D core + 2026-09-17 corrective pass: mandatory execution scope, pinned Eggfetch backend).
+
+Execution scope is mandatory: `LoadTestRunner` stores `Option<Scope>` and ordinary `run()` fails closed without the `EnforcementContext` snapshot (no wildcard default). New entry points require execution context — never synthesize `allowed_targets = ["*"]`. Strict paths carry scope via `ApprovedExecution` (`approve_execution()` → `execute_approved_execution()` / `execute_canonical_with_scope()`) and `ToolExecutionContext` (`execute_with_context()` via `dispatch_execution()`); raw `LoadTestTool::execute()` fails closed. Direct + supported proxied traffic uses the pinned Eggfetch backend (`eggfetch-core 0.1.5`, H1/H2, proxy peers/targets); Reqwest is fail-closed transition only (no fallback, credential-partitioned cache).
 
 ## Key Types and Patterns
 
@@ -15,17 +17,20 @@ Transport-neutral reusable primitive: target, request template, budgets, explici
 ### LoadTestExecutor<T: HttpTransport> (`loadtest/executor.rs`)
 Generic executor over the scoped transport seam. Each worker owns a private `Metrics` (merged at end — no shared mutex); global pacing via CAS slot allocator (`GlobalPacer`); cancellation races transport dispatch.
 
-### ReqwestTransport (`loadtest/backend.rs`)
-Scope-aware Reqwest `HttpTransport` — the only `reqwest::Client` contact point for load testing. Per-hop authority checkpoints mirror the recording fake; redirects re-authorized per hop.
+### ReqwestTransport (`loadtest/backend.rs`, transition/fail-closed)
+Scope-aware Reqwest `HttpTransport` (verified + insecure clients, proxied cache keyed by endpoint + mode + TLS + credential fingerprint). Construction fails closed (`Result`; no `Client::new()` default, no verified/insecure fallback, no placeholder proxy, no direct-for-proxy fallback). Proxy peers authorized via `authorize_proxy_resolved`/`authorize_proxy_socket` (no pinning under Reqwest). Production load-test traffic uses Eggfetch, not this backend.
+
+### Eggfetch production backend (`eggsec-transport-eggfetch`, `eggfetch-core 0.1.5`)
+Pinned direct (approved-IP wire URL, logical Host/SNI) + qualified proxy routes (`Proxy::resolved_addresses` + `proxy_target_addresses`; CONNECT + SOCKS5 local supported, SOCKS5H/plaintext fail closed). H1/H2 via ALPN (`Auto { allow_http3: false }`).
+
+### LoadTestRunner / LoadTestRunConfig (`loadtest/runner.rs`)
+Compatibility facades. `tui_mode` is retained for source compat but **ignored** — progress is structured events (`progress.rs`: `NoopSink`, `FnSink`, `ChannelSink`). Scope is `Option<Scope>`: attach via `with_scope()`/`set_scope()` or `run()` fails before I/O; `run_with(transport, authority, ...)` stays explicit (facade scope ignored).
 
 ### RequestTemplate (`loadtest/adapter.rs`)
 Engine adaptation above the core: CLI/config/auth → plan + transport-neutral template. Auth applied through canonical transport helpers, never reimplemented in the executor.
 
 ### Metrics (`loadtest/metrics.rs`)
 Pure single-threaded accumulator (`merge` for sharded workers) + `LoadTestResults` + `LoadTestErrorKind` categorization (`error_kinds`).
-
-### LoadTestRunner / LoadTestRunConfig (`loadtest/runner.rs`)
-Compatibility facades. `tui_mode` is retained for source compat but **ignored** — progress is structured events (`progress.rs`: `NoopSink`, `FnSink`, `ChannelSink`).
 
 ### Worker Model
 - `worker_count = min(concurrency, total_requests)`
