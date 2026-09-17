@@ -1,6 +1,6 @@
 # Multi-address socket-binding corrective pass
 
-Status: Planned
+Status: Executed
 
 Date: 2026-09-17
 
@@ -450,3 +450,103 @@ Append after execution:
 - prior-plan completion-record update;
 - residual debt, especially the explicit absence/policy of multi-address
   failover.
+
+## Completion record
+
+- Baseline SHA `ea41641866b53a5c2ea7151482b32c71c1275706` (prior
+  corrective-pass final) / final SHA
+  `d72e3d32f28f3e775b44500416f4efb1827996a2` ("Multi-address
+  socket-binding corrective pass: singular per-leg proxy pins,
+  adversarial fixtures, guard 135").
+- Baseline reproduction (before fix, new fixtures against baseline
+  adapter): both adversarial tests failed as required, proving the defect.
+  Proxy-peer case returned `Ok(200)` via `unwrap_err()` on an `Ok` value
+  instead of failing, with `ConnectionInfo { remote_addr:
+  Some(127.0.0.2:PORT) }` reporting the failed primary while the request
+  actually succeeded through the socket-unchecked secondary — proving both
+  silent fallback and untruthful metadata at once. Ultimate-target case
+  likewise returned `Ok(200)` instead of failing (CONNECT retried to the
+  socket-unchecked secondary). Control (single proxy + single ultimate)
+  passed on baseline and after.
+- Representation: singular `SocketAddr` fields (`proxy_peer` /
+  `ultimate_peer` on `AuthorizedProxyRoute`), converted at the Eggfetch
+  boundary to single-element pin sets
+  (`resolved_addresses([proxy_peer])`,
+  `proxy_target_addresses([ultimate_peer])`). Rationale: the type makes an
+  accidental multi-address expansion hardest (a `Vec` widening now fails
+  the struct shape + guard Check 135 instead of silently compiling).
+- Proxy peer evidence: candidates `proxy.local → [127.0.0.2 (bad, no
+  listener, primary), 127.0.0.1 (good, CONNECT proxy)]` via ordered
+  resolver; `authorize_proxy_resolved` approves both;
+  `authorize_proxy_socket` called exactly `[127.0.0.2]`, never `127.0.0.1`;
+  final backend pin `[127.0.0.2:proxy_port]` only. After fix the request
+  fails with `TransportError::Backend` (proxy TCP refused), secondary
+  proxy hits `0`, CONNECT targets `[]`, origin hits `0`.
+- Ultimate target evidence: candidates `origin.local → [127.0.0.2 (bad,
+  no TLS, primary), 127.0.0.1 (good, TLS origin)]`; `authorize_socket`
+  called exactly `[127.0.0.2]`, never `127.0.0.1`; final backend pin
+  `[127.0.0.2:origin_port]` only. After fix the proxy issues exactly one
+  `CONNECT 127.0.0.2:PORT` (fails `502`), no retry to `127.0.0.1`, origin
+  hits `0`, request fails with `Backend`.
+- Fixture result: `proxy_peer_fallback_..._forbidden` and
+  `proxied_ultimate_fallback_..._forbidden` fail on baseline, pass after;
+  `proxied_success_reports_the_authorized_peer` passes both (control).
+  No public DNS or external network; loopback + deterministic resolvers
+  only.
+- `ConnectionInfo.remote_addr`: direct hops still report the selected
+  ultimate socket (existing `basic_get_binds_to_approved_address` green);
+  proxied success reports `Some(127.0.0.1:proxy_port)` — the
+  socket-authorized proxy peer — asserted in the new control test. Truthful
+  by construction (single pin, no alternate).
+- Route matrix (after narrowing): direct HTTP/HTTPS ok; CONNECT + SOCKS5
+  success paths covered by new control + existing suite; SOCKS5H
+  (`socks5h_remote_dns_fails_closed_before_dispatch`) and plaintext
+  forward-proxy (`plaintext_forward_proxy_fails_closed_before_dispatch`)
+  remain fail-closed at `Proxy`; full parity `39/39` green.
+- No Reqwest/direct fallback: adapter contains no `reqwest`; `without_proxy()`
+  retained on direct hops; production load-test paths dispatch through
+  `EggfetchTransport` (guard Check 132 green); Reqwest no-fallback guards
+  (Checks 130–131) green.
+- Targeted commands/results (local):
+  `cargo test -p eggsec-transport-eggfetch --test parity` → `39 passed`;
+  `cargo test -p eggsec-transport-eggfetch --tests` → `47 passed`
+  (8 lib + 39 parity); `cargo test -p eggsec --features rest-api,cli
+  --test loadtest_authorization_regression` → `9 passed`;
+  `cargo test -p eggsec --features rest-api,cli --test transport_contract`
+  → `13 passed`; `cargo test -p eggsec --features rest-api,cli --test
+  network_policy_invariants` → `12 passed`;
+  `cargo test -p eggsec --features rest-api,cli --tests` → `2870 passed
+  (53 suites)`; `cargo test -p eggsec-transport --lib` → `18 passed`.
+- `make check` contract (run stepwise locally, all green): `cargo fmt
+  --all --check`, `cargo check --workspace --no-default-features`,
+  `cargo check -p eggsec`, `cargo check -p eggsec-cli`,
+  `cargo check -p eggsec-cli --no-default-features`, `make check-deps`
+  (deny advisories/bans/licenses/sources ok), `make clippy` (engine lib
+  empty + `cli` + 10 leaf crates, `-D warnings`), `cargo test -p eggsec
+  --doc` (21 passed), `cargo test -p eggsec --no-default-features --test
+  tool_registration --test loadtest_tests` (29 passed), full
+  `rest-api,cli` suite (2870), `eggsec-output` (82), `eggsec-report-model`
+  (11), `eggsec-policy` (80), `eggsec-transport-eggfetch` (47),
+  `eggsec-tui --lib` (874), `bash
+  scripts/check-architecture-guards.sh` (ALL PASSED incl. new Check 135).
+- `make check-deps`: `cargo deny --workspace --all-features check`
+  (+ advisories/bans/licenses/sources) all ok.
+- `make check-msrv` (`cargo +1.89 ...`): workspace no-default, `eggsec-cli`
+  no-default, `eggsec-transport`, `eggsec-transport-eggfetch`, `eggsec`
+  no-default — all ok (toolchain `1.89.0` present).
+- Python: no Python files touched; `make check-python` not required by
+  `AGENTS.md` for this pass.
+- Hosted runs on final SHA `d72e3d32`: CI `35185898998` success (Rust full
+  contract + Python verification + dependency review), CodeQL code-quality
+  `35185898489` success.
+- Prior-plan update: appended the missing factual completion record to
+  `plans/loadtest-authorization-transport-corrective-pass-2026-09-16.md`
+  in the same implementation commit (final SHA, scope/Reqwest/contract/
+  Eggfetch/MSRV/Python/guards evidence, CI-record gap noted, follow-up
+  defect note pointing here).
+- Residual debt: no multi-address failover by design (correctness over
+  silent availability; future resilience must re-authorize per attempt
+  above the backend via candidate iteration, pre-dial callback, or
+  control-return — not implemented here); SOCKS5H/plaintext remain
+  unsupported by design; custom-CA TLS row future-only; `README.md`
+  reviewed (backend description already accurate, no change needed).
