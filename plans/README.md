@@ -14,6 +14,24 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggfetch 0.1.7 adoption and direct-route simplification (ready for handoff)
+
+Plan:
+[`eggfetch-0.1.7-adoption-and-direct-route-simplification-2026-09-18.md`](eggfetch-0.1.7-adoption-and-direct-route-simplification-2026-09-18.md)
+
+This bounded follow-up consumes the published `eggfetch-core 0.1.7` release.
+It raises the current 0.1.5 lock, replaces the production direct adapter's
+IP-literal wire-URL/SNI shim with logical-URL + singular
+`resolved_addresses()` routing, qualifies the new bounded H1/H2 resolved-route
+reuse, and adopts the corrected total deadline through response-body EOF while
+preserving Eggsec's manual per-hop authorization loop.
+
+The pass explicitly does **not** reopen completed scope/proxy policy: singular
+socket-authorized pins remain mandatory, environment proxy discovery remains
+disabled, SOCKS5H/plain forward-proxy strict cases remain fail closed, H3 and
+automatic retries remain disabled, and the new Eggfetch HTTPS-downgrade policy
+does not change Eggsec semantics without a separate neutral-contract decision.
+
 ## Load-test authorization and transport corrective pass (ready for handoff)
 
 Corrective pass:
