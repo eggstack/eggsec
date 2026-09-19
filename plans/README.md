@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Eggfetch 0.1.7 final qualification/deep-check corrective pass (ready for hosted verification)
+## Eggfetch 0.1.7 final qualification/deep-check corrective pass (executed 2026-09-19)
 
 Corrective pass:
 [eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md](eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md)
@@ -195,8 +195,8 @@ Phase 0 converted surface/binding assumptions into executable guards. Phase 1
 established one engine-owned operation execution seam. Phase 2 completed TUI
 metadata/action/feature wiring against that seam. Phase 3 resolved runtime
 wire/domain ownership, proved embedded/daemon lifecycle parity, removed parallel
-semantic mappings, and recorded closure evidence. The active corrective pass
-above addresses the one remaining TUI feature-profile verification defect.
+semantic mappings, and recorded closure evidence. The executed corrective pass
+above records closure of the remaining TUI feature-profile verification defect.
 
 ## Architecture convergence and capability maturity (executed)
 

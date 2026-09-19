@@ -1,6 +1,6 @@
 # Eggfetch 0.1.7 final qualification and deep-check corrective pass
 
-Status: Ready for hosted verification
+Status: Executed
 Date: 2026-09-19
 Planning baseline: 612b543b23ba83c43382276505f6c4c6cdefaf2c
 Predecessor implementation: 7f4a92ca4660c4a68e69fa5a8c5d494cda972676
@@ -424,3 +424,47 @@ compile, the exhaustive feature sweep and actual hosted Deep Checks have been
 truthfully exercised, the H2 route-key fixture independently proves physical
 selected-address isolation, and performance/documentation claims are no
 stronger than the measurements support.
+
+## Completion record (2026-09-19)
+
+This plan is executed against implementation commit
+`df17526c9d30c0a82799e60e9cac876870281732`. The preceding implementation/docs
+candidate is `33028847`; `df17526c` also contains the release-archive inspector
+correction described below. A record-only documentation commit follows this
+record and does not change the qualified implementation.
+
+Local qualification evidence:
+
+- `cargo check -p eggsec --features full`, both TUI packet/full checks, focused
+  transport suites, and the full Eggfetch suite passed; Eggfetch is now 67
+  tests, including 5 H2 and 4 SOCKS5-local tests.
+- `make check-msrv`, `make check`, `make check-deps`,
+  `make check-feature-profiles`, and `make check-full` passed.
+- `make check-features-individual` passed with 89 PASS / 0 SKIP / 0 FAIL.
+- The clean Rust release validation passed with
+  `EGGSEC_RELEASE_SKIP_PYTHON=1`: 17 Cargo archives were packaged and
+  inspected. The standalone `make check-python` also passed; Python bindings,
+  stubs, and package artifacts were not part of the qualified source change.
+- The release archive inspector was corrected to accept valid
+  slash-qualified feature forwarding from required dependencies, with a
+  regression test in `scripts/test_release_package_graph.py`.
+
+H2 evidence is independent across route dimensions: the selected-address-only
+fixture keeps the same `https://h2.local:P/` logical origin while rotating
+between `127.0.0.1:P` and `127.0.0.2:P`; each listener accepts exactly one
+physical connection, revisiting the first selected address reuses its route,
+both negotiate ALPN `h2`, and all response-task live counters reach zero after
+quiescence. The existing concurrent multiplex, sequential reuse, and logical
+origin isolation tests remain green.
+
+Performance remains a bounded current-version qualification, not a categorical
+version-regression claim. Five repeated current `0.1.7` trials were collected
+at concurrency 1/10/50/100 with zero errors and zero post-warm-up accepts;
+the short historical `0.1.5` samples remain context only because an equally
+long repeated pre-adoption run was not collected.
+
+Hosted verification for the final implementation SHA is green:
+
+- [CI run 35470625395](https://github.com/eggstack/eggsec/actions/runs/35470625395): Rust, Python, and dependency policy passed.
+- [Code Quality run 35470625338](https://github.com/eggstack/eggsec/actions/runs/35470625338): CodeQL analysis passed.
+- [Deep Checks run 35470637339](https://github.com/eggstack/eggsec/actions/runs/35470637339): Linux Deep Checks, exhaustive feature sweep, MSRV 1.89, macOS/Windows portability, and platform integration all passed.

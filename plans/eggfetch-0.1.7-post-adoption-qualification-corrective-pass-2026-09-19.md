@@ -410,3 +410,30 @@ Residual debt (owning follow-ups, not this pass):
 - Docs-finalization follow-up (this file's TBD fill): implementation SHA
   `7f4a92ca` CI `35430396972` + `35430396524` recorded here; follow-up commit
   pushes only this record update (no code change).
+
+## Final qualification corrective addendum (2026-09-19)
+
+The successor final-qualification pass is executed. It resolved the three
+feature-sweep compile failures by restoring packet privilege-helper imports to
+the canonical `crate::platform::is_root` owner and reconciling the TUI
+full-profile record. The provisioned local sweep is now 89 PASS / 0 SKIP / 0
+FAIL, and the retained TUI corrective is marked executed.
+
+The H2 fixture now has five behaviors, including selected-address-only route
+isolation on one unchanged logical origin (`https://h2.local:P/`) across
+`127.0.0.1:P` and `127.0.0.2:P`; it also uses exact-once live-stream cleanup
+and asserts quiescence. The Eggfetch adapter suite is therefore 67 tests,
+while the four SOCKS5-local tests remain green.
+
+Performance wording is narrowed to the evidence: five repeated current
+`0.1.7` trials at concurrency 1/10/50/100 are recorded, while the short
+historical `0.1.5` samples are not treated as a version-to-version regression
+study. The release archive inspector was also corrected and regression-tested
+for valid required-dependency feature forwarding.
+
+The final implementation is `df17526c9d30c0a82799e60e9cac876870281732`.
+Hosted [CI 35470625395](https://github.com/eggstack/eggsec/actions/runs/35470625395),
+[Code Quality 35470625338](https://github.com/eggstack/eggsec/actions/runs/35470625338),
+and [Deep Checks 35470637339](https://github.com/eggstack/eggsec/actions/runs/35470637339)
+all passed, including MSRV, portability, platform fixtures, Linux broad
+validation, and exhaustive feature compilation.
