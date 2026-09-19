@@ -14,6 +14,25 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggfetch 0.1.7 final qualification/deep-check corrective pass (ready for handoff)
+
+Corrective pass:
+[eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md](eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md)
+
+This final bounded closure pass addresses the residual issues found after the
+0.1.7 post-adoption qualification: the three real Rust compile failures in the
+exhaustive feature sweep (including stale packet `is_root` ownership), the
+still-active TUI full-profile corrective, lack of an actual hosted Deep Checks
+run for the qualified implementation, a confounded H2 selected-socket isolation
+fixture, H2 test-counter cleanup, and overly strong conclusions from very short
+single-run loopback performance samples.
+
+It does not reopen the Eggfetch transport architecture. The pass preserves
+logical-URL + singular authorized resolved routing, manual per-hop redirect
+authorization, aggregate body-through-EOF deadlines, explicit pinned proxy
+routing, fail-closed unsupported proxy shapes, H1/H2, no H3/retries, and no
+environment-derived proxy routing.
+
 ## Eggfetch 0.1.7 post-adoption qualification corrective pass (executed 2026-09-19)
 
 Corrective pass:
