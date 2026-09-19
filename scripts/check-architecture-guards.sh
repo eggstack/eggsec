@@ -2374,7 +2374,7 @@ fi
 # multipart/compression), no concrete client types in its sources, no eggfetch
 # types in its public surface, and the engine may depend on it in production
 # for pinned load-test execution only (direct + supported proxied; no Reqwest
-# fallback). Requires eggfetch-core 0.1.5+ for proxy pinning APIs.
+# fallback). Requires eggfetch-core 0.1.7+ for direct resolved-route reuse + proxy pinning APIs.
 echo ""
 echo "--- Check 102: Eggfetch adapter stays narrow; load-test production backend ---"
 SECTION_FAIL=0
@@ -2401,8 +2401,8 @@ else
       echo "$DEP_LINE"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
-    if ! echo "$DEP_LINE" | rg -q '0\.1\.5|0\.1\.[6-9]|0\.[2-9]'; then
-      echo "FAIL: adapter must require eggfetch-core 0.1.5+ (proxy pinning APIs)."
+    if ! echo "$DEP_LINE" | rg -q '0\.1\.[7-9]|0\.[2-9]'; then
+      echo "FAIL: adapter must require eggfetch-core 0.1.7+ (resolved-route reuse + proxy pinning APIs)."
       echo "$DEP_LINE"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
@@ -3429,16 +3429,16 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 134. Corrective pass: MSRV truthful for eggfetch-core 0.1.5.
+# 134. Corrective pass: MSRV truthful for eggfetch-core 0.1.7.
 echo ""
 echo "--- Check 134: MSRV compatible with eggfetch-core ---"
 SECTION_FAIL=0
 if ! rg -q 'rust-version = "1.89"' Cargo.toml 2>/dev/null; then
-  echo "FAIL: workspace rust-version is not 1.89 (eggfetch-core 0.1.5 declares 1.89)."
+  echo "FAIL: workspace rust-version is not 1.89 (eggfetch-core 0.1.7 declares 1.89)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'version = "0.1.5"' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
-  echo "FAIL: adapter does not require eggfetch-core 0.1.5+."
+if ! rg -q 'version = "0.1.7"' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
+  echo "FAIL: adapter does not require eggfetch-core 0.1.7+."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
@@ -3492,6 +3492,67 @@ else
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Proxied backend route is single-address per leg."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 136. Eggfetch 0.1.7 adoption: direct route is logical URL + singular
+# resolved_addresses (no IP-literal wire-URL shim).
+echo ""
+echo "--- Check 136: Direct backend route uses singular resolved_addresses ---"
+SECTION_FAIL=0
+ADAPTER="crates/eggsec-transport-eggfetch/src/adapter.rs"
+if [[ ! -f "$ADAPTER" ]]; then
+  echo "FAIL: missing adapter: $ADAPTER"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! rg -Fq 'selected_target: SocketAddr' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER missing singular direct pin field: selected_target: SocketAddr"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -Fq 'resolved_addresses([hop.selected_target])' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER does not dispatch direct hops via singular resolved_addresses pin."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -q 'pin_wire_url' "$ADAPTER" 2>/dev/null; then
+    echo "FAIL: $ADAPTER reintroduces pin_wire_url (removed in 0.1.7 adoption)."
+    rg -n 'pin_wire_url' "$ADAPTER" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -q 'pin_wire_url' crates/eggsec-transport-eggfetch/src/mapping.rs 2>/dev/null; then
+    echo "FAIL: mapping.rs still defines pin_wire_url (must stay removed)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Direct backend route uses singular resolved_addresses."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 137. Eggfetch 0.1.7 adoption: no environment-proxy integration, H3 off.
+echo ""
+echo "--- Check 137: No environment proxy or HTTP/3 in scoped adapter ---"
+SECTION_FAIL=0
+if rg -q 'ProxyEnvironment::|proxy_environment\(|use .*ProxyEnvironment' crates/eggsec-transport-eggfetch/src/ 2>/dev/null; then
+  echo "FAIL: adapter must never use ProxyEnvironment/proxy_environment."
+  rg -n 'ProxyEnvironment::|proxy_environment\(|use .*ProxyEnvironment' crates/eggsec-transport-eggfetch/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'without_proxy' crates/eggsec-transport-eggfetch/src/adapter.rs 2>/dev/null; then
+  echo "FAIL: adapter direct route must force without_proxy."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '"http3"|features = .*http3|http3.*feature' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
+  echo "FAIL: adapter must not enable http3."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'allow_http3: false' crates/eggsec-transport-eggfetch/src/adapter.rs 2>/dev/null; then
+  echo "FAIL: adapter must keep HttpVersionPolicy allow_http3:false."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: No environment proxy or HTTP/3 in scoped adapter."
 else
   FAIL=$((FAIL + 1))
 fi

@@ -1,17 +1,20 @@
-# Eggfetch Transport Adapter (Phase C + corrective passes)
+# Eggfetch Transport Adapter (Phase C + corrective passes + 0.1.7 adoption)
 
 Status: adapter implemented 2026-09-12 (`eggsec-transport-eggfetch`).
 Corrective pass (2026-09-17): production load-test backend over published
 `eggfetch-core 0.1.5` (H1/H2 via ALPN, pinned proxy peers/targets where enforceable).
-Follow-up (2026-09-17, this pass): proxied backend route narrowed to one
+Follow-up (2026-09-17): proxied backend route narrowed to one
 socket-authorized address per leg (singular `proxy_peer` / `ultimate_peer`;
 no silent multi-address fallback; truthful `ConnectionInfo`).
+Adoption (2026-09-19): published `eggfetch-core 0.1.7` (logical-URL +
+singular `resolved_addresses` direct, H1/H2 route reuse, `Timeout.total`
+through body EOF; direct IP-literal shim removed).
 
 ## Role & Responsibilities
 
 [`EggfetchTransport`](../../../crates/eggsec-transport-eggfetch/src/adapter.rs)
 implements [`HttpTransport`](transport.md) over the **published**
-`eggfetch-core 0.1.5` client using only stable public APIs.
+`eggfetch-core 0.1.7` client using only stable public APIs.
 
 **Non-responsibilities:**
 
@@ -30,23 +33,27 @@ implements [`HttpTransport`](transport.md) over the **published**
 | Item | Path | Notes |
 |------|------|-------|
 | Adapter crate | `crates/eggsec-transport-eggfetch/` | 18th workspace crate; lib only, no features |
-| Parity/adversarial suite | `crates/eggsec-transport-eggfetch/tests/parity.rs` + `tests/common/` | Local loopback fixtures only (plain + TLS + CONNECT proxy); 39 tests |
+| Parity/adversarial suite | `crates/eggsec-transport-eggfetch/tests/parity.rs` + `tests/common/` | Local loopback fixtures only (plain + TLS + CONNECT proxy + slow-body/trickle/keep-alive); 52 tests |
 | Engine interop tests | `crates/eggsec/tests/transport_eggfetch_parity.rs` | 5 tests through `ScopeAuthority` (dev-dep only) |
-| Guards | Checks 102 + 135 in `scripts/check-architecture-guards.sh` | Feature allowlist, no direct concrete clients, production load-test backend only, singular per-leg route |
+| Guards | Checks 102 + 135 + 136 + 137 in `scripts/check-architecture-guards.sh` | Feature allowlist, no direct concrete clients, production load-test backend only, singular per-leg route, direct resolved-address pin, no env-proxy/H3 |
 
 Dependency envelope (`cargo tree -p eggsec-transport-eggfetch -e features`):
 
-- `eggsec-transport`, `eggfetch-core` (published `0.1.5`,
+- `eggsec-transport`, `eggfetch-core` (published `0.1.7`,
   `default-features = false`, `features = ["http1", "http2", "tls-rustls", "proxy"]`),
   `bytes`, `http`, `url`, `tracing`
 - NOT enabled: `http3`, `cookies`, `multipart`, any compression codec
-- The `proxy` feature serves pinned routing: the SNI-direct connector path
-  (pinned-IP URL with SNI = logical hostname for verified HTTPS) plus
-  `Proxy::resolved_addresses` (pinned proxy peer) and
-  `RequestBuilder::proxy_target_addresses` (pinned ultimate target, where
-  enforceable). Direct hops set `without_proxy` so environment-style proxy
-  selection cannot divert them; proxied hops configure exactly one pinned
-  peer + one pinned ultimate (singular per-leg rule below).
+- The `proxy` feature serves pinned routing: direct logical-URL +
+  `RequestBuilder::resolved_addresses([selected_target])` (singular
+  socket-authorized pin; no origin DNS; Hyper H1/H2 route reuse for equal
+  origin + address + SNI keys) plus `Proxy::resolved_addresses` (pinned
+  proxy peer) and `RequestBuilder::proxy_target_addresses` (pinned ultimate
+  target, where enforceable). Direct hops set `without_proxy` so
+  environment-style proxy selection cannot divert them (`ProxyEnvironment`
+  never constructed); proxied hops configure exactly one pinned peer + one
+  pinned ultimate (singular per-leg rule below). `Timeout.total` spans
+  response-body EOF/trailers (0.1.7 correction); redirect downgrade stays
+  compatibility-`Allow` (no silent `Deny`).
 
 ## Architecture
 
@@ -59,18 +66,23 @@ the authorized address is the connected address. The adapter closes the
 gap through public APIs instead of an upstream change:
 
 ```text
-resolve host (injected TransportResolver facts)
-  -> authority.authorize_resolved / authorize_reresolution
-  -> validate_binding (approved must be a non-empty subset of candidates)
-  -> authority.authorize_socket (primary, immediately before dispatch)
-  -> rewrite the wire URL host to the approved IP literal
-  -> connector resolves the literal to itself (no network DNS)
-logical hostname preserved via the adapter-owned Host header + TLS SNI
+Eggsec resolver
+  -> NetworkAuthority DNS authorization
+  -> singular selected socket authorization
+  -> logical URL remains the request URL
+  -> eggfetch resolved_addresses([exact selected SocketAddr])
+  -> Hyper-owned H1/H2 connection reuse for that exact route identity
 ```
 
-One authoritative path: every hostname hop is pinned; IP literals skip
-resolution (proven by a panicking-resolver test). Each redirect/retry hop
-re-resolves fresh through the same sequence.
+One authoritative path: every hostname hop carries the logical URL plus the
+singular socket-authorized pin (no origin DNS inside Eggfetch; proven by
+`test.local` succeeding with no system DNS entry + panicking-resolver
+literal tests). Literals use the same resolved-route shape with the
+literal/port as the singular pin (no second hidden DNS path). Each
+redirect/retry hop re-resolves fresh through the same sequence. The
+pre-0.1.7 IP-literal wire-URL + logical Host + logical SNI shim is removed;
+the adapter retains the explicit Host header + SNI hint as the step-1
+compatibility shim (identical to the logical-URL identity).
 
 ### Proxied binding is singular per leg (2026-09-17 follow-up)
 
@@ -97,8 +109,8 @@ Future failover must live above the opaque backend retry layer (Eggsec
 iterates candidates with per-attempt checkpoints, a pre-dial authorize
 callback, or backend control-return on connect failure) — never as
 backend-internal fallback. Redirects re-resolve/re-authorize and build a
-fresh single-address route per hop; direct routes remain pinned to their
-single selected IP literal. Supported matrix unchanged: direct HTTP/HTTPS,
+fresh single-address route per hop; direct routes carry one selected
+`SocketAddr` per hop (proven by the direct-fallback-forbidden fixture). Supported matrix unchanged: direct HTTP/HTTPS,
 HTTP/HTTPS proxy → HTTPS (CONNECT) with both pins, SOCKS5 local-resolution
 → HTTP/HTTPS with both pins; SOCKS5H remote-DNS and plaintext HTTP
 forward-proxy fail closed at the `Proxy` checkpoint.
@@ -148,7 +160,7 @@ both bindings recorded/tested separately).
 | Hostname/SNI mismatch | rejected | rejected (SNI = logical host) | wrong-SAN cert rejected |
 | Custom CA / client identity / version bounds | unused (Phase A) | not representable in `TlsPolicy` | none needed |
 | Misconfigured TLS | build error, no fallback | stock configs only; backend surfaces errors at dispatch, never falls back | unit: roots build |
-| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off) | H1 fixtures + H2 negotiation path |
+| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off; 0.1.7 bounded route-keyed reuse) | H1 keep-alive reuse (5 reqs, 1 accept) + origin/socket isolation; H2 multiplexing upstream-qualified |
 
 Verified-success-over-TLS has no local e2e fixture (no custom-CA row in
 `TlsPolicy` to trust a fixture CA with); the insecure-success test proves
@@ -158,9 +170,12 @@ consumer needs it.
 
 ### Timeouts / cancellation / bodies (parity notes)
 
-- `total` = contract `request_timeout` shrunk per hop (aggregate bound
-  holds across redirects); `connect` mirrors the optional connect timeout.
-  Pool/read/write phases stay unset — the contract carries no such values.
+- `total` = remaining aggregate Eggsec budget per hop (0.1.7 absolute
+  deadline through body EOF/trailers, never reset by chunks; proven by
+  headers-fast/body-slow, post-first-chunk stall, trickle, redirect-remainder,
+  and post-timeout-reuse fixtures); `connect` mirrors the optional connect
+  timeout. Pool/read/write phases stay unset — the contract carries no such
+  values.
 - Dropping the execute future cancels dispatch (no detached tasks); a
   regression test aborts a slow dispatch and reuses the transport.
 - All contract bodies are replayable by construction; 307/308 echo tests
@@ -171,7 +186,7 @@ consumer needs it.
 
 ## Testing
 
-- `cargo test -p eggsec-transport-eggfetch` — 8 mapping unit tests + 39
+- `cargo test -p eggsec-transport-eggfetch` — 6 mapping unit tests + 52
   parity/adversarial integration tests (binding, DNS-change-between-hops,
   redirect-to-denied, userinfo/unsupported-scheme redirects, cross-origin
   stripping, same-origin auth preservation, surface-vs-follow gates, hop
@@ -179,9 +194,13 @@ consumer needs it.
   redaction, verbatim compression, total/connect/zero timeouts,
   cancellation, TLS reject/accept/mismatch, 304 surfacing, mixed answers,
   per-hop pinning, checkpoint order, `reresolution` usage, plus the
-  2026-09-17 singular-binding trio: proxy-peer fallback forbidden,
-  ultimate-target fallback forbidden, proxied success reports the
-  authorized peer).
+  2026-09-17 singular-binding trio (proxy-peer/ultimate fallback forbidden,
+  proxied success reports peer) plus the 0.1.7 adoption set: direct singular
+  pin forbids fallback, headers-fast/body-slow + post-chunk stall + trickle
+  + redirect-remainder + post-timeout reuse prove `Timeout.total` through
+  EOF, H1 keep-alive reuse (5 reqs/1 accept) + target/origin isolation,
+  hostile proxy env ignored, https-downgrade stays Allow, IPv6 literal,
+  proxy credential isolation).
 - `cargo test -p eggsec --features rest-api --test transport_eggfetch_parity`
   — 5 engine interop tests through `ScopeAuthority`.
 - Phase A `network_policy_invariants.rs` (12) and Phase B
@@ -189,29 +208,35 @@ consumer needs it.
 
 ## Upstream assessment (WS1–WS2 handoff input, closed)
 
-No `eggfetch` change was required for the properties above, and none is
-consumed beyond the published release: the adapter pins `eggfetch-core`
-from crates.io (`0.1.5`) rather than a branch reference, and `eggfetch`
-remains independent of EggSec (no new dependency in either direction
-beyond the versioned client use). The `0.1.5` release supplies the
-qualified proxy-pinning APIs consumed here
+No `eggfetch` fork/change was required: the adapter pins published
+`eggfetch-core` from crates.io (`0.1.7`) rather than a branch reference,
+and `eggfetch` remains independent of EggSec (no new dependency in either
+direction beyond the versioned client use). The `0.1.7` release supplies
+the qualified direct resolved-route reuse (`RequestBuilder::resolved_addresses`
+with logical-URL authority + bounded Hyper H1/H2 route cache), the
+`Timeout.total`-through-body correction, and the proxy-pinning APIs
 (`Proxy::resolved_addresses`, `RequestBuilder::proxy_target_addresses`,
-route/cache identity with pin state).
+route/cache identity with pin state). The 0.1.6 redirect-downgrade controls
+and environment-proxy support are available upstream but deliberately unused
+(downgrade stays compatibility-`Allow`; no `ProxyEnvironment`).
 
-Recommended optional hardening (not a prerequisite): a generic upstream
-`DnsResolver` trait (`resolve(host, port) -> Vec<SocketAddr>`, defaulting
-to the current `lookup_host` behavior and threaded through the direct,
-proxy, SOCKS, and HTTP/3 connectors) plus a pre-follow redirect callback
-would let a future adapter revision drop IP-literal rewriting in favor of
-direct approved-address binding. Recorded here so future phases can
-evaluate it against a released `eggfetch-core` with the hook.
+The earlier optional-hardening note (generic upstream `DnsResolver` hook
+to drop IP-literal rewriting) is closed by 0.1.7: the adapter now uses the
+first-class logical-URL + `resolved_addresses` route and the shim is
+removed. Remaining optional work is SNI-hint removal (needs the
+logical-SNI/certificate fixture proof) and lean `standard-http1/2` profile
+evaluation (currently blocked: `proxy` pulls the full H1 slice while Eggsec
+needs H2 + advanced routing; record the graph rather than optimizing by
+assumption).
 
 ## Invariants & Gotchas
 
 1. **No unchecked dispatch** — same rule as the contract; the adapter adds
    no constructor that skips the authority.
-2. **Pinned literals only on the wire** — the backend never sees an
-   authorizable hostname; `Host`/SNI carry the logical name.
+2. **Logical URL on the wire, singular pin below it** — the backend sees
+   the logical URL (Host/SNI/redirect/cookie/auth identity) plus exactly
+   one socket-authorized `SocketAddr` via `resolved_addresses`; it never
+   performs origin DNS and never sees an IP-rewritten URL.
 3. **Adapter owns `Host`** — caller-supplied `Host` headers are stripped
    before the first hop and re-set per hop (verified by fixture: the
    server observes the logical host, never the literal).
@@ -225,10 +250,11 @@ evaluate it against a released `eggfetch-core` with the hook.
    production dependency for pinned load-test execution (direct + supported
    proxied; no Reqwest fallback); no other crate may gain a production
    dependency (Check 103 keeps agent/NSE/proxy on `eggsec-transport` types).
-7. **One address per leg** — `AuthorizedProxyRoute` is singular
-   (`proxy_peer` / `ultimate_peer`); the backend receives single-element
-   pin sets and cannot fail over to a DNS-approved but socket-unchecked
-   address (guard Check 135 + adversarial CONNECT-proxy fixtures).
+7. **One address per leg** — `AuthorizedHop.selected_target` (direct) and
+   `AuthorizedProxyRoute` (`proxy_peer` / `ultimate_peer`) are singular
+   `SocketAddr` by construction; the backend receives single-element pin
+   sets and cannot fail over to a DNS-approved but socket-unchecked address
+   (guards Check 135 + 136 + direct/proxy fallback-forbidden fixtures).
    `ConnectionInfo.remote_addr` is the socket-authorized peer by
    construction (direct: ultimate; proxied: proxy peer).
 
@@ -236,4 +262,4 @@ evaluate it against a released `eggfetch-core` with the hook.
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-17 (follow-up: singular per-leg binding; 8 mapping + 39 parity + 5 interop green; retained report in [network_dependency_closure.md](network_dependency_closure.md))*
+*Last verified against source: 2026-09-19 (0.1.7 adoption: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation; 6 mapping + 52 parity + 5 interop green; retained report in [network_dependency_closure.md](network_dependency_closure.md))*

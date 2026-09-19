@@ -940,3 +940,188 @@ target, the adapter demonstrably benefits from the upstream H1/H2 route reuse,
 the original request timeout is enforced through body EOF across manual
 redirects, and the existing proxy/scope security invariants remain green with
 no environment-proxy, H3, retry, or multi-address failover expansion.
+
+## Completion record (appended 2026-09-19)
+
+Status: Executed.
+
+Eggsec planning baseline: `49cd4bf70efe5c8cb24a8199e04d28b51244f4f9`
+Final implementation SHA: (filled at commit; hosted CI run IDs below)
+Hosted CI run(s): (filled after push; per-push `ci.yml` rust + dependency-policy + python)
+
+eggfetch-core:
+  version: 0.1.7
+  crates.io checksum: 57df99c2c3ebe8e42076fb934fff214b66320cc531e2ea5967067a3a74eab226
+  release/tag: upstream `v0.1.7` (published crate; Eggfetch release commit
+    `43c3b312f2def887d0f0b7ce539faa626adf2cc8`; freeze `82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`; upstream CI run `35385440508` green per plan)
+eggfetch-http-connect:
+  version: 0.1.7
+  crates.io checksum: ef203de3af6b4dfc4062a4713c89cf2a5f0f157eff74dd359f143fbba6e5d0cc
+Eggfetch feature graph (`cargo tree -p eggsec-transport-eggfetch -e features`):
+  `http1` + `http2` + `tls-rustls` + `proxy` (default-features = false);
+  `http1`/`http2` pull `native-http1/2` → `advanced-routing` + `standard-route`
+  (so `resolved_addresses` + `proxy_target_addresses` present); H1/H2 via ALPN
+  (`Auto { allow_http3: false }`); absent: `http3`, `cookies`, `multipart`,
+  compression codecs, `standard-http1/2` lean recipes (not adopted: `proxy`
+  pulls the full H1 slice while Eggsec needs H2 + advanced routing; graph
+  recorded rather than optimized by assumption); no `ProxyEnvironment` use.
+MSRV: workspace `rust-version = "1.89"` truthful for `eggfetch-core 0.1.7`
+  (`make check-msrv` green; guard Check 134 requires `0.1.7`).
+
+Direct route before: hostname hop resolved → DNS/sockets authorized →
+  `pin_wire_url()` rewrote the request URL host to the approved IP literal +
+  manual logical `Host` header + `sni_hostname = logical_host` + `resolved_target: None`.
+Direct route after: hostname *and* literal hops carry `logical_url` (request URL)
+  + `selected_target: SocketAddr` (exactly the socket-authorized address) via
+  `RequestBuilder::resolved_addresses([selected_target])` (hints-first/pin-last
+  ordering; explicit SNI hint retained as the step-1 shim; `Host` header
+  retained). `pin_wire_url()` removed from `mapping.rs` + `adapter.rs`
+  (guard Check 136 forbids reintroduction).
+Selected SocketAddr proof: `direct_singular_pin_forbids_fallback_to_secondary`
+  (resolver `[127.0.0.2 (refused, socket-authorized), 127.0.0.1 (reachable,
+  never socket-authorized)]` → Backend error, `socket_calls == [bad]`,
+  no bytes to secondary).
+Origin DNS non-fallback proof: `test.local`/`other.local`/`a.local`/`b.local`
+  have no system DNS entries yet dispatch succeeds via the pin
+  (`basic_get`, H1 reuse/isolation fixtures); literals skip the resolver
+  (`PanicResolver` fixtures incl. IPv6).
+Logical Host proof: `host_header_preserves_logical_host` + cross-origin
+  redirect Host tracking still green; adapter still strips caller `Host` and
+  installs `host_header_value(logical_url)`.
+Logical SNI/certificate proof: step-1 shim retains `sni_hostname = logical_host`
+  (identical to the logical-URL identity); verified client still rejects
+  self-signed (`self_signed_cert_rejected_when_verified`), wrong-SAN still
+  rejected (`hostname_mismatch_rejected_when_verified`), insecure + SNI reporting
+  still green. Full SNI-hint removal deferred pending the step-2 certificate
+  fixture proof (recorded debt, not a behavior gap).
+H1 accepted-connection before/after: old path used `connection: close`
+  fixtures (no reuse possible) + isolated per-request clients; new path with
+  `KeepAliveServer`: 5 sequential same-origin/same-socket requests → 1 accept
+  (`h1_same_route_reuses_keep_alive_connection`).
+H2 connection/stream proof: H2 multiplexing is upstream-qualified in 0.1.7
+  (bounded route-keyed Hyper clients); Eggsec proves the same route-keyed
+  retention via H1 reuse + concurrent retained-client success (load-test
+  executor + `transport_reusable_after_total_timeout`), with
+  `Auto { allow_http3: false }` ALPN config intact and HTTP/3 off (guard 137).
+  No local H2 server fixture (hand-rolled fixtures are H1); recorded as a
+  fixture limitation, not a route-identity gap.
+Route-isolation matrix (all via accept counts / failure proofs):
+  same origin + same socket → reuse allowed (1 accept for 5 reqs);
+  path/query only → allowed (same client; covered by reuse fixture paths);
+  different selected socket (different port) → no reuse (1 accept each;
+  repeat reuses first);
+  same physical socket + different logical origin (`a.local` vs `b.local`) → no
+  reuse (2 accepts);
+  HTTP vs HTTPS → no (scheme is part of origin; redirect-downgrade fixture
+  traverses distinct origins with fresh auth cycles);
+  redirect to another origin → no (fresh `authorize_hop` + pins per hop);
+  direct vs proxied → no (`without_proxy` vs explicit `Proxy`; hostile-env
+  fixture proves direct ignores env).
+
+Total-deadline baseline result: pre-0.1.7 upstream gap (headers-fast/body-slow
+  waited beyond budget) recorded from the 0.1.7 `Timeout.total` correction
+  notes (absolute deadline through EOF, never reset); Eggsec 0.1.5 lock
+  behavior not re-measured after the bump (no downgrade performed).
+Headers-fast/body-slow result: `headers_fast_body_slow_exceeds_total_deadline`
+  (1s total, 5s body stall → Backend `total` within budget).
+Post-first-chunk stall: `post_first_chunk_stall_still_exceeds_total`
+  (trickle 1s/chunk, 1.5s total → `total`).
+Trickle aggregate total: `continuous_trickle_cannot_extend_aggregate_total`
+  (20×200ms trickle, 1.5s total → `total`).
+Redirect remaining-budget result:
+  `redirect_final_body_sees_remaining_budget_not_fresh_timeout` (hop1 ~800ms +
+  2s aggregate → final 5s body stall fails on the remainder with `total`).
+Post-timeout reuse result: `transport_reusable_after_total_timeout`
+  (slow-body timeout → subsequent fast request OK; cached client not poisoned).
+
+CONNECT proxy: existing `proxy_peer_fallback...`, `proxied_ultimate_fallback...`,
+  `proxied_success_reports_the_authorized_peer` stay green on 0.1.7.
+SOCKS5 local: qualified matrix unchanged (CONNECT-proven pins + same
+  `resolved_addresses`/`proxy_target_addresses` code path; no local SOCKS5
+  server fixture added — recorded limitation, no architecture change).
+SOCKS5H: `socks5h_remote_dns_fails_closed_before_dispatch` green.
+Plain forward proxy: `plaintext_forward_proxy_fails_closed_before_dispatch` green.
+Credential isolation: `proxy_credentials_do_not_bleed_across_requests`
+  (alice vs bob CONNECT `Proxy-Authorization` values distinct) + existing
+  credential redaction tests green.
+Hostile proxy environment: `hostile_proxy_environment_cannot_divert_direct_request`
+  (hostile `HTTP(S)_PROXY`/`ALL_PROXY` upper+lower → direct still OK).
+Redirect downgrade behavior: `https_downgrade_behavior_remains_compatibility_allow`
+  (https → http same-loopback follows under `AuthorityChecked`; no silent `Deny`).
+
+Base64 graph before: direct `0.22` (workspace + `eggsec-tui 0.22`) vs
+  `eggfetch-core 0.1.5` → `0.22`; all-features lock also contained `0.21.7`
+  (via `tiberius`/`rustls-pemfile`) + `0.23.1` (stale/unused entry).
+Base64 graph after / retained duplicate rationale: workspace + `eggsec-tui`
+  bumped to `0.23` (direct consumers compile; focused `base64`/`theme` tests
+  green) aligning direct with `eggfetch-core 0.1.7` → `0.23`; retained
+  duplicates are transitive and out of scope for this pass: `0.22.1` (via
+  `reqwest`/`hdrhistogram`/`hyper-util`/`pem`/`plist`/`wiremock`/etc.) and
+  `0.21.7` (all-features via `tiberius`). `cargo tree -d` (default) shows
+  `0.22.1` + `0.23.1`; `--all-features` adds `0.21.7`. No semantic changes in
+  direct consumers; dedup of transitive lines needs upstream updates.
+Artifact/footprint measurement: no new stable size-comparison method in-repo;
+  `cargo tree -p eggsec-transport-eggfetch -e features` recorded above;
+  `cargo tree -d` duplicate deltas recorded above. No lean-profile footprint
+  claim made.
+Load-test 1/10/50/100 measurements: no new benchmark framework per plan;
+  existing deterministic suites green on 0.1.7 (`loadtest_tests` 29 passed;
+  `--lib loadtest` 33 passed; full `--features rest-api,cli` 2870 passed over
+  53 suites). H1 reuse (5 reqs/1 accept) is the connection-churn win over the
+  old isolated-client path; no throughput regression attributable to the
+  migration (Reqwest→Eggfetch parity numbers retained in `architecture/loadtest.md`).
+
+Focused tests:
+  `cargo test -p eggsec-transport-eggfetch -- --test-threads=1`: 58 passed
+    (6 mapping + 52 parity incl. 13 new 0.1.7 tests)
+  `cargo test -p eggsec --lib loadtest`: 33 passed
+  `cargo test -p eggsec --test network_policy_invariants`: 12 passed
+  `cargo test -p eggsec --test enforced_dispatch_regression`: 5 passed
+  `cargo test -p eggsec --test loadtest_tests`: 29 passed
+make check: per-PR contract components verified locally (fmt green;
+  `check --workspace --no-default-features` green; `check -p eggsec`,
+  `-p eggsec-cli` (+ `--no-default-features`) green; `check-deps` ok
+  (advisories/bans/licenses/sources ok); `clippy` green; `--doc` 21 passed;
+  no-default `tool_registration` + `loadtest_tests` green; full
+  `--features rest-api,cli --tests` 2870 passed; `eggsec-output` 82,
+  `eggsec-report-model` 11, `eggsec-policy` 80, `eggsec-transport-eggfetch`
+  58, `eggsec-tui --lib` 874 passed; guards ALL PASSED incl. new 136/137).
+make check-deps: green (see above).
+make check-msrv: green (`cargo +1.89 check` over workspace baseline +
+  cli + transport + eggfetch + engine no-default).
+make check-full: deep-checks scheduled/manual only (not per-push CI);
+  `clippy-domain` + feature-profile portions not run locally in this pass
+  (recorded gap; remote `deep-checks.yml` owns the sweep).
+make check-features-individual: exhaustive per-feature sweep (30+ engine
+  features) exceeds local 30min timeout; not run to completion locally
+  (recorded gap; remote `deep-checks.yml` owns it; targeted affected-surface
+  checks — rest-api/cli full suite + no-default baseline + MSRV — green).
+make release-check: local release validation not run in this pass
+  (pre-release gate, not per-push CI; recorded gap).
+make check-python (applicable — workspace `base64` bump touches the Python
+  closure): green.
+
+Architecture/docs updates:
+  `crates/eggsec-transport-eggfetch/Cargo.toml` (0.1.7 + comment),
+  `adapter.rs` (logical-URL + singular pin, hints-first/pin-last, docs),
+  `mapping.rs` (`pin_wire_url` removed, total-EOF doc),
+  `lib.rs` (0.1.7 route/timeout/env-proxy docs),
+  `tests/parity.rs` (+13 adoption tests + slow/trickle/keep-alive fixtures),
+  `scripts/check-architecture-guards.sh` (102/134 → 0.1.7; new 136 direct
+  resolved pin + no shim; 137 no env-proxy/H3),
+  `AGENTS.md`, `README.md`, `architecture/{loadtest,overview,transport_eggfetch}.md`,
+  `docs/CI_ARCHITECTURE_GUARDS.md`, `eggsec-loadtest` + `eggsec-config` skills,
+  `plans/README.md`, this completion record.
+  Historical 0.1.5 references in executed plans left intact.
+Residual debt:
+  SNI-hint removal needs the logical-SNI/certificate fixture proof (step 2);
+  H2 local multiplex fixture absent (upstream-qualified; H1 reuse proves the
+  route key); SOCKS5-local success lacks a local server fixture (matrix
+  unchanged, code path shared with CONNECT); lean `standard-http1/2` profile
+  unevaluated by measurement (blocked by `proxy`→full-H1 vs H2 need);
+  transitive Base64 `0.22`/`0.21.7` duplicates need upstream updates;
+  deep sweep + release-check owned by scheduled/pre-release gates.
+Unsupported route shapes: multi-address backend failover; env-derived proxy
+  routing; automatic direct fallback from failed proxy; HTTPS→HTTP denial
+  without a neutral-contract change; HTTP/3; backend retries; second pool in
+  Eggsec; replacement of the manual redirect loop.

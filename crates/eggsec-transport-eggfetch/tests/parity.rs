@@ -1405,3 +1405,745 @@ async fn proxied_success_reports_the_authorized_peer() {
     );
     assert_eq!(origin.received().len(), 1);
 }
+
+// --- Eggfetch 0.1.7 adoption (2026-09-18): direct resolved route, total
+// deadline through body EOF, reuse/isolation, policy dispositions ---
+//
+// The production direct route is logical URL + singular `resolved_addresses`
+// pin (no IP-literal wire-URL shim). `Timeout.total` is an absolute deadline
+// through response-body EOF/trailers. The route cache reuses Hyper H1/H2
+// clients for equal logical-origin + ordered-address + SNI keys.
+
+/// Raw slow-body server: sends response headers immediately, then delays
+/// body EOF beyond the caller timeout. Proves `Timeout.total` covers the
+/// body, not just headers/connect.
+struct SlowBodyServer {
+    addr: std::net::SocketAddr,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for SlowBodyServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl SlowBodyServer {
+    async fn start(body: Vec<u8>, body_delay: Duration) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback binds");
+        let addr = listener.local_addr().expect("local addr");
+        let task = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    return;
+                };
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let mut head = Vec::new();
+                    loop {
+                        match stream.read(&mut buf).await {
+                            Ok(0) => return,
+                            Ok(n) => {
+                                head.extend_from_slice(&buf[..n]);
+                                if head.windows(4).any(|w| w == b"\r\n\r\n") {
+                                    break;
+                                }
+                                if head.len() > 65536 {
+                                    return;
+                                }
+                            }
+                            Err(_) => return,
+                        }
+                    }
+                    let headers = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    if stream.write_all(headers.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    if stream.flush().await.is_err() {
+                        return;
+                    }
+                    tokio::time::sleep(body_delay).await;
+                    let _ = stream.write_all(&body).await;
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+        Self { addr, task }
+    }
+
+    fn base_host(&self, host: &str) -> String {
+        format!("http://{host}:{}", self.addr.port())
+    }
+}
+
+/// Trickle server: headers immediately, then body bytes one at a time with
+/// a delay between chunks. Regular chunk arrival must not restart
+/// `Timeout.total`.
+struct TrickleServer {
+    addr: std::net::SocketAddr,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for TrickleServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl TrickleServer {
+    async fn start(body: Vec<u8>, per_chunk: Duration) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback binds");
+        let addr = listener.local_addr().expect("local addr");
+        let task = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    return;
+                };
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let mut head = Vec::new();
+                    loop {
+                        match stream.read(&mut buf).await {
+                            Ok(0) => return,
+                            Ok(n) => {
+                                head.extend_from_slice(&buf[..n]);
+                                if head.windows(4).any(|w| w == b"\r\n\r\n") {
+                                    break;
+                                }
+                                if head.len() > 65536 {
+                                    return;
+                                }
+                            }
+                            Err(_) => return,
+                        }
+                    }
+                    let headers = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    if stream.write_all(headers.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    if stream.flush().await.is_err() {
+                        return;
+                    }
+                    for chunk in body.chunks(1) {
+                        tokio::time::sleep(per_chunk).await;
+                        if stream.write_all(chunk).await.is_err() {
+                            return;
+                        }
+                        if stream.flush().await.is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        Self { addr, task }
+    }
+
+    fn base_host(&self, host: &str) -> String {
+        format!("http://{host}:{}", self.addr.port())
+    }
+}
+
+/// Keep-alive server: counts accepted TCP connections, serves multiple
+/// requests per connection with `connection: keep-alive`. Proves physical
+/// reuse (accept count stays 1 for repeated same-route requests).
+struct KeepAliveServer {
+    addr: std::net::SocketAddr,
+    accepts: Arc<std::sync::atomic::AtomicUsize>,
+    received: Arc<std::sync::Mutex<Vec<Incoming>>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for KeepAliveServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl KeepAliveServer {
+    async fn start() -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback binds");
+        let addr = listener.local_addr().expect("local addr");
+        let accepts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let task = {
+            let accepts = accepts.clone();
+            let received = received.clone();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((stream, _)) = listener.accept().await else {
+                        return;
+                    };
+                    accepts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let received = received.clone();
+                    tokio::spawn(async move {
+                        let mut stream = stream;
+                        loop {
+                            let mut head = Vec::new();
+                            let mut chunk = [0u8; 4096];
+                            let incoming = loop {
+                                match stream.read(&mut chunk).await {
+                                    Ok(0) => return,
+                                    Ok(n) => {
+                                        head.extend_from_slice(&chunk[..n]);
+                                        if head.len() > 65536 {
+                                            return;
+                                        }
+                                        if let Some(end) = head
+                                            .windows(4)
+                                            .position(|w| w == b"\r\n\r\n")
+                                            .map(|p| p + 4)
+                                        {
+                                            let text =
+                                                String::from_utf8_lossy(&head[..end]).to_string();
+                                            let mut lines = text.lines();
+                                            let line = lines.next().unwrap_or("").to_string();
+                                            let mut parts = line.split_whitespace();
+                                            let method = parts.next().unwrap_or("").to_string();
+                                            let path = parts.next().unwrap_or("/").to_string();
+                                            let mut headers = Vec::new();
+                                            let mut content_length = 0usize;
+                                            for l in lines {
+                                                if let Some((k, v)) = l.split_once(':') {
+                                                    let k = k.trim().to_lowercase();
+                                                    let v = v.trim().to_string();
+                                                    if k == "content-length" {
+                                                        content_length =
+                                                            v.parse().unwrap_or(0).min(1024);
+                                                    }
+                                                    headers.push((k, v));
+                                                }
+                                            }
+                                            let mut body = head[end..].to_vec();
+                                            while body.len() < content_length {
+                                                match stream.read(&mut chunk).await {
+                                                    Ok(0) => break,
+                                                    Ok(m) => body.extend_from_slice(&chunk[..m]),
+                                                    Err(_) => return,
+                                                }
+                                            }
+                                            body.truncate(content_length);
+                                            break Incoming {
+                                                method,
+                                                path,
+                                                headers,
+                                                body,
+                                            };
+                                        }
+                                    }
+                                    Err(_) => return,
+                                }
+                            };
+                            received.lock().expect("lock").push(incoming.clone());
+                            let payload = b"ok";
+                            let resp = format!(
+                                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: keep-alive\r\n\r\n",
+                                payload.len()
+                            );
+                            if stream.write_all(resp.as_bytes()).await.is_err() {
+                                return;
+                            }
+                            if stream.write_all(payload).await.is_err() {
+                                return;
+                            }
+                            if stream.flush().await.is_err() {
+                                return;
+                            }
+                        }
+                    });
+                }
+            })
+        };
+        Self {
+            addr,
+            accepts,
+            received,
+            task,
+        }
+    }
+
+    fn base_host(&self, host: &str) -> String {
+        format!("http://{host}:{}", self.addr.port())
+    }
+
+    fn accepts(&self) -> usize {
+        self.accepts.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn received(&self) -> Vec<Incoming> {
+        self.received.lock().expect("lock").clone()
+    }
+}
+
+#[tokio::test]
+async fn direct_singular_pin_forbids_fallback_to_secondary() {
+    // Direct candidates: primary 127.0.0.2 (refused) is the only
+    // socket-authorized target; secondary 127.0.0.1 (real server) is
+    // DNS-approved but never passes `authorize_socket`. The backend must fail
+    // on the primary rather than fall back to the secondary.
+    let server = echo_target().await;
+    let bad: IpAddr = "127.0.0.2".parse().expect("ip");
+    let good: IpAddr = "127.0.0.1".parse().expect("ip");
+    let resolver: Arc<dyn TransportResolver> = Arc::new(OrderedResolver::new(vec![(
+        "test.local",
+        vec!["127.0.0.2", "127.0.0.1"],
+    )]));
+    let transport = EggfetchTransport::new(resolver);
+    let auth = SocketRecorder::default();
+    let url = format!("http://test.local:{}/", server.addr.port());
+    let err = transport.execute(&auth, get(&url)).await.unwrap_err();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "primary direct failure must surface as Backend, got {err:?}"
+    );
+    assert!(!err.is_denied());
+    assert_eq!(
+        auth.socket_calls(),
+        vec![bad],
+        "only the primary may pass the socket checkpoint"
+    );
+    assert!(
+        !auth.socket_calls().contains(&good),
+        "secondary must never be socket-authorized"
+    );
+    assert!(
+        server.received().is_empty(),
+        "no bytes may reach the secondary peer"
+    );
+}
+
+#[tokio::test]
+async fn headers_fast_body_slow_exceeds_total_deadline() {
+    // Headers arrive before `request_timeout`; body EOF stalls beyond it.
+    // Under 0.1.5 this waited for the delayed body; under 0.1.7 it must fail
+    // with a total-timeout Backend error within the budget.
+    let server = SlowBodyServer::start(b"late-body".to_vec(), Duration::from_secs(5)).await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let request = get(&server.base_host("test.local")).with_timeout(TimeoutPolicy {
+        request_timeout: Duration::from_secs(1),
+        connect_timeout: None,
+    });
+    let start = std::time::Instant::now();
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    let elapsed = start.elapsed();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "expected Backend total timeout, got {err:?}"
+    );
+    assert!(!err.is_denied());
+    assert!(
+        err.to_string().contains("total"),
+        "timeout phase must be total, got {err}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(4),
+        "total deadline must fire within budget, took {elapsed:?}"
+    );
+}
+
+#[tokio::test]
+async fn post_first_chunk_stall_still_exceeds_total() {
+    // First body byte arrives quickly, then the stream stalls past total.
+    // Total must not reset on chunk arrival.
+    let server = TrickleServer::start(b"0123456789".to_vec(), Duration::from_secs(1)).await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let request = get(&server.base_host("test.local")).with_timeout(TimeoutPolicy {
+        request_timeout: Duration::from_millis(1500),
+        connect_timeout: None,
+    });
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "expected Backend total timeout, got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("total"),
+        "must be total phase: {err}"
+    );
+}
+
+#[tokio::test]
+async fn continuous_trickle_cannot_extend_aggregate_total() {
+    // 20 bytes at 200ms each = 4s total trickle with a 1.5s budget. Regular
+    // arrival must not extend the absolute deadline.
+    let body = vec![b'x'; 20];
+    let server = TrickleServer::start(body, Duration::from_millis(200)).await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let request = get(&server.base_host("test.local")).with_timeout(TimeoutPolicy {
+        request_timeout: Duration::from_millis(1500),
+        connect_timeout: None,
+    });
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "trickle must still hit total, got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("total"),
+        "must be total phase: {err}"
+    );
+}
+
+#[tokio::test]
+async fn redirect_final_body_sees_remaining_budget_not_fresh_timeout() {
+    // Hop 1 delays ~800ms (consumes budget); hop 2 sends headers fast but
+    // stalls its body for 5s. With a 2s aggregate budget the final body must
+    // time out on the ~1.2s remainder. A fresh full timeout per hop would
+    // incorrectly allow the 5s stall.
+    let slow_body = SlowBodyServer::start(b"final".to_vec(), Duration::from_secs(5)).await;
+    let landing = slow_body.base_host("other.local");
+    let first = Fixture::start(Arc::new(move |incoming: &Incoming| {
+        if incoming.path == "/slow-redirect" {
+            std::thread::sleep(Duration::from_millis(800));
+            Action::redirect(302, format!("{landing}/final"))
+        } else {
+            Action::ok("first".as_bytes().to_vec())
+        }
+    }))
+    .await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let url = format!("{}{}", first.base_host("test.local"), "/slow-redirect");
+    let request = get(&url)
+        .with_redirect(RedirectPolicy::AuthorityChecked { max_redirects: 5 })
+        .with_timeout(TimeoutPolicy {
+            request_timeout: Duration::from_secs(2),
+            connect_timeout: None,
+        });
+    let start = std::time::Instant::now();
+    let err = transport.execute(&auth, request).await.unwrap_err();
+    let elapsed = start.elapsed();
+    assert!(
+        matches!(err, TransportError::Backend(_)),
+        "expected Backend total timeout on remainder, got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("total"),
+        "must be total phase: {err}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(4),
+        "remaining budget must bound the chain, took {elapsed:?}"
+    );
+}
+
+#[tokio::test]
+async fn transport_reusable_after_total_timeout() {
+    // A total-timeout terminalization must not poison the cached route client
+    // for a subsequent authorized request.
+    let slow = SlowBodyServer::start(b"late".to_vec(), Duration::from_secs(5)).await;
+    let fast = echo_target().await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let slow_req = get(&slow.base_host("test.local")).with_timeout(TimeoutPolicy {
+        request_timeout: Duration::from_secs(1),
+        connect_timeout: None,
+    });
+    let err = transport.execute(&auth, slow_req).await.unwrap_err();
+    assert!(matches!(err, TransportError::Backend(_)));
+    let ok = transport
+        .execute(&auth, get(&fast.base_host("test.local")))
+        .await
+        .expect("transport reusable after timeout");
+    assert_eq!(ok.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn h1_same_route_reuses_keep_alive_connection() {
+    // One transport, one logical origin, one selected socket: repeated
+    // sequential requests reuse the keep-alive TCP connection (accept count
+    // stays 1) via the 0.1.7 route-keyed client.
+    let server = KeepAliveServer::start().await;
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    let url = server.base_host("test.local");
+    for _ in 0..5 {
+        let response = transport
+            .execute(&auth, get(&url))
+            .await
+            .expect("reuse request");
+        assert_eq!(response.status, StatusCode::OK);
+        assert_eq!(response.body.as_ref(), b"ok");
+    }
+    assert_eq!(
+        server.accepts(),
+        1,
+        "same-route sequential requests must reuse one TCP connection"
+    );
+    assert_eq!(server.received().len(), 5);
+}
+
+#[tokio::test]
+async fn selected_target_change_does_not_reuse_old_connection() {
+    // Two logical servers (different ports => different selected sockets):
+    // requests to each must not share a connection.
+    let first = KeepAliveServer::start().await;
+    let second = KeepAliveServer::start().await;
+    assert_ne!(first.addr.port(), second.addr.port());
+    let transport = EggfetchTransport::new(memory_resolver());
+    let auth = AllowAll;
+    transport
+        .execute(&auth, get(&first.base_host("test.local")))
+        .await
+        .expect("first");
+    transport
+        .execute(&auth, get(&second.base_host("test.local")))
+        .await
+        .expect("second");
+    assert_eq!(first.accepts(), 1);
+    assert_eq!(second.accepts(), 1);
+    // Repeat first: must reuse first's connection, not open a second.
+    transport
+        .execute(&auth, get(&first.base_host("test.local")))
+        .await
+        .expect("first again");
+    assert_eq!(first.accepts(), 1, "same target must reuse, not redial");
+    assert_eq!(first.received().len(), 2);
+}
+
+#[tokio::test]
+async fn logical_origin_change_does_not_reuse_connection() {
+    // Same physical socket (same server port) but different logical origins
+    // must not share a route connection (cache key includes origin).
+    let server = KeepAliveServer::start().await;
+    let port = server.addr.port();
+    let resolver: Arc<dyn TransportResolver> = Arc::new(
+        InMemoryResolver::new()
+            .with("a.local", vec!["127.0.0.1"])
+            .with("b.local", vec!["127.0.0.1"]),
+    );
+    let transport = EggfetchTransport::new(resolver);
+    let auth = AllowAll;
+    transport
+        .execute(&auth, get(&format!("http://a.local:{port}/")))
+        .await
+        .expect("a.local");
+    transport
+        .execute(&auth, get(&format!("http://b.local:{port}/")))
+        .await
+        .expect("b.local");
+    assert_eq!(
+        server.accepts(),
+        2,
+        "different logical origins must not share a physical route"
+    );
+}
+
+#[tokio::test]
+async fn hostile_proxy_environment_cannot_divert_direct_request() {
+    // `ProxyEnvironment` is never constructed in the adapter; direct hops
+    // force `.without_proxy()`. Hostile process env must not divert them.
+    std::env::set_var("HTTP_PROXY", "http://127.0.0.1:9/");
+    std::env::set_var("HTTPS_PROXY", "http://127.0.0.1:9/");
+    std::env::set_var("ALL_PROXY", "http://127.0.0.1:9/");
+    std::env::set_var("http_proxy", "http://127.0.0.1:9/");
+    std::env::set_var("https_proxy", "http://127.0.0.1:9/");
+    std::env::set_var("all_proxy", "http://127.0.0.1:9/");
+    let result = async {
+        let server = echo_target().await;
+        let transport = EggfetchTransport::new(memory_resolver());
+        let auth = AllowAll;
+        transport
+            .execute(&auth, get(&server.base_host("test.local")))
+            .await
+    }
+    .await;
+    std::env::remove_var("HTTP_PROXY");
+    std::env::remove_var("HTTPS_PROXY");
+    std::env::remove_var("ALL_PROXY");
+    std::env::remove_var("http_proxy");
+    std::env::remove_var("https_proxy");
+    std::env::remove_var("all_proxy");
+    let response = result.expect("direct must ignore hostile proxy env");
+    assert_eq!(response.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn https_downgrade_behavior_remains_compatibility_allow() {
+    // The cumulative 0.1.6 `RedirectDowngradePolicy` must not silently become
+    // `Deny`: an https -> http same-loopback redirect still follows under
+    // `AuthorityChecked` (neutral contract has no downgrade dimension).
+    let plain = Fixture::start(Arc::new(|incoming: &Incoming| {
+        Action::ok(format!("landed:{}", incoming.path).into_bytes())
+    }))
+    .await;
+    let downgrade_target = format!("http://test.local:{}/landed", plain.addr.port());
+    let tls = TlsFixture::start(
+        Arc::new(move |incoming: &Incoming| {
+            if incoming.path == "/down" {
+                Action::redirect(302, downgrade_target.clone())
+            } else {
+                Action::ok("tls".as_bytes().to_vec())
+            }
+        }),
+        vec!["127.0.0.1".to_string()],
+    )
+    .await;
+    let resolver: Arc<dyn TransportResolver> = Arc::new(
+        InMemoryResolver::new()
+            .with("test.local", vec!["127.0.0.1"])
+            .with("tls.local", vec!["127.0.0.1"]),
+    );
+    let transport = EggfetchTransport::new(resolver);
+    let auth = AllowAll;
+    let tls_url = format!("https://tls.local:{}/down", tls.addr.port());
+    let request = ScopedHttpRequest::new_with_url(Method::GET, &tls_url)
+        .expect("request")
+        .with_tls(TlsPolicy::insecure())
+        .with_redirect(RedirectPolicy::AuthorityChecked { max_redirects: 5 });
+    let response = transport.execute(&auth, request).await.expect("follow");
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.redirect_history.len(), 1);
+    assert_eq!(plain.received().len(), 1);
+}
+
+#[tokio::test]
+async fn literal_ipv6_loopback_dispatches_without_resolver() {
+    let server = echo_target().await;
+    // Rewrite the IPv4 loopback base as IPv6 loopback on the same port.
+    let url = format!("http://[::1]:{}/", server.addr.port());
+    // If the fixture host lacks IPv6 loopback this fails as Backend (not
+    // denial); either way the resolver must never be consulted.
+    let transport = EggfetchTransport::new(Arc::new(PanicResolver));
+    let auth = AllowAll;
+    match transport.execute(&auth, get(&url)).await {
+        Ok(response) => {
+            assert_eq!(response.status, StatusCode::OK);
+            let conn = response.connection.expect("connection");
+            let addr = conn.remote_addr.expect("addr");
+            assert_eq!(addr.ip(), "::1".parse::<IpAddr>().expect("ip"));
+        }
+        Err(TransportError::Backend(_)) => {}
+        Err(other) => panic!("unexpected error kind: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn proxy_credentials_do_not_bleed_across_requests() {
+    // Two sequential CONNECT requests with distinct credentials must present
+    // distinct `Proxy-Authorization` values (no cross-request bleed).
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    struct AuthProxy {
+        addr: std::net::SocketAddr,
+        seen: Arc<std::sync::Mutex<Vec<Option<String>>>>,
+        task: tokio::task::JoinHandle<()>,
+    }
+    impl Drop for AuthProxy {
+        fn drop(&mut self) {
+            self.task.abort();
+        }
+    }
+    impl AuthProxy {
+        async fn start() -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("loopback binds");
+            let addr = listener.local_addr().expect("local addr");
+            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let task = {
+                let seen = seen.clone();
+                tokio::spawn(async move {
+                    loop {
+                        let Ok((mut inbound, _)) = listener.accept().await else {
+                            return;
+                        };
+                        let seen = seen.clone();
+                        tokio::spawn(async move {
+                            let mut buf = Vec::new();
+                            let mut chunk = [0u8; 4096];
+                            let end = loop {
+                                match inbound.read(&mut chunk).await {
+                                    Ok(0) => return,
+                                    Ok(n) => {
+                                        buf.extend_from_slice(&chunk[..n]);
+                                        if buf.len() > 65536 {
+                                            return;
+                                        }
+                                        if let Some(p) =
+                                            buf.windows(4).position(|w| w == b"\r\n\r\n")
+                                        {
+                                            break p + 4;
+                                        }
+                                    }
+                                    Err(_) => return,
+                                }
+                            };
+                            let head = String::from_utf8_lossy(&buf[..end]).to_string();
+                            let mut auth_value = None;
+                            for line in head.lines().skip(1) {
+                                if let Some((k, v)) = line.split_once(':') {
+                                    if k.trim().eq_ignore_ascii_case("proxy-authorization") {
+                                        auth_value = Some(v.trim().to_string());
+                                    }
+                                }
+                            }
+                            seen.lock().expect("lock").push(auth_value);
+                            let resp = "HTTP/1.1 502 Bad Gateway\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+                            let _ = inbound.write_all(resp.as_bytes()).await;
+                        });
+                    }
+                })
+            };
+            Self { addr, seen, task }
+        }
+    }
+    let proxy = AuthProxy::start().await;
+    let resolver: Arc<dyn TransportResolver> = Arc::new(
+        InMemoryResolver::new()
+            .with("proxy.local", vec!["127.0.0.1"])
+            .with("origin.local", vec!["127.0.0.1"]),
+    );
+    let transport = EggfetchTransport::new(resolver);
+    let auth = AllowAll;
+    // Two CONNECT attempts with different credentials (both fail at the
+    // fake proxy with 502, but the presented auth must differ per request).
+    for user in ["alice", "bob"] {
+        let req = ScopedHttpRequest::new_with_url(Method::GET, "https://origin.local:443/")
+            .expect("request")
+            .with_tls(TlsPolicy::insecure())
+            .with_timeout(TimeoutPolicy {
+                request_timeout: Duration::from_secs(5),
+                connect_timeout: Some(Duration::from_secs(2)),
+            })
+            .with_proxy(ProxyIntent::Http {
+                endpoint: Url::parse(&format!("http://proxy.local:{}/", proxy.addr.port()))
+                    .expect("proxy url"),
+                credential: Some(eggsec_transport::ProxyCredential::new(user, "s3cr3t")),
+            });
+        let _ = transport.execute(&auth, req).await;
+    }
+    let seen = proxy.seen.lock().expect("lock").clone();
+    assert_eq!(
+        seen.len(),
+        2,
+        "both CONNECT attempts must reach proxy: {seen:?}"
+    );
+    assert!(
+        seen[0].is_some() && seen[1].is_some(),
+        "both must present proxy auth: {seen:?}"
+    );
+    assert_ne!(
+        seen[0], seen[1],
+        "credential A must not bleed into B: {seen:?}"
+    );
+}

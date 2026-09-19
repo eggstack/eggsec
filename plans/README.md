@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Eggfetch 0.1.7 adoption and direct-route simplification (ready for handoff)
+## Eggfetch 0.1.7 adoption and direct-route simplification (executed 2026-09-19)
 
 Plan:
 [`eggfetch-0.1.7-adoption-and-direct-route-simplification-2026-09-18.md`](eggfetch-0.1.7-adoption-and-direct-route-simplification-2026-09-18.md)

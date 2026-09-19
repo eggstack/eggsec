@@ -21,10 +21,13 @@ eggsec-transport = { workspace = true }
 # pinned proxy routing. Deliberately NOT enabled: http3 (separate QUIC
 # resolution path, no authorized binding story), cookies (jar semantics
 # bypass per-hop authorization), compression codecs (bomb-limit parity),
-# multipart. Requires eggfetch-core 0.1.5+ for `Proxy::resolved_addresses`
-# and `RequestBuilder::proxy_target_addresses` (+ route/cache identity with
+# multipart. Requires eggfetch-core 0.1.7+ for direct
+# `RequestBuilder::resolved_addresses` route reuse (logical URL + singular
+# selected SocketAddr, Hyper-owned H1/H2 reuse), `Timeout.total` through
+# response-body EOF, and `Proxy::resolved_addresses` +
+# `RequestBuilder::proxy_target_addresses` (+ route/cache identity with
 # pin state, SOCKS5H/plaintext fail-closed).
-eggfetch-core = { version = "0.1.5", default-features = false, features = ["http1", "http2", "tls-rustls", "proxy"] }
+eggfetch-core = { version = "0.1.7", default-features = false, features = ["http1", "http2", "tls-rustls", "proxy"] }
 bytes = { workspace = true }
 http = { workspace = true }
 url = { workspace = true }

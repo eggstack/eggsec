@@ -1850,13 +1850,13 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-core"
-version = "0.1.5"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8415bc169d247e90aa25890b37b45275f3e4449e6aeda0946c022aa3e4713fc1"
+checksum = "57df99c2c3ebe8e42076fb934fff214b66320cc531e2ea5967067a3a74eab226"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
- "dashmap",
+ "eggfetch-http-connect",
  "futures-core",
  "futures-util",
  "getrandom 0.2.17",
@@ -1881,6 +1881,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "eggfetch-http-connect"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef203de3af6b4dfc4062a4713c89cf2a5f0f157eff74dd359f143fbba6e5d0cc"
+dependencies = [
+ "base64 0.23.1",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "eggsec"
 version = "0.1.0"
 dependencies = [
@@ -1890,7 +1901,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "chrono-tz",
@@ -2136,7 +2147,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "dashmap",
  "des",
@@ -2306,7 +2317,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "arc-swap",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "chrono-tz",
  "clap",
@@ -2350,7 +2361,7 @@ name = "eggsec-web-proxy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "criterion",
@@ -6518,7 +6529,7 @@ checksum = "7bd22781911de0ca6debda95f073c8f18bec65d1a94f1fa9573f3102e514cea4"
 dependencies = [
  "ahash",
  "annotate-snippets",
- "base64 0.21.7",
+ "base64 0.22.1",
  "encoding_rs_io",
  "getrandom 0.3.4",
  "granit-parser",
@@ -8500,7 +8511,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

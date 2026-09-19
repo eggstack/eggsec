@@ -58,30 +58,16 @@ pub(crate) fn host_header_value(url: &Url) -> Result<String, TransportError> {
     Ok(format!("{host}{port_part}"))
 }
 
-/// Rewrite the wire URL host to an approved IP literal, preserving
-/// scheme/port/path/query/fragment. The connector therefore resolves only
-/// the authorized address; the logical hostname travels via `Host`/SNI.
-pub(crate) fn pin_wire_url(logical: &Url, approved: IpAddr) -> Result<Url, TransportError> {
-    // `Url::set_host` takes IPv6 literals bracketed (bare colons are
-    // rejected as invalid domain characters).
-    let host = if approved.is_ipv6() {
-        format!("[{approved}]")
-    } else {
-        approved.to_string()
-    };
-    let mut wire = logical.clone();
-    wire.set_host(Some(&host)).map_err(|e| {
-        TransportError::InvalidRequest(format!("failed to pin approved address: {e}"))
-    })?;
-    Ok(wire)
-}
-
 /// Map the contract timeout to an `eggfetch-core` per-hop timeout.
 ///
 /// `total` is the caller budget shrunk by already-elapsed time (the redirect
 /// loop passes the remainder); `connect` mirrors the optional connect
 /// timeout. Pool/read/write phases stay unset: the contract carries no such
-/// values and parity configures none.
+/// values and parity configures none. Under `eggfetch-core 0.1.7` the mapped
+/// `total` is an absolute wall-clock deadline through response-body
+/// EOF/trailers (never reset by chunk arrival), so the remaining-budget
+/// mapping enforces the Eggsec aggregate request timeout through body
+/// completion on each hop.
 pub(crate) fn eggfetch_timeout(
     policy: &TimeoutPolicy,
     remaining_total: Duration,
@@ -180,28 +166,6 @@ mod tests {
         assert_eq!(host_header_value(&n).expect("host"), "example.com");
         let v6 = Url::parse("http://[::1]:8080/a").expect("url");
         assert_eq!(host_header_value(&v6).expect("host"), "[::1]:8080");
-    }
-
-    #[test]
-    fn pinning_preserves_everything_but_host() {
-        let logical = Url::parse("https://example.com:8443/a/b?x=1#frag").expect("url");
-        let ip: IpAddr = "93.184.216.34".parse().expect("ip");
-        let wire = pin_wire_url(&logical, ip).expect("pin");
-        assert_eq!(wire.scheme(), "https");
-        assert_eq!(wire.port(), Some(8443));
-        assert_eq!(wire.path(), "/a/b");
-        assert_eq!(wire.query(), Some("x=1"));
-        assert_eq!(wire.fragment(), Some("frag"));
-        assert_eq!(wire.host_str(), Some("93.184.216.34"));
-    }
-
-    #[test]
-    fn pinning_supports_ipv6_literals() {
-        let logical = Url::parse("http://example.com/a").expect("url");
-        let ip: IpAddr = "::1".parse().expect("ip");
-        let wire = pin_wire_url(&logical, ip).expect("pin");
-        assert_eq!(wire.host_str(), Some("[::1]"));
-        assert_eq!(ip_literal(&wire), Some(ip));
     }
 
     #[test]

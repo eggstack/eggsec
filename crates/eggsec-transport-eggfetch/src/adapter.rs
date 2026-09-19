@@ -24,20 +24,22 @@ use url::Url;
 
 use crate::mapping::{
     effective_port, eggfetch_body, eggfetch_timeout, ensure_http_scheme, extract_redirect_body,
-    host_header_value, ip_literal, map_backend_error, map_redirect_build_error, pin_wire_url,
-    same_origin, LogicalHop,
+    host_header_value, ip_literal, map_backend_error, map_redirect_build_error, same_origin,
+    LogicalHop,
 };
 
 /// Scope-aware outbound HTTP transport over `eggfetch-core`.
 ///
 /// Holds two preconfigured backend clients (verified TLS and explicit
 /// insecure TLS) plus the caller-supplied DNS resolver. DNS facts always
-/// come from that resolver — never from the backend's own lookup — and the
-/// wire URL is pinned to the approved IP literal before dispatch, so the
-/// backend connector can only dial the authorized address.
+/// come from that resolver — never from the backend's own lookup — and each
+/// direct hop dispatches the logical URL with a singular socket-authorized
+/// `resolved_addresses` pin, so the backend connector can only dial the
+/// authorized address (no origin DNS inside Eggfetch).
 ///
-/// No production EggSec consumer uses this type yet (Phase D migrates
-/// consumers one at a time).
+/// Production direct load-test traffic uses this transport (first production
+/// backend); supported proxied load testing uses it where the route matrix
+/// allows, otherwise it fails closed.
 pub struct EggfetchTransport {
     resolver: Arc<dyn TransportResolver>,
     verified: Client,
@@ -111,11 +113,14 @@ impl std::fmt::Debug for EggfetchTransport {
 }
 
 /// Authorized single-hop dispatch plan: the logical destination plus the
-/// pinned wire route the backend is allowed to see.
+/// singular physical pin the backend is allowed to see.
 ///
-/// Direct hops carry a pinned wire URL (approved-IP literal, logical Host/SNI).
-/// Proxied hops keep the logical URL on the wire and carry one pinned
-/// proxy-peer plus one pinned ultimate-target socket for
+/// Direct hops carry the logical URL plus exactly one socket-authorized
+/// `SocketAddr` for `RequestBuilder::resolved_addresses` (logical URL stays
+/// authoritative for HTTP Host, TLS SNI/certificate identity, redirects,
+/// cookies, and auth; Eggfetch performs no origin DNS when the pin is
+/// present). Proxied hops keep the logical URL on the wire and carry one
+/// pinned proxy-peer plus one pinned ultimate-target socket for
 /// `Proxy::resolved_addresses` and `proxy_target_addresses` (both
 /// independently authorized). One authorization cycle selects one physical
 /// address per connection leg; a DNS-approved set is an input to selection,
@@ -125,7 +130,8 @@ struct AuthorizedHop {
     logical_host: String,
     port: u16,
     primary: IpAddr,
-    wire_url: Url,
+    logical_url: Url,
+    selected_target: SocketAddr,
     is_https: bool,
     proxy: Option<AuthorizedProxyRoute>,
 }
@@ -150,7 +156,7 @@ struct AuthorizedProxyRoute {
 
 impl EggfetchTransport {
     /// Run the full checkpoint sequence for one logical URL and bind the
-    /// approved address to the wire URL.
+    /// singular socket-authorized address as the resolved-route pin.
     fn authorize_hop(
         &self,
         authority: &dyn NetworkAuthority,
@@ -228,8 +234,9 @@ impl EggfetchTransport {
         // 7. Proxy endpoint vs ultimate destination are distinct decisions.
         // Both legs are resolved/authorized/bound independently through the
         // proxy-peer checkpoints. Supported matrix (published eggfetch-core
-        // 0.1.5 route-pinning release):
-        // - direct HTTP/HTTPS: pinned wire URL (below);
+        // 0.1.7 route-pinning release):
+        // - direct HTTP/HTTPS: logical URL + singular `resolved_addresses`
+        //   pin (below);
         // - HTTP/HTTPS proxy -> HTTPS origin (CONNECT) with both pins: supported;
         // - SOCKS5 local-resolution -> HTTP/HTTPS with both pins: supported;
         // - SOCKS5H remote-DNS: fail closed (ultimate IP not locally enforceable);
@@ -308,11 +315,15 @@ impl EggfetchTransport {
             // bindings (see `send_hop`). Cross-origin pinned-route reuse fails
             // closed unless a new authorized snapshot is constructed (per-hop
             // authorize_hop above).
+            // Proxied hops keep the logical URL; direct pins are not used.
+            // The singular ultimate pin travels via `proxy_target_addresses`.
+            let selected_target = SocketAddr::new(binding.primary(), port);
             return Ok(AuthorizedHop {
                 logical_host: host.to_string(),
                 port,
                 primary: binding.primary(),
-                wire_url: url.clone(),
+                logical_url: url.clone(),
+                selected_target,
                 is_https: url.scheme() == "https",
                 proxy: Some(AuthorizedProxyRoute {
                     endpoint: endpoint.clone(),
@@ -324,16 +335,18 @@ impl EggfetchTransport {
             });
         }
 
-        // Bind: the connector only ever sees the approved IP literal.
-        let wire_url = match literal {
-            Some(_) => url.clone(),
-            None => pin_wire_url(url, binding.primary())?,
-        };
+        // Bind: one authorization cycle selects one physical socket. The
+        // backend receives exactly that address via `resolved_addresses` and
+        // never consults origin DNS. Literals use the same resolved-route
+        // shape with the literal/port as the singular pin (no second hidden
+        // DNS path; TLS semantics preserved via the logical URL).
+        let selected_target = SocketAddr::new(binding.primary(), port);
         Ok(AuthorizedHop {
             logical_host: host.to_string(),
             port,
             primary: binding.primary(),
-            wire_url,
+            logical_url: url.clone(),
+            selected_target,
             is_https: url.scheme() == "https",
             proxy: None,
         })
@@ -370,7 +383,7 @@ impl EggfetchTransport {
 
         let mut builder = self
             .backend_for(request)
-            .request(logical.method.clone(), hop.wire_url.as_str())
+            .request(logical.method.clone(), hop.logical_url.as_str())
             .map_err(map_redirect_build_error)?;
         for (name, value) in wire_headers.iter() {
             let value_str = value.to_str().map_err(|_| {
@@ -382,12 +395,15 @@ impl EggfetchTransport {
             builder = builder.header(name.as_str(), value_str);
         }
         let sni = hop.is_https.then(|| hop.logical_host.clone());
-        // For direct hops the backend sees the pinned-IP wire URL with logical
-        // Host/SNI and explicit direct routing. For proxied hops the backend
-        // sees the logical URL with logical Host/SNI plus the single pinned
-        // proxy-peer and ultimate-target addresses (both authorized above).
-        // Single-element pin sets by construction: the connector has no
-        // authorized alternate to fail over to.
+        // Direct hops carry the logical URL plus exactly one socket-authorized
+        // `resolved_addresses` pin (Eggfetch performs no origin DNS; logical
+        // URL owns Host/SNI/redirect/cookie/auth identity). Proxied hops carry
+        // the logical URL plus the single pinned proxy-peer and ultimate-target
+        // addresses (both authorized above). Single-element pin sets by
+        // construction: the connector has no authorized alternate to fail over
+        // to. Downgrade behavior stays compatibility-equivalent (`Allow` via
+        // `RedirectPolicy::new`; a `Deny` policy needs a separate neutral
+        // contract change with recording-fake parity).
         let mut builder = builder
             .body(eggfetch_body(&logical.body))
             .timeout(eggfetch_timeout(&request.timeout, remaining_total))
@@ -422,20 +438,28 @@ impl EggfetchTransport {
         } else {
             // No proxy is configured on the backend clients; this per-request
             // override additionally pins direct routing so environment-style
-            // proxy selection cannot divert a hop.
+            // proxy selection cannot divert a hop (environment discovery is never
+            // constructed in this adapter).
             builder = builder.without_proxy();
         }
-        let response = builder
+        // `transport_hints` replaces the whole hint struct, while
+        // `resolved_addresses` only sets the pin field: hints first, pin last
+        // so the singular pin survives. The explicit SNI hint is retained as
+        // the step-1 compatibility shim (identical to the logical-URL identity
+        // Eggfetch would derive); removing it needs the SNI/certificate
+        // fixture proof in Workstream 2 step 2.
+        builder = builder
             .decompress(false)
             .transport_hints(eggfetch_core::TransportHints {
                 target: None,
                 sni_hostname: sni,
                 resolved_target: None,
                 trace: None,
-            })
-            .send()
-            .await
-            .map_err(map_backend_error)?;
+            });
+        if hop.proxy.is_none() {
+            builder = builder.resolved_addresses([hop.selected_target]);
+        }
+        let response = builder.send().await.map_err(map_backend_error)?;
         Ok(response)
     }
 
