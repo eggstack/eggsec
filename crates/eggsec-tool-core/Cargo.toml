@@ -21,4 +21,4 @@ chrono = { workspace = true }
 rustc-hash = { workspace = true }
 parking_lot = { workspace = true }
 uuid = { workspace = true }
-toml = "0.8"
+toml = "1.1"
