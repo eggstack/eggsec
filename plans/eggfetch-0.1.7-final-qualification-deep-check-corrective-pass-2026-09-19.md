@@ -430,8 +430,9 @@ stronger than the measurements support.
 This plan is executed against implementation commit
 `df17526c9d30c0a82799e60e9cac876870281732`. The preceding implementation/docs
 candidate is `33028847`; `df17526c` also contains the release-archive inspector
-correction described below. A record-only documentation commit follows this
-record and does not change the qualified implementation.
+correction described below. This completion record is in record-only commit
+`d2400ea48d43cf6be62846abeac83543cc70f81b`; it does not change the qualified
+implementation.
 
 Local qualification evidence:
 
