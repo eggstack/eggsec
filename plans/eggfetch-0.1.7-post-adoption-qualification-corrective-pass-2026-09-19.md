@@ -236,9 +236,13 @@ Baseline HEAD at handoff: `8f3249a3af4630a708c8792b45178741d25721f0` (plans-only
 delta over the planning baseline; reconciled, no implementation drift).
 Predecessor implementation preserved: `055c6a9d230895618ad9474cbfca815877c71419`
 (CI `35424678035`, Code Quality `35424676943`). No Eggfetch downgrade performed.
-Final implementation SHA: TBD (filled after push; implementation + docs +
-this record in one commit).
-Hosted CI run(s): TBD (ordinary push CI + deep-checks; links filled after green).
+Final implementation SHA: `7f4a92ca4660c4a68e69fa5a8c5d494cda972676`
+(implementation + docs + H2/SOCKS5 fixtures + this record).
+Hosted CI run(s): `35430396972` (CI: success — Rust + dependency-policy +
+python green; dependency-review skipped on push) + `35430396524` (Code
+Quality: success). Deep-checks workflow is scheduled/manual (not per-push);
+the exhaustive `check-features-individual` + `release-check` dispositions
+above are the local deep-gate evidence for this SHA.
 
 eggfetch-core: `0.1.7`, checksum
 `57df99c2c3ebe8e42076fb934fff214b66320cc531e2ea5967067a3a74eab226`
@@ -319,8 +323,9 @@ WS3 gates (final corrective SHA, `--test-threads=1` where applicable):
   this pass; TUI full-profile has its own active corrective pass per
   `plans/README.md`). No in-scope regression; transport/eggfetch profiles all
   pass.
-- `make release-check`: fails dirty pre-commit (expected — uncommitted
-  implementation); re-run clean post-commit before close (must pass).
+- `make release-check`: failed dirty pre-commit (expected); re-ran clean on
+  `7f4a92ca` post-commit: green (package graph + publishability validation
+  passed).
 - `make check-python`: not applicable (no Python bindings/stubs/docs/scripts
   touched).
 
@@ -386,7 +391,8 @@ Acceptance mapping (plan §Acceptance, in order):
    precisely recorded; `release-check` re-run clean post-commit — met with
    truthful dispositions.
 8. Hosted ordinary CI + deep-check green on final SHA (or linked equivalent) —
-   TBD pending push (filled below).
+   met: CI `35430396972` success + Code Quality `35430396524` success on
+   `7f4a92ca`; deep-checks owned by scheduled gates (local deep evidence above).
 9. 1/10/50/100 evidence with env/connections/errors/latency — met.
 10. No unmeasured before/after claim — met (same-harness pre comparison +
     noisy disclaimer).
@@ -400,4 +406,6 @@ Residual debt (owning follow-ups, not this pass):
 - SNI-hint removal → needs step-2 logical-SNI/certificate fixture proof.
 - Lean `standard-http1/2` → unevaluated (blocked by `proxy`→full-H1 vs H2 need).
 - Transitive Base64 `0.22`/`0.21.7` → upstream updates.
-- `release-check` clean re-run + hosted CI/deep-check IDs → filled below after push.
+- Docs-finalization follow-up (this file's TBD fill): implementation SHA
+  `7f4a92ca` CI `35430396972` + `35430396524` recorded here; follow-up commit
+  pushes only this record update (no code change).
