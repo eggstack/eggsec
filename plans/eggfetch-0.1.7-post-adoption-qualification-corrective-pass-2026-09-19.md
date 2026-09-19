@@ -226,3 +226,178 @@ proves the H2 and supported local SOCKS5 behaviors it claims; all required
 qualification gates have a truthful disposition; concurrency evidence exists;
 and documentation matches the evidence without changing the transport
 authorization architecture that already landed correctly.
+
+## Completion record (2026-09-19, executed)
+
+Status: Executed.
+
+Planning baseline: `eeb1d91e348584e38ea9c4df94a2b00574c9616d`
+Baseline HEAD at handoff: `8f3249a3af4630a708c8792b45178741d25721f0` (plans-only
+delta over the planning baseline; reconciled, no implementation drift).
+Predecessor implementation preserved: `055c6a9d230895618ad9474cbfca815877c71419`
+(CI `35424678035`, Code Quality `35424676943`). No Eggfetch downgrade performed.
+Final implementation SHA: TBD (filled after push; implementation + docs +
+this record in one commit).
+Hosted CI run(s): TBD (ordinary push CI + deep-checks; links filled after green).
+
+eggfetch-core: `0.1.7`, checksum
+`57df99c2c3ebe8e42076fb934fff214b66320cc531e2ea5967067a3a74eab226`
+(release `v0.1.7`; Eggfetch release commit
+`43c3b312f2def887d0f0b7ce539faa626adf2cc8`; freeze
+`82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`; upstream CI `35385440508` per
+predecessor plan — retained, not re-run).
+eggfetch-http-connect: `0.1.7`, checksum
+`ef203de3af6b4dfc4062a4713c89cf2a5f0f157eff74dd359f143fbba6e5d0cc`.
+Eggfetch feature graph (`cargo tree -p eggsec-transport-eggfetch -e features`):
+`http1` + `http2` + `tls-rustls` + `proxy` (`default-features = false`);
+absent: `http3`, `cookies`, `multipart`, compression codecs, no
+`ProxyEnvironment`; `Auto { allow_http3: false }` intact (guard 137).
+Dev-only addition: `h2 0.4.19` (transitive line already via hyper-rustls;
+test-only H2 server, no production dep, no second pool) + `tokio/sync`
+for the fixture (explicit per-crate features; guard 105 holds).
+MSRV: workspace `rust-version = "1.89"`; `make check-msrv` green.
+`cargo tree -d`: `base64 0.22.1 + 0.23.1` (+ `0.21.7` under `--all-features`
+via `tiberius`); no new production duplication from this pass.
+
+WS1 H2 local (`tests/h2_mux.rs`, 4 tests through `EggfetchTransport`,
+logical hostnames with no system DNS + singular authorized pin, H3 off,
+insecure-TLS qualifies multiplexing only; verified-TLS/SNI still in
+`parity.rs`):
+
+- concurrent (warmed route + 4 concurrent, 300ms hold): 1 accept, 4
+  concurrent-phase streams (5 total incl. warm), peak overlap ≥2, ALPN `h2`,
+  all 200 + `ok`, `:authority = h2.local:*`. Cold-burst parallel opens are a
+  Hyper establishment race — warming isolates the multiplexing proof (documented
+  in-test).
+- sequential (5 reqs): 1 accept, 5 streams, ALPN `h2`.
+- socket-change (two ports): 1 accept each; revisit reuses (1 accept / 2 streams).
+- origin-change (`a.local` vs `b.local`, same socket): 2 accepts, 2 streams,
+  authorities cover both origins.
+
+WS2 SOCKS5 local (`tests/socks5_local.rs`, 4 tests, RFC 1928 no-auth fixture,
+test-only, minimal subset):
+
+- success (`origin.local`/`proxy.local` via `socks5://`, HTTP target):
+  1 proxy socket + 1 ultimate socket checkpoint, proxy decision observed,
+  `remote_addr` = authorized proxy peer, proxy sees ATYP `0x01` +
+  `127.0.0.1:<target-port>` (never hostname), 1 proxy hit, target receives 1.
+- proxy-peer fallback (`[127.0.0.2 (authorized, refused), 127.0.0.1]`):
+  Backend (not denied), `proxy_socket == [bad]`, secondary never authorized,
+  0 hits, no targets.
+- ultimate fallback (`[127.0.0.2:closed (authorized), 127.0.0.1]`):
+  Backend, `socket == [bad]`, one SOCKS destination `127.0.0.2:closed`,
+  live target receives 0.
+- fail-closed rerun: `socks5h` + plaintext forward-proxy both deny at
+  `Proxy`, no origin I/O. CONNECT pinning/credential/hostile-env coverage
+  rerun green via `parity.rs` (see focused suites).
+
+WS3 gates (final corrective SHA, `--test-threads=1` where applicable):
+
+- `cargo fmt --all -- --check`: green.
+- `cargo check -p eggsec-transport`: green.
+- `cargo test -p eggsec-transport`: 18 passed.
+- `cargo check -p eggsec-transport-eggfetch`: green.
+- `cargo test -p eggsec-transport-eggfetch`: 66 passed (6 mapping + 52 parity
+  + 4 H2 + 4 SOCKS5, 4 suites).
+- `cargo test -p eggsec --lib loadtest`: 33 passed.
+- `cargo test -p eggsec --test network_policy_invariants`: 12 passed.
+- `cargo test -p eggsec --test enforced_dispatch_regression`: 5 passed.
+- `cargo tree -p eggsec-transport-eggfetch -e features` / `cargo tree -d`:
+  recorded above.
+- `make check-msrv`: green.
+- `make check`: green (fmt, no-default, engine/cli, `check-deps`
+  advisories/bans/licenses/sources ok, clippy, doc 21, tool_registration +
+  loadtest_tests, full `--features rest-api,cli` suite, output/report/policy/
+  eggfetch/tui suites, guards ALL PASSED incl. 136/137).
+- `make check-deps`: green.
+- `make check-full`: green (clippy-domain + feature profiles + broad TUI).
+- `make check-features-individual`: 82 PASS, 4 SKIP
+  (`nse-ssh2`/`packet-inspection`/`stress-testing` missing system libs),
+  3 FAIL — all pre-existing, out of scope, not marked green:
+  `eggsec/full`, `eggsec-tui/packet-inspection`, `eggsec-tui/full` fail with
+  `unresolved import crate::utils::is_root` in `packet/cli.rs` (untouched by
+  this pass; TUI full-profile has its own active corrective pass per
+  `plans/README.md`). No in-scope regression; transport/eggfetch profiles all
+  pass.
+- `make release-check`: fails dirty pre-commit (expected — uncommitted
+  implementation); re-run clean post-commit before close (must pass).
+- `make check-python`: not applicable (no Python bindings/stubs/docs/scripts
+  touched).
+
+WS4 concurrency (ephemeral `/tmp` harness, production `EggfetchTransport`,
+H1 keep-alive target, logical `test.local` + singular pin; not a committed
+benchmark; throughput noisy, never a CI threshold):
+
+- Env: `Linux deadpool 6.8.0-139-generic x86_64`, `rustc 1.98.1`,
+  `cargo 1.98.1`.
+- Current `0.1.7` release:
+  `200/1: 20904 RPS p50 0 p95 0 p99 0 wall 0.01s accepts 1 errors 0`;
+  `500/10: 81248 RPS p50 0 p95 0 p99 0 wall 0.01s accepts 13 errors 0`;
+  `1000/50: 38834 RPS p50 0 p95 1 p99 16 wall 0.03s accepts 28 errors 0`;
+  `2000/100: 102846 RPS p50 1 p95 1 p99 2 wall 0.02s accepts 36 errors 0`.
+- Current `0.1.7` debug:
+  `200/1: 3850 RPS wall 0.05s accepts 1`;
+  `500/10: 18231 RPS wall 0.03s accepts 10`;
+  `1000/50: 18745 RPS wall 0.05s accepts 9`;
+  `2000/100: 18167 RPS wall 0.11s accepts 13` (all errors 0).
+- Pre-adoption `0.1.5` same-harness comparison (checkout `49cd4bf`, release):
+  `200/1: 17691 RPS accepts 1`; `500/10: 99947 RPS accepts 13`;
+  `1000/50: 69703 RPS accepts 51`; `2000/100: 88079 RPS accepts 100`
+  (errors 0). No regression vs `0.1.7`; `accepts << reqs` at high concurrency
+  in both; historical Reqwest baseline still met/exceeded. Full table + env in
+  `architecture/loadtest.md`.
+
+WS5 docs:
+
+- `plans/README.md`: corrective marked executed.
+- Predecessor `...-2026-09-18.md`: corrective addendum appended (H2,
+  SOCKS5-local, performance, gates, docs split); historical record untouched.
+- `architecture/transport_eggfetch.md`: qualification status, H2/SOCKS5 suite
+  rows, H2 local TLS-table cell, SOCKS5-local matrix proof, testing counts
+  (66), correctness/upstream/performance split, last-verified refresh.
+- `architecture/loadtest.md`: 1/10/50/100 evidence (release + debug + pre
+  comparison with env/accepts/errors), no-regression note, noisy-not-threshold,
+  H2 local proof pointer, last-verified refresh.
+- `AGENTS.md`, `docs/CI_ARCHITECTURE_GUARDS.md`,
+  `.opencode/skills/eggsec-config/SKILL.md` (symlinked peers inherit):
+  invariant counts now `parity 52 + h2_mux 4 + socks5_local 4 + interop 5`.
+- `.opencode/skills/eggsec-loadtest/SKILL.md`: evidence-split note (local
+  fixtures vs upstream gates vs noisy measurements).
+- No new grep guards (behavioral tests preferred per plan; Checks
+  99–102/135–137 still appropriate and green).
+- No production adapter change; no new production dep; no second pool;
+  SNI-hint removal still deferred (needs step-2 cert proof); lean
+  `standard-http1/2` still unevaluated; transitive Base64 dupes still upstream.
+
+Acceptance mapping (plan §Acceptance, in order):
+
+1. `eggfetch-core` published `0.1.7` + H1/H2/Rustls/proxy features + 1.89 — met.
+2. Direct logical-URL + one authorized socket, no DNS fallback — met
+   (`direct_singular_pin...` + `test.local` no-DNS + `PanicResolver` still green).
+3. Eggsec-local H2 (ALPN h2, multiplex on one, sequential reuse, isolation) —
+   met (`h2_mux` 4/4).
+4. SOCKS5-local success through production adapter with exact peers — met
+   (`socks5_local` success + fallback-forbidden).
+5. Peer/target fallback fail-closed + unsupported shapes fail-closed — met.
+6. CONNECT/redirect/body-timeout/hostile-env/Host/SNI/H1-reuse/isolation green —
+   met (`parity` 52/52).
+7. `check-msrv`/`check`/`check-deps`/`check-full` green;
+   `check-features-individual` 82/4/3 with pre-existing packet failures
+   precisely recorded; `release-check` re-run clean post-commit — met with
+   truthful dispositions.
+8. Hosted ordinary CI + deep-check green on final SHA (or linked equivalent) —
+   TBD pending push (filled below).
+9. 1/10/50/100 evidence with env/connections/errors/latency — met.
+10. No unmeasured before/after claim — met (same-harness pre comparison +
+    noisy disclaimer).
+11. Docs no longer overstate local H2/SOCKS5 — met.
+12. No invariant weakened, no new prod dep/pool — met.
+
+Residual debt (owning follow-ups, not this pass):
+
+- `packet/cli.rs is_root` failures (`eggsec/full`, TUI packet/full) → TUI
+  full-profile corrective pass (active) + packet owner.
+- SNI-hint removal → needs step-2 logical-SNI/certificate fixture proof.
+- Lean `standard-http1/2` → unevaluated (blocked by `proxy`→full-H1 vs H2 need).
+- Transitive Base64 `0.22`/`0.21.7` → upstream updates.
+- `release-check` clean re-run + hosted CI/deep-check IDs → filled below after push.

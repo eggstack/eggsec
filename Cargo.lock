@@ -2300,6 +2300,7 @@ dependencies = [
  "bytes",
  "eggfetch-core",
  "eggsec-transport",
+ "h2",
  "http",
  "ipnetwork 0.21.1",
  "rcgen",

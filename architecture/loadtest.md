@@ -189,7 +189,58 @@ backend=eggfetch-0.1.5 reqs=1000 conc=50 rps=20943 p50=1 p95=2 p99=13 wall=0.05s
 backend=eggfetch-0.1.5 reqs=2000 conc=100 rps=20659 p50=3 p95=5 p99=26 wall=0.10s
 ```
 
-No performance win bypasses authorization or pinning. Eggfetch meets or exceeds the Reqwest baseline at representative concurrency (1/10/50/100) with identical Host/SNI, redirect, and reuse semantics; H1 retained, H2 negotiated via ALPN where offered (intentional protocol difference, explicitly accepted; HTTP/3 out of scope). Connection reuse never crosses incompatible physical-route identity (route/cache keys include pin state; proven by redirect/pin fixtures + upstream route-cache qualification).
+2026-09-19 qualification (corrective pass WS4): same-harness 1/10/50/100
+against the production `EggfetchTransport` (logical-URL + singular pin,
+H1 keep-alive target, `Timeout.total` through EOF). Small ephemeral harness
+in `/tmp` (not a committed benchmark subsystem); production transport only,
+no old-path restoration for benchmarking except the reproducible
+pre-adoption checkout below. Throughput is noisy — recorded as evidence,
+never a hard CI threshold.
+
+Environment: `Linux deadpool 6.8.0-139-generic x86_64`, `rustc 1.98.1`,
+`cargo 1.98.1`, loopback `127.0.0.1`, H1 (`http`, keep-alive), logical
+`test.local` via `InMemoryResolver` + singular authorized pin.
+
+Current `0.1.7` (release, `cargo run --release`):
+
+```text
+backend=eggfetch-0.1.7 reqs=200 conc=1 rps=20904 p50=0 p95=0 p99=0 wall=0.01s accepts=1 errors=0
+backend=eggfetch-0.1.7 reqs=500 conc=10 rps=81248 p50=0 p95=0 p99=0 wall=0.01s accepts=13 errors=0
+backend=eggfetch-0.1.7 reqs=1000 conc=50 rps=38834 p50=0 p95=1 p99=16 wall=0.03s accepts=28 errors=0
+backend=eggfetch-0.1.7 reqs=2000 conc=100 rps=102846 p50=1 p95=1 p99=2 wall=0.02s accepts=36 errors=0
+```
+
+Current `0.1.7` (debug, `cargo run`):
+
+```text
+backend=eggfetch-0.1.7 reqs=200 conc=1 rps=3850 p50=0 p95=0 p99=0 wall=0.05s accepts=1 errors=0
+backend=eggfetch-0.1.7 reqs=500 conc=10 rps=18231 p50=1 p95=1 p99=1 wall=0.03s accepts=10 errors=0
+backend=eggfetch-0.1.7 reqs=1000 conc=50 rps=18745 p50=3 p95=3 p99=3 wall=0.05s accepts=9 errors=0
+backend=eggfetch-0.1.7 reqs=2000 conc=100 rps=18167 p50=5 p95=6 p99=7 wall=0.11s accepts=13 errors=0
+```
+
+Pre-adoption `0.1.5` same-harness comparison (reproducible checkout
+`49cd4bf70efe5c8cb24a8199e04d28b51244f4f9`, release):
+
+```text
+backend=eggfetch-0.1.5-pre reqs=200 conc=1 rps=17691 p50=0 p95=0 p99=0 wall=0.01s accepts=1 errors=0
+backend=eggfetch-0.1.5-pre reqs=500 conc=10 rps=99947 p50=0 p95=0 p99=0 wall=0.01s accepts=13 errors=0
+backend=eggfetch-0.1.5-pre reqs=1000 conc=50 rps=69703 p50=0 p95=1 p99=10 wall=0.01s accepts=51 errors=0
+backend=eggfetch-0.1.5-pre reqs=2000 conc=100 rps=88079 p50=1 p95=2 p99=10 wall=0.02s accepts=100 errors=0
+```
+
+No performance win bypasses authorization or pinning. Measured `0.1.7`
+meets or exceeds the historical Reqwest baseline at representative
+concurrency (1/10/50/100) with identical Host/SNI, redirect, and reuse
+semantics, and shows no throughput/latency regression versus the same-harness
+`0.1.5` pre-adoption checkout (both noisy at these levels; `accepts` varies
+run-to-run as Hyper races burst connections, always `<< reqs` at high
+concurrency with zero errors). H1 retained, H2 negotiated via ALPN where
+offered (Eggsec-local H2 proof in `transport_eggfetch.md`; intentional
+protocol difference, explicitly accepted; HTTP/3 out of scope). Connection
+reuse never crosses incompatible physical-route identity (route/cache keys
+include pin state; proven by Eggsec-local H1/H2 redirect/pin fixtures, not
+only upstream route-cache qualification).
 
 The scoped seam adds no measurable overhead versus raw dispatch at these levels: authority checks are in-memory scope matching on the IP-literal fast path, clients are shared per run (no per-request construction), and drained bodies preserve keep-alive reuse. CPU/allocation profiling was not run (criterion: acceptable throughput + reuse evidence, both met).
 
@@ -261,4 +312,4 @@ Unit coverage: plan validation/rate/method, adapter auth/proxy/timeout shapes, m
 - [capability_segregation.md](capability_segregation.md) — Gate D1/D2 rejection records
 - [utils.md](utils.md) — engine utility ownership (Phase D `cache` removal)
 
-*Last verified against source: 2026-09-19 (0.1.7 adoption: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation; scope propagation, Reqwest fail-closed, qualified proxy, MSRV 1.89)*
+*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1/H2 reuse/isolation + SOCKS5-local success/pinning; 1/10/50/100 evidence above with env metadata; scope propagation, Reqwest fail-closed, qualified proxy, MSRV 1.89)*

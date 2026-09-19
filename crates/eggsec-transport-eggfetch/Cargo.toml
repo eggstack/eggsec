@@ -35,8 +35,13 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 # Phase E WS3: local-fixture parity suite (TcpListener/timeout/spawn + test).
-tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util"] }
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "sync"] }
 ipnetwork = { workspace = true }
 rcgen = { version = "0.14" }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# Corrective 2026-09-19 WS1: deterministic loopback H2-over-TLS fixture only.
+# Production adapter still owns no H2 server code; this is test-only and shares
+# the transitive h2 0.4 line already pulled by hyper-rustls/hyper (no new
+# production dependency, no second pool).
+h2 = { version = "0.4" }

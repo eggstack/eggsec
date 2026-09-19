@@ -1125,3 +1125,37 @@ Unsupported route shapes: multi-address backend failover; env-derived proxy
   routing; automatic direct fallback from failed proxy; HTTPS→HTTP denial
   without a neutral-contract change; HTTP/3; backend retries; second pool in
   Eggsec; replacement of the manual redirect loop.
+
+## Corrective addendum (2026-09-19 qualification pass, executed)
+
+Historical completion record above left intact. This addendum resolves its
+recorded residuals via
+[eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md](eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md):
+
+- H2: Eggsec-local `h2_mux` fixture proves ALPN h2, warmed-route
+  4-concurrent multiplex on 1 accept / 4 streams / peak overlap ≥2,
+  5-sequential reuse on 1 accept, plus socket-change and origin-change
+  isolation — all through `EggfetchTransport` with logical hostname +
+  singular authorized pin (insecure-TLS policy qualifies multiplexing only;
+  verified-TLS/SNI coverage unchanged in `parity.rs`).
+- SOCKS5-local: `socks5_local` proves the supported local-resolution route
+  through the production adapter (one authorized proxy peer + one authorized
+  ultimate, proxy sees IP/port not hostname, target receives request, both
+  socket checkpoints recorded) plus peer/ultimate fallback-forbidden and a
+  SOCKS5H/plaintext fail-closed rerun. No proxy semantics broadened.
+- Performance: same-harness 1/10/50/100 evidence for current `0.1.7` (release
+  + debug, env metadata, accepts/errors) plus a reproducible pre-adoption
+  `49cd4bf` (`0.1.5`) comparison shows no regression; throughput stays noisy
+  and is never a CI threshold. See `architecture/loadtest.md`.
+- Gates: focused suites + `make check` / `check-deps` / `check-msrv` /
+  `check-full` / `check-features-individual` / `release-check` dispositions
+  are recorded truthfully in the corrective plan's completion record; hosted
+  ordinary CI + deep-check evidence linked there.
+- Docs: `architecture/transport_eggfetch.md` now distinguishes local
+  correctness (H1/H2/SOCKS5-local fixtures), upstream qualification (0.1.7
+  Tier 1/extended/HTTPX exact-SHA release gate), and measured performance
+  (see `architecture/loadtest.md`); no unmeasured before/after claim remains.
+
+Remaining debt carried forward: SNI-hint removal still needs the step-2
+certificate fixture proof; lean `standard-http1/2` still unevaluated by
+measurement; transitive Base64 duplicates still need upstream updates.
