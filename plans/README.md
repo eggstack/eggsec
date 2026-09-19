@@ -14,6 +14,24 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggfetch 0.1.7 post-adoption qualification corrective pass (ready for handoff)
+
+Corrective pass:
+[eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md](eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md)
+
+This bounded follow-up closes the remaining evidence gaps after the successful
+0.1.7 migration: Eggsec-local H2 ALPN/multiplex/reuse proof, supported
+local-resolution SOCKS5 success and singular two-leg pinning proof, completion
+of the deep feature/release gates, and bounded concurrency 1/10/50/100
+measurement. It also reconciles documentation that currently relies on
+upstream H2 qualification.
+
+The pass does not reopen the transport architecture. Logical-URL + singular
+authorized resolved routing, manual per-hop redirect authorization, explicit
+proxy intent, aggregate body-through-EOF deadlines, no environment proxies,
+fail-closed unsupported proxy shapes, H3 off, and backend retries off remain
+mandatory invariants.
+
 ## Eggfetch 0.1.7 adoption and direct-route simplification (executed 2026-09-19)
 
 Plan:
