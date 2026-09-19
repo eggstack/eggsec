@@ -946,8 +946,8 @@ no environment-proxy, H3, retry, or multi-address failover expansion.
 Status: Executed.
 
 Eggsec planning baseline: `49cd4bf70efe5c8cb24a8199e04d28b51244f4f9`
-Final implementation SHA: (filled at commit; hosted CI run IDs below)
-Hosted CI run(s): (filled after push; per-push `ci.yml` rust + dependency-policy + python)
+Final implementation SHA: `055c6a9d230895618ad9474cbfca815877c71419`
+Hosted CI run(s): `35424678035` (CI: success — Rust + dependency-policy + python green; dependency-review skipped on push) + `35424676943` (Code Quality: success)
 
 eggfetch-core:
   version: 0.1.7
