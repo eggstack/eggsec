@@ -281,11 +281,27 @@ def inspect_archive(archive: Path, expected_name: str | None = None, expected_ve
                         if dep_package in package_names and dep_package != expected_name and dep_val.get("version") != expected_version:
                             errors.append(f"packaged internal dependency '{dep_name}' has version '{dep_val.get('version')}', expected '{expected_version}'")
                 features = manifest.get("features", {})
-                valid_feature_names = set(features) | {key for _, table in _dependency_tables(manifest) for key, value in table.items() if isinstance(value, dict) and value.get("optional")}
+                dependency_names = {
+                    key
+                    for _, table in _dependency_tables(manifest)
+                    for key in table
+                }
+                optional_dependency_names = {
+                    key
+                    for _, table in _dependency_tables(manifest)
+                    for key, value in table.items()
+                    if isinstance(value, dict) and value.get("optional")
+                }
+                valid_feature_names = set(features) | optional_dependency_names
                 for feature_name, refs in features.items():
                     for ref in refs if isinstance(refs, list) else []:
                         base = ref.removeprefix("dep:").split("/", 1)[0].removesuffix("?")
-                        if base and base not in valid_feature_names:
+                        # A slash-qualified dependency feature may forward a
+                        # feature from a required dependency as well as from
+                        # an optional dependency. Bare dependency names remain
+                        # valid only for optional dependencies.
+                        dependency_feature = "/" in ref and base in dependency_names
+                        if base and base not in valid_feature_names and not dependency_feature:
                             errors.append(f"feature '{feature_name}' references unknown feature or optional dependency '{base}'")
                 for forbidden in ("workspace", "patch", "replace"):
                     if forbidden in manifest:

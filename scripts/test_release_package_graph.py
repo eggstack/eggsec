@@ -422,6 +422,15 @@ class TestArchiveInspection(unittest.TestCase):
         )
         self.assertEqual(_rpg.inspect_archive(archive, "fixture", "0.1.0"), [])
 
+    def test_required_dependency_feature_forwarding_is_accepted(self):
+        archive = self._archive(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+            'repository = "https://example.invalid/eggsec"\nlicense = "MIT"\nrust-version = "1.80"\n\n'
+            '[dependencies]\neggsec-other = { version = "0.1.0" }\n\n'
+            '[features]\nforward = ["eggsec-other/some-feature"]\n'
+        )
+        self.assertEqual(_rpg.inspect_archive(archive, "fixture", "0.1.0"), [])
+
     def test_retained_path_and_version_mismatch_are_rejected(self):
         archive = self._archive(
             '[package]\nname = "fixture"\nversion = "0.1.0"\n'
