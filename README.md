@@ -92,7 +92,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-ui-model` | Frontend-neutral view DTOs |
 | `eggsec-python` | Python bindings (PyO3/maturin) |
 | `eggsec-transport` | Scope-aware outbound HTTP contract (neutral DTOs, mandatory authority incl. proxy-peer checkpoints, recording fake) |
-| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core 0.1.7` (logical-URL + singular resolved-address direct + qualified proxy routes, H1/H2 route reuse; production load-test backend) |
+| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core 0.1.7` (logical-URL + singular resolved-address direct + qualified proxy routes, H1/H2 route reuse; production load-test backend; local qualification covers 5 H2 and 4 SOCKS5 tests) |
 | `eggsec-policy` | Deterministic authorization/enforcement semantics (no I/O, runtime, or transport); engine bridges DNS/features/authority |
 
 ### Build and Run

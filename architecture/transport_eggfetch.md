@@ -10,7 +10,7 @@ Adoption (2026-09-19): published `eggfetch-core 0.1.7` (logical-URL +
 singular `resolved_addresses` direct, H1/H2 route reuse, `Timeout.total`
 through body EOF; direct IP-literal shim removed).
 Qualification (2026-09-19 corrective): Eggsec-local H2 ALPN/multiplex/reuse
-proof (`tests/h2_mux.rs`, 4 tests) + supported local-resolution SOCKS5
+proof (`tests/h2_mux.rs`, 5 tests) + supported local-resolution SOCKS5
 success/pinning proof (`tests/socks5_local.rs`, 4 tests); deep gates +
 concurrency 1/10/50/100 evidence recorded (see Completion addendum).
 
@@ -38,7 +38,7 @@ implements [`HttpTransport`](transport.md) over the **published**
 |------|------|-------|
 | Adapter crate | `crates/eggsec-transport-eggfetch/` | 18th workspace crate; lib only, no features |
 | Parity/adversarial suite | `crates/eggsec-transport-eggfetch/tests/parity.rs` + `tests/common/` | Local loopback fixtures only (plain + TLS + CONNECT proxy + slow-body/trickle/keep-alive); 52 tests |
-| H2 qualification suite | `crates/eggsec-transport-eggfetch/tests/h2_mux.rs` | Loopback H2-over-TLS via `EggfetchTransport` (ALPN h2, concurrent multiplex + sequential reuse + isolation); 4 tests |
+| H2 qualification suite | `crates/eggsec-transport-eggfetch/tests/h2_mux.rs` | Loopback H2-over-TLS via `EggfetchTransport` (ALPN h2, concurrent multiplex + sequential reuse + logical-origin and selected-address isolation); 5 tests |
 | SOCKS5-local suite | `crates/eggsec-transport-eggfetch/tests/socks5_local.rs` | Loopback SOCKS5 local-resolution via production proxy path (success + peer/ultimate fallback-forbidden + fail-closed rerun); 4 tests |
 | Engine interop tests | `crates/eggsec/tests/transport_eggfetch_parity.rs` | 5 tests through `ScopeAuthority` (dev-dep only) |
 | Guards | Checks 102 + 135 + 136 + 137 in `scripts/check-architecture-guards.sh` | Feature allowlist, no direct concrete clients, production load-test backend only, singular per-leg route, direct resolved-address pin, no env-proxy/H3 |
@@ -169,7 +169,7 @@ both bindings recorded/tested separately).
 | Hostname/SNI mismatch | rejected | rejected (SNI = logical host) | wrong-SAN cert rejected |
 | Custom CA / client identity / version bounds | unused (Phase A) | not representable in `TlsPolicy` | none needed |
 | Misconfigured TLS | build error, no fallback | stock configs only; backend surfaces errors at dispatch, never falls back | unit: roots build |
-| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off; 0.1.7 bounded route-keyed reuse) | H1 keep-alive reuse (5 reqs, 1 accept) + origin/socket isolation; H2 Eggsec-local (`h2_mux`: warmed-route 4-concurrent on 1 accept/4 streams/max≥2 + 5-sequential on 1 accept + socket/origin isolation, ALPN h2, `:authority` = logical host) |
+| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off; 0.1.7 bounded route-keyed reuse) | H1 keep-alive reuse (5 reqs, 1 accept) + origin/socket isolation; H2 Eggsec-local (`h2_mux`: warmed-route 4-concurrent on 1 accept/4 streams/max≥2 + 5-sequential on 1 accept + selected-address-only and logical-origin isolation, ALPN h2, `:authority` = logical host) |
 
 Verified-success-over-TLS has no local e2e fixture (no custom-CA row in
 `TlsPolicy` to trust a fixture CA with); the insecure-success test proves
@@ -209,17 +209,18 @@ consumer needs it.
   + redirect-remainder + post-timeout reuse prove `Timeout.total` through
   EOF, H1 keep-alive reuse (5 reqs/1 accept) + target/origin isolation,
   hostile proxy env ignored, https-downgrade stays Allow, IPv6 literal,
-  proxy credential isolation) + 4 H2 local tests (`h2_mux`: concurrent
-  multiplex on warmed route, sequential reuse, socket-change + origin-change
-  isolation) + 4 SOCKS5-local tests (`socks5_local`: IP-target success with
+  proxy credential isolation) + 5 H2 local tests (`h2_mux`: concurrent
+  multiplex on warmed route, sequential reuse, selected-address-only +
+  logical-origin isolation) + 4 SOCKS5-local tests (`socks5_local`: IP-target success with
   both pins, peer/ultimate fallback-forbidden, SOCKS5H/plaintext rerun).
-  Total: 66 passed (6 + 52 + 4 + 4) over 4 suites.
+  Total: 67 current tests (6 + 52 + 5 + 4) over 4 suites.
 - `cargo test -p eggsec --features rest-api --test transport_eggfetch_parity`
   — 5 engine interop tests through `ScopeAuthority`.
 - Phase A `network_policy_invariants.rs` (12) and Phase B
   `transport_contract.rs` (13) remain green.
 - Correctness vs upstream vs performance: Eggsec-local fixtures prove H1
-  reuse, H2 multiplex/reuse/isolation, and SOCKS5-local success/pinning
+  reuse, H2 multiplex/reuse/selected-address and origin isolation, and
+  SOCKS5-local success/pinning
   through `EggfetchTransport`. Upstream 0.1.7 qualification (Tier 1 +
   extended + HTTPX/HTTPX2 exact-SHA per the adoption plan) remains the
   release gate for the published crate, not a substitute for the local
@@ -282,4 +283,4 @@ assumption).
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 4 H2 + 4 SOCKS5 + 5 interop green; 1/10/50/100 evidence in [loadtest.md](loadtest.md); retained report in [network_dependency_closure.md](network_dependency_closure.md))*
+*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/selected-address/origin isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 5 H2 + 4 SOCKS5 + 5 interop green; repeated current-only 1/10/50/100 evidence in [loadtest.md](loadtest.md), version-to-version performance inconclusive; retained report in [network_dependency_closure.md](network_dependency_closure.md))*

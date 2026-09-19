@@ -1,6 +1,6 @@
 # Eggfetch 0.1.7 post-adoption qualification corrective pass
 
-Status: Ready for handoff
+Status: Executed
 Date: 2026-09-19
 Planning baseline: eeb1d91e348584e38ea9c4df94a2b00574c9616d
 Predecessor implementation: 055c6a9d230895618ad9474cbfca815877c71419
@@ -263,7 +263,7 @@ MSRV: workspace `rust-version = "1.89"`; `make check-msrv` green.
 `cargo tree -d`: `base64 0.22.1 + 0.23.1` (+ `0.21.7` under `--all-features`
 via `tiberius`); no new production duplication from this pass.
 
-WS1 H2 local (`tests/h2_mux.rs`, 4 tests through `EggfetchTransport`,
+WS1 H2 local (`tests/h2_mux.rs`, 5 tests through `EggfetchTransport`,
 logical hostnames with no system DNS + singular authorized pin, H3 off,
 insecure-TLS qualifies multiplexing only; verified-TLS/SNI still in
 `parity.rs`):
@@ -301,8 +301,9 @@ WS3 gates (final corrective SHA, `--test-threads=1` where applicable):
 - `cargo check -p eggsec-transport`: green.
 - `cargo test -p eggsec-transport`: 18 passed.
 - `cargo check -p eggsec-transport-eggfetch`: green.
-- `cargo test -p eggsec-transport-eggfetch`: 66 passed (6 mapping + 52 parity
-  + 4 H2 + 4 SOCKS5, 4 suites).
+- Historical baseline: `cargo test -p eggsec-transport-eggfetch`: 66 passed
+  (6 mapping + 52 parity + 4 H2 + 4 SOCKS5, 4 suites). The final corrective
+  adds one selected-address-only H2 test, for 67 current tests.
 - `cargo test -p eggsec --lib loadtest`: 33 passed.
 - `cargo test -p eggsec --test network_policy_invariants`: 12 passed.
 - `cargo test -p eggsec --test enforced_dispatch_regression`: 5 passed.
@@ -365,7 +366,7 @@ WS5 docs:
   H2 local proof pointer, last-verified refresh.
 - `AGENTS.md`, `docs/CI_ARCHITECTURE_GUARDS.md`,
   `.opencode/skills/eggsec-config/SKILL.md` (symlinked peers inherit):
-  invariant counts now `parity 52 + h2_mux 4 + socks5_local 4 + interop 5`.
+  invariant counts now `parity 52 + h2_mux 5 + socks5_local 4 + interop 5`.
 - `.opencode/skills/eggsec-loadtest/SKILL.md`: evidence-split note (local
   fixtures vs upstream gates vs noisy measurements).
 - No new grep guards (behavioral tests preferred per plan; Checks
@@ -379,8 +380,8 @@ Acceptance mapping (plan §Acceptance, in order):
 1. `eggfetch-core` published `0.1.7` + H1/H2/Rustls/proxy features + 1.89 — met.
 2. Direct logical-URL + one authorized socket, no DNS fallback — met
    (`direct_singular_pin...` + `test.local` no-DNS + `PanicResolver` still green).
-3. Eggsec-local H2 (ALPN h2, multiplex on one, sequential reuse, isolation) —
-   met (`h2_mux` 4/4).
+3. Eggsec-local H2 (ALPN h2, multiplex on one, sequential reuse, selected
+   address and logical-origin isolation) — met (`h2_mux` 5/5).
 4. SOCKS5-local success through production adapter with exact peers — met
    (`socks5_local` success + fallback-forbidden).
 5. Peer/target fallback fail-closed + unsupported shapes fail-closed — met.

@@ -1,23 +1,27 @@
-//! Corrective 2026-09-19 WS1 — Eggsec-local H2-over-TLS qualification.
+//! Corrective 2026-09-19 WS1 (strengthened by the final-qualification
+//! deep-check pass) — Eggsec-local H2-over-TLS qualification.
 //!
 //! Exercises [`EggfetchTransport`] (never `eggfetch-core` directly) against a
 //! deterministic loopback H2-over-TLS fixture. Proves ALPN `h2`, concurrent
-//! multiplexing on one physical connection, sequential reuse, and
-//! route-key isolation — all through the production resolved-route path
+//! multiplexing on one physical connection, sequential reuse, logical-origin
+//! isolation, and selected-resolved-address isolation with an unchanged
+//! logical origin — all through the production resolved-route path
 //! (logical hostname + singular authorized loopback `SocketAddr`).
 //!
 //! The fixture uses an explicit insecure TLS policy: it qualifies
 //! ALPN/multiplexing only. Verified-TLS/SNI semantics remain covered by the
 //! existing `parity.rs` certificate fixtures, which stay green.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::time::Duration;
 
-use eggsec_transport::{HttpTransport, InMemoryResolver, TlsPolicy, TransportResolver};
+use eggsec_transport::{
+    HttpTransport, InMemoryResolver, ResolvedCandidates, TlsPolicy, TransportResolver,
+};
 use eggsec_transport_eggfetch::EggfetchTransport;
 use http::Method;
 
@@ -49,10 +53,33 @@ impl Drop for H2TlsFixture {
     }
 }
 
+/// Guard that decrements the live-stream counter exactly once when the
+/// response task exits, regardless of response-send success/failure.
+/// Single-exit accounting: a future early return inside the task cannot
+/// reintroduce a double-decrement.
+struct LiveGuard {
+    counter: Arc<AtomicUsize>,
+}
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        self.counter.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 impl H2TlsFixture {
     async fn start(delay: Duration) -> Self {
+        Self::start_on(
+            SocketAddr::new("127.0.0.1".parse().expect("loopback ip"), 0),
+            delay,
+        )
+        .await
+    }
+
+    async fn start_on(bind: SocketAddr, delay: Duration) -> Self {
         let sans = vec![
             "127.0.0.1".to_string(),
+            "127.0.0.2".to_string(),
             "h2.local".to_string(),
             "a.local".to_string(),
             "b.local".to_string(),
@@ -73,7 +100,7 @@ impl H2TlsFixture {
         server_config.alpn_protocols = vec![b"h2".to_vec()];
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        let listener = tokio::net::TcpListener::bind(bind)
             .await
             .expect("loopback binds");
         let addr = listener.local_addr().expect("local addr");
@@ -129,6 +156,9 @@ impl H2TlsFixture {
                             authorities.lock().expect("lock").push(authority);
                             let current = current.clone();
                             tokio::spawn(async move {
+                                let _live = LiveGuard {
+                                    counter: current.clone(),
+                                };
                                 if !delay.is_zero() {
                                     tokio::time::sleep(delay).await;
                                 }
@@ -136,16 +166,9 @@ impl H2TlsFixture {
                                     .status(200)
                                     .body(())
                                     .expect("response");
-                                match respond.send_response(response, false) {
-                                    Ok(mut send) => {
-                                        let _ =
-                                            send.send_data(bytes::Bytes::from_static(b"ok"), true);
-                                    }
-                                    Err(_) => {
-                                        current.fetch_sub(1, Ordering::SeqCst);
-                                    }
+                                if let Ok(mut send) = respond.send_response(response, false) {
+                                    let _ = send.send_data(bytes::Bytes::from_static(b"ok"), true);
                                 }
-                                current.fetch_sub(1, Ordering::SeqCst);
                             });
                         }
                     });
@@ -176,6 +199,21 @@ impl H2TlsFixture {
         self.max_concurrent.load(Ordering::SeqCst)
     }
 
+    fn live(&self) -> usize {
+        self.current.load(Ordering::SeqCst)
+    }
+
+    /// Wait until no response task holds a live stream (bounded poll so a
+    /// future accounting regression fails loudly instead of hanging the
+    /// suite). Response tasks decrement after the client-visible body send,
+    /// so callers must quiesce before asserting a zero count.
+    async fn wait_quiescent(&self, timeout: Duration) {
+        let start = std::time::Instant::now();
+        while self.live() != 0 && start.elapsed() < timeout {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     fn alpns(&self) -> Vec<Option<Vec<u8>>> {
         self.alpns.lock().expect("lock").clone()
     }
@@ -191,6 +229,42 @@ fn h2_resolver(hosts: &[&str]) -> Arc<dyn TransportResolver> {
         resolver = resolver.with(*host, vec!["127.0.0.1"]);
     }
     Arc::new(resolver)
+}
+
+/// Resolver with a scripted per-call answer sequence (selected-address
+/// rotation fixtures). Calls beyond the script reuse the final answer so a
+/// revisit step can re-select an earlier snapshot. Test-local: facts only,
+/// policy stays with the per-call authority.
+struct ScriptedResolver {
+    script: Vec<Vec<IpAddr>>,
+    calls: AtomicUsize,
+}
+
+impl ScriptedResolver {
+    fn new(script: Vec<Vec<&str>>) -> Self {
+        let parse = |list: Vec<&str>| {
+            list.into_iter()
+                .map(|s| s.parse().expect("test IP parses"))
+                .collect()
+        };
+        Self {
+            script: script.into_iter().map(parse).collect(),
+            calls: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl TransportResolver for ScriptedResolver {
+    fn resolve(&self, host: &str) -> ResolvedCandidates {
+        let n = self.calls.fetch_add(1, Ordering::SeqCst);
+        let addrs = self
+            .script
+            .get(n)
+            .or_else(|| self.script.last())
+            .cloned()
+            .unwrap_or_default();
+        ResolvedCandidates::new(host, addrs)
+    }
 }
 
 fn h2_get(url: &str) -> eggsec_transport::ScopedHttpRequest {
@@ -275,6 +349,8 @@ async fn h2_concurrent_same_route_multiplexes_on_one_connection() {
             "authority must name logical host, got {authority}"
         );
     }
+    server.wait_quiescent(Duration::from_secs(5)).await;
+    assert_eq!(server.live(), 0, "no live streams after quiescence");
 }
 
 #[tokio::test]
@@ -301,12 +377,18 @@ async fn h2_sequential_same_route_reuses_one_connection() {
     let alpns = server.alpns();
     assert_eq!(alpns.len(), 1);
     assert_eq!(alpns[0].as_deref(), Some(b"h2".as_slice()));
+    server.wait_quiescent(Duration::from_secs(5)).await;
+    assert_eq!(server.live(), 0, "no live streams after quiescence");
 }
 
 #[tokio::test]
 async fn h2_selected_socket_change_does_not_reuse_old_connection() {
-    // Two H2 servers (different ports => different selected sockets): each
-    // must accept its own connection; revisiting the first must reuse it.
+    // Two H2 servers (different ports => different selected sockets AND
+    // different logical origins): each must accept its own connection;
+    // revisiting the first must reuse it. This proves route differentiation
+    // across logical ports, not selected-address isolation on its own — see
+    // h2_selected_address_change_with_same_origin_* for the address-only
+    // proof with an unchanged logical origin.
     let first = H2TlsFixture::start(Duration::ZERO).await;
     let second = H2TlsFixture::start(Duration::ZERO).await;
     assert_ne!(first.addr.port(), second.addr.port());
@@ -344,6 +426,98 @@ async fn h2_selected_socket_change_does_not_reuse_old_connection() {
     );
     assert_eq!(first.streams(), 2);
     assert_eq!(second.accepts(), 1);
+    first.wait_quiescent(Duration::from_secs(5)).await;
+    second.wait_quiescent(Duration::from_secs(5)).await;
+    assert_eq!(first.live(), 0, "no live streams after quiescence");
+    assert_eq!(second.live(), 0, "no live streams after quiescence");
+}
+
+#[tokio::test]
+async fn h2_selected_address_change_with_same_origin_does_not_reuse_old_connection() {
+    // Selected-address-only isolation: the logical origin (scheme, hostname,
+    // port) is identical for every request while the authorized resolved
+    // address rotates across authorization cycles. The route key must
+    // include the selected physical address, not just the logical origin.
+    //
+    // Two H2-over-TLS listeners share one TCP port on different loopback
+    // addresses (`127.0.0.1:P` and `127.0.0.2:P`); one logical URL such as
+    // `https://h2.local:P/` addresses both. The scripted resolver returns
+    // the first address, then the second, then the first again.
+    let first = H2TlsFixture::start(Duration::ZERO).await;
+    let port = first.addr.port();
+    let second = H2TlsFixture::start_on(
+        SocketAddr::new("127.0.0.2".parse().expect("loopback ip"), port),
+        Duration::ZERO,
+    )
+    .await;
+    assert_eq!(second.addr.port(), port, "same TCP port on 127.0.0.2");
+    assert_ne!(first.addr.ip(), second.addr.ip());
+    let resolver: Arc<dyn TransportResolver> = Arc::new(ScriptedResolver::new(vec![
+        vec!["127.0.0.1"],
+        vec!["127.0.0.2"],
+        vec!["127.0.0.1"],
+    ]));
+    let transport = EggfetchTransport::new(resolver);
+    let auth = AllowAll;
+    let url = format!("https://h2.local:{port}/");
+    transport
+        .execute(&auth, h2_get(&url))
+        .await
+        .expect("first selected address");
+    assert_eq!(first.accepts(), 1, "first snapshot dials its listener");
+    assert_eq!(
+        second.accepts(),
+        0,
+        "unselected listener must see no connection"
+    );
+    assert_eq!(first.streams(), 1);
+    transport
+        .execute(&auth, h2_get(&url))
+        .await
+        .expect("rotated selected address");
+    assert_eq!(
+        first.accepts(),
+        1,
+        "rotated selected address must not reuse the old connection"
+    );
+    assert_eq!(second.accepts(), 1, "rotated snapshot dials its listener");
+    assert_eq!(second.streams(), 1);
+    transport
+        .execute(&auth, h2_get(&url))
+        .await
+        .expect("first snapshot again");
+    assert_eq!(
+        first.accepts(),
+        1,
+        "revisiting a cached selected-address snapshot must reuse, not redial"
+    );
+    assert_eq!(first.streams(), 2);
+    assert_eq!(second.accepts(), 1);
+    // Logical :authority tracks the logical hostname on every hop, never
+    // the pinned loopback literal.
+    for authority in first
+        .authorities()
+        .iter()
+        .chain(second.authorities().iter())
+    {
+        assert!(
+            authority.starts_with("h2.local:"),
+            "authority must name logical host, got {authority}"
+        );
+    }
+    // ALPN h2 was negotiated on both physical connections.
+    for (label, alpns) in [("first", first.alpns()), ("second", second.alpns())] {
+        assert_eq!(alpns.len(), 1, "{label} listener: one TLS connection");
+        assert_eq!(
+            alpns[0].as_deref(),
+            Some(b"h2".as_slice()),
+            "{label} listener: ALPN must negotiate h2"
+        );
+    }
+    first.wait_quiescent(Duration::from_secs(5)).await;
+    second.wait_quiescent(Duration::from_secs(5)).await;
+    assert_eq!(first.live(), 0, "no live streams after quiescence");
+    assert_eq!(second.live(), 0, "no live streams after quiescence");
 }
 
 #[tokio::test]
@@ -372,4 +546,6 @@ async fn h2_logical_origin_change_does_not_reuse_connection() {
     assert_eq!(authorities.len(), 2);
     assert!(authorities.iter().any(|a| a.starts_with("a.local:")));
     assert!(authorities.iter().any(|a| a.starts_with("b.local:")));
+    server.wait_quiescent(Duration::from_secs(5)).await;
+    assert_eq!(server.live(), 0, "no live streams after quiescence");
 }

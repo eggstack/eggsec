@@ -14,15 +14,15 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Eggfetch 0.1.7 final qualification/deep-check corrective pass (ready for handoff)
+## Eggfetch 0.1.7 final qualification/deep-check corrective pass (ready for hosted verification)
 
 Corrective pass:
 [eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md](eggfetch-0.1.7-final-qualification-deep-check-corrective-pass-2026-09-19.md)
 
 This final bounded closure pass addresses the residual issues found after the
 0.1.7 post-adoption qualification: the three real Rust compile failures in the
-exhaustive feature sweep (including stale packet `is_root` ownership), the
-still-active TUI full-profile corrective, lack of an actual hosted Deep Checks
+exhaustive feature sweep (including stale packet `is_root` ownership), the stale
+TUI full-profile record, lack of an actual hosted Deep Checks
 run for the qualified implementation, a confounded H2 selected-socket isolation
 fixture, H2 test-counter cleanup, and overly strong conclusions from very short
 single-run loopback performance samples.
@@ -39,7 +39,7 @@ Corrective pass:
 [eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md](eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md)
 
 This bounded follow-up closed the remaining evidence gaps after the successful
-0.1.7 migration: Eggsec-local H2 ALPN/multiplex/reuse proof (`h2_mux`, 4
+0.1.7 migration: Eggsec-local H2 ALPN/multiplex/reuse proof (`h2_mux`, 5
 tests), supported local-resolution SOCKS5 success and singular two-leg
 pinning proof (`socks5_local`, 4 tests), completion of the deep
 feature/release gates, and bounded concurrency 1/10/50/100 measurement with
@@ -157,19 +157,19 @@ Retained closure report:
 mapping); measurement addendum is §10 of
 [`../architecture/network_dependency_baseline.md`](../architecture/network_dependency_baseline.md).
 
-## TUI full-profile corrective closure (active)
+## TUI full-profile corrective closure (executed 2026-09-11)
 
 Corrective pass:
 [`frontend-runtime-tui-full-profile-corrective-pass.md`](frontend-runtime-tui-full-profile-corrective-pass.md)
 
-This bounded pass closes the remaining frontend/runtime verification gap after
+This bounded pass closed the remaining frontend/runtime verification gap after
 Phases 0-3: `eggsec-tui --features full` is advertised as the maximum-capability
 TUI aggregate but currently fails to compile because several feature-gated task
 builders lag the runtime DTO contract. The same pass adds mechanical TUI feature
 coverage to the individual-feature sweep and a dependency-light broad TUI
 profile to routine verification so the defect cannot silently recur.
 
-It does not reopen canonical request, approval-binding, dispatch ownership,
+It did not reopen canonical request, approval-binding, dispatch ownership,
 TUI surface-model, or runtime-contract architecture unless implementation
 uncovers a concrete regression in those completed invariants.
 
@@ -260,7 +260,7 @@ This pass corrected dispatch and tool-API pipeline construction to use
 ensuring `ScanProfile` is the single source of truth for stage selection, risk
 budget, and profile-specific validation. The historical roadmap is closed; the
 completed frontend/runtime convergence roadmap above addresses the later
-maintenance, wiring, and runtime-contract work, while the active TUI full-profile
-corrective pass closes its remaining feature-verification gap.
+maintenance, wiring, and runtime-contract work, including the executed TUI
+full-profile corrective closure.
 
 Package publication and release cadence remain manual maintainer actions.

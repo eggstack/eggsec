@@ -1,12 +1,12 @@
 # Eggfetch 0.1.7 final qualification and deep-check corrective pass
 
-Status: Ready for handoff
+Status: Ready for hosted verification
 Date: 2026-09-19
 Planning baseline: 612b543b23ba83c43382276505f6c4c6cdefaf2c
 Predecessor implementation: 7f4a92ca4660c4a68e69fa5a8c5d494cda972676
 Predecessor CI-record commit: 612b543b23ba83c43382276505f6c4c6cdefaf2c
 Predecessor corrective plan: plans/eggfetch-0.1.7-post-adoption-qualification-corrective-pass-2026-09-19.md
-Related active TUI corrective: plans/frontend-runtime-tui-full-profile-corrective-pass.md
+Related executed TUI corrective: plans/frontend-runtime-tui-full-profile-corrective-pass.md
 
 ## Purpose
 

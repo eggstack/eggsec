@@ -91,7 +91,7 @@ pub async fn handle_packet_capture(
 }
 
 pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(), anyhow::Error> {
-    use crate::utils::is_root;
+    use crate::platform::is_root;
     use std::net::UdpSocket;
 
     let target: SocketAddr = args.target.parse()?;
@@ -412,7 +412,7 @@ pub async fn handle_packet_traceroute(
     args: PacketTracerouteArgs,
     json: bool,
 ) -> Result<(), anyhow::Error> {
-    use crate::utils::is_root;
+    use crate::platform::is_root;
 
     let use_icmp = args.icmp;
 

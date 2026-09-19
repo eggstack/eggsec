@@ -229,20 +229,31 @@ backend=eggfetch-0.1.5-pre reqs=1000 conc=50 rps=69703 p50=0 p95=1 p99=10 wall=0
 backend=eggfetch-0.1.5-pre reqs=2000 conc=100 rps=88079 p50=1 p95=2 p99=10 wall=0.02s accepts=100 errors=0
 ```
 
-No performance win bypasses authorization or pinning. Measured `0.1.7`
-meets or exceeds the historical Reqwest baseline at representative
-concurrency (1/10/50/100) with identical Host/SNI, redirect, and reuse
-semantics, and shows no throughput/latency regression versus the same-harness
-`0.1.5` pre-adoption checkout (both noisy at these levels; `accepts` varies
-run-to-run as Hyper races burst connections, always `<< reqs` at high
-concurrency with zero errors). H1 retained, H2 negotiated via ALPN where
-offered (Eggsec-local H2 proof in `transport_eggfetch.md`; intentional
-protocol difference, explicitly accepted; HTTP/3 out of scope). Connection
-reuse never crosses incompatible physical-route identity (route/cache keys
-include pin state; proven by Eggsec-local H1/H2 redirect/pin fixtures, not
-only upstream route-cache qualification).
+The short historical samples above are retained as context only. They are not
+long or repeated enough to support a categorical 0.1.5-versus-0.1.7
+throughput/latency conclusion, and the current repeat run below is current-only
+rather than a matched repeated comparison.
 
-The scoped seam adds no measurable overhead versus raw dispatch at these levels: authority checks are in-memory scope matching on the IP-literal fast path, clients are shared per run (no per-request construction), and drained bodies preserve keep-alive reuse. CPU/allocation profiling was not run (criterion: acceptable throughput + reuse evidence, both met).
+2026-09-19 repeated current `0.1.7` release evidence (five measured trials per
+concurrency, after one unreported warm-up; same production `EggfetchTransport`,
+H1 keep-alive, logical `test.local` plus one authorized loopback pin):
+
+| Concurrency | Requests/trial | RPS median (range) | p50 µs median (range) | p95 µs median (range) | p99 µs median (range) | Wall ms median (range) | Errors | New accepts after warm-up |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 40,000 | 35,240 (35,034–35,413) | 26 (26–26) | 28 (27–28) | 43 (42–48) | 1,135 (1,129–1,141) | 0 | 0 |
+| 10 | 120,000 | 49,086 (41,939–51,638) | 200 (189–202) | 222 (212–349) | 281 (255–373) | 2,444 (2,323–2,861) | 0 | 0 |
+| 50 | 150,000 | 50,490 (47,241–50,920) | 950 (947–1,014) | 1,139 (1,124–1,266) | 1,336 (1,291–1,772) | 2,964 (2,945–3,175) | 0 | 0 |
+| 100 | 200,000 | 50,387 (49,740–50,486) | 1,975 (1,972–1,994) | 2,207 (2,144–2,289) | 2,499 (2,377–2,590) | 3,969 (3,961–4,020) | 0 | 0 |
+
+The repeated run supports current correctness, zero observed request errors, and
+stable warmed-route reuse. It does not establish a version-to-version
+performance regression result because an equally long repeated 0.1.5 run was
+not collected; performance disposition for the comparison is therefore
+inconclusive. No benchmark threshold belongs in normal CI. H1 remains retained,
+H2 is negotiated via ALPN where offered (Eggsec-local proof in
+`transport_eggfetch.md`), and HTTP/3 remains out of scope. Connection reuse
+must continue to respect incompatible physical-route identity (route/cache keys
+include pin state), as proven by the local H1/H2 route-isolation fixtures.
 
 ## Public API
 

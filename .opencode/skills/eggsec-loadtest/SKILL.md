@@ -7,6 +7,14 @@ description: "HTTP load testing and performance benchmarking - use when working 
 
 HTTP load testing module workflows and patterns (Phase D core + 2026-09-17 corrective pass + 2026-09-19 0.1.7 adoption: mandatory execution scope, logical-URL + resolved-address Eggfetch backend).
 
+Qualification evidence: the Eggfetch adapter has 5 Eggsec-local H2 tests
+(including selected-address-only route isolation with unchanged logical origin)
+and 4 local-resolution SOCKS5 tests. Treat the repeated 0.1.7 loopback
+measurements in `architecture/loadtest.md` as current transport smoke evidence:
+they include five trials at concurrency 1/10/50/100, but do not by themselves
+establish a version-to-version performance regression comparison. Preserve that
+distinction when adding or updating benchmark claims.
+
 Execution scope is mandatory: `LoadTestRunner` stores `Option<Scope>` and ordinary `run()` fails closed without the `EnforcementContext` snapshot (no wildcard default). New entry points require execution context — never synthesize `allowed_targets = ["*"]`. Strict paths carry scope via `ApprovedExecution` (`approve_execution()` → `execute_approved_execution()` / `execute_canonical_with_scope()`) and `ToolExecutionContext` (`execute_with_context()` via `dispatch_execution()`); raw `LoadTestTool::execute()` fails closed. Direct + supported proxied traffic uses the pinned Eggfetch backend (`eggfetch-core 0.1.7`, logical-URL + singular resolved-address direct, H1/H2 route reuse, total deadline through body EOF, proxy peers/targets); Reqwest is fail-closed transition only (no fallback, credential-partitioned cache).
 
 ## Key Types and Patterns
