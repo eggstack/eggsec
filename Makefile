@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check check-deps check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -72,6 +72,16 @@ test-feature-matrix:
 test-architecture-guards:
 	bash scripts/check-architecture-guards.sh
 
+# TUI PTY regression smoke (Phase B WS6, specialist/deep-checks only).
+# Runs the real eggsec binary in a pseudo-terminal (stdlib pty, no Rust
+# runtime deps) and proves a representative tracing warning no longer leaks
+# outside the frame plus terminal restoration on the daemon-attach path.
+# Unix/Linux only; the script reports SKIP on Windows. Never part of the
+# normal unit-test loop (depends on terminal timing).
+test-tui-pty:
+	cargo build -p eggsec-cli
+	python3 scripts/tui_pty_smoke.py --binary ./target/debug/eggsec
+
 # Validate no-default-features build
 check-no-default:
 	cargo check --workspace --no-default-features
@@ -123,6 +133,7 @@ check:
 check-full: check
 	$(MAKE) clippy-domain
 	$(MAKE) check-feature-profiles
+	$(MAKE) test-tui-pty
 
 # Exhaustive per-feature compilation sweep (weekly/manual, not per-PR).
 # `full` is a curated aggregate, so this sweep is the completeness oracle.
@@ -191,6 +202,7 @@ help:
 	@echo "  make test-slow       - Run ignored tests"
 	@echo "  make test-coverage   - Code coverage"
 	@echo "  make test-feature-matrix - Feature metadata validation tests"
+	@echo "  make test-tui-pty - TUI PTY regression smoke (specialist/deep-checks)"
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
 	@echo "  make check-msrv         - Validate MSRV (requires rustup toolchain install 1.89)"

@@ -3661,6 +3661,81 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 139. TUI terminal lifecycle is cleanup-safe and child output is captured.
+# Phase B: one session owner (TerminalSession over ratatui::try_init), no
+# open-coded raw/alternate-screen lifecycle, no nested Tokio runtimes on the
+# daemon path, no competing panic hooks, no inherited child stdio in the TUI
+# crate, and the CLI launch gate passes has_command (is_some, not is_none).
+echo ""
+echo "--- Check 139: TUI cleanup-safe terminal lifecycle holds ---"
+SECTION_FAIL=0
+TUI_RUNNER="crates/eggsec-tui/src/app/runner.rs"
+TUI_APP_MOD="crates/eggsec-tui/src/app/mod.rs"
+CLI_MAIN="crates/eggsec-cli/src/main.rs"
+# 139a: no Stdio::inherit() in TUI Rust sources (rich mode forbids
+# inherited child stdio; the workspace audit records all sites as captured).
+# Scoped to *.rs: prose docs name the banned token to document the ban.
+INHERIT_HITS=$(rg -n 'Stdio::inherit' crates/eggsec-tui/src/ --glob='*.rs' 2>/dev/null || true)
+if [[ -n "$INHERIT_HITS" ]]; then
+  echo "$INHERIT_HITS"
+  echo "FAIL: eggsec-tui contains Stdio::inherit(). TUI-reachable child output must be captured (Command::output/piped), never inherited."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# 139b: runner uses the session path; open-coded lifecycle tokens are gone.
+for sym in "TerminalSession::new" "session.restore()" "combine_body_restore" "fn run_tui_body" "restore_with_ops" "block_on_ambient"; do
+  if ! rg -Fq "$sym" "$TUI_RUNNER" 2>/dev/null; then
+    echo "FAIL: $TUI_RUNNER missing required session-path symbol: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# Code-level occurrences only (strip // comments like Check 138d).
+LEGACY_TOKENS='Terminal::new\(|enable_raw_mode|EnterAlternateScreen|LeaveAlternateScreen|set_hook|take_hook'
+LEGACY_HITS=$(while IFS= read -r hit; do
+  line=$(echo "$hit" | cut -d: -f1)
+  line_content=$(sed -n "${line}p" "$TUI_RUNNER" 2>/dev/null || true)
+  code_part=$(printf '%s' "$line_content" | sed 's|//.*||')
+  if printf '%s' "$code_part" | rg -q "$LEGACY_TOKENS" 2>/dev/null; then
+    echo "$hit"
+  fi
+done < <(rg -n "$LEGACY_TOKENS" "$TUI_RUNNER" 2>/dev/null || true))
+if [[ -n "$LEGACY_HITS" ]]; then
+  echo "$LEGACY_HITS"
+  echo "FAIL: $TUI_RUNNER still contains open-coded terminal lifecycle or competing panic hooks (use TerminalSession over ratatui::try_init)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# 139c: no nested Tokio runtime construction on the TUI daemon path.
+# The only legitimate tokio::runtime::Runtime::new in the runner is the
+# standalone-host fallback inside block_on_ambient (exactly one site).
+NESTED_RUNNER=$(rg -cn 'tokio::runtime::Runtime::new' "$TUI_RUNNER" 2>/dev/null || echo "0")
+if [[ "$NESTED_RUNNER" != "1" ]]; then
+  echo "FAIL: $TUI_RUNNER has $NESTED_RUNNER tokio::runtime::Runtime::new site(s), expected exactly 1 (the block_on_ambient standalone fallback)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+NESTED_APPMOD=$(rg -n 'tokio::runtime::Runtime::new' "$TUI_APP_MOD" 2>/dev/null || true)
+if [[ -n "$NESTED_APPMOD" ]]; then
+  echo "$NESTED_APPMOD"
+  echo "FAIL: $TUI_APP_MOD constructs a nested Tokio runtime (use runner::block_on_ambient; nested runtimes panic under #[tokio::main])."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# 139d: CLI launch gate passes has_command (is_some). The 2026-09-20 PTY
+# smoke caught an is_none() inversion that dead-coded the TUI launch.
+SOME_COUNT=$(rg -c 'cli\.command\.is_some\(\)' "$CLI_MAIN" 2>/dev/null || echo "0")
+if [[ "$SOME_COUNT" -lt 2 ]]; then
+  echo "FAIL: $CLI_MAIN must pass cli.command.is_some() for has_command in both cfg branches (found $SOME_COUNT)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+INVERTED_CALL=$(awk '/rich_tui_launch_requested\(/{watch=8} watch>0{watch--; if (/is_none\(\)/) {print NR": "$0; exit 0}}' "$CLI_MAIN" || true)
+if [[ -n "$INVERTED_CALL" ]]; then
+  echo "$INVERTED_CALL"
+  echo "FAIL: $CLI_MAIN passes is_none() for has_command near a rich_tui_launch_requested call (inverts the launch gate)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI cleanup-safe terminal lifecycle holds."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

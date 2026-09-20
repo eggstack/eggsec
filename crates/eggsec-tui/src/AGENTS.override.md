@@ -25,17 +25,52 @@ writer to the controlling terminal:
     `stop_with_message` (no extra notification overlay);
   - transient event errors / stream end: `tracing::warn!` + graceful quit
     (no visible surface would persist);
-  - post-loop quick-save failure: `tracing::warn!` only (no in-frame surface
-    remains; Phase B owns post-restoration fatal reporting).
-- The `io::stdout()` in `run_with_mode()` exists only to construct the
-  `CrosstermBackend`; it is not a side-channel writer.
-- Fatal terminal-loop errors after restoration stay as `tracing::error!` for
-  now; Phase B owns failure-safe teardown and post-restoration reporting. Do
-  not reintroduce a console writer or `terminal.clear()` to hide leaks.
+   - post-loop quick-save failure: `tracing::warn!` only (no in-frame surface
+     remains; non-fatal by rule — never overwrites a body failure nor changes
+     the exit status).
+- The `io::stdout()` in `TerminalSession` exists only for mouse-capture
+  enable/disable and the `CrosstermBackend` constructor; it is not a
+  side-channel writer.
+- Fatal terminal-loop errors propagate from `run_with_mode()` after
+  restoration (the CLI prints the returned error post-restoration). Never
+  log-and-convert them to success. Do not reintroduce a console writer or
+  `terminal.clear()` to hide leaks.
+
+## Cleanup-Safe Terminal Lifecycle (Phase B, 2026-09-20)
+
+- One owner: `TerminalSession` in `app/runner.rs` over `ratatui::try_init()`
+  (raw mode + alternate screen + panic hook). Mouse capture is enabled only
+  after init succeeds (rollback on failure); cursor visibility is restored
+  on the normal path.
+- Structure: `run_with_mode` acquires the session → `run_tui_body` (app /
+  runtime setup incl. daemon Tokio work, event loop, quick-save) → explicit
+  `restore()` → combined error. No `?` after acquisition may bypass the
+  guard. Keep the public `run` / `run_with_mode` signatures.
+- Teardown is independent per step, idempotent (`restored` flag), with a
+  silent best-effort `Drop` fallback. Never install competing panic hooks:
+  unit tests must use the injectable `restore_with_ops` /
+  `combine_cleanup_errors` / `combine_body_restore` helpers, never repeated
+  `try_init` (hooks would stack recursively). Guard Check 139 pins the
+  session path, the hook ban, and the launch-gate composition.
+- Daemon sync/async bridging: use `runner::block_on_ambient` (ambient
+  multi-thread runtime via `block_in_place`; throwaway runtime only for
+  standalone hosts). Never `tokio::runtime::Runtime::new()` on TUI daemon
+  paths — it panics under the CLI `#[tokio::main]`.
+- Child processes: no process-spawn sites exist in `eggsec-tui`; every
+  TUI-reachable operation captures (`Command::output()` / `Stdio::piped()`).
+  Never add `Stdio::inherit()` here (guard Check 139a). No interactive
+  suspend/resume handoff exists — do not weaken the single-writer invariant.
+- CLI launch gate: `rich_tui_launch_requested` takes `has_command`; the
+  call site passes `cli.command.is_some()`. The 2026-09-20 PTY smoke caught
+  an `is_none()` inversion that dead-coded the TUI launch — guard Check
+  139d pins the composition.
+- PTY smoke (`scripts/tui_pty_smoke.py`, `make test-tui-pty`): Unix/Linux
+  stdlib-`pty`, outside the normal unit-test loop. Extend cases rather than
+  adding terminal-timing unit tests.
 
 ## Policy Enforcement Alignment (2026-06-11)
 
-TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts (the old post-dispatch retroactive gate has been removed). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs:82 (init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).
+TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts (the old post-dispatch retroactive gate has been removed). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs `run_tui_body` (enforcement init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).
 
 ## Enforcement Posture Model (Phase 5)
 

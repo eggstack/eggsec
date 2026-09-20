@@ -97,6 +97,7 @@ These checks are valuable but not required for every merge. They run in the opti
 | Full mandatory contract | `make check` (included in `check-full`; already runs `check-deps`) | Baseline correctness + dependency policy |
 | Domain/platform lint | `make clippy-domain` | Lint extracted implementation crates with relevant features |
 | Representative feature profiles | `make check-feature-profiles` | Feature coherence (engine profiles + broad TUI `db-pentest,web-proxy,c2` check and lib tests) |
+| TUI PTY regression smoke | `make test-tui-pty` (part of `make check-full`) | Real binary in a pseudo-terminal: representative warning absent from the raw stream, alternate-screen entry/exit present, exit 0; Unix/Linux only (named SKIP on Windows; never in the unit-test loop) |
 | Exhaustive per-feature sweep | `make check-features-individual` | Every engine and TUI feature compiled in its minimum set (`full` aggregates are curated, not exhaustive) |
 
 ### Security tool ownership
@@ -171,7 +172,7 @@ performed and recorded on each target platform.
 - Format check passes
 
 **Release readiness** additionally requires:
-- `make check-full` passes (domain lint, representative profiles; `check-deps` already covered via `make check`)
+- `make check-full` passes (domain lint, representative profiles, TUI PTY smoke; `check-deps` already covered via `make check`)
 - `make check-features-individual` passes (or reports only documented system-prerequisite SKIP entries)
 - `make release-check` passes end-to-end on the supported Linux release host
 - all intended Rust archives are created by Cargo's workspace package command,
@@ -201,7 +202,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make check` | Full mandatory Rust CI contract (format, checks, `check-deps`, clippy, tests, guards) | Every PR/push |
 | `make check-deps` | Dependency advisory/license/ban/source policy (`cargo deny --workspace --all-features check`) | Every PR/push (part of `make check`, plus independent `dependency-policy` CI job) |
 | `make check-python` | Python CI check (one build, all checks) | Python changes |
-| `make check-full` | Optional broad validation (domain lint + feature profiles; `check-deps` via `check`) | Pre-release |
+| `make check-full` | Optional broad validation (domain lint + feature profiles + TUI PTY smoke; `check-deps` via `check`) | Pre-release |
 | `make clippy` | Lint | Every PR/push |
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
@@ -210,5 +211,6 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
 | `make clippy-domain` | Lint domain/platform crates | Pre-release (part of `make check-full`) |
+| `make test-tui-pty` | TUI PTY regression smoke (stdlib `pty`, real binary) | Pre-release / weekly (deep checks; part of `make check-full`) |
 | `make check-features-individual` | Exhaustive per-feature compile sweep | Pre-release / weekly (deep checks) |
 | `make build` | Release build of CLI binary | Release only |

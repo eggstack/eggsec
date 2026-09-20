@@ -371,24 +371,22 @@ impl App {
         } = mode
         {
             let socket = socket_path.clone();
-            // Create a blocking runtime for the synchronous connect.
-            match tokio::runtime::Runtime::new() {
-                Ok(rt) => {
-                    let result = rt.block_on(async {
-                        crate::runtime_client::DaemonRuntimeClient::connect(&socket).await
-                    });
-                    match result {
-                        Ok(client) => {
-                            self.runtime_client = Some(std::sync::Arc::new(client));
-                            tracing::info!("Connected to daemon at {}", socket);
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to connect to daemon at {}: {}", socket, e);
-                        }
-                    }
+            // Synchronous connect from the TUI setup path: reuse the ambient
+            // runtime when present (the CLI binary runs under
+            // `#[tokio::main]`, where a nested `Runtime::new` panics).
+            // See `runner::block_on_ambient`.
+            match runner::block_on_ambient(async {
+                crate::runtime_client::DaemonRuntimeClient::connect(&socket).await
+            }) {
+                Ok(Ok(client)) => {
+                    self.runtime_client = Some(std::sync::Arc::new(client));
+                    tracing::info!("Connected to daemon at {}", socket);
+                }
+                Ok(Err(e)) => {
+                    tracing::error!("Failed to connect to daemon at {}: {}", socket, e);
                 }
                 Err(e) => {
-                    tracing::error!("Failed to create tokio runtime for daemon connect: {}", e);
+                    tracing::error!("Failed to drive daemon connect for {}: {}", socket, e);
                 }
             }
         }

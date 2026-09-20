@@ -155,7 +155,21 @@ state: small terminal via `small_terminal_warning_message()` →
 `overlay.notification` (`Warning`); malformed config → notification;
 daemon attach failure → per-tab error via `stop_with_message`; transient
 event errors / stream end → tracing + graceful quit; post-loop quick-save
-failure → tracing only (Phase B owns post-restoration fatal reporting).
+failure → tracing only (non-fatal by rule: never overwrites a body failure
+nor changes the exit status).
+
+### Cleanup-Safe Terminal Lifecycle (Phase B)
+One owner: `TerminalSession` (`app/runner.rs`) over `ratatui::try_init()`.
+`run_with_mode` acquires the session → `run_tui_body` (setup incl. daemon
+work, event loop, quick-save) → explicit `restore()` → combined error; fatal
+loop errors propagate for post-restoration presentation (CLI prints after
+the alternate screen is gone). Never reintroduce open-coded
+raw/alternate-screen calls, nested `tokio::runtime::Runtime::new()` on
+daemon paths (use `runner::block_on_ambient`), competing panic hooks, or
+`Stdio::inherit()` — guard Check 139 fails otherwise. Unit-test cleanup via
+the injectable `restore_with_ops` / `combine_cleanup_errors` /
+`combine_body_restore` helpers, never repeated `try_init`. PTY smoke is
+`make test-tui-pty` (specialist/deep-checks only, Unix/Linux).
 
 ### Dynamic Layouts
 ```rust
@@ -305,6 +319,8 @@ Guard 98 pins these invariants. TUI profiles need no system prerequisites.
 
 ### Visual Regression Tests
 ```rust
+// Tests only: TestBackend never touches the real terminal, so it is exempt
+// from the production TerminalSession rule (guard Check 139).
 let backend = TestBackend::new(80, 24);
 let mut terminal = Terminal::new(backend).unwrap();
 terminal.draw(|f| ui::draw(f, &mut app)).unwrap();

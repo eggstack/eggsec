@@ -144,7 +144,9 @@ pub enum Commands {
 subscriber construction via `rich_tui_launch_requested(has_command,
 stdout_is_terminal, tui_feature)` → `console_policy_for_launch()` →
 `resolve_console_logging()`, then calls `init_logging_with_console(format,
-log_dir, policy)`. TUI launches use `ConsoleLogging::Disabled` (no
+log_dir, policy)`. Pass `cli.command.is_some()` for `has_command`
+(`is_none()` inverts the gate and dead-codes the TUI launch — guard Check
+139d pins this). TUI launches use `ConsoleLogging::Disabled` (no
 stdout/stderr formatter; file-only JSON when `log_dir` is `Some`, silent
 otherwise); all other surfaces keep `Enabled`. `init_logging()` remains as a
 compat wrapper (`Enabled`). Never add a second subscriber, reload handle, or

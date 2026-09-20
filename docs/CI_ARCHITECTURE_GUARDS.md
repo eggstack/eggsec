@@ -187,6 +187,12 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - `app/runner.rs` has no `eprintln!` and routes the sub-80x24 warning through `small_terminal_warning_message()` into the in-frame notification overlay.
 - The guard deliberately does not ban `tracing::warn!` / `info!` / `error!`: tracing is the required diagnostic facade; the sink policy is the architectural control.
 
+### TUI Cleanup-Safe Lifecycle + Process-Output Closure (Phase B, 2026-09-20, guard Check 139)
+- No `Stdio::inherit()` in TUI Rust sources (`crates/eggsec-tui/src/**/*.rs`; prose docs may name the banned token to document the ban). TUI-reachable child output is captured, never inherited; the whole-workspace process audit of 2026-09-20 records every production site as `Command::output()` capture or explicit `Stdio::piped()`.
+- `app/runner.rs` uses the session path: `TerminalSession::new`, `session.restore()`, `combine_body_restore`, `fn run_tui_body`, `restore_with_ops`, `block_on_ambient` are present; code-level (comment-stripped) `Terminal::new(`, `enable_raw_mode`, `EnterAlternateScreen`, `LeaveAlternateScreen`, `set_hook`/`take_hook` are absent (no open-coded lifecycle, no competing panic hooks).
+- No nested Tokio runtime on the TUI daemon path: exactly one `tokio::runtime::Runtime::new` in `runner.rs` (the `block_on_ambient` standalone-host fallback) and none in `app/mod.rs` (daemon connect/attach reuse the ambient `#[tokio::main]` runtime via `block_in_place`).
+- The CLI launch gate passes `has_command` correctly: `cli.command.is_some()` appears in both `cfg` branches of `main.rs`, and no `is_none()` sits inside a `rich_tui_launch_requested` call (pins the 2026-09-20 PTY-caught inversion that dead-coded the TUI launch).
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

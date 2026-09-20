@@ -165,7 +165,7 @@ The `WorkerGuard` **must** be held for the process lifetime when `log_dir` is `S
 3. **`WorkerGuard` lifetime**: If the guard is dropped before process exit, log messages may be lost (non-blocking writer flush is tied to guard drop).
 4. **`EnvFilter` default is `info`**: Only changed by setting `RUST_LOG` env var. No programmatic override is provided.
 5. **Daemon has no logging module**: `eggsec-daemon` does not own logging configuration. The process host that embeds the daemon is responsible for subscriber setup.
-6. **Single-writer rule (Phase A)**: Rich TUI console logging is disabled. Stdout *and* stderr are both forbidden as side channels while the alternate screen is owned. `tracing` remains the required diagnostic facade; user-visible recoverable errors use TUI state (notification overlay, per-tab error, popup/status). Fatal errors are deferred until after restoration (Phase B owns teardown). No new default persistent TUI logging was introduced.
+6. **Single-writer rule (Phase A) + cleanup-safe lifecycle (Phase B)**: Rich TUI console logging is disabled. Stdout *and* stderr are both forbidden as side channels while the alternate screen is owned. `tracing` remains the required diagnostic facade; user-visible recoverable errors use TUI state (notification overlay, per-tab error, popup/status). Fatal errors propagate from `run_with_mode()` and are presented only after restoration (`TerminalSession` teardown in `app/runner.rs`; quick-save failure stays non-fatal tracing). No new default persistent TUI logging was introduced.
 
 ## Related
 
@@ -173,4 +173,4 @@ The `WorkerGuard` **must** be held for the process lifetime when `log_dir` is `S
 - [config.md](config.md) — Configuration system may set log-related options
 - [tui.md](tui.md) — Single-terminal-writer ownership contract and in-frame error routing
 
-*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20*
+*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20*

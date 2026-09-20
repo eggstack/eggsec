@@ -165,14 +165,42 @@ Global search (`Ctrl+F`) overlays a search popup. The search query is applied to
 
 ### Event Loop (`app/runner.rs`)
 
-`run_with_mode()` sets up crossterm raw mode, alternate screen, and mouse capture. The core loop (`run_app()`) follows `update() → draw() → input-check`:
+Terminal lifecycle is owned by one cleanup-safe session (`TerminalSession`
+in `app/runner.rs`, Phase B). Acquisition uses `ratatui::try_init()` (raw
+mode + alternate screen + panic-hook registration); mouse capture is an
+Eggsec-owned extra enabled only after init succeeds, with rollback of the
+already-acquired state if the enable fails. The core loop (`run_app()`)
+follows `update() → draw() → input-check`:
 
 1. `app.update()` drains runtime events via `TuiRuntimeAdapter::drain_and_reduce()`, then typed results from `progress_rx`/`result_rx`.
 2. `app.auto_save_if_due()`.
 3. `terminal.draw(|f| ui::draw(f, app))` only if `needs_redraw` or `pending_redraw`.
 4. Input via non-blocking `EventStream::next().now_or_never()`. If no events, sleeps 10ms.
 
-Exit calls `session_manager.save_quick()`.
+`run_with_mode()` acquires the session, runs the guarded body
+(`run_tui_body`: app/runtime setup incl. daemon Tokio work, event loop,
+quick-save), then restores and returns the combined outcome — so no `?`
+after acquisition can strand terminal modes. Teardown runs every step
+independently (one failure never blocks later steps; first failure stays
+primary with the rest as context) and is idempotent, with a silent
+best-effort `Drop` fallback for early return/unwind. The Ratatui panic hook
+runs at panic time (before unwinding) and restores raw/alternate-screen
+state; the guard drop then pairs mouse capture during unwind. No competing
+hooks are installed (unit tests use injectable cleanup operations, never
+repeated `try_init`, so hooks cannot stack recursively).
+
+Fatal loop errors propagate to the caller and are presented only after the
+alternate screen is gone (the CLI prints the returned error
+post-restoration); they are never logged-and-converted to success.
+Quick-save failure is non-fatal by explicit rule: it never overwrites a
+body failure nor changes the exit status, and is reported through the
+tracing diagnostic path (silent under the TUI no-console policy).
+
+Daemon sync/async bridging reuses the ambient runtime
+(`block_on_ambient`): the CLI runs under `#[tokio::main]`, where a nested
+`tokio::runtime::Runtime::new()` panics. A throwaway runtime is built only
+for standalone hosts (tests, non-Tokio embeddings) with no ambient
+runtime. Exit calls `session_manager.save_quick()` inside the guarded body.
 
 ### Single-Terminal-Writer Ownership (Phase A)
 
@@ -197,15 +225,50 @@ writer to the controlling terminal:
   notification overlay (tracing stays as diagnostic); daemon attach failure →
   per-tab error via `stop_with_message` (tracing stays as diagnostic);
   transient event errors / event-stream end → tracing diagnostic + graceful
-  quit (no visible surface would persist); post-loop quick-save failure →
-  tracing diagnostic (no in-frame surface remains; post-restoration fatal
-  reporting is owned by Phase B).
+   quit (no visible surface would persist); post-loop quick-save failure →
+   tracing diagnostic, non-fatal by rule (see Cleanup-Safe Lifecycle
+   section below).
 - No new default persistent TUI log directory was introduced; file logging
   still occurs only when an existing caller passes `log_dir` (agent memory
   dir), as file-only JSON when console is disabled.
 
+### Cleanup-Safe Lifecycle and Child-Process Closure (Phase B)
+
+- Ratatui owns terminal bytes during rich mode (alternate screen); tracing
+  sink selection is a frontend/process-host responsibility (console disabled
+  for TUI launches per the section above).
+- Terminal lifecycle is cleanup-safe: one `TerminalSession` owner, guarded
+  body, independent/idempotent teardown, silent `Drop` fallback, no
+  competing panic hooks (see Event Loop). User-facing fatal output occurs
+  only after restoration.
+- Child-process output reachable from the TUI is captured, not inherited.
+  Whole-workspace audit (`rg -n
+  'std::process::Command|tokio::process::Command|Command::new|Stdio::inherit'
+  crates/`, 2026-09-20): `crates/eggsec-tui/src` contains no process-spawn
+  sites at all; every production site uses `Command::output()` capture or
+  explicit `Stdio::piped()` consumed by the operation (NSE
+  `wrappers::process_exec` / `io.popen` / `nmap` probes, wireless `iwlist`,
+  recon `git` history reads, transparent-proxy `iptables`, distributed
+  remote-command executor, mobile-lab `adb`/`frida` probes). Zero
+  `Stdio::inherit()` sites exist workspace-wide for stdout/stderr. No
+  TUI-reachable process inherits stdout/stderr while rich mode is active, so
+  no new process wrapper was introduced (isolated sites only; guard Check
+  139a pins `Stdio::inherit()` out of `eggsec-tui`).
+- Changed child-output capture is bounded where output can be unbounded:
+  no process-execution call sites were changed in this phase (all already
+  capture), so no new bounding was required; the pre-existing
+  capability-gated NSE `process_exec` path remains the only owner of
+  untrusted child output and stays sandbox-gated.
+- PTY coverage (`scripts/tui_pty_smoke.py`, `make test-tui-pty`, wired into
+  `make check-full` / Deep Checks): Unix/Linux-scoped stdlib-`pty` smoke
+  asserting a representative config-load warning is absent from the raw PTY
+  stream, alternate-screen entry/exit is present, and the child exits 0 —
+  plus a daemon-attach-failure case proving guarded-body restoration. Named
+  platform skip on Windows; PTY coverage does not replace unit/architecture
+  guards (session unit tests use injectable cleanup operations).
+
 See [logging.md](logging.md) for the console emission policy and
-`docs/CI_ARCHITECTURE_GUARDS.md` for the Check 138 regression guard.
+`docs/CI_ARCHITECTURE_GUARDS.md` for the Check 138/139 regression guards.
 
 ### Key Processing Pipeline (`app/key_handler.rs`)
 
@@ -379,6 +442,7 @@ Semantic rules for safety-relevant fields:
 8. **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
 9. **Stale-focus guard**: Always use `InputGroup::valid_focused_index()` instead of direct `self.focused` indexing.
 10. **Single-writer terminal rule**: Never `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or touch `stdout` / `stderr` directly in production TUI code. Keep `tracing` diagnostics; surface user-actionable conditions through `Notification`, per-tab error, popup, or status state. See the Single-Terminal-Writer section above.
+11. **Cleanup-safe lifecycle**: Terminal setup/teardown lives in `TerminalSession` (`app/runner.rs`) over `ratatui::try_init()`; never reintroduce open-coded raw/alternate-screen calls, nested `tokio::runtime::Runtime::new()` on the daemon path (use `runner::block_on_ambient`), competing panic hooks, or `Stdio::inherit()`. Guard Check 139 pins this.
 
 ### Overlay Selector Containment
 
@@ -386,7 +450,7 @@ When an embedded Settings selector is open, normal-mode shortcuts are blocked vi
 
 ### Entry Point
 
-TUI launches from `eggsec-cli/src/main.rs` when no subcommand is provided and stdout is a terminal (`rich_tui_launch_requested`). Launch intent is resolved before logging initialization so the subscriber can be installed with `ConsoleLogging::Disabled`.
+TUI launches from `eggsec-cli/src/main.rs` when no subcommand is provided and stdout is a terminal (`rich_tui_launch_requested(has_command, stdout_is_terminal, tui_feature)`; the call site passes `cli.command.is_some()` for `has_command` — guard Check 139d). Launch intent is resolved before logging initialization so the subscriber can be installed with `ConsoleLogging::Disabled`.
 
 ### Key Bindings Summary
 
@@ -418,4 +482,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20*
+*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20*

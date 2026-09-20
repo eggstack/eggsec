@@ -64,7 +64,8 @@ fn resolve_execution_surface(cli: &Cli) -> eggsec::config::ExecutionSurface {
 ///
 /// Pure policy selection over launch eligibility, tested without touching the
 /// global tracing subscriber or the real stdout. The caller passes the
-/// already-computed facts: no subcommand was given and stdout is a terminal.
+/// already-computed facts: whether a subcommand was given and whether stdout
+/// is a terminal.
 /// The `tui_feature` flag mirrors the `tui` Cargo feature gate so headless
 /// builds never select the TUI surface.
 pub fn rich_tui_launch_requested(
@@ -102,15 +103,19 @@ async fn main() -> Result<()> {
     // logging boundary can suppress console formatting for the alternate
     // screen. Stdout *and* stderr are both the same terminal while the TUI
     // owns it, so stderr is never used as an alternate writer.
+    // NOTE: `rich_tui_launch_requested` takes `has_command`; pass
+    // `is_some()` here. Passing `is_none()` inverts the gate (TUI never
+    // launches without a command and hijacks real subcommands); pinned by
+    // architecture guard Check 139.
     #[cfg(feature = "tui")]
     let is_rich_tui_launch = rich_tui_launch_requested(
-        cli.command.is_none(),
+        cli.command.is_some(),
         std::io::IsTerminal::is_terminal(&std::io::stdout()),
         true,
     );
     #[cfg(not(feature = "tui"))]
     let is_rich_tui_launch = rich_tui_launch_requested(
-        cli.command.is_none(),
+        cli.command.is_some(),
         std::io::IsTerminal::is_terminal(&std::io::stdout()),
         false,
     );
@@ -228,5 +233,17 @@ mod tests {
 
         let cli_console = console_policy_for_launch(rich_tui_launch_requested(true, true, true));
         assert!(console_layer_enabled(cli_console));
+    }
+
+    #[test]
+    fn tui_launch_composition_matches_cli_facts() {
+        // Call-site composition regression (2026-09-20): main.rs must pass
+        // `cli.command.is_some()` for `has_command`. Model the two facts:
+        // no subcommand => `is_some()` is false => TUI eligible;
+        // subcommand present => `is_some()` is true => never TUI.
+        let no_command_is_some = false;
+        assert!(rich_tui_launch_requested(no_command_is_some, true, true));
+        let has_command_is_some = true;
+        assert!(!rich_tui_launch_requested(has_command_is_some, true, true));
     }
 }

@@ -2,9 +2,8 @@ use anyhow::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, MouseEvent, MouseEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::Terminal;
 use std::io;
 
 use super::App;
@@ -65,13 +64,213 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     run_with_mode(config_path, RuntimeMode::default())
 }
 
-pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<()> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+/// Cleanup-safe owner for the rich-TUI terminal session (Phase B).
+///
+/// Acquisition uses `ratatui::try_init()`, which owns raw mode plus the
+/// alternate screen and registers a panic hook restoring both. Mouse capture
+/// is an Eggsec-owned extra: it is enabled only after init succeeds, and a
+/// failed enable rolls back the already-acquired state before returning.
+/// Cursor visibility is restored on the normal path.
+///
+/// Teardown rules:
+/// - explicit [`TerminalSession::restore`] runs every step independently: one
+///   failure never prevents later steps, and the first failure stays primary
+///   with later failures attached as context;
+/// - teardown is idempotent (`restored` flag), so panic-hook restoration plus
+///   guard drop cannot make the terminal worse;
+/// - `Drop` is a silent best-effort fallback for early return / unwind. It
+///   never prints: the Ratatui hook runs at panic time (before unwinding),
+///   destructors run during unwind, and double restoration is harmless.
+pub(crate) struct TerminalSession {
+    terminal: Option<ratatui::DefaultTerminal>,
+    mouse_capture_active: bool,
+    restored: bool,
+}
 
+impl TerminalSession {
+    /// Acquire raw mode + alternate screen, then mouse capture.
+    pub(crate) fn new() -> Result<Self> {
+        let terminal = ratatui::try_init().map_err(|e| {
+            // `try_init` enables raw mode before entering the alternate
+            // screen; if the latter fails the former would linger, so make a
+            // best-effort attempt to hand back a usable terminal.
+            let _ = ratatui::try_restore();
+            anyhow::anyhow!("failed to initialize TUI terminal: {e:#}")
+        })?;
+        let mut session = Self {
+            terminal: Some(terminal),
+            mouse_capture_active: false,
+            restored: false,
+        };
+        if let Err(e) = execute!(io::stdout(), EnableMouseCapture) {
+            // Mouse enable failed after raw/alternate-screen acquisition:
+            // roll back before returning so no half-owned state escapes.
+            let _ = ratatui::try_restore();
+            session.restored = true;
+            return Err(anyhow::anyhow!("failed to enable mouse capture: {e:#}"));
+        }
+        session.mouse_capture_active = true;
+        Ok(session)
+    }
+
+    pub(crate) fn terminal(&mut self) -> &mut ratatui::DefaultTerminal {
+        self.terminal
+            .as_mut()
+            .expect("TerminalSession terminal taken after successful acquisition")
+    }
+
+    /// Explicit fallible restore for the normal path. Independent steps,
+    /// idempotent: a second call (including via `Drop`) is a no-op success.
+    pub(crate) fn restore(&mut self) -> Result<()> {
+        if self.restored {
+            return Ok(());
+        }
+        self.restored = true;
+        let mouse_active = &mut self.mouse_capture_active;
+        let terminal = &mut self.terminal;
+        restore_with_ops(
+            mouse_active,
+            || execute!(io::stdout(), DisableMouseCapture),
+            ratatui::try_restore,
+            || {
+                terminal
+                    .as_mut()
+                    .expect("TerminalSession terminal taken after successful acquisition")
+                    .show_cursor()
+            },
+        )
+    }
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        if self.restored {
+            return;
+        }
+        self.restored = true;
+        if self.mouse_capture_active {
+            self.mouse_capture_active = false;
+            let _ = execute!(io::stdout(), DisableMouseCapture);
+        }
+        let _ = ratatui::try_restore();
+        if let Some(ref mut terminal) = self.terminal {
+            let _ = terminal.show_cursor();
+        }
+    }
+}
+
+/// Run the three teardown steps independently with injectable operations.
+///
+/// Every step is attempted even if an earlier one fails; per-step failures
+/// are collected and combined with the first failure primary. Production
+/// passes the real Crossterm/Ratatui operations; tests inject recording
+/// closures. `mouse_active` is cleared before the disable attempt so a retry
+/// or guard drop cannot double-disable.
+pub(crate) fn restore_with_ops(
+    mouse_active: &mut bool,
+    mut disable_mouse: impl FnMut() -> std::io::Result<()>,
+    mut restore_terminal: impl FnMut() -> std::io::Result<()>,
+    mut show_cursor: impl FnMut() -> std::io::Result<()>,
+) -> Result<()> {
+    let mut errors: Vec<anyhow::Error> = Vec::new();
+    if *mouse_active {
+        *mouse_active = false;
+        if let Err(e) = disable_mouse() {
+            errors.push(anyhow::anyhow!("failed to disable mouse capture: {e:#}"));
+        }
+    }
+    if let Err(e) = restore_terminal() {
+        errors.push(anyhow::anyhow!(
+            "failed to restore terminal (raw mode / alternate screen): {e:#}"
+        ));
+    }
+    if let Err(e) = show_cursor() {
+        errors.push(anyhow::anyhow!(
+            "failed to restore cursor visibility: {e:#}"
+        ));
+    }
+    combine_cleanup_errors(errors)
+}
+
+/// Combine ordered cleanup failures: the first stays primary, later failures
+/// attach as context so no diagnostic is lost.
+pub(crate) fn combine_cleanup_errors(mut errors: Vec<anyhow::Error>) -> Result<()> {
+    let mut iter = errors.drain(..);
+    let Some(mut combined) = iter.next() else {
+        return Ok(());
+    };
+    for rest in iter {
+        combined = combined.context(format!("additional cleanup failure: {rest:#}"));
+    }
+    Err(combined)
+}
+
+/// Drive a daemon future to completion from the synchronous TUI body.
+///
+/// The CLI binary runs under `#[tokio::main]`, so constructing a nested
+/// `tokio::runtime::Runtime` here panics ("Cannot start a runtime from
+/// within a runtime"; caught by the Phase B PTY smoke on 2026-09-20).
+/// Reuse the ambient multi-thread runtime via `block_in_place` when one
+/// exists; only build a throwaway runtime for standalone hosts (unit tests,
+/// non-Tokio embeddings) where no ambient runtime is present.
+pub(crate) fn block_on_ambient<F>(future: F) -> Result<F::Output>
+where
+    F: std::future::Future,
+{
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => Ok(tokio::task::block_in_place(|| handle.block_on(future))),
+        Err(_) => {
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| anyhow::anyhow!("failed to create tokio runtime: {e:#}"))?;
+            Ok(rt.block_on(future))
+        }
+    }
+}
+
+/// Combine the guarded TUI body outcome with the restoration outcome.
+///
+/// Precedence: the body error is always primary (restoration failure attaches
+/// as context); a lone restoration failure is returned; success requires
+/// both. Fatal presentation happens after restoration by the caller, which
+/// prints the returned error once the alternate screen is gone.
+pub(crate) fn combine_body_restore(body: Result<()>, restore: Result<()>) -> Result<()> {
+    match (body, restore) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(body_err), Ok(())) => Err(body_err),
+        (Ok(()), Err(restore_err)) => Err(restore_err),
+        (Err(body_err), Err(restore_err)) => {
+            Err(body_err.context(format!("terminal restoration also failed: {restore_err:#}")))
+        }
+    }
+}
+
+pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<()> {
+    // One cleanup-safe owner: acquisition happens here, and every fallible
+    // step below runs either inside the guarded body or after restoration.
+    // No `?` after this point can strand raw/alternate-screen state.
+    let mut session = TerminalSession::new()?;
+    let body_result = run_tui_body(session.terminal(), config_path, mode);
+    let restore_result = session.restore();
+    combine_body_restore(body_result, restore_result)
+}
+
+/// Guarded TUI body: app/runtime setup, event loop, and quick-save.
+///
+/// Runs while the `TerminalSession` guard is alive in the caller. Daemon
+/// runtime construction and attach happen here (inside the guard), and the
+/// returned error propagates to the caller for post-restoration reporting —
+/// fatal loop failures are never converted to success here.
+///
+/// Quick-save precedence (explicit rule): quick-save failure is non-fatal. It
+/// never overwrites a body failure and never changes the exit status; it is
+/// reported through the established tracing diagnostic path (silent under
+/// the TUI no-console policy). Returning the body error primary keeps the
+/// more important runtime/render failure intact.
+fn run_tui_body(
+    terminal: &mut ratatui::DefaultTerminal,
+    config_path: Option<String>,
+    mode: RuntimeMode,
+) -> Result<()> {
     // Single-writer rule (Phase A): while the alternate screen is owned,
     // Ratatui/Crossterm is the only writer to the controlling terminal. No
     // `eprintln!`/`println!`/`dbg!` or direct stdout/stderr use is allowed here;
@@ -170,44 +369,30 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
         if let Some(ref client) = app.runtime_client {
             let client_arc = client.clone();
             let rt_mode = runtime_mode.clone();
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async {
+            // Inside the terminal-session guard: reuse the ambient runtime
+            // (never a nested `Runtime::new`, which panics under
+            // `#[tokio::main]`). Attach failure degrades to the per-tab
+            // error surface, never to an early return or panic.
+            block_on_ambient(async {
                 if let Err(e) = attach_daemon_session(client_arc.as_ref(), &rt_mode, &mut app).await
                 {
                     tracing::error!("Failed to attach to daemon session: {}", e);
                     app.stop_with_message(&format!("Daemon attach failed: {}", e));
                 }
-            });
+            })?;
         }
     }
 
-    let res = run_app(&mut terminal, &mut app);
+    let res = run_app(terminal, &mut app);
 
-    // Evaluated for WS4: quick-save failure occurs post-loop while the
-    // alternate screen is still owned, so there is no appropriate in-frame
-    // surface left to render into. Keep the tracing diagnostic (silent under
-    // the TUI no-console policy); post-restoration fatal reporting is owned
-    // by Phase B.
+    // Quick-save runs while the alternate screen is still owned, so no
+    // in-frame surface remains to render into; per the precedence rule above
+    // it stays a tracing diagnostic and never overwrites the loop result.
     if let Err(e) = app.session_manager.save_quick(&app) {
         tracing::warn!("Failed to save session on exit: {:?}", e);
     }
 
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    // Post-restoration: fatal terminal-loop errors are logged as diagnostics.
-    // Phase B owns failure-safe teardown and any post-restoration user-visible
-    // fatal reporting; Phase A must not reintroduce a console writer here.
-    if let Err(err) = res {
-        tracing::error!("TUI exited with error: {:?}", err);
-    }
-
-    Ok(())
+    res
 }
 
 /// Attach to a daemon session: create/list/subscribe based on mode flags.
@@ -540,5 +725,130 @@ mod tests {
 
         assert!(small_terminal_warning_message(80, 24).is_none());
         assert!(small_terminal_warning_message(120, 40).is_none());
+    }
+
+    fn io_err(msg: &str) -> std::io::Error {
+        std::io::Error::other(msg)
+    }
+
+    #[test]
+    fn restore_with_ops_all_steps_attempted_despite_failures() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let calls: Rc<RefCell<Vec<&str>>> = Rc::new(RefCell::new(Vec::new()));
+        let record = |tag: &'static str| {
+            let calls = Rc::clone(&calls);
+            move || {
+                calls.borrow_mut().push(tag);
+                Err(io_err("injected failure"))
+            }
+        };
+        let mut mouse_active = true;
+        let err = restore_with_ops(
+            &mut mouse_active,
+            record("mouse"),
+            record("terminal"),
+            record("cursor"),
+        )
+        .expect_err("all-failing restore must fail");
+        // Every step ran despite earlier failures.
+        assert_eq!(*calls.borrow(), vec!["mouse", "terminal", "cursor"]);
+        assert!(!mouse_active, "mouse flag clears even when disable fails");
+        // First failure stays primary; later failures attach as context.
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("mouse"), "primary error: {rendered}");
+        assert!(rendered.contains("terminal"), "context kept: {rendered}");
+        assert!(rendered.contains("cursor"), "context kept: {rendered}");
+    }
+
+    #[test]
+    fn restore_with_ops_skips_mouse_when_inactive() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let calls: Rc<RefCell<Vec<&str>>> = Rc::new(RefCell::new(Vec::new()));
+        let record_ok = |tag: &'static str| {
+            let calls = Rc::clone(&calls);
+            move || {
+                calls.borrow_mut().push(tag);
+                Ok(())
+            }
+        };
+        let mut mouse_active = false;
+        restore_with_ops(
+            &mut mouse_active,
+            record_ok("mouse"),
+            record_ok("terminal"),
+            record_ok("cursor"),
+        )
+        .expect("all-ok restore must succeed");
+        assert_eq!(*calls.borrow(), vec!["terminal", "cursor"]);
+    }
+
+    #[test]
+    fn restore_with_ops_partial_failure_returns_first() {
+        let mut mouse_active = true;
+        let err = restore_with_ops(
+            &mut mouse_active,
+            || Ok(()),
+            || Err(io_err("terminal boom")),
+            || Ok(()),
+        )
+        .expect_err("terminal failure must surface");
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("terminal"), "{rendered}");
+    }
+
+    #[test]
+    fn combine_cleanup_errors_empty_is_ok() {
+        assert!(combine_cleanup_errors(Vec::new()).is_ok());
+    }
+
+    #[test]
+    fn block_on_ambient_drives_future_without_ambient_runtime() {
+        // Plain #[test]: no ambient runtime, so the standalone fallback
+        // runtime must drive the future.
+        let out = block_on_ambient(async { 42u32 }).expect("standalone fallback must drive future");
+        assert_eq!(out, 42);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn block_on_ambient_reuses_ambient_runtime() {
+        // Inside a multi-thread runtime (like the CLI `#[tokio::main]`),
+        // the future must complete without a nested `Runtime::new`
+        // (which would panic). A nested spawn proves other workers
+        // progress while blocked.
+        let out = block_on_ambient(async {
+            tokio::task::spawn(async { 7u32 })
+                .await
+                .expect("spawn works")
+        })
+        .expect("ambient branch must drive future");
+        assert_eq!(out, 7);
+    }
+
+    #[test]
+    fn combine_body_restore_keeps_body_primary() {
+        // Both succeed.
+        assert!(combine_body_restore(Ok(()), Ok(())).is_ok());
+        // Lone body failure propagates unchanged.
+        let err = combine_body_restore(Err(anyhow::anyhow!("body boom")), Ok(()))
+            .expect_err("body failure must propagate");
+        assert!(format!("{err:#}").contains("body boom"));
+        // Lone restore failure propagates.
+        let err = combine_body_restore(Ok(()), Err(anyhow::anyhow!("restore boom")))
+            .expect_err("restore failure must propagate");
+        assert!(format!("{err:#}").contains("restore boom"));
+        // Both fail: body stays primary, restore attaches as context.
+        let err = combine_body_restore(
+            Err(anyhow::anyhow!("body boom")),
+            Err(anyhow::anyhow!("restore boom")),
+        )
+        .expect_err("combined failure must propagate");
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("body boom"), "primary kept: {rendered}");
+        assert!(
+            rendered.contains("restore boom"),
+            "context kept: {rendered}"
+        );
     }
 }
