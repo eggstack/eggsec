@@ -72,7 +72,7 @@ disabled, SOCKS5H/plain forward-proxy strict cases remain fail closed, H3 and
 automatic retries remain disabled, and the new Eggfetch HTTPS-downgrade policy
 does not change Eggsec semantics without a separate neutral-contract decision.
 
-## Load-test authorization and transport corrective pass (ready for handoff)
+## Load-test authorization and transport corrective pass (executed)
 
 Corrective pass:
 [`loadtest-authorization-transport-corrective-pass-2026-09-16.md`](loadtest-authorization-transport-corrective-pass-2026-09-16.md)
