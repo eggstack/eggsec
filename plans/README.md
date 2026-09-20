@@ -14,6 +14,29 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## TUI terminal ownership corrective campaign (ready 2026-09-19)
+
+Roadmap:
+[`tui-terminal-ownership-corrective-roadmap-2026-09-19.md`](tui-terminal-ownership-corrective-roadmap-2026-09-19.md)
+
+Ordered implementation plans:
+
+1. [`tui-terminal-ownership-phase-a-single-writer-logging-boundary.md`](tui-terminal-ownership-phase-a-single-writer-logging-boundary.md)
+2. [`tui-terminal-ownership-phase-b-lifecycle-process-output-closure.md`](tui-terminal-ownership-phase-b-lifecycle-process-output-closure.md)
+
+This bounded corrective campaign addresses TUI rendering corruption caused by
+multiple writers touching the controlling terminal while Ratatui owns the
+alternate screen. Phase A establishes an explicit no-console logging policy for
+rich TUI execution, removes direct TUI terminal writes, routes recoverable
+messages through UI state, and pins the single-writer invariant. Phase B makes
+terminal teardown cleanup-safe across errors/panics, propagates fatal errors
+only after restoration, audits all TUI-reachable subprocess output, and adds a
+PTY smoke test plus closure guards.
+
+The campaign does not redesign TUI layout, remove tracing diagnostics, create
+default persistent TUI log retention, or reopen scope/dispatch/runtime
+semantics.
+
 ## Eggfetch 0.1.7 final qualification/deep-check corrective pass (executed 2026-09-19)
 
 Corrective pass:
