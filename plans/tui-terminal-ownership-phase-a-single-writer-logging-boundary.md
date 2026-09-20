@@ -306,8 +306,8 @@ Phase A is complete only when:
 Executed 2026-09-20.
 
 - Start SHA: `5b653e3f` (plans campaign registration head). Final
-  implementation SHA: Phase A implementation commit on `main` (this commit;
-  record-only SHA follow-up, if any, touches plan text only).
+  implementation SHA: `56985014` (tui single-writer Phase A commit; this
+  record-only SHA follow-up touches plan text only).
 - Source audit results:
   - `crates/eggsec-cli/src/main.rs` called `init_logging()` before testing
     TUI launch eligibility; both logging copies built an unconditional console
