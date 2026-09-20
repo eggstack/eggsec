@@ -1,6 +1,6 @@
 # TUI terminal ownership Phase B — lifecycle and process-output closure
 
-Status: Ready for implementation
+Status: Executed (2026-09-20)
 
 Date: 2026-09-19
 
@@ -314,13 +314,112 @@ Phase B is complete only when:
 
 ## Completion record
 
-When executed, append:
+Executed 2026-09-20.
 
-- actual starting/final SHAs;
-- terminal-session implementation chosen;
-- panic-hook behavior verified;
-- complete process-output inventory table;
-- files changed to capture child output;
-- PTY command/output classification;
-- architecture guard numbers;
-- all validation results using PASS/FAIL/SKIPPED/BLOCKED terminology.
+- Starting SHA: `3dad197a` (Phase A completion record head). Final
+  implementation SHA: `71bef7ac` (Phase B lifecycle/process-output commit;
+  this record-only SHA follow-up touches plan text only).
+- Terminal-session implementation chosen: internal `TerminalSession` in
+  `crates/eggsec-tui/src/app/runner.rs` (no new crate) over
+  `ratatui::try_init()` (raw mode + alternate screen + panic-hook
+  registration). Mouse capture is Eggsec-owned: enabled only after init
+  succeeds, rolled back via best-effort `try_restore()` on enable failure,
+  paired on normal return and unwind; cursor restored on the normal path.
+  Teardown (`restore_with_ops`) runs mouse/terminal/cursor steps
+  independently (all attempted; first error primary, rest as context) and is
+  idempotent (`restored` flag); `Drop` is a silent best-effort fallback that
+  never prints. `run_with_mode` keeps its signature:
+  acquire → `run_tui_body` (setup incl. daemon Tokio work, loop,
+  quick-save) → `restore()` → `combine_body_restore` (body primary, restore
+  attached as context). `run_app` errors propagate for post-restoration
+  presentation (CLI prints the returned error after the alternate screen is
+  gone). Quick-save precedence rule: non-fatal, never overwrites a body
+  failure, never changes exit status, reported via tracing diagnostic.
+- Panic-hook behavior verified: Ratatui hook (installed by `try_init`) runs
+  at panic time and restores raw/alternate-screen state before unwinding;
+  the session `Drop` then pairs mouse capture during unwind. No competing
+  hooks installed; unit tests use injectable cleanup operations
+  (`restore_with_ops`, `combine_cleanup_errors`, `combine_body_restore`),
+  never repeated `try_init`, so hooks cannot stack recursively. Live
+  evidence: the pre-fix daemon-attach PTY run panicked inside the guarded
+  body and the PTY stream still showed full restoration bytes
+  (`?1006l…?1049l` + cursor show) from hook + guard drop.
+- Two live defects caught by the new PTY smoke during implementation (both
+  fixed in the same commit):
+  1. CLI launch-gate inversion (Phase A residue): `main.rs` passed
+     `cli.command.is_none()` for `has_command`, so the rich TUI never
+     launched (and a real subcommand would have triggered it). Fixed to
+     `is_some()` + composition unit test + guard Check 139d.
+  2. Nested Tokio runtime on the daemon path: `apply_runtime_mode` and the
+     attach block built `Runtime::new()` under the CLI `#[tokio::main]`
+     (panic "Cannot start a runtime from within a runtime"). Fixed via
+     `runner::block_on_ambient` (ambient multi-thread runtime through
+     `block_in_place`; throwaway runtime only for standalone hosts) +
+     ambient/standalone unit tests + guard Check 139c.
+- Complete process-output inventory table (audit command:
+  `rg -n 'std::process::Command|tokio::process::Command|Command::new|Stdio::inherit|\.stdout\(|\.stderr\(|\.status\(|\.spawn\(' crates/`):
+
+  | Site | Crate/module | TUI-reachable? | stdout | stderr | stdin | Disposition |
+  |------|--------------|----------------|--------|--------|-------|-------------|
+  | `adb devices` probe | `eggsec-mobile-lab/adb.rs` | No (no Mobile TaskKind / TUI tab) | captured (`output()`) | captured | null (default) | parsed serials, returned |
+  | `frida-ps` probe, `which frida`, `frida --version`, `frida -U … -f …` run | `eggsec-mobile-lab/frida.rs` | No (mobile only) | captured | captured | null | parsed/simulated session, tracing on failure |
+  | `io.popen` (`sh -c` / `cmd /C`) | `eggsec-nse/libraries/io.rs` | Yes (Nse task) | `piped()` | `piped()` | `piped()` | Lua process handle, sandbox-gated |
+  | `wrapper.process_exec` | `eggsec-nse/wrappers.rs` | Yes (Nse task) | captured | captured | null | returned `Output`, capability-gated |
+  | `nmap.is_admin` / `is_privileged` (`id -u`) | `eggsec-nse/libraries/nmap.rs` | Yes (Nse task) | captured | captured | null | parsed bool, capability-gated |
+  | `nmap` interface addrs (`ip addr`, `ipconfig`, `ip addr show`) | `eggsec-nse/libraries/nmap.rs` | Yes (Nse task) | captured | captured | null | parsed tables, capability-gated |
+  | `docker inspect` | `eggsec/container/docker.rs` | No (no Container TaskKind / TUI tab) | captured | captured | null | parsed JSON metadata |
+  | `iwlist scan` | `eggsec/wireless/mod.rs` | Yes (Wireless task) | captured | captured | null | parsed networks / mapped error |
+  | distributed remote command | `eggsec/distributed/command.rs` | No (cluster protocol, not a TaskKind) | `piped()` | `piped()` | null | formatted string + duration, allowlisted |
+  | `git log/diff/show` history reads | `eggsec/recon/git_secrets.rs` | No (module not wired into Recon dispatch) | captured | captured | null | scanned findings, fallback on failure |
+  | `iptables` rules/verify/cleanup (6 sites) | `eggsec-web-proxy/intercept/transparent.rs` | Yes (Intercept task) | captured | captured | null | status-checked, stderr mapped to error |
+  | `adb` probes | `eggsec-python/mobile*.rs` | No (Python bindings only) | captured | captured | null | returned to Python caller |
+  | `crates/eggsec-tui/src` | — | — | none | none | none | **zero process-spawn sites** |
+
+  `Stdio::inherit()` count workspace-wide for stdout/stderr: **zero**.
+- Files changed to capture child output: **none** — every site already
+  captures; no disposition needed changing. No general process wrapper
+  introduced (isolated sites only, no 3-module duplication of TUI-specific
+  capture logic). WS5 bounding vacuous for the same reason (no changed
+  child process; NSE `process_exec` stays sandbox/capability-gated).
+- PTY command/output classification:
+  - `python3 scripts/tui_pty_smoke.py --binary ./target/debug/eggsec`
+    (`make test-tui-pty`; wired into `make check-full` → Deep Checks):
+    `warning-suppressed` (malformed `--config` → `Failed to load TUI
+    config` warning eligible at default filter; PTY stream must not contain
+    it; alt enter/exit present; exit 0) PASS; `daemon-attach-failure`
+    (`--runtime daemon` vs nonexistent socket → guarded-body attach path;
+    no panic text; alt exit present; exit 0) PASS. Unix/Linux stdlib `pty`,
+    deterministic 100x30 size, quit via `q`, ≥1 redraw wait. Named SKIP on
+    Windows. PTY does not replace unit/architecture guards.
+- Architecture guard numbers: Check 139 (139a no `Stdio::inherit()` in TUI
+  Rust sources; 139b session-path symbols present + no open-coded
+  lifecycle/hook tokens; 139c exactly one `tokio::runtime::Runtime::new`
+  in runner (fallback) + none in `app/mod.rs`; 139d `is_some()`
+  composition). `docs/CI_ARCHITECTURE_GUARDS.md` documents the rationale.
+- All validation results using PASS/FAIL/SKIPPED/BLOCKED terminology:
+  - `cargo fmt --all --check` PASS.
+  - `cargo check -p eggsec-tui` PASS; `cargo check -p eggsec-cli` PASS.
+  - `cargo test -p eggsec-tui` PASS (882 passed, 12 ignored; incl. 7 new
+    session/block tests).
+  - `cargo test -p eggsec-cli` PASS (10 passed; incl. 1 new composition
+    test).
+  - `bash scripts/check-architecture-guards.sh` PASS (ALL PASSED, incl.
+    new Check 139; negative paths verified: 139a fires on a planted
+    `Stdio::inherit`, 139d awk fires on planted `is_none()`).
+  - `make check` PASS (EXIT 0, full mandatory contract).
+  - `make test-tui-pty` PASS (both cases).
+  - `cargo check -p eggsec-tui --features db-pentest,web-proxy,c2` PASS
+    (0 errors; pre-existing warnings in untouched feature tabs).
+  - `cargo check -p eggsec-tui --features full` PASS (0 errors; 122
+    pre-existing warnings).
+  - `make check-msrv` PASS (1.89 toolchain present).
+  - Focused tests for changed process-execution modules: SKIPPED/N/A (no
+    process-execution module changed; audit-only).
+  - `make check-python` SKIPPED (no bindings/stubs/docs changes; the new
+    PTY script is stdlib-only, validated via `py_compile` + direct run).
+  - `cargo clippy -p eggsec-tui --all-targets`: files touched by this
+    phase clean (2 new-hint fixes applied); remaining warnings
+    pre-existing in untouched files (TUI not in `make clippy` scope).
+- Docs updated: `architecture/tui.md` (Event Loop lifecycle, new Phase B
+  section, convention 11, entry-point composition, footer), 
+...[truncated 911 chars]
