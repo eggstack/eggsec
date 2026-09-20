@@ -180,6 +180,13 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - MSRV truthful for the adapter dependency: workspace `rust-version = "1.89"`, adapter requires `eggfetch-core 0.1.7+` (Check 134).
 - Proxied backend route is singular per leg: `AuthorizedProxyRoute` carries `proxy_peer` / `ultimate_peer` (`SocketAddr`, not `Vec`), the Eggfetch boundary pins single-element sets, and DNS-approved vectors are never iterated into pins (Check 135 + adversarial CONNECT-proxy fixtures).
 
+### TUI Single-Writer Logging Boundary (Phase A, 2026-09-20, guard Check 138)
+- Production `crates/eggsec-tui/src/**/*.rs` has no direct `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` outside `#[cfg(test)]` modules. The guard splits each file at its first `#[cfg(test)]` / `mod tests` line (same approach as Check 18) so test-only uses stay allowed.
+- The CLI TUI launch path resolves intent before subscriber construction (`rich_tui_launch_requested` + `resolve_console_logging` / `console_policy_for_launch`) and initializes logging via `init_logging_with_console` with an explicit `ConsoleLogging` policy — bare `init_logging(` must not remain in `main.rs`.
+- Both logging copies (`eggsec-cli/src/logging.rs`, `eggsec/src/logging/init.rs`) expose `ConsoleLogging`, `init_logging_with_console`, `resolve_console_logging`, `console_layer_enabled`, gate the console `fmt` layer on `console_layer_enabled`, and carry the `ConsoleLogging::Disabled` no-console path.
+- `app/runner.rs` has no `eprintln!` and routes the sub-80x24 warning through `small_terminal_warning_message()` into the in-frame notification overlay.
+- The guard deliberately does not ban `tracing::warn!` / `info!` / `error!`: tracing is the required diagnostic facade; the sink policy is the architectural control.
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

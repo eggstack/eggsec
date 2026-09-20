@@ -28,8 +28,8 @@ The `main()` function (`:64`) executes this exact sequence:
 | 2 | `:66` | `Cli::parse()` — clap argument parsing |
 | 3 | `:68–71` | `--generate-config` early return — prints default config to stdout, exits |
 | 4 | `:73–76` | `--generate-shell-completion` early return — generates shell completion script, exits |
-| 5 | `:78–86` | `init_logging()` — configures tracing subscriber based on `--json` flag and optional agent log directory |
-| 6 | `:89–105` | TUI launch (feature `tui`) — when no command and stdout is a terminal; supports `--runtime daemon` mode |
+| 5 | `main.rs` | Rich-TUI launch intent resolved before logging (`rich_tui_launch_requested`); `init_logging_with_console()` with `ConsoleLogging::Disabled` for TUI launches, `Enabled` otherwise — format from `--json` flag plus optional agent log directory |
+| 6 | `main.rs` | TUI launch (feature `tui`) — when no command and stdout is a terminal; supports `--runtime daemon` mode |
 | 7 | `:108–114` | Headless fallback (no `tui` feature) — prints guidance to stderr when no command given |
 | 8 | `:117–122` | Daemon client intercept (feature `daemon-client`) — `is_daemon_command()` routes `Daemon`/`Session`/`Task` variants to `daemon_cli::handle_daemon_command()` before general dispatch |
 | 9 | `:124–125` | Config + scope loading — `load_config()` and `load_scope_with_source()` from `eggsec::config` |
@@ -366,15 +366,17 @@ Both are `PassiveAnalytical` / `HelperOnly` in the registry and `cli_interactive
 
 ## Logging Setup (`crates/eggsec-cli/src/logging.rs`)
 
-`init_logging()` (`:18`) configures the `tracing` subscriber:
+`init_logging_with_console(format, log_dir, console)` configures the `tracing` subscriber; `init_logging()` remains as a compat wrapper (`ConsoleLogging::Enabled`). See [logging.md](logging.md) for the full console emission policy.
 
 ### Format Selection
 
-| Condition | Format | Behavior |
-|-----------|--------|----------|
+| Condition | Format | Behavior (when console enabled) |
+|-----------|--------|---------------------------------|
 | `--json` flag | `LogFormat::Json` | JSON output with span events, thread IDs, thread names |
 | Default (no flag) | `LogFormat::Pretty` | Pretty-printed output with targets and line numbers |
 | `Compact` (dead code) | `LogFormat::Compact` | Compact output — **defined but never selected by CLI flags** |
+
+Rich TUI launches use `ConsoleLogging::Disabled`: no console formatter is constructed (file-only JSON when `log_dir` is `Some`, silent otherwise).
 
 ### Filter
 
@@ -383,13 +385,13 @@ Both are `PassiveAnalytical` / `HelperOnly` in the registry and `cli_interactive
 
 ### Agent Log Appender
 
-When the `Agent` command is used (`main.rs:78`), `agent_log_dir()` (`:20`) returns a log directory path (`<memory_dir>/logs`). This enables:
+When the `Agent` command is used, `agent_log_dir()` returns a log directory path (`<memory_dir>/logs`). This enables:
 - Daily rolling file appender (`tracing_appender::rolling::Rotation::DAILY`)
 - Non-blocking writer (`tracing_appender::non_blocking`)
 - JSON format for file output (`.json` extension, no ANSI, thread IDs, file + line)
-- File layer always runs alongside the console layer
+- File layer runs alongside the console layer on console-enabled surfaces; on TUI-disabled surfaces it runs file-only
 
-The `WorkerGuard` returned by `init_logging()` must be held for the lifetime of the process to keep the non-blocking writer alive.
+The `WorkerGuard` returned by the init functions must be held for the lifetime of the process to keep the non-blocking writer alive.
 
 ---
 

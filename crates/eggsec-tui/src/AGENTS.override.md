@@ -2,6 +2,37 @@
 
 Specialized guidance for the terminal UI module.
 
+## Single-Terminal-Writer Ownership (Phase A, 2026-09-20)
+
+While the rich TUI owns the alternate screen, Ratatui/Crossterm is the only
+writer to the controlling terminal:
+
+- Never add `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or direct
+  `stdout` / `stderr` use in production `crates/eggsec-tui/src` code. Test-only
+  uses stay inside `#[cfg(test)]` modules. Guard Check 138 fails otherwise.
+- Keep `tracing::{warn!, info!, error!, debug!}` diagnostics as-is. The sink
+  policy (CLI installs `ConsoleLogging::Disabled` for TUI launches) is the
+  architectural control — do not downgrade severities or delete diagnostics to
+  protect rendering.
+- Route user-actionable runner conditions through existing TUI state, never
+  direct writes and never duplicated across surfaces:
+  - small terminal (<80x24): `small_terminal_warning_message()` in
+    `app/runner.rs` → `overlay.notification` (`Warning`); responsive layout +
+    `is_terminal_too_small` fallback already render the UI;
+  - malformed TUI config: `tracing::warn!` + `overlay.notification` (`Warning`)
+    when no notification is already present;
+  - daemon attach failure: `tracing::error!` + per-tab error via
+    `stop_with_message` (no extra notification overlay);
+  - transient event errors / stream end: `tracing::warn!` + graceful quit
+    (no visible surface would persist);
+  - post-loop quick-save failure: `tracing::warn!` only (no in-frame surface
+    remains; Phase B owns post-restoration fatal reporting).
+- The `io::stdout()` in `run_with_mode()` exists only to construct the
+  `CrosstermBackend`; it is not a side-channel writer.
+- Fatal terminal-loop errors after restoration stay as `tracing::error!` for
+  now; Phase B owns failure-safe teardown and post-restoration reporting. Do
+  not reintroduce a console writer or `terminal.clear()` to hide leaks.
+
 ## Policy Enforcement Alignment (2026-06-11)
 
 TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts (the old post-dispatch retroactive gate has been removed). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs:82 (init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).

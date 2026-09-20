@@ -1,6 +1,6 @@
 # TUI terminal ownership Phase A — single-writer logging boundary
 
-Status: Ready for implementation
+Status: Executed (2026-09-20)
 
 Date: 2026-09-19
 
@@ -303,11 +303,69 @@ Phase A is complete only when:
 
 ## Completion record
 
-When executed, append:
+Executed 2026-09-20.
 
-- actual start/final SHA;
-- source audit results;
-- selected logging API names;
-- exact test commands/outcomes;
-- architecture guard number;
-- any intentionally retained pre-terminal stderr output.
+- Start SHA: `5b653e3f` (plans campaign registration head). Final
+  implementation SHA: Phase A implementation commit on `main` (this commit;
+  record-only SHA follow-up, if any, touches plan text only).
+- Source audit results:
+  - `crates/eggsec-cli/src/main.rs` called `init_logging()` before testing
+    TUI launch eligibility; both logging copies built an unconditional console
+    `fmt::layer()` (stdout default); normal TUI operation emits ordinary
+    `tracing` records eligible at default `info` filter.
+  - Direct-write audit over `crates/eggsec-tui/src/**/*.rs` found one
+    production direct write: `app/runner.rs` post-`EnterAlternateScreen`
+    `eprintln!` small-terminal warning. The only other `io::stdout` use is the
+    legitimate `CrosstermBackend::new(stdout)` constructor. No `println!` /
+    `print!` / `eprint!` / `dbg!` on live paths; test-only mentions live in
+    `AGENTS.override.md` prose (not Rust code).
+  - TUI-reachable subprocess audit (Phase A scope): no new subprocess sites
+    introduced or closed here beyond recording; Phase B owns inherited
+    stdout/stderr closure.
+- Selected logging API names (identical in both copies):
+  `ConsoleLogging::{Enabled, Disabled}`, `init_logging_with_console(format,
+  log_dir, console)`, `init_logging(format, log_dir)` compat wrapper
+  (`Enabled`), `resolve_console_logging(is_rich_tui_launch)`,
+  `console_layer_enabled(console)`. Process host adds
+  `rich_tui_launch_requested(has_command, stdout_is_terminal, tui_feature)` +
+  `console_policy_for_launch(is_rich_tui_launch)` in `eggsec-cli/src/main.rs`;
+  TUI adds `small_terminal_warning_message(width, height)` in
+  `app/runner.rs`.
+- Test commands/outcomes (local, before push):
+  - `cargo fmt --all --check` PASS (after `cargo fmt --all`).
+  - `cargo check -p eggsec-cli` PASS (one pre-existing-style dead_code warning
+    on the compat wrapper silenced via `#[allow(dead_code)]` with rationale).
+  - `cargo check -p eggsec-tui` PASS.
+  - `cargo test -p eggsec-tui --lib` PASS (875 passed).
+  - `cargo test -p eggsec-tui` PASS (875 passed, 12 ignored).
+  - `cargo test -p eggsec-cli` PASS (9 passed: 3 launch-policy + 6
+    injectable-writer logging policy tests).
+  - `cargo test -p eggsec --features logging-subscriber --lib logging` PASS
+    (engine copy policy + 4-combo emission tests via local dispatcher, no
+    global subscriber mutation; file-only claim verified by observed event in
+    file writer while console capture stays empty).
+  - `bash scripts/check-architecture-guards.sh` ALL PASSED (Check 138 new).
+  - `make check` PASS (EXIT 0, full mandatory Rust contract incl. check-deps,
+    clippy, doc/integration/output/report-model/policy/eggfetch/TUI/guards).
+- Architecture guard number: Check 138 (TUI single-writer logging boundary;
+  138a production macro ban outside `#[cfg(test)]` with comment-aware match,
+  138b CLI launch uses `init_logging_with_console` + intent resolution, 138c
+  both logging copies expose/gate the policy, 138d runner in-frame warning
+  path). `docs/CI_ARCHITECTURE_GUARDS.md` documents the rationale (tracing
+  deliberately not banned).
+- Intentionally retained pre-terminal stderr output: unknown `--runtime` notice
+  (`Unknown runtime mode '...', falling back to embedded`) and headless
+  no-command guidance remain `eprintln!` before terminal acquisition (cannot
+  corrupt the alternate screen; preserves the fallback-to-embedded CLI
+  contract). Initialization failures before acquisition may still report to
+  stderr. No new default persistent TUI log directory introduced.
+- Docs updated: `architecture/logging.md` (console emission policy, pruned
+  stale no-`log_dir`-implies-console claim), `architecture/tui.md`
+  (single-writer section, corrected entry point, new convention 10),
+  `architecture/cli_commands.md` (startup + logging setup),
+  `crates/eggsec-tui/src/AGENTS.override.md` (new Phase A section),
+  `AGENTS.md` (workspace TUI single-writer bullet + guard), skills
+  `eggsec-tui` (ownership + corrected `overlay.notification`),
+  `eggsec-cli` (logging surface), `eggsec-agent/agent_observability.md`
+  (file-only vs composed wording + new API). README required no change (no
+  logging/console claims to prune).

@@ -6,7 +6,7 @@ use clap_complete::Shell;
 
 use eggsec::cli::Cli;
 mod logging;
-use logging::{init_logging, LogFormat};
+use logging::{init_logging_with_console, resolve_console_logging, ConsoleLogging, LogFormat};
 
 #[cfg(feature = "daemon-client")]
 mod daemon_cli;
@@ -60,6 +60,29 @@ fn resolve_execution_surface(cli: &Cli) -> eggsec::config::ExecutionSurface {
     }
 }
 
+/// Whether the process will enter rich TUI mode.
+///
+/// Pure policy selection over launch eligibility, tested without touching the
+/// global tracing subscriber or the real stdout. The caller passes the
+/// already-computed facts: no subcommand was given and stdout is a terminal.
+/// The `tui_feature` flag mirrors the `tui` Cargo feature gate so headless
+/// builds never select the TUI surface.
+pub fn rich_tui_launch_requested(
+    has_command: bool,
+    stdout_is_terminal: bool,
+    tui_feature: bool,
+) -> bool {
+    tui_feature && !has_command && stdout_is_terminal
+}
+
+/// Resolve the console emission policy before subscriber construction.
+///
+/// Rich TUI mode disables console formatting so Ratatui/Crossterm is the only
+/// writer to the controlling terminal. All other surfaces keep console output.
+pub fn console_policy_for_launch(is_rich_tui_launch: bool) -> ConsoleLogging {
+    resolve_console_logging(is_rich_tui_launch)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     eggsec::install_tls_provider();
@@ -75,19 +98,41 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Resolve rich-TUI launch intent before subscriber construction so the
+    // logging boundary can suppress console formatting for the alternate
+    // screen. Stdout *and* stderr are both the same terminal while the TUI
+    // owns it, so stderr is never used as an alternate writer.
+    #[cfg(feature = "tui")]
+    let is_rich_tui_launch = rich_tui_launch_requested(
+        cli.command.is_none(),
+        std::io::IsTerminal::is_terminal(&std::io::stdout()),
+        true,
+    );
+    #[cfg(not(feature = "tui"))]
+    let is_rich_tui_launch = rich_tui_launch_requested(
+        cli.command.is_none(),
+        std::io::IsTerminal::is_terminal(&std::io::stdout()),
+        false,
+    );
+
     let log_dir = agent_log_dir(&cli);
-    let _guard = init_logging(
+    let _guard = init_logging_with_console(
         if cli.json {
             LogFormat::Json
         } else {
             LogFormat::Pretty
         },
         log_dir,
+        console_policy_for_launch(is_rich_tui_launch),
     );
 
-    // Launch TUI directly when no command is given and stdout is a terminal.
+    // Launch TUI directly when the pre-logging launch intent resolved true.
+    // The unknown-runtime notice below runs before terminal acquisition, so it
+    // cannot corrupt the alternate screen; it is intentionally retained as
+    // pre-terminal stderr output to preserve the fallback-to-embedded CLI
+    // contract (Phase A completion record).
     #[cfg(feature = "tui")]
-    if cli.command.is_none() && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+    if is_rich_tui_launch {
         let mode = match cli.runtime.as_deref() {
             Some("daemon") => eggsec_tui::RuntimeMode::Daemon {
                 socket_path: cli.socket.clone(),
@@ -151,4 +196,37 @@ async fn main() -> Result<()> {
     eggsec::commands::handle_command(cli, &ctx).await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::console_policy_for_launch;
+    use super::rich_tui_launch_requested;
+    use crate::logging::{console_layer_enabled, ConsoleLogging};
+
+    #[test]
+    fn rich_tui_launch_requires_feature_no_command_and_tty() {
+        assert!(rich_tui_launch_requested(false, true, true));
+        assert!(!rich_tui_launch_requested(true, true, true));
+        assert!(!rich_tui_launch_requested(false, false, true));
+        assert!(!rich_tui_launch_requested(false, true, false));
+        assert!(!rich_tui_launch_requested(true, false, false));
+    }
+
+    #[test]
+    fn console_policy_disables_for_tui_launch_only() {
+        assert_eq!(console_policy_for_launch(true), ConsoleLogging::Disabled);
+        assert_eq!(console_policy_for_launch(false), ConsoleLogging::Enabled);
+    }
+
+    #[test]
+    fn tui_launch_implies_no_console_writer() {
+        // Prove the policy, not just the enum: the TUI surface must have no
+        // console writer while non-TUI surfaces keep one.
+        let tui_console = console_policy_for_launch(rich_tui_launch_requested(false, true, true));
+        assert!(!console_layer_enabled(tui_console));
+
+        let cli_console = console_policy_for_launch(rich_tui_launch_requested(true, true, true));
+        assert!(console_layer_enabled(cli_console));
+    }
 }

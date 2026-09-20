@@ -72,18 +72,29 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    if let Ok(size) = terminal.size() {
-        if size.width < 80 || size.height < 24 {
-            eprintln!(
-                "Warning: Terminal size ({}x{}) is smaller than recommended (80x24). \
-                 Resize your window or scroll horizontally for full UI.",
-                size.width, size.height
-            );
-        }
-    }
+    // Single-writer rule (Phase A): while the alternate screen is owned,
+    // Ratatui/Crossterm is the only writer to the controlling terminal. No
+    // `eprintln!`/`println!`/`dbg!` or direct stdout/stderr use is allowed here;
+    // recoverable conditions are surfaced through in-frame TUI state below.
+    // The terminal size is captured pre-App so the warning can be routed
+    // through the notification overlay instead of a direct terminal write.
+    let small_terminal_warning: Option<String> = terminal
+        .size()
+        .ok()
+        .and_then(|size| small_terminal_warning_message(size.width, size.height));
 
     let history = state::create_shared_history();
     let mut app = App::new(history);
+
+    // In-frame small-terminal notice: the responsive layout plus the
+    // `is_terminal_too_small` fallback already render correctly, so this
+    // warning is advisory and must not duplicate into other surfaces.
+    if let Some(warning) = small_terminal_warning {
+        app.overlay.notification = Some(super::notifications::Notification::new(
+            warning,
+            super::notifications::NotificationSeverity::Warning,
+        ));
+    }
 
     // Apply runtime mode if non-default.
     if mode != RuntimeMode::default() {
@@ -94,6 +105,17 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
         Ok(c) => Some(c),
         Err(e) => {
             tracing::warn!("Failed to load TUI config: {e}");
+            // User-actionable: config was requested but could not be read, so
+            // surface it in-frame. Tracing remains the diagnostic facade; the
+            // notification is the user-visible route (no duplicate surfaces).
+            // Only overwrite the small-terminal notice if one is not already
+            // present, to avoid duplicating messages.
+            if app.overlay.notification.is_none() {
+                app.overlay.notification = Some(super::notifications::Notification::new(
+                    format!("TUI config could not be loaded; using defaults: {e}"),
+                    super::notifications::NotificationSeverity::Warning,
+                ));
+            }
             None
         }
     };
@@ -139,6 +161,10 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
     );
 
     // For daemon mode, connect and attach to session before starting the event loop.
+    // Evaluated for WS4: daemon attach failure is user-actionable, so it uses
+    // the existing per-tab error surface (`stop_with_message`) in addition to
+    // the tracing diagnostic. No notification overlay is added to avoid
+    // duplicating the same message into multiple persistent surfaces.
     if mode != RuntimeMode::default() {
         let runtime_mode = app.runtime_mode.clone();
         if let Some(ref client) = app.runtime_client {
@@ -157,6 +183,11 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
 
     let res = run_app(&mut terminal, &mut app);
 
+    // Evaluated for WS4: quick-save failure occurs post-loop while the
+    // alternate screen is still owned, so there is no appropriate in-frame
+    // surface left to render into. Keep the tracing diagnostic (silent under
+    // the TUI no-console policy); post-restoration fatal reporting is owned
+    // by Phase B.
     if let Err(e) = app.session_manager.save_quick(&app) {
         tracing::warn!("Failed to save session on exit: {:?}", e);
     }
@@ -169,6 +200,9 @@ pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<(
     )?;
     terminal.show_cursor()?;
 
+    // Post-restoration: fatal terminal-loop errors are logged as diagnostics.
+    // Phase B owns failure-safe teardown and any post-restoration user-visible
+    // fatal reporting; Phase A must not reintroduce a console writer here.
     if let Err(err) = res {
         tracing::error!("TUI exited with error: {:?}", err);
     }
@@ -269,6 +303,23 @@ async fn attach_daemon_session(
     }
 
     Ok(())
+}
+
+/// Pure advisory message for terminals below the recommended 80x24.
+///
+/// Returns `None` when the size is sufficient. The caller routes `Some` into
+/// the in-frame notification overlay; this helper never writes to the
+/// terminal itself. The responsive layout plus the `is_terminal_too_small`
+/// fallback already render correctly, so the message is advisory only.
+pub(crate) fn small_terminal_warning_message(width: u16, height: u16) -> Option<String> {
+    if width < 80 || height < 24 {
+        Some(format!(
+            "Terminal size ({width}x{height}) is smaller than recommended (80x24). \
+             Resize your window or scroll horizontally for full UI."
+        ))
+    } else {
+        None
+    }
 }
 
 fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
@@ -403,11 +454,18 @@ where
                     }
                 }
                 Some(Some(Err(e))) => {
+                    // Evaluated for WS4: transient event errors stay as tracing
+                    // diagnostics (silent under the TUI no-console policy).
+                    // They are not user-actionable per-event, so no
+                    // notification surface is added.
                     tracing::warn!("Terminal event error: {:?}", e);
                 }
                 Some(None) => {
                     // Terminal event stream ended (e.g. terminal detached).
                     // Quit gracefully instead of spinning in a busy-loop.
+                    // Evaluated for WS4: the session ends here, so no
+                    // in-frame notification would be visible; keep the tracing
+                    // diagnostic only.
                     tracing::warn!("Terminal event stream ended; quitting");
                     app.should_quit = true;
                     break;
@@ -469,5 +527,18 @@ mod tests {
             concurrency: None,
         });
         assert_eq!(tab_for_task_kind(&kind), Tab::Fingerprint);
+    }
+
+    #[test]
+    fn small_terminal_warning_fires_below_80x24() {
+        let warning = small_terminal_warning_message(79, 24).expect("width below 80 must warn");
+        assert!(warning.contains("79x24"));
+        assert!(warning.contains("80x24"));
+
+        let warning = small_terminal_warning_message(80, 23).expect("height below 24 must warn");
+        assert!(warning.contains("80x23"));
+
+        assert!(small_terminal_warning_message(80, 24).is_none());
+        assert!(small_terminal_warning_message(120, 40).is_none());
     }
 }

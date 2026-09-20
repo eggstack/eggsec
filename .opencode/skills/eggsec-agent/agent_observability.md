@@ -18,25 +18,29 @@ These skills cover the agent observability system and configuration hot-reloadin
 **Key Features**:
 - Uses `tracing-appender` for non-blocking writes
 - Daily rotating logs at `memory_dir/logs/agent.log` (when agent subcommand is active)
-- Composed alongside console layer — both file and stdout active simultaneously
+- Composed alongside the console layer on console-enabled surfaces; file-only JSON when the TUI disables console output (`ConsoleLogging::Disabled`)
 - Thread-safe with worker guard pattern
 - Rich formatting with target, thread IDs, file/line numbers
 
 **Usage**:
 ```rust
-// init_logging() is called once in main.rs with an optional log_dir
+// init_logging_with_console() is called once in main.rs with an optional
+// log_dir plus an explicit ConsoleLogging policy (Disabled for rich TUI
+// launches so Ratatui owns the terminal; Enabled elsewhere). init_logging()
+// remains as a compat wrapper (Enabled).
 // When the agent subcommand is used, the log directory is derived from
 // the agent's memory_dir and passed to enable file-based logging:
 
 let log_dir = agent_log_dir(&cli);
-let _guard = init_logging(
+let _guard = init_logging_with_console(
     if cli.json { LogFormat::Json } else { LogFormat::Pretty },
     log_dir,
+    console_policy_for_launch(is_rich_tui_launch),
 );
 ```
 
 **When to use**:
-- TUI swallows stdout, need file-based audit trail
+- Rich TUI mode installs no console logger, so file-based audit trail is the durable record
 - Security compliance requires persistent logging
 - Debugging agent decision-making
 

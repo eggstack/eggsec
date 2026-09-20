@@ -3557,6 +3557,110 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 138. TUI single-writer logging boundary (Phase A): no direct terminal writers
+# in production TUI code, and the CLI TUI launch path uses no-console logging.
+# While the rich TUI owns the alternate screen, Ratatui/Crossterm must be the
+# only writer to the controlling terminal. Tracing stays the diagnostic facade;
+# the sink policy is the architectural control (never ban tracing macros).
+echo ""
+echo "--- Check 138: TUI single-writer logging boundary holds ---"
+SECTION_FAIL=0
+# 138a: no direct print/debug macros in production TUI code (outside #[cfg(test)]).
+# Same per-file test-module split as Check 18: anything before the first
+# #[cfg(test)]/mod tests line is production and must not emit terminal text.
+# Comment-only mentions (// lines documenting the ban) are ignored by
+# stripping the // comment suffix before matching.
+TUI_MACRO_FILES=$(rg -l '\b(println!|eprintln!|print!|eprint!|dbg!)' crates/eggsec-tui/src/ --glob='*.rs' 2>/dev/null || true)
+for file in $TUI_MACRO_FILES; do
+  TEST_MODULE_LINE=$(rg -n '#\[cfg\(test\)]|^mod tests' "$file" 2>/dev/null | head -1 | cut -d: -f1)
+  if [[ -z "$TEST_MODULE_LINE" ]]; then
+    echo "FAIL: $file uses a direct print/debug macro with no test module to exclude."
+    rg -n '\b(println!|eprintln!|print!|eprint!|dbg!)' "$file" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  while IFS= read -r hit; do
+    line=$(echo "$hit" | cut -d: -f1)
+    if [[ "$line" -lt "$TEST_MODULE_LINE" ]]; then
+      line_content=$(sed -n "${line}p" "$file" 2>/dev/null || true)
+      code_part=$(printf '%s' "$line_content" | sed 's|//.*||')
+      if printf '%s' "$code_part" | rg -q '\b(println!|eprintln!|print!|eprint!|dbg!)' 2>/dev/null; then
+        echo "$file:$hit"
+        echo "FAIL: $file has direct print/debug macro at line $line (before test module at $TEST_MODULE_LINE)."
+        echo "      Production rich-TUI code must route user-visible info through TUI state; tracing stays for diagnostics."
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    fi
+  done < <(rg -n '\b(println!|eprintln!|print!|eprint!|dbg!)' "$file" 2>/dev/null || true)
+done
+# 138b: CLI TUI launch path must resolve intent before logging and disable console.
+CLI_MAIN="crates/eggsec-cli/src/main.rs"
+if [[ ! -f "$CLI_MAIN" ]]; then
+  echo "FAIL: missing CLI entry point: $CLI_MAIN"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! rg -q 'init_logging_with_console' "$CLI_MAIN" 2>/dev/null; then
+    echo "FAIL: $CLI_MAIN does not use init_logging_with_console for the TUI launch surface."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'rich_tui_launch_requested|resolve_console_logging|console_policy_for_launch' "$CLI_MAIN" 2>/dev/null; then
+    echo "FAIL: $CLI_MAIN does not resolve rich-TUI launch intent before subscriber construction."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # Bare init_logging( (without _with_console) must not remain in main.rs;
+  # existing callers stay source-compatible via the wrapper, but the launch
+  # path itself must select the console policy explicitly.
+  BARE_INIT=$(rg -n 'init_logging\(' "$CLI_MAIN" 2>/dev/null | grep -v 'init_logging_with_console' || true)
+  if [[ -n "$BARE_INIT" ]]; then
+    echo "$BARE_INIT"
+    echo "FAIL: $CLI_MAIN still calls bare init_logging(; use init_logging_with_console with an explicit ConsoleLogging policy."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+# 138c: both logging copies expose the no-console policy and gate the console layer.
+for logfile in "crates/eggsec-cli/src/logging.rs" "crates/eggsec/src/logging/init.rs"; do
+  if [[ ! -f "$logfile" ]]; then
+    echo "FAIL: missing logging implementation: $logfile"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  for sym in "enum ConsoleLogging" "init_logging_with_console" "resolve_console_logging" "console_layer_enabled" "ConsoleLogging::Disabled"; do
+    if ! rg -Fq "$sym" "$logfile" 2>/dev/null; then
+      echo "FAIL: $logfile missing required no-console policy symbol: $sym"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if ! rg -q 'if !console_layer_enabled' "$logfile" 2>/dev/null; then
+    echo "FAIL: $logfile does not gate the console fmt layer on console_layer_enabled (must construct no stdout/stderr layer when disabled)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# 138d: TUI runner must route the small-terminal warning in-frame (no code-level eprintln).
+# Comment-only mentions documenting the ban are ignored.
+RUNNER="crates/eggsec-tui/src/app/runner.rs"
+RUNNER_CODE_HITS=$(while IFS= read -r hit; do
+  line=$(echo "$hit" | cut -d: -f1)
+  line_content=$(sed -n "${line}p" "$RUNNER" 2>/dev/null || true)
+  code_part=$(printf '%s' "$line_content" | sed 's|//.*||')
+  if printf '%s' "$code_part" | rg -q 'eprintln!' 2>/dev/null; then
+    echo "$hit"
+  fi
+done < <(rg -n 'eprintln!' "$RUNNER" 2>/dev/null || true))
+if [[ -n "$RUNNER_CODE_HITS" ]]; then
+  echo "FAIL: $RUNNER still contains code-level eprintln! after terminal acquisition (must use the in-frame notification path)."
+  echo "$RUNNER_CODE_HITS"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'small_terminal_warning_message' "$RUNNER" 2>/dev/null; then
+  echo "FAIL: $RUNNER missing the in-frame small-terminal warning path (small_terminal_warning_message)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI single-writer logging boundary holds."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

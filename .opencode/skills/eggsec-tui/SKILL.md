@@ -140,8 +140,22 @@ Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_d
 
 ### Notifications
 ```rust
-app.notification = Some(Notification::new("Exported".to_string(), NotificationSeverity::Success));
+app.overlay.notification = Some(Notification::new("Exported".to_string(), NotificationSeverity::Success));
 ```
+
+### Single-Terminal-Writer Ownership (Phase A)
+While the rich TUI owns the alternate screen, Ratatui/Crossterm is the only
+writer to the controlling terminal. Production `crates/eggsec-tui/src` code
+must not use `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or touch
+`stdout` / `stderr` directly (test-only uses stay in `#[cfg(test)]`; guard
+Check 138 fails otherwise). The CLI installs `ConsoleLogging::Disabled` for
+TUI launches, so `tracing` events emit no terminal bytes — keep diagnostics,
+do not downgrade severities. Route user-actionable conditions through existing
+state: small terminal via `small_terminal_warning_message()` →
+`overlay.notification` (`Warning`); malformed config → notification;
+daemon attach failure → per-tab error via `stop_with_message`; transient
+event errors / stream end → tracing + graceful quit; post-loop quick-save
+failure → tracing only (Phase B owns post-restoration fatal reporting).
 
 ### Dynamic Layouts
 ```rust

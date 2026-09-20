@@ -163,7 +163,7 @@ Global search (`Ctrl+F`) overlays a search popup. The search query is applied to
 
 ## Event Loop & Input Handling
 
-### Event Loop (`app/runner.rs:64-177`)
+### Event Loop (`app/runner.rs`)
 
 `run_with_mode()` sets up crossterm raw mode, alternate screen, and mouse capture. The core loop (`run_app()`) follows `update() → draw() → input-check`:
 
@@ -173,6 +173,39 @@ Global search (`Ctrl+F`) overlays a search popup. The search query is applied to
 4. Input via non-blocking `EventStream::next().now_or_never()`. If no events, sleeps 10ms.
 
 Exit calls `session_manager.save_quick()`.
+
+### Single-Terminal-Writer Ownership (Phase A)
+
+While the rich TUI owns the alternate screen, Ratatui/Crossterm is the only
+writer to the controlling terminal:
+
+- The CLI resolves rich-TUI launch intent before subscriber construction
+  (`rich_tui_launch_requested` in `eggsec-cli/src/main.rs`) and initializes
+  logging with `ConsoleLogging::Disabled` (`init_logging_with_console`).
+  Rich TUI mode installs no stdout/stderr tracing formatter; tracing call
+  sites remain valid diagnostics but emit no terminal bytes.
+- Stdout *and* stderr are both forbidden as side channels while the alternate
+  screen is owned; stderr is never used as an alternate TUI writer.
+- Production `eggsec-tui` code contains no direct `println!` / `eprintln!` /
+  `print!` / `eprint!` / `dbg!` on live paths (guard Check 138). The former
+  post-`EnterAlternateScreen` `eprintln!` small-terminal warning now routes
+  through `small_terminal_warning_message()` into the in-frame notification
+  overlay (`NotificationSeverity::Warning`); the responsive layout plus the
+  `is_terminal_too_small` fallback already render the degraded UI.
+- Recoverable user-relevant runner conditions use existing TUI state, never
+  direct writes and never duplicated across surfaces: malformed TUI config →
+  notification overlay (tracing stays as diagnostic); daemon attach failure →
+  per-tab error via `stop_with_message` (tracing stays as diagnostic);
+  transient event errors / event-stream end → tracing diagnostic + graceful
+  quit (no visible surface would persist); post-loop quick-save failure →
+  tracing diagnostic (no in-frame surface remains; post-restoration fatal
+  reporting is owned by Phase B).
+- No new default persistent TUI log directory was introduced; file logging
+  still occurs only when an existing caller passes `log_dir` (agent memory
+  dir), as file-only JSON when console is disabled.
+
+See [logging.md](logging.md) for the console emission policy and
+`docs/CI_ARCHITECTURE_GUARDS.md` for the Check 138 regression guard.
 
 ### Key Processing Pipeline (`app/key_handler.rs`)
 
@@ -345,6 +378,7 @@ Semantic rules for safety-relevant fields:
 7. **TabWindow/TabSpan**: Use `TabWindow` for pagination, not raw tab count division. Never use `tab as usize` for indexing.
 8. **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
 9. **Stale-focus guard**: Always use `InputGroup::valid_focused_index()` instead of direct `self.focused` indexing.
+10. **Single-writer terminal rule**: Never `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or touch `stdout` / `stderr` directly in production TUI code. Keep `tracing` diagnostics; surface user-actionable conditions through `Notification`, per-tab error, popup, or status state. See the Single-Terminal-Writer section above.
 
 ### Overlay Selector Containment
 
@@ -352,7 +386,7 @@ When an embedded Settings selector is open, normal-mode shortcuts are blocked vi
 
 ### Entry Point
 
-TUI launches automatically via `handle_no_command()` in `commands/handlers/mod.rs` when no subcommand is provided and stdout is a terminal.
+TUI launches from `eggsec-cli/src/main.rs` when no subcommand is provided and stdout is a terminal (`rich_tui_launch_requested`). Launch intent is resolved before logging initialization so the subscriber can be installed with `ConsoleLogging::Disabled`.
 
 ### Key Bindings Summary
 
@@ -384,4 +418,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20*

@@ -138,6 +138,19 @@ pub enum Commands {
 - `--user-agent`, `--stealth` - Request customization
 - `--rate-limit`, `--jitter` - Rate limiting
 
+## Logging Surface (TUI Single-Writer Boundary)
+
+`crates/eggsec-cli/src/main.rs` resolves rich-TUI launch intent before
+subscriber construction via `rich_tui_launch_requested(has_command,
+stdout_is_terminal, tui_feature)` → `console_policy_for_launch()` →
+`resolve_console_logging()`, then calls `init_logging_with_console(format,
+log_dir, policy)`. TUI launches use `ConsoleLogging::Disabled` (no
+stdout/stderr formatter; file-only JSON when `log_dir` is `Some`, silent
+otherwise); all other surfaces keep `Enabled`. `init_logging()` remains as a
+compat wrapper (`Enabled`). Never add a second subscriber, reload handle, or
+stderr-as-TUI-writer path — stderr is the same terminal while the alternate
+screen is owned. Guard Check 138 pins this boundary.
+
 ## Command Dispatch (`src/commands/handlers/`)
 
 ### Routing contract (Phase 1: single owner)
