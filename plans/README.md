@@ -60,9 +60,10 @@ Production APIs, wire DTOs, TLS trust behavior, worker capacity, retry policy,
 and performance architecture remain unchanged.
 
 Executed: implementation `71336632` (verified TLS steady-state, TLS
-sever/reconnect, no-retry regressions, doc corrections); completion record
-in the pass plan. Hosted CI status for the final polish SHA is recorded in
-the pass plan post-push.
+sever/reconnect, no-retry regressions, doc corrections) + docs/record
+`855d03cd`; completion record in the pass plan. Hosted CI for `855d03cd`:
+CI `35637506642` success, Code Quality `35637504761` success (see the pass
+plan; the recording follow-up's own runs are verified before closure).
 
 ## TUI terminal ownership corrective campaign (executed 2026-09-20)
 

@@ -376,8 +376,13 @@ Status: Executed
   EXIT 0; `make check-msrv` EXIT 0. Deep sweeps (`check-features-individual`,
   `check-full`) are deep-checks-only per AGENTS.md, not per-PR; no new
   features or system deps were added.
-- Hosted CI: recorded post-push below (the pre-polish HEAD run is context,
-  not proof for the polish SHA).
+- Hosted CI for the polish HEAD `855d03cd` (code + docs + this record
+  skeleton): CI run `35637506642` conclusion `success` (Rust mandatory
+  contract in progress → success, dependency policy success, Python
+  success), Code Quality run `35637504761` conclusion `success`. The
+  pre-polish HEAD run is context only, not proof for the polish SHA.
+  The CI-status recording update itself lands as a docs-only follow-up;
+  its own runs are verified out-of-band before closure is claimed.
 - Residual debt (with reopen conditions):
   - None from this pass's acceptance list; all 15 criteria are met.
   - Reopen the sever fixture only if the retry matrix or reconnect policy
