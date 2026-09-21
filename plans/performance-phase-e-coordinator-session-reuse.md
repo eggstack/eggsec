@@ -221,26 +221,39 @@ Status: Executed
   - `scripts/perf-profile.sh` (`session` suite);
   - `architecture/performance.md` (Phase E evidence table).
 - Connection/auth counts before/after: 6-op steady workload 6 accepts →
-  1 accept / 1 auth / 1 live connection; 12-op fixture ~496ms of setups →
-  single setup per healthy lifetime.
+  1 accept / 1 auth / 1 live connection (plaintext); closure-polish adds
+  the verified-TLS counterpart with 1 accept / 1 handshake / 1 auth
+  (`session_reuses_single_tls_connection_in_steady_state`); 12-op fixture
+  ~496ms of setups → single setup per healthy lifetime.
 - Reconnect evidence: outage-then-recovery test drives re-establishment +
-  registration replay via heartbeat alone; wrong-PSK test proves no
-  unauthenticated fallback (0 auths, 0 live connections); shutdown test
-  proves prompt caller failure with no detached loop; burst test proves
-  queue liveness past the bound; concurrency test proves response
-  association across 5 parallel results.
-- Retry matrix: heartbeat once (idempotent); RequestTasks/result never
-  transparently retried (dequeue-loss and duplicate-complete analysis in
-  code comments); `Execute` untouched.
-- Checks: `cargo test -p eggsec --lib distributed::` (25 passed);
+  registration replay via heartbeat alone; closure-polish adds the
+  deterministic established-session sever fixture
+  (`session_severed_tls_connection_reconnects_with_reregister`: A Register
+  + heartbeat, server-side drop of A, fresh B with new TCP/TLS/auth,
+  Register replayed before heartbeat, retry succeeds; accepts 2,
+  handshakes 2, auths 2, peer addrs differ, zero unauthenticated
+  commands); wrong-PSK test proves no unauthenticated fallback (0 auths,
+  0 live connections); shutdown test proves prompt caller failure with no
+  detached loop; burst test proves queue liveness past the bound;
+  concurrency test proves response association across 5 parallel results.
+- Retry matrix: heartbeat once (idempotent; proven by the sever test's
+  successful retry); RequestTasks/result never transparently retried
+  (dequeue-loss and duplicate-complete analysis in code comments, plus
+  explicit regression tests `session_request_tasks_never_retried_on_failure`
+  and `session_result_never_retried_on_failure`: one wire message per
+  caller call on failure, next explicit call recovers); `Execute`
+  untouched.
+- Checks (A–E): `cargo test -p eggsec --lib distributed::` (25 passed);
   `--test distributed_tests` (21 passed); full lib 1466 passed;
   `cargo clippy -p eggsec --no-default-features` + `--features cli` clean;
-  `cargo fmt --all --check` clean; release session suite green.
-- Protocol limitation intentionally unresolved: deterministic mid-session
-  TCP sever has no loopback fixture without root/netns (documented in
-  `architecture/performance.md`); recovery shares the tested
-  establish+replay path.
+  `cargo fmt --all --check` clean; release session suite green. Post-polish
+  re-validation is recorded in the closure-polish plan, not cited here.
+- Former limitation withdrawn: deterministic mid-session sever no longer
+  requires root/netns — the loopback sever fixture above covers
+  sever/reconnect/re-auth/re-register without privileged networking
+  (see `architecture/performance.md` polish addendum).
 - Compatibility: no wire-format change (`CommandMessage`/`ResponseMessage`
   untouched), no public API removal/signature change (session types are
-  crate-internal; one-shot client methods unchanged), auth/TLS semantics
-  unchanged.
+  crate-internal; one-shot client methods unchanged; test-only trust
+  constructors are `#[cfg(test)]` crate-private), auth/TLS semantics
+  unchanged (verified test trust, never the `insecure-tls` bypass).

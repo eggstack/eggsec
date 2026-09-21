@@ -199,6 +199,30 @@ impl TlsClient {
         })
     }
 
+    /// Test-only verified trust injection: build a client that verifies
+    /// against the given DER-encoded test root instead of the WebPKI roots.
+    /// No new public constructor, no feature flag, no change to
+    /// [`TlsClient::new`] behavior. Never uses the `insecure-tls` bypass.
+    #[cfg(test)]
+    pub(crate) fn with_test_root(
+        domain: &str,
+        root_der: &[u8],
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(rustls::pki_types::CertificateDer::from(root_der.to_vec()))?;
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        Ok(Self {
+            connector: TlsConnector::from(Arc::new(config)),
+            domain: domain.to_string(),
+            #[cfg(feature = "insecure-tls")]
+            warn_on_use: false,
+            #[cfg(feature = "insecure-tls")]
+            insecure_connection_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        })
+    }
+
     pub fn connector(&self) -> &TlsConnector {
         &self.connector
     }

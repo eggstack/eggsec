@@ -253,8 +253,11 @@ Status: Executed
   entry instead of per comparison); 26 pool tests incl. tie-ordering pin.
 - F4 TaskQueue: option B landed (unified `QueueState` under one mutex;
   removes the pending→in_progress vs in_progress→pending lock-order
-  inversion and one clone per dequeue); 23 distributed tests incl.
-  200-task hammer + stale-cycle preservation.
+  inversion; the owned-return/in-progress representation still requires
+  one task clone at dequeue — the earlier "removes one clone per dequeue"
+  wording was overstated and is corrected here and in
+  `architecture/performance.md`); 23 distributed tests incl. 200-task
+  hammer + stale-cycle preservation.
 - F5 larger rewrites: all rejected/deferred with evidence (runtime mutex,
   pipeline waves, allocator, PGO, target-cpu=native) — dispositions in
   `architecture/performance.md`.
@@ -272,13 +275,18 @@ Status: Executed
   `CI_ARCHITECTURE_GUARDS.md` (140–142), `README.md` (evidence pointer),
   `AGENTS.md` (performance contract), loadtest/distributed skills;
   plans retained with completion records.
-- Final verification: `make check` + `make check-python` (as applicable) +
-  `check-feature-profiles` + guards + affected-crate suites (see the
-  verification todo outcome at commit time).
+- Final verification (A–F): `make check` + `make check-python` +
+  `check-feature-profiles` + guards + affected-crate suites green at the
+  campaign HEAD (see the closure-polish pass for the post-polish
+  re-validation record; the pre-polish run is context, not proof for the
+  polish SHA).
 - Residual debt (owner / why / measurement / reopen condition):
-  - Mid-session TCP sever fixture (distributed): no deterministic loopback
-    sever without root/netns; recovery shares the tested establish+replay
-    path. Reopen if a harness gains packet-level fault injection.
+  - Mid-session TCP sever fixture (distributed): CLOSED by the
+    closure-polish pass — deterministic server-side sever/reconnect/
+    re-auth/re-register is now proven by
+    `session_severed_tls_connection_reconnects_with_reregister` without
+    root/netns. Reopen only if the retry matrix or reconnect policy
+    changes and the fixture no longer covers it.
   - Global runtime mutex (runtime): no contention measured; reopen only on
     multi-session mutex-wait profiling with benefit exceeding
     lifecycle-ordering risk.

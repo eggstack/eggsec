@@ -152,8 +152,14 @@ connection lifetime instead of one per message. Reconnect replays worker
 registration before heartbeat state is used; heartbeat retries once
 (idempotent) while task acquisition/result errors surface for normal-poll
 recovery (no duplicate execution). The one-shot `RemoteClient` methods above
-are unchanged for CLI/tool callers. Evidence: `architecture/performance.md`
-(Phase E).
+are unchanged for CLI/tool callers. Steady-state reuse is proven over both
+plaintext and verified local TLS (1 accept / 1 handshake where TLS / 1 auth
+per healthy lifetime); deterministic server-side sever/reconnect/
+re-auth/re-register is proven without root/netns
+(`session_severed_tls_connection_reconnects_with_reregister`: accepts 2,
+handshakes 2, auths 2, Register replayed before heartbeat on the fresh
+connection). Evidence: `architecture/performance.md` (Phase E + polish
+addendum).
 
 #### WorkerConfig (`worker.rs:46-54`)
 
@@ -247,16 +253,19 @@ pub struct TaskResult {
 }
 ```
 
-#### TaskQueue (`queue.rs:29-153`)
+#### TaskQueue (`queue.rs`)
 
 ```rust
 pub struct TaskQueue {
-    pending: Arc<RwLock<VecDeque<Task>>>,
-    in_progress: Arc<RwLock<FxHashMap<String, Task>>>,
-    completed: Arc<RwLock<VecDeque<TaskResult>>>,
+    state: Arc<Mutex<QueueState>>, // unified pending/in_progress/completed
     max_size: usize,
 }
 ```
+
+One private `QueueState` under a single Tokio mutex: pending→in_progress
+and in_progress→completed are short atomic transitions (no cross-lock
+ordering inversion). The owned-return/in-progress representation still
+requires one task clone at dequeue.
 
 #### QueueError (`queue.rs:155-169`)
 
@@ -277,10 +286,18 @@ Implements `AsyncRead` + `AsyncWrite` by delegating to the inner stream.
 
 `TlsServer::from_pem(cert_path, key_path)` loads PEM files, extracts certificates and private key (supports PKCS#8 and PKCS#1), builds a `rustls::ServerConfig` with `with_no_client_auth()`.
 
-#### TlsClient (`io.rs:163-313`)
+#### TlsClient (`io.rs`)
 
-- With `insecure-tls` feature: `NoVerifier` accepts all certificates (for lab use only).
-- Without `insecure-tls`: Uses `webpki_roots::TLS_SERVER_ROOTS` for proper certificate verification.
+- Production `TlsClient::new(domain)` verifies against the WebPKI roots
+  (without `insecure-tls`); with the `insecure-tls` feature it uses a
+  `NoVerifier` that accepts all certificates (isolated lab only, never as
+  evidence).
+- Test-only verified trust (`#[cfg(test)]` crate-private
+  `TlsClient::with_test_root` / `RemoteClient::with_test_root` /
+  `CoordinatorSession::spawn_with_test_root`): verifies a short-lived
+  `rcgen` localhost root with no public constructor, no feature flag, and
+  no change to production trust. The TLS session-reuse and sever fixtures
+  use this path with the production `TlsServer::from_pem` accept path.
 - Tracks `insecure_connection_count` when using `NoVerifier`.
 
 #### LineWriter (`io.rs:315-349`)
@@ -542,9 +559,10 @@ Note: The standalone `process_*` functions (`worker.rs:525-870`) are marked `#[a
 
 | Test suite | Path | What it covers |
 |------------|------|----------------|
-| Unit tests | `crates/eggsec/src/distributed/command.rs:289-305` | PSK generation length and uniqueness |
-| Unit tests | `crates/eggsec/src/distributed/io.rs:351-459` | StreamWrapper variants, LineWriter roundtrip, TCP plaintext e2e, TLS server invalid PEM |
-| Unit tests | `crates/eggsec/src/distributed/worker.rs:876-901` | Worker rejects tasks without explicit scope (requires tool-api) |
+| Unit tests | `crates/eggsec/src/distributed/command.rs` | PSK generation length and uniqueness |
+| Unit tests | `crates/eggsec/src/distributed/io.rs` | StreamWrapper variants, LineWriter roundtrip, TCP plaintext e2e, TLS server invalid PEM |
+| Unit tests | `crates/eggsec/src/distributed/worker.rs` | Worker rejects tasks without explicit scope (requires tool-api) |
+| Session tests | `crates/eggsec/src/distributed/remote.rs` (`session_tests`) | Plaintext steady-state reuse; verified-TLS steady-state reuse (1 accept/1 handshake/1 auth); deterministic TLS sever/reconnect/re-auth/re-register; RequestTasks/result no-retry dispositions; wrong-PSK, shutdown, queue-bound, association, error-surface |
 | Integration tests | `crates/eggsec/tests/distributed_tests.rs` | Queue operations, FIFO ordering, full queue, complete, evict, serde roundtrip, listener auth (success + invalid PSK), task assignment cycle, heartbeat, connection count, enqueue command, status request, disconnect cleanup, stale task reassignment |
 
 ```bash
@@ -554,7 +572,7 @@ cargo test -p eggsec --test distributed_tests
 
 ## Invariants & Gotchas
 
-1. **Each RemoteClient method creates a new TCP connection**: `register_worker`, `send_heartbeat`, `send_result`, `request_tasks`, `execute`, `request_status`, and `enqueue_task` each open a fresh connection, authenticate, send one message, wait for response, and drop the connection. There is no persistent connection pooling.
+1. **One-shot vs session connections**: the one-shot `RemoteClient` methods (`register_worker`, `send_heartbeat`, `send_result`, `request_tasks`, `execute`, `request_status`, `enqueue_task`) each open a fresh connection, authenticate, send one message, wait for response, and drop it. The worker's steady-state path instead multiplexes over one `CoordinatorSession` per healthy lifetime (one setup, not one per message); only the session reuses connections.
 2. **DNS caching**: `RemoteClient` caches DNS resolution for 60 seconds (`remote.rs:702-715`). Cached addresses are not re-validated for reachability.
 3. **Worker registration requires TLS domain**: `WorkerConfig::default()` sets `tls_domain: Some("localhost")`. If `tls_domain` is `None`, registration, heartbeat, and task processing all fail (`worker.rs:159-161,208-211,394-397`).
 4. **Completed results eviction**: `TaskQueue::complete()` evicts the oldest results when completed count exceeds `max_size` (`queue.rs:117-119`).

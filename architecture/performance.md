@@ -1,11 +1,16 @@
 # Performance evidence
 
-Status: Active campaign (roadmap `plans/performance-resource-efficiency-roadmap-2026-09-21.md`).
+Status: Executed (roadmap `plans/performance-resource-efficiency-roadmap-2026-09-21.md`;
+A–F implementation `4fb021d`; closure-polish corrective pass
+`plans/performance-closure-polish-corrective-pass-2026-09-21.md`, completion
+record in that plan).
 
 This document is the retained before/after evidence surface for the
 performance and resource-efficiency campaign. Raw generated logs are ignored
 artifacts; only summarized medians/ranges and structural counters are kept
-here.
+here. Measured throughput/latency numbers below are the campaign evidence;
+connection/handshake/auth counters in Phases E/F and the polish addendum are
+structural correctness evidence, not universal network-latency benchmarks.
 
 ## Baseline reference
 
@@ -277,14 +282,15 @@ behavior, task dispatch, enforcement, and TLS/PSK behavior are unchanged.
 
 ## Phase E — coordinator session reuse
 
-Implemented 2026-09-21 (same host). Fixed control workload before/after
-(plaintext loopback; TLS handshakes ride the same per-setup sequence 1:1
-with accepts by construction):
+Implemented 2026-09-21 (same host). Fixed control workload before/after;
+steady-state reuse is proven over both plaintext and verified local TLS
+(the closure-polish pass replaced the earlier plaintext structural
+inference with a real TLS fixture; see the polish addendum below):
 
 | Counter | Before (one-shot client per message) | After (steady state, shared session) |
 |---------|--------------------------------------|--------------------------------------|
-| Coordinator TCP accepts | 6 for register+3 heartbeats+request+result (12 for the 12-op fixture, ~496ms) | 1 (`session_reuses_single_connection_in_steady_state`: 6 ops, 1 accept, 1 auth, 1 live connection) |
-| TLS handshakes | 1 per message | 1 per healthy connection lifetime (same setup sequence) |
+| Coordinator TCP accepts | 6 for register+3 heartbeats+request+result (12 for the 12-op fixture, ~496ms) | 1 (plaintext `session_reuses_single_connection_in_steady_state` and TLS `session_reuses_single_tls_connection_in_steady_state`: 6 ops, 1 accept, 1 handshake where TLS, 1 auth, 1 live connection) |
+| TLS handshakes | 1 per message | 1 per healthy connection lifetime (verified by the TLS listener's handshake counter, not inferred) |
 | PSK auth exchanges | 1 per message | 1 per connection (+1 per reconnect) |
 | Heartbeats / task-requests / results | N each | N each (same workload, fewer setups) |
 | Wall (6-op steady workload) | ~248ms in setups alone (extrapolated from the 12-op fixture) | ~246ms total incl. RTTs (loopback-RTT-dominated; the count improvement 6→1 setups is the durable claim) |
@@ -296,28 +302,58 @@ methods unchanged for CLI/tool callers). Commands serialize through a
 bounded (64) mpsc channel with `oneshot` replies; the queue bound is a
 pinned constant plus burst-liveness coverage. Reconnect performs TCP +
 TLS + PSK auth plus worker re-registration before connection-local
-heartbeat state is relied upon (proven by the recovery test, which drives
-re-establishment + registration replay with a heartbeat alone and no
-explicit re-register call).
+heartbeat state is relied upon (proven by the outage-recovery test, which
+drives re-establishment + registration replay with a heartbeat alone and
+no explicit re-register call, and by the deterministic sever fixture in
+the polish addendum, which observes Register replay on the fresh
+connection before the post-reconnect heartbeat).
 
 Retry matrix: heartbeat retried once after reconnect (idempotent); task
 acquisition never transparently retried (lost-response-after-dequeue risk
 → error surfaces, next poll recovers via stale tasks); result submission
 never transparently retried (`complete()` appends → replay could duplicate
 → error surfaces, matching pre-session behavior); `Execute` untouched (no
-broad retries). Reconnect pacing: windowed rate limiting (1s/2s/5s by
-consecutive failures) with fail-fast inside the window — no actor sleeps,
-no tight loop, shutdown trivially responsive. No backoff state on the wire.
+broad retries). The polish pass adds explicit no-retry regression tests
+(one wire `RequestTasks` / one wire `Result` per caller call on failure,
+second explicit call recovers). Reconnect pacing: windowed rate limiting
+(1s/2s/5s by consecutive failures) with fail-fast inside the window — no
+actor sleeps, no tight loop, shutdown trivially responsive. No backoff
+state on the wire.
 
 Authentication/TLS unchanged: fewer handshakes, not weaker ones (no cert
 verification change, no plaintext widening, no cross-connection auth
 caching, same timeouts, same DNS-cache TTL semantics held by the actor's
-single owned client).
+single owned client; the TLS fixture uses verified test trust, never the
+`insecure-tls` bypass).
 
-Remaining limitation (intentional): mid-session TCP sever without
-cooperation has no deterministic loopback fixture (needs root/netns); the
-recovery path shares the tested establish+replay code, and the actor's
-execute-failure → discard → re-establish shape is reviewed and logged.
+### Closure-polish addendum (2026-09-21)
+
+Short-lived `rcgen` localhost material, the production
+`TlsServer::from_pem` accept path, and test-only verified trust
+(`TlsClient::with_test_root` / `RemoteClient::with_test_root` /
+`CoordinatorSession::spawn_with_test_root`; no public constructor, no
+feature flag, PEM files under a test tempdir):
+
+- TLS steady state (`session_reuses_single_tls_connection_in_steady_state`):
+  register + 3 heartbeats + task request + result over one `CoordinatorSession`
+  → 1 TCP accept / 1 TLS handshake / 1 PSK auth / 1 live connection.
+- Established-session sever (`session_severed_tls_connection_reconnects_with_reregister`):
+  scripted TLS coordinator accepts A, authenticates, handles Register + one
+  live heartbeat, then deliberately drops A; the next heartbeat observes the
+  loss, reconnects as B with fresh TCP/TLS/auth, replays Register before the
+  heartbeat is handled as the worker's, and the idempotent retry succeeds.
+  Observed: accepts 2, handshakes 2, auths 2, peer addrs differ, event order
+  `conn0 register → conn0 heartbeat → conn0 severed → conn1 register →
+  conn1 heartbeat`, zero unauthenticated commands.
+- Retry dispositions (`session_request_tasks_never_retried_on_failure`,
+  `session_result_never_retried_on_failure`): a dropped exchange surfaces
+  exactly one wire message per caller call; the next explicit call recovers
+  (second message, fresh setup). Heartbeat remains the only retried control
+  op (proven by the sever test's successful retry).
+
+The former "deterministic mid-session sever requires root/netns"
+limitation is withdrawn: the sever/reconnect/re-auth/re-register sequence
+is now covered by the loopback fixture above without privileged networking.
 
 ## Phase F — secondary hot spots and closure
 
@@ -332,14 +368,14 @@ Final re-measurement 2026-09-21 (same host; warm-up 1 + 5 trials; release):
 | port sweep200 wall | ~3ms | ~3–4ms, same open counts |
 | endpoint 1002 paths wall | ~23ms | ~24–25ms, identical checksum |
 | subdomain 2000 candidates | ~1ms, unbounded tasks | ~1ms, peak live 50 |
-| distributed 12 fresh setups | ~496ms | ~495ms (local scheduling only; session reuse measured separately: 6 ops → 1 accept/1 auth) |
+| distributed 12 fresh setups | ~496ms | ~495ms (local scheduling only; session reuse measured separately: 6 ops → 1 accept/1 auth, 1 handshake where TLS) |
 | pool 5k sorts latency/rate | ~14.1ms / ~8.6ms | ~3.1ms / ~3.3ms (snapshot sort) |
 
 | Candidate | Disposition | Evidence |
 |-----------|-------------|----------|
 | Metrics micro-cleanup | implemented (Phase C) | counts identical under success/failure/cancel/merge; serialized shape byte-compatible (legacy test green) |
 | ProxyPool snapshot sort | implemented (this phase) | latency 14.1ms → 3.1ms, rate 8.6ms → 3.3ms; health/priority/latency/rate/round-robin semantics pinned by 26 pool tests incl. tie-ordering |
-| TaskQueue lock layout | implemented as option B (this phase) | split locks acquired in opposite orders on different paths (dequeue pending→in_progress vs stale-recovery in_progress→pending); unified state removes the inversion and one clone per dequeue; 23 distributed tests incl. 200-task hammer + stale-cycle preservation |
+| TaskQueue lock layout | implemented as option B (this phase) | split locks acquired in opposite orders on different paths (dequeue pending→in_progress vs stale-recovery in_progress→pending); unified state removes the inversion; the owned-return/in-progress representation still requires one task clone at dequeue; 23 distributed tests incl. 200-task hammer + stale-cycle preservation |
 | Global runtime mutex | rejected without contention evidence | no multi-session contention measured; lifecycle-ordering risk exceeds any hypothetical gain |
 | Pipeline dependency waves | rejected (bounded cardinality) | wave size bounded by the dependency graph; not a scaling path |
 | Global allocator (mimalloc/jemalloc) | rejected without allocation-profile + packaging review | no profile evidence; dependency-surface cost |

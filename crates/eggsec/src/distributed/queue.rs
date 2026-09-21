@@ -30,12 +30,13 @@ pub struct TaskResult {
 /// pending→in_progress and in_progress→completed are short atomic state
 /// transitions. The previous split-`RwLock` layout acquired the locks in
 /// opposite orders on different paths (`dequeue` took pending→in_progress
-/// while stale reassignment took in_progress→pending) and cloned every
-/// dequeued task; the unified state removes the lock-order inversion and
-/// moves (rather than clones) tasks between states. All operations are
-/// synchronous in-memory transitions — the mutex is never held across an
-/// await — so a single mutex is strictly simpler than three `RwLock`s at
-/// this control-plane throughput.
+/// while stale reassignment took in_progress→pending); the unified state
+/// removes that lock-order inversion. The owned-return/in-progress
+/// representation still requires one task clone at dequeue
+/// (`in_progress.insert(id, task.clone())` before returning the owned
+/// task). All operations are synchronous in-memory transitions — the mutex
+/// is never held across an await — so a single mutex is strictly simpler
+/// than three `RwLock`s at this control-plane throughput.
 #[derive(Debug, Default)]
 struct QueueState {
     pending: VecDeque<Task>,

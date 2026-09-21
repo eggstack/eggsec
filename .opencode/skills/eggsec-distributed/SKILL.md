@@ -27,7 +27,12 @@ worker.start().await?;
 `TlsServer::from_pem(cert_path, key_path)` loads PEM cert + key files.
 
 ### TlsClient
-`TlsClient::new(domain)` creates client with `NoVerifier` (insecure, for internal use).
+`TlsClient::new(domain)` verifies against the WebPKI roots. The
+`insecure-tls` feature swaps in a `NoVerifier` (isolated lab only, never as
+evidence). Tests use crate-private `#[cfg(test)]` verified trust
+(`TlsClient::with_test_root` / `RemoteClient::with_test_root` /
+`CoordinatorSession::spawn_with_test_root`) with short-lived `rcgen`
+localhost material and the production `TlsServer::from_pem` accept path.
 
 ### Worker Registration Protocol
 
@@ -38,8 +43,10 @@ connection, bounded 64-command queue): one TCP/TLS/PSK setup per healthy
 connection lifetime, not one per message. Reconnect replays registration
 before heartbeat state is used; heartbeat retries once (idempotent) while
 task-acquisition/result errors surface for normal-poll recovery (no
-duplicate execution). The one-shot `RemoteClient` methods below are
-unchanged for CLI/tool callers:
+duplicate execution). Steady-state reuse is proven over verified local TLS
+and deterministic server-side sever/reconnect is covered without root/netns
+(see `architecture/performance.md` polish addendum). The one-shot
+`RemoteClient` methods below are unchanged for CLI/tool callers:
 
 ```rust
 // Worker side

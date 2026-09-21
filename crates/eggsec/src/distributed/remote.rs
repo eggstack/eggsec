@@ -41,6 +41,11 @@ pub struct RemoteListener {
     workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
     /// Total accepted TCP connections (monotonic; test/evidence introspection).
     accepted: Arc<AtomicUsize>,
+    /// Total successful TLS handshakes (monotonic; test introspection).
+    /// Incremented only after `accept_tls` succeeds, so plaintext
+    /// listeners report zero while TLS listeners report 1:1 with
+    /// handshake completions.
+    tls_handshakes: Arc<AtomicUsize>,
     /// Total successful PSK authentications (monotonic; test introspection).
     authenticated: Arc<AtomicUsize>,
 }
@@ -54,6 +59,7 @@ struct ConnectionDeps {
     tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
     task_queue: Arc<TaskQueue>,
     workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
+    tls_handshakes: Arc<AtomicUsize>,
     authenticated: Arc<AtomicUsize>,
 }
 
@@ -75,6 +81,7 @@ impl RemoteListener {
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
             accepted: Arc::new(AtomicUsize::new(0)),
+            tls_handshakes: Arc::new(AtomicUsize::new(0)),
             authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -96,6 +103,7 @@ impl RemoteListener {
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
             accepted: Arc::new(AtomicUsize::new(0)),
+            tls_handshakes: Arc::new(AtomicUsize::new(0)),
             authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -117,6 +125,7 @@ impl RemoteListener {
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
             accepted: Arc::new(AtomicUsize::new(0)),
+            tls_handshakes: Arc::new(AtomicUsize::new(0)),
             authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -141,6 +150,7 @@ impl RemoteListener {
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
             accepted: Arc::new(AtomicUsize::new(0)),
+            tls_handshakes: Arc::new(AtomicUsize::new(0)),
             authenticated: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -169,6 +179,13 @@ impl RemoteListener {
     #[cfg(test)]
     pub(crate) fn accepted_count(&self) -> usize {
         self.accepted.load(Ordering::Relaxed)
+    }
+
+    /// Total successful TLS handshakes (monotonic). Incremented only after
+    /// `accept_tls` succeeds; plaintext listeners stay at zero.
+    #[cfg(test)]
+    pub(crate) fn tls_handshake_count(&self) -> usize {
+        self.tls_handshakes.load(Ordering::Relaxed)
     }
 
     /// Total successful PSK authentications (monotonic). Each accepted
@@ -332,6 +349,7 @@ impl RemoteListener {
                                 tls_acceptor: tls_acceptor.clone(),
                                 task_queue: Arc::clone(&self.task_queue),
                                 workers: Arc::clone(&self.workers),
+                                tls_handshakes: Arc::clone(&self.tls_handshakes),
                                 authenticated: Arc::clone(&self.authenticated),
                             };
                             self.accepted.fetch_add(1, Ordering::Relaxed);
@@ -375,6 +393,7 @@ impl RemoteListener {
             tls_acceptor,
             task_queue,
             workers,
+            tls_handshakes,
             authenticated,
         } = deps;
         tracing::info!("Connection from {}", addr);
@@ -382,7 +401,10 @@ impl RemoteListener {
 
         let stream = match tls_acceptor {
             Some(acceptor) => match StreamWrapper::accept_tls(&acceptor, stream).await {
-                Ok(s) => s,
+                Ok(s) => {
+                    tls_handshakes.fetch_add(1, Ordering::Relaxed);
+                    s
+                }
                 Err(e) => {
                     tracing::error!(addr = %addr, "TLS handshake failed: {}", e);
                     return Err(EggsecError::Network(format!(
@@ -733,6 +755,22 @@ impl RemoteClient {
     pub fn with_tls(psk: String, domain: &str) -> Result<Self> {
         let tls = TlsClient::new(domain)
             .map_err(|e| EggsecError::Network(format!("Failed to initialize TLS client: {}", e)))?;
+        Ok(Self {
+            psk,
+            tls: Some(tls),
+            cached_addr: None,
+            plaintext_allowed: false,
+        })
+    }
+
+    /// Test-only verified-TLS client: verifies against the given test root
+    /// DER instead of the WebPKI roots. Crate-private, no feature flag, no
+    /// insecure bypass.
+    #[cfg(test)]
+    pub(crate) fn with_test_root(psk: String, domain: &str, root_der: &[u8]) -> Result<Self> {
+        let tls = TlsClient::with_test_root(domain, root_der).map_err(|e| {
+            EggsecError::Network(format!("Failed to initialize test TLS client: {}", e))
+        })?;
         Ok(Self {
             psk,
             tls: Some(tls),
@@ -1388,6 +1426,25 @@ impl CoordinatorSession {
         }
     }
 
+    /// Test-only spawn with verified test trust (DER-encoded test root).
+    /// Uses the same actor loop as production; only the TLS trust differs.
+    #[cfg(test)]
+    pub(crate) fn spawn_with_test_root(config: SessionConfig, root_der: Vec<u8>) -> Self {
+        let (commands, receiver) = mpsc::channel(SESSION_COMMAND_QUEUE);
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let actor_handle = tokio::spawn(session_actor_with_test_root(
+            config,
+            receiver,
+            shutdown_rx,
+            root_der,
+        ));
+        Self {
+            commands,
+            shutdown_tx,
+            actor: std::sync::Mutex::new(Some(actor_handle)),
+        }
+    }
+
     /// Register (or re-register) the worker. The metadata is remembered for
     /// reconnect replay.
     pub(crate) async fn register(
@@ -1538,10 +1595,10 @@ async fn session_establish(
 
 async fn session_actor(
     config: SessionConfig,
-    mut commands: mpsc::Receiver<SessionCommand>,
-    mut shutdown: watch::Receiver<bool>,
+    commands: mpsc::Receiver<SessionCommand>,
+    shutdown: watch::Receiver<bool>,
 ) {
-    let mut client = if let Some(domain) = config.tls_domain.clone() {
+    let client = if let Some(domain) = config.tls_domain.clone() {
         match RemoteClient::with_tls(config.psk.clone(), &domain) {
             Ok(client) => client,
             Err(e) => {
@@ -1556,6 +1613,42 @@ async fn session_actor(
         return;
     };
 
+    session_actor_loop(config, commands, shutdown, client).await;
+}
+
+/// Test-only actor entry: same loop, but the client verifies against the
+/// given test root DER instead of the WebPKI roots.
+#[cfg(test)]
+async fn session_actor_with_test_root(
+    config: SessionConfig,
+    commands: mpsc::Receiver<SessionCommand>,
+    shutdown: watch::Receiver<bool>,
+    root_der: Vec<u8>,
+) {
+    let domain = match config.tls_domain.clone() {
+        Some(domain) => domain,
+        None => {
+            tracing::error!("TLS domain is required for test coordinator sessions");
+            return;
+        }
+    };
+    let client = match RemoteClient::with_test_root(config.psk.clone(), &domain, &root_der) {
+        Ok(client) => client,
+        Err(e) => {
+            tracing::error!(%e, "Failed to initialize test coordinator session TLS");
+            return;
+        }
+    };
+
+    session_actor_loop(config, commands, shutdown, client).await;
+}
+
+async fn session_actor_loop(
+    config: SessionConfig,
+    mut commands: mpsc::Receiver<SessionCommand>,
+    mut shutdown: watch::Receiver<bool>,
+    mut client: RemoteClient,
+) {
     let mut writer: Option<LineWriter> = None;
     let mut registration: Option<SessionRegistration> = None;
     let mut reconnect = SessionReconnect::default();
@@ -2076,5 +2169,884 @@ mod session_tests {
             "control errors did not surface promptly"
         );
         session.shutdown();
+    }
+
+    // -----------------------------------------------------------------------
+    // Verified local TLS session fixture (corrective pass Workstreams 2-3).
+    //
+    // Uses short-lived `rcgen` localhost material, the production
+    // `TlsServer::from_pem` accept path, and test-only verified trust
+    // (`TlsClient::with_test_root` / `RemoteClient::with_test_root` /
+    // `CoordinatorSession::spawn_with_test_root`). No public constructor,
+    // no feature flag, no `insecure-tls` bypass, no checked-in key/cert;
+    // PEM files live under a test tempdir that cleans up on drop.
+    // -----------------------------------------------------------------------
+
+    fn generate_tls_material() -> (Vec<u8>, String, String) {
+        let sans = vec!["localhost".to_string(), "127.0.0.1".to_string()];
+        let params = rcgen::CertificateParams::new(sans).expect("cert params");
+        let key_pair = rcgen::KeyPair::generate().expect("key pair");
+        let cert = params.self_signed(&key_pair).expect("self-signed");
+        let cert_der = cert.der().to_vec();
+        let cert_pem = cert.pem();
+        let key_pem = key_pair.serialize_pem();
+        (cert_der, cert_pem, key_pem)
+    }
+
+    async fn start_tls_listener(
+        psk: &str,
+    ) -> (
+        Arc<RemoteListener>,
+        tokio::task::JoinHandle<()>,
+        u16,
+        Vec<u8>,
+        tempfile::TempDir,
+    ) {
+        let (cert_der, cert_pem, key_pem) = generate_tls_material();
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let cert_path = dir.path().join("test-cert.pem");
+        let key_path = dir.path().join("test-key.pem");
+        std::fs::write(&cert_path, cert_pem.as_bytes()).expect("write cert");
+        std::fs::write(&key_path, key_pem.as_bytes()).expect("write key");
+
+        let port = free_port().await;
+        let listener = Arc::new(
+            RemoteListener::with_tls(
+                psk.to_string(),
+                TlsConfig {
+                    cert_path,
+                    key_path,
+                },
+            )
+            .expect("tls listener"),
+        );
+        assert!(listener.is_tls(), "test listener must be TLS");
+        let server = Arc::clone(&listener);
+        let handle = tokio::spawn(async move {
+            let _ = server.start(port).await;
+        });
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        (listener, handle, port, cert_der, dir)
+    }
+
+    fn tls_session(psk: &str, port: u16, root_der: Vec<u8>) -> CoordinatorSession {
+        CoordinatorSession::spawn_with_test_root(
+            SessionConfig {
+                host: "127.0.0.1".to_string(),
+                port,
+                psk: psk.to_string(),
+                tls_domain: Some("localhost".to_string()),
+                plaintext_allowed: false,
+            },
+            root_der,
+        )
+    }
+
+    /// Steady state over verified TLS: register + heartbeats + task request
+    /// + result reuse one accepted TCP connection with one TLS handshake
+    /// and one PSK authentication. No plaintext fallback (TLS-only
+    /// listener; verified test trust, not the insecure bypass).
+    #[tokio::test]
+    async fn session_reuses_single_tls_connection_in_steady_state() {
+        let psk = "test-psk-session-tls-reuse".to_string();
+        let (listener, handle, port, root_der, _dir) = start_tls_listener(&psk).await;
+        let session = tls_session(&psk, port, root_der);
+
+        let start = Instant::now();
+        session
+            .register(
+                "worker-tls-1".to_string(),
+                "host-tls-1".to_string(),
+                vec!["PortScan".to_string()],
+            )
+            .await
+            .expect("tls register");
+        for _ in 0..3 {
+            session
+                .heartbeat(heartbeat_status("worker-tls-1"))
+                .await
+                .expect("tls heartbeat");
+        }
+        let tasks = session
+            .request_tasks("worker-tls-1".to_string(), 5)
+            .await
+            .expect("tls request tasks");
+        assert!(tasks.is_empty());
+        session
+            .send_result(result_for("tls-task-1"))
+            .await
+            .expect("tls send result");
+        let wall = start.elapsed();
+
+        assert_eq!(listener.accepted_count(), 1, "one TCP accept");
+        assert_eq!(
+            listener.tls_handshake_count(),
+            1,
+            "one TLS handshake for the accepted connection"
+        );
+        assert_eq!(listener.authenticated_count(), 1, "one PSK auth");
+        assert_eq!(listener.connection_count().await, 1);
+        println!(
+            "perf session tls_steady_state ops=6 wall_ms={} accepts={} handshakes={} auths={} live={}",
+            wall.as_millis(),
+            listener.accepted_count(),
+            listener.tls_handshake_count(),
+            listener.authenticated_count(),
+            listener.connection_count().await
+        );
+
+        let workers = listener.get_workers().await;
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].worker_id, "worker-tls-1");
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Deterministic established-connection sever/reconnect over verified
+    /// TLS (Workstream 3).
+    ///
+    /// A purpose-built loopback coordinator accepts connection A, performs
+    /// TLS + PSK auth, receives Register + one live heartbeat, then
+    /// deliberately drops A from the server side. The client observes the
+    /// loss on its next heartbeat, reconnects as connection B with a fresh
+    /// TLS/auth sequence, replays Register before the heartbeat is handled
+    /// as belonging to the worker, and the retried heartbeat succeeds. The
+    /// old connection is never reused and no unauthenticated command is
+    /// accepted. Ordering comes from observed messages/counters; only the
+    /// reconnect pacing crosses an intentional timing window, and even
+    /// there success is asserted via protocol observations with timeouts.
+    #[tokio::test]
+    async fn session_severed_tls_connection_reconnects_with_reregister() {
+        use tokio::sync::{Mutex as AsyncMutex, Notify};
+
+        let psk = "test-psk-session-tls-sever".to_string();
+        let worker_id = "worker-sever-1".to_string();
+
+        let (cert_der, cert_pem, key_pem) = generate_tls_material();
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let cert_path = dir.path().join("sever-cert.pem");
+        let key_path = dir.path().join("sever-key.pem");
+        std::fs::write(&cert_path, cert_pem.as_bytes()).expect("write cert");
+        std::fs::write(&key_path, key_pem.as_bytes()).expect("write key");
+        let tls_server = TlsServer::from_pem(&cert_path, &key_path).expect("tls server");
+        let acceptor = tls_server.clone_acceptor();
+
+        let tcp = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let port = tcp.local_addr().expect("addr").port();
+
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let handshakes = Arc::new(AtomicUsize::new(0));
+        let auths = Arc::new(AtomicUsize::new(0));
+        let events: Arc<AsyncMutex<Vec<String>>> = Arc::new(AsyncMutex::new(Vec::new()));
+        let peers: Arc<AsyncMutex<Vec<SocketAddr>>> = Arc::new(AsyncMutex::new(Vec::new()));
+        let violations = Arc::new(AtomicUsize::new(0));
+
+        let live_notify = Arc::new(Notify::new());
+        let sever_notify = Arc::new(Notify::new());
+        let severed_notify = Arc::new(Notify::new());
+        let reconnected_notify = Arc::new(Notify::new());
+
+        let server_handle = {
+            let accepted = Arc::clone(&accepted);
+            let handshakes = Arc::clone(&handshakes);
+            let auths = Arc::clone(&auths);
+            let events = Arc::clone(&events);
+            let peers = Arc::clone(&peers);
+            let violations = Arc::clone(&violations);
+            let live_notify = Arc::clone(&live_notify);
+            let sever_notify = Arc::clone(&sever_notify);
+            let severed_notify = Arc::clone(&severed_notify);
+            let reconnected_notify = Arc::clone(&reconnected_notify);
+            let psk = psk.clone();
+            let worker_id = worker_id.clone();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((stream, peer)) = tcp.accept().await else {
+                        return;
+                    };
+                    let idx = accepted.fetch_add(1, Ordering::SeqCst);
+                    peers.lock().await.push(peer);
+                    let acceptor = acceptor.clone();
+                    let handshakes = Arc::clone(&handshakes);
+                    let auths = Arc::clone(&auths);
+                    let events = Arc::clone(&events);
+                    let violations = Arc::clone(&violations);
+                    let live_notify = Arc::clone(&live_notify);
+                    let sever_notify = Arc::clone(&sever_notify);
+                    let severed_notify = Arc::clone(&severed_notify);
+                    let reconnected_notify = Arc::clone(&reconnected_notify);
+                    let psk = psk.clone();
+                    let worker_id = worker_id.clone();
+                    tokio::spawn(async move {
+                        let stream = match StreamWrapper::accept_tls(&acceptor, stream).await {
+                            Ok(s) => {
+                                handshakes.fetch_add(1, Ordering::SeqCst);
+                                s
+                            }
+                            Err(e) => {
+                                tracing::debug!(%e, "sever fixture TLS handshake failed");
+                                return;
+                            }
+                        };
+                        let mut writer = LineWriter::new(stream);
+                        let auth_line =
+                            match tokio::time::timeout(Duration::from_secs(10), writer.read_line())
+                                .await
+                            {
+                                Ok(Ok(Some(line))) => line,
+                                _ => return,
+                            };
+                        let auth: AuthMessage = match serde_json::from_str(&auth_line) {
+                            Ok(a) => a,
+                            Err(_) => return,
+                        };
+                        if auth.psk != psk {
+                            return;
+                        }
+                        auths.fetch_add(1, Ordering::SeqCst);
+                        let welcome = ResponseMessage {
+                            id: "auth".to_string(),
+                            msg_type: "authenticated".to_string(),
+                            success: true,
+                            output: Some("Authenticated".to_string()),
+                            error: None,
+                            duration_ms: None,
+                            hostname: Some("sever-coordinator".to_string()),
+                            capabilities: None,
+                        };
+                        if writer
+                            .write_line(&serde_json::to_string(&welcome).expect("welcome"))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+
+                        // Per-connection command loop with explicit sever control.
+                        let mut registered_on_conn = false;
+                        if idx == 0 {
+                            // Connection A: Register, one live heartbeat, then
+                            // wait for the deliberate sever signal and drop.
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(10),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => return,
+                            };
+                            match cmd {
+                                CommandMessage::Register { id, .. } => {
+                                    assert_eq!(id, worker_id);
+                                    registered_on_conn = true;
+                                    events.lock().await.push("conn0 register".to_string());
+                                    let resp =
+                                        ResponseMessage::registration(id, "h".to_string(), vec![]);
+                                    if writer
+                                        .write_line(
+                                            &serde_json::to_string(&resp).expect("registered"),
+                                        )
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                _ => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            }
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(10),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => return,
+                            };
+                            match cmd {
+                                CommandMessage::Heartbeat { .. } => {
+                                    if !registered_on_conn {
+                                        violations.fetch_add(1, Ordering::SeqCst);
+                                        return;
+                                    }
+                                    events.lock().await.push("conn0 heartbeat".to_string());
+                                    let resp = ResponseMessage {
+                                        id: "hb-a".to_string(),
+                                        msg_type: "heartbeat_ack".to_string(),
+                                        success: true,
+                                        output: Some("{}".to_string()),
+                                        error: None,
+                                        duration_ms: None,
+                                        hostname: None,
+                                        capabilities: None,
+                                    };
+                                    if writer
+                                        .write_line(&serde_json::to_string(&resp).expect("hb ack"))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                _ => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            }
+                            live_notify.notify_one();
+                            // Wait for the test to order the deliberate sever.
+                            let _ = tokio::time::timeout(
+                                Duration::from_secs(15),
+                                sever_notify.notified(),
+                            )
+                            .await;
+                            events.lock().await.push("conn0 severed".to_string());
+                            severed_notify.notify_one();
+                            // Drop closes an established, registered connection.
+                        } else {
+                            // Connection B: must see Register replay before
+                            // any heartbeat is handled as the worker's.
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(15),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            };
+                            match cmd {
+                                CommandMessage::Register { id, .. } => {
+                                    if id != worker_id {
+                                        violations.fetch_add(1, Ordering::SeqCst);
+                                        return;
+                                    }
+                                    registered_on_conn = true;
+                                    events.lock().await.push("conn1 register".to_string());
+                                    let resp =
+                                        ResponseMessage::registration(id, "h".to_string(), vec![]);
+                                    if writer
+                                        .write_line(
+                                            &serde_json::to_string(&resp).expect("registered"),
+                                        )
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                _ => {
+                                    // Heartbeat (or anything) before
+                                    // Register on the fresh connection must
+                                    // not be accepted as the worker's.
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            }
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(15),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            };
+                            match cmd {
+                                CommandMessage::Heartbeat { .. } => {
+                                    if !registered_on_conn {
+                                        violations.fetch_add(1, Ordering::SeqCst);
+                                        return;
+                                    }
+                                    events.lock().await.push("conn1 heartbeat".to_string());
+                                    let resp = ResponseMessage {
+                                        id: "hb-b".to_string(),
+                                        msg_type: "heartbeat_ack".to_string(),
+                                        success: true,
+                                        output: Some("{}".to_string()),
+                                        error: None,
+                                        duration_ms: None,
+                                        hostname: None,
+                                        capabilities: None,
+                                    };
+                                    if writer
+                                        .write_line(&serde_json::to_string(&resp).expect("hb ack"))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                    reconnected_notify.notify_one();
+                                }
+                                _ => {
+                                    violations.fetch_add(1, Ordering::SeqCst);
+                                    return;
+                                }
+                            }
+                            // Keep B open briefly for clean shutdown.
+                            let _ = tokio::time::timeout(Duration::from_secs(10), async {
+                                loop {
+                                    match writer.read_line().await {
+                                        Ok(Some(_)) => {}
+                                        _ => break,
+                                    }
+                                }
+                            })
+                            .await;
+                        }
+                    });
+                }
+            })
+        };
+
+        let session = tls_session(&psk, port, cert_der);
+        session
+            .register(worker_id.clone(), "h".to_string(), vec![])
+            .await
+            .expect("register on A");
+        session
+            .heartbeat(heartbeat_status(&worker_id))
+            .await
+            .expect("live heartbeat on A");
+
+        tokio::time::timeout(Duration::from_secs(10), live_notify.notified())
+            .await
+            .expect("server saw live connection A");
+        sever_notify.notify_one();
+        tokio::time::timeout(Duration::from_secs(10), severed_notify.notified())
+            .await
+            .expect("server dropped connection A");
+
+        // The next heartbeat observes the loss, reconnects as B with fresh
+        // TLS/auth + Register replay, and the idempotent retry succeeds.
+        tokio::time::timeout(
+            Duration::from_secs(15),
+            session.heartbeat(heartbeat_status(&worker_id)),
+        )
+        .await
+        .expect("heartbeat future resolved")
+        .expect("heartbeat retried after sever succeeds");
+        tokio::time::timeout(Duration::from_secs(10), reconnected_notify.notified())
+            .await
+            .expect("server saw Register replay + heartbeat on B");
+
+        assert_eq!(accepted.load(Ordering::SeqCst), 2, "A then B accepted");
+        assert_eq!(
+            handshakes.load(Ordering::SeqCst),
+            2,
+            "fresh TLS per connection"
+        );
+        assert_eq!(
+            auths.load(Ordering::SeqCst),
+            2,
+            "fresh PSK auth per connection"
+        );
+        assert_eq!(
+            violations.load(Ordering::SeqCst),
+            0,
+            "no unauthenticated command"
+        );
+        let peers = peers.lock().await;
+        assert_eq!(peers.len(), 2);
+        assert_ne!(peers[0], peers[1], "old connection not reused");
+        drop(peers);
+        let events = events.lock().await.clone();
+        assert_eq!(
+            events,
+            vec![
+                "conn0 register".to_string(),
+                "conn0 heartbeat".to_string(),
+                "conn0 severed".to_string(),
+                "conn1 register".to_string(),
+                "conn1 heartbeat".to_string(),
+            ],
+            "Register replayed on B before post-reconnect heartbeat"
+        );
+        println!(
+            "perf session tls_sever accepts=2 handshakes=2 auths=2 events={:?}",
+            events
+        );
+
+        session.shutdown();
+        server_handle.abort();
+    }
+
+    /// `RequestTasks` is never transparently retried: a lost
+    /// response-after-dequeue surfaces instead of replaying. A single
+    /// `request_tasks()` call emits exactly one wire `RequestTasks` even
+    /// when the exchange fails; the next explicit poll recovers normally.
+    #[tokio::test]
+    async fn session_request_tasks_never_retried_on_failure() {
+        let psk = "test-psk-session-no-retry-tasks".to_string();
+        let worker_id = "worker-no-retry-tasks".to_string();
+
+        let (cert_der, cert_pem, key_pem) = generate_tls_material();
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let cert_path = dir.path().join("nrt-cert.pem");
+        let key_path = dir.path().join("nrt-key.pem");
+        std::fs::write(&cert_path, cert_pem.as_bytes()).expect("write cert");
+        std::fs::write(&key_path, key_pem.as_bytes()).expect("write key");
+        let tls_server = TlsServer::from_pem(&cert_path, &key_path).expect("tls server");
+        let acceptor = tls_server.clone_acceptor();
+
+        let tcp = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let port = tcp.local_addr().expect("addr").port();
+
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let tasks_seen = Arc::new(AtomicUsize::new(0));
+        let drop_first = Arc::new(AtomicUsize::new(1));
+
+        let server_handle = {
+            let accepted = Arc::clone(&accepted);
+            let tasks_seen = Arc::clone(&tasks_seen);
+            let drop_first = Arc::clone(&drop_first);
+            let psk = psk.clone();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((stream, _)) = tcp.accept().await else {
+                        return;
+                    };
+                    accepted.fetch_add(1, Ordering::SeqCst);
+                    let acceptor = acceptor.clone();
+                    let tasks_seen = Arc::clone(&tasks_seen);
+                    let drop_first = Arc::clone(&drop_first);
+                    let psk = psk.clone();
+                    tokio::spawn(async move {
+                        let stream = match StreamWrapper::accept_tls(&acceptor, stream).await {
+                            Ok(s) => s,
+                            Err(_) => return,
+                        };
+                        let mut writer = LineWriter::new(stream);
+                        let auth_line =
+                            match tokio::time::timeout(Duration::from_secs(10), writer.read_line())
+                                .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                        let auth: AuthMessage = match serde_json::from_str(&auth_line) {
+                            Ok(a) => a,
+                            Err(_) => return,
+                        };
+                        if auth.psk != psk {
+                            return;
+                        }
+                        let welcome = ResponseMessage {
+                            id: "auth".to_string(),
+                            msg_type: "authenticated".to_string(),
+                            success: true,
+                            output: Some("Authenticated".to_string()),
+                            error: None,
+                            duration_ms: None,
+                            hostname: Some("nrt".to_string()),
+                            capabilities: None,
+                        };
+                        if writer
+                            .write_line(&serde_json::to_string(&welcome).expect("welcome"))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                        loop {
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(10),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => return,
+                            };
+                            match cmd {
+                                CommandMessage::Register { id, hostname, .. } => {
+                                    let resp = ResponseMessage::registration(id, hostname, vec![]);
+                                    if writer
+                                        .write_line(
+                                            &serde_json::to_string(&resp).expect("registered"),
+                                        )
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                CommandMessage::RequestTasks { id, .. } => {
+                                    let n = tasks_seen.fetch_add(1, Ordering::SeqCst) + 1;
+                                    if drop_first.load(Ordering::SeqCst) == 1 && n == 1 {
+                                        // Lost-response-after-dequeue shape:
+                                        // drop without responding.
+                                        return;
+                                    }
+                                    let resp = ResponseMessage {
+                                        id,
+                                        msg_type: "tasks_assigned".to_string(),
+                                        success: true,
+                                        output: Some("[]".to_string()),
+                                        error: None,
+                                        duration_ms: None,
+                                        hostname: None,
+                                        capabilities: None,
+                                    };
+                                    if writer
+                                        .write_line(&serde_json::to_string(&resp).expect("tasks"))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    });
+                }
+            })
+        };
+
+        let session = tls_session(&psk, port, cert_der);
+        session
+            .register(worker_id.clone(), "h".to_string(), vec![])
+            .await
+            .expect("register");
+
+        let first = session.request_tasks(worker_id.clone(), 2).await;
+        assert!(
+            first.is_err(),
+            "failed RequestTasks must surface, not retry"
+        );
+
+        // Allow any spurious transparent retry to appear; the count must
+        // stay at exactly one wire message for one caller call.
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert_eq!(
+            tasks_seen.load(Ordering::SeqCst),
+            1,
+            "one caller call emits one wire RequestTasks"
+        );
+
+        // The next explicit poll recovers via a fresh setup.
+        let second = tokio::time::timeout(
+            Duration::from_secs(15),
+            session.request_tasks(worker_id.clone(), 2),
+        )
+        .await
+        .expect("second poll resolved")
+        .expect("second poll recovers");
+        assert!(second.is_empty());
+        assert_eq!(
+            tasks_seen.load(Ordering::SeqCst),
+            2,
+            "second explicit poll emits the second wire message"
+        );
+        assert_eq!(accepted.load(Ordering::SeqCst), 2);
+
+        session.shutdown();
+        server_handle.abort();
+    }
+
+    /// Result submission is never transparently retried: replays could
+    /// duplicate completed entries. One `send_result()` emits one wire
+    /// `Result`; the next explicit submission recovers.
+    #[tokio::test]
+    async fn session_result_never_retried_on_failure() {
+        let psk = "test-psk-session-no-retry-result".to_string();
+        let worker_id = "worker-no-retry-result".to_string();
+
+        let (cert_der, cert_pem, key_pem) = generate_tls_material();
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let cert_path = dir.path().join("nrr-cert.pem");
+        let key_path = dir.path().join("nrr-key.pem");
+        std::fs::write(&cert_path, cert_pem.as_bytes()).expect("write cert");
+        std::fs::write(&key_path, key_pem.as_bytes()).expect("write key");
+        let tls_server = TlsServer::from_pem(&cert_path, &key_path).expect("tls server");
+        let acceptor = tls_server.clone_acceptor();
+
+        let tcp = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let port = tcp.local_addr().expect("addr").port();
+
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let results_seen = Arc::new(AtomicUsize::new(0));
+
+        let server_handle = {
+            let accepted = Arc::clone(&accepted);
+            let results_seen = Arc::clone(&results_seen);
+            let psk = psk.clone();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((stream, _)) = tcp.accept().await else {
+                        return;
+                    };
+                    accepted.fetch_add(1, Ordering::SeqCst);
+                    let acceptor = acceptor.clone();
+                    let results_seen = Arc::clone(&results_seen);
+                    let psk = psk.clone();
+                    tokio::spawn(async move {
+                        let stream = match StreamWrapper::accept_tls(&acceptor, stream).await {
+                            Ok(s) => s,
+                            Err(_) => return,
+                        };
+                        let mut writer = LineWriter::new(stream);
+                        let auth_line =
+                            match tokio::time::timeout(Duration::from_secs(10), writer.read_line())
+                                .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                        let auth: AuthMessage = match serde_json::from_str(&auth_line) {
+                            Ok(a) => a,
+                            Err(_) => return,
+                        };
+                        if auth.psk != psk {
+                            return;
+                        }
+                        let welcome = ResponseMessage {
+                            id: "auth".to_string(),
+                            msg_type: "authenticated".to_string(),
+                            success: true,
+                            output: Some("Authenticated".to_string()),
+                            error: None,
+                            duration_ms: None,
+                            hostname: Some("nrr".to_string()),
+                            capabilities: None,
+                        };
+                        if writer
+                            .write_line(&serde_json::to_string(&welcome).expect("welcome"))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                        loop {
+                            let line = match tokio::time::timeout(
+                                Duration::from_secs(10),
+                                writer.read_line(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Some(l))) => l,
+                                _ => return,
+                            };
+                            let cmd: CommandMessage = match serde_json::from_str(&line) {
+                                Ok(c) => c,
+                                Err(_) => return,
+                            };
+                            match cmd {
+                                CommandMessage::Register { id, hostname, .. } => {
+                                    let resp = ResponseMessage::registration(id, hostname, vec![]);
+                                    if writer
+                                        .write_line(
+                                            &serde_json::to_string(&resp).expect("registered"),
+                                        )
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                CommandMessage::Result { id, .. } => {
+                                    let n = results_seen.fetch_add(1, Ordering::SeqCst) + 1;
+                                    if n == 1 {
+                                        // Drop before ack: replay would
+                                        // duplicate the completed entry.
+                                        return;
+                                    }
+                                    let resp = ResponseMessage {
+                                        id,
+                                        msg_type: "result_ack".to_string(),
+                                        success: true,
+                                        output: Some("Result received".to_string()),
+                                        error: None,
+                                        duration_ms: None,
+                                        hostname: None,
+                                        capabilities: None,
+                                    };
+                                    if writer
+                                        .write_line(&serde_json::to_string(&resp).expect("ack"))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    });
+                }
+            })
+        };
+
+        let session = tls_session(&psk, port, cert_der);
+        session
+            .register(worker_id.clone(), "h".to_string(), vec![])
+            .await
+            .expect("register");
+
+        let first = session.send_result(result_for("nrr-1")).await;
+        assert!(first.is_err(), "failed result must surface, not retry");
+
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert_eq!(
+            results_seen.load(Ordering::SeqCst),
+            1,
+            "one caller call emits one wire Result"
+        );
+
+        tokio::time::timeout(
+            Duration::from_secs(15),
+            session.send_result(result_for("nrr-2")),
+        )
+        .await
+        .expect("second submit resolved")
+        .expect("second explicit submit recovers");
+        assert_eq!(
+            results_seen.load(Ordering::SeqCst),
+            2,
+            "second explicit submit emits the second wire message"
+        );
+        assert_eq!(accepted.load(Ordering::SeqCst), 2);
+
+        session.shutdown();
+        server_handle.abort();
     }
 }
