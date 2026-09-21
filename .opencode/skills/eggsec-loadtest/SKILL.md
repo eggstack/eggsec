@@ -35,7 +35,7 @@ Logical-URL + singular `resolved_addresses([selected_target])` direct (no IP-lit
 Compatibility facades. `tui_mode` is retained for source compat but **ignored** — progress is structured events (`progress.rs`: `NoopSink`, `FnSink`, `ChannelSink`). Scope is `Option<Scope>`: attach via `with_scope()`/`set_scope()` or `run()` fails before I/O; `run_with(transport, authority, ...)` stays explicit (facade scope ignored).
 
 ### RequestTemplate (`loadtest/adapter.rs`)
-Engine adaptation above the core: CLI/config/auth → plan + transport-neutral template. Auth applied through canonical transport helpers, never reimplemented in the executor.
+Engine adaptation above the core: CLI/config/auth → plan + transport-neutral template. Auth applied through canonical transport helpers, never reimplemented in the executor. Performance Phase C: the executor compiles the prototype `ScopedHttpRequest` once per run (fail-fast, same "invalid request: ..." intent) and dispatches cheap clones — never rebuild the DTO per request; every clone still passes through `HttpTransport::execute` with the same authority (no policy caching).
 
 ### Metrics (`loadtest/metrics.rs`)
 Pure single-threaded accumulator (`merge` for sharded workers) + `LoadTestResults` + `LoadTestErrorKind` categorization (`error_kinds`).
@@ -44,6 +44,7 @@ Pure single-threaded accumulator (`merge` for sharded workers) + `LoadTestResult
 - `worker_count = min(concurrency, total_requests)`
 - Each worker loops, fetching `request_index = issued_requests.fetch_add(1, Ordering::Relaxed)`
 - Global pacing via CAS allocator (aggregate rate holds at any worker count; no mutex on hot path)
+- Per-request dispatch clones the run prototype (no method/URL/header re-parse, refcounted body); error-kind counters are single-lookup `entry` mutations with enum-keyed internals (`String` map materialized once in `to_results`)
 
 ## Testing
 

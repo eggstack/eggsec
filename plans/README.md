@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Performance and resource-efficiency optimization campaign (ready 2026-09-21)
+## Performance and resource-efficiency optimization campaign (executed 2026-09-21)
 
 Roadmap:
 [performance-resource-efficiency-roadmap-2026-09-21.md](performance-resource-efficiency-roadmap-2026-09-21.md)

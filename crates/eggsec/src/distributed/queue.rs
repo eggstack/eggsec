@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -26,47 +26,59 @@ pub struct TaskResult {
     pub duration_millis: u64,
 }
 
+/// Phase F: one private queue state under a single Tokio mutex, so
+/// pending→in_progress and in_progress→completed are short atomic state
+/// transitions. The previous split-`RwLock` layout acquired the locks in
+/// opposite orders on different paths (`dequeue` took pending→in_progress
+/// while stale reassignment took in_progress→pending) and cloned every
+/// dequeued task; the unified state removes the lock-order inversion and
+/// moves (rather than clones) tasks between states. All operations are
+/// synchronous in-memory transitions — the mutex is never held across an
+/// await — so a single mutex is strictly simpler than three `RwLock`s at
+/// this control-plane throughput.
+#[derive(Debug, Default)]
+struct QueueState {
+    pending: VecDeque<Task>,
+    in_progress: FxHashMap<String, Task>,
+    completed: VecDeque<TaskResult>,
+}
+
 pub struct TaskQueue {
-    pending: Arc<RwLock<VecDeque<Task>>>,
-    in_progress: Arc<RwLock<FxHashMap<String, Task>>>,
-    completed: Arc<RwLock<VecDeque<TaskResult>>>,
+    state: Arc<Mutex<QueueState>>,
     max_size: usize,
 }
 
 impl TaskQueue {
     pub fn new(max_size: usize) -> Self {
         Self {
-            pending: Arc::new(RwLock::new(VecDeque::new())),
-            in_progress: Arc::new(RwLock::new(FxHashMap::default())),
-            completed: Arc::new(RwLock::new(VecDeque::new())),
+            state: Arc::new(Mutex::new(QueueState::default())),
             max_size,
         }
     }
 
     pub async fn enqueue(&self, task: Task) -> Result<(), QueueError> {
-        let mut pending = self.pending.write().await;
+        let mut state = self.state.lock().await;
 
-        if pending.len() >= self.max_size {
+        if state.pending.len() >= self.max_size {
             return Err(QueueError::QueueFull);
         }
 
-        pending.push_back(task);
+        state.pending.push_back(task);
         Ok(())
     }
 
     pub async fn dequeue(&self, worker_id: &str) -> Result<Option<Task>, QueueError> {
         let now = chrono::Utc::now().timestamp();
-        let mut pending = self.pending.write().await;
-        let mut task = match pending.pop_front() {
-            Some(t) => t,
+        let mut state = self.state.lock().await;
+        let mut task = match state.pending.pop_front() {
+            Some(task) => task,
             None => return Ok(None),
         };
 
         task.worker_id = Some(worker_id.to_string());
         task.assigned_at_secs = Some(now);
 
-        let mut in_progress = self.in_progress.write().await;
-        in_progress.insert(task.id.clone(), task.clone());
+        state.in_progress.insert(task.id.clone(), task.clone());
 
         Ok(Some(task))
     }
@@ -74,81 +86,59 @@ impl TaskQueue {
     pub async fn reassign_stale_tasks(&self, timeout_secs: i64) -> Vec<Task> {
         let now = chrono::Utc::now().timestamp();
 
-        let stale_tasks = {
-            let mut stale_tasks = Vec::new();
-            let mut in_progress = self.in_progress.write().await;
-            in_progress.retain(|_id, task| {
-                if let Some(assigned_at) = task.assigned_at_secs {
-                    if now - assigned_at > timeout_secs {
-                        stale_tasks.push(task.clone());
-                        return false;
-                    }
+        let mut state = self.state.lock().await;
+        let mut stale_tasks = Vec::new();
+        state.in_progress.retain(|_id, task| {
+            if let Some(assigned_at) = task.assigned_at_secs {
+                if now - assigned_at > timeout_secs {
+                    stale_tasks.push(task.clone());
+                    return false;
                 }
-                true
-            });
-            stale_tasks
-        };
-
-        if !stale_tasks.is_empty() {
-            let mut pending = self.pending.write().await;
-            for task in &stale_tasks {
-                let mut task = task.clone();
-                task.worker_id = None;
-                task.assigned_at_secs = None;
-                pending.push_back(task);
             }
+            true
+        });
+
+        for task in &stale_tasks {
+            let mut task = task.clone();
+            task.worker_id = None;
+            task.assigned_at_secs = None;
+            state.pending.push_back(task);
         }
 
         stale_tasks
     }
 
     pub async fn complete(&self, result: TaskResult) {
-        let task_id = result.task_id.clone();
+        let mut state = self.state.lock().await;
+        state.in_progress.remove(&result.task_id);
+        state.completed.push_back(result);
 
-        {
-            let mut in_progress = self.in_progress.write().await;
-            in_progress.remove(&task_id);
-        }
-
-        {
-            let mut completed = self.completed.write().await;
-            completed.push_back(result);
-
-            while completed.len() > self.max_size {
-                completed.pop_front();
-            }
+        while state.completed.len() > self.max_size {
+            state.completed.pop_front();
         }
     }
 
     pub async fn get_pending_count(&self) -> usize {
-        let pending = self.pending.read().await;
-        pending.len()
+        self.state.lock().await.pending.len()
     }
 
     pub async fn get_in_progress_count(&self) -> usize {
-        let in_progress = self.in_progress.read().await;
-        in_progress.len()
+        self.state.lock().await.in_progress.len()
     }
 
     pub async fn get_completed_count(&self) -> usize {
-        let completed = self.completed.read().await;
-        completed.len()
+        self.state.lock().await.completed.len()
     }
 
     pub async fn get_results(&self) -> Vec<TaskResult> {
-        let completed = self.completed.read().await;
-        completed.iter().cloned().collect()
+        self.state.lock().await.completed.iter().cloned().collect()
     }
 
     pub async fn clear(&self) {
-        let mut pending = self.pending.write().await;
-        pending.clear();
-
-        let mut in_progress = self.in_progress.write().await;
-        in_progress.clear();
-
-        let mut completed = self.completed.write().await;
-        completed.clear();
+        let mut state = self.state.lock().await;
+        state.pending.clear();
+        state.in_progress.clear();
+        state.completed.clear();
     }
 }
 

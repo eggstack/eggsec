@@ -132,34 +132,43 @@ impl ProxyPool {
     }
 
     pub fn get_sorted_by_latency(&self) -> Vec<ProxyEntry> {
-        let mut proxies: Vec<_> = self.get_healthy();
-        proxies.sort_by_key(|p| {
-            self.stats
-                .get(&p.to_log_key())
-                .map(|s| s.avg_latency_ms())
-                .unwrap_or(u64::MAX)
-        });
-        proxies
+        // Phase F: snapshot entry + already-fetched stats once per proxy,
+        // then sort the snapshot without repeated concurrent-map lookups or
+        // key-String rebuilds inside the comparator.
+        let mut snapshot: Vec<(ProxyEntry, u64)> = self
+            .get_healthy()
+            .into_iter()
+            .map(|entry| {
+                let latency = self
+                    .stats
+                    .get(&Self::stats_key(&entry))
+                    .map(|stats| stats.avg_latency_ms())
+                    .unwrap_or(u64::MAX);
+                (entry, latency)
+            })
+            .collect();
+        snapshot.sort_by_key(|(_, latency)| *latency);
+        snapshot.into_iter().map(|(entry, _)| entry).collect()
     }
 
     pub fn get_sorted_by_success_rate(&self) -> Vec<ProxyEntry> {
-        let mut proxies: Vec<_> = self.get_healthy();
-        proxies.sort_by(|a, b| {
-            let rate_a = self
-                .stats
-                .get(&a.to_log_key())
-                .map(|s| s.success_rate())
-                .unwrap_or(0.0);
-            let rate_b = self
-                .stats
-                .get(&b.to_log_key())
-                .map(|s| s.success_rate())
-                .unwrap_or(0.0);
-            rate_b
-                .partial_cmp(&rate_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        proxies
+        // Phase F: same snapshot shape as latency sorting. The success-rate
+        // comparison (including the non-finite fallback to `Equal`) is
+        // preserved verbatim.
+        let mut snapshot: Vec<(ProxyEntry, f64)> = self
+            .get_healthy()
+            .into_iter()
+            .map(|entry| {
+                let rate = self
+                    .stats
+                    .get(&Self::stats_key(&entry))
+                    .map(|stats| stats.success_rate())
+                    .unwrap_or(0.0);
+                (entry, rate)
+            })
+            .collect();
+        snapshot.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        snapshot.into_iter().map(|(entry, _)| entry).collect()
     }
 
     pub fn record_success(&self, proxy: &ProxyEntry, latency_ms: u64) {
@@ -591,5 +600,32 @@ mod tests {
         let sorted = pool.get_sorted_by_success_rate();
         assert_eq!(sorted[0].address, "2.2.2.2");
         assert_eq!(sorted[1].address, "1.1.1.1");
+    }
+
+    /// Phase F: snapshot sorting preserves latency ordering with ties —
+    /// strictly-smaller latencies come first regardless of map iteration
+    /// order (ties may follow in any order, as with the old comparator).
+    #[test]
+    fn test_pool_sorted_by_latency_tie_ordering() {
+        let config = ProxyConfig::default();
+        let pool = ProxyPool::new(config);
+        let p1 = make_proxy("1.1.1.1", 1080);
+        let p2 = make_proxy("2.2.2.2", 1080);
+        let p3 = make_proxy("3.3.3.3", 1080);
+        pool.add(p1.clone());
+        pool.add(p2.clone());
+        pool.add(p3.clone());
+
+        pool.record_success(&p1, 200);
+        pool.record_success(&p2, 50);
+        pool.record_success(&p3, 50);
+
+        let sorted = pool.get_sorted_by_latency();
+        assert_eq!(sorted.len(), 3);
+        // p1 (200ms) sorts strictly after the 50ms pair.
+        assert_eq!(sorted[2].address, "1.1.1.1");
+        let tied: Vec<&str> = sorted[..2].iter().map(|p| p.address.as_str()).collect();
+        assert!(tied.contains(&"2.2.2.2"));
+        assert!(tied.contains(&"3.3.3.3"));
     }
 }

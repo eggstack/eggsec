@@ -31,7 +31,15 @@ worker.start().await?;
 
 ### Worker Registration Protocol
 
-Workers register with coordinators using TCP line-based JSON (NOT HTTP):
+Workers register with coordinators using TCP line-based JSON (NOT HTTP).
+The worker multiplexes registration, heartbeats, task acquisition, and
+result submission over one shared `CoordinatorSession` (actor-owned
+connection, bounded 64-command queue): one TCP/TLS/PSK setup per healthy
+connection lifetime, not one per message. Reconnect replays registration
+before heartbeat state is used; heartbeat retries once (idempotent) while
+task-acquisition/result errors surface for normal-poll recovery (no
+duplicate execution). The one-shot `RemoteClient` methods below are
+unchanged for CLI/tool callers:
 
 ```rust
 // Worker side
@@ -47,6 +55,17 @@ client.send_heartbeat(host, port, worker_id, status).await?;
 ```
 
 **Important**: Coordinator URL format is `host:port` (no http:// prefix).
+
+### Worker Capacity (performance Phase D)
+
+`max_concurrency` is a real contract, not a hint: `start()` rejects zero,
+one `CapacityTracker` (execution semaphore + atomic assigned-but-not-terminal
+count) is shared by acquisition and execution, task requests ask
+`min(5, available)` and skip the tick at zero capacity, and the processor
+admits through an owned `JoinSet` with exactly-once accounting
+(`tasks_in_progress <= max_concurrency` on all terminal paths). Channel
+buffer equals the capacity contract. Never reintroduce the fixed 100-slot
+channel or detached per-task spawning (guard Check 141).
 
 ## Bugs Fixed
 

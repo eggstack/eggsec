@@ -3736,6 +3736,78 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 140. Fuzzer high-cardinality fan-out stays bounded (Phase B).
+# The concurrent engine must not return to one-spawn-per-payload plus
+# semaphore retention: execution.rs must schedule through a bounded JoinSet
+# admission loop, not a semaphore-gated task per payload.
+echo ""
+echo "--- Check 140: Fuzzer fan-out stays bounded ---"
+SECTION_FAIL=0
+FUZZ_EXEC="crates/eggsec/src/fuzzer/engine/execution.rs"
+for sym in "JoinSet" "in_flight.len() < concurrency"; do
+  if ! rg -Fq "$sym" "$FUZZ_EXEC" 2>/dev/null; then
+    echo "FAIL: $FUZZ_EXEC missing bounded-scheduler symbol: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for sym in "tokio::sync::Semaphore" "DashMap" "join_all"; do
+  if rg -Fq "$sym" "$FUZZ_EXEC" 2>/dev/null; then
+    echo "FAIL: $FUZZ_EXEC regressed to unbounded fan-out (found $sym; use the bounded JoinSet scheduler)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Fuzzer fan-out stays bounded."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 141. Distributed worker capacity stays truthful (Phase D).
+# WorkerConfig.max_concurrency must flow through the shared capacity
+# tracker: acquisition sizes requests by available capacity and the
+# processing loop admits through it. The fixed 100-slot channel (which let
+# locally queued work grow beyond budget) must not return.
+echo ""
+echo "--- Check 141: Worker max_concurrency capacity holds ---"
+SECTION_FAIL=0
+WORKER="crates/eggsec/src/distributed/worker.rs"
+for sym in "CapacityTracker" "try_reserve" "request_size" "max_concurrency must be greater than zero"; do
+  if ! rg -Fq "$sym" "$WORKER" 2>/dev/null; then
+    echo "FAIL: $WORKER missing capacity symbol: $sym"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if rg -Fq 'mpsc::channel::<Task>(100)' "$WORKER" 2>/dev/null; then
+  echo "FAIL: $WORKER restored the fixed 100-slot channel (size it from max_concurrency so queued work stays within budget)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Worker max_concurrency capacity holds."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 142. Load-test request prototype stays compiled once per run (Phase C).
+# The per-request worker loop must dispatch cheap prototype clones, not
+# rebuild the transport DTO (method/URL/header re-parse) per request.
+echo ""
+echo "--- Check 142: Load-test prototype compiled once per run ---"
+SECTION_FAIL=0
+LT_EXEC="crates/eggsec/src/loadtest/executor.rs"
+if ! rg -Fq 'prototype.clone()' "$LT_EXEC" 2>/dev/null; then
+  echo "FAIL: $LT_EXEC no longer dispatches prototype clones in the worker loop."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -Fq 'self.template.scoped_request' "$LT_EXEC" 2>/dev/null; then
+  echo "FAIL: $LT_EXEC rebuilds the request DTO per request (compile the prototype once in run())."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: Load-test prototype compiled once per run."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

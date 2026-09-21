@@ -18,13 +18,10 @@ use crate::utils::parsing::resolve_host;
 #[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
 use crate::utils::strip_controls;
-use dashmap::DashMap;
-use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "cli")]
 use std::fmt::Write as FmtWrite;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -559,16 +556,17 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
     }
 
     let addr = resolve_host(host)?;
-    let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
-    let scanned_count = Arc::new(AtomicU64::new(0));
-    let results_count = Arc::new(AtomicU64::new(0));
-    let total_matches_count = Arc::new(AtomicU64::new(0));
     let total_ports = config.ports.len() as u64;
+    let ports = config.ports;
+    let concurrency = config.concurrency;
+    let timeout_dur = config.timeout_duration;
+    let max_results = config.max_results;
+    let progress_tx = config.progress_tx.clone();
 
     let progress = if config.tui_mode {
         None
     } else {
-        let pb = Arc::new(ProgressBar::new(config.ports.len() as u64));
+        let pb = Arc::new(ProgressBar::new(ports.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ports ({eta})")
@@ -578,83 +576,97 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         Some(pb)
     };
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
-    let mut handles = Vec::with_capacity(config.ports.len());
+    // Phase B: bounded scheduler. At most `concurrency` connect tasks are in
+    // flight; tasks return their result to the parent instead of mutating a
+    // shared map, so retained handle state is O(concurrency), not O(ports).
     let start = std::time::Instant::now();
-    let ports_count = config.ports.len();
+    let ports_count = ports.len();
+    let mut open_results: Vec<PortResult> = Vec::new();
+    let mut total_matches_count: usize = 0;
+    let mut admitted_count: u64 = 0;
+    let mut scanned_count: u64 = 0;
+    let mut in_flight = tokio::task::JoinSet::new();
+    let mut next: usize = 0;
 
-    for port in config.ports {
-        let permit = semaphore.clone().acquire_owned().await?;
-        let results = results.clone();
-        let progress = progress.clone();
-        let timeout_dur = config.timeout_duration;
-        let scanned_count = scanned_count.clone();
-        let progress_tx = config.progress_tx.clone();
-        let results_count = results_count.clone();
-        let total_matches_count = total_matches_count.clone();
+    while next < ports.len() || !in_flight.is_empty() {
+        while next < ports.len() && in_flight.len() < concurrency {
+            let port = ports[next];
+            next += 1;
 
-        // Project invariant: every spawned tokio task carries a timeout
-        // wrapper (30-300s).
-        let handle = tokio::spawn(tokio::time::timeout(
-            std::time::Duration::from_secs(300),
-            async move {
-                let socket_addr = std::net::SocketAddr::new(addr, port);
-                let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
+            // Project invariant: every spawned tokio task carries a timeout
+            // wrapper (30-300s).
+            in_flight.spawn(tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                async move {
+                    let socket_addr = std::net::SocketAddr::new(addr, port);
+                    if connect_with_nodelay_timeout(&socket_addr, timeout_dur)
+                        .await
+                        .is_ok()
+                    {
+                        Some(PortResult {
+                            port,
+                            status: "open".to_string(),
+                            service: get_service_name(port).to_string(),
+                        })
+                    } else {
+                        None
+                    }
+                },
+            ));
+        }
 
-                if result.is_ok() {
-                    total_matches_count.fetch_add(1, Ordering::Relaxed);
-                    let should_insert = match config.max_results {
+        if let Some(join_result) = in_flight.join_next().await {
+            match join_result {
+                Ok(Ok(Some(result))) => {
+                    total_matches_count += 1;
+                    // Completion-order selection, as before: the first
+                    // `limit` completions win.
+                    let should_insert = match max_results {
                         Some(limit) => {
-                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            let old = admitted_count;
+                            admitted_count += 1;
                             old < limit as u64
                         }
                         None => true,
                     };
                     if should_insert {
-                        results.insert(
-                            port,
-                            PortResult {
-                                port,
-                                status: "open".to_string(),
-                                service: get_service_name(port).to_string(),
-                            },
-                        );
+                        open_results.push(result);
                     }
                 }
-                if let Some(ref pb) = progress {
-                    pb.inc(1);
+                Ok(Ok(None)) => {}
+                Ok(Err(_)) => {
+                    tracing::debug!("Port scan worker timed out after 300s");
                 }
-                if let Some(ref tx) = progress_tx {
-                    let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                    if tx.send((count, total_ports)).await.is_err() {
-                        tracing::warn!("Progress receiver dropped");
-                    }
+                Err(e) => {
+                    tracing::warn!("Port scan worker task join failure: {}", e);
                 }
-                drop(permit);
-            },
-        ));
-
-        handles.push(handle);
+            }
+            if let Some(ref pb) = progress {
+                pb.inc(1);
+            }
+            if let Some(ref tx) = progress_tx {
+                scanned_count += 1;
+                if tx.send((scanned_count, total_ports)).await.is_err() {
+                    tracing::warn!("Progress receiver dropped");
+                }
+            }
+        }
     }
-
-    join_all(handles).await;
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }
 
-    let results_map = Arc::try_unwrap(results).map_err(|_| {
-        crate::error::EggsecError::Runtime("Arc ref count non-zero after workers completed".into())
-    })?;
-    let mut results: Vec<PortResult> = results_map.into_iter().map(|(_, v)| v).collect();
-    results.sort_by_key(|p| p.port);
+    open_results.sort_by_key(|p| p.port);
 
-    let results_truncated = results.len() > MAX_SCAN_RESULTS;
+    let results_truncated = open_results.len() > MAX_SCAN_RESULTS;
     if results_truncated {
-        results.truncate(MAX_SCAN_RESULTS);
+        open_results.truncate(MAX_SCAN_RESULTS);
     }
 
-    let open_ports: Vec<PortResult> = results.into_iter().filter(|p| p.status == "open").collect();
-    let total_open_ports = total_matches_count.load(Ordering::Relaxed) as usize;
+    let open_ports: Vec<PortResult> = open_results
+        .into_iter()
+        .filter(|p| p.status == "open")
+        .collect();
 
     Ok(PortScanResults {
         host: host.to_string(),
@@ -662,7 +674,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
             crate::error::EggsecError::Internal("port count exceeds u32::MAX".into())
         })?,
         open_ports,
-        total_open_ports,
+        total_open_ports: total_matches_count,
         results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,

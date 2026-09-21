@@ -161,13 +161,14 @@ scan_ports(host, config)                     [ports/mod.rs:531]
   │       └─ return PortScanResults with SpoofStats
   └─ NO → TCP connect scan
       ├─ resolve_host()
-      ├─ for each port (semaphore-controlled):
-      │   ├─ tokio::spawn with 300s timeout wrapper
+      ├─ bounded JoinSet scheduler (at most `concurrency` in flight;
+      │   peak live work is O(concurrency), not O(ports)):
+      │   ├─ admit a port as one completes (JoinSet, 300s timeout wrapper)
       │   ├─ connect_with_nodelay_timeout()
-      │   ├─ on success: insert into DashMap, track max_results
+      │   ├─ task returns its PortResult; parent aggregates
+      │   ├─ completion-order `max_results` selection + match counting
       │   └─ update progress (indicatif bar or TUI channel)
-      ├─ join_all handles
-      ├─ Arc::try_unwrap(results) → sort by port
+      ├─ sort by port
       └─ truncate to MAX_SCAN_RESULTS (10,000)
 ```
 
@@ -180,16 +181,19 @@ scan_endpoints(config)                       [endpoints.rs:992]
   ├─ install_tls_provider()
   ├─ concurrency == 0? → error
   ├─ build reqwest::Client (timeout, TLS verification, redirect policy: max 5)
-  ├─ for each endpoint (semaphore-controlled):
+  ├─ bounded JoinSet scheduler (at most `concurrency` in flight;
+  │   peak live work is O(concurrency), not O(paths)):
   │   ├─ join_endpoint_url(base, endpoint) — rejects path traversal (../)
-  │   ├─ build GET request with optional spoof headers (X-Forwarded-For, X-Real-IP, X-Originating-IP)
-  │   ├─ send request
-  │   ├─ if status != 404 or include_404:
-  │   │   ├─ extract content_length, redirect location
-  │   │   ├─ is_interesting() — checks against 88 sensitive patterns on status 200/403/401
-  │   │   └─ insert into DashMap
-  │   └─ update progress
-  ├─ join_all handles
+  │   ├─ probe task (300s outer wrapper + per-request timeout):
+  │   │   ├─ build GET request with optional spoof headers (X-Forwarded-For, X-Real-IP, X-Originating-IP)
+  │   │   ├─ send request
+  │   │   └─ task returns Option<EndpointResult>
+  │   ├─ parent aggregates in completion order:
+  │   │   ├─ if status != 404 or include_404:
+  │   │   │   ├─ extract content_length, redirect location
+  │   │   │   ├─ is_interesting() — checks against 88 sensitive patterns on status 200/403/401
+  │   │   │   └─ completion-order `max_results` selection
+  │   │   └─ update progress
   ├─ sort: interesting first, then by status, then path
   └─ truncate to MAX_SCAN_RESULTS (100,000)
 ```

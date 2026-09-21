@@ -1,6 +1,6 @@
 # Performance Phase B — bounded async fan-out and fuzzer locking
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -192,5 +192,57 @@ Also run the affected Phase A profile cases in release mode.
 
 ## Completion record
 
-Append starting/final SHA, files changed, peak-live-work before/after, wall/RSS
-measurements, and any fan-out site intentionally left unchanged with reason.
+Status: Executed
+
+- Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
+  (built on the Phase A harness HEAD); final SHA recorded at commit time.
+- Files changed:
+  - `crates/eggsec/src/fuzzer/engine/utils.rs` (B1: analyzer guard narrowed
+    to the `record()` mutation; + deterministic lock-scope regression test);
+  - `crates/eggsec/src/fuzzer/engine/execution.rs` (B2: `run_concurrent_inner`
+    spawn-per-payload + semaphore + `DashMap` replaced by a `JoinSet`
+    admission loop bounded by `concurrency` with indexed `Vec<Option<_>>`
+    results; 300s timeout, fallback `FuzzResult` shapes, progress, and
+    deterministic order preserved; `concurrency == 0` fails closed);
+  - `crates/eggsec/src/scanner/ports/mod.rs` (B3: permit-before-spawn +
+    retain-all-handles + `DashMap`/atomics replaced by bounded `JoinSet`
+    with task-return aggregation; `total_matches_count`, completion-order
+    `max_results`, progress events, port sort, `MAX_SCAN_RESULTS`
+    truncation, spoof path, and timeouts preserved);
+  - `crates/eggsec/src/scanner/endpoints.rs` (B4: same pattern; shared
+    `Client`, redirect/TLS/spoof/`include_404`, content-length/redirect
+    extraction, `is_interesting`, timeout/error paths, completion-order
+    `max_results`, final sort, `total_endpoints_matched` preserved; tasks
+    additionally carry the project 300s wrapper);
+  - `crates/eggsec/src/recon/subdomain.rs` (B5: `verify_subdomains` and
+    `bruteforce` converted to the bounded `JoinSet` shape; concurrency,
+    per-query timeouts, resolver checks, and DTOs preserved);
+  - `crates/eggsec/tests/bounded_fanout_tests.rs` (new: sorting,
+    `include_404`, `max_results`, membership, zero-concurrency rejection);
+  - `architecture/performance.md` (Phase B evidence table).
+- Peak-live-work before/after: fuzzer O(payloads) → O(concurrency);
+  port/endpoint O(candidates) → O(concurrency); subdomain O(candidates) →
+  O(concurrency). Structural (admission bound `set.len() < concurrency`),
+  confirmed by the synthetic harness (retained 10k vs peak 50, identical
+  checksum) and loopback walls (port sweep ~3ms, endpoint ~24ms, checksums
+  stable/identical).
+- Wall/RSS: no regressions beyond run noise (endpoint 1002 paths ~23ms →
+  ~24ms; port sweep ~3ms → ~3–4ms).
+- Intentionally unchanged with reason:
+  - `recon/dns_enhanced.rs` (wordlist hard-capped at 1024, permit already
+    acquired before spawn; no measurable retained-task cost);
+  - pipeline dependency-wave `join_all` (wave cardinality bounded by the
+    dependency graph; not a high-cardinality path);
+  - no shared concurrency helper crate (per B6; one consistent JoinSet
+    pattern inline per domain, no public API added).
+- Verification: `cargo test -p eggsec --lib` (1445 passed, incl. new
+  `test_timing_lock_released_before_body_read`,
+  `test_run_concurrent_preserves_payload_order`,
+  `test_run_concurrent_error_fallback_shape`);
+  `cargo test -p eggsec --test bounded_fanout_tests` (5 passed);
+  `--test loadtest_tests` (29 passed); `--test fuzzer_tests` (31 passed);
+  `cargo clippy -p eggsec --no-default-features` and `--features cli` clean;
+  `cargo fmt --all --check` clean; Phase A release profiles re-run.
+- Lock-scope negative control: the regression test was verified to FAIL
+  against a temporarily restored guard-spans-body shape and PASS with the
+  fix.

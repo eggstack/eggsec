@@ -19,9 +19,12 @@ use super::plan::{normalize_method, LoadTestPlan, RatePolicy};
 
 /// Transport-neutral request template derived from the adapter.
 ///
-/// The executor clones this per request and builds a
-/// [`eggsec_transport::ScopedHttpRequest`] from it (method/URL/headers/body
-/// + timeout/redirect/proxy/TLS/hints values).
+/// The executor compiles this plus the [`LoadTestPlan`] into one prototype
+/// [`eggsec_transport::ScopedHttpRequest`] once per run (method/URL/headers/
+/// body + timeout/redirect/proxy/TLS/hints values) and dispatches cheap
+/// clones of it. Per-request authorization still runs inside
+/// [`eggsec_transport::HttpTransport::execute`]; nothing policy-relevant is
+/// cached.
 #[derive(Debug, Clone)]
 pub struct RequestTemplate {
     /// Extra headers as ordered pairs (auth already applied).

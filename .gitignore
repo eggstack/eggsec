@@ -57,3 +57,9 @@ __pycache__/
 *.egg-info/
 .venv-ci/
 crates/eggsec-python/dist/
+
+# Performance harness generated output (Phase A; summaries live in
+# architecture/performance.md, raw logs are never committed)
+/perf-results/
+*.perf.log
+*.perf.jsonl

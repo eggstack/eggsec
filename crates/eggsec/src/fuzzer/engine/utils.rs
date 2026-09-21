@@ -265,8 +265,14 @@ pub(crate) async fn send_payload_async(
     let response = request.send().await;
 
     let response_time = start.elapsed();
-    let mut timing: tokio::sync::MutexGuard<'_, TimingAnalyzer> = timing_analyzer.lock().await;
-    let timing_result = timing.record(response_time);
+    // Phase B: the analyzer mutex guards only the timing mutation. The guard
+    // is dropped before any response-body await, pattern scan, leak
+    // formatting, severity calculation, or FuzzResult construction, so a slow
+    // body path cannot serialize concurrent workers on this lock.
+    let timing_result = {
+        let mut timing = timing_analyzer.lock().await;
+        timing.record(response_time)
+    };
 
     match response {
         Ok(resp) => {
@@ -597,5 +603,104 @@ mod tests {
         let session = engine.build_session(results, Duration::from_millis(5), None);
         assert_eq!(session.waf_bypasses, 1);
         assert_eq!(session.findings, 2);
+    }
+
+    /// Phase B regression: the `TimingAnalyzer` mutex must not be held across
+    /// the response-body await. A loopback server sends response headers, then
+    /// delays the body; while the body is in flight `try_lock` must succeed.
+    /// Under the old (guard-spans-body) shape this assertion fails
+    /// deterministically — no wall-time threshold is involved.
+    #[tokio::test]
+    async fn test_timing_lock_released_before_body_read() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        crate::install_tls_provider();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback bind");
+        let addr = listener.local_addr().expect("local addr");
+        let (phase_tx, phase_rx) = tokio::sync::oneshot::channel::<()>();
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buf = vec![0u8; 4096];
+            let mut acc = Vec::new();
+            loop {
+                let n = socket.read(&mut buf).await.expect("read request");
+                if n == 0 {
+                    break;
+                }
+                acc.extend_from_slice(&buf[..n]);
+                if acc.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            // Headers first so `request.send()` resolves and timing is
+            // recorded; the body follows after a delay.
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n")
+                .await
+                .expect("write headers");
+            let _ = phase_tx.send(());
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+            socket.write_all(b"hello world").await.expect("write body");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        });
+
+        let client = Client::builder().build().expect("client");
+        let timing = Arc::new(Mutex::new(TimingAnalyzer::new()));
+        let payload = Payload {
+            payload_type: PayloadType::Sqli,
+            payload: "test".to_string(),
+            description: "test".to_string(),
+            severity: Severity::Low,
+            tags: vec![],
+        };
+        let base = format!("http://{addr}");
+
+        let send_fut = send_payload_async(
+            client,
+            &base,
+            "GET",
+            None,
+            &payload,
+            timing.clone(),
+            PatternMatcher::new(),
+            "eggsec-test",
+            None,
+        );
+        tokio::pin!(send_fut);
+        let mut phase_rx = phase_rx;
+
+        tokio::select! {
+            _ = &mut phase_rx => {},
+            r = &mut send_fut => {
+                panic!("send completed before the server reached the body phase: {r:?}");
+            }
+        }
+
+        // Settle: poll the send future until it has consumed the headers,
+        // recorded timing, and parked in the body await. The body arrives
+        // ~1000ms after the phase signal, so the send cannot complete here.
+        tokio::select! {
+            () = tokio::time::sleep(Duration::from_millis(200)) => {},
+            r = &mut send_fut => {
+                panic!("send completed during the body delay: {r:?}");
+            }
+        }
+
+        // The body is now in flight; the analyzer mutex must be free.
+        assert!(
+            timing.try_lock().is_ok(),
+            "TimingAnalyzer mutex held across the response-body await"
+        );
+
+        let result = tokio::time::timeout(Duration::from_secs(10), send_fut)
+            .await
+            .expect("send future resolves")
+            .expect("payload send succeeds");
+        assert_eq!(result.status_code, 200);
+        assert_eq!(result.response_body.as_deref(), Some("hello world"));
     }
 }

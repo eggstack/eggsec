@@ -1,6 +1,4 @@
 use crate::error::Result;
-use dashmap::DashMap;
-use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::sync::Arc;
 
@@ -78,6 +76,14 @@ impl FuzzEngine {
         mode_name: &str,
     ) -> Result<Vec<FuzzResult>> {
         let payload_count = payloads.len();
+        // Fail closed rather than deadlock the admission loop below.
+        // (Construction clamps concurrency to >= 1; this guards direct
+        // struct mutation.)
+        if self.args.concurrency == 0 {
+            return Err(crate::error::EggsecError::Runtime(
+                "concurrency must be greater than zero".to_string(),
+            ));
+        }
 
         let progress = if self.tui_mode {
             None
@@ -92,37 +98,55 @@ impl FuzzEngine {
             Some(pb)
         };
 
-        let results: Arc<DashMap<usize, FuzzResult>> = Arc::new(DashMap::new());
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.args.concurrency));
-        let mut handles = Vec::new();
-        let mut payload_catalog = Vec::with_capacity(payload_count);
+        // Phase B: bounded scheduler. At most `concurrency` payload futures
+        // are in flight at any moment; a new item is admitted as one
+        // completes. The original payload index travels with each completion
+        // so output remains deterministically ordered. Peak live Tokio work
+        // and retained handle state are O(concurrency), not O(payloads).
+        let concurrency = self.args.concurrency;
+        let mut results: Vec<Option<FuzzResult>> = (0..payload_count).map(|_| None).collect();
+        let mut in_flight = tokio::task::JoinSet::new();
+        let mut next: usize = 0;
 
-        for (idx, payload) in payloads.into_iter().enumerate() {
-            payload_catalog.push(payload.clone());
-            let semaphore = semaphore.clone();
-            let client = self.client.clone();
-            let url = self.args.url.clone();
-            let method = self.args.method.clone();
-            let param = self.args.param.clone();
-            let timing_analyzer = self.timing_analyzer.clone();
-            let pattern_matcher = self.pattern_matcher.clone();
-            let results = results.clone();
-            let progress = progress.clone();
-            let payload_clone = payload.clone();
-            let user_agent = self.user_agent.clone();
-            let auth_context_entry = self.auth_context_entry.clone();
+        while next < payload_count || !in_flight.is_empty() {
+            while next < payload_count && in_flight.len() < concurrency {
+                let idx = next;
+                next += 1;
+                let payload = payloads[idx].clone();
+                let client = self.client.clone();
+                let url = self.args.url.clone();
+                let method = self.args.method.clone();
+                let param = self.args.param.clone();
+                let timing_analyzer = self.timing_analyzer.clone();
+                let pattern_matcher = self.pattern_matcher.clone();
+                let user_agent = self.user_agent.clone();
+                let auth_context_entry = self.auth_context_entry.clone();
+                let payload_type = payload.payload_type.to_string();
 
-            // Project invariant: every spawned tokio task carries a timeout
-            // wrapper (30-300s); this also bounds semaphore acquisition.
-            let handle = tokio::spawn(tokio::time::timeout(
-                std::time::Duration::from_secs(300),
-                async move {
-                    let Ok(_permit) = semaphore.acquire_owned().await else {
-                        tracing::warn!("Semaphore closed before request dispatch");
-                        results.insert(
-                            idx,
+                // Project invariant: every spawned tokio task carries a
+                // timeout wrapper (30-300s).
+                in_flight.spawn(async move {
+                    let outcome = tokio::time::timeout(
+                        std::time::Duration::from_secs(300),
+                        send_payload_async(
+                            client,
+                            &url,
+                            &method,
+                            param.as_deref(),
+                            &payload,
+                            timing_analyzer,
+                            pattern_matcher,
+                            &user_agent,
+                            auth_context_entry.as_ref(),
+                        ),
+                    )
+                    .await;
+                    let result = match outcome {
+                        Ok(Ok(r)) => r,
+                        Ok(Err(e)) => {
+                            tracing::warn!("Fuzz request failed: {:?}", e);
                             FuzzResult {
-                                payload: payload_clone.clone(),
+                                payload: payload.clone(),
                                 status_code: 0,
                                 response_time_ms: 0,
                                 response_length: None,
@@ -131,73 +155,52 @@ impl FuzzEngine {
                                 is_anomaly: false,
                                 is_redos_suspected: false,
                                 leaks_found: vec![],
-                                error: Some("semaphore closed before request dispatch".to_string()),
-                                owasp_category: Some(payload_clone.payload_type.to_string()),
+                                error: Some(e.to_string()),
+                                owasp_category: Some(payload_type),
                                 detected_severity: Severity::Info,
-                            },
-                        );
-                        return;
+                            }
+                        }
+                        Err(_) => FuzzResult {
+                            payload: payload.clone(),
+                            status_code: 0,
+                            response_time_ms: 0,
+                            response_length: None,
+                            response_body: None,
+                            is_waf_blocked: false,
+                            is_anomaly: false,
+                            is_redos_suspected: false,
+                            leaks_found: vec![],
+                            error: Some("worker task failed or cancelled".to_string()),
+                            owasp_category: Some(payload_type),
+                            detected_severity: Severity::Info,
+                        },
                     };
-                    let result = send_payload_async(
-                        client,
-                        &url,
-                        &method,
-                        param.as_deref(),
-                        &payload_clone,
-                        timing_analyzer,
-                        pattern_matcher,
-                        &user_agent,
-                        auth_context_entry.as_ref(),
-                    )
-                    .await;
+                    (idx, result)
+                });
+            }
 
-                    match result {
-                        Ok(r) => {
-                            // Preserve payload order for deterministic output.
-                            results.insert(idx, r);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Fuzz request failed: {:?}", e);
-                            results.insert(
-                                idx,
-                                FuzzResult {
-                                    payload: payload_clone.clone(),
-                                    status_code: 0,
-                                    response_time_ms: 0,
-                                    response_length: None,
-                                    response_body: None,
-                                    is_waf_blocked: false,
-                                    is_anomaly: false,
-                                    is_redos_suspected: false,
-                                    leaks_found: vec![],
-                                    error: Some(e.to_string()),
-                                    owasp_category: Some(payload_clone.payload_type.to_string()),
-                                    detected_severity: Severity::Info,
-                                },
-                            );
-                        }
+            if let Some(join_result) = in_flight.join_next().await {
+                match join_result {
+                    Ok((idx, result)) => {
+                        // Preserve payload order for deterministic output.
+                        results[idx] = Some(result);
                     }
-
-                    if let Some(ref pb) = progress {
-                        pb.inc(1);
+                    Err(e) => {
+                        tracing::warn!("Fuzz worker task join failure: {}", e);
                     }
-                },
-            ));
-
-            handles.push(handle);
-        }
-
-        for join_result in join_all(handles).await {
-            if let Err(e) = join_result {
-                tracing::warn!("Fuzz worker task join failure: {}", e);
+                }
+                if let Some(ref pb) = progress {
+                    pb.inc(1);
+                }
             }
         }
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
         }
-        for (idx, payload) in payload_catalog.into_iter().enumerate() {
-            results.entry(idx).or_insert_with(|| FuzzResult {
-                payload: payload.clone(),
+        let mut final_results = Vec::with_capacity(payload_count);
+        for (idx, slot) in results.into_iter().enumerate() {
+            final_results.push(slot.unwrap_or_else(|| FuzzResult {
+                payload: payloads[idx].clone(),
                 status_code: 0,
                 response_time_ms: 0,
                 response_length: None,
@@ -207,21 +210,10 @@ impl FuzzEngine {
                 is_redos_suspected: false,
                 leaks_found: vec![],
                 error: Some("worker task failed or cancelled".to_string()),
-                owasp_category: Some(payload.payload_type.to_string()),
+                owasp_category: Some(payloads[idx].payload_type.to_string()),
                 detected_severity: Severity::Info,
-            });
+            }));
         }
-        let mut ordered_results: Vec<(usize, FuzzResult)> = match Arc::try_unwrap(results) {
-            Ok(map) => map.into_iter().collect(),
-            Err(_) => {
-                tracing::error!("Failed to unwrap results - workers still holding references");
-                return Err(crate::error::EggsecError::Runtime(
-                    "Fuzz engine state inconsistent: workers still running".into(),
-                ));
-            }
-        };
-        ordered_results.sort_by_key(|(k, _)| *k);
-        let final_results: Vec<FuzzResult> = ordered_results.into_iter().map(|(_, v)| v).collect();
         Ok(final_results)
     }
 
@@ -448,5 +440,70 @@ mod tests {
         let url = engine.build_fuzz_url("test");
         assert!(url.contains("foo=bar"));
         assert!(url.contains("q=test"));
+    }
+
+    fn make_payloads(n: usize) -> Vec<Payload> {
+        (0..n)
+            .map(|i| Payload {
+                payload_type: PayloadType::Sqli,
+                payload: format!("bounded-payload-{i}"),
+                description: format!("test {i}"),
+                severity: Severity::Medium,
+                tags: vec!["test".to_string()],
+            })
+            .collect()
+    }
+
+    /// Phase B: bounded scheduling must preserve deterministic payload/result
+    /// association across completions arriving in any order.
+    #[tokio::test]
+    async fn test_run_concurrent_preserves_payload_order() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("ok"))
+            .mount(&server)
+            .await;
+
+        let mut args = make_fuzz_args(&server.uri());
+        args.concurrency = 4;
+        let engine = super::super::core::FuzzEngine::new_with_tui_mode(args, true).unwrap();
+        let payloads = make_payloads(25);
+        let results = engine
+            .run_concurrent(payloads.clone(), "TEST")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), payloads.len());
+        for (i, result) in results.iter().enumerate() {
+            assert_eq!(
+                result.payload.payload, payloads[i].payload,
+                "result index {i} is not associated with input payload {i}"
+            );
+        }
+        assert!(results.iter().all(|r| r.error.is_none()));
+    }
+
+    /// Phase B: worker failure must keep the same fallback/error
+    /// representation as the pre-bounded scheduler (status 0, error text,
+    /// OWASP category populated, deterministic order).
+    #[tokio::test]
+    async fn test_run_concurrent_error_fallback_shape() {
+        let mut args = make_fuzz_args("http://127.0.0.1:1");
+        args.concurrency = 8;
+        let engine = super::super::core::FuzzEngine::new_with_tui_mode(args, true).unwrap();
+        let payloads = make_payloads(5);
+        let results = engine
+            .run_concurrent(payloads.clone(), "TEST")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), payloads.len());
+        for (i, result) in results.iter().enumerate() {
+            assert_eq!(result.payload.payload, payloads[i].payload);
+            assert_eq!(result.status_code, 0);
+            assert!(result.error.is_some(), "missing error fallback at {i}");
+            assert!(
+                result.owasp_category.is_some(),
+                "missing OWASP category at {i}"
+            );
+        }
     }
 }

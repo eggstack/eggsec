@@ -1,6 +1,6 @@
 # Performance Phase D — distributed worker capacity
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -187,6 +187,48 @@ representative feature profile rather than inventing a new production feature.
 
 ## Completion record
 
-Append baseline/final SHA, capacity model chosen, peak observed concurrency,
-network request-count changes, timeout/shutdown evidence, and exact validation
-commands.
+Status: Executed
+
+- Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
+  (built on the Phase A–C HEAD); final SHA recorded at commit time.
+- Files changed:
+  - `crates/eggsec/src/distributed/worker.rs` (D1: `start()` rejects
+    `max_concurrency == 0` before registration; D2: `CapacityTracker`
+    — `Arc<Semaphore>` execution permits + atomic `reserved` count with
+    CAS `try_reserve`, `available`/`request_size`, exactly-once `release`;
+    D3: request loop skips the network tick at zero capacity and asks
+    `min(5, available)` with pre-exposure reservation, over-delivery
+    anomaly logging, and stale-recovery disposition; D4: processing loop
+    owns a `JoinSet` with per-task permit, 300s timeout, and parent-side
+    exactly-once accounting plus abort-and-drain shutdown with no detached
+    tasks; D5: `tasks_in_progress` derives from admission truth with
+    saturating counters; channel buffer equals the capacity contract).
+  - `architecture/performance.md` (Phase D evidence table).
+- Capacity model chosen: semaphore permits (live tasks) + atomic reserved
+  count (queued + executing), `reserved <= max_concurrency` via
+  `fetch_update` CAS. No actor rewrite: the two-loop structure is kept,
+  sharing one tracker instance.
+- Peak observed concurrency: processor integration (12 fast-fail tasks at
+  cap 3): observed peak <= 3, final `failed=12`, `in_progress=0`,
+  `reserved=0`; 10 concurrent reserve-5 ticks on cap 10 admit exactly 10.
+- Network request-count changes: saturated ticks skip `RequestTasks`
+  entirely; unsaturated ticks request less. Wire format unchanged
+  (`CommandMessage::RequestTasks` untouched).
+- Timeout/shutdown evidence: 300s bound pinned by test; timeout arm shares
+  the exact `account(false)` path as the deterministically tested join-error
+  arm (disposition documented); shutdown aborts the owned set, drains with
+  accounting, and leaves counters terminal (integration-asserted).
+- Tests: 10 `capacity_tests` unit tests (bounds, over-delivery, release,
+  concurrency race, zero rejection, serialization, processor integration);
+  existing `distributed_tests` 21 passed; lib 1459 passed.
+- Verification: `cargo test -p eggsec --lib`, `--test distributed_tests`,
+  `cargo clippy -p eggsec --no-default-features` + `--features cli` clean,
+  `cargo check -p eggsec --features tool-api,rest-api` clean (two
+  pre-existing warnings in untouched `fingerprint.rs`/`agent/mod.rs`),
+  `cargo fmt --all --check` clean; release control-plane profile re-run
+  (~495ms vs ~496ms baseline — Phase D is local scheduling; connection
+  setup is Phase E's target).
+- Scheduling semantics preserved (D6): task dispatch, enforcement,
+  operation policy, payload/result schema, queue ownership, stale timeout,
+  heartbeat format, TLS/PSK — all untouched. No work-stealing or priority
+  scheduling added.

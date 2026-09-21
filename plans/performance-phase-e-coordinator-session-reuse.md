@@ -1,6 +1,6 @@
 # Performance Phase E — coordinator session reuse
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -197,6 +197,50 @@ If daemon/runtime protocol fixtures cover the same DTOs, run them as well.
 
 ## Completion record
 
-Append the final session architecture, retry matrix, connection/auth counts
-before/after, reconnect evidence, exact checks, and any protocol limitation that
-remains intentionally unresolved.
+Status: Executed
+
+- Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
+  (built on the Phase A–D HEAD); final SHA recorded at commit time.
+- Session architecture: `CoordinatorSession` (crate-internal, `remote.rs`)
+  — one actor task owns the `LineWriter`; bounded 64-command mpsc channel
+  with `oneshot` replies (actor model, not a mutex-wrapped socket);
+  remembered registration metadata replayed on every (re)connect; the
+  actor owns a single `RemoteClient` so DNS cache persists across
+  reconnects within TTL. One-shot `RemoteClient` methods are byte-identical
+  for existing CLI/tool callers.
+- Files changed:
+  - `crates/eggsec/src/distributed/remote.rs` (E1/E2: session config/state/
+    actor/`exchange`/`establish`/windowed reconnect; E3: reconnect +
+    registration replay + documented retry matrix; E6: windowed pacing
+    without actor sleeps; test-only accept/auth/completed counters;
+    `ConnectionDeps` for the clippy arg-count lint; 7 session tests);
+  - `crates/eggsec/src/distributed/worker.rs` (E5: registration, heartbeat,
+    capacity-aware acquisition, and result submission all multiplex over the
+    shared session; session-first shutdown ordering; no fresh TLS client
+    per message);
+  - `scripts/perf-profile.sh` (`session` suite);
+  - `architecture/performance.md` (Phase E evidence table).
+- Connection/auth counts before/after: 6-op steady workload 6 accepts →
+  1 accept / 1 auth / 1 live connection; 12-op fixture ~496ms of setups →
+  single setup per healthy lifetime.
+- Reconnect evidence: outage-then-recovery test drives re-establishment +
+  registration replay via heartbeat alone; wrong-PSK test proves no
+  unauthenticated fallback (0 auths, 0 live connections); shutdown test
+  proves prompt caller failure with no detached loop; burst test proves
+  queue liveness past the bound; concurrency test proves response
+  association across 5 parallel results.
+- Retry matrix: heartbeat once (idempotent); RequestTasks/result never
+  transparently retried (dequeue-loss and duplicate-complete analysis in
+  code comments); `Execute` untouched.
+- Checks: `cargo test -p eggsec --lib distributed::` (25 passed);
+  `--test distributed_tests` (21 passed); full lib 1466 passed;
+  `cargo clippy -p eggsec --no-default-features` + `--features cli` clean;
+  `cargo fmt --all --check` clean; release session suite green.
+- Protocol limitation intentionally unresolved: deterministic mid-session
+  TCP sever has no loopback fixture without root/netns (documented in
+  `architecture/performance.md`); recovery shares the tested
+  establish+replay path.
+- Compatibility: no wire-format change (`CommandMessage`/`ResponseMessage`
+  untouched), no public API removal/signature change (session types are
+  crate-internal; one-shot client methods unchanged), auth/TLS semantics
+  unchanged.

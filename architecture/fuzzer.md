@@ -449,7 +449,7 @@ Common: `common: CommonHttpArgs` (proxy, bearer, user_agent, insecure, auth_cont
 
 ### FuzzMode
 
-`Sequential` (default) → one-at-a-time; `Burst` → concurrent with semaphore; `Adaptive` → rate-limited with backoff/recovery.
+`Sequential` (default) → one-at-a-time; `Burst` → concurrent with bounded JoinSet scheduler; `Adaptive` → rate-limited with backoff/recovery.
 
 ### WafConfig (15 fields)
 
@@ -482,8 +482,8 @@ Conversions: `FuzzArgs` → `FuzzConfig` (feature `cli`), `WafStressArgs` → `W
 ## Invariants & Gotchas
 
 1. **Concurrency always ≥ 1**: `FuzzEngine::new_with_tui_mode()` clamps to `1..=500` (`engine/core.rs:143`)
-2. **Every spawned task has a timeout**: 300s wrapper on all concurrent tasks (`engine/execution.rs:117`)
-3. **Semaphore per concurrent session**: bounds parallel requests (`engine/execution.rs:96`)
+2. **Every spawned task has a timeout**: 300s wrapper on all concurrent tasks
+3. **Bounded concurrent scheduler** (performance Phase B): `run_concurrent_inner` admits at most `concurrency` payload futures through a `JoinSet` loop and carries original indices for deterministic output — peak live work is O(concurrency), not O(payloads). The `TimingAnalyzer` mutex guards only the `record()` mutation, never the response-body await.
 4. **Regex caching**: `ChainExecutor` uses LRU (size 100) for extraction patterns (`chain.rs:9`); `PatternMatcher` uses `LazyLock` static Aho-Corasick (`detection/aho_corasick.rs:48`)
 5. **NaN handling**: `TimingAnalyzer` sorts with explicit NaN ordering to prevent panics (`detection/analyzer.rs:168-178`)
 6. **Sleep clamping**: Chain sleep actions max 60s (`chain.rs:172`)

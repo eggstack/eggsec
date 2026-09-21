@@ -189,13 +189,18 @@ impl std::fmt::Display for LoadTestResults {
 ///
 /// Not `Sync`: each executor worker owns one and the run merges them at the
 /// end, so hot-path recording never touches a shared mutex.
+///
+/// Phase C: error-kind counters are keyed by [`LoadTestErrorKind`] internally
+/// (no per-record `String` allocation); the stable `String`-keyed map is
+/// materialized only in [`Metrics::to_results`], so the serialized
+/// [`LoadTestResults`] shape is unchanged.
 #[derive(Debug)]
 pub struct Metrics {
     histogram: Histogram<u64>,
     successful: u64,
     failed: u64,
     status_codes: FxHashMap<u16, u64>,
-    error_kinds: FxHashMap<String, u64>,
+    error_kind_counts: FxHashMap<LoadTestErrorKind, u64>,
     errors: Vec<String>,
     target_url: String,
 }
@@ -208,7 +213,7 @@ impl Metrics {
             successful: 0,
             failed: 0,
             status_codes: FxHashMap::default(),
-            error_kinds: FxHashMap::default(),
+            error_kind_counts: FxHashMap::default(),
             errors: Vec::new(),
             target_url,
         }
@@ -236,25 +241,14 @@ impl Metrics {
     }
 
     fn bump_kind(&mut self, kind: LoadTestErrorKind) {
-        *self
-            .error_kinds
-            .entry(kind.as_str().to_string())
-            .or_insert(0) = self
-            .error_kinds
-            .get(kind.as_str())
-            .copied()
-            .unwrap_or(0)
-            .saturating_add(1);
+        let count = self.error_kind_counts.entry(kind).or_insert(0);
+        *count = count.saturating_add(1);
     }
 
     pub fn record_http_response(&mut self, latency: Duration, status_code: u16) {
         self.record_latency(latency);
-        *self.status_codes.entry(status_code).or_insert(0) = self
-            .status_codes
-            .get(&status_code)
-            .copied()
-            .unwrap_or(0)
-            .saturating_add(1);
+        let count = self.status_codes.entry(status_code).or_insert(0);
+        *count = count.saturating_add(1);
 
         if (200..400).contains(&status_code) {
             self.successful = self.successful.saturating_add(1);
@@ -301,20 +295,12 @@ impl Metrics {
         self.successful = self.successful.saturating_add(other.successful);
         self.failed = self.failed.saturating_add(other.failed);
         for (code, count) in &other.status_codes {
-            *self.status_codes.entry(*code).or_insert(0) = self
-                .status_codes
-                .get(code)
-                .copied()
-                .unwrap_or(0)
-                .saturating_add(*count);
+            let slot = self.status_codes.entry(*code).or_insert(0);
+            *slot = slot.saturating_add(*count);
         }
-        for (kind, count) in &other.error_kinds {
-            *self.error_kinds.entry(kind.clone()).or_insert(0) = self
-                .error_kinds
-                .get(kind)
-                .cloned()
-                .unwrap_or(0)
-                .saturating_add(*count);
+        for (kind, count) in &other.error_kind_counts {
+            let slot = self.error_kind_counts.entry(*kind).or_insert(0);
+            *slot = slot.saturating_add(*count);
         }
         for err in &other.errors {
             if self.errors.len() >= 1000 {
@@ -327,6 +313,13 @@ impl Metrics {
     pub fn to_results(&self, total_duration: Duration) -> LoadTestResults {
         let total = self.total();
         let duration_secs = total_duration.as_secs_f64();
+        // Stable String-keyed view, materialized once per run (not per
+        // request): the serialized shape is unchanged.
+        let error_kinds: FxHashMap<String, u64> = self
+            .error_kind_counts
+            .iter()
+            .map(|(kind, count)| (kind.as_str().to_string(), *count))
+            .collect();
 
         LoadTestResults {
             target_url: self.target_url.clone(),
@@ -348,7 +341,7 @@ impl Metrics {
             latency_p99_ms: self.histogram.value_at_percentile(99.0) as f64,
             status_codes: self.status_codes.clone(),
             errors: self.errors.clone(),
-            error_kinds: self.error_kinds.clone(),
+            error_kinds,
         }
     }
 }

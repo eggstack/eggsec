@@ -193,6 +193,11 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - No nested Tokio runtime on the TUI daemon path: exactly one `tokio::runtime::Runtime::new` in `runner.rs` (the `block_on_ambient` standalone-host fallback) and none in `app/mod.rs` (daemon connect/attach reuse the ambient `#[tokio::main]` runtime via `block_in_place`).
 - The CLI launch gate passes `has_command` correctly: `cli.command.is_some()` appears in both `cfg` branches of `main.rs`, and no `is_none()` sits inside a `rich_tui_launch_requested` call (pins the 2026-09-20 PTY-caught inversion that dead-coded the TUI launch).
 
+### Performance Campaign Invariants (2026-09-21, guards Checks 140–142)
+- Fuzzer fan-out stays bounded (Check 140): `crates/eggsec/src/fuzzer/engine/execution.rs` schedules through a bounded `JoinSet` admission loop (`in_flight.len() < concurrency`) with no `tokio::sync::Semaphore`, `DashMap`, or `join_all` retained-handle shape.
+- Worker capacity stays truthful (Check 141): `crates/eggsec/src/distributed/worker.rs` carries `CapacityTracker` with `try_reserve`/`request_size` and the zero-concurrency rejection; the fixed `mpsc::channel::<Task>(100)` buffer (which let queued work exceed budget) is gone.
+- Load-test prototype stays compiled once per run (Check 142): `crates/eggsec/src/loadtest/executor.rs` dispatches `prototype.clone()` in the worker loop with no `self.template.scoped_request` per-request rebuild.
+
 ### NSE Subsystem Invariants
 - NSE script/module loading flows through `ScriptResolver`.
 - `NseRunReport.libraries` is per-run require activity, not registry dump.

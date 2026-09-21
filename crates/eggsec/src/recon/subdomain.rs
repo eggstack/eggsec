@@ -4,9 +4,7 @@ use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::TokioResolver;
 use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
 
 use crate::utils::create_http_client;
 
@@ -171,82 +169,79 @@ impl SubdomainEnumerator {
         domain: &str,
         subdomains: &FxHashSet<String>,
     ) -> Vec<SubdomainInfo> {
-        let semaphore = Arc::new(Semaphore::new(self.concurrency));
-        let mut handles = Vec::new();
-
-        for subdomain in subdomains {
-            let subdomain = subdomain.clone();
-            let domain = domain.to_string();
-            let semaphore = Arc::clone(&semaphore);
-            let resolver = self.resolver.clone();
-
-            let handle = tokio::spawn(async move {
-                let _permit = match semaphore.acquire().await {
-                    Ok(p) => p,
-                    Err(_) => {
-                        tracing::warn!("Semaphore closed during subdomain verification");
-                        return SubdomainInfo {
-                            subdomain: subdomain.clone(),
-                            ip_addresses: Vec::new(),
-                            has_mx: false,
-                            has_cname: false,
-                            has_txt: false,
-                        };
-                    }
-                };
-                let mut info = SubdomainInfo {
-                    subdomain: subdomain.clone(),
-                    ip_addresses: Vec::new(),
-                    has_mx: false,
-                    has_cname: false,
-                    has_txt: false,
-                };
-
-                let fqdn = Self::normalize_fqdn(&domain, &subdomain);
-                let per_query_timeout = std::time::Duration::from_secs(5);
-
-                if let Ok(Ok(lookup)) =
-                    tokio::time::timeout(per_query_timeout, resolver.lookup_ip(&fqdn)).await
-                {
-                    for ip in lookup.iter() {
-                        info.ip_addresses.push(ip.to_string());
-                    }
-                }
-
-                if let Ok(Ok(mx_lookup)) =
-                    tokio::time::timeout(per_query_timeout, resolver.mx_lookup(&fqdn)).await
-                {
-                    info.has_mx = !mx_lookup.answers().is_empty();
-                }
-
-                if let Ok(Ok(txt_lookup)) =
-                    tokio::time::timeout(per_query_timeout, resolver.txt_lookup(&fqdn)).await
-                {
-                    info.has_txt = !txt_lookup.answers().is_empty();
-                }
-
-                if let Ok(Ok(cname_lookup)) = tokio::time::timeout(
-                    per_query_timeout,
-                    resolver.lookup(&fqdn, RecordType::CNAME),
-                )
-                .await
-                {
-                    info.has_cname = cname_lookup.answers().iter().any(|record| {
-                        matches!(record.data, hickory_resolver::proto::rr::RData::CNAME(_))
-                    });
-                }
-
-                info
-            });
-
-            handles.push(handle);
-        }
-
+        // Phase B: bounded scheduler. At most `concurrency` verification
+        // futures are in flight; candidate counts may be large, so no
+        // suspended task is retained per candidate.
+        let candidates: Vec<String> = subdomains.iter().cloned().collect();
         let mut results = Vec::new();
-        for handle in handles {
-            if let Ok(info) = handle.await {
-                if !info.ip_addresses.is_empty() || info.has_mx || info.has_txt || info.has_cname {
-                    results.push(info);
+        let mut in_flight = tokio::task::JoinSet::new();
+        let mut next: usize = 0;
+
+        while next < candidates.len() || !in_flight.is_empty() {
+            while next < candidates.len() && in_flight.len() < self.concurrency {
+                let subdomain = candidates[next].clone();
+                next += 1;
+                let domain = domain.to_string();
+                let resolver = self.resolver.clone();
+
+                in_flight.spawn(async move {
+                    let mut info = SubdomainInfo {
+                        subdomain: subdomain.clone(),
+                        ip_addresses: Vec::new(),
+                        has_mx: false,
+                        has_cname: false,
+                        has_txt: false,
+                    };
+
+                    let fqdn = Self::normalize_fqdn(&domain, &subdomain);
+                    let per_query_timeout = std::time::Duration::from_secs(5);
+
+                    if let Ok(Ok(lookup)) =
+                        tokio::time::timeout(per_query_timeout, resolver.lookup_ip(&fqdn)).await
+                    {
+                        for ip in lookup.iter() {
+                            info.ip_addresses.push(ip.to_string());
+                        }
+                    }
+
+                    if let Ok(Ok(mx_lookup)) =
+                        tokio::time::timeout(per_query_timeout, resolver.mx_lookup(&fqdn)).await
+                    {
+                        info.has_mx = !mx_lookup.answers().is_empty();
+                    }
+
+                    if let Ok(Ok(txt_lookup)) =
+                        tokio::time::timeout(per_query_timeout, resolver.txt_lookup(&fqdn)).await
+                    {
+                        info.has_txt = !txt_lookup.answers().is_empty();
+                    }
+
+                    if let Ok(Ok(cname_lookup)) = tokio::time::timeout(
+                        per_query_timeout,
+                        resolver.lookup(&fqdn, RecordType::CNAME),
+                    )
+                    .await
+                    {
+                        info.has_cname = cname_lookup.answers().iter().any(|record| {
+                            matches!(record.data, hickory_resolver::proto::rr::RData::CNAME(_))
+                        });
+                    }
+
+                    info
+                });
+            }
+
+            if let Some(join_result) = in_flight.join_next().await {
+                match join_result {
+                    Ok(info)
+                        if !info.ip_addresses.is_empty()
+                            || info.has_mx
+                            || info.has_txt
+                            || info.has_cname =>
+                    {
+                        results.push(info);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -255,50 +250,45 @@ impl SubdomainEnumerator {
     }
 
     pub async fn bruteforce(&self, domain: &str, wordlist: &[String]) -> Result<SubdomainResult> {
-        let semaphore = Arc::new(Semaphore::new(self.concurrency));
-        let mut handles = Vec::new();
+        // Phase B: bounded scheduler, same shape as `verify_subdomains`.
+        let mut subdomains = Vec::new();
+        let mut in_flight = tokio::task::JoinSet::new();
+        let mut next: usize = 0;
 
-        for word in wordlist {
-            let subdomain = format!("{}.{}", word, domain);
-            let semaphore = Arc::clone(&semaphore);
-            let resolver = self.resolver.clone();
+        while next < wordlist.len() || !in_flight.is_empty() {
+            while next < wordlist.len() && in_flight.len() < self.concurrency {
+                let subdomain = format!("{}.{}", wordlist[next], domain);
+                next += 1;
+                let resolver = self.resolver.clone();
 
-            let handle = tokio::spawn(async move {
-                let _permit = match semaphore.acquire().await {
-                    Ok(p) => p,
-                    Err(_) => {
-                        tracing::warn!("Semaphore closed during subdomain brute-force");
-                        return None;
+                in_flight.spawn(async move {
+                    if let Ok(Ok(lookup)) = tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        resolver.lookup_ip(&subdomain),
+                    )
+                    .await
+                    {
+                        let ips: Vec<String> = lookup.iter().map(|ip| ip.to_string()).collect();
+                        if !ips.is_empty() {
+                            return Some(SubdomainInfo {
+                                subdomain,
+                                ip_addresses: ips,
+                                has_mx: false,
+                                has_cname: false,
+                                has_txt: false,
+                            });
+                        }
                     }
-                };
+                    None
+                });
+            }
 
-                if let Ok(Ok(lookup)) = tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    resolver.lookup_ip(&subdomain),
-                )
-                .await
-                {
-                    let ips: Vec<String> = lookup.iter().map(|ip| ip.to_string()).collect();
-                    if !ips.is_empty() {
-                        return Some(SubdomainInfo {
-                            subdomain,
-                            ip_addresses: ips,
-                            has_mx: false,
-                            has_cname: false,
-                            has_txt: false,
-                        });
-                    }
+            if let Some(join_result) = in_flight.join_next().await {
+                if let Ok(Some(info)) = join_result {
+                    subdomains.push(info);
+                } else if join_result.is_err() {
+                    tracing::debug!("Subdomain brute-force worker task failed");
                 }
-                None
-            });
-
-            handles.push(handle);
-        }
-
-        let mut subdomains = Vec::with_capacity(handles.len());
-        for handle in handles {
-            if let Ok(Some(info)) = handle.await {
-                subdomains.push(info);
             }
         }
 

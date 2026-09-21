@@ -1,6 +1,6 @@
 # Performance Phase F — secondary hot spots and closure
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -236,6 +236,54 @@ The roadmap may be marked Executed only when:
 
 ## Completion record
 
-At closure append the campaign baseline/final SHAs, one summary table of all
-before/after metrics, compatibility checks, guard numbers, residual debt, and
-the exact disposition of every Phase F candidate.
+Status: Executed
+
+- Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
+  (built on the Phase A–E HEAD); final SHA recorded at commit time (campaign
+  commit + SHA-record follow-up; see the roadmap completion record).
+- F1 full-matrix re-run (same host, release, warm-up 1 + 5 trials):
+  rebuild ~890ns / clone ~106ns; fake executor ~1.1M RPS; H1 ~21k/40k/30k
+  at c=1/10/50; port sweep ~3–4ms; endpoint ~24–25ms identical checksum;
+  subdomain ~1ms peak 50; distributed setups unchanged shape; session 6 ops
+  → 1 accept/1 auth; pool sorts 14.1/8.6ms → 3.1/3.3ms. Table in
+  `architecture/performance.md` (Phase F).
+- F2 Metrics: completed in Phase C (single-lookup entry counters,
+  enum-keyed internals, unchanged serialization).
+- F3 ProxyPool: snapshot sort landed (one stats lookup + one key build per
+  entry instead of per comparison); 26 pool tests incl. tie-ordering pin.
+- F4 TaskQueue: option B landed (unified `QueueState` under one mutex;
+  removes the pending→in_progress vs in_progress→pending lock-order
+  inversion and one clone per dequeue); 23 distributed tests incl.
+  200-task hammer + stale-cycle preservation.
+- F5 larger rewrites: all rejected/deferred with evidence (runtime mutex,
+  pipeline waves, allocator, PGO, target-cpu=native) — dispositions in
+  `architecture/performance.md`.
+- F6 compatibility: zero public-signature changes outside `pub(crate)`/tests
+  (diff scan); `LoadTestResults`/wire DTOs/config shapes unchanged;
+  authorization checkpoints, redirect/proxy/TLS semantics, body-through-EOF
+  deadlines unchanged; no Python/CLI changes.
+- F7 guards: Checks 140 (fuzzer bounded scheduler), 141 (worker capacity),
+  142 (load-test prototype) appended to
+  `scripts/check-architecture-guards.sh` and documented in
+  `docs/CI_ARCHITECTURE_GUARDS.md`; full guard script passes.
+- F8 docs: `architecture/performance.md` (evidence), `loadtest.md`
+  (prototype), `distributed.md` (capacity + session), `scanner.md`
+  (bounded flows), `fuzzer.md` (bounded scheduler + lock scope),
+  `CI_ARCHITECTURE_GUARDS.md` (140–142), `README.md` (evidence pointer),
+  `AGENTS.md` (performance contract), loadtest/distributed skills;
+  plans retained with completion records.
+- Final verification: `make check` + `make check-python` (as applicable) +
+  `check-feature-profiles` + guards + affected-crate suites (see the
+  verification todo outcome at commit time).
+- Residual debt (owner / why / measurement / reopen condition):
+  - Mid-session TCP sever fixture (distributed): no deterministic loopback
+    sever without root/netns; recovery shares the tested establish+replay
+    path. Reopen if a harness gains packet-level fault injection.
+  - Global runtime mutex (runtime): no contention measured; reopen only on
+    multi-session mutex-wait profiling with benefit exceeding
+    lifecycle-ordering risk.
+  - Allocator/PGO/native-cpu (release engineering): no profile evidence;
+    reopen only with allocation profiles + packaging review (allocator) or
+    stable representative workloads (PGO).
+  - H1 loopback RPS variance ±10% run noise: harness remains informational;
+    never promote to a merge threshold.

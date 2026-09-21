@@ -2,11 +2,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, RwLock};
 
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
@@ -36,6 +39,22 @@ pub struct RemoteListener {
     plaintext_allowed: bool,
     task_queue: Arc<TaskQueue>,
     workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
+    /// Total accepted TCP connections (monotonic; test/evidence introspection).
+    accepted: Arc<AtomicUsize>,
+    /// Total successful PSK authentications (monotonic; test introspection).
+    authenticated: Arc<AtomicUsize>,
+}
+
+/// Per-connection dependencies (keeps `handle_connection` under the
+/// clippy argument-count lint).
+#[derive(Clone)]
+struct ConnectionDeps {
+    psk: String,
+    connections: Arc<RwLock<FxHashSet<String>>>,
+    tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
+    task_queue: Arc<TaskQueue>,
+    workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
+    authenticated: Arc<AtomicUsize>,
 }
 
 impl RemoteListener {
@@ -55,6 +74,8 @@ impl RemoteListener {
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
+            accepted: Arc::new(AtomicUsize::new(0)),
+            authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -74,6 +95,8 @@ impl RemoteListener {
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
+            accepted: Arc::new(AtomicUsize::new(0)),
+            authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -93,6 +116,8 @@ impl RemoteListener {
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
+            accepted: Arc::new(AtomicUsize::new(0)),
+            authenticated: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -115,6 +140,8 @@ impl RemoteListener {
                 crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
             )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
+            accepted: Arc::new(AtomicUsize::new(0)),
+            authenticated: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -135,6 +162,29 @@ impl RemoteListener {
 
     pub async fn get_workers(&self) -> Vec<crate::distributed::WorkerRegistration> {
         self.workers.read().await.values().cloned().collect()
+    }
+
+    /// Total accepted TCP connections (monotonic). Crate-internal
+    /// introspection for session-reuse evidence; not part of the wire surface.
+    #[cfg(test)]
+    pub(crate) fn accepted_count(&self) -> usize {
+        self.accepted.load(Ordering::Relaxed)
+    }
+
+    /// Total successful PSK authentications (monotonic). Each accepted
+    /// connection authenticates exactly once, so steady-state session reuse
+    /// shows accepts/auths approaching one per connection lifetime rather
+    /// than one per control message.
+    #[cfg(test)]
+    pub(crate) fn authenticated_count(&self) -> usize {
+        self.authenticated.load(Ordering::Relaxed)
+    }
+
+    /// Completed task results recorded by the coordinator. Crate-internal
+    /// introspection for session association tests.
+    #[cfg(test)]
+    pub(crate) async fn completed_results(&self) -> Vec<crate::distributed::queue::TaskResult> {
+        self.task_queue.get_results().await
     }
 
     pub async fn get_queue_counts(&self) -> (usize, usize, usize) {
@@ -276,13 +326,17 @@ impl RemoteListener {
                                 continue;
                             }
 
-                            let psk = self.psk.clone();
-                            let connections = Arc::clone(&self.connections);
-                            let tls_acceptor = tls_acceptor.clone();
-                            let task_queue = Arc::clone(&self.task_queue);
-                            let workers = Arc::clone(&self.workers);
+                            let deps = ConnectionDeps {
+                                psk: self.psk.clone(),
+                                connections: Arc::clone(&self.connections),
+                                tls_acceptor: tls_acceptor.clone(),
+                                task_queue: Arc::clone(&self.task_queue),
+                                workers: Arc::clone(&self.workers),
+                                authenticated: Arc::clone(&self.authenticated),
+                            };
+                            self.accepted.fetch_add(1, Ordering::Relaxed);
                             let handle = tokio::spawn(async move {
-                                if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor, task_queue, workers).await {
+                                if let Err(e) = Self::handle_connection(stream, addr, deps).await {
                                     tracing::error!("Connection error: {}", e);
                                 }
                             });
@@ -313,12 +367,17 @@ impl RemoteListener {
     async fn handle_connection(
         stream: TcpStream,
         addr: SocketAddr,
-        psk: String,
-        connections: Arc<RwLock<FxHashSet<String>>>,
-        tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
-        task_queue: Arc<TaskQueue>,
-        workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
+        deps: ConnectionDeps,
     ) -> Result<()> {
+        let ConnectionDeps {
+            psk,
+            connections,
+            tls_acceptor,
+            task_queue,
+            workers,
+            authenticated,
+        } = deps;
+        tracing::info!("Connection from {}", addr);
         tracing::info!("Connection from {}", addr);
 
         let stream = match tls_acceptor {
@@ -356,6 +415,7 @@ impl RemoteListener {
 
         // Register connection
         connections.write().await.insert(addr.to_string());
+        authenticated.fetch_add(1, Ordering::Relaxed);
         tracing::info!(addr = %addr, "Authenticated successfully");
 
         // Send welcome
@@ -1211,5 +1271,810 @@ impl RemoteClient {
         }
 
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase E: persistent coordinator session reuse.
+// ---------------------------------------------------------------------------
+
+/// Bound on queued session commands. Result submission must not become an
+/// unbounded memory sink; producers backpressure on a full queue while the
+/// actor drains. Failed establishments fail fast inside the reconnect window
+/// (no actor sleeps), so bursts never head-of-line block.
+pub(crate) const SESSION_COMMAND_QUEUE: usize = 64;
+
+/// Connection configuration for a [`CoordinatorSession`].
+#[derive(Debug, Clone)]
+pub(crate) struct SessionConfig {
+    pub host: String,
+    pub port: u16,
+    pub psk: String,
+    /// TLS server domain. `None` with `plaintext_allowed` selects the
+    /// explicit plaintext opt-in (isolated lab/tests only).
+    pub tls_domain: Option<String>,
+    pub plaintext_allowed: bool,
+}
+
+/// Worker registration metadata remembered by the session and replayed on
+/// every (re)connect before connection-local heartbeat state is relied upon.
+#[derive(Debug, Clone)]
+struct SessionRegistration {
+    worker_id: String,
+    hostname: String,
+    capabilities: Vec<String>,
+}
+
+/// Actor-protocol command. The line protocol is request/response without
+/// multiplexing correlation, so steady-state commands are serialized by the
+/// single connection owner and results return over `oneshot` channels.
+enum SessionCommand {
+    Register {
+        registration: SessionRegistration,
+        reply: oneshot::Sender<Result<()>>,
+    },
+    Heartbeat {
+        status: String,
+        reply: oneshot::Sender<Result<()>>,
+    },
+    RequestTasks {
+        worker_id: String,
+        max_tasks: usize,
+        reply: oneshot::Sender<Result<Vec<crate::distributed::queue::Task>>>,
+    },
+    SendResult {
+        result: crate::distributed::queue::TaskResult,
+        reply: oneshot::Sender<Result<()>>,
+    },
+}
+
+impl SessionCommand {
+    /// Fail the caller with `err` (the session is down or shutting down).
+    fn fail(self, err: EggsecError) {
+        match self {
+            SessionCommand::Register { reply, .. } => {
+                let _ = reply.send(Err(err));
+            }
+            SessionCommand::Heartbeat { reply, .. } => {
+                let _ = reply.send(Err(err));
+            }
+            SessionCommand::RequestTasks { reply, .. } => {
+                let _ = reply.send(Err(err));
+            }
+            SessionCommand::SendResult { reply, .. } => {
+                let _ = reply.send(Err(err));
+            }
+        }
+    }
+}
+
+/// Persistent, authenticated coordinator session (Phase E).
+///
+/// One actor task owns the connection (`LineWriter`) for its whole lifetime:
+/// registration, heartbeats, capacity-aware task acquisition, and result
+/// submission all multiplex over a single TCP/TLS/PSK setup per healthy
+/// connection lifetime instead of one setup per message. The one-shot
+/// [`RemoteClient`] methods are unchanged for CLI/tool callers.
+///
+/// Retry disposition (documented per method):
+/// - heartbeat: safe to retry once after reconnect (idempotent status
+///   update; the next cadence tick recovers anything else);
+/// - task acquisition: never transparently retried — a lost response after
+///   the coordinator dequeues tasks must not cause hidden loss or duplicate
+///   execution, so the error surfaces and the next normal poll recovers
+///   through existing stale-task behavior;
+/// - result submission: never transparently retried — `complete()` appends
+///   to the completed deque, so replay could duplicate results; the error
+///   surfaces (matching the pre-session warn-and-continue behavior);
+/// - registration: performed on every (re)connect while remembered, before
+///   any heartbeat depends on connection-local worker identity.
+pub(crate) struct CoordinatorSession {
+    commands: mpsc::Sender<SessionCommand>,
+    shutdown_tx: watch::Sender<bool>,
+    actor: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
+}
+
+impl CoordinatorSession {
+    /// Spawn the session owner. No I/O happens until the first command
+    /// (registration drives the first connect).
+    pub(crate) fn spawn(config: SessionConfig) -> Self {
+        let (commands, receiver) = mpsc::channel(SESSION_COMMAND_QUEUE);
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let actor_handle = tokio::spawn(session_actor(config, receiver, shutdown_rx));
+        Self {
+            commands,
+            shutdown_tx,
+            actor: std::sync::Mutex::new(Some(actor_handle)),
+        }
+    }
+
+    /// Register (or re-register) the worker. The metadata is remembered for
+    /// reconnect replay.
+    pub(crate) async fn register(
+        &self,
+        worker_id: String,
+        hostname: String,
+        capabilities: Vec<String>,
+    ) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.commands
+            .send(SessionCommand::Register {
+                registration: SessionRegistration {
+                    worker_id,
+                    hostname,
+                    capabilities,
+                },
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session is shut down".to_string()))?;
+        reply_rx
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session shut down".to_string()))?
+    }
+
+    /// Send a heartbeat over the shared session.
+    pub(crate) async fn heartbeat(&self, status: String) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.commands
+            .send(SessionCommand::Heartbeat {
+                status,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session is shut down".to_string()))?;
+        reply_rx
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session shut down".to_string()))?
+    }
+
+    /// Acquire tasks over the shared session. Never transparently retried.
+    pub(crate) async fn request_tasks(
+        &self,
+        worker_id: String,
+        max_tasks: usize,
+    ) -> Result<Vec<crate::distributed::queue::Task>> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.commands
+            .send(SessionCommand::RequestTasks {
+                worker_id,
+                max_tasks,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session is shut down".to_string()))?;
+        reply_rx
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session shut down".to_string()))?
+    }
+
+    /// Submit a task result over the shared session. Never transparently
+    /// retried (see the disposition above).
+    pub(crate) async fn send_result(
+        &self,
+        result: crate::distributed::queue::TaskResult,
+    ) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.commands
+            .send(SessionCommand::SendResult {
+                result,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session is shut down".to_string()))?;
+        reply_rx
+            .await
+            .map_err(|_| EggsecError::Network("coordinator session shut down".to_string()))?
+    }
+
+    /// Stop accepting new commands, fail pending callers, and close the
+    /// connection owner without leaving a detached reconnect loop.
+    pub(crate) fn shutdown(&self) {
+        if let Err(e) = self.shutdown_tx.send(true) {
+            tracing::debug!(?e, "Coordinator session shutdown receiver already dropped");
+        }
+        if let Ok(mut actor) = self.actor.lock() {
+            if let Some(handle) = actor.take() {
+                handle.abort();
+            }
+        }
+    }
+}
+
+impl Drop for CoordinatorSession {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+/// Send one command and read its response on an owned connection.
+async fn session_exchange(
+    writer: &mut LineWriter,
+    command: &CommandMessage,
+    timeout_secs: u64,
+    timeout_message: &str,
+) -> Result<ResponseMessage> {
+    writer.write_line(&serde_json::to_string(command)?).await?;
+    tokio::time::timeout(Duration::from_secs(timeout_secs), async {
+        let line = writer
+            .read_line()
+            .await?
+            .ok_or_else(|| EggsecError::Network("No response".to_string()))?;
+        Ok::<_, EggsecError>(serde_json::from_str::<ResponseMessage>(&line)?)
+    })
+    .await
+    .map_err(|_| EggsecError::Network(timeout_message.to_string()))?
+}
+
+/// Establish one authenticated connection and replay remembered worker
+/// registration on it. Every setup performs TCP connect, TLS handshake
+/// (when configured), and PSK authentication — persistent reuse means
+/// fewer setups, never weaker ones.
+async fn session_establish(
+    client: &mut RemoteClient,
+    host: &str,
+    port: u16,
+    registration: Option<&SessionRegistration>,
+) -> Result<LineWriter> {
+    let mut writer = client.connect_to_coordinator(host, port).await?;
+    if let Some(registration) = registration {
+        let command = CommandMessage::Register {
+            id: registration.worker_id.clone(),
+            hostname: registration.hostname.clone(),
+            capabilities: registration.capabilities.clone(),
+        };
+        let response =
+            session_exchange(&mut writer, &command, 10, "Registration response timed out").await?;
+        if !response.success {
+            return Err(EggsecError::Validation(format!(
+                "Registration failed: {:?}",
+                response.error
+            )));
+        }
+        tracing::info!(worker_id = %registration.worker_id, "Worker (re-)registered on coordinator session");
+    }
+    Ok(writer)
+}
+
+async fn session_actor(
+    config: SessionConfig,
+    mut commands: mpsc::Receiver<SessionCommand>,
+    mut shutdown: watch::Receiver<bool>,
+) {
+    let mut client = if let Some(domain) = config.tls_domain.clone() {
+        match RemoteClient::with_tls(config.psk.clone(), &domain) {
+            Ok(client) => client,
+            Err(e) => {
+                tracing::error!(%e, "Failed to initialize coordinator session TLS");
+                return;
+            }
+        }
+    } else if config.plaintext_allowed {
+        RemoteClient::new_plaintext(config.psk.clone())
+    } else {
+        tracing::error!("TLS domain is required for coordinator sessions");
+        return;
+    };
+
+    let mut writer: Option<LineWriter> = None;
+    let mut registration: Option<SessionRegistration> = None;
+    let mut reconnect = SessionReconnect::default();
+
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => {
+                tracing::info!("Coordinator session shutting down");
+                break;
+            }
+            command = commands.recv() => {
+                let Some(command) = command else {
+                    break;
+                };
+                // Short registration commands update remembered metadata.
+                if let SessionCommand::Register { registration: fresh, reply } = command {
+                    registration = Some(fresh);
+                    // Force (re-)establishment so registration is verified
+                    // on a live connection before reporting success.
+                    writer = None;
+                    match reconnect.ensure_connected(&mut client, &config.host, config.port, registration.as_ref()).await {
+                        Ok(established) => {
+                            writer = Some(established);
+                            let _ = reply.send(Ok(()));
+                        }
+                        Err(e) => {
+                            tracing::warn!("Coordinator session registration failed: {}", e);
+                            reply.send(Err(e)).unwrap_or(());
+                        }
+                    }
+                    continue;
+                }
+
+                // Ensure a live authenticated connection (windowed: recent
+                // failures fail fast without a new setup).
+                if writer.is_none() {
+                    match reconnect.ensure_connected(&mut client, &config.host, config.port, registration.as_ref()).await {
+                        Ok(established) => {
+                            writer = Some(established);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Coordinator session establish failed: {}", e);
+                            command.fail(e);
+                            continue;
+                        }
+                    }
+                }
+
+                let writer_ref = writer.as_mut().expect("session writer established");
+                match command {
+                    SessionCommand::Register { .. } => {
+                        // Unreachable: handled above.
+                    }
+                    SessionCommand::Heartbeat { status, reply } => {
+                        let command = CommandMessage::Heartbeat {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            status,
+                        };
+                        match session_exchange(writer_ref, &command, 5, "Heartbeat response timed out").await {
+                            Ok(_) => {
+                                reply.send(Ok(())).unwrap_or(());
+                            }
+                            Err(first_err) => {
+                                // Broken stream: discard and retry the
+                                // idempotent heartbeat once on a fresh
+                                // connection before failing the caller. The
+                                // retry goes through the same reconnect
+                                // window as any other establishment.
+                                tracing::debug!("Session heartbeat failed, re-establishing: {}", first_err);
+                                writer = None;
+                                match reconnect.ensure_connected(&mut client, &config.host, config.port, registration.as_ref()).await {
+                                    Ok(established) => {
+                                        let retry = session_exchange(&mut *writer.insert(established), &command, 5, "Heartbeat response timed out").await;
+                                        match retry {
+                                            Ok(_) => reply.send(Ok(())).unwrap_or(()),
+                                            Err(e) => {
+                                                writer = None;
+                                                reply.send(Err(e)).unwrap_or(());
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        reply.send(Err(e)).unwrap_or(());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    SessionCommand::RequestTasks { worker_id, max_tasks, reply } => {
+                        let command = CommandMessage::RequestTasks {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            worker_id,
+                            max_tasks,
+                        };
+                        match session_exchange(writer_ref, &command, 10, "Task request response timed out").await {
+                            Ok(response) => {
+                                if !response.success {
+                                    reply.send(Ok(Vec::new())).unwrap_or(());
+                                    continue;
+                                }
+                                let tasks: Vec<crate::distributed::queue::Task> = match response.output {
+                                    Some(output) => serde_json::from_str(&output).unwrap_or_else(|e| {
+                                        tracing::warn!("Failed to deserialize task list from coordinator: {}", e);
+                                        Vec::new()
+                                    }),
+                                    None => Vec::new(),
+                                };
+                                reply.send(Ok(tasks)).unwrap_or(());
+                            }
+                            Err(e) => {
+                                // Never transparently retried: a lost
+                                // response may follow a server-side dequeue.
+                                // The next normal poll recovers via
+                                // stale-task behavior.
+                                tracing::debug!("Session task request failed: {}", e);
+                                writer = None;
+                                reply.send(Err(e)).unwrap_or(());
+                            }
+                        }
+                    }
+                    SessionCommand::SendResult { result, reply } => {
+                        let command = CommandMessage::Result {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            result,
+                        };
+                        match session_exchange(writer_ref, &command, 10, "Result response timed out").await {
+                            Ok(_) => {
+                                reply.send(Ok(())).unwrap_or(());
+                            }
+                            Err(e) => {
+                                // Never transparently retried: replays could
+                                // duplicate completed entries.
+                                tracing::debug!("Session result submission failed: {}", e);
+                                writer = None;
+                                reply.send(Err(e)).unwrap_or(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Reconnect pacing state. Reconnect attempts are rate-limited to at most
+/// one per backoff window (1s/2s/5s by consecutive failures, consistent with
+/// worker polling cadence). Attempts inside the window fail fast WITHOUT a
+/// new TCP/TLS/auth setup and WITHOUT sleeping the actor, so a broken
+/// coordinator can neither cause a tight reconnect loop nor head-of-line
+/// block a burst of queued commands; shutdown stays trivially responsive
+/// because the actor never sleeps.
+#[derive(Debug, Default)]
+struct SessionReconnect {
+    consecutive_failures: u32,
+    last_failure: Option<Instant>,
+}
+
+impl SessionReconnect {
+    fn window(&self) -> Duration {
+        match self.consecutive_failures {
+            0 | 1 => Duration::from_secs(1),
+            2 => Duration::from_secs(2),
+            _ => Duration::from_secs(5),
+        }
+    }
+
+    /// Establish one authenticated connection (with registration replay),
+    /// rate-limited by the backoff window.
+    async fn ensure_connected(
+        &mut self,
+        client: &mut RemoteClient,
+        host: &str,
+        port: u16,
+        registration: Option<&SessionRegistration>,
+    ) -> Result<LineWriter> {
+        if let Some(last) = self.last_failure {
+            let window = self.window();
+            if last.elapsed() < window {
+                return Err(EggsecError::Network(
+                    "coordinator unavailable (reconnect backing off)".to_string(),
+                ));
+            }
+        }
+        match session_establish(client, host, port, registration).await {
+            Ok(writer) => {
+                self.consecutive_failures = 0;
+                self.last_failure = None;
+                Ok(writer)
+            }
+            Err(e) => {
+                self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+                self.last_failure = Some(Instant::now());
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Phase E session tests (deterministic, plaintext loopback, isolated lab).
+///
+/// Plaintext exercises the identical connection-lifecycle path as TLS (TCP
+/// accept → handshake step → PSK auth → command loop); TLS handshakes ride
+/// the same per-setup sequence 1:1 with accepts by construction, so the
+/// accept/auth counters below prove session reuse for both.
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+    use crate::distributed::queue::{Task, TaskResult};
+
+    async fn free_port() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        drop(listener);
+        port
+    }
+
+    async fn start_plaintext_listener(
+        psk: &str,
+    ) -> (Arc<RemoteListener>, tokio::task::JoinHandle<()>, u16) {
+        let port = free_port().await;
+        start_plaintext_listener_on(psk, port).await
+    }
+
+    async fn start_plaintext_listener_on(
+        psk: &str,
+        port: u16,
+    ) -> (Arc<RemoteListener>, tokio::task::JoinHandle<()>, u16) {
+        let listener = Arc::new(RemoteListener::new_plaintext(psk.to_string()));
+        let server = Arc::clone(&listener);
+        let handle = tokio::spawn(async move {
+            let _ = server.start(port).await;
+        });
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        (listener, handle, port)
+    }
+
+    fn plaintext_session(psk: &str, port: u16) -> CoordinatorSession {
+        CoordinatorSession::spawn(SessionConfig {
+            host: "127.0.0.1".to_string(),
+            port,
+            psk: psk.to_string(),
+            tls_domain: None,
+            plaintext_allowed: true,
+        })
+    }
+
+    fn heartbeat_status(worker_id: &str) -> String {
+        serde_json::json!({
+            "worker_id": worker_id,
+            "status": "idle",
+            "current_jobs": 0,
+            "completed_jobs": 0,
+            "failed_jobs": 0,
+        })
+        .to_string()
+    }
+
+    fn result_for(task_id: &str) -> TaskResult {
+        TaskResult {
+            task_id: task_id.to_string(),
+            success: true,
+            output: "ok".to_string(),
+            error: None,
+            duration_millis: 1,
+        }
+    }
+
+    /// Steady state: register + heartbeats + task requests + results ride
+    /// one accepted connection with one PSK authentication.
+    #[tokio::test]
+    async fn session_reuses_single_connection_in_steady_state() {
+        let psk = "test-psk-session-reuse".to_string();
+        let (listener, handle, port) = start_plaintext_listener(&psk).await;
+        let session = plaintext_session(&psk, port);
+
+        let start = Instant::now();
+        session
+            .register(
+                "worker-1".to_string(),
+                "host-1".to_string(),
+                vec!["PortScan".to_string()],
+            )
+            .await
+            .expect("register");
+        for _ in 0..3 {
+            session
+                .heartbeat(heartbeat_status("worker-1"))
+                .await
+                .expect("heartbeat");
+        }
+        let tasks = session
+            .request_tasks("worker-1".to_string(), 5)
+            .await
+            .expect("request tasks");
+        assert!(tasks.is_empty());
+        session
+            .send_result(result_for("task-1"))
+            .await
+            .expect("send result");
+        let wall = start.elapsed();
+
+        assert_eq!(listener.accepted_count(), 1);
+        assert_eq!(listener.authenticated_count(), 1);
+        assert_eq!(listener.connection_count().await, 1);
+        println!(
+            "perf session steady_state ops=6 wall_ms={} accepts={} auths={} live_connections={}",
+            wall.as_millis(),
+            listener.accepted_count(),
+            listener.authenticated_count(),
+            listener.connection_count().await
+        );
+
+        // Heartbeats depended on the connection-local registration: the
+        // coordinator updated heartbeat state for the registered worker.
+        let workers = listener.get_workers().await;
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].worker_id, "worker-1");
+        let last_heartbeat = workers[0].last_heartbeat_secs.expect("heartbeat timestamp");
+        assert!(
+            chrono::Utc::now().timestamp() - last_heartbeat < 60,
+            "stale heartbeat timestamp"
+        );
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Outage recovery: commands fail fast while down, and after recovery a
+    /// heartbeat alone succeeds — proving the remembered registration was
+    /// replayed on the new connection before connection-local heartbeat
+    /// state was relied upon (no explicit re-register call).
+    #[tokio::test]
+    async fn session_recovers_and_replays_registration() {
+        let psk = "test-psk-session-recover".to_string();
+        let port = free_port().await;
+        let session = plaintext_session(&psk, port);
+
+        session
+            .register(
+                "worker-9".to_string(),
+                "host-9".to_string(),
+                vec!["PortScan".to_string()],
+            )
+            .await
+            .expect_err("register must fail while the coordinator is down");
+
+        let (listener, handle, _) = start_plaintext_listener_on(&psk, port).await;
+        // Past the first-failure reconnect window (1s) with margin.
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        // No explicit re-register: the heartbeat drives re-establishment +
+        // registration replay on the fresh connection.
+        session
+            .heartbeat(heartbeat_status("worker-9"))
+            .await
+            .expect("heartbeat after recovery");
+        let workers = listener.get_workers().await;
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].worker_id, "worker-9");
+        assert!(
+            workers[0].last_heartbeat_secs.is_some(),
+            "heartbeat state requires connection-local registration"
+        );
+        assert_eq!(listener.authenticated_count(), 1);
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Failed authentication never falls back to an unauthenticated session:
+    /// every operation fails and no auth is recorded.
+    #[tokio::test]
+    async fn session_wrong_psk_never_succeeds() {
+        let (listener, handle, port) = start_plaintext_listener("right-psk").await;
+        let session = plaintext_session("wrong-psk", port);
+
+        assert!(session
+            .register("w".to_string(), "h".to_string(), vec![])
+            .await
+            .is_err());
+        assert!(session.heartbeat(heartbeat_status("w")).await.is_err());
+        assert!(session.request_tasks("w".to_string(), 1).await.is_err());
+        assert!(session.send_result(result_for("t")).await.is_err());
+        assert_eq!(listener.authenticated_count(), 0);
+        assert_eq!(listener.connection_count().await, 0);
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Shutdown fails pending/future callers promptly and leaves no
+    /// detached reconnect loop.
+    #[tokio::test]
+    async fn session_shutdown_fails_callers() {
+        let psk = "test-psk-session-shutdown".to_string();
+        let (listener, handle, port) = start_plaintext_listener(&psk).await;
+        let session = plaintext_session(&psk, port);
+        session
+            .register("w".to_string(), "h".to_string(), vec![])
+            .await
+            .expect("register");
+        session.shutdown();
+        let start = Instant::now();
+        assert!(session.heartbeat(heartbeat_status("w")).await.is_err());
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "shutdown caller did not fail promptly"
+        );
+        assert_eq!(listener.accepted_count(), 1);
+
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// The command queue is bounded (structural pin) and stays live under a
+    /// burst larger than the bound.
+    #[tokio::test]
+    async fn session_command_queue_bounded_and_live() {
+        assert_eq!(SESSION_COMMAND_QUEUE, 64);
+        let psk = "test-psk-session-burst".to_string();
+        let (listener, handle, port) = start_plaintext_listener(&psk).await;
+        let session = plaintext_session(&psk, port);
+        session
+            .register("w".to_string(), "h".to_string(), vec![])
+            .await
+            .expect("register");
+        for i in 0..70 {
+            session
+                .heartbeat(heartbeat_status(&format!("w-{i}")))
+                .await
+                .expect("burst heartbeat");
+        }
+        assert_eq!(listener.accepted_count(), 1);
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Concurrent callers keep correct response association: every result
+    /// lands under its own task id.
+    #[tokio::test]
+    async fn session_concurrent_results_keep_association() {
+        let psk = "test-psk-session-assoc".to_string();
+        let (listener, handle, port) = start_plaintext_listener(&psk).await;
+
+        // Enqueue through the one-shot path (unchanged public behavior).
+        for i in 0..5 {
+            let mut client = RemoteClient::new_plaintext(psk.clone());
+            client
+                .enqueue_task(
+                    "127.0.0.1",
+                    port,
+                    Task {
+                        id: format!("assoc-{i}"),
+                        job_id: "job-1".to_string(),
+                        task_type: crate::distributed::TaskType::PortScan,
+                        target: "example.com".to_string(),
+                        payload: rustc_hash::FxHashMap::default(),
+                        worker_id: None,
+                        assigned_at_secs: None,
+                    },
+                )
+                .await
+                .expect("enqueue");
+        }
+
+        let session = plaintext_session(&psk, port);
+        session
+            .register("w".to_string(), "h".to_string(), vec![])
+            .await
+            .expect("register");
+        let mut handles = Vec::new();
+        for i in 0..5 {
+            let session_ref = &session;
+            handles.push(async move {
+                session_ref
+                    .send_result(result_for(&format!("assoc-{i}")))
+                    .await
+                    .expect("concurrent result")
+            });
+        }
+        futures::future::join_all(handles).await;
+
+        let completed = listener.completed_results().await;
+        let mut ids: Vec<String> = completed.iter().map(|r| r.task_id.clone()).collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![
+                "assoc-0".to_string(),
+                "assoc-1".to_string(),
+                "assoc-2".to_string(),
+                "assoc-3".to_string(),
+                "assoc-4".to_string(),
+            ]
+        );
+
+        session.shutdown();
+        listener.shutdown();
+        handle.abort();
+    }
+
+    /// Acquisition/result errors surface instead of hanging or speculative
+    /// replay while the coordinator is down.
+    #[tokio::test]
+    async fn session_errors_surface_without_retry_or_hang() {
+        let port = free_port().await;
+        let session = plaintext_session("psk", port);
+        let start = Instant::now();
+        assert!(session.request_tasks("w".to_string(), 2).await.is_err());
+        assert!(session.send_result(result_for("t")).await.is_err());
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "control errors did not surface promptly"
+        );
+        session.shutdown();
     }
 }

@@ -1,6 +1,6 @@
 # Performance Phase A — baseline and measurement harness
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -183,5 +183,41 @@ command/output summary in architecture/performance.md.
 
 ## Completion record
 
-When implemented, append baseline/final SHAs, exact profile commands,
-environment, measurement table, and any unavailable metric with reason.
+Status: Executed
+
+- Starting SHA: `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb` (roadmap baseline)
+- Implementation HEAD: recorded at commit time (see `git log` for
+  `performance: phase A baseline and measurement harness`).
+- Environment: Ubuntu 24.04.5 LTS, kernel 6.8.0-139-generic, x86_64;
+  Intel Core i9-9900K @ 3.60GHz (16 threads); rustc/cargo 1.98.1
+  (performance runs only; merge MSRV stays 1.89).
+- Profile commands:
+  `bash scripts/perf-profile.sh --suite all --trials 5 --warmup 1`
+  (distributed suite uses 3 trials + 1 warm-up with 4 messages per trial to
+  stay under the production 60/min/IP loopback rate limit); direct form
+  `cargo test --release -p eggsec --test perf_baseline -- --ignored --nocapture`
+  and `cargo test --release -p eggsec-web-proxy --test perf_pool_baseline -- --ignored --nocapture`.
+- Measurement tables: `architecture/performance.md` (§ Phase A baseline).
+  Headline medians: request materialization ~1.13M ops/sec (~882ns/op);
+  fake-transport executor ~690k RPS flat across concurrency 1–100;
+  wiremock H1 ~19k/36k/26k RPS at concurrency 1/10/50; synthetic fan-out
+  10k items retains 10k handles unbounded vs peak 50 bounded with identical
+  checksum; port sweep200 ~3ms; endpoint 1002 paths ~23ms; subdomain 2000
+  candidates ~1ms peak 50; distributed 12 fresh setups ~496ms (~41ms/setup);
+  pool 5k sorts ~14.1ms latency / ~8.6ms success-rate.
+- Compatibility tests run: `cargo test -p eggsec --lib` (1442 passed),
+  `cargo test -p eggsec --test loadtest_tests` (29 passed),
+  `cargo test -p eggsec-runtime --lib` (83 passed),
+  `cargo fmt --all --check` clean.
+- Unavailable metrics with reason: accepted-connection counts after warm-up
+  (wiremock reuses connections opportunistically; fixture does not expose a
+  stable counter — recorded as informational); per-hop TLS handshake counts
+  on the distributed baseline (plaintext loopback used; TLS handshake cost
+  is covered by the retained Eggfetch qualification evidence, not re-measured
+  here); peak RSS portability (reported as `/proc` VmHWM where available,
+  otherwise omitted — never a gate).
+- No production behavior or public API changes in this phase (new files only:
+  `architecture/performance.md`, `scripts/perf-profile.sh`,
+  `crates/eggsec/tests/perf_baseline.rs`,
+  `crates/eggsec-web-proxy/tests/perf_pool_baseline.rs`, `.gitignore`
+  generated-output entries).

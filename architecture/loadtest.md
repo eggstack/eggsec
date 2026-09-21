@@ -83,7 +83,15 @@ Implements `Display` with sorted status codes, sorted error kinds, and first-5 e
 
 ### `RequestTemplate` (`adapter.rs`)
 
-Transport-neutral request template derived from CLI/config/auth input. `scoped_request(&plan)` builds the per-request `ScopedHttpRequest` DTO (method/URL/headers/body + timeout/redirect/proxy/TLS/hints). Auth-flag shapes (`user:pass`, bearer, cookie merge, `Name:value` API keys) are parsed at this boundary and applied through the canonical `eggsec_transport::merge_cookie_header` semantics — never reimplemented in the executor.
+Transport-neutral request template derived from CLI/config/auth input. `scoped_request(&plan)` builds the `ScopedHttpRequest` DTO (method/URL/headers/body + timeout/redirect/proxy/TLS/hints). Auth-flag shapes (`user:pass`, bearer, cookie merge, `Name:value` API keys) are parsed at this boundary and applied through the canonical `eggsec_transport::merge_cookie_header` semantics — never reimplemented in the executor.
+
+**Performance Phase C:** the executor compiles the prototype once per run
+(fail-fast with the historical "invalid request: ..." message intent) and
+dispatches cheap per-request clones (~106ns vs ~890ns rebuild). Every clone
+still passes through `HttpTransport::execute` with the same authority and
+per-hop checkpoints — no policy decision is cached. Metrics counters use
+single-lookup `entry` mutation with enum-keyed internal maps (serialized
+shape unchanged). Evidence: `architecture/performance.md` (Phase C).
 
 ### `ReqwestTransport` (`backend.rs`, transition/fail-closed)
 

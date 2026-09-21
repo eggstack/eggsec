@@ -138,6 +138,84 @@ async fn test_clear() {
     assert_eq!(queue.get_completed_count().await, 0);
 }
 
+/// Phase F: the unified queue state must stay consistent under concurrent
+/// enqueue/dequeue/complete/reassign hammering (no lost tasks, no deadlock;
+/// the whole hammer is bounded by a timeout).
+#[tokio::test]
+async fn test_queue_concurrent_hammer_stays_consistent() {
+    use std::sync::Arc;
+
+    let queue = Arc::new(TaskQueue::new(1000));
+    let task_count = 200usize;
+
+    for i in 0..task_count {
+        queue
+            .enqueue(make_task(&format!("task-{i}"), "job-1"))
+            .await
+            .unwrap();
+    }
+
+    let hammer = async {
+        let mut handles = Vec::new();
+        for worker in 0..8 {
+            let queue = Arc::clone(&queue);
+            handles.push(tokio::spawn(async move {
+                let worker_id = format!("worker-{worker}");
+                while let Ok(Some(task)) = queue.dequeue(&worker_id).await {
+                    // Interleave stale scans with completions.
+                    if task.id.ends_with('0') {
+                        let _ = queue.reassign_stale_tasks(3_600).await;
+                    }
+                    queue.complete(make_result(&task.id, true)).await;
+                }
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("hammer worker");
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(30), hammer)
+        .await
+        .expect("queue hammer deadlocked");
+
+    assert_eq!(queue.get_pending_count().await, 0);
+    assert_eq!(queue.get_in_progress_count().await, 0);
+    assert_eq!(queue.get_completed_count().await, task_count);
+}
+
+/// Phase F: dequeue moves (rather than clones) tasks between states and a
+/// full stale cycle preserves every assignment.
+#[tokio::test]
+async fn test_queue_stale_cycle_preserves_tasks() {
+    let queue = TaskQueue::new(100);
+
+    for i in 0..5 {
+        queue
+            .enqueue(make_task(&format!("cycle-{i}"), "job-1"))
+            .await
+            .unwrap();
+    }
+    for worker in 0..5 {
+        queue
+            .dequeue(&format!("worker-{worker}"))
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    assert_eq!(queue.get_pending_count().await, 0);
+    assert_eq!(queue.get_in_progress_count().await, 5);
+
+    let stale = queue.reassign_stale_tasks(-1).await;
+    assert_eq!(stale.len(), 5);
+    assert_eq!(queue.get_pending_count().await, 5);
+    assert_eq!(queue.get_in_progress_count().await, 0);
+
+    // Re-dequeued tasks carry cleared assignment metadata.
+    let task = queue.dequeue("worker-9").await.unwrap().unwrap();
+    assert_eq!(task.worker_id.as_deref(), Some("worker-9"));
+    assert!(task.assigned_at_secs.is_some());
+}
+
 #[tokio::test]
 async fn test_completed_evicts_oldest() {
     let queue = TaskQueue::new(3);

@@ -1,6 +1,6 @@
 # Performance and resource-efficiency optimization roadmap
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -268,3 +268,42 @@ Each phase must append a completion record containing:
 
 Do not mark the roadmap executed because one benchmark improved. Closure
 requires compatibility evidence and the complete ordered campaign disposition.
+
+## Completion record
+
+Status: Executed
+
+- Baseline SHA: `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`; final SHA:
+  recorded in the campaign commit(s) (implementation commit + SHA-record
+  follow-up — see `git log` for `performance:`).
+- All six phases executed in order with completion records in their plans:
+  A (harness + baselines), B (bounded fan-out + fuzzer lock), C (request
+  hot path; C4 drain-without-retain measured no-change), D (worker
+  capacity), E (session reuse), F (secondary hotspots + closure).
+- Roadmap acceptance criteria disposition (all 15):
+  1. committed loopback harness (`scripts/perf-profile.sh`, ignored
+     `perf_baseline`/`perf_pool_baseline` targets, lib session tests) ✓
+  2. `TimingAnalyzer` lock spans `record()` only (negative-controlled test) ✓
+  3. O(concurrency) in-flight fan-out everywhere (admission-bound JoinSets) ✓
+  4. deterministic fuzzer output (order/fallback tests) ✓
+  5. compatible port/endpoint/subdomain semantics (sorting/`include_404`/
+     `max_results`/membership tests) ✓
+  6. immutable request state compiled once per run (prototype clones) ✓
+  7. body-through-EOF deadline semantics unchanged (256KB EOF test + parity
+     suites) ✓
+  8. `max_concurrency` enforced on all terminal paths (tracker + processor
+     integration tests) ✓
+  9. capacity-aware acquisition (`min(5, available)`, skip at zero) ✓
+  10. steady-state session reuse (1 accept/1 auth per lifetime) ✓
+  11. reconnect re-auth + re-registration before heartbeat reliance ✓
+  12. no new unbounded queue/task set (bounded 64-command session queue;
+      worker channel sized by capacity) ✓
+  13. `architecture/performance.md` records env/commands/reps/warm-up,
+      medians/ranges, limitations ✓
+  14. verification per phase (lib/integration/parity suites, clippy, fmt,
+      guards; `make check` + feature profiles at closure) ✓
+  15. public API/capability surface unchanged (diff scan: zero
+      non-`pub(crate)` signature changes) ✓
+- Before/after summary: `architecture/performance.md` (Phase F table).
+- Residual debt: see the Phase F completion record (sever fixture, runtime
+  mutex, allocator/PGO/native-cpu, harness-noise policy).

@@ -116,12 +116,14 @@ pub struct RemoteClient {
 | `request_status(host, port)` | Query coordinator status |
 | `enqueue_task(host, port, task)` | Push task to queue |
 
-#### Worker (`worker.rs:77-91`)
+#### Worker (`worker.rs`)
 
 ```rust
 pub struct Worker {
     config: WorkerConfig,
     stats: Arc<Mutex<WorkerStats>>,
+    capacity: Arc<CapacityTracker>,          // Phase D: shared capacity truth
+    session: Option<Arc<CoordinatorSession>>, // Phase E: shared coordinator session
     sender: Option<mpsc::Sender<Task>>,
     receiver: Option<mpsc::Receiver<Task>>,
     heartbeat_handle: Option<JoinHandle<()>>,
@@ -133,6 +135,25 @@ pub struct Worker {
     shutdown_tx: watch::Sender<bool>,
 }
 ```
+
+**Phase D — capacity enforcement:** `max_concurrency` is a real contract.
+One `CapacityTracker` (execution semaphore + atomic assigned-but-not-terminal
+count) is shared by acquisition and execution: task requests ask
+`min(5, available)` and skip the tick at zero capacity; reservations happen
+before exposure (single CAS, no over-reserve); the processor admits through
+an owned `JoinSet` with per-task permits and exactly-once accounting, so
+`tasks_in_progress <= max_concurrency` holds through success, error,
+timeout, and shutdown. Zero is a configuration error, never coerced.
+
+**Phase E — session reuse:** registration, heartbeats, task acquisition,
+and result submission multiplex over one `CoordinatorSession` (actor-owned
+`LineWriter`, bounded 64-command queue): one TCP/TLS/PSK setup per healthy
+connection lifetime instead of one per message. Reconnect replays worker
+registration before heartbeat state is used; heartbeat retries once
+(idempotent) while task acquisition/result errors surface for normal-poll
+recovery (no duplicate execution). The one-shot `RemoteClient` methods above
+are unchanged for CLI/tool callers. Evidence: `architecture/performance.md`
+(Phase E).
 
 #### WorkerConfig (`worker.rs:46-54`)
 

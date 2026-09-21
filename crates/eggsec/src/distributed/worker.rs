@@ -1,9 +1,10 @@
 #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
 use crate::config::{metadata_for_tool_id, ExecutionSurface};
 use crate::config::{EnforcementContext, LoadedScope};
+use crate::distributed::remote::{CoordinatorSession, SessionConfig};
 #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
 use crate::distributed::TaskType;
-use crate::distributed::{RemoteClient, Task, TaskResult, CAPABILITIES};
+use crate::distributed::{Task, TaskResult, CAPABILITIES};
 use crate::error::{EggsecError, Result};
 use crate::scanner::endpoints::EndpointScanConfig;
 #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
@@ -11,11 +12,96 @@ use crate::tool::{
     create_default_registry, EnforcedDispatcher, Target, ToolDispatcher, ToolRequest,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::{mpsc, watch, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+use tokio::sync::{mpsc, watch, Mutex, Semaphore};
 use tokio::task::JoinHandle;
 
 const MAX_TASKS_PER_REQUEST: usize = 5;
+
+/// Task-processing timeout: no distributed task may outlive this bound or
+/// detach from shutdown/cancellation.
+const TASK_PROCESSING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Single capacity-accounting truth shared by task acquisition and task
+/// execution (Phase D).
+///
+/// `reserved` counts coordinator-assigned work that is not yet terminal
+/// (queued locally plus actively executing). The invariant
+/// `reserved <= max_concurrency` is enforced by atomic compare-and-swap on
+/// every reservation, so two loops can never observe the same free slot and
+/// over-reserve. Execution permits bound live tasks; statistics derive from
+/// the same counts (see `WorkerStats::tasks_in_progress`).
+#[derive(Debug)]
+pub(crate) struct CapacityTracker {
+    max_concurrency: usize,
+    reserved: AtomicUsize,
+    execution_permits: Arc<Semaphore>,
+}
+
+impl CapacityTracker {
+    pub(crate) fn new(max_concurrency: usize) -> Self {
+        Self {
+            max_concurrency,
+            reserved: AtomicUsize::new(0),
+            execution_permits: Arc::new(Semaphore::new(max_concurrency)),
+        }
+    }
+
+    /// Currently reservable slots (assigned-but-not-terminal subtracted).
+    pub(crate) fn available(&self) -> usize {
+        self.max_concurrency
+            .saturating_sub(self.reserved.load(Ordering::Acquire))
+    }
+
+    /// How many tasks to ask the coordinator for this tick: at most
+    /// `MAX_TASKS_PER_REQUEST` and never more than locally available
+    /// capacity. Zero means the tick must skip the network operation.
+    pub(crate) fn request_size(&self) -> usize {
+        MAX_TASKS_PER_REQUEST.min(self.available())
+    }
+
+    /// Atomically reserve up to `want` slots. Returns the admitted count,
+    /// which is always `<= want` and keeps `reserved <= max_concurrency`.
+    /// A shortfall means the coordinator over-delivered (or a concurrent
+    /// tick reserved first); the caller must not execute beyond the
+    /// admitted count.
+    pub(crate) fn try_reserve(&self, want: usize) -> usize {
+        match self
+            .reserved
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                let room = self.max_concurrency.saturating_sub(current);
+                if room == 0 {
+                    None
+                } else {
+                    Some(current + room.min(want))
+                }
+            }) {
+            Ok(previous) => (self.max_concurrency.saturating_sub(previous)).min(want),
+            Err(_) => 0,
+        }
+    }
+
+    /// Release one reservation (exactly once per admitted task, on every
+    /// terminal path: success, execution error, timeout, or cancellation).
+    pub(crate) fn release(&self) {
+        self.reserved.fetch_sub(1, Ordering::AcqRel);
+    }
+
+    /// Currently reserved (assigned but not terminal) count.
+    /// Test-only introspection for the capacity proofs.
+    #[cfg(test)]
+    pub(crate) fn reserved(&self) -> usize {
+        self.reserved.load(Ordering::Acquire)
+    }
+
+    /// Execution permits bounding live tasks.
+    pub(crate) fn permits(&self) -> Arc<Semaphore> {
+        Arc::clone(&self.execution_permits)
+    }
+}
 
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
     let url = url
@@ -77,6 +163,11 @@ pub struct WorkerStats {
 pub struct Worker {
     config: WorkerConfig,
     stats: Arc<Mutex<WorkerStats>>,
+    capacity: Arc<CapacityTracker>,
+    /// Shared coordinator session (Phase E). Set during registration;
+    /// heartbeats, task acquisition, and result submission all multiplex
+    /// over it instead of constructing a fresh TLS client per message.
+    session: Option<Arc<CoordinatorSession>>,
     sender: Option<mpsc::Sender<Task>>,
     receiver: Option<mpsc::Receiver<Task>>,
     heartbeat_handle: Option<JoinHandle<()>>,
@@ -120,6 +211,8 @@ impl Worker {
                 tasks_in_progress: 0,
                 last_heartbeat_secs: chrono::Utc::now().timestamp(),
             })),
+            capacity: Arc::new(CapacityTracker::new(config.max_concurrency)),
+            session: None,
             sender: None,
             receiver: None,
             heartbeat_handle: None,
@@ -138,9 +231,19 @@ impl Worker {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Phase D1: `max_concurrency` is a real execution/resource contract.
+        // Zero is a structured configuration error, never silently coerced.
+        if self.config.max_concurrency == 0 {
+            return Err(EggsecError::Config(
+                "max_concurrency must be greater than zero".to_string(),
+            ));
+        }
         self.register_with_coordinator().await?;
 
-        let (tx, rx) = mpsc::channel::<Task>(100);
+        // The channel buffer equals the capacity contract: reservations are
+        // capped at `max_concurrency`, so enqueueing reserved tasks never
+        // blocks and locally queued work stays within budget.
+        let (tx, rx) = mpsc::channel::<Task>(self.config.max_concurrency);
         self.sender = Some(tx);
         self.receiver = Some(rx);
 
@@ -151,65 +254,51 @@ impl Worker {
         Ok(())
     }
 
-    async fn register_with_coordinator(&self) -> Result<()> {
+    async fn register_with_coordinator(&mut self) -> Result<()> {
         let hostname = hostname::get()?.to_string_lossy().to_string();
 
         let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
 
-        let domain = self.config.tls_domain.as_deref().ok_or_else(|| {
+        let domain = self.config.tls_domain.clone().ok_or_else(|| {
             EggsecError::Config("TLS domain is required for worker connections".to_string())
         })?;
-        let mut client = RemoteClient::with_tls(self.psk.clone(), domain)
-            .map_err(|e| EggsecError::Network(format!("Failed to initialize TLS: {}", e)))?;
-
-        client
-            .register_worker(
-                host,
-                port,
+        // Phase E: establish the shared coordinator session. Registration
+        // runs over the session and its metadata is remembered for reconnect
+        // replay; steady-state control traffic reuses this connection
+        // instead of constructing a fresh TLS client per message.
+        let session = CoordinatorSession::spawn(SessionConfig {
+            host: host.to_string(),
+            port,
+            psk: self.psk.clone(),
+            tls_domain: Some(domain),
+            plaintext_allowed: false,
+        });
+        session
+            .register(
                 self.config.worker_id.clone(),
                 hostname,
                 worker_capabilities(),
             )
             .await?;
+        self.session = Some(Arc::new(session));
 
         Ok(())
     }
 
     async fn start_heartbeat_loop(&mut self) {
         let worker_id = self.config.worker_id.clone();
-        let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
-        let psk = self.psk.clone();
-        let tls_domain = self.config.tls_domain.clone();
         let stats = Arc::clone(&self.stats);
+        let session = self.session.clone();
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
-        let (host, port) = match parse_coordinator_url(&coordinator_url) {
-            Ok(hp) => hp,
-            Err(e) => {
-                tracing::error!("Failed to parse coordinator URL for heartbeat: {}", e);
-                return;
-            }
+        let Some(session) = session else {
+            tracing::error!("Coordinator session is required for worker heartbeat");
+            return;
         };
-
-        let host = host.to_string();
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
-
-            let mut client = match tls_domain.as_deref() {
-                Some(domain) => match RemoteClient::with_tls(psk, domain) {
-                    Ok(client) => client,
-                    Err(error) => {
-                        tracing::error!(%error, "Failed to initialize worker heartbeat TLS");
-                        return;
-                    }
-                },
-                None => {
-                    tracing::error!("TLS domain is required for worker heartbeat");
-                    return;
-                }
-            };
 
             loop {
                 tokio::select! {
@@ -227,7 +316,7 @@ impl Worker {
                             "failed_jobs": failed_jobs,
                         });
 
-                        if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
+                        if let Err(e) = session.heartbeat(status.to_string()).await {
                             tracing::warn!("Heartbeat failed: {}", e);
                         }
                     }
@@ -243,27 +332,19 @@ impl Worker {
 
     async fn start_task_request_loop(&mut self) -> Result<()> {
         let worker_id = self.config.worker_id.clone();
-        let coordinator_url = self.config.coordinator_url.clone();
-        let psk = self.psk.clone();
-        let tls_domain = self.config.tls_domain.clone();
+        let capacity = Arc::clone(&self.capacity);
+        let session = self.session.clone();
         let sender = self
             .sender
             .clone()
             .ok_or_else(|| EggsecError::Config("sender must be set before start".into()))?;
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
-        let (host, port) = match parse_coordinator_url(&coordinator_url) {
-            Ok(hp) => hp,
-            Err(e) => {
-                tracing::error!("Failed to parse coordinator URL for task requests: {}", e);
-                return Err(EggsecError::Config(format!(
-                    "Invalid coordinator URL: {}",
-                    e
-                )));
-            }
+        let Some(session) = session else {
+            return Err(EggsecError::Config(
+                "coordinator session must be set before start".into(),
+            ));
         };
-
-        let host = host.to_string();
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
@@ -271,25 +352,49 @@ impl Worker {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        let mut client = match tls_domain.as_deref() {
-                            Some(domain) => match RemoteClient::with_tls(psk.clone(), domain) {
-                                Ok(client) => client,
-                                Err(error) => {
-                                    tracing::warn!(%error, "Failed to initialize worker task-request TLS");
-                                    continue;
-                                }
-                            },
-                            None => {
-                                tracing::warn!("TLS domain is required for worker task requests");
-                                continue;
-                            }
-                        };
-                        match client.request_tasks(&host, port, worker_id.clone(), MAX_TASKS_PER_REQUEST).await {
+                        // Phase D3: capacity-aware acquisition. No local
+                        // capacity means no network operation this tick; the
+                        // request size is capped by available capacity. The
+                        // wire format is unchanged (`max_tasks` is just
+                        // smaller). Phase E: the request multiplexes over the
+                        // shared session instead of a fresh TLS client.
+                        let want = capacity.request_size();
+                        if want == 0 {
+                            continue;
+                        }
+                        match session.request_tasks(worker_id.clone(), want).await {
                             Ok(tasks) => {
-                                for task in tasks {
-                                    if let Err(e) = sender.send(task).await {
-                                        tracing::warn!("Failed to enqueue assigned task: {}", e);
+                                // Reserve before exposing to the processing
+                                // loop (single CAS: concurrent ticks cannot
+                                // over-reserve the same slots).
+                                let admitted = capacity.try_reserve(tasks.len());
+                                if admitted < tasks.len() {
+                                    tracing::warn!(
+                                        requested = want,
+                                        returned = tasks.len(),
+                                        admitted,
+                                        "Coordinator over-delivered tasks beyond available capacity; \
+                                         excess assignments are left for stale-task recovery rather \
+                                         than executed beyond the configured limit"
+                                    );
+                                }
+                                let mut pending_reservations = admitted;
+                                for task in tasks.into_iter().take(admitted) {
+                                    if sender.send(task).await.is_err() {
+                                        tracing::warn!(
+                                            "Failed to enqueue assigned task: processor is gone"
+                                        );
+                                        break;
                                     }
+                                    // This reservation is now owned by the
+                                    // queued task; the terminal path releases
+                                    // it.
+                                    pending_reservations -= 1;
+                                }
+                                // Release reservations for tasks never exposed
+                                // to the processor so counters stay truthful.
+                                for _ in 0..pending_reservations {
+                                    capacity.release();
                                 }
                             }
                             Err(e) => {
@@ -311,116 +416,173 @@ impl Worker {
     async fn start_task_processing_loop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
             let stats = Arc::clone(&self.stats);
+            let capacity = Arc::clone(&self.capacity);
             #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
             let enforcement = Arc::clone(&self.enforcement);
             #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
             let dispatcher = self.dispatcher.clone();
-            let coordinator_url = self.config.coordinator_url.clone();
-            let psk = self.psk.clone();
-            let tls_domain = self.config.tls_domain.clone();
-
-            let (host, port) = match parse_coordinator_url(&coordinator_url) {
-                Ok(hp) => hp,
-                Err(e) => {
-                    tracing::error!("Failed to parse coordinator URL for task results: {}", e);
-                    return;
-                }
-            };
-
-            let host = host.to_string();
+            let session = self.session.clone();
+            let max_concurrency = self.config.max_concurrency;
+            let mut shutdown_rx = self.shutdown_tx.subscribe();
 
             let handle = tokio::spawn(async move {
                 let mut receiver = receiver;
+                // Phase D4: the running set is owned here (JoinSet), never
+                // detached. Each task holds one execution permit and one
+                // capacity reservation; the parent accounts every completion
+                // exactly once, so `tasks_in_progress <= max_concurrency`
+                // holds through success, error, timeout, and shutdown paths.
+                let mut in_flight = tokio::task::JoinSet::new();
 
-                while let Some(task) = receiver.recv().await {
-                    let task_id = task.id.clone();
-                    let stats = Arc::clone(&stats);
-
+                async fn account(
+                    stats: &Arc<Mutex<WorkerStats>>,
+                    capacity: &Arc<CapacityTracker>,
+                    success: bool,
+                ) {
                     {
                         let mut s = stats.lock().await;
-                        s.tasks_in_progress += 1;
+                        // D5: progress derives from the capacity truth —
+                        // increments happen only for reserved admissions, so
+                        // this can never exceed `max_concurrency`.
+                        s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
+                        if success {
+                            s.tasks_completed = s.tasks_completed.saturating_add(1);
+                        } else {
+                            s.tasks_failed = s.tasks_failed.saturating_add(1);
+                        }
                     }
+                    capacity.release();
+                }
 
-                    let host = host.clone();
-                    let psk = psk.clone();
-                    let tls_domain = tls_domain.clone();
-                    let stats = Arc::clone(&stats);
-                    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
-                    let enforcement = Arc::clone(&enforcement);
-                    #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
-                    let dispatcher = dispatcher.clone();
-
-                    let timeout_task_id = task_id.clone();
-                    let timeout_stats = Arc::clone(&stats);
-                    tokio::spawn(async move {
-                        let process = async move {
-                            #[cfg(any(
-                                feature = "tool-api",
-                                feature = "rest-api",
-                                feature = "grpc-api"
-                            ))]
-                            let result = process_task(task, enforcement, dispatcher).await;
-                            #[cfg(not(any(
-                                feature = "tool-api",
-                                feature = "rest-api",
-                                feature = "grpc-api"
-                            )))]
-                            let result = process_task(task).await;
-
-                            let task_result = match result {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    tracing::error!("Task processing error: {}", e);
-                                    TaskResult {
-                                        task_id: task_id.clone(),
-                                        success: false,
-                                        output: String::new(),
-                                        error: Some(e.to_string()),
-                                        duration_millis: 0,
-                                    }
+                loop {
+                    tokio::select! {
+                        // Admit only while live work is within budget. The
+                        // permit is provably available (`running < reserved
+                        // <= max_concurrency`), so acquisition never blocks;
+                        // a closed semaphore (impossible while `capacity` is
+                        // held) fails closed with accounting restored.
+                        task = receiver.recv(), if in_flight.len() < max_concurrency => {
+                            let Some(task) = task else {
+                                break;
+                            };
+                            let permit = match capacity.permits().acquire_owned().await {
+                                Ok(permit) => permit,
+                                Err(_) => {
+                                    tracing::error!("Capacity semaphore closed; dropping task");
+                                    account(&stats, &capacity, false).await;
+                                    continue;
                                 }
                             };
-
                             {
                                 let mut s = stats.lock().await;
-                                s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
-                                if task_result.success {
-                                    s.tasks_completed += 1;
-                                } else {
-                                    s.tasks_failed += 1;
-                                }
+                                s.tasks_in_progress += 1;
                             }
 
-                            let Some(domain) = tls_domain.as_deref() else {
-                                tracing::warn!("TLS domain is required for worker task results");
-                                return;
-                            };
-                            let mut client = match RemoteClient::with_tls(psk, domain) {
-                                Ok(client) => client,
-                                Err(error) => {
-                                    tracing::warn!(%error, "Failed to initialize worker result TLS");
-                                    return;
+                            let session = session.clone();
+                            let stats = Arc::clone(&stats);
+                            let capacity = Arc::clone(&capacity);                            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+                            let enforcement = Arc::clone(&enforcement);
+                            #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+                            let dispatcher = dispatcher.clone();
+
+                            in_flight.spawn(async move {
+                                let _permit = permit;
+                                let task_id = task.id.clone();
+                                let outcome = tokio::time::timeout(
+                                    TASK_PROCESSING_TIMEOUT,
+                                    async {
+                                        #[cfg(any(
+                                            feature = "tool-api",
+                                            feature = "rest-api",
+                                            feature = "grpc-api"
+                                        ))]
+                                        let result =
+                                            process_task(task, enforcement, dispatcher).await;
+                                        #[cfg(not(any(
+                                            feature = "tool-api",
+                                            feature = "rest-api",
+                                            feature = "grpc-api"
+                                        )))]
+                                        let result = process_task(task).await;
+
+                                        let task_result = match result {
+                                            Ok(r) => r,
+                                            Err(e) => {
+                                                tracing::error!("Task processing error: {}", e);
+                                                TaskResult {
+                                                    task_id: task_id.clone(),
+                                                    success: false,
+                                                    output: String::new(),
+                                                    error: Some(e.to_string()),
+                                                    duration_millis: 0,
+                                                }
+                                            }
+                                        };
+
+                                        let success = task_result.success;
+                                        // Phase E: result submission
+                                        // multiplexes over the shared
+                                        // session — no fresh TLS client per
+                                        // task. Submission stays best-effort
+                                        // (warn on failure), exactly as
+                                        // before; accounting is unchanged.
+                                        match session.as_ref() {
+                                            Some(session) => {
+                                                if let Err(e) = session
+                                                    .send_result(task_result)
+                                                    .await
+                                                {
+                                                    tracing::warn!(
+                                                        "Failed to send task result to coordinator: {}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                            None => {
+                                                tracing::warn!(
+                                                    "No coordinator session; task result not submitted"
+                                                );
+                                            }
+                                        }
+                                        success
+                                    },
+                                )
+                                .await;
+                                match outcome {
+                                    Ok(success) => account(&stats, &capacity, success).await,
+                                    Err(_) => {
+                                        tracing::warn!(
+                                            task_id = %task_id,
+                                            "worker task processing timed out after 300s"
+                                        );
+                                        account(&stats, &capacity, false).await;
+                                    }
                                 }
-                            };
-                            if let Err(e) = client.send_result(&host, port, task_result).await {
-                                tracing::warn!("Failed to send task result to coordinator: {}", e);
-                            }
-                        };
-                        const TASK_PROCESSING_TIMEOUT: std::time::Duration =
-                            std::time::Duration::from_secs(300);
-                        if tokio::time::timeout(TASK_PROCESSING_TIMEOUT, process)
-                            .await
-                            .is_err()
-                        {
-                            tracing::warn!(
-                                task_id = %timeout_task_id,
-                                "worker task processing timed out after 300s"
-                            );
-                            let mut s = timeout_stats.lock().await;
-                            s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
-                            s.tasks_failed += 1;
+                            });
                         }
-                    });
+                        Some(join_result) = in_flight.join_next(), if !in_flight.is_empty() => {
+                            if let Err(e) = join_result {
+                                // Panic or abort: the permit drops with the
+                                // task; restore the stats/reservation truth.
+                                tracing::warn!("Worker task join failure: {}", e);
+                                account(&stats, &capacity, false).await;
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            tracing::info!("Task processor shutting down; draining owned tasks");
+                            break;
+                        }
+                    }
+                }
+
+                // No detached tasks: cancel owned children and account every
+                // outcome exactly once before exiting.
+                in_flight.abort_all();
+                while let Some(join_result) = in_flight.join_next().await {
+                    if let Err(e) = join_result {
+                        tracing::debug!("Worker task cancelled during drain: {}", e);
+                        account(&stats, &capacity, false).await;
+                    }
                 }
             });
             self.task_processor_handle = Some(handle);
@@ -431,10 +593,22 @@ impl Worker {
         self.stats.lock().await.clone()
     }
 
+    /// Currently reserved (assigned but not terminal) slots. Crate-internal
+    /// capacity introspection for tests; not part of the public surface.
+    #[cfg(test)]
+    pub(crate) fn reserved_slots(&self) -> usize {
+        self.capacity.reserved()
+    }
+
     pub fn shutdown(&mut self) {
         tracing::info!("Worker shutting down");
         if let Err(e) = self.shutdown_tx.send(true) {
             tracing::warn!("Failed to send shutdown signal (no receivers): {:?}", e);
+        }
+        // Phase E6: stop the coordinator session first so pending control
+        // callers fail fast instead of waiting out reconnect backoff.
+        if let Some(session) = self.session.take() {
+            session.shutdown();
         }
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();
@@ -847,5 +1021,229 @@ mod tests {
             .await
             .expect_err("an empty strict scope must reject the task");
         assert!(error.to_string().contains("denied"));
+    }
+}
+
+/// Phase D capacity-accounting tests (deterministic, no network, no timing
+/// races). The hard `reserved <= max_concurrency` guarantee lives in
+/// [`CapacityTracker::try_reserve`]; the worker loops share that single
+/// instance, so these unit proofs compose with the end-to-end bounds in
+/// `distributed_tests.rs`.
+#[cfg(test)]
+mod capacity_tests {
+    use super::*;
+
+    #[test]
+    fn zero_capacity_admits_nothing_and_requests_nothing() {
+        let tracker = CapacityTracker::new(0);
+        assert_eq!(tracker.available(), 0);
+        assert_eq!(tracker.request_size(), 0);
+        assert_eq!(tracker.try_reserve(5), 0);
+        assert_eq!(tracker.reserved(), 0);
+    }
+
+    #[test]
+    fn request_size_caps_at_five_and_available() {
+        let tracker = CapacityTracker::new(100);
+        assert_eq!(tracker.request_size(), MAX_TASKS_PER_REQUEST);
+        let partial = CapacityTracker::new(3);
+        assert_eq!(partial.request_size(), 3);
+    }
+
+    #[test]
+    fn exact_fit_and_release_restores_capacity() {
+        let tracker = CapacityTracker::new(4);
+        assert_eq!(tracker.try_reserve(4), 4);
+        assert_eq!(tracker.available(), 0);
+        assert_eq!(tracker.request_size(), 0);
+        // Terminal paths release exactly once each.
+        for _ in 0..4 {
+            tracker.release();
+        }
+        assert_eq!(tracker.reserved(), 0);
+        assert_eq!(tracker.available(), 4);
+        assert_eq!(tracker.request_size(), 4);
+    }
+
+    #[test]
+    fn over_delivery_admits_only_room() {
+        let tracker = CapacityTracker::new(3);
+        // Coordinator returns more than requested: admit only the room.
+        assert_eq!(tracker.try_reserve(5), 3);
+        assert_eq!(tracker.reserved(), 3);
+        assert_eq!(tracker.try_reserve(2), 0);
+        for _ in 0..3 {
+            tracker.release();
+        }
+        assert_eq!(tracker.available(), 3);
+    }
+
+    #[test]
+    fn partial_reservation_then_completion_frees_next_request() {
+        let tracker = CapacityTracker::new(2);
+        assert_eq!(tracker.try_reserve(2), 2);
+        // Saturated: the acquisition tick must skip the network operation.
+        assert_eq!(tracker.request_size(), 0);
+        // One completion frees one slot and permits the next request.
+        tracker.release();
+        assert_eq!(tracker.available(), 1);
+        assert_eq!(tracker.request_size(), 1);
+        assert_eq!(tracker.try_reserve(1), 1);
+        tracker.release();
+        tracker.release();
+        assert_eq!(tracker.reserved(), 0);
+    }
+
+    #[test]
+    fn task_processing_timeout_bound_is_pinned() {
+        // The no-detached-task bound (success/error/timeout/cancel all
+        // terminal within this duration).
+        assert_eq!(TASK_PROCESSING_TIMEOUT, std::time::Duration::from_secs(300));
+    }
+
+    #[tokio::test]
+    async fn concurrent_reservation_never_exceeds_capacity() {
+        let tracker = Arc::new(CapacityTracker::new(10));
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let tracker = Arc::clone(&tracker);
+            handles.push(tokio::spawn(async move { tracker.try_reserve(5) }));
+        }
+        let mut total = 0usize;
+        for handle in handles {
+            total += handle.await.expect("reservation task");
+        }
+        // Ten concurrent ticks of five on capacity ten admit exactly ten:
+        // no two ticks observed the same free slots.
+        assert_eq!(total, 10);
+        assert_eq!(tracker.reserved(), 10);
+    }
+
+    #[tokio::test]
+    async fn worker_start_rejects_zero_concurrency() {
+        let config = WorkerConfig {
+            max_concurrency: 0,
+            ..WorkerConfig::default()
+        };
+        let mut worker = Worker::new(config, "test-psk".to_string());
+        let err = worker
+            .start()
+            .await
+            .expect_err("max_concurrency 0 must fail explicitly");
+        assert!(err.to_string().contains("max_concurrency"));
+    }
+
+    #[test]
+    fn worker_config_serialization_unchanged() {
+        // Wire/config compatibility: defaults and shape are untouched.
+        let config = WorkerConfig::default();
+        assert_eq!(config.max_concurrency, 10);
+        let json = serde_json::to_string(&config).expect("serialize");
+        let decoded: WorkerConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(decoded.max_concurrency, 10);
+        assert_eq!(decoded.worker_id, config.worker_id);
+    }
+
+    fn capacity_test_task(id: usize) -> Task {
+        Task {
+            id: format!("task-{id}"),
+            job_id: "job-1".to_string(),
+            task_type: crate::distributed::TaskType::PortScan,
+            target: "203.0.113.10".to_string(),
+            payload: rustc_hash::FxHashMap::default(),
+            worker_id: None,
+            assigned_at_secs: None,
+        }
+    }
+
+    /// Phase D processor integration (no coordinator/TLS needed): drive the
+    /// real processing loop with reserved admissions and prove live work
+    /// never exceeds capacity, every terminal path releases exactly once,
+    /// and shutdown leaves no detached task behind.
+    ///
+    /// Without the `tool-api` feature every task takes the execution-error
+    /// path (fast and deterministic); the capacity/accounting behavior under
+    /// test is identical on the success path.
+    #[tokio::test]
+    async fn processor_bounds_live_work_and_releases_everything() {
+        let max_concurrency = 3usize;
+        let config = WorkerConfig {
+            max_concurrency,
+            coordinator_url: "http://127.0.0.1:9".to_string(),
+            ..WorkerConfig::default()
+        };
+        let mut worker = Worker::new(config, "test-psk".to_string());
+        // Phase E: result submission goes through the shared session. A
+        // plaintext session against a refused loopback port fails fast,
+        // exercising the submit-and-account path without a coordinator.
+        let session = CoordinatorSession::spawn(SessionConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9,
+            psk: "test-psk".to_string(),
+            tls_domain: None,
+            plaintext_allowed: true,
+        });
+        worker.session = Some(Arc::new(session));
+        let (tx, rx) = mpsc::channel::<Task>(max_concurrency);
+        worker.sender = Some(tx.clone());
+        worker.receiver = Some(rx);
+        worker.start_task_processing_loop().await;
+
+        // Peak observer: one-sided upper-bound proof (any observation above
+        // capacity fails; missing the true peak still passes).
+        let stats_probe = Arc::clone(&worker.stats);
+        let peak = Arc::new(AtomicUsize::new(0));
+        let peak_task = Arc::clone(&peak);
+        let observer = tokio::spawn(async move {
+            for _ in 0..500 {
+                let current = stats_probe.lock().await.tasks_in_progress;
+                peak_task.fetch_max(current, Ordering::SeqCst);
+                tokio::task::yield_now().await;
+            }
+        });
+
+        // Four waves of `max_concurrency` admissions (12 tasks total),
+        // mirroring capacity-aware acquisition: reserve, expose, drain.
+        let waves = 4;
+        for _ in 0..waves {
+            let admitted = worker.capacity.try_reserve(max_concurrency);
+            assert_eq!(admitted, max_concurrency);
+            for i in 0..max_concurrency {
+                tx.send(capacity_test_task(i)).await.expect("enqueue");
+            }
+            // Drain with a bounded wait (loopback-refused submits are fast).
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                if worker.reserved_slots() == 0 {
+                    break;
+                }
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "reservations did not drain"
+                );
+                tokio::task::yield_now().await;
+            }
+        }
+
+        observer.abort();
+        let observed_peak = peak.load(Ordering::SeqCst);
+        assert!(
+            observed_peak <= max_concurrency,
+            "live work {observed_peak} exceeded capacity {max_concurrency}"
+        );
+
+        let stats = worker.get_stats().await;
+        assert_eq!(stats.tasks_in_progress, 0);
+        assert_eq!(stats.tasks_failed, (waves * max_concurrency) as u64);
+        assert_eq!(stats.tasks_completed, 0);
+        assert_eq!(worker.reserved_slots(), 0);
+
+        // Shutdown leaves no detached processing task: after shutdown the
+        // owned set is drained and counters stay terminal.
+        worker.shutdown();
+        tokio::task::yield_now().await;
+        let stats = worker.get_stats().await;
+        assert_eq!(stats.tasks_in_progress, 0);
+        assert_eq!(worker.reserved_slots(), 0);
     }
 }

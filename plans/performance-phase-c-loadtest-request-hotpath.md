@@ -1,6 +1,6 @@
 # Performance Phase C — load-test request hot path
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -183,6 +183,40 @@ Run the release performance profile separately.
 
 ## Completion record
 
-Append exact request-materialization and loopback before/after evidence, state
-whether C4 landed or was rejected/deferred, and explicitly confirm that the
-transport authorization/deadline invariants did not change.
+Status: Executed
+
+- Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
+  (built on the Phase A/B HEAD); final SHA recorded at commit time.
+- Files changed:
+  - `crates/eggsec/src/loadtest/executor.rs` (C1: `run()` compiles one
+    prototype `ScopedHttpRequest` before spawning workers and fails fast
+    with the historical "invalid request: ..." message intent;
+    `WorkerCtx` carries the prototype and dispatches cheap clones; +4
+    tests: fail-fast-before-I/O, prototype/clone equality, mutation
+    isolation, 256KB large-body EOF);
+  - `crates/eggsec/src/loadtest/adapter.rs` (doc: prototype ownership);
+  - `crates/eggsec/src/loadtest/metrics.rs` (C3: single-lookup `entry`
+    counters; error kinds keyed by `LoadTestErrorKind` internally with the
+    `String` map materialized once in `to_results`; serialized shape,
+    saturating arithmetic, and the 1000-error cap unchanged);
+  - `crates/eggsec/tests/perf_baseline.rs` (harness: clone-cost timing
+    alongside rebuild timing);
+  - `architecture/performance.md` (Phase C evidence table).
+- Request-materialization evidence: rebuild ~890ns/op vs clone ~106ns/op
+  (~8.4×); fake executor ~690k → ~1.1M RPS (~1.6×); H1 loopback
+  ~18.9k/36.3k/25.8k → ~21.3k/40.3k/29.8k at c=1/10/50 (network-dominated,
+  within ±10% run noise).
+- C4 disposition: measured no-change (only narrow primitive is
+  `bytes_stream()`, which still forces adapter duplication or a
+  single-consumer trait method; body/deadline-through-EOF and the shared
+  full-body contract preserved; 256KB EOF test guards the semantics).
+- Transport authorization/deadline invariants: unchanged (denial,
+  redirect/proxy/TLS parity suites green: transport 18, eggfetch parity
+  52, H2 5, SOCKS5 4; `loadtest_tests` 29; loadtest lib 37).
+- Verification: `cargo test -p eggsec --lib loadtest::` (37 passed);
+  `--test loadtest_tests` (29 passed); transport + eggfetch suites green;
+  `cargo clippy -p eggsec --no-default-features` clean;
+  `cargo fmt --all --check` clean; release profiles re-run.
+- Kept architecture: worker-private histograms, histogram merge, atomic
+  issuance, CAS pacer, cancellation, Eggfetch backend, manual redirect
+  loop, H1/H2 behavior (per C5).

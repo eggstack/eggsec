@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use eggsec_transport::{HttpTransport, NetworkAuthority};
+use eggsec_transport::{HttpTransport, NetworkAuthority, ScopedHttpRequest};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
@@ -58,6 +58,15 @@ impl<T: HttpTransport + 'static> LoadTestExecutor<T> {
     where
         T: 'static,
     {
+        // Phase C: compile the immutable transport request once per run.
+        // Method/URL/header/body parsing happens here, before any worker
+        // spawns or network I/O; every dispatched request is a cheap clone
+        // of this prototype. The error keeps the historical per-request
+        // "invalid request: ..." message intent, now reported fail-fast.
+        let prototype = self
+            .template
+            .scoped_request(&self.plan)
+            .map_err(|e| format!("invalid request: {e}"))?;
         let worker_count = self.plan.worker_count();
         let issued = Arc::new(AtomicU64::new(0));
         let progress = SharedProgress::new();
@@ -69,7 +78,7 @@ impl<T: HttpTransport + 'static> LoadTestExecutor<T> {
         for _ in 0..worker_count {
             let ctx = WorkerCtx {
                 plan: self.plan.clone(),
-                template: self.template.clone(),
+                prototype: prototype.clone(),
                 transport: self.transport.clone(),
                 authority: self.authority.clone(),
                 token: self.cancellation.clone(),
@@ -165,9 +174,15 @@ impl GlobalPacer {
 }
 /// Worker-owned execution context (keeps the spawned future under the
 /// clippy argument-count lint while sharing issuance/progress state).
+///
+/// Each worker holds a clone of the run's compiled request prototype
+/// (Phase C); per-request dispatch clones that prototype again. Clones are
+/// cheap DTO copies (refcounted body, no re-parsing) and every clone still
+/// passes through `HttpTransport::execute` with the same authority, so no
+/// authorization decision is cached.
 struct WorkerCtx<T: HttpTransport> {
     plan: LoadTestPlan,
-    template: RequestTemplate,
+    prototype: ScopedHttpRequest,
     transport: Arc<T>,
     authority: Arc<dyn NetworkAuthority>,
     token: CancellationToken,
@@ -203,18 +218,10 @@ impl<T: HttpTransport> WorkerCtx<T> {
             }
 
             let request_start = Instant::now();
-            let scoped = match self.template.scoped_request(&self.plan) {
-                Ok(r) => r,
-                Err(e) => {
-                    metrics.record_transport_error(
-                        LoadTestErrorKind::InvalidRequest,
-                        format!("invalid request: {e}"),
-                        request_start.elapsed(),
-                    );
-                    self.progress.inc();
-                    continue;
-                }
-            };
+            // Cheap prototype clone (no method/URL/header re-parsing, no
+            // temporary map, refcounted body). Authorization is NOT cached:
+            // the clone is authorized per hop inside `execute`.
+            let scoped = self.prototype.clone();
             // Dropping the transport future on cancellation performs no further
             // hops (contract requirement); race it against the token so a
             // cancelled run doesn't wait out per-request timeouts.
@@ -420,6 +427,92 @@ mod tests {
             results.total_requests,
             results.successful_requests + results.failed_requests
         );
+    }
+
+    /// Phase C: an invalid template fails the run before any worker spawns
+    /// or network I/O happens, keeping the historical "invalid request: ..."
+    /// message intent.
+    #[tokio::test]
+    async fn executor_prototype_failure_is_fail_fast_before_io() {
+        let transport = fake_with("example.com", eggsec_transport::StatusCode::OK);
+        let (mut plan, template) = plan_for("http://example.com/", 20, 4);
+        plan.method = "NOT A METHOD".to_string();
+        let ex = LoadTestExecutor::new(
+            plan,
+            template,
+            transport.clone(),
+            Arc::new(AllowAll),
+            CancellationToken::new(),
+        );
+        let err = ex
+            .run(&NoopSink)
+            .await
+            .expect_err("invalid template must fail fast");
+        assert!(
+            err.contains("invalid request"),
+            "message intent lost: {err}"
+        );
+        assert_eq!(transport.hop_count(), 0, "no I/O may precede validation");
+    }
+
+    /// Phase C: the once-per-run prototype is semantically equal to
+    /// per-request construction, and clones are equal to the prototype.
+    #[tokio::test]
+    async fn executor_prototype_clones_equal_per_request_construction() {
+        let (plan, template) = plan_for("http://example.com/", 5, 2);
+        let prototype = template.scoped_request(&plan).expect("prototype");
+        let rebuilt = template.scoped_request(&plan).expect("rebuild");
+        assert_eq!(prototype, rebuilt);
+        assert_eq!(prototype.clone(), prototype);
+        assert_eq!(prototype.clone().url.as_str(), "http://example.com/");
+    }
+
+    /// Phase C: mutating one dispatched clone cannot leak into the prototype
+    /// or a subsequent clone.
+    #[tokio::test]
+    async fn executor_request_mutation_isolation() {
+        let (plan, template) = plan_for("http://example.com/", 5, 2);
+        let prototype = template.scoped_request(&plan).expect("prototype");
+        let mut first = prototype.clone();
+        first.headers.insert(
+            "x-phase-c-probe"
+                .parse::<eggsec_transport::HeaderName>()
+                .expect("header name"),
+            "1".parse().expect("header value"),
+        );
+        assert!(first.headers.contains_key("x-phase-c-probe"));
+        assert!(!prototype.headers.contains_key("x-phase-c-probe"));
+        let second = prototype.clone();
+        assert!(!second.headers.contains_key("x-phase-c-probe"));
+        assert_eq!(second, prototype);
+    }
+
+    /// Phase C/C4 guard: large bodies are still consumed through EOF and
+    /// classified by status on the shared full-body contract.
+    #[tokio::test]
+    async fn executor_large_body_consumed_to_eof() {
+        let body = vec![b'x'; 256 * 1024];
+        let resolver = Arc::new(InMemoryResolver::new().with("example.com", vec!["93.184.216.34"]));
+        let transport = Arc::new(RecordingFakeTransport::new(resolver).with_canned(
+            "http://example.com/",
+            CannedResponse {
+                status: eggsec_transport::StatusCode::OK,
+                location: None,
+                body,
+            },
+        ));
+        let (plan, template) = plan_for("http://example.com/", 10, 4);
+        let ex = LoadTestExecutor::new(
+            plan,
+            template,
+            transport.clone(),
+            Arc::new(AllowAll),
+            CancellationToken::new(),
+        );
+        let results = ex.run(&NoopSink).await.expect("run");
+        assert_eq!(results.total_requests, 10);
+        assert_eq!(results.successful_requests, 10);
+        assert_eq!(transport.hop_count(), 10);
     }
 
     #[tokio::test]

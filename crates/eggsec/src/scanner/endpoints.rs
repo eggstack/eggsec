@@ -8,12 +8,9 @@ use crate::scanner::spoof::SpoofConfig;
 use crate::utils::preserve_all;
 #[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
-use dashmap::DashMap;
-use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing;
@@ -1018,16 +1015,19 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                 .with_timeout(config.timeout_duration.as_millis() as u64)
         })?;
 
-    let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
-    let scanned_count = Arc::new(AtomicU64::new(0));
-    let results_count = Arc::new(AtomicU64::new(0));
-    let total_matches_count = Arc::new(AtomicU64::new(0));
     let total_endpoints = config.endpoints.len() as u64;
+    let endpoints = config.endpoints;
+    let concurrency = config.concurrency;
+    let timeout_duration = config.timeout_duration;
+    let include_404 = config.include_404;
+    let max_results = config.max_results;
+    let progress_tx = config.progress_tx.clone();
+    let spoof_config = Arc::clone(&config.spoof_config);
 
     let progress = if config.tui_mode {
         None
     } else {
-        let pb = Arc::new(ProgressBar::new(config.endpoints.len() as u64));
+        let pb = Arc::new(ProgressBar::new(endpoints.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} endpoints ({eta})")
@@ -1037,78 +1037,73 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         Some(pb)
     };
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
-    let mut handles = Vec::with_capacity(config.endpoints.len());
+    // Phase B: bounded scheduler. At most `concurrency` probe futures are in
+    // flight; tasks return their result to the parent instead of mutating a
+    // shared map, so retained handle state is O(concurrency), not O(paths).
     let start = std::time::Instant::now();
-    let base = config.base_url.trim_end_matches('/');
-    let endpoints_count = config.endpoints.len();
-    let spoof_config = Arc::clone(&config.spoof_config);
+    let base = config.base_url.trim_end_matches('/').to_string();
+    let endpoints_count = endpoints.len();
+    let mut results: Vec<EndpointResult> = Vec::new();
+    let mut total_matches_count: usize = 0;
+    let mut admitted_count: u64 = 0;
+    let mut scanned_count: u64 = 0;
+    let mut in_flight = tokio::task::JoinSet::new();
+    let mut next: usize = 0;
 
-    for (idx, endpoint) in config.endpoints.into_iter().enumerate() {
-        let permit = semaphore.clone().acquire_owned().await?;
-        let client = client.clone();
-        let results = results.clone();
-        let progress = progress.clone();
-        let url = join_endpoint_url(base, &endpoint)?;
-        let endpoint_path = endpoint;
-        let spoof_config = Arc::clone(&spoof_config);
-        let scanned_count = scanned_count.clone();
-        let progress_tx = config.progress_tx.clone();
-        let results_count = results_count.clone();
-        let total_matches_count = total_matches_count.clone();
-        let max_results = config.max_results;
+    while next < endpoints.len() || !in_flight.is_empty() {
+        while next < endpoints.len() && in_flight.len() < concurrency {
+            let endpoint = endpoints[next].clone();
+            next += 1;
+            let client = client.clone();
+            let url = join_endpoint_url(&base, &endpoint)?;
+            let endpoint_path = endpoint;
+            let spoof_config = Arc::clone(&spoof_config);
 
-        let handle = tokio::spawn(async move {
-            let request_start = std::time::Instant::now();
+            // Project invariant: every spawned tokio task carries a timeout
+            // wrapper (30-300s). The request itself is bounded by
+            // `timeout_duration`; the outer wrapper bounds pathological
+            // post-response hangs.
+            in_flight.spawn(tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                async move {
+                    let request_start = std::time::Instant::now();
 
-            let mut request = client.get(&url);
-            let request_timeout = config.timeout_duration;
+                    let mut request = client.get(&url);
 
-            if spoof_config.enabled {
-                if let Ok(Some(spoof_ip)) = spoof_config.header_value() {
-                    request = request
-                        .header("X-Forwarded-For", &spoof_ip)
-                        .header("X-Real-IP", &spoof_ip)
-                        .header("X-Originating-IP", &spoof_ip);
-                }
-            }
+                    if spoof_config.enabled {
+                        if let Ok(Some(spoof_ip)) = spoof_config.header_value() {
+                            request = request
+                                .header("X-Forwarded-For", &spoof_ip)
+                                .header("X-Real-IP", &spoof_ip)
+                                .header("X-Originating-IP", &spoof_ip);
+                        }
+                    }
 
-            match tokio::time::timeout(request_timeout, request.send()).await {
-                Err(_) => {
-                    tracing::debug!(url = %url, "endpoint scan request timed out");
-                    return;
-                }
-                Ok(res) => match res {
-                    Ok(response) => {
-                        let status = response.status();
-                        let status_code = status.as_u16();
+                    match tokio::time::timeout(timeout_duration, request.send()).await {
+                        Err(_) => {
+                            tracing::debug!(url = %url, "endpoint scan request timed out");
+                            None
+                        }
+                        Ok(res) => match res {
+                            Ok(response) => {
+                                let status = response.status();
+                                let status_code = status.as_u16();
 
-                        if config.include_404 || status_code != 404 {
-                            let content_length = response.content_length();
-                            let redirect = if status.is_redirection() {
-                                response
-                                    .headers()
-                                    .get("location")
-                                    .and_then(|h| h.to_str().ok())
-                                    .map(|s| s.to_string())
-                            } else {
-                                None
-                            };
+                                if include_404 || status_code != 404 {
+                                    let content_length = response.content_length();
+                                    let redirect = if status.is_redirection() {
+                                        response
+                                            .headers()
+                                            .get("location")
+                                            .and_then(|h| h.to_str().ok())
+                                            .map(|s| s.to_string())
+                                    } else {
+                                        None
+                                    };
 
-                            let interesting = is_interesting(&endpoint_path, status_code);
+                                    let interesting = is_interesting(&endpoint_path, status_code);
 
-                            let should_insert = match max_results {
-                                Some(limit) => {
-                                    let old = results_count.fetch_add(1, Ordering::Relaxed);
-                                    old < limit as u64
-                                }
-                                None => true,
-                            };
-                            total_matches_count.fetch_add(1, Ordering::Relaxed);
-                            if should_insert {
-                                results.insert(
-                                    idx,
-                                    EndpointResult {
+                                    Some(EndpointResult {
                                         path: endpoint_path,
                                         status_code,
                                         status_text: status
@@ -1120,45 +1115,66 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                                             as u64,
                                         redirect,
                                         interesting,
-                                    },
-                                );
+                                    })
+                                } else {
+                                    None
+                                }
                             }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "endpoint scan request failed for {}: {}",
-                            endpoint_path,
-                            e
-                        );
+                            Err(e) => {
+                                tracing::debug!(
+                                    "endpoint scan request failed for {}: {}",
+                                    endpoint_path,
+                                    e
+                                );
+                                None
+                            }
+                        },
                     }
                 },
-            }
+            ));
+        }
 
+        if let Some(join_result) = in_flight.join_next().await {
+            match join_result {
+                Ok(Ok(Some(result))) => {
+                    total_matches_count += 1;
+                    // Completion-order selection, as before: the first
+                    // `limit` completions win.
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let old = admitted_count;
+                            admitted_count += 1;
+                            old < limit as u64
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.push(result);
+                    }
+                }
+                Ok(Ok(None)) => {}
+                Ok(Err(_)) => {
+                    tracing::debug!("Endpoint scan worker timed out after 300s");
+                }
+                Err(e) => {
+                    tracing::warn!("Endpoint scan worker task join failure: {}", e);
+                }
+            }
             if let Some(ref pb) = progress {
                 pb.inc(1);
             }
             if let Some(ref tx) = progress_tx {
-                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                if tx.send((count, total_endpoints)).await.is_err() {
+                scanned_count += 1;
+                if tx.send((scanned_count, total_endpoints)).await.is_err() {
                     tracing::warn!("Progress receiver dropped");
                 }
             }
-            drop(permit);
-        });
-
-        handles.push(handle);
+        }
     }
-
-    join_all(handles).await;
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }
 
-    let results_map = Arc::try_unwrap(results).map_err(|_| {
-        crate::error::EggsecError::Runtime("Arc ref count non-zero after workers completed".into())
-    })?;
-    let mut results: Vec<EndpointResult> = results_map.into_iter().map(|(_, v)| v).collect();
     results.sort_by(|a, b| {
         b.interesting
             .cmp(&a.interesting)
@@ -1172,7 +1188,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
     let endpoints_found = results.len();
     let interesting = results.iter().filter(|r| r.interesting).count();
-    let total_endpoints_matched = total_matches_count.load(Ordering::Relaxed) as usize;
+    let total_endpoints_matched = total_matches_count;
 
     Ok(EndpointScanResults {
         base_url: config.base_url.clone(),
