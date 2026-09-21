@@ -186,8 +186,7 @@ command/output summary in architecture/performance.md.
 Status: Executed
 
 - Starting SHA: `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb` (roadmap baseline)
-- Implementation HEAD: recorded at commit time (see `git log` for
-  `performance: phase A baseline and measurement harness`).
+- Implementation HEAD: `4fb021d` (campaign implementation commit).
 - Environment: Ubuntu 24.04.5 LTS, kernel 6.8.0-139-generic, x86_64;
   Intel Core i9-9900K @ 3.60GHz (16 threads); rustc/cargo 1.98.1
   (performance runs only; merge MSRV stays 1.89).

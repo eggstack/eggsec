@@ -239,8 +239,8 @@ The roadmap may be marked Executed only when:
 Status: Executed
 
 - Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
-  (built on the Phase A–E HEAD); final SHA recorded at commit time (campaign
-  commit + SHA-record follow-up; see the roadmap completion record).
+  (built on the Phase A–E HEAD); implementation commit `4fb021d` (this
+  SHA-record follow-up is a separate docs-only commit).
 - F1 full-matrix re-run (same host, release, warm-up 1 + 5 trials):
   rebuild ~890ns / clone ~106ns; fake executor ~1.1M RPS; H1 ~21k/40k/30k
   at c=1/10/50; port sweep ~3–4ms; endpoint ~24–25ms identical checksum;

@@ -190,7 +190,7 @@ representative feature profile rather than inventing a new production feature.
 Status: Executed
 
 - Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
-  (built on the Phase A–C HEAD); final SHA recorded at commit time.
+  (built on the Phase A–C HEAD); implementation commit `4fb021d`.
 - Files changed:
   - `crates/eggsec/src/distributed/worker.rs` (D1: `start()` rejects
     `max_concurrency == 0` before registration; D2: `CapacityTracker`

@@ -273,9 +273,8 @@ requires compatibility evidence and the complete ordered campaign disposition.
 
 Status: Executed
 
-- Baseline SHA: `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`; final SHA:
-  recorded in the campaign commit(s) (implementation commit + SHA-record
-  follow-up — see `git log` for `performance:`).
+- Baseline SHA: `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`; implementation
+  commit: `4fb021d` (plus this docs-only SHA-record follow-up).
 - All six phases executed in order with completion records in their plans:
   A (harness + baselines), B (bounded fan-out + fuzzer lock), C (request
   hot path; C4 drain-without-retain measured no-change), D (worker

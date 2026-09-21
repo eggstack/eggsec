@@ -200,7 +200,7 @@ If daemon/runtime protocol fixtures cover the same DTOs, run them as well.
 Status: Executed
 
 - Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
-  (built on the Phase A–D HEAD); final SHA recorded at commit time.
+  (built on the Phase A–D HEAD); implementation commit `4fb021d`.
 - Session architecture: `CoordinatorSession` (crate-internal, `remote.rs`)
   — one actor task owns the `LineWriter`; bounded 64-command mpsc channel
   with `oneshot` replies (actor model, not a mutex-wrapped socket);

@@ -186,7 +186,7 @@ Run the release performance profile separately.
 Status: Executed
 
 - Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
-  (built on the Phase A/B HEAD); final SHA recorded at commit time.
+  (built on the Phase A/B HEAD); implementation commit `4fb021d`.
 - Files changed:
   - `crates/eggsec/src/loadtest/executor.rs` (C1: `run()` compiles one
     prototype `ScopedHttpRequest` before spawning workers and fails fast

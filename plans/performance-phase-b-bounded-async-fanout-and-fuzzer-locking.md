@@ -195,7 +195,7 @@ Also run the affected Phase A profile cases in release mode.
 Status: Executed
 
 - Starting SHA: roadmap baseline `1fae91ec489a4fb553c1dfb26e184b5c61ea4adb`
-  (built on the Phase A harness HEAD); final SHA recorded at commit time.
+  (built on the Phase A harness HEAD); implementation commit `4fb021d`.
 - Files changed:
   - `crates/eggsec/src/fuzzer/engine/utils.rs` (B1: analyzer guard narrowed
     to the `record()` mutation; + deterministic lock-scope regression test);
