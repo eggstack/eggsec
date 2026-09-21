@@ -14,12 +14,12 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## TUI terminal ownership corrective campaign (ready 2026-09-19)
+## TUI terminal ownership corrective campaign (executed 2026-09-20)
 
 Roadmap:
 [`tui-terminal-ownership-corrective-roadmap-2026-09-19.md`](tui-terminal-ownership-corrective-roadmap-2026-09-19.md)
 
-Ordered implementation plans:
+Ordered implementation plans (both executed; each carries its completion record):
 
 1. [`tui-terminal-ownership-phase-a-single-writer-logging-boundary.md`](tui-terminal-ownership-phase-a-single-writer-logging-boundary.md)
 2. [`tui-terminal-ownership-phase-b-lifecycle-process-output-closure.md`](tui-terminal-ownership-phase-b-lifecycle-process-output-closure.md)
@@ -33,7 +33,14 @@ terminal teardown cleanup-safe across errors/panics, propagates fatal errors
 only after restoration, audits all TUI-reachable subprocess output, and adds a
 PTY smoke test plus closure guards.
 
-The campaign does not redesign TUI layout, remove tracing diagnostics, create
+The campaign is closed. Phase A implementation landed at
+`5698501457bc9f05363ffa39fb38416f35c6a1a2`; Phase B landed at
+`71bef7acfa92f9c2a9ff2bb1569b024c4ac95b8b`, with the final Phase B
+completion record at `c0ae180d64f7cb7d6bf91e09526997f4b534a857`. Closure
+evidence includes the mandatory Rust checks, architecture guards 138/139, the
+Unix/Linux PTY smoke, broad/full TUI feature checks, and MSRV verification.
+
+The campaign did not redesign TUI layout, remove tracing diagnostics, create
 default persistent TUI log retention, or reopen scope/dispatch/runtime
 semantics.
 
