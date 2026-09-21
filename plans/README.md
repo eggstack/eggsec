@@ -45,7 +45,7 @@ justified, transport authorization checkpoints, singular physical-route
 pinning, redirect/proxy/TLS semantics, no automatic retries, HTTP/3-off policy,
 and load-test body-through-EOF timing.
 
-### Performance campaign closure-polish corrective follow-up (ready 2026-09-21)
+### Performance campaign closure-polish corrective follow-up (executed 2026-09-21)
 
 Corrective pass:
 [`performance-closure-polish-corrective-pass-2026-09-21.md`](performance-closure-polish-corrective-pass-2026-09-21.md)
@@ -58,6 +58,11 @@ coverage, and adds a deterministic established-connection sever/reconnect/
 re-authentication/re-registration fixture that does not require root or netns.
 Production APIs, wire DTOs, TLS trust behavior, worker capacity, retry policy,
 and performance architecture remain unchanged.
+
+Executed: implementation `71336632` (verified TLS steady-state, TLS
+sever/reconnect, no-retry regressions, doc corrections); completion record
+in the pass plan. Hosted CI status for the final polish SHA is recorded in
+the pass plan post-push.
 
 ## TUI terminal ownership corrective campaign (executed 2026-09-20)
 

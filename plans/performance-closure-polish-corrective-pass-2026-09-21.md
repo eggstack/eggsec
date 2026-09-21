@@ -1,6 +1,6 @@
 # Performance campaign closure-polish corrective pass
 
-Status: Ready for implementation
+Status: Executed
 
 Date: 2026-09-21
 
@@ -300,19 +300,89 @@ This pass does not authorize:
 
 ## Handoff / completion record
 
-When implemented, append a completion record to this file containing:
-
-- starting SHA and final implementation SHA;
-- test-only TLS fixture design;
-- certificate/root handling approach;
-- steady-state accepts/handshakes/auth counts;
-- established-session sever event sequence and reconnect counts;
-- registration replay ordering evidence;
-- retry-matrix regression results;
-- documentation corrections made;
-- exact local verification commands/results;
-- hosted CI run/result for the final SHA;
-- any residual debt with a concrete reopen condition.
-
 Then update `plans/README.md` to mark this corrective pass executed while
 retaining the original A-F campaign history.
+
+## Completion record
+
+Status: Executed
+
+- Starting SHA: `7b5e0070c49320e3d9a770d54f6f523515cc0429` (plan registration;
+  the plan text cites the earlier `9fc73a2a` pre-registration HEAD).
+- Implementation SHA: `71336632a12cc795f3fa3e4d9f79cd43d116c2b4` (code +
+  docs corrections; this record + README mark follow as a docs-only
+  commit, whose SHA is recorded in `plans/README.md`).
+- Test-only TLS fixture design: `#[cfg(test)]` crate-private trust
+  injection only — `TlsClient::with_test_root` (verified root, never the
+  `insecure-tls` bypass), `RemoteClient::with_test_root`, and
+  `CoordinatorSession::spawn_with_test_root` running the same actor loop
+  (`session_actor_loop`) as production. No new public constructor, no
+  production feature flag, no change to `TlsClient::new` WebPKI behavior.
+  The server uses the production `TlsServer::from_pem` accept path and a
+  new `#[cfg(test)]` handshake counter (`tls_handshakes`, incremented only
+  after `accept_tls` succeeds) alongside the existing accept/auth counters.
+- Certificate/root handling: short-lived `rcgen` localhost material
+  (SANs `localhost` + `127.0.0.1`, generated per test, no checked-in
+  key/cert); cert/key PEM written under `tempfile::TempDir` (auto-cleaned
+  on drop) and loaded via `TlsServer::from_pem`; client trusts the
+  DER-encoded test root only. TLS domain `localhost` while dialing
+  `127.0.0.1`, mirroring worker TLS-domain/IP dialing.
+- Steady-state counts
+  (`session_reuses_single_tls_connection_in_steady_state`: register + 3
+  heartbeats + task request + result over one session): 1 TCP accept / 1
+  TLS handshake / 1 PSK auth / 1 live connection; worker registered with
+  fresh heartbeat timestamp; TLS-only listener (`is_tls`), no plaintext
+  fallback.
+- Sever event sequence
+  (`session_severed_tls_connection_reconnects_with_reregister`): scripted
+  TLS coordinator accepts A → TLS/auth → Register → one live heartbeat →
+  deliberate server-side drop of the established registered connection A →
+  client observes loss on next heartbeat → fresh connection B (new TCP +
+  TLS + PSK auth) → Register replayed → idempotent heartbeat retry
+  succeeds. Reconnect counts: accepts 2, handshakes 2, auths 2; peer
+  addrs differ (old connection never reused); violations 0 (no
+  unauthenticated command accepted).
+- Registration replay ordering: server event log
+  `conn0 register → conn0 heartbeat → conn0 severed → conn1 register →
+  conn1 heartbeat`; connection B rejects any pre-Register command as a
+  violation (none observed).
+- Retry-matrix regression: heartbeat retry proven by the sever test's
+  successful post-reconnect retry; `session_request_tasks_never_retried_on_failure`
+  and `session_result_never_retried_on_failure` prove one wire
+  `RequestTasks` / one wire `Result` per caller call on dropped exchanges
+  (600ms quiescence, no transparent replay) with recovery on the next
+  explicit call (second wire message over a fresh setup).
+- Documentation corrections: `architecture/performance.md` status
+  Active→Executed with polish addendum (TLS counts, sever sequence,
+  withdrawn root/netns limitation, corrected TaskQueue clone wording);
+  Phase F completion fixed (retained dequeue clone, real verification
+  record, sever debt closed); Phase E completion records TLS reuse +
+  sever/re-auth/re-register evidence and the withdrawn limitation;
+  `architecture/distributed.md` updated (unified TaskQueue layout,
+  test-only verified trust, session-vs-oneshot invariant, new test
+  inventory); `eggsec-distributed` skill corrected (`TlsClient::new` is
+  WebPKI-verified; test trust + sever coverage noted). README and
+  AGENTS.md needed no changes (no stale status or overstated claims there).
+- Local verification (all green): `cargo test -p eggsec --lib
+  distributed::remote::session_tests` (11 passed);
+  `cargo test -p eggsec --lib distributed::` (29 passed);
+  `cargo test -p eggsec --test distributed_tests` (23 passed);
+  `cargo fmt --all --check` clean;
+  `cargo clippy -p eggsec --no-default-features -- -D warnings` clean;
+  `cargo clippy -p eggsec --no-default-features --features cli -- -D warnings`
+  clean; `make check` EXIT 0 (fmt, no-default check, deny, clippy, doc +
+  integration suites incl. transport-eggfetch parity/H2/SOCKS5, TUI lib,
+  guards); `make check-feature-profiles` EXIT 0; `make check-python`
+  EXIT 0; `make check-msrv` EXIT 0. Deep sweeps (`check-features-individual`,
+  `check-full`) are deep-checks-only per AGENTS.md, not per-PR; no new
+  features or system deps were added.
+- Hosted CI: recorded post-push below (the pre-polish HEAD run is context,
+  not proof for the polish SHA).
+- Residual debt (with reopen conditions):
+  - None from this pass's acceptance list; all 15 criteria are met.
+  - Reopen the sever fixture only if the retry matrix or reconnect policy
+    changes and the fixture no longer covers it.
+  - Reopen TLS trust scaffolding only if production cert loading changes
+    and the test-only injection no longer mirrors it.
+  - Timing stays informational (loopback medians/ranges, never merge
+    gates); short samples never establish regression parity.
