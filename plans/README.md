@@ -45,6 +45,20 @@ justified, transport authorization checkpoints, singular physical-route
 pinning, redirect/proxy/TLS semantics, no automatic retries, HTTP/3-off policy,
 and load-test body-through-EOF timing.
 
+### Performance campaign closure-polish corrective follow-up (ready 2026-09-21)
+
+Corrective pass:
+[`performance-closure-polish-corrective-pass-2026-09-21.md`](performance-closure-polish-corrective-pass-2026-09-21.md)
+
+This narrow post-closure pass reconciles the remaining evidence defects without
+reopening the completed A-F optimization campaign. It corrects the stale
+performance-document status and overstated TaskQueue clone claim, replaces the
+plaintext-only inference for coordinator-session reuse with verified local TLS
+coverage, and adds a deterministic established-connection sever/reconnect/
+re-authentication/re-registration fixture that does not require root or netns.
+Production APIs, wire DTOs, TLS trust behavior, worker capacity, retry policy,
+and performance architecture remain unchanged.
+
 ## TUI terminal ownership corrective campaign (executed 2026-09-20)
 
 Roadmap:
