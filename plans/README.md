@@ -14,6 +14,37 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Performance and resource-efficiency optimization campaign (ready 2026-09-21)
+
+Roadmap:
+[performance-resource-efficiency-roadmap-2026-09-21.md](performance-resource-efficiency-roadmap-2026-09-21.md)
+
+Ordered implementation plans:
+
+1. [performance-phase-a-baseline-and-measurement-harness.md](performance-phase-a-baseline-and-measurement-harness.md)
+2. [performance-phase-b-bounded-async-fanout-and-fuzzer-locking.md](performance-phase-b-bounded-async-fanout-and-fuzzer-locking.md)
+3. [performance-phase-c-loadtest-request-hotpath.md](performance-phase-c-loadtest-request-hotpath.md)
+4. [performance-phase-d-distributed-worker-capacity.md](performance-phase-d-distributed-worker-capacity.md)
+5. [performance-phase-e-coordinator-session-reuse.md](performance-phase-e-coordinator-session-reuse.md)
+6. [performance-phase-f-secondary-hotspots-and-closure.md](performance-phase-f-secondary-hotspots-and-closure.md)
+
+This bounded campaign targets measured runtime performance/resource hot paths
+without reopening the completed transport, crate-boundary, or frontend/runtime
+architecture work. Phase A establishes reproducible local-only evidence. Phase
+B bounds high-cardinality async fan-out and narrows the fuzzer timing lock.
+Phase C removes repeated load-test request materialization and evaluates
+body-drain allocation only behind a semantic/measurement gate. Phase D makes
+WorkerConfig.max_concurrency an actual capacity contract. Phase E reuses the
+coordinator's existing multi-command authenticated connection lifecycle. Phase
+F re-measures, applies only evidence-supported secondary cleanup, and performs
+compatibility/closure qualification.
+
+The campaign must preserve public Rust/Python/CLI surfaces, distributed wire
+formats unless an explicitly additive compatibility-safe change is separately
+justified, transport authorization checkpoints, singular physical-route
+pinning, redirect/proxy/TLS semantics, no automatic retries, HTTP/3-off policy,
+and load-test body-through-EOF timing.
+
 ## TUI terminal ownership corrective campaign (executed 2026-09-20)
 
 Roadmap:
