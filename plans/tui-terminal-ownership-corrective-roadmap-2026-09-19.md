@@ -1,6 +1,6 @@
 # TUI terminal ownership corrective roadmap
 
-Status: Ready for implementation
+Status: Executed (2026-09-20)
 
 Date: 2026-09-19
 
@@ -200,3 +200,44 @@ Implementation must record:
 
 Do not close the roadmap by clearing/redrawing the terminal after leaked output.
 That masks the defect. Closure requires exclusive writer ownership.
+
+
+## Completion record
+
+Executed 2026-09-20.
+
+- Roadmap baseline: `05e04b6643f739025d54fe188f5fe381d32439c6`.
+- Phase A implementation: `5698501457bc9f05363ffa39fb38416f35c6a1a2`;
+  completion record: `3dad197a9cff47b84a354c72a2212b18bf81505f`.
+- Phase B implementation: `71bef7acfa92f9c2a9ff2bb1569b024c4ac95b8b`;
+  completion record: `c0ae180d64f7cb7d6bf91e09526997f4b534a857`.
+- Phase A established the rich-TUI no-console tracing boundary, removed direct
+  terminal writes from the owned alternate-screen window, routed actionable
+  warnings through TUI state, and added architecture guard Check 138.
+- Phase B replaced the manual terminal lifecycle with cleanup-safe
+  `TerminalSession` ownership over `ratatui::try_init()`, paired Eggsec-owned
+  mouse capture, preserved body/restoration error context, audited child-process
+  output disposition, and added architecture guard Check 139 plus the PTY smoke.
+- The PTY implementation pass also found and corrected two adjacent real
+  defects: the CLI rich-TUI launch predicate was inverted at the call site, and
+  daemon attach attempted to create a nested Tokio runtime under
+  `#[tokio::main]`.
+- Process-output audit result: no process-spawn sites exist in
+  `crates/eggsec-tui/src`; workspace process sites already capture/pipe
+  stdout/stderr; workspace-wide `Stdio::inherit()` count for stdout/stderr was
+  zero at closure.
+- Closure validation recorded by the phase plans: `cargo fmt --all --check`,
+  `cargo check -p eggsec-cli`, `cargo check -p eggsec-tui`,
+  `cargo test -p eggsec-cli`, `cargo test -p eggsec-tui`,
+  `bash scripts/check-architecture-guards.sh`, `make check`,
+  `make test-tui-pty`, the broad TUI feature profile,
+  `eggsec-tui --features full`, and `make check-msrv` all PASS.
+- `make check-python` was SKIPPED as not applicable to the Rust/TUI-only
+  implementation; the PTY helper itself was validated directly and uses only
+  the Python standard library.
+- No default persistent TUI log retention, scope/policy/dispatch semantics, or
+  public operation capability was changed.
+
+Roadmap exit condition: **met**. The single-terminal-writer contract is now
+implemented, mechanically guarded, PTY-smoke tested on the supported Unix/Linux
+path, and documented in the active architecture/contributor guidance.
