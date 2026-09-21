@@ -378,11 +378,14 @@ Status: Executed
   features or system deps were added.
 - Hosted CI for the polish HEAD `855d03cd` (code + docs + this record
   skeleton): CI run `35637506642` conclusion `success` (Rust mandatory
-  contract in progress → success, dependency policy success, Python
-  success), Code Quality run `35637504761` conclusion `success`. The
-  pre-polish HEAD run is context only, not proof for the polish SHA.
-  The CI-status recording update itself lands as a docs-only follow-up;
-  its own runs are verified out-of-band before closure is claimed.
+  contract, dependency policy, Python), Code Quality run `35637504761`
+  conclusion `success`. The pre-polish HEAD run is context only, not
+  proof for the polish SHA. Recording follow-ups are `plans/`-only, so
+  CI does not re-trigger by design (`ci.yml` push path filter excludes
+  `plans/**`; not a failure): the `855d03cd` recording commit has Code
+  Quality `35639967626` `success` with no new CI run, and the Rust code
+  at every follow-up HEAD is byte-identical to the CI-green `855d03cd`
+  tree outside `plans/`.
 - Residual debt (with reopen conditions):
   - None from this pass's acceptance list; all 15 criteria are met.
   - Reopen the sever fixture only if the retry matrix or reconnect policy
