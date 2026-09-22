@@ -59,15 +59,15 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `lib.rs` | 376 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
+| `lib.rs` | 421 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
 | `config.rs` | 626 | `ProxyConfig`, `ProxyEntry`, `ProxyType`, `RotationStrategy`, `HealthCheckConfig`, file loading (JSON/YAML/plaintext) |
 | `error.rs` | 93 | `WebProxyError` enum (9 variants: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout`) and `Result<T>` type alias |
 | `pool.rs` | 595 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
 | `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
-| `health.rs` | 377 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffer_unordered`), `HealthCheckResult`, `ProxyHealth` |
-| `eggress_outbound.rs` | 226 | Eggress adapter: `ProxyEntry`→`ProxyHopSpec`, chain spec, `OutboundConnector::from_chain`, redacted error mapping |
-| `socks.rs` | 605 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
-| `http_connect.rs` | 345 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
+| `health.rs` | 416 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffered` preserving enabled-input order), `HealthCheckResult`, `ProxyHealth` |
+| `eggress_outbound.rs` | 341 | Eggress adapter: literal-gated `ProxyEntry`→`ProxyHopSpec` (`socket_addr()` validation, hostname entries rejected), chain spec, `OutboundConnector::from_chain`, centralized unknown-`local_addr` sentinel, redacted error mapping |
+| `socks.rs` | 604 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
+| `http_connect.rs` | 344 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
 | `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
 | `mcp.rs` | — | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
 
@@ -99,7 +99,7 @@ configured `test_url`), never tunnel-only success. Reqwest is the explicit
 health-only owner (Phase B Option B); production dialing is Eggress-backed.
 
 1. **Background health check** (`lib.rs`): `start_background_health_check(interval_secs)` spawns a `tokio::spawn` loop that calls `check_concurrent()` with bounded concurrency (default 10).
-2. **Concurrent checks** (`health.rs`): `check_concurrent()` uses `buffer_unordered(concurrency)` — O(concurrency) in-flight, one result per enabled proxy, no spawn-per-proxy JoinHandle retention. Each proxy gets an independent reqwest client with the proxy's auth credentials.
+2. **Concurrent checks** (`health.rs`): `check_concurrent()` uses `buffered(concurrency)` — O(concurrency) in-flight, one result per enabled proxy, results in enabled-input order, no spawn-per-proxy JoinHandle retention. Each proxy gets an independent reqwest client with the proxy's auth credentials.
 3. **Result processing** (`lib.rs`): Healthy proxies call `pool.mark_healthy()` (resets `consecutive_failures` to 0); unhealthy call `pool.mark_unhealthy()`.
 4. **Automatic demotion** (`pool.rs:177-194`): `record_failure()` increments `consecutive_failures`; when it reaches `config.max_failures_before_disable` (default 3), `is_healthy` is set to `false`.
 5. **Selection** (`lib.rs`): `get_next_proxy()` and `get_healthy_proxy()` use `ProxyRotator::select_with_stats()` which queries pool stats for `LeastUsed` and `LowestLatency` strategies.
@@ -115,7 +115,8 @@ fallback, redacted errors, aggregate timeout, future-drop cancellation).
 **Single-hop** (`lib.rs`):
 - `create_connection(target)` resolves target (private-IP blocked), selects healthy proxy, passes the resolved IP literal + port to Eggress with the proxy's `timeout_ms`.
 - Protocol mapping: `Socks4`→Socks4, `Socks5`/`Tor`→Socks5, `Http`/`Https`→Http plaintext CONNECT (`Https` naming debt: `tls=false` until a fixture proves TLS-to-proxy).
-- `ProxiedConnection.local_addr` is an unspecified placeholder: `eggress-outbound 1.0.8` always reports `local_addr=None` (residual upstream debt; no workspace consumer reads the field).
+- Proxy hop endpoints are literal-address-only: `hop_from_entry()` validates each entry through `ProxyEntry::socket_addr()` and builds the Eggress endpoint from the IP literal (corrective pass 2026-09-22; hostname-valued proxy endpoints fail closed before any network behavior). SOCKS5/Tor remote-domain *targets* remain supported as a separate concern.
+- `ProxiedConnection.local_addr` is the centralized unknown sentinel (`eggress_outbound::unknown_local_addr()`, `0.0.0.0:0`): `eggress-outbound 1.0.8` always reports `local_addr=None` (upstream-gated debt; no policy/routing/evidence path reads it, and it is never logged as a measured address). Removal condition: a published Eggress release exposes the established-socket local address.
 
 **Remote-domain path**: `create_connection_to_domain(domain, port)` preserves SOCKS5/Tor remote-domain semantics (domain reaches the proxy; SOCKS4/HTTP fail closed as before).
 
@@ -175,7 +176,7 @@ fallback, redacted errors, aggregate timeout, future-drop cancellation).
 
 ## Public API
 
-### `ProxyManager` methods (`lib.rs:50-286`)
+### `ProxyManager` methods (`lib.rs:50-330`)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -226,7 +227,7 @@ Key test categories:
 2. **Chain proxying limited to SOCKS5/Tor**: `create_chained_connection()` rejects chains with HTTP or SOCKS4 entries (public contract preserved; Eggress could compose mixed chains but the surface is not broadened silently).
 3. **`socks::connect_through()` only accepts SOCKS types**: returns error for `ProxyType::Http` or `ProxyType::Https` (now Eggress-backed, signature preserved).
 4. **SOCKS4 health fails closed**: `HealthChecker` returns an explicit unsupported error for `Socks4` instead of testing SOCKS5 (behavior fix 2026-09-22; previously a SOCKS5 result was presented as SOCKS4 health).
-5. **`ProxiedConnection.local_addr` is a placeholder**: `eggress-outbound 1.0.8` never populates `OutboundInfo.local_addr`; Eggsec records unspecified `0.0.0.0:0` until upstream exposes the socket address. No workspace consumer reads the field.
+5. **`ProxiedConnection.local_addr` is the centralized unknown sentinel**: `eggress-outbound 1.0.8` never populates `OutboundInfo.local_addr`; all production call sites share `eggress_outbound::unknown_local_addr()` (`0.0.0.0:0`), documented as unknown metadata — never logged as measured, never read by policy/authorization/routing/evidence. Removal condition: a published Eggress release exposes the established-socket local address.
 6. **Legacy handshake shims remain for `TcpStream` signatures only**: `SocksProxy`/`chain_connect`/`connect_through_with_domain`/`HttpConnectProxy` keep their implementations because Eggress `BoxStream` cannot satisfy `TcpStream` returns without a forbidden downcast. Do not extend them; do not claim all duplicate code is removed.
 4. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
 5. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.

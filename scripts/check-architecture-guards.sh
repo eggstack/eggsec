@@ -2650,10 +2650,60 @@ fi
 # Only eggsec-web-proxy may own the reviewed eggress-outbound/eggress-uri
 # edge; transport/eggfetch/policy/core/DTO layers and unrelated domains stay
 # Eggress-free; embed/runtime/server/routing/advanced crates stay forbidden.
+# The direct Eggress dependency set is an exact allowlist (corrective pass,
+# 2026-09-22): any third `eggress-*` edge fails even if no forbidden regex
+# matches it.
 echo ""
 echo "--- Check 106: Eggress narrow boundary (1.0.8) ---"
 SECTION_FAIL=0
-# Approved edge: web-proxy manifests exactly the pinned 1.0.8 line.
+# Exact direct-dependency allowlist via manifest parse (tomllib): the complete
+# set of direct dependencies whose package key begins with `eggress` must be
+# exactly {eggress-outbound, eggress-uri}, with pinned versions/features.
+if ! python3 - <<'PYEOF' 2>&1; then
+import sys, tomllib, pathlib
+p = pathlib.Path("crates/eggsec-web-proxy/Cargo.toml")
+with open(p, "rb") as f:
+    m = tomllib.load(f)
+deps = m.get("dependencies") or {}
+eggress_direct = sorted(n for n in deps if n == "eggress" or n.startswith("eggress-") or n.startswith("eggress_"))
+allowed = ["eggress-outbound", "eggress-uri"]
+unexpected = [n for n in eggress_direct if n not in allowed]
+missing = [n for n in allowed if n not in eggress_direct]
+if unexpected:
+    print(f"FAIL: unexpected direct Eggress dependencies in eggsec-web-proxy: {unexpected}")
+    print(f"      allowed set is exactly {allowed}")
+    sys.exit(1)
+if missing:
+    print(f"FAIL: missing approved direct Eggress dependencies in eggsec-web-proxy: {missing}")
+    sys.exit(1)
+# Exact version/feature constraints on the approved edge.
+outbound = deps.get("eggress-outbound")
+if not isinstance(outbound, dict) or outbound.get("version") != "=1.0.8":
+    print(f"FAIL: eggress-outbound must be pinned to version \"=1.0.8\", got {outbound!r}")
+    sys.exit(1)
+if outbound.get("default-features", True) is not False:
+    print(f"FAIL: eggress-outbound must set default-features = false, got {outbound!r}")
+    sys.exit(1)
+if outbound.get("features"):
+    print(f"FAIL: eggress-outbound must enable no optional features, got {outbound.get('features')!r}")
+    sys.exit(1)
+uri = deps.get("eggress-uri")
+if isinstance(uri, dict):
+    if uri.get("version") != "=1.0.8":
+        print(f"FAIL: eggress-uri must be pinned to version \"=1.0.8\", got {uri!r}")
+        sys.exit(1)
+    if uri.get("features"):
+        print(f"FAIL: eggress-uri must enable no optional features, got {uri.get('features')!r}")
+        sys.exit(1)
+elif uri != "=1.0.8":
+    print(f"FAIL: eggress-uri must be pinned to version \"=1.0.8\", got {uri!r}")
+    sys.exit(1)
+print(f"PASS: exact Eggress allowlist holds: {allowed} (1.0.8 pinned, no optional features).")
+PYEOF
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Approved edge regex backstop (kept for message stability alongside the
+# manifest-aware check above).
 if ! rg -q 'eggress-outbound = \{ version = "=1\.0\.8", default-features = false \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
   echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-outbound = \"=1.0.8\" with default-features = false."
   SECTION_FAIL=$((SECTION_FAIL + 1))

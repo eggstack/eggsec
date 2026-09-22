@@ -530,3 +530,28 @@ Phase A is complete only when:
   `ProxyFlow` header maps are `FxHashMap`; `HashMap::new()` literals in
   `redteam.rs`/`narrative.rs`/`stress_tests.rs`/`integration_tests.rs`
   corrected to `FxHashMap::default()`.
+
+---
+
+## Post-adoption corrective note (2026-09-22, appended — history above untouched)
+
+Follow-up:
+`plans/eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md`.
+
+- The 1.0.8 architecture adoption remains accepted.
+- Corrects this record in two places: (1) the adapter copied
+  `ProxyEntry.address` into Eggress `EndpointSpec`, silently accepting
+  hostname-valued proxy endpoints the pre-adoption
+  `ProxyEntry::socket_addr()` path rejected — `hop_from_entry()` now
+  validates every hop through `socket_addr()` and builds the endpoint
+  from the IP literal (hostname entries fail closed before any network
+  behavior; SOCKS5/Tor remote-domain *target* semantics are a separate,
+  preserved concern); (2) "Acceptance 1–15 all met … DNS semantics
+  explicit" is superseded — DNS-at-proxy-hop semantics were broadened,
+  not preserved, until this correction.
+- `local_addr` remains upstream-gated (Eggress 1.0.8 reports `None`);
+  production call sites now share the centralized
+  `eggress_outbound::unknown_local_addr()` sentinel, documented as
+  unknown metadata that no policy/routing/evidence path may read as a
+  measured address. Restore the real value only when a published Eggress
+  release exposes the established socket local address.

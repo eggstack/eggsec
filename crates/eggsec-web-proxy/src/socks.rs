@@ -369,10 +369,9 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
         timeout,
     )
     .await?;
-    // Same upstream local_addr gap as ProxyManager (see eggress_outbound).
-    let local_addr = info.local_addr.unwrap_or_else(|| {
-        std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
-    });
+    // Same upstream local_addr gap as ProxyManager (see eggress_outbound):
+    // centralized unknown sentinel, never a measured address.
+    let local_addr = crate::eggress_outbound::local_addr_or_unknown(&info);
 
     Ok(ProxiedConnection {
         proxy_chain: vec![proxy],

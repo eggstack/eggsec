@@ -43,6 +43,16 @@ pub use eggress_outbound::OutboundInfo;
 /// Convert one Eggsec proxy entry into an Eggress hop spec.
 ///
 /// Native structs only — no proxy-URI serialize/parse round trip.
+///
+/// Proxy-endpoint acceptance boundary (corrective pass, 2026-09-22):
+/// the endpoint must be an IP literal validated through
+/// [`ProxyEntry::socket_addr()`], preserving the pre-adoption contract
+/// where hostname-valued endpoints failed before any network activity.
+/// Hostname entries are rejected here with a credential-safe configuration
+/// error; Eggress must never resolve a proxy hostname on this path. Target
+/// remote-domain-at-proxy semantics (SOCKS5/Tor `establish(host =
+/// domain)`) are a separate concern and are unaffected: only the proxy hop
+/// endpoint itself is literal-gated.
 pub fn hop_from_entry(entry: &ProxyEntry) -> Result<eggress_uri::ProxyHopSpec> {
     let protocol = match entry.proxy_type {
         ProxyType::Socks4 => eggress_uri::ProtocolSpec::Socks4,
@@ -53,9 +63,14 @@ pub fn hop_from_entry(entry: &ProxyEntry) -> Result<eggress_uri::ProxyHopSpec> {
     // dedicated fixture proves TLS-to-proxy is intended. See decision record.
     let tls = false;
 
+    // Literal-endpoint gate: reject hostname-valued proxy endpoints before
+    // any Eggress/network behavior. Build the Eggress endpoint from the
+    // validated IP literal, preserving the configured port. Never perform
+    // Eggsec DNS here to "make hostnames work".
+    let validated = entry.socket_addr()?;
     let endpoint = eggress_uri::EndpointSpec {
-        host: entry.address.clone(),
-        port: entry.port,
+        host: validated.ip().to_string(),
+        port: validated.port(),
     };
 
     // Convert credentials at the last boundary. Plaintext lives only in
@@ -116,9 +131,10 @@ pub fn chain_from_entries(entries: &[ProxyEntry]) -> Result<eggress_uri::ProxyCh
 /// always reports `OutboundInfo.local_addr = None` on the chain path
 /// (`connector.rs` constructs `OutboundInfo { local_addr: None, .. }`
 /// unconditionally). Callers needing `ProxiedConnection.local_addr` must
-/// apply the documented unspecified-placeholder fallback until an upstream
-/// release exposes the underlying socket address. `peer_addr` (first-hop
-/// proxy address) and `hop_count` are populated and asserted by fixtures.
+/// apply [`unknown_local_addr()`] via [`local_addr_or_unknown()`] until an
+/// upstream release exposes the underlying socket address. `peer_addr`
+/// (first-hop proxy address) and `hop_count` are populated and asserted by
+/// fixtures.
 pub async fn establish(
     entries: &[ProxyEntry],
     host: &str,
@@ -133,6 +149,31 @@ pub async fn establish(
         .await
         .map_err(map_outbound_error)?;
     Ok(info)
+}
+
+/// Unknown local-address sentinel for Eggress-backed production paths.
+///
+/// `eggress-outbound 1.0.8` always reports `OutboundInfo.local_addr = None`
+/// on the chain path. Because `ProxiedConnection.local_addr` is a
+/// non-optional `SocketAddr`, callers use this explicitly-named unspecified
+/// placeholder. It is unknown metadata, never a measured socket address:
+/// do not log it as measured, and never branch policy, authorization,
+/// routing, or evidence on it.
+///
+/// Removal condition: a published Eggress release exposes the actual local
+/// `SocketAddr` for the established outbound chain connection; replace
+/// every `unknown_local_addr()` call with the real value at that point.
+pub fn unknown_local_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+}
+
+/// Map an Eggress `OutboundInfo` local address into the public placeholder.
+///
+/// Returns the real address when upstream eventually populates it;
+/// otherwise the [`unknown_local_addr()`] sentinel. Centralizes the
+/// fallback so no call site invents its own literal.
+pub fn local_addr_or_unknown(info: &OutboundInfo) -> std::net::SocketAddr {
+    info.local_addr.unwrap_or_else(unknown_local_addr)
 }
 
 /// Map Eggress outbound errors without leaking credentials.
@@ -222,5 +263,79 @@ mod tests {
         assert_eq!(chain.hops.len(), 2);
         assert_eq!(chain.hops[0].endpoint.host, "10.0.0.1");
         assert_eq!(chain.hops[1].endpoint.host, "10.0.0.2");
+    }
+
+    #[test]
+    fn ipv4_literal_endpoint_accepted() {
+        let e = ProxyEntry::new(ProxyType::Socks5, "127.0.0.1".to_string(), 1080);
+        let hop = hop_from_entry(&e).unwrap();
+        assert_eq!(hop.endpoint.host, "127.0.0.1");
+        assert_eq!(hop.endpoint.port, 1080);
+    }
+
+    #[test]
+    fn ipv6_literal_endpoint_accepted() {
+        // Pre-adoption contract: `socket_addr()` parses `address:port`, so
+        // IPv6 literals use the bracketed form (`[::1]`).
+        let e = ProxyEntry::new(ProxyType::Socks5, "[::1]".to_string(), 1080);
+        let hop = hop_from_entry(&e).unwrap();
+        let parsed: std::net::IpAddr = hop.endpoint.host.parse().unwrap();
+        assert!(parsed.is_loopback());
+        assert_eq!(hop.endpoint.port, 1080);
+    }
+
+    #[test]
+    fn socks5_hostname_endpoint_rejected_before_network() {
+        let e = ProxyEntry::new(ProxyType::Socks5, "proxy.example.test".to_string(), 1080);
+        let err = hop_from_entry(&e).unwrap_err();
+        let msg = format!("{:?} {}", err, err);
+        assert!(
+            msg.contains("Invalid proxy address"),
+            "must be an explicit config error, got: {msg}"
+        );
+        assert!(!msg.contains("proxy.example.test:1080:proxy"));
+    }
+
+    #[test]
+    fn http_hostname_endpoint_rejected_before_network() {
+        let e = ProxyEntry::new(ProxyType::Http, "proxy.example.test".to_string(), 8080);
+        let err = hop_from_entry(&e).unwrap_err();
+        assert!(err.to_string().contains("Invalid proxy address"));
+    }
+
+    #[test]
+    fn hostname_rejection_error_is_credential_safe() {
+        let e = ProxyEntry::new(ProxyType::Socks5, "proxy.example.test".to_string(), 1080)
+            .with_auth("hopuser-x1".to_string(), "hopsecret-abc-9z".to_string());
+        let err = hop_from_entry(&e).unwrap_err();
+        let msg = format!("{:?} {}", err, err);
+        assert!(
+            !msg.contains("hopsecret-abc-9z"),
+            "credential leaked: {msg}"
+        );
+        assert!(!msg.contains("hopuser-x1"), "credential leaked: {msg}");
+        assert!(msg.contains("Invalid proxy address"));
+    }
+
+    #[test]
+    fn unknown_local_addr_is_explicitly_unspecified() {
+        let sentinel = unknown_local_addr();
+        assert!(sentinel.ip().is_unspecified());
+        assert_eq!(sentinel.port(), 0);
+        // `local_addr_or_unknown` passes through a real address untouched
+        // and maps `None` to the same sentinel.
+        let real: std::net::SocketAddr = "10.1.2.3:4567".parse().unwrap();
+        let info = OutboundInfo {
+            local_addr: Some(real),
+            peer_addr: None,
+            hop_count: 1,
+        };
+        assert_eq!(local_addr_or_unknown(&info), real);
+        let missing = OutboundInfo {
+            local_addr: None,
+            peer_addr: None,
+            hop_count: 1,
+        };
+        assert_eq!(local_addr_or_unknown(&missing), unknown_local_addr());
     }
 }

@@ -413,4 +413,54 @@ This corrective pass is complete only when:
 
 ## Completion record
 
-Not yet executed.
+Executed 2026-09-22.
+
+- Baseline SHA: `47b01cbc` (clean tree; corrective baseline per plan).
+  Focused web-proxy suite green before editing (all suites passed).
+- WS1: `hop_from_entry()` validates every hop through
+  `ProxyEntry::socket_addr()` and builds `EndpointSpec` from the
+  validated IP literal (port preserved); hostname entries fail closed
+  with a credential-safe config error before any Eggress/network
+  behavior. Unit fixtures (IPv4, bracketed IPv6, SOCKS5/HTTP hostname
+  rejection, credential-safe errors) in `eggress_outbound.rs` plus
+  integration fixtures (hostname rejection pre-network with zero target
+  hits, credential-safe `establish` error, literal IPv4/IPv6 still work,
+  Tor remote-domain preserved) in `tests/eggress_parity.rs`.
+- WS2: Check 106 proves the exact direct allowlist via `tomllib`
+  manifest parse (`eggress-outbound` =1.0.8/default-features-off/no
+  optional features, `eggress-uri` =1.0.8/no optional features); any
+  third `eggress-*` edge fails (negative path proven with a simulated
+  `eggress-udp` edge). Version/feature regex backstops and all
+  repository-wide constraints retained. Guard output: `PASS: exact
+  Eggress allowlist holds`.
+- WS3: `check_concurrent()` uses `buffered(concurrency)`
+  (enabled-input order, O(concurrency) bound, no JoinHandle retention);
+  deterministic slow-A/fast-B ordering fixture in `health.rs` plus
+  existing bounded-accounting matrix fixture.
+- WS4: production call sites (`lib.rs` ×3, `socks.rs`, `http_connect.rs`)
+  share `eggress_outbound::unknown_local_addr()` /
+  `local_addr_or_unknown()`; unknown metadata is never logged as
+  measured and no policy/authorization/routing/evidence path branches
+  on it (verified by source audit; runtime fixture asserts the sentinel
+  with truthful chain/target fields). Removal condition recorded in
+  code + `architecture/egress_reuse_decision.md`: a published Eggress
+  release exposing the established-socket local address.
+- Docs: appended corrective notes to the roadmap and Phase A/B records
+  (history untouched); `plans/README.md` campaign entry no longer
+  presents completion as unconditional closure; updated
+  `architecture/egress_reuse_decision.md` (corrective addendum),
+  `architecture/proxy.md` (literal boundary, `buffered` order,
+  centralized sentinel, pruned stale line counts),
+  `docs/CI_ARCHITECTURE_GUARDS.md` (exact allowlist), and the
+  `eggsec-proxy` skill. README/AGENTS.md carry no Eggress behavior
+  claims, so no changes were needed there.
+- Verification (all green locally 2026-09-22): `cargo fmt --check`;
+  `cargo check -p eggsec-web-proxy` (no-default + `web-proxy`);
+  `cargo test -p eggsec-web-proxy` 484 passed; `proxy_adapter_smoke`
+  3 passed; `bash scripts/check-architecture-guards.sh` ALL PASSED;
+  `make check-deps`; `make check-feature-profiles` (exit 0);
+  `make check-features-individual` (exit 0); `make check` (exit 0);
+  `make check-msrv` (exit 0).
+- Remaining upstream-gated debt: `ProxiedConnection.local_addr` stays
+  the unknown sentinel until Eggress publishes the real socket address
+  (see removal condition above). No other open items.

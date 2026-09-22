@@ -160,7 +160,9 @@ impl HealthChecker {
         // Bounded in-flight scheduler: O(concurrency) futures, one result
         // per enabled proxy, no spawn-per-proxy JoinHandle retention (Phase
         // B WS4). `check` never panics (all paths return data), so no
-        // JoinError accounting is needed.
+        // JoinError accounting is needed. `buffered` (not `buffer_unordered`)
+        // preserves enabled-input ordering in the collected vector while
+        // retaining the bound (corrective pass, 2026-09-22).
         let concurrency = concurrency.max(1);
         let enabled: Vec<ProxyEntry> = proxies.iter().filter(|p| p.enabled).cloned().collect();
 
@@ -169,7 +171,7 @@ impl HealthChecker {
                 let checker = self.clone();
                 async move { checker.check(&proxy).await }
             })
-            .buffer_unordered(concurrency)
+            .buffered(concurrency)
             .collect()
             .await;
 
@@ -189,6 +191,7 @@ impl HealthChecker {
 mod tests {
     use super::*;
     use crate::config::{ProxyEntry, ProxyType};
+    use std::time::Duration;
 
     fn make_proxy(addr: &str, port: u16) -> ProxyEntry {
         ProxyEntry::new(ProxyType::Socks5, addr.to_string(), port)
@@ -372,5 +375,42 @@ mod tests {
         assert_eq!(health.total, 0);
         assert_eq!(health.unhealthy, 0);
         assert_eq!(health.results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_check_concurrent_preserves_enabled_input_order() {
+        // Deterministic ordering proof (corrective pass, 2026-09-22):
+        // proxy A is slow (blackhole holds the socket until the health
+        // timeout), proxy B fails fast (closed port refuses immediately).
+        // Completion order is B-then-A, but the returned vector must remain
+        // A-then-B while staying bounded (no spawn-per-proxy).
+        use tokio::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let slow_port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let Ok((s, _)) = listener.accept().await else {
+                return;
+            };
+            let _held = s;
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        });
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 60,
+            timeout_ms: 1500,
+            test_url: "http://127.0.0.1:9/health".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config).unwrap();
+        let slow = make_proxy("127.0.0.1", slow_port);
+        let fast = make_proxy("127.0.0.1", 9);
+        let slow_key = slow.to_log_key();
+        let fast_key = fast.to_log_key();
+        let health = checker.check_concurrent(&[slow, fast], 2).await.unwrap();
+        assert_eq!(health.total, 2);
+        assert_eq!(health.results.len(), 2);
+        assert_eq!(health.results[0].proxy_url, slow_key);
+        assert_eq!(health.results[1].proxy_url, fast_key);
+        assert_eq!(health.healthy + health.unhealthy, 2);
     }
 }

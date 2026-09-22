@@ -140,16 +140,16 @@ impl ProxyManager {
         )
         .await?;
         // Upstream gap: eggress-outbound 1.0.8 never populates the local
-        // address field (always None). Fall back to the unspecified
-        // placeholder rather than failing closed on metadata; the
-        // connection itself was established and verified. Recorded as
-        // residual debt (see the eggress_outbound adapter module docs).
-        let local_addr = info.local_addr.unwrap_or_else(|| {
-            tracing::debug!(
-                "Eggress 1.0.8 reports no local address; using unspecified placeholder"
-            );
-            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
-        });
+        // address field (always None). Map to the centralized unknown
+        // sentinel rather than failing closed on metadata; the connection
+        // itself was established and verified. The sentinel is unknown
+        // metadata, never a measured address: it is not logged as measured
+        // and no routing/authorization/evidence path branches on it.
+        // Removal condition: see crate::eggress_outbound::unknown_local_addr.
+        let local_addr = crate::eggress_outbound::local_addr_or_unknown(&info);
+        if info.local_addr.is_none() {
+            tracing::debug!("Eggress 1.0.8 reports no local address; recording unknown sentinel");
+        }
 
         Ok(ProxiedConnection {
             proxy_chain: vec![proxy],
@@ -191,13 +191,12 @@ impl ProxyManager {
         let info =
             crate::eggress_outbound::establish(std::slice::from_ref(&proxy), domain, port, timeout)
                 .await?;
-        let local_addr = info.local_addr.unwrap_or_else(|| {
-            tracing::warn!(
-                "Eggress established domain connection without local address for {}",
-                domain
+        let local_addr = crate::eggress_outbound::local_addr_or_unknown(&info);
+        if info.local_addr.is_none() {
+            tracing::debug!(
+                "Eggress established domain connection without reporting a local address; recording unknown sentinel"
             );
-            std::net::SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), 0)
-        });
+        }
         Ok(ProxiedConnection {
             proxy_chain: vec![proxy],
             local_addr,
@@ -265,11 +264,14 @@ impl ProxyManager {
             Duration::from_millis(timeout_ms),
         )
         .await?;
-        // Same upstream local_addr gap as create_connection (see above).
-        let final_local_addr = info.local_addr.unwrap_or_else(|| {
-            tracing::debug!("Eggress 1.0.8 reports no local address for chain; using placeholder");
-            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
-        });
+        // Same upstream local_addr gap as create_connection (see above):
+        // centralized unknown sentinel, never a measured address.
+        let final_local_addr = crate::eggress_outbound::local_addr_or_unknown(&info);
+        if info.local_addr.is_none() {
+            tracing::debug!(
+                "Eggress 1.0.8 reports no local address for chain; recording unknown sentinel"
+            );
+        }
 
         let proxy_chain: Vec<ProxyEntry> = chain.into_iter().collect();
 

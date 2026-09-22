@@ -63,7 +63,7 @@ The following 12 tools are available when the `web-proxy-mcp` feature is enabled
 
 **Tool implementation:** `tool/implementations/proxy.rs` implements the `SecurityTool` trait with all 12 actions. Tools use a shared `PROXY_SESSION` static for session state.
 
-### Outbound proxy engine (Eggress 1.0.8, 2026-09-22)
+### Outbound proxy engine (Eggress 1.0.8, 2026-09-22; corrective pass 2026-09-22)
 Production SOCKS/HTTP-CONNECT/chain dialing runs on listener-free
 `eggress-outbound 1.0.8` via `crates/eggsec-web-proxy/src/eggress_outbound.rs`
 (pinned `=1.0.8`, `default-features = false`; plus `eggress-uri =1.0.8`).
@@ -74,8 +74,15 @@ helpers delegate to the adapter; the remaining handshake code exists only for
 `TcpStream`-returning compatibility shims. Reqwest stays as the explicit
 health-only owner (application-level 2xx-through-proxy checks; SOCKS4 fails
 closed as unsupported). `Https` means plaintext CONNECT (naming debt).
-`ProxiedConnection.local_addr` is an unspecified placeholder (upstream
-`local_addr` gap). Guard Check 106 encodes the narrow boundary.
+Proxy hop endpoints are literal-address-only: `hop_from_entry()` validates
+through `ProxyEntry::socket_addr()` and rejects hostname-valued endpoints
+before any network behavior (SOCKS5/Tor remote-domain *targets* stay
+supported as a separate concern). `check_concurrent()` uses `buffered`
+(enabled-input result order, still O(concurrency)). `ProxiedConnection.local_addr`
+is the centralized unknown sentinel (`unknown_local_addr()`, upstream-gated
+until Eggress exposes the real socket address) — never a measured address,
+never a routing/policy input. Guard Check 106 encodes the exact two-crate
+allowlist (`eggress-outbound` + `eggress-uri` only).
 
 ### Safe Logging
 `proxy` module uses `to_log_key()` for safe logging of sensitive data.

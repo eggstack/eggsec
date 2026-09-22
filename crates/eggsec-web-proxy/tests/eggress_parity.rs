@@ -818,3 +818,128 @@ async fn private_targets_rejected_before_eggress() {
         assert!(err.to_string().contains("private"), "got: {err}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Corrective pass (2026-09-22): literal proxy-endpoint boundary + local_addr
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn hostname_proxy_endpoint_rejected_before_network() {
+    // No listener exists for the hostname; rejection must occur at the
+    // adapter conversion boundary (explicit config error), before any proxy
+    // DNS or connection attempt attributable to that endpoint.
+    for t in [ProxyType::Socks5, ProxyType::Http] {
+        let e = ProxyEntry::new(t, "proxy.example.test".to_string(), 1080);
+        let err = adapter::hop_from_entry(&e).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid proxy address"),
+            "got: {err}"
+        );
+        let err = adapter::chain_from_entries(std::slice::from_ref(&e)).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid proxy address"),
+            "got: {err}"
+        );
+        // `establish` surfaces the same boundary error without dialing.
+        let err = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid proxy address"),
+            "got: {err}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn hostname_proxy_rejection_contacts_no_target() {
+    // A target listener counts hits; a hostname-valued proxy entry must fail
+    // at conversion, so the target observes zero connections.
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_srv = hits.clone();
+    let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target_addr = target.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let Ok((_, _)) = target.accept().await else {
+                return;
+            };
+            hits_srv.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+    let e = ProxyEntry::new(ProxyType::Socks5, "proxy.example.test".to_string(), 1080);
+    let err = adapter::establish(
+        std::slice::from_ref(&e),
+        &target_addr.ip().to_string(),
+        target_addr.port(),
+        SHORT_TIMEOUT,
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("Invalid proxy address"));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(hits.load(Ordering::SeqCst), 0, "network activity detected");
+}
+
+#[tokio::test]
+async fn hostname_rejection_error_is_credential_safe() {
+    let e = ProxyEntry::new(ProxyType::Socks5, "proxy.example.test".to_string(), 1080)
+        .with_auth("hopuser".to_string(), "hopsecret-abc".to_string());
+    let err = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
+        .await
+        .unwrap_err();
+    let msg = format!("{:?} {}", err, err);
+    assert!(!msg.contains("hopsecret-abc"), "leak: {msg}");
+    assert!(!msg.contains("hopuser"), "leak: {msg}");
+}
+
+#[tokio::test]
+async fn literal_ipv4_and_ipv6_proxy_endpoints_still_work() {
+    // IPv4 literal proxy endpoint via the manager path.
+    let proxy_addr = spawn_socks5(false, "", "", None, None, false).await;
+    assert!(proxy_addr.ip().is_ipv4());
+    let mgr = manager_with(entry_with_addr(ProxyType::Socks5, proxy_addr)).await;
+    let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
+    assert_eq!(conn.proxy_chain.len(), 1);
+    // IPv6 literal endpoint converts through the adapter boundary
+    // (bracketed form, matching the pre-adoption `socket_addr` contract).
+    let e = ProxyEntry::new(ProxyType::Socks5, "[::1]".to_string(), 1080);
+    let hop = adapter::hop_from_entry(&e).unwrap();
+    let parsed: std::net::IpAddr = hop.endpoint.host.parse().unwrap();
+    assert!(parsed.is_loopback());
+    assert_eq!(hop.endpoint.port, 1080);
+}
+
+#[tokio::test]
+async fn tor_remote_domain_preserved_after_literal_gate() {
+    // Tor proxy endpoint itself is a literal; the *target* domain still
+    // reaches the proxy as a domain (separate concern from the endpoint).
+    let seen = Arc::new(tokio::sync::Mutex::new(None));
+    let proxy_addr = spawn_socks5(false, "", "", None, Some(seen.clone()), false).await;
+    let mgr = manager_with(entry_with_addr(ProxyType::Tor, proxy_addr)).await;
+    let conn = mgr
+        .create_connection_to_domain("example.com", 443)
+        .await
+        .unwrap();
+    assert_eq!(conn.proxy_chain.len(), 1);
+    let seen = seen.lock().await;
+    let seen = seen.as_ref().unwrap();
+    assert_eq!(seen.atyp, 0x03, "proxy must receive domain encoding");
+    assert_eq!(seen.host, "example.com");
+}
+
+#[tokio::test]
+async fn local_addr_is_unknown_sentinel_not_measured() {
+    // Production connections carry the centralized unknown sentinel while
+    // routing-relevant fields (chain, target) stay truthful. No
+    // authorization/routing decision branches on `local_addr`: selection
+    // used the healthy pool entry and the resolved documentation target.
+    let proxy_addr = spawn_socks5(false, "", "", None, None, false).await;
+    let mgr = manager_with(entry_with_addr(ProxyType::Socks5, proxy_addr)).await;
+    let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
+    assert_eq!(conn.local_addr, adapter::unknown_local_addr());
+    assert!(conn.local_addr.ip().is_unspecified());
+    assert_eq!(conn.local_addr.port(), 0);
+    assert_eq!(conn.target_addr.ip().to_string(), "203.0.113.1");
+    assert_eq!(conn.proxy_chain.len(), 1);
+}

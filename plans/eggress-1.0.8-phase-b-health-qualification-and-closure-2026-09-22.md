@@ -458,3 +458,27 @@ Phase B is complete only when:
   parity + 15 matrix), `proxy_adapter_smoke` 3 passed, `make check`,
   `make check-deps`, `make check-feature-profiles`, `make
   check-features-individual`, `make check-msrv` — all green locally.
+
+---
+
+## Post-adoption corrective note (2026-09-22, appended — history above untouched)
+
+Follow-up:
+`plans/eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md`.
+
+- The 1.0.8 architecture adoption remains accepted (health stays
+  application-level; Reqwest stays the explicit health-only owner).
+- Corrects this record in two places: (1) `check_concurrent()` used
+  `buffer_unordered`, so `ProxyHealth.results` arrived in completion
+  order rather than the pre-Phase-B input order — it now uses
+  `buffered(concurrency)`, preserving enabled-input ordering under the
+  same O(concurrency) bound with no spawn-per-proxy handles (proven by a
+  deterministic slow-A/fast-B ordering fixture); (2) "Acceptance 1–15
+  met" is superseded for the ordering and dependency-boundary items —
+  Check 106 now proves the exact direct Eggress allowlist
+  (`eggress-outbound` + `eggress-uri` only) instead of merely excluding
+  forbidden families.
+- `local_addr` remains upstream-gated as recorded above; the corrective
+  pass centralizes the sentinel and records the removal condition
+  (published Eggress release exposing the established socket address)
+  rather than changing the migration.

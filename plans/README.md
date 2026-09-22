@@ -66,6 +66,14 @@ health-only owner; SOCKS4 fails closed) with 15 matrix fixtures. Guards,
 dependency policy, feature profiles, MSRV, and `make check` green locally.
 Completion evidence lives in the roadmap and phase-plan completion records.
 
+> Corrective qualification (2026-09-22): the campaign completion above is
+> not unconditional final closure. Review found four bounded defects
+> (proxy-endpoint hostname broadening, non-exact Check 106, health
+> completion-ordering, `local_addr` equivalence overstatement); each
+> roadmap/phase record carries an appended post-adoption corrective note,
+> and the corrective pass above defines current behavior. See the
+> corrective-pass entry at the top of this section.
+
 ## TUI confirmation-test intent corrective pass (executed 2026-09-22)
 
 Plan:

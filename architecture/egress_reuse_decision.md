@@ -272,3 +272,45 @@ SOCKS5/Tor remote-domain path is preserved and proven by fixture.
   (Phase B); tunnel-only success is never reported as health.
 
 *Addendum verified against published crates: 2026-09-22.*
+
+---
+
+# Corrective addendum 2026-09-22 — post-adoption compatibility pass
+
+Status: Accepted (narrow correction, architecture unchanged). Plan:
+`plans/eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md`.
+
+Review of the successful 1.0.8 adoption found four bounded defects; the
+1.0.8 edge above remains accepted, with these corrections:
+
+1. **Proxy endpoint literal boundary restored.** The Phase A adapter
+   copied `ProxyEntry.address` into Eggress `EndpointSpec`, letting
+   Eggress DNS-resolve proxy hostnames the pre-adoption
+   `ProxyEntry::socket_addr()` path rejected. `hop_from_entry()` now
+   validates every hop through `socket_addr()` and builds the endpoint
+   from the validated IP literal (port preserved); hostname entries fail
+   closed before any network behavior. Proxy endpoint configuration is
+   therefore literal-address-only in this release; hostname support needs
+   a separately authorized design. SOCKS5/Tor remote-domain *target*
+   behavior is a separate, preserved concern. The Phase A statement that
+   DNS semantics were preserved is superseded.
+2. **Check 106 is now an exact allowlist.** The guard proves via
+   manifest parse (`tomllib`) that the complete direct Eggress
+   dependency set in `eggsec-web-proxy` is exactly `eggress-outbound`
+   (=1.0.8, `default-features = false`, no optional features) and
+   `eggress-uri` (=1.0.8, no optional features). Any third `eggress-*`
+   edge fails even if no forbidden regex matches.
+3. **Concurrent health ordering restored.** `check_concurrent()` used
+   `buffer_unordered` (completion order); it now uses
+   `buffered(concurrency)`, preserving enabled-input order under the
+   same O(concurrency) bound with no spawn-per-proxy handles.
+4. **`local_addr` classified as upstream-gated debt.** Eggress 1.0.8
+   never populates `OutboundInfo.local_addr` on chain execution.
+   Production paths share the centralized
+   `eggress_outbound::unknown_local_addr()` sentinel — unknown metadata,
+   never logged as a measured address, never read by
+   policy/authorization/routing/evidence. Removal condition: a published
+   Eggress release exposes the actual established-socket local address.
+   Prior all-acceptance-criteria-met wording is superseded for this item.
+
+*Corrective addendum verified against source: 2026-09-22.*

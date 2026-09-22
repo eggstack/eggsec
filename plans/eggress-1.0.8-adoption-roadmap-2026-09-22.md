@@ -276,3 +276,28 @@ never existed. Current architecture documentation may be updated to state that
 - Residual debt: `OutboundInfo.local_addr` placeholder; `Https` naming;
   no upstream resolver-injection API. Phase completion records live in
   the two phase plans (same SHAs).
+
+---
+
+## Post-adoption corrective note (2026-09-22, appended — history above untouched)
+
+Follow-up:
+`plans/eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md`.
+
+- The 1.0.8 architecture adoption remains accepted (Eggress-backed proxy
+  dialing, health-only Reqwest, Eggress-free canonical transport).
+- Review found four bounded defects in the completion above, corrected by
+  the follow-up pass: (1) proxy endpoint hostname acceptance was
+  unintentionally broadened (Eggress resolves hop hostnames the old
+  `ProxyEntry::socket_addr()` path rejected) — the adapter now
+  literal-gates every hop endpoint; (2) Check 106 proved only a forbidden
+  family, not the exact direct Eggress set — it now allowlists exactly
+  `eggress-outbound` + `eggress-uri`; (3) `check_concurrent()` returned
+  completion order via `buffer_unordered` — it now uses `buffered` so
+  results retain enabled-input order under the same O(concurrency) bound;
+  (4) `local_addr` compatibility is upstream-gated (Eggress 1.0.8 never
+  populates it), centralized as an explicitly-unknown sentinel.
+- The statements above that DNS semantics were fully preserved and all
+  acceptance criteria were met are superseded by this corrective finding.
+  Current behavior is defined by the corrective pass, not by this
+  campaign record alone.
