@@ -1,6 +1,6 @@
 # Eggfetch 0.2.0 adoption and requalification
 
-Status: Ready for handoff
+Status: Executed
 
 Date: 2026-09-22
 
@@ -607,3 +607,156 @@ qualification unchanged, all security and policy invariants remain intact,
 repository guards and living documentation reflect 0.2.0, and the final
 implementation has current local/hosted evidence without introducing a new
 transport behavior or maintenance branch.
+
+## Exit criterion
+
+This line is closed when Eggsec consumes the published `eggfetch-core 0.2.0`
+release, the existing adapter passes its direct/H2/proxy/redirect/timeout
+qualification unchanged, all security and policy invariants remain intact,
+repository guards and living documentation reflect 0.2.0, and the final
+implementation has current local/hosted evidence without introducing a new
+transport behavior or maintenance branch.
+
+## Completion record (executed 2026-09-22)
+
+```text
+Status: Executed
+Starting Eggsec SHA: 1296f6f7cb9d478197aead7bbdca8230dddc2db2 (clean tree)
+Final implementation SHA: 17cf8c31
+Final documentation/record SHA: (this record commit; see log)
+Hosted CI run(s): (recorded after push; see log)
+Hosted Deep Checks run(s): (recorded after push; see log)
+
+eggfetch-core:
+  version: 0.2.0
+  crates.io checksum: 6cd254b82aa20d1becb6e3e90a5103e8bcc2d7057bb13532096326e43cd98904
+  release/tag: v0.2.0 (MSRV 1.89 retained)
+eggfetch-http-connect:
+  version: 0.2.0
+  crates.io checksum: b16f85a1fdbc2deb5c705001a1d8ec4c05934175262a62664e634bd09043fde0
+Eggfetch feature graph before: http1 + http2 + tls-rustls + proxy over
+  0.1.7 (plus the long-standing implied high-level slice:
+  basic-auth/high-level-url/logical-retry/native-http1/advanced-routing/
+  standard-route/transport-http1/redirects)
+Eggfetch feature graph after: identical slice over 0.2.0; no http3,
+  cookies, compression codecs, or multipart (verified via
+  `cargo tree -e features`: zero matches)
+Dependency duplicate graph before: base64, hyper-util, pem, plist,
+  reqwest, wiremock (with eggfetch-core/http-connect 0.1.7)
+Dependency duplicate graph after: identical set (with eggfetch-core/
+  http-connect 0.2.0); targeted `cargo update -p eggfetch-core` left
+  155 unrelated deps untouched
+MSRV: 1.89 (`make check-msrv` green)
+
+Production source semantic delta: none. The adapter compiled unchanged
+  against 0.2.0 (category 0: no mechanical API adaptation needed for
+  Client/builder, HttpVersionPolicy::Auto { allow_http3: false },
+  TlsConfig/TrustStore, resolved_addresses, Proxy::resolved_addresses,
+  proxy_target_addresses, TransportHints, Timeout, RedirectPolicy,
+  redirect primitives, without_proxy/without_retry/decompress(false)).
+  Only version-wording comments changed (lib.rs, adapter.rs, mapping.rs)
+  plus the manifest requirement 0.1.7 -> 0.2.0.
+Direct singular-pin proof: parity suite (52 tests incl. direct singular
+  pin forbids fallback, Host ownership, literal handling) + engine
+  interop (5 tests) green on 0.2.0; guard Check 136 passes.
+Origin DNS non-fallback proof: `test.local` no-system-DNS +
+  panicking-resolver literal fixtures green (unchanged suite).
+Logical Host proof: adapter-owned Host per hop fixtures green.
+Logical SNI/certificate proof: self-signed rejected, wrong-SAN
+  rejected, insecure mode explicit opt-in only (unchanged suite).
+H1 reuse proof: 5 reqs / 1 accept + target/origin isolation green.
+H2 ALPN/multiplex/reuse/isolation proof: h2_mux 5/5 green (warmed-route
+  4-concurrent on 1 accept, 5-sequential on 1 accept, selected-address-only
+  + logical-origin isolation, ALPN h2, :authority = logical host).
+
+Redirect matrix: automatic Eggfetch redirects still doubly disabled;
+  authorize_redirect before next-hop dispatch; full checkpoint sequence
+  per followed hop; same-origin credential restore / cross-origin strip;
+  301/302/303/307/308 method/body rules; hop caps surface last 3xx;
+  HTTPS->HTTP stays compatibility-Allow (all in unchanged parity suite).
+Same-origin credential behavior: unchanged (auth preservation fixtures green).
+Cross-origin credential stripping: unchanged (stripping fixtures green).
+HTTPS downgrade disposition: unchanged (compatibility-Allow, no silent Deny).
+Total-deadline body EOF: headers-fast/body-slow + post-first-chunk stall
+  + trickle + redirect-remainder + post-timeout-reuse fixtures green.
+Post-first-chunk stall: green (cannot reset the total deadline).
+Trickle aggregate total: green (cannot extend the aggregate deadline).
+Redirect remaining-budget: green (final body gets only the remainder).
+Post-timeout reuse: green (no connection/client poisoning).
+
+CONNECT proxy: authorized CONNECT + both pins green.
+SOCKS5 local: IP-target success with both pins green (4/4 socks5_local).
+SOCKS5H: rejected before dispatch (rerun green in parity + socks5_local).
+Plain forward proxy: unenforceable ultimate pin rejected before dispatch.
+Proxy peer fallback: forbidden (fixture green).
+Ultimate target fallback: forbidden (fixture green).
+Credential isolation: proxy credential isolation fixture green.
+Hostile proxy environment: HTTP_PROXY/HTTPS_PROXY/ALL_PROXY (+lowercase)
+  cannot divert a direct request (fixture green).
+
+Automatic decompression: still off (.automatic_decompression(false) +
+  .decompress(false), no compression features); verbatim-bytes fixture green.
+Issue #24 disposition: fixed upstream in 0.2.0; outside Eggsec's
+  decompression-off production path, so no Eggsec semantic change and no
+  decompressor added. Documented, not exercised.
+Automatic retry: still disabled (Eggsec owns retry above the transport).
+HTTP/3: still disabled (http3 feature off, allow_http3: false; guard 137).
+Environment proxy discovery: still disabled (without_proxy on direct hops,
+  ProxyEnvironment never constructed; guard 137).
+
+Focused transport checks (all on published 0.2.0):
+  eggsec-transport: 18 passed
+  eggsec-transport-eggfetch: 67 passed (6 unit + 52 parity + 5 h2 + 4 socks5)
+  h2_mux: 5 passed; socks5_local: 4 passed
+  engine transport_eggfetch_parity (rest-api): 5 passed
+  engine lib loadtest: 37 passed
+  network_policy_invariants: 12 passed
+  enforced_dispatch_regression: 5 passed
+  scripts/check-architecture-guards.sh: ALL PASSED (incl. Check 134 at
+    0.2.0, Checks 102/135/136/137 preserved)
+make check: green (fmt, no-default checks, cargo deny, clippy, full test
+  suites, guards)
+make check-deps: green (cargo deny --workspace --all-features)
+make check-msrv: green (exit 0)
+make check-python: green (exit 0)
+make check-feature-profiles: green (exit 0; required completing 4
+  mechanical pre-existing FxHash corrections below)
+make check-full: green (exit 0, incl. TUI PTY smoke)
+make check-features-individual: green (89 passed, 0 skipped, 0 failed)
+make release-check: green on the clean implementation tree (re-run
+  post-commit; dirty-tree gate fails closed by design pre-commit)
+
+Architecture guards updated: Check 134 requires published
+  `eggfetch-core 0.2.0` (+1.89 MSRV retained); Check 102 floor raised to
+  the 0.2.x line with 0.2.0+ wording; Checks 135/136/137 security
+  assertions preserved byte-for-byte (only historical 0.1.7-adoption
+  labels retained where they name the originating event).
+Living docs updated: adapter Cargo.toml comment + lib.rs/adapter.rs/
+  mapping.rs version wording; architecture/transport_eggfetch.md (0.2.0
+  adoption entry, current-state refs, requalification footer);
+  architecture/loadtest.md (active-backend + route-matrix + see-also
+  refs; historical 0.1.5/0.1.7 measurement tables preserved);
+  architecture/overview.md (3 refs); README.md (2 refs);
+  docs/CI_ARCHITECTURE_GUARDS.md (Checks 102-line + Check 134-line);
+  .opencode/skills/eggsec-loadtest + eggsec-config (current-state
+  backend/guard wording); plans/README.md (marked executed).
+  AGENTS.md encodes no Eggfetch version: unchanged.
+Historical records preserved: 0.1.7 adoption/corrective plans, 0.1.5/0.1.7
+  measurement tables, upstream 0.1.7 qualification record, guard 136/137
+  adoption-event labels, parity.rs adoption comment: all untouched.
+Performance/footprint disposition: no new benchmark framework; no
+  performance claim from upstream maintenance without Eggsec measurements.
+  Duplicate graph unchanged (only eggfetch versions moved); no binary/RSS
+  regression tracked. Bounded 1/10/50/100 loopback evidence remains the
+  retained 0.1.7-era record in loadtest.md (noisy, never a CI threshold);
+  version-to-version comparison stays inconclusive by prior record.
+Residual debt: (a) pre-existing HEAD FxHash fallout corrected here to
+  unblock feature profiles (ProxyFlow std->FxHashMap constructors in
+  crates/eggsec/src/pipeline/executor.rs,
+  crates/eggsec/src/tool/implementations/proxy.rs,
+  crates/eggsec/src/commands/handlers/web_proxy.rs,
+  crates/eggsec-tui/src/tabs/intercept/tests.rs; verified failing on the
+  clean 1296f6f7 baseline via stash, so unrelated to this bump);
+  (b) TUI broad-profile warnings (unused imports/variables, e.g.
+  mobile/mod.rs, task_dispatcher.rs) remain warnings-only, pre-existing.
+```
