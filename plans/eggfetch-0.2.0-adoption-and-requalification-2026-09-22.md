@@ -623,9 +623,14 @@ transport behavior or maintenance branch.
 Status: Executed
 Starting Eggsec SHA: 1296f6f7cb9d478197aead7bbdca8230dddc2db2 (clean tree)
 Final implementation SHA: 17cf8c31
-Final documentation/record SHA: (this record commit; see log)
-Hosted CI run(s): (recorded after push; see log)
-Hosted Deep Checks run(s): (recorded after push; see log)
+Final documentation/record SHA: 86d2670b7ce487dd1697ef120116bd811a9c5d40
+  (record commit; this hosted-evidence amendment is a docs-only descendant
+  with an identical executable tree)
+Hosted CI run(s): CI 35698884162 success + Code Quality 35698883346 success
+  (head 86d2670b, push on main)
+Hosted Deep Checks run(s): Deep Checks 35698970796 success (manual
+  workflow_dispatch on main @ 86d2670b; sub-jobs incl. MSRV 1.89,
+  portability macos/windows, platform integration all success)
 
 eggfetch-core:
   version: 0.2.0
