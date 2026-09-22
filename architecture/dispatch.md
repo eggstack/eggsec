@@ -42,7 +42,7 @@ The public entry points are:
 |------|-------|----------|
 | `canonical_execution.rs` | 2006 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
 | `mod.rs` | ~310 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
-| `types.rs` | 156 | `TaskResult` enum (27 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
+| `types.rs` | 156 | `TaskResult` enum (34 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
 | `executor.rs` | 64 | `OperationExecutor` trait (object-safe: no generic self, no generic associated types), `ExecutionOutput` enum (`Success`/`FeatureUnavailable`/`Failed`) |
 | `executors/mod.rs` | 43 | `build_default_registry()` — registers 5 always-compiled + 2 feature-gated adapters |
 | `executors/registry.rs` | 140 | `ExecutorRegistry` — maps operation IDs to `Box<dyn OperationExecutor>`, panics on duplicate registration |
@@ -148,7 +148,7 @@ The `OperationExecutor` trait provides:
 - `execute_sync()` → optional blocking path (default: returns `Failed`)
 - `can_handle()` → checks membership in `operation_ids()`
 
-The `ExecutorRegistry` (`executors/registry.rs:9`) uses `std::collections::HashMap` for operation→executor mapping. It panics on duplicate operation ID registration (`registry.rs:33`).
+The `ExecutorRegistry` (`executors/registry.rs:12`) uses `rustc_hash::FxHashMap` for operation→executor mapping. It panics on duplicate operation ID registration (`registry.rs:33`).
 
 ## Interaction With Enforcement
 
@@ -185,14 +185,14 @@ TUI action
 > `EnforcementContext`; see `architecture/api_extraction_boundary.md`.
 
 
-Route through `EnforcedDispatcher::dispatch_checked()` in `tool/dispatcher.rs:258`, which calls `validate_request_binding()` to verify the `ApprovedOperation` token binding (tool ↔ canonical operation, target agreement). Fails closed before any executor runs.
+Route through `EnforcedDispatcher::dispatch_checked()` in `tool/dispatcher.rs:336`, which calls `validate_request_binding()` (`tool/dispatcher.rs:81`) to verify the `ApprovedOperation` token binding (tool ↔ canonical operation, target agreement). Fails closed before any executor runs.
 
 ```
 REST/MCP/gRPC/Agent handler
     → EnforcementContext::evaluate()
     → ApprovedOperation
     → EnforcedDispatcher::dispatch_checked(approved, request)
-        → validate_request_binding() [tool/dispatcher.rs:263]
+        → validate_request_binding() [tool/dispatcher.rs:81]
         → ToolDispatcher::dispatch(request)
 ```
 
@@ -217,7 +217,7 @@ Daemon/Runtime
 
 ## TaskResult Variants
 
-`TaskResult` (`types.rs:80`) is a typed enum with 27 data variants + `Error`. Feature-gated variants compile out with their features:
+`TaskResult` (`types.rs:80`) is a typed enum with 34 data variants + `Error`. Feature-gated variants compile out with their features:
 
 | Variant | Feature | Source Type |
 |---------|---------|------------|
@@ -268,7 +268,7 @@ Daemon/Runtime
 
 | Severity | File:Line | Issue |
 |----------|-----------|-------|
-| LOW | `executors/registry.rs:12` | Uses `std::collections::HashMap` instead of `FxHashMap` for operation→executor mapping. Not performance-critical (built once, queried per-dispatch) but inconsistent with workspace convention (`AGENTS.md` key patterns). |
+| FIXED | `executors/registry.rs:12` | Previously used `std::collections::HashMap`; now uses `rustc_hash::FxHashMap` (`operation_to_executor: FxHashMap<String, usize>`), consistent with workspace convention. |
 | LOW | `runtime_bridge/executor.rs` | Spawned `progress_forwarder` tokio task has no explicit timeout wrapper. However, it is bounded by the `dispatch_approved_runtime_request` lifetime and `CancellationToken` — the task drains on success and is aborted when the shared `race_with_cancel` reports cancellation. Acceptable but not explicit. |
 
 ## Testing
@@ -320,4 +320,4 @@ conversion (explicit, exhaustive); `ExecutorRegistry` adapter registry (tool-pat
 composition, validation converges via shared canonical contracts); helper/lifecycle
 routes (explicit non-operation); compatibility aliases at input/wire boundaries only.
 
-*Last verified against source: 2026-09-11 (Phase 3 closure)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); counts/cites re-verified 2026-09-22 (systematic review)*

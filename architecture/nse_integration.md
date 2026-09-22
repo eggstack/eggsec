@@ -342,7 +342,7 @@ The following remain **deferred**:
 - **Milestone 3**: Capability wrappers and Rust-side blocking-helper cancellation (~170 calls across 40+ library files).
 - **Full Nmap parity gaps**: Eggsec has selective practical NSE compatibility, not full Nmap parity. Expanding coverage to full parity is not a Milestone 2 goal.
 - **Expanding corpus breadth**: The current corpus is representative; broader coverage is future work.
-- **Additional library behavior upgrades**: Library implementations beyond the current 166 files are not part of Milestone 2.
+- **Additional library behavior upgrades**: Library implementations beyond the current 167 files are not part of Milestone 2.
 
 ### Boundary for Future Work
 

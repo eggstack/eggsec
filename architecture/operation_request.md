@@ -10,7 +10,7 @@ The module is **policy-free** — it produces a normalized request but never aut
 
 - **Single owner for defaults**: `DEFAULT_*` consts (ports, concurrency, timeouts, fuzz/GraphQL/OAuth settings) live in `eggsec-tool-core`, not in CLI/TUI/runtime duplicates.
 - **Pure normalization**: `parse_port_spec`, `resolve_load_test_counts`, `parse_scan_type`, `normalize_timeout_*`, `normalize_concurrency`, `parse_scan_profile`, `normalize_target_value` — pure functions with bounds enforcement.
-- **Typed requests per family**: `PortScanRequest`, `EndpointScanRequest`, `FingerprintRequest`, `FuzzRequest`, `WafDetectRequest`, `WafStressRequest`, `LoadTestRequest`, `ReconRequest`, `GraphQlRequest`, `OAuthRequest`, `AuthTestRequest`, `PipelineRequest`, … each with serde support and a `normalize()` returning a validated `Normalized*` value.
+- **Typed requests per family**: `PortScanRequest`, `EndpointScanRequest`, `FingerprintRequest`, `FuzzRequest`, `WafDetectRequest`, `WafStressRequest`, `LoadTestRequest`, `ReconRequest`, `GraphQlRequest`, `OAuthRequest`, `AuthTestRequest`, `PipelineRequest`, `DbPentestRequest` (`tool-core:938`), `StorageRequest` (`tool-core:1006`), … each with serde support and a `normalize()` returning a validated `Normalized*` value.
 - **Shallow frontend adapters**: `operation_request::cli_adapters` (Clap args → canonical), `operation_request::runtime_adapters` (`TaskKind` params → canonical), plus `ToolRequest`/Python adapters — no policy logic, no defaults re-declared.
 
 ## Location & Feature Gating
@@ -114,4 +114,4 @@ Canonical request structs expose `normalize()`; normalization helpers (`parse_po
 
 ---
 
-*Last verified against source: 2026-09-11*
+*Last verified against source: 2026-09-11; counts re-verified 2026-09-22 (systematic review)*

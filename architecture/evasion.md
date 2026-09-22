@@ -25,7 +25,7 @@ Defense-lab-only module for validating that security controls detect common evas
 |------|-------|-------------|
 | `evasion/mod.rs` | 1208 | Core: `EvasionScanner`, `EvasionReport`, `EvasionDetection`, `EvasionTechnique`, 16 default techniques, detection checks per category, `to_scan_report_data()`, `run_cli()`, tests |
 | `cli/evasion.rs` | — | `EvasionArgs` + `EVASION_ABOUT` (target, type, pid, dry-run, json, output, quiet) |
-| `commands/handlers/evasion.rs` | 33 | `handle_evasion` with `EnforcementContext` (EvasionTesting risk + DefenseLab mode) |
+| `commands/handlers/evasion.rs` | 24 | `handle_evasion` via registry `describe_from_registry("evasion")` + `evaluate_and_enforce_operation` (forces `dry_run: true`) |
 
 ### Key Types
 
@@ -165,7 +165,7 @@ The evasion module is standalone. It does not register as an MCP tool, is not wi
 
 ## Testing
 
-16 tests in `evasion/mod.rs`:
+18 tests in `evasion/mod.rs`:
 
 - `test_evasion_risk_as_str` (`:917`) — risk level string conversion
 - `test_evasion_risk_to_severity` (`:925`) — risk → severity mapping
@@ -206,4 +206,4 @@ The evasion module is standalone. It does not register as an MCP tool, is not wi
 | `mod.rs:654` | Same pattern in `check_anti_analysis` — reads entire binary | Medium |
 | `commands/handlers/evasion.rs:25-28` | Handler silently overrides `dry_run` to `true` without returning the override to the caller. User sees no indication their `--dry-run false` was ignored unless `!args.quiet` | Low |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

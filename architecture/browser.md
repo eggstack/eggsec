@@ -17,23 +17,23 @@ Headless Chrome integration for browser-based security testing. Provides:
 |------|----------|------|
 | Module declaration | `crates/eggsec/src/lib.rs:86-87` | `#[cfg(feature = "headless-browser")]` |
 | Real `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:41` | `#[cfg(feature = "headless-browser")]` |
-| Error-stub `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:211` | `#[cfg(not(feature = "headless-browser"))]` |
+| Error-stub `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:213` | `#[cfg(not(feature = "headless-browser"))]` — **dead code**: `lib.rs` declares no `#[cfg(not(...))] mod browser`, so this stub never compiles. Feature-off means no browser surface at all (callers are hard-gated) |
 | `capture_requests()` | `crates/eggsec/src/browser/mod.rs:112` | `#[cfg(feature = "headless-browser")]` |
 | Submodules (xss_dom, spa_discovery, client_checks, corpus) | `crates/eggsec/src/browser/mod.rs:12-15` | Gated by parent module |
 | CLI handler | `crates/eggsec/src/commands/handlers/browser.rs:5` | `#[cfg(feature = "cli")]` |
-| Feature flag | `crates/eggsec/Cargo.toml:336` | `headless-browser = ["headless_chrome"]` |
-| `headless_chrome` dep | `crates/eggsec/Cargo.toml:192-194` | `version = "1"`, optional |
+| Feature flag | `crates/eggsec/Cargo.toml:351` | `headless-browser = ["headless_chrome"]` |
+| `headless_chrome` dep | `crates/eggsec/Cargo.toml:204-206` | `version = "1"`, optional |
 
-When `headless-browser` is disabled, `run_browser_scan()` returns `EggsecError::Config("headless-browser feature not enabled")`. The module itself does not exist (no stub modules).
+Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature = "headless-browser"))] mod browser`, so the `not(feature)` stub at `browser/mod.rs:213-218` never compiles (dead code) and `BrowserConfig`/`BrowserReport` are also unavailable. Callers are hard-gated (`commands/handlers/mod.rs`, `cli/mod.rs`).
 
 ## Architecture
 
-### Files (5 total)
+### Files (6 total)
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `browser/mod.rs` | 237 | `BrowserConfig`, `BrowserReport`, `run_browser_scan()` entry point, XHR/Fetch interceptor injection, `capture_requests()` |
-| `browser/backend.rs` | ~200 | Phase E WS1/WS3: `BrowserBackendKind`, `BrowserBackendCapabilities`, `BrowserBackend` trait, `capabilities_for_current_build()`, `validate_browser_url()` URL policy gate |
+| `browser/mod.rs` | 239 | `BrowserConfig`, `BrowserReport`, `run_browser_scan()` entry point, XHR/Fetch interceptor injection, `capture_requests()` |
+| `browser/backend.rs` | 279 | Phase E WS1/WS3: `BrowserBackendKind`, `BrowserBackendCapabilities`, `BrowserBackend` trait, `capabilities_for_current_build()`, `validate_browser_url()` URL policy gate |
 | `browser/xss_dom.rs` | 323 | `DomXssFinding`, `XssSource` (8 variants), `XssSink` (10 variants), `scan_dom_xss()`, `calculate_severity()`, `get_remediation()` |
 | `browser/spa_discovery.rs` | 259 | `SpaRoute`, `DiscoveryMethod` (4 variants), `discover_routes()`, `extract_parameters()` |
 | `browser/client_checks.rs` | 346 | `ClientIssue`, `ClientIssueType` (6 variants), `check_client_security()`, `get_remediation()` |
@@ -169,4 +169,4 @@ Integration tests in `xss_dom.rs`, `spa_discovery.rs`, and `client_checks.rs` re
 | `client_checks.rs:153` | CORS test sends synchronous XHR in a try-catch — silently catches errors without logging | Low |
 | Browser tests (`xss_dom.rs:211`, `spa_discovery.rs:178`, `client_checks.rs:256`) | Integration tests require Chrome; will fail in CI without it. No `#[ignore]` or conditional compilation | Medium |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review)*

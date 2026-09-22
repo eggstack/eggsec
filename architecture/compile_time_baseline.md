@@ -1,6 +1,6 @@
 # Compile Time Baseline
 
-> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 16 crates (this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
+> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 20 crates (this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
 
 ## Context
 
@@ -71,7 +71,7 @@ cargo check -p eggsec-cli --features stress-testing
 - Output modules with engine coupling remain in `eggsec` to avoid cycles
 - The `eggsec` crate re-exports `eggsec_output` as `output` for backward compatibility
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; head counts re-verified 2026-09-22 (systematic review)*
 
 ## Notes
 

@@ -67,7 +67,7 @@ The pipeline module provides a deterministic, repeatable execution harness that:
 | `db`, `dbpentest`, `db-pentest` | `DbPentest` (returns `None` without `db-pentest`) |
 | `proxy`, `webproxy`, `web-proxy`, `intercept` | `WebProxy` (returns `None` without `web-proxy`) |
 
-### ScanProfile Enum (`types.rs:121-142`)
+### ScanProfile Enum (`crates/eggsec/src/types.rs:123-141` — 18 variants; there is no `pipeline/types.rs`)
 
 Exactly 18 variants:
 
@@ -236,7 +236,7 @@ The pipeline itself is a **policy-free executor**. All authorization and scope e
 
 - **CLI**: `handle_scan()` (`commands/handlers/scan.rs:176`) calls `pipeline::run_cli()` after scope validation.
 - **Tool API**: `PipelineTool::execute()` (`tool/implementations/pipeline.rs:48`) runs through the `SecurityTool` trait, which is invoked by `EnforcedDispatcher::dispatch_checked()`.
-- **Dispatch**: The runtime bridge converts `TaskKind::Pipeline` → `OperationDescriptor` and issues an `ApprovedOperation` before invoking the pipeline.
+- **Dispatch**: The runtime bridge converts `TaskKind::Pipeline` → `OperationDescriptor` and issues an `ApprovedOperation` (or an `ApprovedExecution` bundle for scope-sensitive paths) before invoking the pipeline.
 
 Within the pipeline, the only security-relevant checks are:
 1. **Defense-lab scope validation** (`executor.rs:271-312`): rejects public targets for defense-lab profiles.
@@ -331,4 +331,4 @@ cargo test -p eggsec --test pipeline_e2e_tests
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

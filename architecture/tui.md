@@ -17,7 +17,7 @@ See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md)
 
 ### Tab Inventory (33 variants)
 
-The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `tabs/mod.rs:191-220` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:67-662` has exactly 33 entries; the test `tab_specs_order_matches_enum_discriminants` (line 899) asserts `len == 33`.
+The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `tabs/mod.rs:191-220` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:113-717` has exactly 33 entries; the tests `test_tab_spec_count_matches_all_tab_variants` (`spec.rs:1136`, asserts `tab_specs().len() == all_variants.len()`) and `test_tab_specs_returns_all_33` (`spec.rs:1183`, asserts `len == 33`) pin the count.
 
 | # | Variant | stable_id | Feature Gate | Category | Risk | Operation | direct_launch | Source Module |
 |---|---------|-----------|-------------|----------|------|-----------|--------------|---------------|
@@ -298,11 +298,11 @@ Every input handler (`handle_up`, `handle_down`, `handle_left`, `handle_right`, 
 
 ## Daemon/Runtime Integration
 
-### Runtime Binding (`app/mod.rs:139-137`)
+### Runtime Binding (`app/mod.rs:146`)
 
 `RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
 
-### Attach Mode (`app/runner.rs:179-272`)
+### Attach Mode (`app/runner.rs:399-498`)
 
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
 
@@ -482,4 +482,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20*
+*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review)*

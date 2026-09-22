@@ -84,7 +84,7 @@ Defined at `:121-170`:
 
 22 total `From` impls: 1 via `#[from]` attribute on `Io` (`:85`) + 21 manual impls.
 
-### Non-Feature-Gated (19 total: 1 derive + 18 manual)
+### Non-Feature-Gated (18 total: 1 derive + 17 manual)
 
 | # | Source Type | Target Variant | Location | Notes |
 |---|-------------|----------------|----------|-------|
@@ -106,15 +106,15 @@ Defined at `:121-170`:
 | 16 | `quick_xml::Error` | `Output` | `:345-348` | Prefixed `"XML error: "` |
 | 17 | `maxminddb::MaxMindDbError` | `Io` | `:351-354` | Wraps via `std::io::Error::other()` first |
 | 18 | `reqwest::header::InvalidHeaderValue` | `Http` | `:357-360` | Prefixed `"Invalid header value: "` |
-| 19 | `eggsec_web_proxy::WebProxyError` | `Network` | `:364-368` | **Feature-gated: `web-proxy`**. Prefixed `"Web proxy error: "` |
 
-### Feature-Gated (3 manual impls)
+### Feature-Gated (4 manual impls)
 
 | # | Source Type | Target Variant(s) | Feature | Location | Mapping |
 |---|-------------|-------------------|---------|----------|---------|
 | 1 | `crate::ai::AiError` | `RequestFailed`, `Config`, `Parse`, `Timeout`, or `RateLimited` | `ai-integration` | `:279-317` | `RequestFailed` → `RequestFailed`, `MissingApiKey`/`InvalidConfig` → `Config`, `ApiError` → `RequestFailed`, `ParseError`/`InvalidResponse` → `Parse`, `Timeout` → `Timeout`, `RateLimited`/`CircuitBreakerOpen` → `RateLimited` |
 | 2 | `crate::packet::CaptureError` | `Network` | `packet-inspection` | `:319-324` | Prefixed `"Packet capture error: "` |
 | 3 | `crate::packet::TracerouteError` | `Network` | `packet-inspection` OR `stress-testing` | `:326-331` | Prefixed `"Traceroute error: "` |
+| 4 | `eggsec_web_proxy::WebProxyError` | `Network` | `web-proxy` | `:363-368` | Prefixed `"Web proxy error: "` |
 
 ---
 
@@ -150,7 +150,7 @@ These domain-specific error types serve specialized purposes and intentionally d
 | Type | Location | Purpose | Converts to `EggsecError`? |
 |------|----------|---------|-----------------------------|
 | `ConfigError` | `config/settings.rs:707` | Config file IO/parse/serialize errors | No (config boundary) |
-| `ScopeError` | `config/scope.rs:420` | Target scope validation errors | Yes (via `From` impl) |
+| `ScopeError` | `eggsec-policy/src/scope.rs:509` (facade: `config/scope.rs`) | Target scope validation errors | Yes (via `From` impl) |
 | `AiError` | `ai/errors.rs:6` | AI/LLM API errors (9 variants) | Yes (feature-gated) |
 | `CaptureError` | `packet/capture.rs:440` | Packet capture errors (7 variants) | Yes (feature-gated) |
 | `TracerouteError` | `packet/traceroute.rs:543` | Traceroute errors (4 variants) | Yes (feature-gated) |
@@ -230,4 +230,4 @@ Sanitization tests in `crates/eggsec/src/utils/error.rs:82-112`:
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

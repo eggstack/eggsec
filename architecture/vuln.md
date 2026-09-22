@@ -10,7 +10,7 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 |-------|-------------|-------------|--------------|------------|
 | `eggsec` | `vuln/` | `vuln-management` | `lib.rs:147-151` | `pub mod` when enabled, `mod` (dead_code) when disabled |
 
-The `vuln-management` feature is a **marker-level dependency** — no external system dependencies required. It is included in the `rest-api` and `full-no-system` feature profiles.
+The `vuln-management` feature is a **marker-level dependency** — no external system dependencies required. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.)
 
 ## Files
 
@@ -352,4 +352,4 @@ Total: **26 unit tests** across all sub-modules.
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

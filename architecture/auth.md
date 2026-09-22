@@ -205,7 +205,7 @@ All multi-protocol functions use `tokio::time::timeout()` wrapping blocking `std
 
 ### Dispatch
 
-- `TaskKind::AuthTest(AuthTestParams)` dispatched at `dispatch/mod.rs:240-251`
+- `TaskKind::AuthTest(AuthTestParams)` dispatched via `dispatch/auth.rs` + `dispatch/types.rs` (executor adapter; `dispatch/` is a directory, not `dispatch/mod.rs`)
 - Calls `auth::run_auth_task()` with max_attempts=100, concurrency=1, timeout=30
 
 ### Pipeline
@@ -256,7 +256,7 @@ Handler-level tests in `commands/handlers/` plus 17 wiremock `auth_tests` + enfo
 5. **`unwrap_or_default()` on `resp.text().await`**: Used in brute_force.rs:72, credential_stuffing.rs:80, lockout.rs:66, mfa.rs:68, password_policy.rs:44,96. Acceptable — these unwrap already-completed HTTP response bodies, not hanging async operations.
 6. **Credential stuffing success detection is narrower than brute force**: credential_stuffing.rs:82-84 checks only for `"invalid"` and `"error"`, while brute_force.rs:75-85 additionally checks `"incorrect"`, `"wrong"`, `"failed"`, `"denied"`, and error CSS classes.
 7. **`password_policy.rs:69` uses `.expect("valid regex pattern")`**: Acceptable — compile-time-known regex; panics only on bug in the regex literal.
-8. **`auth_engine.rs:171` uses `.unwrap_or_default()` on `Vec<CredentialPair>`**: This is a sync `Option::unwrap_or_default()`, not async — safe.
+8. **`auth/mod.rs:171` uses `.unwrap_or_default()` on `Vec<CredentialPair>`**: This is a sync `Option::unwrap_or_default()`, not async — safe. (There is no `auth_engine.rs`; the engine logic lives in `auth/mod.rs`.)
 9. **Timing tester uses `std::time::Instant`** (`timing.rs:88`): Fine for wall-clock measurement but susceptible to NTP adjustments; 50ms threshold is conservative enough.
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

@@ -36,7 +36,7 @@ implements [`HttpTransport`](transport.md) over the **published**
 
 | Item | Path | Notes |
 |------|------|-------|
-| Adapter crate | `crates/eggsec-transport-eggfetch/` | 18th workspace crate; lib only, no features |
+| Adapter crate | `crates/eggsec-transport-eggfetch/` | 19th workspace crate in member order; lib only, no features |
 | Parity/adversarial suite | `crates/eggsec-transport-eggfetch/tests/parity.rs` + `tests/common/` | Local loopback fixtures only (plain + TLS + CONNECT proxy + slow-body/trickle/keep-alive); 52 tests |
 | H2 qualification suite | `crates/eggsec-transport-eggfetch/tests/h2_mux.rs` | Loopback H2-over-TLS via `EggfetchTransport` (ALPN h2, concurrent multiplex + sequential reuse + logical-origin and selected-address isolation); 5 tests |
 | SOCKS5-local suite | `crates/eggsec-transport-eggfetch/tests/socks5_local.rs` | Loopback SOCKS5 local-resolution via production proxy path (success + peer/ultimate fallback-forbidden + fail-closed rerun); 4 tests |
@@ -283,4 +283,4 @@ assumption).
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/selected-address/origin isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 5 H2 + 4 SOCKS5 + 5 interop green; repeated current-only 1/10/50/100 evidence in [loadtest.md](loadtest.md), version-to-version performance inconclusive; retained report in [network_dependency_closure.md](network_dependency_closure.md))*
+*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/selected-address/origin isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 5 H2 + 4 SOCKS5 + 5 interop green; repeated current-only 1/10/50/100 evidence in [loadtest.md](loadtest.md), version-to-version performance inconclusive; retained report in [network_dependency_closure.md](network_dependency_closure.md); cites re-verified 2026-09-22 (systematic review))*

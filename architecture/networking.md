@@ -10,27 +10,28 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 
 | Component | Feature gate | `cfg` line |
 |-----------|-------------|------------|
-| All `packet/` submodules | Always compiled | `packet/mod.rs:1-7` |
-| `packet/cli` module | `packet-inspection` + `cli` | `packet/mod.rs:20-22` (`#[cfg(all(feature = "packet-inspection", unix))]` for capture; `#[cfg(all(feature = "packet-inspection", cli))]` for CLI) |
+| Whole `packet` module | `packet-inspection` OR `stress-testing` | `lib.rs:183` (`#[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]`) |
+| `packet/cli` module | `packet-inspection` + `cli` (both) | `packet/mod.rs:21-23` |
 | `PacketCapture::start()` | `packet-inspection` + unix | `capture.rs:151` |
 | `list_interfaces()` (real) | `packet-inspection` + unix | `capture.rs:414` |
 | `list_interfaces()` (stub) | non-packet-inspection | `capture.rs:434` |
 | Raw ICMP send (`send_raw_icmp`) | `packet-inspection` + unix | `cli.rs:148` |
-| ICMP traceroute (`probe_hop_icmp_parallel`) | `stress-testing` + unix | `traceroute.rs:348` |
+| ICMP probe (`icmp_probe.rs`) | `stress-testing` | `#![cfg(feature = "stress-testing")]` (traceroute itself ships with `packet`; only the ICMP probe helper is separately gated) |
 
 ## Architecture
 
-### Submodules (7)
+### Submodules (8)
 
 | Submodule | File | Purpose |
 |-----------|------|---------|
-| `capture` | `capture.rs` (557 lines) | Live packet capture via pnet, PCAP writing, interface enumeration, BPF-style filtering |
-| `craft` | `craft.rs` (748 lines) | Packet construction: Ethernet, IPv4, IPv6, TCP, UDP, ICMP with checksums |
+| `capture` | `capture.rs` (591 lines) | Live packet capture via pnet, PCAP writing, interface enumeration, BPF-style filtering |
+| `craft` | `craft.rs` (815 lines) | Packet construction: Ethernet, IPv4, IPv6, TCP, UDP, ICMP with checksums |
+| `fixture` | `fixture.rs` | Test fixtures (not a runtime submodule) |
 | `hexdump` | `hexdump.rs` (192 lines) | Hex dump formatting: streaming `HexDumper<W>` and convenience functions |
 | `parse_impl` | `parse_impl.rs` (866 lines) | Protocol parsing: L2→L7 chain (Ethernet, IPv4/IPv6, TCP/UDP/ICMP, DNS, TLS, HTTP) |
-| `traceroute` | `traceroute.rs` (677 lines) | Multi-protocol traceroute: UDP (default) and ICMP (disabled), parallel probes, reverse DNS |
+| `traceroute` | `traceroute.rs` (744 lines) | Multi-protocol traceroute: UDP (default) and ICMP (disabled), parallel probes, reverse DNS |
 | `types` | `types.rs` (265 lines) | Core data types: `ParsedPacket`, protocol structs, `AppLayer` enum |
-| `validation` | `validation.rs` (149 lines) | DNS name parsing with compression, RData formatting, IPv6 formatting |
+| `validation` | `validation.rs` (172 lines) | DNS name parsing with compression, RData formatting, IPv6 formatting |
 
 ### Key Types
 
@@ -259,4 +260,4 @@ named prerequisite when root/pcap is absent.
 
 See also: [overview.md](overview.md), [probe.md](probe.md), [stress.md](stress.md), [defense_lab.md](defense_lab.md)
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review)*

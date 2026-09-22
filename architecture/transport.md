@@ -23,11 +23,11 @@ unrestricted dispatch by forgetting a scope helper.
 |------|------|:------------:|
 | Transport crate | `crates/eggsec-transport/` | None (always compiled) |
 | Fake/recording transport | `crates/eggsec-transport/src/fake.rs` | `cfg(test)` or `test-util` (never in production builds) |
-| Engine authority binding | `crates/eggsec/src/config/scope_transport.rs` | None (always compiled) |
+| Engine authority binding | `crates/eggsec/src/config/scope_transport.rs` (facade; canonical `crate::policy_bridge::transport::ScopeAuthority`) | None (always compiled) |
 | Contract closure tests | `crates/eggsec/tests/transport_contract.rs` | Integration tests (run via `rest-api` suite) |
 | Canonical header helpers | `crates/eggsec-transport/src/headers.rs` + `auth_context` transport fns | None |
 
-Workspace membership: `eggsec-transport` is the 17th workspace crate
+Workspace membership: `eggsec-transport` is the 18th workspace crate in member order
 (dependency-light leaf). The engine depends on it; it depends on nothing
 in the workspace.
 
@@ -256,4 +256,4 @@ concrete-client leakage is possible:
 
 See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
-*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green)*
+*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green); cites re-verified 2026-09-22 (systematic review)*

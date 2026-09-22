@@ -48,7 +48,7 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 
 ## Architecture
 
-### File inventory (24 Rust source files, 10 root + 14 intercept)
+### File inventory (25 Rust source files, 11 root + 14 intercept)
 
 #### Root files
 
@@ -57,13 +57,14 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 | `lib.rs` | 376 | `ProxyManager`, `ProxiedConnection`, `resolve_target()`, `is_private_ip()` |
 | `config.rs` | 626 | `ProxyType` (5 variants), `ProxyEntry` (11 fields), `ProxyConfig`, `RotationStrategy` (5 variants), `HealthCheckConfig` |
 | `error.rs` | 93 | `WebProxyError` (9 variants), `Result<T>` |
-| `pool.rs` | 595 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
+| `pool.rs` | 631 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
 | `rotator.rs` | 418 | `ProxyRotator` — 5 rotation strategies |
 | `health.rs` | 382 | `HealthChecker`, `HealthCheckResult`, `ProxyHealth` |
 | `socks.rs` | 584 | `SocksProxy`, SOCKS4/4a/5 connection, `chain_connect()` |
 | `http_connect.rs` | 336 | `HttpConnectProxy`, HTTP CONNECT tunnel |
 | `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
-| `mcp.rs` | — | `WebProxyToolSchema`, `WebProxyToolCall` (12 MCP tools) |
+| `outbound.rs` | 169 | Outbound upstream connection helpers |
+| `mcp.rs` | ~500 | `WebProxyToolSchema`, `WebProxyToolCall` (12 MCP tools; gated behind `web-proxy-mcp`) |
 
 #### Intercept submodule
 
@@ -72,12 +73,12 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 | `mod.rs` | 1272 | `ProxyServer` (TCP listener), `handle_connection()`, `handle_connect_request()`, `handle_http_request()`, `handle_websocket_interception()`, `handle_http2_interception()`, `create_tls_acceptor()` |
 | `cert.rs` | 180 | `CertGenerator` (Arc<RwLock<HashMap>> cache, 24h default), `CertMaterial` |
 | `interceptor.rs` | 251 | `InterceptProxy`, `InterceptConfig`, `InterceptMode` (Monitor/Intercept/Allow), `InterceptRequest`, `InterceptResponse`, `InterceptEvent`, `InterceptDecision`, `RequestModification`, `ResponseModification`, `validate_header_value()` |
-| `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule` (id, name, condition, action, priority, modifications), `EnhancedRuleSet` (prefix-indexed, async eval), `RuleCondition` (14 variants), `RuleAction` (8 variants: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag), `RuleContext`, `InjectResponseConfig` |
+| `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule` (id, name, condition, action, priority, modifications), `EnhancedRuleSet` (prefix-indexed, async eval), `RuleCondition` (13 variants), `RuleAction` (8 variants: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag), `RuleContext`, `InjectResponseConfig` |
 | `types.rs` | 1040 | `WebProxySessionReport` (20+ fields), `ProxyFlow` (15 fields), `BudgetUsage` (12 fields), `RedactionPattern`, `ManipulationRecord`, `FlowAction` (4 variants), `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR 1.2 export types |
 | `protocols.rs` | 1868 | `ProxyProtocol` (4 variants), `WebSocketSession`, `WebSocketMessage`, `WebSocketOpcode`, `Http2Session`, `Http2Stream`, `Http2StreamState`, `GrpcSession`, `GrpcCall`, `GrpcMethodType`, `GrpcStreamFrame`, `GrpcStreamingState`, `GrpcReflectionInfo`, `GrpcSecurityFinding`, `ProtocolDetection`, `detect_grpc_security_issues()` |
 | `bridge.rs` | 493 | `to_scan_report_data_proxy()` — finding categories: `proxy-intercept-flow`, `proxy-websocket-session`, `proxy-http2-session`, `proxy-grpc-session`, `proxy-correlation-summary`, `proxy-manipulation-*`, `web-traffic-summary` |
 | `correlation.rs` | — | `CorrelationEngine`, `CorrelationContext`, `CorrelationReference`, `CorrelationSource` (6 variants), `ConfidenceScorer`, `BehavioralPattern`, `TemporalCorrelation`, `CorrelationSummary` |
-| `bundle.rs` | 779 | `EvidenceBundle` (version "2"), `BundleManifest`, HMAC-SHA256 signing, `compare_bundles()` → `BundleDiff` |
+| `bundle.rs` | 797 | `EvidenceBundle` (version "2"), `BundleManifest`, HMAC-SHA256 signing, `compare_bundles()` → `BundleDiff` |
 | `narrative.rs` | — | `AttackNarrative`, `NarrativeEvent`, `build_narrative()` |
 | `plugins.rs` | — | `PluginRegistry`, `PluginSandbox`, `ProtocolHandler` trait, `PluginCapability`, `CapabilitySet`, `PluginFinding`, `PluginError` |
 | `dynamic_plugins.rs` | — | `DynamicPluginRegistry` (shared-library loading, `dynamic-plugins` feature) |
@@ -95,7 +96,7 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 | `InterceptMode` | `intercept/interceptor.rs:15-22` | Monitor (default), Intercept, Allow |
 | `RuleSet` | `intercept/rules.rs:613-616` | Vec<InterceptRule> with priority-sorted evaluation |
 | `EnhancedRuleSet` | `intercept/rules.rs:217-223` | Rules + host/path prefix indices for fast lookup |
-| `RuleCondition` | `intercept/rules.rs:51-67` | 14 variants: HostMatches, PathMatches, MethodMatches, HeaderContains, BodyContains, ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs, And, Or, Not, BodySizeGt, BodySizeLt |
+| `RuleCondition` | `intercept/rules.rs:53-67` | 13 variants: HostMatches, PathMatches, MethodMatches, HeaderContains, BodyContains, ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs, And, Or, Not, BodySizeGt, BodySizeLt |
 | `RuleAction` | `intercept/rules.rs:16-28` | 8 variants: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag |
 | `WebProxySessionReport` | `intercept/types.rs:101-153` | 20+ fields including flows, budget, protocol sessions, correlation |
 | `ProxyFlow` | `intercept/types.rs:18-57` | 15 fields including method, url, host, path, headers, body, status, timing, protocol |
@@ -267,4 +268,4 @@ Key test areas:
 - `crates/eggsec-web-proxy/` — domain crate source
 - `crates/eggsec/src/proxy/AGENTS.override.md` — module-specific agent guidance
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

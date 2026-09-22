@@ -27,7 +27,7 @@ Always compiled. Dependencies: `eggsec-core`, `eggsec-report-model`, `serde`, `s
 
 | File | Lines | Tests | Purpose |
 |------|-------|-------|---------|
-| `lib.rs` | 71 | 0 | Module root and re-exports |
+| `lib.rs` | 80 | 0 | Module root and re-exports |
 | `agent.rs` | 481 | 2 | `AgentFinding`, `Confidence` (4 variants), `Evidence`, `Remediation`, `FindingSummary`, `AttackSurface` (10 variants), `FindingStatus` (5 variants: New/Confirmed/FalsePositive/Ignored/Remediated) |
 | `ai_schema.rs` | 237 | 9 | `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` — typed AI consumption output |
 | `audit_summary.rs` | 82 | 2 | `AuditSummary` — aggregated enforcement decision counts from JSON audit events |
@@ -36,7 +36,7 @@ Always compiled. Dependencies: `eggsec-core`, `eggsec-report-model`, `serde`, `s
 | `csv.rs` | 163 | 0 | `CsvExporter` — finding/port/endpoint CSV export; streaming async variant |
 | `dedup.rs` | 163 | 6 | `DedupEngine`, `DedupStrategy` (Strict/Fuzzy/Disabled) |
 | `diff.rs` | 27 | 1 | Re-exports `DiffSummary` from `eggsec-report-model` (canonical owner) — numeric diff envelope for `RunManifest` |
-| `envelope.rs` | 770 | 11 | Compatibility facade: re-exports `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` from `eggsec-report-model` (canonical owner) + `From<&AgentFinding>` conversion (stays: couples contract to output-side type) |
+| `envelope.rs` | 228 | 11 | Compatibility facade: re-exports `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` from `eggsec-report-model` (canonical owner, 555 lines) + `From<&AgentFinding>` conversion (stays: couples contract to output-side type) |
 | `escape.rs` | 81 | 4 | `escape_html()`, `escape_csv()` (NFKC + formula injection protection), `escape_xml()` |
 | `html.rs` | 325 | 0 | `HtmlReport` — styled HTML with dark/light themes, Chart.js doughnut |
 | `junit.rs` | 407 | 2 | `JUnitBuilder`, `JUnitReport` — JUnit XML via `quick_xml::Writer` (write-only, XXE-safe) |
@@ -47,7 +47,7 @@ Always compiled. Dependencies: `eggsec-core`, `eggsec-report-model`, `serde`, `s
 
 **Test-bearing files**: 12 of 17 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, junit, policy_summary, sarif, trend).
 
-### `crates/eggsec/src/output/` (8 files, engine crate)
+### `crates/eggsec/src/output/` (7 files, engine crate)
 
 Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionBudget`). Feature-gated where noted.
 
@@ -61,7 +61,7 @@ Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionB
 | `report_summary.rs` | 286 | 10 | — | `ReportSummary`, `AssetCount` — aggregated statistics from canonical `Finding` with risk narrative generation |
 | `run_manifest.rs` | 269 | 4 | — | `RunManifest` — run-level metadata envelope for regression workflows, carries `DiffSummary` |
 
-**Test-bearing files**: 4 of 8 (attack_graph, lab_report, pdf, report_summary, run_manifest = 5).
+**Test-bearing files**: 5 of 7 (attack_graph, lab_report, pdf, report_summary, run_manifest).
 
 **Combined test-bearing files**: 17 of 25 total source files.
 
@@ -330,4 +330,4 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 
 ---
 
-*Last verified against source: 2026-09-16 (Phase A: schedule/session removed; cron in `eggsec-agent::cron`)*
+*Last verified against source: 2026-09-16 (Phase A: schedule/session removed; cron in `eggsec-agent::cron`); counts re-verified 2026-09-22 (systematic review)*

@@ -71,8 +71,8 @@ Both modes require explicit scope and are distinct from `StandardAssessment` (wh
 | auth-test | (always compiled) | StandardAssessment | CredentialTesting | N/A (no dry-run mode) | No |
 | web-proxy | `web-proxy` | StandardAssessment | TrafficInterception (real) / SafeActive (dry) | Always safe | `--allow-web-proxy` for real |
 | evasion | `evasion` | DefenseLab | EvasionTesting | Dry-run-only handler | `--allow-evasion-testing` |
-| postex | `postex` | DefenseLab | PostExploitation | Dry-run-only handler | `--allow-postex` |
-| c2 | `c2` | StandardAssessment | C2Operation | Dry-run-only handler | `--allow-c2` |
+| postex | `postex` | DefenseLab | ExploitAdjacent | Dry-run-only handler | `--allow-postex` |
+| c2 | `c2` | StandardAssessment | C2Operation | Real path behind `--allow-c2` (dry-run default; `c2-mcp` forces dry-run) | `--allow-c2` |
 | stress | `stress-testing` | HazardousLab | StressTest | No | `--allow-stress-testing` |
 | packet-inspection | `packet-inspection` | HazardousLab | RawPacket | No | `--allow-raw-packets` |
 
@@ -85,7 +85,7 @@ Both modes require explicit scope and are distinct from `StandardAssessment` (wh
 - **web-proxy**: Interactive MITM proxy for HTTP/HTTPS traffic interception. Phase 1 delivers dry-run mode with complete `WebProxySessionReport`. Standalone defense-lab (no MCP/agent/TUI/pipeline).
 - **evasion**: Evasion technique detection for defense validation. 16 techniques across 6 categories. Feature-gated: `evasion`. Dry-run-only handler behavior.
 - **postex**: Post-exploitation and LOTL simulation. Feature-gated: `postex`. Dry-run-only handler behavior.
-- **c2**: C2 simulation (beaconing, tasking, campaign orchestration). Feature-gated: `c2`. Depends on postex+evasion. Dry-run-only handler behavior.
+- **c2**: C2 simulation (beaconing, tasking, campaign orchestration). Feature-gated: `c2`. Depends on postex+evasion. Dry-run default; real network I/O path exists behind `--allow-c2` (see `c2.md`). Wired to TUI (`Tab::C2`), MCP (`c2-mcp`, dry-run forced), and `TaskKind::C2` dispatch despite the stale `mod.rs:11` comment.
 - **stress**: Network stress testing (SYN/UDP/HTTP/TCP/ICMP floods, IP spoofing). Feature-gated: `stress-testing`. HazardousLab mode.
 - **packet-inspection**: Packet capture, crafting, parsing. Feature-gated: `packet-inspection`. HazardousLab mode.
 
@@ -209,7 +209,7 @@ For ManualPermissive profiles, missing scope for safe low-risk operations may do
 7. **No dangerous defaults**: No profile enables raw sockets, IP spoofing, or SYN flood by default (except `distributed-system-stress` and `synvoid-protocol-edge`).
 8. **Engine modules are policy-free**: Security modules (scanner, fuzzer, etc.) are policy-free executors. All authorization happens upstream via `EnforcementContext::evaluate()`.
 9. **PolicyDecision is the single source of truth**: Operation policy checks use `OperationMetadata` and `evaluate_operation_policy()`, not inline checks.
-10. **Dry-run-only handlers**: Evasion, postex, and c2 modules have dry-run-only handler behavior — real execution requires feature-gated code paths behind explicit `--allow-*` flags.
+10. **Dry-run defaults with gated real paths**: Evasion and postex handlers force `dry_run: true`; c2 defaults to dry-run with a real network-I/O path behind explicit `--allow-c2` (and `c2-mcp` forces dry-run). Other real execution requires feature-gated code paths behind explicit `--allow-*` flags.
 
 ## Integration with Policy System
 
@@ -286,4 +286,4 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 
 Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

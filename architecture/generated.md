@@ -46,7 +46,7 @@ Only generates the `.bin` descriptor file — the Rust code is never regenerated
 
 ## Feature Gate
 
-**Required feature**: `grpc-api` (declared in `Cargo.toml:287`):
+**Required feature**: `grpc-api` (declared in `Cargo.toml:302`):
 ```toml
 grpc-api = ["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost",
             "tonic-reflection", "dep:prost-build", "async-stream", "tokio-stream"]
@@ -224,4 +224,4 @@ All are optional and behind `grpc-api`.
 - [dispatch.md](dispatch.md) — How gRPC requests flow through enforcement and dispatch
 - [runtime_bridge.md](runtime_bridge.md) — Surface conversion for daemon gRPC transport
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

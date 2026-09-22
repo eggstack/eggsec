@@ -28,7 +28,7 @@ Every number in this document was verified against source on 2026-08-25; console
 
 ## Feature Gate: `logging-subscriber`
 
-Declared in `crates/eggsec/Cargo.toml:318`:
+Declared in `crates/eggsec/Cargo.toml:333`:
 ```toml
 logging-subscriber = ["dep:tracing-subscriber", "dep:tracing-appender"]
 ```
@@ -173,4 +173,4 @@ The `WorkerGuard` **must** be held for the process lifetime when `log_dir` is `S
 - [config.md](config.md) — Configuration system may set log-related options
 - [tui.md](tui.md) — Single-terminal-writer ownership contract and in-frame error routing
 
-*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20*
+*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review)*

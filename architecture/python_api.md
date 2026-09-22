@@ -330,7 +330,7 @@ in the wheel via `pyproject.toml` `include`.
 
 ## Feature Gating & Extras
 
-### Cargo features (21 features in `Cargo.toml`)
+### Cargo features (26 entries in `Cargo.toml`: `default` + 25 named)
 
 | Feature | Engine passthrough | System deps | Notes |
 |---------|-------------------|-------------|-------|
@@ -339,6 +339,8 @@ in the wheel via `pyproject.toml` `include`.
 | `git-secrets` | `eggsec/git-secrets` | — | Git secrets scanning |
 | `sbom` | `eggsec/sbom` | — | SBOM generation |
 | `db-pentest` | `eggsec/db-pentest` | drivers | Database assessment |
+| `db-pentest-mongodb` | `eggsec/db-pentest` + mongodb driver | drivers | MongoDB assessment |
+| `db-pentest-redis` | `eggsec/db-pentest` + redis driver | drivers | Redis assessment |
 | `web-proxy` | `eggsec/web-proxy` | — | MITM proxy |
 | `mobile` | `eggsec/mobile` | — | APK/IPA static analysis |
 | `mobile-dynamic` | `eggsec/mobile-dynamic` | ADB | Android runtime testing |
@@ -350,6 +352,7 @@ in the wheel via `pyproject.toml` `include`.
 | `headless-browser` | `eggsec/headless-browser` | Chromium | Browser testing |
 | `advanced-hunting` | `eggsec/advanced-hunting` | — | Attack chain detection |
 | `compliance` | — | — | Compliance mapping (no engine passthrough) |
+| `external-integrations` | `eggsec/external-integrations` | — | Jira/GitHub/GitLab connectors |
 | `wireless` | `eggsec/wireless` | wireless-tools | WiFi scanning |
 | `evasion` | `eggsec/evasion` | — | Evasion detection |
 | `postex` | `eggsec/postex` | — | Post-exploitation |
@@ -512,4 +515,4 @@ Low-level network primitives (`Target`, `TcpSession`, `UdpSocket`,
 - [config.md](config.md) — enforcement model, LoadedScope, policy system
 - [docs/python/domain-maturity.md](../docs/python/domain-maturity.md) — domain maturity classifications and graduation checklist
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

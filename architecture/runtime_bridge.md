@@ -98,43 +98,43 @@ Maps each `RuntimeSurface` variant to its `ExecutionSurface` counterpart. This i
 | `SecurityAgent` | `SecurityAgent` | false |
 | `Unknown` | **Error** (`UnknownSurface`) | — |
 
-Only `CliManual` and `TuiManual` honor manual overrides (`config/policy.rs:412–413`).
+Only `CliManual` and `TuiManual` honor manual overrides (`eggsec-policy/src/policy.rs:417`).
 
 ### TaskKind Resolution (`descriptor.rs`)
 
-`resolve_operation_and_target()` maps all **29** `TaskKind` variants to canonical operation IDs (Phase 0: packet traceroute/send explicitly share the `packet` family; no unsupported wire kinds remain):
+`resolve_operation_and_target()` maps all **29** `TaskKind` variants to canonical operation IDs (Phase 3: no per-kind match remains in the bridge — it delegates to the single wire-side match `TaskKind::{operation_id, canonical_target}` at `descriptor.rs:40-47`; packet traceroute/send share the `packet` family; no unsupported wire kinds remain). Effective mapping (derived, not per-kind arms):
 
-| TaskKind | Operation ID | Target Required | Line |
+| TaskKind | Operation ID | Target Required | Source |
 |----------|-------------|----------------|------|
-| `PortScan` | `scan-ports` | Yes | `:41` |
-| `EndpointScan` | `scan-endpoints` | Yes | `:42` |
-| `Fingerprint` | `fingerprint` | Yes | `:43` |
-| `Waf` | `waf-detect` | Yes | `:44` |
-| `WafStress` | `waf-stress` | Yes | `:45` |
-| `Pipeline` | `pipeline` | Yes | `:46` |
-| `Recon` | `recon` | Yes | `:47` |
-| `LoadTest` | `load-test` | Yes | `:48` |
-| `Fuzz` | `fuzz` | Yes | `:49` |
-| `StressTest` | `stress-test` | Yes | `:50` |
-| `PacketCapture` | `packet` | None | `:51` |
-| `PacketTraceroute` | `packet` | Yes | `:52` |
-| `PacketSend` | `packet` | Yes | `:53` |
-| `GraphQl` | `graphql` | Yes | `:54` |
-| `OAuth` | `oauth` | Yes | `:55` |
-| `AuthTest` | `auth-test` | Yes | `:56` |
-| `Nse` | `nse` | Yes | `:57` |
-| `Hunt` | `hunt` | Yes | `:58` |
-| `Browser` | `browser` | Yes | `:59` |
-| `Compliance` | `compliance` | Yes | `:60` |
-| `Storage` | `storage` | None | `:61` |
-| `Integrations` | `integrations` | None | `:62` |
-| `Workflow` | `workflow` | None | `:63` |
-| `Vuln` | `vuln` | Yes | `:64` |
-| `Wireless` | `wireless` | None | `:65` |
-| `WirelessActive` | `wireless` | None | `:66` |
-| `DbPentest` | `db-pentest` | Yes | `:67` |
-| `Intercept` | `proxy-intercept` | Optional | `:68` |
-| `C2` | `c2` | Optional | `:69` |
+| `PortScan` | `scan-ports` | Yes | derived |
+| `EndpointScan` | `scan-endpoints` | Yes | derived |
+| `Fingerprint` | `fingerprint` | Yes | derived |
+| `Waf` | `waf-detect` | Yes | derived |
+| `WafStress` | `waf-stress` | Yes | derived |
+| `Pipeline` | `pipeline` | Yes | derived |
+| `Recon` | `recon` | Yes | derived |
+| `LoadTest` | `load-test` | Yes | derived |
+| `Fuzz` | `fuzz` | Yes | derived |
+| `StressTest` | `stress-test` | Yes | derived |
+| `PacketCapture` | `packet` | None | derived |
+| `PacketTraceroute` | `packet` | Yes | derived |
+| `PacketSend` | `packet` | Yes | derived |
+| `GraphQl` | `graphql` | Yes | derived |
+| `OAuth` | `oauth` | Yes | derived |
+| `AuthTest` | `auth-test` | Yes | derived |
+| `Nse` | `nse` | Yes | derived |
+| `Hunt` | `hunt` | Yes | derived |
+| `Browser` | `browser` | Yes | derived |
+| `Compliance` | `compliance` | Yes | derived |
+| `Storage` | `storage` | None | derived |
+| `Integrations` | `integrations` | None | derived |
+| `Workflow` | `workflow` | None | derived |
+| `Vuln` | `vuln` | Yes | derived |
+| `Wireless` | `wireless` | None | derived |
+| `WirelessActive` | `wireless` | None | derived |
+| `DbPentest` | `db-pentest` | Yes | derived |
+| `Intercept` | `proxy-intercept` | Optional | derived |
+| `C2` | `c2` | Optional | derived |
 
 The resolved operation ID is looked up in `ALL_OPERATION_METADATA` to produce the full `OperationDescriptor` (risk tier, mode, capabilities, scope requirements, feature gates). `descriptor_for_run_request()` uses `metadata.try_descriptor_for_target()` for validated construction (`descriptor.rs:25–30`).
 
@@ -287,4 +287,4 @@ The bridge module has extensive test coverage across all files:
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Section 4.8 (Daemon / Runtime execution flow)
 
-*Last verified against source: 2026-09-11 (Phase 3 closure)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); cites re-verified 2026-09-22 (systematic review)*

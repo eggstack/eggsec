@@ -10,7 +10,7 @@ Supply chain security analysis including SBOM generation (CycloneDX and SPDX for
 |-------|-------------|-------------|--------------|------------|
 | `eggsec` | `supply_chain/` | `sbom` | `lib.rs:140-144` | `pub mod` when enabled, `mod` (dead_code) when disabled |
 
-The `sbom` feature is included in the `rest-api` and `full-no-system` feature profiles. The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:58`.
+The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.) The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:58`.
 
 ## Files
 
@@ -19,7 +19,7 @@ The `sbom` feature is included in the `rest-api` and `full-no-system` feature pr
 | `mod.rs` | 52 | Module root: `SupplyChainReport`, `SupplyChainFinding`, re-exports |
 | `sbom.rs` | 766 | `SbomGenerator`: Cargo/npm/requirements.txt parsing, CycloneDX and SPDX exporters |
 | `scanner.rs` | 744 | `ManifestType` enum, `scan_repo()` directory walker, Dockerfile/GitHub Actions analysis, `collect_package_names()` |
-| `typosquat.rs` | 353 | `TyposquatDetector`: Levenshtein distance, 44-package known list, technique classification |
+| `typosquat.rs` | 353 | `TyposquatDetector`: Levenshtein distance, 42-package known list, technique classification |
 
 **Total: 4 files, 1,915 lines (including tests).**
 
@@ -162,7 +162,7 @@ Flat (no subdirectory walking) package name extraction from `Cargo.toml`, `packa
 
 #### Algorithm (`typosquat.rs:96-158`)
 
-For each input package name, iterates the 44-entry `WELL_KNOWN_PACKAGES` list (`typosquat.rs:42-85`) and computes:
+For each input package name, iterates the 42-entry `WELL_KNOWN_PACKAGES` list (`typosquat.rs:42-85`) and computes:
 
 1. **Levenshtein distance** (`typosquat.rs:160-191`): Classic O(n×m) dynamic programming, character-level.
 2. **Similarity score**: `1.0 - (distance / max(len1, len2))` (`typosquat.rs:125-129`). Range [0.0, 1.0].
@@ -198,7 +198,7 @@ Aggregate risk is the highest severity among all findings: Critical > High > Med
 
 #### Known Package List (`typosquat.rs:42-85`)
 
-44 packages spanning 6 ecosystems: Python (requests, flask, django, numpy, pandas, scipy, tensorflow, pytorch), JavaScript (express, lodash, react, angular, vue, axios, webpack, babel, moment, underscore, async, await, chalk), Rust (serde, tokio, actix, rocket, clap, rand, regex, reqwest), Ruby (rails, sinatra, devise, rspec, sidekiq, puma, unicorn), Java (spring-boot, hibernate, jackson, guava, lombok, log4j).
+42 packages spanning 6 ecosystems: Python (requests, flask, django, numpy, pandas, scipy, tensorflow, pytorch), JavaScript (express, lodash, react, angular, vue, axios, webpack, babel, moment, underscore, async, await, chalk), Rust (serde, tokio, actix, rocket, clap, rand, regex, reqwest), Ruby (rails, sinatra, devise, rspec, sidekiq, puma, unicorn), Java (spring-boot, hibernate, jackson, guava, lombok, log4j).
 
 ## Behavior / Flow
 
@@ -344,4 +344,4 @@ Total: **41 unit tests** across all files.
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

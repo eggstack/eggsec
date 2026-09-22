@@ -11,7 +11,7 @@ Engine-internal runtime helpers shared by several domains but not yet stable eno
 
 Every number in this document was verified against source on 2026-09-16.
 
-## Sub-Module Inventory (13 declared)
+## Sub-Module Inventory (13 declared + 1 orphan)
 
 | # | Module | File | Purpose |
 |---|--------|------|---------|
@@ -33,7 +33,7 @@ Removed in Phase A (see completion record in `plans/crate-boundary-consolidation
 
 Removed in Phase D (see completion record in `plans/crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md`): `cache` (`ApiCache`, zero production consumers; the `ai::cache::AiCache` used by AI code is a separate module and is unaffected).
 
-**Verified count**: 13 `pub mod` declarations in `mod.rs` (all unconditional).
+**Verified count**: 13 `pub mod` declarations in `mod.rs` (all unconditional). Note: `serialization.rs` exists on disk but is **not** declared in `mod.rs` and has no references outside itself — orphan dead file, candidate for deletion.
 
 ## Key Re-exports
 
@@ -106,6 +106,7 @@ DTO separation: `RateLimitStatus` conversion lives in a dedicated adapter block;
 7. Private key PEM blocks → `[REDACTED PRIVATE KEY]`
 8. Secret/password/token key-value pairs → `[REDACTED]`
 9. Connection strings (mysql/postgres/mongodb/redis) → `[REDACTED CONNECTION STRING]`
+10. Sensitive key names (password/passwd/secret/token/access_token/auth_token/client_secret/secret_key/api_key/credential/cookie/auth) → `[REDACTED]`
 
 `redact_json()` recursively walks JSON trees, redacting string values and renaming sensitive object keys (e.g., `"password"` → `"[REDACTED PASSWORD]"`).
 
@@ -197,4 +198,4 @@ Every sub-module has `#[cfg(test)] mod tests` with unit tests. Several modules i
 
 - [logging.md](logging.md) — `utils/logging.rs` provides `sanitize_for_logging()` for stripping ANSI escapes and control characters from log output (used across scanner, fuzzer, pipeline, recon, stress, and waf modules).
 
-*Last verified against source: 2026-09-16 (Phase A ownership cleanup)*
+*Last verified against source: 2026-09-16 (Phase A ownership cleanup); counts re-verified 2026-09-22 (systematic review)*

@@ -35,7 +35,7 @@ Key capabilities:
 | `detection/` | 4 | Aho-Corasick leak matcher, IQR timing analyzer, raw patterns |
 | `targets/` | 6 | Per-target profiles: api, apache, php, nginx, generic |
 | `api_schema/` | 1 | **Internal** schema-aware fuzzer (distinct from top-level `api_schema/`) |
-| (root) | 12 | config, chain, filters, grammar, mutator, rate_limit, redos_detect, diff, state, waf_fingerprint, advanced, mod |
+| (root) | 13 | config, chain, filters, grammar, mutator, rate_limit, redos_detect, diff, state, waf_fingerprint, advanced, calibration, mod |
 
 ---
 
@@ -97,12 +97,12 @@ Exact variant list in declaration order:
 ### Payload Structure
 
 ```rust
-// payload.rs:159
+// payloads/mod.rs:160-168
 pub struct Payload {
     pub payload_type: PayloadType,
     pub payload: String,
     pub description: String,
-    pub severity: Severity,     // re-exported from waf::types::Severity
+    pub severity: Severity,     // same type as waf::types::Severity via crate::types re-export
     pub tags: Vec<String>,
 }
 ```
@@ -141,11 +141,11 @@ Payloads are cached via `LazyLock` maps (`payloads/mod.rs:170-180`): `PAYLOAD_CA
 | `TimingResult` | `detection/analyzer.rs:5` | `response_time_ms`, `is_anomaly`, `is_redos_suspected`, `anomaly_factor` |
 | Constants | `detection/analyzer.rs:27-29` | `DEFAULT_SPIKE_THRESHOLD=3.0`, `DEFAULT_REDOS_THRESHOLD_MS=5000`, `DEFAULT_MIN_SAMPLES_FOR_BASELINE=20` |
 
-Pattern categories in `detection/patterns.rs`:
-- **Database errors** (17 patterns): SQL syntax, mysql_fetch, ORA-, PLS-, PostgreSQL, ODBC, SQLSTATE, etc.
-- **Stack traces** (19 patterns): Java/Python/PHP/.NET/General
-- **File paths** (18 patterns): /etc/passwd, /var/log, .env, wp-config, etc.
-- **Sensitive data** (30 patterns): passwords, API keys, tokens, private keys, AWS keys, connection strings
+Pattern functions in `detection/patterns.rs` (each returns a `Vec`; aggregated by `get_detection_patterns()` at `:1`):
+- **Database errors** (`get_database_error_patterns`, 19 patterns): SQL syntax, mysql_fetch, ORA-, PLS-, PostgreSQL, ODBC, SQLSTATE, etc.
+- **Stack traces** (`get_stack_trace_patterns`, 25 patterns): Java/Python/PHP/.NET/General
+- **File paths** (`get_file_leak_patterns`, 23 patterns): /etc/passwd, /var/log, .env, wp-config, etc.
+- **Credentials** (`get_credential_patterns`, 23 patterns) plus separate **key** (`get_key_patterns`), **connection-string** (`get_connection_string_patterns`), and **debug** (`get_debug_patterns`) functions: passwords, API keys, tokens, private keys, AWS keys, connection strings
 
 ### Response Diffing
 
@@ -504,6 +504,6 @@ Conversions: `FuzzArgs` → `FuzzConfig` (feature `cli`), `WafStressArgs` → `W
 | 2 | `engine/execution.rs:88` | `ProgressStyle::template()` uses `format!` with user-controlled mode_name; invalid template characters cause `unwrap_or_else` fallback (safe but noisy) | Low |
 | 3 | `calibration.rs:89` | Uses `eprintln!` directly instead of `tracing` — inconsistent with codebase logging convention | Low |
 | 4 | `calibration.rs:171` | Uses `eprintln!` for calibration sample failure — same logging inconsistency | Low |
-| 5 | `advanced.rs:480-489` | `AutoExploiter::try_sqli_exploitation()` always returns `None` — dead code | Low |
+| 5 | `chain.rs:480-489` | `AutoExploiter::try_sqli_exploitation()` always returns `None` — dead code | Low |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

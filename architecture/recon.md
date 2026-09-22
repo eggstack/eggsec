@@ -9,7 +9,7 @@ The reconnaissance module performs **passive and active information gathering** 
 ## Location & Feature Gating
 
 - **Path**: `crates/eggsec/src/recon/` (35 `.rs` files: 30 top-level + 5 in `cloud/`)
-- **Declared modules** (`mod.rs:78-102`): 19 unconditional `pub mod` + 1 conditional (`cloud` behind `cfg(feature = "cloud")`) = 20 total
+- **Declared modules** (`mod.rs:78-102`): 21 unconditional `pub mod` + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = 23 total
 - **Feature-gated modules**: `cloud` (feature `cloud`), `git_secrets` (feature `git-secrets`)
 - **Detached utilities** (7 files exist on disk but are NOT declared as `pub mod` — `mod.rs:497-505`): `asn`, `cve_lookup`, `dns_enhanced`, `ftp_auth`, `smtp_auth`, `ssh_auth`, `ssl_audit`
 
@@ -23,7 +23,7 @@ The reconnaissance module performs **passive and active information gathering** 
 | `subdomain.rs` | 454 | Subdomain enumeration via crt.sh certificate transparency, Threatminer API, DNS brute-force | Yes | Uses `hickory_resolver` with configurable concurrency |
 | `ssl.rs` | 339 | SSL/TLS certificate analysis: chain inspection, protocol versions, cipher suites, expiry checks | Yes | Extracts `CertificateDer` from reqwest extensions |
 | `cve.rs` | 498 | CVE mapping: built-in database (7 product families) + NVD API v2.0 fallback | Yes | Global `OnceLock` cache (`CVE_CACHE`); optional NVD API key |
-| `secrets.rs` | 492 | Secret detection in HTTP responses via 25 regex patterns (31 `SecretType` enum variants, 25 with active patterns) | Yes | LazyLock patterns; entropy filter for AWS secrets |
+| `secrets.rs` | 492 | Secret detection in HTTP responses via 25 regex patterns (30 `SecretType` enum variants, 20 with dedicated patterns) | Yes | LazyLock patterns; entropy filter for AWS secrets |
 | `content.rs` | 423 | Content/directory discovery: scans ~80 sensitive paths concurrently | Yes | Semaphore-bounded concurrency |
 | `cors.rs` | 281 | CORS misconfiguration testing: sends 9 test origins, checks `Access-Control-*` headers | Yes | Tests `null`, `*`, localhost, evil origins |
 | `dns_records.rs` | 185 | DNS record enumeration: A, AAAA, MX, TXT, NS, SOA, CAA via `hickory_resolver` | Yes | No external API dependency |
@@ -113,7 +113,7 @@ email, takeover, cve, secrets
 
 ### secrets — Secret Detection (`secrets.rs`)
 
-- **Pattern count**: 25 regex patterns covering 31 `SecretType` enum variants. Six variants (`AzureKey`, `GcpServiceAccount`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the enum but have no active pattern in `build_patterns()`.
+- **Pattern count**: 25 regex patterns covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the enum but have no dedicated pattern in `build_patterns()`.
 - **High-confidence types**: AWS keys (3 variants), GitHub tokens (PAT + OAuth), GitLab PAT, Slack tokens, OpenAI keys, Stripe keys, GCP API keys, private keys, JWT tokens, Discord tokens, Twilio/SendGrid/Mailchimp keys, database connection strings (MongoDB/PostgreSQL/MySQL URIs), password-in-URL, GitHub credentials in URL
 - **Entropy filter**: AWS secret key candidates with Shannon entropy < 3.5 are discarded (`secrets.rs:334`)
 - **Output**: `Vec<SecretFinding>` with type, value preview (truncated to 20 chars), confidence, severity
@@ -158,7 +158,7 @@ email, takeover, cve, secrets
 | `run_cli()` | `pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()>` | `mod.rs:417` | `cli` |
 | `run_with_callback()` | `pub async fn run_with_callback(request: &ReconRequest, config: &EggsecConfig, callback: F) -> Result<FullReconResult>` | `mod.rs:324` | `tool-api` |
 | `run_cli_with_callback()` | `pub async fn run_cli_with_callback(args: ReconArgs, config: &EggsecConfig, callback: F) -> Result<()>` | `mod.rs:301` | `tool-api` + `cli` |
-| `ReconRequest` | `pub struct ReconRequest` (target + 17 `no_*` toggles + concurrency) | `mod.rs:238` | — |
+| `ReconRequest` | `pub struct ReconRequest` (target + 16 `no_*` toggles + concurrency) | `mod.rs:238` | — |
 | `FullReconResult` | `pub struct FullReconResult` (18 `Option` result fields + errors) | `mod.rs:183` | — |
 | `print_recon_results_string()` | `pub fn print_recon_results_string(recon: &FullReconResult) -> String` | `runner.rs:767` | — |
 | `FULL_RECON_PIPELINE_MODULES` | `pub const FULL_RECON_PIPELINE_MODULES: &[&str]` (17 entries) | `mod.rs:435` | — |
@@ -257,4 +257,4 @@ No critical bugs found. Minor observations:
 - [dispatch.md](dispatch.md) — task dispatch and enforcement flow
 - [config.md](config.md) — configuration, scope, enforcement model
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

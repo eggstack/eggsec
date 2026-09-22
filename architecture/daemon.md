@@ -107,7 +107,7 @@ first, persisted snapshot fallback, `None` outcome while active. See
 
 `Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`
 
-### eggsec-daemon (10 top-level source files + store/)
+### eggsec-daemon (10 compiled source files + store/, plus 1 orphan)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -122,7 +122,7 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | `error` | `src/error.rs` | `DaemonError`: Io, Serialization, Protocol, Runtime |
 | `store/mod` | `src/store/mod.rs` | `DaemonStore` trait, `PersistedAuditEvent`, `noop_store()` |
 | `store/sqlite` | `src/store/sqlite.rs` | `SqliteStore` (WAL, foreign keys, schema version 2), `NoopStore` |
-| `client_registry` | `src/client_registry.rs` | Daemon-local RBAC mirror (`ClientKind`, `ClientRole`, `CommandPermission`, `SessionAccess`, `command_permission()`); `host.rs` authorizes against this copy, the TUI against the protocol-crate copy — keep the two `command_permission()` maps in sync when adding commands |
+| `client_registry` | `src/client_registry.rs` | **Orphan (uncompiled)**: this 16.9K file is never declared as a module (`lib.rs` only re-exports `eggsec_daemon_protocol::client_registry`), so `host.rs`/`server.rs`/`client.rs` all resolve the RBAC types from the single protocol-crate source. There is no sync obligation; the file should be deleted or wired up |
 | `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum routes, SSE streaming, auth header, bind validation |
 
 ## Behavior & Flows
@@ -204,7 +204,7 @@ Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSe
 
 ### Session Access Control
 
-Three-tier resolution for `GetPersistedSnapshot` (`host.rs:814-882`):
+Three-tier resolution for `GetPersistedSnapshot` (`host.rs:877-930`):
 1. In `session_access` + authorized (owner or allow-listed) → allow
 2. In `session_access` + NOT authorized → deny immediately
 3. NOT in `session_access` (recovered session) → check `snapshot.owner_client_id`:
@@ -214,7 +214,7 @@ Three-tier resolution for `GetPersistedSnapshot` (`host.rs:814-882`):
 
 ### Persisted Session Listing Policy
 
-`ListPersistedSessions` (`host.rs:762-811`):
+`ListPersistedSessions` (`host.rs:825-876`):
 - `DaemonInternal` clients: see all sessions
 - CLI/TUI clients: see only own sessions (owner match) + legacy sessions without owner
 
@@ -320,4 +320,4 @@ Schema version: `2` (stored in `schema_meta`). Migration refuses to load when st
 - [tui.md](tui.md) — TUI daemon attach mode
 - [cli_commands.md](cli_commands.md) — CLI daemon/session/task commands
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review)*

@@ -47,7 +47,7 @@ The `config` module owns all configuration loading/validation and the **mandator
 - Provide preflight policy preview without dispatching
 - Define `ExecutionBudget` constraints for stress/load/packet operations
 - Define defense-lab `DefenseLabPreset` presets
-- Maintain the canonical `ALL_OPERATION_METADATA` registry (34 operations, 43 aliases)
+- Maintain the canonical `ALL_OPERATION_METADATA` registry (34 operations, 42 aliases)
 - Maintain the authoritative compile-time feature registry
 
 **Non-responsibilities:**
@@ -104,7 +104,7 @@ All source files live under `crates/eggsec/src/config/`:
 | `EnforcementOutcome` | `policy_decision.rs` | 4 | Profile-aware enforcement result |
 | `AddressClass` | `scope_address.rs` | 7 | IP address classification |
 | `ScopeSource` | `scope.rs` | 4 | Scope provenance |
-| `DescriptorError` | `policy_target.rs` | 2 | Target-policy violation errors |
+| `DescriptorError` | `policy_target.rs` (facade; canonical `eggsec-policy/src/target.rs:194`) | 3 | Target-policy violation errors |
 | `DiscoveredTargetStatus` | `discovery.rs:10` | 4 | Discovery promotion model |
 | `BudgetError` | `budget.rs:107` | 3 | Budget validation errors |
 | `ConfigError` | `settings.rs:708` | 4 | Config loading/parsing errors |
@@ -117,7 +117,7 @@ All source files live under `crates/eggsec/src/config/`:
 | `EggsecConfig` | `settings.rs:92` | Main configuration struct |
 | `ExecutionPolicy` | `policy.rs:33` | Operation policy controls (14 boolean flags + risk + capabilities) |
 | `OperationDescriptor` | `policy.rs:279` | Unit of policy evaluation |
-| `OperationMetadata` | `policy_catalog.rs:317` | Static metadata for one operation (17 fields) |
+| `OperationMetadata` | `eggsec-policy/src/catalog.rs:25` (facade: `policy_catalog.rs`) | Static metadata for one operation (15 fields) |
 | `PolicyDecision` | `policy_decision.rs:11` | Fully-populated enforcement decision record (17 fields) |
 | `EnforcementContext` | `policy_decision.rs:472` | Bundles profile + policy + scope for shared evaluation |
 | `ApprovedOperation` | `policy_decision.rs:331` | Proof-of-enforcement token (private fields) |
@@ -136,8 +136,8 @@ All source files live under `crates/eggsec/src/config/`:
 
 | Registry | File:Line | Count | Purpose |
 |----------|-----------|-------|---------|
-| `ALL_OPERATION_METADATA` | `policy_catalog.rs:317` | 34 | Canonical operation definitions |
-| `ALL_OPERATION_METADATA_ALIASES` | `policy_catalog.rs:901` | 42 | Tool-ID → canonical-ID mappings |
+| `ALL_OPERATION_METADATA` | `eggsec-policy/src/catalog.rs:291` (facade: `policy_catalog.rs`) | 34 | Canonical operation definitions |
+| `ALL_OPERATION_METADATA_ALIASES` | `eggsec-policy/src/catalog.rs:875` (facade: `policy_catalog.rs`) | 42 | Tool-ID → canonical-ID mappings |
 | `ALL_FEATURES` | `feature_registry.rs:110` (generated) | ~48 | Compile-time feature registry |
 
 ### ExecutionSurface → ExecutionProfile Mapping
@@ -165,41 +165,41 @@ Defined by `baseline_allowed_capability()` at `policy.rs:557`. All other capabil
 
 ### `EnforcementContext::evaluate()` — Central Entry Point
 
-`EnforcementContext::evaluate()` at `policy_decision.rs:561` is the **mandatory pre-dispatch gate** for all surfaces. The step-by-step flow:
+`EnforcementContext::evaluate()` at `eggsec-policy/src/decision.rs:542` (engine facade: `config/policy_decision.rs`) is the **mandatory pre-dispatch gate** for all surfaces. The step-by-step flow:
 
-1. **Inner evaluation**: Calls `evaluate_enforcement(descriptor, policy, Some(&scope), profile)` at `policy_decision.rs:562`.
+1. **Inner evaluation**: Calls `evaluate_enforcement(descriptor, policy, Some(&scope), profile)` (`decision.rs:1158`) from inside `evaluate()` (`decision.rs:542`).
 
-2. **Provenance gate** (`policy_decision.rs:569`): For automated profiles (`CiStrict`, `McpStrict`, `AgentStrict`) with target-bearing operations that set `requires_explicit_scope`:
+2. **Provenance gate** (`decision.rs:557`): For automated profiles (`CiStrict`, `McpStrict`, `AgentStrict`) with target-bearing operations that set `requires_explicit_scope`:
    - If `loaded_scope.is_explicit_manifest() == false` (i.e. `DefaultEmpty`):
      - Returns `EnforcementOutcome::Deny` with `DenialClass::ScopeMissing`
 
-3. **Feature checks** (`evaluate_operation_policy` at `policy_decision.rs:935`): For each `required_feature` in the descriptor:
+3. **Feature checks** (`evaluate_operation_policy` at `decision.rs:895`): For each `required_feature` in the descriptor:
    - If `is_feature_enabled(feature) == false`: pushes `DenialClass::FeatureMissing`, sets `allowed = false`
 
-4. **Scope evaluation** (`policy_decision.rs:947`): If target and scope are provided:
+4. **Scope evaluation** (`decision.rs:966`): If target and scope are provided:
    - Resolves target to addresses via `TargetScope`
    - Checks exclusion rules first (exclusion wins)
    - Checks allowed rules via `evaluate_addresses()` for all-resolved-address evaluation
    - Returns `DenialClass::ExplicitExclusion`, `DenialClass::TargetOutOfScope`, or `DenialClass::InvalidTarget` as appropriate
    - If scope is missing and operation requires it: `DenialClass::ScopeMissing`
 
-5. **Risk check** (`policy_decision.rs:1017`): If `descriptor.risk.is_allowed_by(policy) == false`:
+5. **Risk check** (`decision.rs:1006`): If `descriptor.risk.is_allowed_by(policy) == false`:
    - Returns `DenialClass::RiskPolicyDenied`
 
-6. **Policy flag checks** (`policy_decision.rs:1029`): For each `required_policy_flags` entry.
+6. **Policy flag checks** (`decision.rs:1026`): For each `required_policy_flags` entry.
 
-7. **Capability checks** (`evaluate_enforcement` at `policy_decision.rs:1180`):
+7. **Capability checks** (`evaluate_enforcement` at `decision.rs:1158`):
    - Denied capabilities always deny (hard)
    - Strict profiles: non-baseline capabilities require explicit allow; missing = `DenialClass::CapabilityDenied`
 
-8. **ManualPermissive downgrade logic** (`policy_decision.rs:1214`):
+8. **ManualPermissive downgrade logic** (`decision.rs:1202`):
    - For safe (Passive/SafeActive), StandardAssessment ops with only ScopeMissing/TargetOutOfScope:
      - If no positive scope rules declared: **downgrade to `Warn`** (allowed with warnings)
      - If positive rules declared but target missed: **`RequireConfirmation`** (operator discretion)
    - For explicit exclusion, high-risk, non-baseline capability: **`RequireConfirmation`**
    - Hard denials (feature missing, invalid target, capability denied, risk-policy denied) **stay Deny**
 
-9. **Strict profiles** (`policy_decision.rs:1323`):
+9. **Strict profiles** (`decision.rs:1311`):
    - Missing scope for networked ops → `Deny`
    - Scope ambiguity (target present, no matched rules) → `Deny`
    - Any warnings → `Deny`
@@ -341,13 +341,13 @@ Key methods:
 | Agent | Forces `AgentStrict` profile; handler defensively rebuilds `AgentStrict` enforcement |
 | gRPC API | Forces `McpStrict` profile |
 | `eggsec-runtime` | `runtime_bridge` converts `RuntimeSurface` → `ExecutionSurface` → `EnforcementContext` |
-| Preflight | `preflight_operation()` at `policy_decision.rs:776` provides read-only policy preview |
+| Preflight | `preflight_operation()` at `eggsec-policy/src/decision.rs:772` provides read-only policy preview |
 
 ### OperationMetadata → OperationDescriptor Flow
 
-1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `policy_catalog.rs:948`
-2. Alias resolution: 43 aliases in `ALL_OPERATION_METADATA_ALIASES` at `policy_catalog.rs:901` map alternative IDs to canonical operation IDs
-3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `policy_catalog.rs:106` (validated) or `metadata.descriptor_for_target(target)` at `policy_catalog.rs:49` (unchecked stable shim for backward compatibility; new strict-surface code must use `try_`)
+1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `eggsec-policy/src/catalog.rs:926` (facade: `policy_catalog.rs`)
+2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `eggsec-policy/src/catalog.rs:875` map alternative IDs to canonical operation IDs
+3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `catalog.rs:106` (validated) or `metadata.descriptor_for_target(target)` at `catalog.rs:49` (unchecked stable shim for backward compatibility; new strict-surface code must use `try_`)
 4. Policy evaluation: `enforcement.evaluate(&descriptor)` or `enforcement.approve(surface, descriptor)`
 
 ### EnforcedDispatcher
@@ -387,7 +387,7 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 
 ### Invariants
 
-1. **`EnforcementContext::evaluate()` is mandatory.** Every execution surface (CLI, TUI, REST, MCP, agent, gRPC) must pass through it. Never bypass it. (`policy_decision.rs:561`)
+1. **`EnforcementContext::evaluate()` is mandatory.** Every execution surface (CLI, TUI, REST, MCP, agent, gRPC) must pass through it. Never bypass it. (`eggsec-policy/src/decision.rs:542`)
 
 2. **`ApprovedOperation` is the only valid dispatch token.** Strict programmatic surfaces (REST, MCP, Agent, CI) require it before `dispatch_checked()`. (`policy_decision.rs:331`)
 
@@ -423,4 +423,4 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 |----------|---------|----------|
 | `policy_decision.rs:727` | `expect("ExecutionPolicy is JSON-serializable")` in `policy_hash()` — will panic on serialization failure | Low (in practice, always serializable) |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review; enforcement paths re-pointed to `eggsec-policy` kernel)*

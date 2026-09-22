@@ -175,11 +175,12 @@ use crate::ai::AiClient;
 
 ### Architecture
 
-**File inventory (12 entries):**
+**File inventory (13 entries):**
 
 | File | Purpose |
 |------|---------|
 | `mod.rs:1-3575` | Agent runtime, config, polling loop, `Agent::new()` requires `AgentStrict` enforcement |
+| `services.rs` | `AgentExecutionService`: checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injection point (adapter boundary) |
 | `alerts/` | Alert routing, aggregation, channel delivery (Slack, PagerDuty, email, webhook) |
 | `channels.rs` | Channel implementations (`WebhookConfig`, `SlackTemplate`, `PagerDutyTemplate`, etc.) |
 | `constraints.rs` / `constraints/` | `ConstraintChecker`: `evaluate_action()`, `evaluate_target()`, `evaluate_scan_depth()`, `evaluate_rate_limit()`, `evaluate_payload()`, `evaluate_off_peak()`, `evaluate_approval()`, `evaluate_all()` |
@@ -262,11 +263,12 @@ No feature gates — always compiled as a standalone crate.
 
 ### Architecture
 
-**File inventory (7 files):**
+**File inventory (8 files):**
 
 | File | Purpose | Key type(s) |
 |------|---------|-------------|
 | `lib.rs:1-29` | Crate root; re-exports | — |
+| `cron.rs` | Cron scheduling primitives | `CronScheduler` |
 | `registry.rs:1-125` | Agent registration and lookup | `AgentRegistry` (FxHashMap<Uuid, AgentInfo> + tokio::RwLock), `AgentInfo`, `AgentStatus` |
 | `scheduler.rs:1-400` | Task queue with priority, leasing, retry | `TaskScheduler`, `TaskQueue`, `ScheduledTask`, `TaskStatus` (5 variants), `TaskPriority` (4 variants: Critical/High/Normal/Low) |
 | `lifecycle.rs:1-881` | Health checking, stale detection, graceful shutdown | `LifecycleManager`, `AgentHealth`, `HealthIssue` (5 variants), `LifecycleEvent`, `LifecycleConfig` |
@@ -274,15 +276,17 @@ No feature gates — always compiled as a standalone crate.
 | `aggregator.rs:1-291` | Multi-stage result aggregation | `ResultAggregator`, `AggregatedResult`, `StageSummary`, `ToolSummary`, `AggregatedError` |
 | `communication.rs:1-630` | Inter-agent messaging, capability advertisement | `MultiAgentCoordinator`, `AgentCapability`, `HealthMetrics`, `HealthStatus` (4 variants), `InterAgentChannel` |
 
-**Dependencies** (`Cargo.toml:17-27`):
+**Dependencies** (`Cargo.toml:17-29`):
 
 ```toml
 eggsec-core = { path = "../eggsec-core" }
-reqwest = { version = "0.13", features = ["rustls-no-provider"], default-features = false }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+eggsec-transport = { workspace = true }
+serde / serde_json / chrono / uuid / rustc-hash / tracing / url
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+tokio-util = "0.7"
 ```
 
-Internal deps: `eggsec-core` only. External: `reqwest` + `rustls` (for `LifecycleManager` callback health checks), `tokio`, `uuid`, `chrono`, `serde`/`serde_json`, `rustc-hash`, `tracing`.
+Internal deps: `eggsec-core` + `eggsec-transport`. External: `tokio` (narrow lifecycle-only features), `tokio-util`, `uuid`, `chrono`, `serde`/`serde_json`, `rustc-hash`, `url`, `tracing`. No `reqwest`/`rustls` (removed Phase D; guard 103 enforces).
 
 **TaskStatus** (`scheduler.rs:9-15`): `Pending` → `Leased` → `Completed` / `Failed` / `Cancelled`.
 
@@ -357,13 +361,14 @@ No feature gates — always compiled.
 
 ### Architecture
 
-**File inventory (7 files):**
+**File inventory (8 files):**
 
 | File | Purpose | Key type(s) |
 |------|---------|-------------|
 | `lib.rs:1-26` | Crate root; re-exports at crate level | — |
+| `operation_request.rs` | Canonical execution-parameter contracts (typed per-family requests, `normalize()`) | `*Request` family types |
 | `request.rs:1-356` | Tool invocation request | `ToolRequest` (id, tool, target, params, options, cancel_token), `Target`, `TargetType`, `AuthConfig`, `AuthType`, `Scope`, `RequestOptions`, `CancellationToken`, `CancellationTokenHandle` |
-| `response.rs:1-321` | Tool execution response | `ToolResponse` (request_id, tool_id, status, results, metadata, errors, findings), `ResponseStatus` (6 variants: Success/Failed/Partial/Timeout/Cancelled/RateLimited), `ResponseMetadata`, `StreamEvent`, `StreamEventType`, `ProgressUpdate`, `PortData`, `PortState`, `EndpointData`, `TechnologyData` |
+| `response.rs:1-321` | Tool execution response | `ToolResponse` (request_id, tool_id, status, results, metadata, errors, findings), `ResponseStatus` (6 variants: Success/PartialSuccess/Failed/Timeout/ScopeViolation/Cancelled), `ResponseMetadata`, `StreamEvent`, `StreamEventType`, `ProgressUpdate`, `PortData`, `PortState`, `EndpointData`, `TechnologyData` |
 | `tool_error.rs:1-97` | Structured error type | `ToolError` (code, message, details, target, recoverable, error_type, retry_after_ms), `ToolErrorType` (11 variants) |
 | `finding.rs:1-177` | Security finding DTO | `Finding` (id, finding_type, severity, title, description, location, evidence, cve_ids, remediation, references, metadata), `FindingType` (12 variants), `ResponseSeverity` |
 | `history.rs:1-153` | Execution history ring buffer | `ExecutionHistory` (parking_lot::RwLock<Vec<ExecutionEntry>>, max 1000 entries default), `ExecutionEntry` |
@@ -607,7 +612,7 @@ cargo test --lib -p eggsec tool::
 
 1. **Single source of truth**: `OperationMetadata` defines all operation policy. Never build policy checks inline. Every `OperationDescriptor` derives from metadata via `metadata.descriptor_for_target()`.
 
-2. **ApprovedOperation is the only valid dispatch token**: Strict surfaces (REST, MCP, gRPC, agent) must dispatch through `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`.
+2. **ApprovedOperation is the only valid dispatch token**: Strict surfaces (REST, MCP, gRPC, agent) must dispatch through `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`. For scope-sensitive tools, strict surfaces dispatch via `EnforcedDispatcher::dispatch_execution()` (`dispatcher.rs:355`) with an `ApprovedExecution` bundle (approval token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`); raw `dispatch_checked()` with `ApprovedOperation` alone remains for scope-insensitive tools.
 
 3. **EnforcementContext::evaluate() is the mandatory pre-dispatch gate**: All surfaces must call it before dispatch. Scope must come from `LoadedScope`, never raw `Scope`.
 
@@ -656,4 +661,4 @@ None found. The overview.md references to `ai_agents.md` are consistent:
 
 The overview.md correctly states `eggsec-agent` internal deps are `eggsec-core` only (line 60) and that `eggsec-tool-core` contains `ToolRequest`, `ToolResponse`, `ToolError`, finding/history/rate-limit types, cancellation tokens (line 262).
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

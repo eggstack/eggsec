@@ -18,8 +18,8 @@ WebSocket security testing including connection validation, message injection, c
 | `test_injection()` | `websocket/injection.rs:13` | `#[cfg(feature = "websocket")]` |
 | `test_origins()` | `websocket/origin.rs:11` | `#[cfg(feature = "websocket")]` |
 | `test_dos()`, `test_message_fuzz()` | `websocket/fuzz.rs:14`, `:26` | `#[cfg(feature = "websocket")]` |
-| `tokio-tungstenite` dep | `crates/eggsec/Cargo.toml:155-158` | `version = "0.26"`, `features = ["rustls-tls-native-roots"]`, optional |
-| Feature flag | `crates/eggsec/Cargo.toml:333` | `websocket = ["dep:tokio-tungstenite"]` |
+| `tokio-tungstenite` dep | `crates/eggsec/Cargo.toml:167-170` | `version = "0.27"`, `features = ["rustls-tls-native-roots"]`, optional |
+| Feature flag | `crates/eggsec/Cargo.toml:348` | `websocket = ["dep:tokio-tungstenite"]` |
 
 **Important asymmetry note**: The task description claims `WebSocketTestReport`/`WebSocketFinding` are NOT cfg-gated and always available. This is **incorrect** per source: the entire `websocket` module is gated at `lib.rs:155-156` with no `#[cfg(not(...))]` stub. When the `websocket` feature is disabled, none of these types exist in the public API.
 
@@ -124,12 +124,12 @@ The websocket module is standalone. It does not register as an MCP tool and is n
 ## Testing
 
 ### Always-compiled tests (`fuzzer/payloads/websocket.rs`)
-7 tests: `test_get_payloads_returns_non_empty`, `test_get_payloads_count_reasonable`, `test_payloads_are_non_empty_strings`, `test_payloads_contain_expected_patterns`, `test_subprotocol_tests_generation`, `test_subprotocol_tests_empty_when_no_protocols`, `test_all_tests_includes_subprotocol`, `minimum_payload_count`
+8 tests: `test_get_payloads_returns_non_empty`, `test_get_payloads_count_reasonable`, `test_payloads_are_non_empty_strings`, `test_payloads_contain_expected_patterns`, `test_subprotocol_tests_generation`, `test_subprotocol_tests_empty_when_no_protocols`, `test_all_tests_includes_subprotocol`, `minimum_payload_count`
 
 ### Feature-gated tests
 - `mod.rs:1`: `test_finding_creation`
 - `connection.rs:1`: `test_connection_result_creation`
-- `injection.rs:1`: `test_injection_result_creation` + 8 additional detection logic tests
+- `injection.rs:1`: `test_injection_result_creation` + 10 additional detection logic tests (11 total)
 - `origin.rs:1`: `test_origin_result_creation`
 - `fuzz.rs:1`: `test_fuzz_result_creation`
 
@@ -151,4 +151,4 @@ The websocket module is standalone. It does not register as an MCP tool and is n
 | `mod.rs:50` | Global timeout is `timeout_secs * 10` — if `timeout_secs` is 0, the global timeout is also 0, causing immediate timeout | Medium |
 | `origin.rs:18-20` | Malicious origins are hardcoded (4 values). Not configurable via `WebSocketTestConfig` | Informational |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

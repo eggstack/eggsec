@@ -114,7 +114,7 @@ These modules implement autonomous agent scheduling, memory, and orchestration. 
   - `src/communication.rs` - MultiAgentCoordinator, InterAgentChannel
   - `src/delegation.rs` - DelegationRequest, DelegationResponse
   - `src/aggregator.rs` - ResultAggregator
-- **Dependencies:** `eggsec-core` (constants), `uuid`, `tokio`, `serde_json`, `chrono`, `rustc-hash`, `reqwest`
+- **Dependencies:** `eggsec-core`, `eggsec-transport`, `uuid`, `tokio` (narrow lifecycle-only features), `tokio-util`, `serde_json`, `chrono`, `rustc-hash`, `url`, `tracing` — no `reqwest`/`rustls` (removed Phase D; guard 103 enforces)
 - **Notes:** Successfully extracted with zero engine coupling. Re-exported from `eggsec` via `tool::agents` behind `rest-api` feature.
 
 ### Agent CLI handler
@@ -178,7 +178,7 @@ To enable extraction of the server adapters into `eggsec-api`:
 
 ---
 
-*Last verified against source: 2026-09-09 (Phase D)*
+*Last verified against source: 2026-09-09 (Phase D); agent deps re-verified 2026-09-22 (systematic review)*
 
 ## Known blockers — Phase D resolution
 
@@ -222,7 +222,7 @@ Implementation lives in `crates/eggsec-agent/src/`. The `eggsec` crate preserves
 - `crate::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` → `eggsec_core::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` (already in eggsec-core)
 - `crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` → `eggsec_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` (already in eggsec-core)
 - `crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` → `eggsec_core::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` (already in eggsec-core)
-- `reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.
+- ~~`reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.~~ **Superseded (Phase D):** `reqwest`/`rustls` were removed from `eggsec-agent`; the manifest now has no `reqwest` (guard 103 enforces; transport goes through `eggsec-transport`).
 
 **Compatibility shim:** `eggsec::tool::agents` is re-exported from `eggsec-agent` behind the `rest-api` feature gate.
 

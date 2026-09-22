@@ -46,7 +46,7 @@ crates/eggsec-mobile-lab/src/
 | `lib.rs` | 500 | `MobilePlatform`, `MobileFinding`, `MobileScanReport`, `run_static_cli()`, `format_mobile_report()`, `to_scan_report_data()`, `to_report_envelope()`, `build_general_recommendations()`, tests |
 | `apk.rs` | 1262 | `analyze_apk()` — ZIP open (ZipSlip rejection, 50 MiB extraction budget, 128 KiB per-text scan), binary AXML decoder (string pool + linear chunk walk for START_TAG/END_TAG), text XML fallback (quick-xml), permission/manifest/application analysis, network_security_config parsing, secret scanning, debug cert detection |
 | `ipa.rs` | 782 | `analyze_ipa()` — ZIP open (ZipSlip rejection, 200 MiB guard), Info.plist deserialization (plist + serde), NSAppTransportSecurity exceptions, embedded.mobileprovision markers, _CodeSignature presence, secret scanning in .app assets |
-| `adb.rs` | 861 | Pure-Rust ADB TCP protocol: `AdbClient`/`AdbConnection`, CNXN/AUTH/OPEN/OKAY/WRTE/CLSE framing, `list_devices()`, `connect()`, `shell()`, `install()`, `launch()`, `uninstall()`, `capture_logcat()`, `set_global_proxy()`/`clear_global_proxy()`, `grant()`/`revoke()`/`list_permissions()` |
+| `adb.rs` | 1200 | Pure-Rust ADB TCP protocol: `AdbClient`/`AdbConnection`, CNXN/AUTH/OPEN/OKAY/WRTE/CLSE framing, `list_devices()`, `connect()`, `shell()`, `install()`, `launch()`, `uninstall()`, `capture_logcat()`, `set_global_proxy()`/`clear_global_proxy()`, `grant()`/`revoke()`/`list_permissions()` |
 | `dynamic.rs` | 3264 | `DynamicMobileReport`, `DynamicMobileFinding`, `LabManifest`, `DynamicMobileArgs`, `run_dynamic_cli()`, `CorrelatedFinding`, `CorrelationEngine`, `CorrelationResult`, `capture_baseline()`, `compare_to_baseline()`, `correlate_findings()`, `correlate_reports()`, `export_evidence_bundle()`, `to_scan_report_data_dynamic()`, formatting, tests |
 | `frida.rs` | 961 | `FridaSession`, `FridaScriptResult`, `FridaInstrumentation`, `connect()`, `execute_script()`, `basic_method_trace()`, builtin scripts (basic_method_trace, crypto_keystore, bypass_validation, api_trace), `resolve_frida_script_spec()`, `run_frida_spec()`, `run_builtin()`, `generate_*()`, `redact_frida_evidence()`, embedded `FRIDA_LIB_COMMON_HOOKS` |
 | `traffic.rs` | 479 | `TrafficSummary`, `parse_traffic_capture()` — text log parser (mitmproxy-style), minimal HAR JSON parser, 1 MiB safety cap, domain/cleartext/suspicious analysis |
@@ -235,4 +235,4 @@ resolve_frida_script_spec("builtin:basic_method_trace") → embedded script sour
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

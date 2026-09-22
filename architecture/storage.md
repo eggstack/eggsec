@@ -110,7 +110,7 @@ All non-feature stubs return `Ok(())`, `Ok(None)`, or `Ok(vec![])`.
 ### Finding Persistence Format
 
 Findings are stored with:
-- `finding`: JSONB column containing the full `Finding` struct (17 fields) serialized via `serde_json::to_value()` (`postgres.rs:148`)
+- `finding`: JSONB column containing the full `Finding` struct (19 fields) serialized via `serde_json::to_value()` (`postgres.rs:148`)
 - `status`: Text column using `FindingStatus::Display` (`"new"`, `"confirmed"`, `"accepted_risk"`, `"false_positive"`, `"remediated"`, `"reopened"`)
 - `status_history`: JSONB column containing `Vec<StatusChange>` serialized via `serde_json::to_value()` (`postgres.rs:150`)
 - Deserialization on read: `row_to_stored_finding()` (`postgres.rs:330-384`) deserializes JSON fields and parses status strings; unknown statuses default to `FindingStatus::New` with a `tracing::warn!`
@@ -151,7 +151,7 @@ Re-exported at `models.rs:5`. The canonical type lives in `findings/lifecycle.rs
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `finding` | `Finding` | Full canonical `Finding` struct (17 fields) |
+| `finding` | `Finding` | Full canonical `Finding` struct (19 fields) |
 | `scan_id` | `String` | FK to `scans.id` |
 | `status` | `FindingStatus` | 6-variant lifecycle status |
 | `created_at` | `DateTime<Utc>` | |
@@ -242,4 +242,4 @@ All methods have feature-gated dual implementations — full SQLx body behind `#
 | No pool timeout config | `postgres.rs:35-37` | Low | `PgPoolOptions::new()` uses default `acquire_timeout` (30s). Under load, connections may queue without explicit timeout. |
 | Missing connection validation | `postgres.rs:22-52` | Low | `Database::new()` connects but does not run `SELECT 1` or similar to validate the connection is live. Pool creation may succeed with a lazy connection that fails on first use. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

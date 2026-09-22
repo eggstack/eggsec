@@ -11,10 +11,10 @@ This is an **advanced threat hunting** surface — all sub-modules make real HTT
 | Aspect | Detail |
 |--------|--------|
 | Root module | `crates/eggsec/src/hunt/mod.rs` |
-| Cargo feature | `advanced-hunting` (marker-only, no deps) — `Cargo.toml:305` |
+| Cargo feature | `advanced-hunting` (marker-only, no deps) — `Cargo.toml:320` |
 | Feature gate in lib.rs | `#[cfg(feature = "advanced-hunting")] pub mod hunt;` at `lib.rs:111`; `#[cfg(not(feature = "advanced-hunting"))] #[allow(dead_code)] mod hunt;` at `lib.rs:113-115` |
 | When disabled | Private stub module with `#[allow(dead_code)]` — compiles but is unused |
-| Included in | `full` feature set (`Cargo.toml:327`) |
+| Included in | `full` feature set (`Cargo.toml:342`) |
 
 ## Architecture
 
@@ -203,7 +203,7 @@ All findings use UUID-based IDs (`az-{uuid[..8]}`).
 
 ### Dispatch
 
-- `TaskKind::Hunt(HuntParams)` dispatched at `dispatch/mod.rs:255-258`
+- `TaskKind::Hunt(HuntParams)` dispatched via the security executor (`dispatch/security.rs:14-34`), invoked through `dispatch/canonical_execution.rs:1477`
 - Executor: `security::run_hunt_task()` (`dispatch/security.rs:14-34`) — wraps in 60s `tokio::time::timeout`
 - `TaskResult::Hunt(HuntReport)` at `dispatch/types.rs:114-115` (feature-gated)
 
@@ -250,4 +250,4 @@ Total: 9 tests across 6 files.
 8. **No `auth/` module interaction**: Hunt's `session` sub-module checks HTTP cookie/header security; `auth/session.rs` tests session fixation via login flow. They are independent.
 9. **`HuntClient::build_url()`** (`mod.rs:62-76`): Handles absolute paths, relative paths, and full URLs — used by all sub-modules.
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

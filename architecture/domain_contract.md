@@ -44,7 +44,7 @@ The domain module defines a **static metadata interface** (`DomainDescriptor`) t
 | `DryRunSupport` | `domain/mod.rs:138` | 3 variants | Dry-run availability |
 | `EvidenceSupport` | `domain/mod.rs:149` | 3 variants | Evidence bundle availability |
 | `BaselineSupport` | `domain/mod.rs:160` | 3 variants | Baseline/regression availability |
-| `CapabilityMatrixRow` | `domain/mod.rs:171` | 25 | Generated row for capability matrix |
+| `CapabilityMatrixRow` | `domain/mod.rs:171` | 23 | Generated row for capability matrix |
 
 ### DomainCategory (5 variants, `domain/mod.rs:27`)
 
@@ -135,7 +135,7 @@ If `required_feature` is `None`, the domain is always available. Otherwise avail
 
 ## Testing
 
-All tests are in `domain/mod.rs:651-1056`. Test count: 19 tests total.
+All tests are in `domain/mod.rs:651-1056`. Test count: 35 tests total.
 
 | Test | Line | What It Verifies |
 |------|------|------------------|
@@ -203,4 +203,4 @@ This contract was defined in Phase 3. Phase 4 completed metadata unification:
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*

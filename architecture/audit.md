@@ -145,19 +145,19 @@ Delegates to `audit_event_from_enforcement_outcome` with hardcoded:
 |---------|:------------:|----------------------|:--------------:|---------------|
 | CLI | Yes | Accepted overrides include class+reason | None | `commands/handlers/` (via `EnforcementContext`) |
 | TUI | Yes | Accepted overrides include class+reason | None | `eggsec-tui` (via `EnforcementContext`) |
-| REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:707` |
-| MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:554` |
-| gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:623` |
-| Agent | Yes | Never (Agent never confirms) | None | `agent/mod.rs:958` |
+| REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:743` |
+| MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:592` |
+| gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:641` |
+| Agent | Yes | Never (Agent never confirms) | None | `agent/mod.rs:1087` (`emit_audit_event` call sites: `:1087,:1150,:1185,:1208,:1242`) |
 | CI | Yes | Never | None | Via `EnforcementContext` |
 
-### Agent Denial Recording (`agent/mod.rs:466`)
+### Agent Denial Recording (`agent/mod.rs:572`)
 
 The `Agent` struct maintains a bounded list of recent policy denial events:
 - Field: `recent_policy_denials: Mutex<Vec<EnforcementAuditEvent>>` (`:218`).
-- Capacity: **50** events max (`:473-474`). Old events are drained from the front.
-- Only `Deny` and `ConfirmationRequired` outcomes are recorded (`:467-468`).
-- Exposed via `Agent::recent_policy_denials()` (`:479`) and included in `AgentRuntimeStatus` as `recent_denial_count` (`:516,532`).
+- Capacity: **50** events max (`:579-580`). Old events are drained from the front.
+- Only `Deny` and `ConfirmationRequired` outcomes are recorded (`:573-574`).
+- Exposed via `Agent::recent_policy_denials()` (`:585`) and included in `AgentRuntimeStatus` as `recent_denial_count` (`:622,638`).
 
 ### AuditSummary (`eggsec-output/src/audit_summary.rs:4`)
 
@@ -165,7 +165,7 @@ Provides a summary of audit events from JSON, counting outcomes by type. Fields:
 
 ## Testing
 
-All tests are in `audit.rs:222-765`. Test count: 16 tests total.
+All tests are in `audit.rs:222-765`. Test count: 21 tests total.
 
 | Test | Line | What It Verifies |
 |------|------|------------------|
@@ -198,7 +198,7 @@ All tests are in `audit.rs:222-765`. Test count: 16 tests total.
 1. **Purely observational** — Audit emission never changes control flow or return values.
 2. **Preflight never confirms** — `audit_event_from_preflight()` always passes `confirmed=false` (`:170`).
 3. **Manual override only when confirmed** — `manual_override` field is `Some` only if `confirmed=true` AND override was provided (`:128-132`).
-4. **Agent denial bounded to 50** — `recent_policy_denials` drains old entries when exceeding 50 (`:473-474`).
+4. **Agent denial bounded to 50** — `recent_policy_denials` drains old entries when exceeding 50 (`agent/mod.rs:579-580`).
 5. **Policy hash is deterministic** — SHA-256 of serialized `ExecutionPolicy`, 64 hex chars, stable across calls (`:525-531`).
 6. **UUID v4 for event_id** — Stable, unique, no coordination required.
 
@@ -212,4 +212,4 @@ All tests are in `audit.rs:222-765`. Test count: 16 tests total.
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review)*

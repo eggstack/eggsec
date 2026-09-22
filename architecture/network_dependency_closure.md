@@ -117,7 +117,7 @@ dev-gated with no production consumers).
   advisories/bans/licenses/sources all ok; fails closed without `cargo-deny`.
 - `make clippy-domain`, `make check-feature-profiles`,
   `make check-features-individual`, `make check-python`, `make check-msrv`
-  (1.88): all exit 0. TUI `--features full` checks clean; daemon lib 74
+  (1.89): all exit 0. TUI `--features full` checks clean; daemon lib 74
   passed; NSE `--features nse` lib 195 passed; web-proxy lib 383 passed.
 - Deny canonical (12 advisory ignores matching `docs/DEPENDENCY_EXCEPTIONS.md`
   fields; `MIT-0` allow + `auto_generate_cdp` per-crate GPL exception;
@@ -180,4 +180,4 @@ dev-gated with no production consumers).
    unchanged).
 
 *Measured against source: 2026-09-13 (code SHA `f4ba2198`; toolchain stable +
-1.88).*
+1.89; MSRV 1.89 per workspace `rust-version`).*
