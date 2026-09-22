@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Eggress 1.0.8 post-adoption compatibility corrective pass (ready for handoff)
+## Eggress 1.0.8 post-adoption compatibility corrective pass (executed 2026-09-22)
 
 Plan:
 [eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md](eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md)
