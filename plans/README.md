@@ -14,6 +14,26 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggress 1.0.8 post-adoption compatibility corrective pass (ready for handoff)
+
+Plan:
+[eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md](eggress-1.0.8-post-adoption-compatibility-corrective-pass-2026-09-22.md)
+
+This narrow follow-up corrects four review findings after the otherwise
+successful 1.0.8 adoption: restore the pre-adoption literal-only proxy endpoint
+boundary so Eggress cannot silently add proxy-hostname DNS behavior; make
+Check 106 prove the exact direct dependency allowlist
+(eggress-outbound + eggress-uri only); retain bounded concurrent health
+checking while restoring enabled-input result order; and reconcile the public
+ProxiedConnection.local_addr gap truthfully. Eggress 1.0.8 does not expose the
+actual chain socket local address, so the plan keeps that item explicitly
+upstream-gated rather than rolling production dialing back to duplicate
+handshake code or treating an unspecified sentinel as equivalent metadata.
+
+The corrective pass does not reopen the Eggress architecture, change
+eggsec-transport, remove the health-only Reqwest owner, add proxy-hostname
+support, or expand proxy capabilities.
+
 ## Eggress 1.0.8 selective proxy-engine adoption (executed 2026-09-22)
 
 Roadmap:
