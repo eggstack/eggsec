@@ -14,6 +14,28 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+
+## Eggfetch 0.2.0 adoption and requalification (ready for handoff 2026-09-22)
+
+Plan:
+[eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md](eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md)
+
+This bounded adoption moves the already-qualified scoped HTTP backend from the
+published `eggfetch-core 0.1.7` line to the newly published `0.2.0` line.
+It is intentionally a dependency/requalification pass rather than a transport
+redesign: logical-URL + singular authorized resolved routing, manual per-hop
+redirect authorization, aggregate body-through-EOF deadlines, explicit pinned
+proxy routing, fail-closed unsupported proxy shapes, H1/H2, no H3/retries,
+no environment-derived proxy routing, and decompression-off response semantics
+remain mandatory.
+
+The pass explicitly updates the pre-1.0 Cargo requirement and lockfile, advances
+the exact-version architecture guard, compares the feature/dependency graph,
+and reruns the existing direct/H2/CONNECT/SOCKS5/redirect/timeout/security
+qualification. Upstream issue #24 is fixed in 0.2.0, but Eggsec must not use
+that as a reason to enable automatic decompression or compression features.
+Historical 0.1.7 plans remain unchanged.
+
 ## Performance and resource-efficiency optimization campaign (executed 2026-09-21)
 
 Roadmap:
