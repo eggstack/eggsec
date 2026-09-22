@@ -2,7 +2,7 @@
 
 Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. This document is the bird's-eye view of the system and the index into the per-component deep-dive documents that live alongside it in `architecture/`.
 
-Every number in this document was verified against source on 2026-09-11. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
+Every number in this document was verified against source on 2026-09-22. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
 
 ## Quick Navigation
 
@@ -124,7 +124,7 @@ nor hosted CI publishes a package.
 Every externally invokable operation takes the same path, regardless of frontend:
 
 1. **Parse** — the frontend turns user input into a request (CLI args → `Commands` enum variant; REST/MCP/gRPC → `ToolRequest`; TUI/daemon → `RunRequest`).
-2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 34 canonical operations + 43 aliases).
+2. **Describe** — the request resolves to an `OperationDescriptor` derived from `OperationMetadata` (the single source of truth; 34 canonical operations + 42 aliases).
 3. **Evaluate** — `EnforcementContext::evaluate()` checks scope provenance (`LoadedScope` for automated surfaces), risk tier vs. profile allowlist, capabilities, and features. Outcome: `Allow` / `Warn` / `RequireConfirmation` / `Deny`.
 4. **Approve** — evaluation yields an `ApprovedOperation` token. Strict surfaces dispatch only through `EnforcedDispatcher::dispatch_checked()`, which re-validates tool+target binding against the token and fails closed.
 5. **Execute** — either a command handler (`crates/eggsec/src/commands/handlers/`, 32 handler modules behind `handle_command()`) or the domain executor layer (`crates/eggsec/src/dispatch/executors/`) calls the engine function.
@@ -443,7 +443,7 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 | `ExecutionSurface` | `config/policy.rs:357` | Caller origin (9 variants) |
 | `ExecutionProfile` | `config/policy.rs:461` | Trust boundary (5 variants) |
 | `OperationRisk` | `config/policy.rs:9` | Risk tier (15 levels) |
-| `OperationMetadata` | `config/policy_catalog.rs` | Static registry of all operations (34 canonical + 43 aliases) — single source of truth |
+| `OperationMetadata` | `eggsec-policy::catalog` (facade: `config/policy_catalog.rs`) | Static registry of all operations (34 canonical + 42 aliases) — single source of truth |
 | `OperationDescriptor` | `config/policy.rs` | Unit of policy evaluation |
 | `EnforcementContext` | `config/policy_decision.rs` | Central policy evaluation gate |
 | `ApprovedOperation` | `config/policy_decision.rs:331` | Proof-of-enforcement token |
@@ -552,7 +552,7 @@ Within the `eggsec` crate:
 
 ### Operation Metadata
 
-`OperationMetadata` is the single source of truth for all externally invokable operations: **34 canonical operations + 43 aliases** (`config/policy_catalog.rs:317`, alias table at `:901`). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
+`OperationMetadata` is the single source of truth for all externally invokable operations: **34 canonical operations + 42 aliases** (`crates/eggsec-policy/src/catalog.rs:291`, alias table at `:875`; re-exported via the `config/policy_catalog` facade). Every `OperationDescriptor` derives from metadata; alias mapping ensures REST, MCP, gRPC, TUI, and agent tool IDs resolve to the same canonical entry.
 
 ### Audit Trail
 
@@ -597,9 +597,9 @@ Complete catalog of component deep-dives in this directory:
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
 | **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
-| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [network_dependency_closure.md](network_dependency_closure.md), [transport.md](transport.md), [transport_eggfetch.md](transport_eggfetch.md), [egress_reuse_decision.md](egress_reuse_decision.md), [capability_segregation.md](capability_segregation.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md) |
+| **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [network_dependency_closure.md](network_dependency_closure.md), [transport.md](transport.md), [transport_eggfetch.md](transport_eggfetch.md), [egress_reuse_decision.md](egress_reuse_decision.md), [capability_segregation.md](capability_segregation.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md), [performance.md](performance.md) |
 
-Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md).
+Process/reference docs not tied to a single component: [review_plan.md](review_plan.md), [audit.md](audit.md), [performance.md](performance.md) (resource-efficiency campaign evidence).
 
 ---
 
@@ -620,4 +620,4 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-09-11 — Re-verified counts against source. Corrections: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 167 implementation files / 44 descriptors (was 166/43); CLI 52 = 27 base + 25 gated (was 28/24); operations 34 canonical + 43 aliases (alias block recount); scanner fingerprint 45 TCP probes + UDP set (was 47); TUI tab table restored missing Nse (17) and Auth (29) rows. Added operation_request.md + platform.md deep-dives and indexed them in Module Index + Deep-Dive Index. Same-day systematic sweep: 8 parallel review batches across all 65 docs; applied verified doc fixes (pipeline wave-checkpoint invariant, defense_lab duplicate section, daemon typo, fuzzer dirs/PayloadFilter, hunt 18 admin paths, evasion 15 MITRE IDs + gate lines, websocket gate lines, postex/c2 handler refs, dispatch/descriptor line counts, runtime cancel.rs, compliance line, loadtest counts + rate-limiter timeout note, generated off-by-ones); utils stays 20 declared sub-modules. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, TaskKind 29, ScanProfile 18, endpoints 347.*
+*Last updated: 2026-09-22 — Re-verified counts against source (workspace 20 crates; CLI 52 variants; TUI 33 tabs; TaskKind 29; PayloadType 40; EggsecError 23; ScanProfile 18; endpoints 347; daemon-protocol 15/14/11; themes 50; findings 19/9/5/13; handlers 32 modules + mod). Corrections: operations 34 canonical + 42 aliases (was 43; `crates/eggsec-policy/src/catalog.rs:291`, alias table at `:875` after Phase C extraction, facade at `config/policy_catalog.rs`); indexed previously unlinked [performance.md](performance.md) in Deep-Dive Index. No module-boundary changes since 2026-09-11 (intervening work: performance campaign, TUI terminal lifecycle, eggfetch qualification, AGENTS.md compaction). Prior pass 2026-09-11: daemon-protocol ClientCommand 15 (was 14), ServerMessage 14 (was 13); NSE 167 implementation files / 44 descriptors (was 166/43); CLI 52 = 27 base + 25 gated (was 28/24); scanner fingerprint 45 TCP probes + UDP set (was 47); TUI tab table restored missing Nse (17) and Auth (29) rows; added operation_request.md + platform.md; 8-batch sweep across 65 docs. Prior pass 2026-08-25: EggsecError 23 variants, PayloadType exactly 40, TaskKind 29, ScanProfile 18, endpoints 347.*
