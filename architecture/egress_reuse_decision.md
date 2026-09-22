@@ -1,6 +1,9 @@
-# Egress Reuse Decision Record (Phase E WS1)
+# Egress Reuse Decision Record (Phase E WS1 + Eggress 1.0.8 addendum)
 
-Status: Decided 2026-09-13. No workspace integration (all candidates rejected).
+Status: Decided 2026-09-13 (1.0.6: all candidates rejected). Superseded
+2026-09-22 for the narrow `eggsec-web-proxy` edge only by Eggress 1.0.8
+(`eggress-outbound` / `eggress-uri` accepted; all other Eggress surfaces
+remain rejected).
 
 Evaluated `eggress-uri 1.0.6` (checksum `414a171b…6090e1`) and
 `eggress-routing 1.0.6` (checksum `86fe780d…0f79c7af`) plus `eggress-core 1.0.6`
@@ -156,3 +159,116 @@ isolated probe; workspace lockfile unchanged at 591 packages).
   this record.
 
 *Last verified against source: 2026-09-13*
+
+---
+
+# Addendum 2026-09-22 — Eggress 1.0.8 selective proxy-engine adoption
+
+Status: Accepted (narrow). Parent roadmap:
+`plans/eggress-1.0.8-adoption-roadmap-2026-09-22.md`. Phase A plan:
+`plans/eggress-1.0.8-phase-a-proxy-engine-adoption-2026-09-22.md`. Phase B
+plan:
+`plans/eggress-1.0.8-phase-b-health-qualification-and-closure-2026-09-22.md`.
+
+The 1.0.6 rejection above remains historically valid. Eggress 1.0.8
+materially changes the premise by adding the dedicated listener-free
+`eggress-outbound 1.0.8` crate (published, MSRV 1.89, `default = []`) and
+moving chain execution out of the full service/embed stack. This addendum
+records a release-specific re-evaluation. It does not rewrite the 1.0.6
+record.
+
+## Accepted edge (only)
+
+- `eggsec-web-proxy` may depend on published
+  `eggress-outbound = "=1.0.8"` with `default-features = false` and
+  `eggress-uri = "=1.0.8"`.
+- No Git/path/`[patch]` override. No umbrella `eggress` facade. No
+  `eggress-embed`. No optional `toml`, `pproxy-compat`, `udp`,
+  `extended`, `ssh`, `quic`, `legacy-crypto`, `pproxy-legacy`, or
+  `insecure-tls` feature in the initial integration.
+- `eggsec-transport` and `eggsec-transport-eggfetch` remain Eggress-free.
+  Eggress 1.0.8 `OutboundConnector` resolves destinations internally and
+  does not expose Eggsec's authorized-resolution binding seam, so it is
+  not a suitable replacement for the canonical scoped HTTP backend.
+  Eggfetch remains the canonical scoped HTTP transport backend.
+
+## Rejected (unchanged)
+
+`eggress-routing`, `eggress-embed`, `eggress-runtime`, `eggress-server`,
+advanced transports (SSH/QUIC/H3/Shadowsocks/Trojan/WebSocket outbound),
+and pproxy-compat remain rejected for Eggsec. Interception/MITM remains
+Eggsec-owned.
+
+## Published 1.0.8 graph (measured 2026-09-22, isolated probe)
+
+`eggress-outbound 1.0.8` (`default-features = false`) pulls:
+
+- `eggress-core 1.0.8`, `eggress-relay 1.0.8`, `eggress-uri 1.0.8`,
+  `eggress-protocol-http 1.0.8` (over shared `eggfetch-http-connect
+  0.2.0`, already in the workspace via `eggfetch-core 0.2.0`),
+  `eggress-protocol-socks 1.0.8`, `eggress-transport-tls 1.0.8`;
+- shared protocol deps already present in web-proxy builds (`h2`,
+  `http`, `rustls` ring-only, `tokio-rustls`, `bytes`, `thiserror`,
+  `tracing`, `subtle`, `zeroize`, `base64`).
+
+Tokio widening (explicitly recorded, not hidden): the published
+`eggress-outbound` closure unifies Tokio `fs` + `signal` in addition to
+the `rt`, `rt-multi-thread`, `macros`, `net`, `io-util`, `sync`, `time`
+features already required by the isolated `eggsec-web-proxy` package.
+`test-util` is dev-only upstream and does not enter the normal graph.
+The widening is judged tolerable for the specialized web-proxy crate
+only: `fs`/`signal` enable no new Eggsec code paths (Eggsec code never
+calls those Tokio APIs), the MSRV stays 1.89, TLS stays ring-only, and
+the maintenance benefit is deletion/consolidation of duplicated
+SOCKS/HTTP-CONNECT/chain protocol ownership behind a reviewed
+listener-free engine. The widening must not leak into DTO/transport
+crates; guard Check 106 encodes the narrow boundary.
+
+## Ownership boundary
+
+```text
+Eggsec policy / authorization
+          |
+          +-----------------------------+
+          |                             |
+          v                             v
+ eggsec-transport                eggsec-web-proxy
+          |                       pool / rotation
+          v                             |
+ eggfetch backend                       v
+                              Eggress outbound adapter
+                                        |
+                                        v
+                           HTTP/SOCKS proxy-hop execution
+```
+
+Eggress executes the already-selected proxy route. It never performs
+route selection, authorization, health policy, interception, or
+evidence decisions. Proxy failures never fall back direct
+(`OutboundConnector::from_chain` rejects empty chains; Eggsec maps all
+Eggress failures to `WebProxyError` without retry/direct fallback).
+Credentials convert at the last boundary with short plaintext lifetime;
+`CredentialSpec` redacts `Debug`/`Serialize` (`****`), and Eggress typed
+errors carry redacted strings only.
+
+Protocol mapping preserves current Eggsec behavior (not aspirational
+semantics): `Socks4 -> Socks4`, `Socks5 -> Socks5`, `Tor -> Socks5`,
+`Http -> Http`, `Https -> Http` with `tls=false` (plaintext CONNECT;
+naming debt recorded separately until a dedicated fixture proves TLS
+to the proxy is intended). SOCKS4 remains IP-targeted; the explicit
+SOCKS5/Tor remote-domain path is preserved and proven by fixture.
+
+## Verification
+
+- `cargo tree -p eggsec-web-proxy`, `cargo tree -p eggsec-web-proxy -e
+  features`, `cargo tree -d` before/after recorded in the Phase A/B
+  completion records.
+- `cargo deny` policy green after lockfile resolution; checksums in
+  `Cargo.lock`.
+- Deterministic local parity fixtures for SOCKS5/SOCKS4/HTTP-CONNECT,
+  auth, failures, timeout, cancellation, chaining, redaction, and
+  no-direct-fallback (no Internet/root/Tor required).
+- Health remains application-level HTTP(S)-through-proxy validation
+  (Phase B); tunnel-only success is never reported as health.
+
+*Addendum verified against published crates: 2026-09-22.*

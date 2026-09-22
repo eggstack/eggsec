@@ -360,7 +360,7 @@ mod redteam_evidence_bundle_integrity {
     use super::super::bundle::{compare_bundles, EvidenceBundle};
     use super::super::correlation::{CorrelationReference, CorrelationSource};
     use super::super::types::*;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
 
     fn make_bundle(flow_count: usize) -> EvidenceBundle {
         let mut report = WebProxySessionReport::new("127.0.0.1:8080", false);
@@ -371,10 +371,10 @@ mod redteam_evidence_bundle_integrity {
                 url: format!("https://example.com/{}", i),
                 host: "example.com".to_string(),
                 path: format!("/{}", i),
-                request_headers: std::collections::HashMap::new(),
+                request_headers: FxHashMap::default(),
                 request_body: None,
                 response_status: 200,
-                response_headers: std::collections::HashMap::new(),
+                response_headers: FxHashMap::default(),
                 response_body: None,
                 is_https: true,
                 duration_ms: 100,
@@ -431,13 +431,13 @@ mod redteam_evidence_bundle_integrity {
             host: "example.com".to_string(),
             path: "/api".to_string(),
             request_headers: {
-                let mut h = std::collections::HashMap::new();
+                let mut h = FxHashMap::default();
                 h.insert("Authorization".to_string(), "Bearer token".to_string());
                 h
             },
             request_body: Some("payload".to_string()),
             response_status: 201,
-            response_headers: std::collections::HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: Some("response".to_string()),
             is_https: true,
             duration_ms: 250,
@@ -486,10 +486,10 @@ mod redteam_evidence_bundle_integrity {
                 url: format!("https://example.com/{}", i),
                 host: "example.com".to_string(),
                 path: format!("/{}", i),
-                request_headers: std::collections::HashMap::new(),
+                request_headers: FxHashMap::default(),
                 request_body: None,
                 response_status: 200,
-                response_headers: std::collections::HashMap::new(),
+                response_headers: FxHashMap::default(),
                 response_body: None,
                 is_https: true,
                 duration_ms: 100,
@@ -522,10 +522,10 @@ mod redteam_evidence_bundle_integrity {
             url: "https://evil.com/inject".to_string(),
             host: "evil.com".to_string(),
             path: "/inject".to_string(),
-            request_headers: std::collections::HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: std::collections::HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 0,
@@ -546,7 +546,7 @@ mod redteam_evidence_bundle_integrity {
 mod redteam_narrative_adversarial {
     use super::super::narrative::build_narrative;
     use super::super::types::*;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
 
     #[test]
     fn narrative_handles_extreme_flow_count() {
@@ -558,10 +558,10 @@ mod redteam_narrative_adversarial {
                 url: format!("https://example.com/{}", i),
                 host: "example.com".to_string(),
                 path: format!("/{}", i),
-                request_headers: std::collections::HashMap::new(),
+                request_headers: FxHashMap::default(),
                 request_body: None,
                 response_status: 200,
-                response_headers: std::collections::HashMap::new(),
+                response_headers: FxHashMap::default(),
                 response_body: None,
                 is_https: true,
                 duration_ms: 0,
@@ -628,10 +628,10 @@ mod redteam_narrative_adversarial {
             url: "https://example.com/".to_string(),
             host: "example.com".to_string(),
             path: "/test".to_string(),
-            request_headers: std::collections::HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: std::collections::HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: Some("\u{1F600}\u{1F4A5} unicode payload".to_string()),
             is_https: true,
             duration_ms: 0,

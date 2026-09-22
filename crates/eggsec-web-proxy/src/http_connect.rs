@@ -10,6 +10,11 @@ use tokio::time::timeout;
 use super::config::ProxyEntry;
 use super::ProxiedConnection;
 
+/// Compatibility shim retained for signature compatibility.
+///
+/// Production `connect_through` (above) is Eggress-backed. This framing
+/// implementation remains only for direct `HttpConnectProxy` users; new
+/// code must use `ProxyManager`. Do not extend.
 #[allow(dead_code)]
 pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
@@ -210,20 +215,24 @@ impl HttpConnectProxy {
     }
 }
 
+/// Production HTTP CONNECT path (Eggress-backed).
+///
+/// Delegates to the Eggress adapter, preserving the signature. The legacy
+/// `HttpConnectProxy` framing below is retained only as a compatibility
+/// shim; new code must use `ProxyManager` (Eggress-backed).
 pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<ProxiedConnection> {
-    let proxy_addr = proxy.socket_addr()?;
-
-    let http_proxy =
-        HttpConnectProxy::new(proxy_addr).with_timeout(Duration::from_millis(proxy.timeout_ms));
-
-    let http_proxy = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-        http_proxy.with_auth(user.clone(), pass.expose_secret().to_string())
-    } else {
-        http_proxy
-    };
-
-    let stream = http_proxy.connect(target).await?;
-    let local_addr = stream.local_addr()?;
+    let timeout = Duration::from_millis(proxy.timeout_ms);
+    let info = crate::eggress_outbound::establish(
+        std::slice::from_ref(&proxy),
+        &target.ip().to_string(),
+        target.port(),
+        timeout,
+    )
+    .await?;
+    // Same upstream local_addr gap as ProxyManager (see eggress_outbound).
+    let local_addr = info.local_addr.unwrap_or_else(|| {
+        std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+    });
 
     Ok(ProxiedConnection {
         proxy_chain: vec![proxy],

@@ -13,27 +13,39 @@
 //!   generation (`rcgen`), CA handling
 //! - HTTP/2 stream demux (`h2`), WebSocket interception
 //!   (`tokio-tungstenite`), gRPC protobuf inspection (`prost`)
-//! - Custom SOCKS5 handshake (`socks.rs`), transparent-proxy integration
+//! - Compatibility `TcpStream` handshake shims (`socks.rs`
+//!   `connect_through_with_domain`/`chain_connect`, `http_connect.rs`
+//!   `HttpConnectProxy` direct users), transparent-proxy integration
 //! - Raw `TcpStream` dialing with `TCP_NODELAY` (`utils::connect_with_nodelay_timeout`)
 //! - `lib.rs` `lookup_host` (RAWNET DNS, remain specialized)
 //!
+//! Production SOCKS/HTTP-CONNECT/chain execution migrated to the
+//! `eggress-outbound` engine via `eggress_outbound.rs` (Phase A, 2026-09-22).
+//! The legacy handshake code that remains exists only for the
+//! `TcpStream`-returning compatibility shims above, not as the production
+//! path.
+//!
 //! Side A must never depend on `eggsec-transport` (scope-aware *client*
 //! contract) — server termination and interception demux are not outbound
-//! dispatches. The guard enforces this: `intercept/`, `socks.rs`,
-//! `http_connect.rs` contain no `eggsec_transport::` references.
+//! dispatches. The guard enforces this: `intercept/` plus the compatibility
+//! shims in `socks.rs`/`http_connect.rs` contain no `eggsec_transport::`
+//! references.
 //!
 //! **Side B — ordinary outbound (migrates where semantics fit):**
 //! - `health.rs` proxy health probes (`HealthChecker`)
 //! - `utils::create_insecure_client_with_options` (insecure factory)
 //!
-//! Current disposition: side B **remains on `reqwest`** because every
+//! Current disposition (Phase B WS2, Option B — accepted closure): side B
+//! **remains on `reqwest` as the explicit health-only owner** because every
 //! production probe exercises SOCKS/HTTP proxy routing
 //! (`reqwest::Proxy::all` + `basic_auth`, per-proxy `test_url` over
 //! `socks5`/`http`). The Phase C adapter fails closed on any non-`Direct`
 //! `ProxyIntent` (proxy routing deferred past Phase C; remote-DNS SOCKS
 //! semantics would hide the target IP from the local authority). Migrating
 //! proxy-testing probes to a proxy-blind backend would silently change what
-//! is tested. Direct (non-proxied) probes can use the helper below.
+//! is tested, and rebuilding HTTPS verification over raw Eggress streams
+//! would recreate a general HTTP client. Direct (non-proxied) probes can
+//! use the helper below.
 //!
 //! This module provides the narrow transport-neutral builder for direct
 //! outbound probes (no proxy, verified or explicit-insecure TLS, same-host

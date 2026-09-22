@@ -2646,28 +2646,70 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 106. Phase E WS1: egress reuse decided without widening the graph.
+# 106. Eggress 1.0.8 narrow boundary (supersedes Phase E WS1 blanket reject).
+# Only eggsec-web-proxy may own the reviewed eggress-outbound/eggress-uri
+# edge; transport/eggfetch/policy/core/DTO layers and unrelated domains stay
+# Eggress-free; embed/runtime/server/routing/advanced crates stay forbidden.
 echo ""
-echo "--- Check 106: No eggress graph widening ---"
+echo "--- Check 106: Eggress narrow boundary (1.0.8) ---"
 SECTION_FAIL=0
-EGRESS_MANIFEST=$(rg -n 'eggress' crates/*/Cargo.toml Cargo.toml 2>/dev/null || true)
-if [[ -n "$EGRESS_MANIFEST" ]]; then
-  echo "$EGRESS_MANIFEST"
-  echo "FAIL: No workspace manifest may depend on eggress crates (Phase E WS1: rejected)."
+# Approved edge: web-proxy manifests exactly the pinned 1.0.8 line.
+if ! rg -q 'eggress-outbound = \{ version = "=1\.0\.8", default-features = false \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-outbound = \"=1.0.8\" with default-features = false."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-EGRESS_SRC=$(rg -n 'eggress::|eggress_uri|eggress_routing|eggress_core' crates/*/src/ 2>/dev/null || true)
-if [[ -n "$EGRESS_SRC" ]]; then
-  echo "$EGRESS_SRC"
-  echo "FAIL: No workspace source may reference eggress crates (rejected, no adapter layer)."
+if ! rg -q 'eggress-uri = \{ version = "=1\.0\.8" \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-uri = \"=1.0.8\"."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
+# No other workspace manifest may gain an eggress edge.
+OTHER_EGRESS_MANIFEST=$(rg -n 'eggress' crates/*/Cargo.toml Cargo.toml 2>/dev/null | grep -v 'crates/eggsec-web-proxy/Cargo.toml' || true)
+if [[ -n "$OTHER_EGRESS_MANIFEST" ]]; then
+  echo "$OTHER_EGRESS_MANIFEST"
+  echo "FAIL: Only eggsec-web-proxy may depend on eggress crates."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Transport and eggfetch adapter stay Eggress-free (authorized-resolution seam).
+for f in crates/eggsec-transport/Cargo.toml crates/eggsec-transport-eggfetch/Cargo.toml crates/eggsec-core/Cargo.toml crates/eggsec-policy/Cargo.toml; do
+  if rg -q 'eggress' "$f" 2>/dev/null; then
+    echo "FAIL: forbidden eggress edge in $f (transport/policy/core stay Eggress-free)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# Forbidden Eggress surfaces anywhere (manifest-aware, no source filenames).
+FORBIDDEN_EGRESS=$(rg -n 'eggress-(embed|runtime|server|routing|transport-ssh|transport-quic|protocol-shadowsocks|protocol-trojan|protocol-websocket|protocol-h3|udp|config|pproxy-compat)|eggress"' crates/*/Cargo.toml Cargo.toml 2>/dev/null || true)
+if [[ -n "$FORBIDDEN_EGRESS" ]]; then
+  echo "$FORBIDDEN_EGRESS"
+  echo "FAIL: Forbidden Eggress surface (embed/runtime/server/routing/advanced/umbrella)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Forbidden optional features on the approved edge.
+FORBIDDEN_FEATS=$(rg -n 'eggress-outbound.*(toml|pproxy-compat|udp|extended|ssh|quic|legacy-crypto|pproxy-legacy|insecure-tls)' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null || true)
+if [[ -n "$FORBIDDEN_FEATS" ]]; then
+  echo "$FORBIDDEN_FEATS"
+  echo "FAIL: Unexpected Eggress optional feature on the approved edge."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Source references stay inside the web-proxy adapter boundary.
+# (`crate::eggress_outbound` is the internal Eggsec adapter module and is
+# allowed anywhere inside eggsec-web-proxy; bare `eggress_*::`/`eggress::`
+# are external crate references and stay confined to the adapter + tests.)
+EGRESS_SRC_OUTSIDE=$(rg -n 'eggress_outbound::|eggress_uri::|eggress::' crates/*/src/ 2>/dev/null | grep -v 'crate::eggress_outbound' | grep -v 'crates/eggsec-web-proxy/src/eggress_outbound.rs' | grep -v 'crates/eggsec-web-proxy/tests/' || true)
+if [[ -n "$EGRESS_SRC_OUTSIDE" ]]; then
+  echo "$EGRESS_SRC_OUTSIDE"
+  echo "FAIL: Eggress source references outside eggsec-web-proxy adapter/tests."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Decision record exists and names 1.0.8.
 if [[ ! -f "architecture/egress_reuse_decision.md" ]]; then
-  echo "FAIL: missing Phase E WS1 decision record: architecture/egress_reuse_decision.md"
+  echo "FAIL: missing decision record: architecture/egress_reuse_decision.md"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! rg -q '1\.0\.8' architecture/egress_reuse_decision.md 2>/dev/null; then
+  echo "FAIL: decision record must name the 1.0.8 adoption."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: No eggress graph widening (reuse rejected with record)."
+  echo "PASS: Eggress narrow boundary holds (web-proxy only, 1.0.8 pinned, record current)."
 else
   FAIL=$((FAIL + 1))
 fi

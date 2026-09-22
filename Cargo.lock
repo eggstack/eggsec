@@ -1569,6 +1569,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "der"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a878c850e9e421b20262e9b41f9c860e4785fa07541c266b62ff9d1ef998a80a"
+dependencies = [
+ "const-oid 0.10.2",
+]
+
+[[package]]
 name = "der-parser"
 version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1818,7 +1827,7 @@ version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
- "pkcs8",
+ "pkcs8 0.10.2",
  "signature",
 ]
 
@@ -1889,6 +1898,122 @@ dependencies = [
  "base64 0.23.1",
  "thiserror 2.0.20",
  "tokio",
+]
+
+[[package]]
+name = "eggress-core"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b60c0f191c351fd9814190b4b18c20b3e93cda2c014a4a9b2ccc4d463b77cb22"
+dependencies = [
+ "bytes",
+ "eggress-relay",
+ "eggress-uri",
+ "pin-project-lite",
+ "rustls 0.23.45",
+ "serde",
+ "socket2 0.5.10",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "trait-variant",
+]
+
+[[package]]
+name = "eggress-outbound"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcafe5aff5f17439ff8baabf8458c390a7df31ac4859c90340f54fa88835b104"
+dependencies = [
+ "bytes",
+ "eggress-core",
+ "eggress-protocol-http",
+ "eggress-protocol-socks",
+ "eggress-transport-tls",
+ "eggress-uri",
+ "h2",
+ "http",
+ "libc",
+ "rustls 0.23.45",
+ "subtle",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
+name = "eggress-protocol-http"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3d5cf7962e39d8b4951c5ebfc2e3c32a3583a85c92e9a7f1c622cc1f3907bf8"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "eggfetch-http-connect",
+ "eggress-core",
+ "h2",
+ "http",
+ "httparse",
+ "once_cell",
+ "sha2 0.10.9",
+ "subtle",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "eggress-protocol-socks"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a570ea8456428d0c4e18b4f7cf6b98979f8c0e056101efaf341150cd397f3c63"
+dependencies = [
+ "bytes",
+ "eggress-core",
+ "subtle",
+ "thiserror 2.0.20",
+ "tokio",
+ "zeroize",
+]
+
+[[package]]
+name = "eggress-relay"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a041efae61fefdd9f32350f918896f982d663298eda4739b3fe5fbf9d87a4586"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "eggress-transport-tls"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7473274e70ba449bd64eedb156bfb2cb6d87a917ca0cededc6239ef73a9324ff"
+dependencies = [
+ "bytes",
+ "eggress-core",
+ "pkcs8 0.11.0",
+ "rustls 0.23.45",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "tracing",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "eggress-uri"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0703337615177ae5533a7e222d291c5fdf95201c0ce896859968f94f435975eb"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2371,6 +2496,8 @@ dependencies = [
  "chrono",
  "criterion",
  "dashmap",
+ "eggress-outbound",
+ "eggress-uri",
  "eggsec-core",
  "eggsec-report-model",
  "eggsec-transport",
@@ -5244,9 +5371,9 @@ version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8ffb9f10fa047879315e6625af03c164b16962a5368d724ed16323b68ace47f"
 dependencies = [
- "der",
- "pkcs8",
- "spki",
+ "der 0.7.10",
+ "pkcs8 0.10.2",
+ "spki 0.7.3",
 ]
 
 [[package]]
@@ -5255,8 +5382,18 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
- "der",
- "spki",
+ "der 0.7.10",
+ "spki 0.7.3",
+]
+
+[[package]]
+name = "pkcs8"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "451913da69c775a56034ea8d9003d27ee8948e12443eae7c038ba100a4f21cb7"
+dependencies = [
+ "der 0.8.2",
+ "spki 0.8.0",
 ]
 
 [[package]]
@@ -6186,10 +6323,10 @@ dependencies = [
  "num-integer",
  "num-traits",
  "pkcs1",
- "pkcs8",
+ "pkcs8 0.10.2",
  "rand_core 0.6.4",
  "signature",
- "spki",
+ "spki 0.7.3",
  "subtle",
  "zeroize",
 ]
@@ -6898,7 +7035,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
- "der",
+ "der 0.7.10",
+]
+
+[[package]]
+name = "spki"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d9efca8738c78ee9484207732f728b1ef517bbb1833d6fc0879ca898a522f6f"
+dependencies = [
+ "der 0.8.2",
 ]
 
 [[package]]
@@ -7961,6 +8107,17 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "trait-variant"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b19a4867a870f6edc4c283f2b455804b1879c0baf0e642f26b03ed8ee262d9d3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

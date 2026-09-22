@@ -30,17 +30,32 @@ impl ProxyHealth {
     }
 }
 
+/// Application-level proxy health checker (Phase B, 2026-09-22).
+///
+/// Health means an HTTP(S) request through the selected proxy to the
+/// configured `test_url` returning `2xx` — never mere proxy-connect
+/// success. Reqwest is retained explicitly as the health-only owner: the
+/// production dial path migrated to Eggress, but rebuilding HTTPS
+/// verification, redirect, timeout, and body-cap semantics over raw Eggress
+/// streams would recreate a general HTTP client to remove a dependency
+/// line. See `architecture/egress_reuse_decision.md` and `outbound.rs`.
+///
+/// Protocol disposition (fixtures prove each; see `tests/health_matrix.rs`):
+/// - `Socks5`/`Tor` -> SOCKS5 (faithful; Tor is SOCKS5 to the local daemon).
+/// - `Http` -> HTTP CONNECT (faithful).
+/// - `Https` -> HTTP CONNECT plaintext (faithful to current production dial
+///   behavior, which is plaintext CONNECT under that enum; naming debt
+///   recorded in Phase A, not a health misclassification).
+/// - `Socks4` -> explicit unsupported error (fail closed). Reqwest cannot
+///   represent SOCKS4; testing SOCKS5 instead would be false equivalence.
+#[derive(Debug, Clone)]
 pub struct HealthChecker {
     config: HealthCheckConfig,
-    client: reqwest::Client,
 }
 
 impl HealthChecker {
     pub fn new(config: HealthCheckConfig) -> Result<Self> {
-        let timeout_secs = (config.timeout_ms / 1000).max(1);
-        let client = create_insecure_client_with_options(timeout_secs, |builder| builder)?;
-
-        Ok(Self { config, client })
+        Ok(Self { config })
     }
 
     pub async fn check(&self, proxy: &ProxyEntry) -> HealthCheckResult {
@@ -76,6 +91,17 @@ impl HealthChecker {
     }
 
     async fn check_proxy(&self, proxy: &ProxyEntry) -> Result<bool> {
+        // Fail closed where the Reqwest backend cannot represent the type.
+        // SOCKS4 has no faithful Reqwest mapping; testing SOCKS5 instead
+        // would report health for a protocol never exercised (Phase B WS3
+        // behavior fix with dedicated fixture, not invisible refactoring).
+        if matches!(proxy.proxy_type, super::config::ProxyType::Socks4) {
+            return Err(crate::error::WebProxyError::Proxy(
+                "SOCKS4 health checks are not supported by the Reqwest health backend; \
+                 configure a SOCKS5 proxy for application-level health validation"
+                    .to_string(),
+            ));
+        }
         let proxy_url = format!(
             "{}://{}:{}",
             match proxy.proxy_type {
@@ -129,46 +155,23 @@ impl HealthChecker {
         proxies: &[ProxyEntry],
         concurrency: usize,
     ) -> Result<ProxyHealth> {
-        use futures::future::join_all;
-        use std::sync::Arc;
-        use tokio::sync::Semaphore;
+        use futures::stream::{self, StreamExt};
 
-        let semaphore = Arc::new(Semaphore::new(concurrency));
-        let mut handles = Vec::new();
+        // Bounded in-flight scheduler: O(concurrency) futures, one result
+        // per enabled proxy, no spawn-per-proxy JoinHandle retention (Phase
+        // B WS4). `check` never panics (all paths return data), so no
+        // JoinError accounting is needed.
+        let concurrency = concurrency.max(1);
+        let enabled: Vec<ProxyEntry> = proxies.iter().filter(|p| p.enabled).cloned().collect();
 
-        for proxy in proxies {
-            if !proxy.enabled {
-                continue;
-            }
-
-            let permit = semaphore.clone().acquire_owned().await?;
-            let checker = self.clone();
-            let proxy = proxy.clone();
-
-            let handle = tokio::spawn(async move {
-                let result = checker.check(&proxy).await;
-                drop(permit);
-                result
-            });
-
-            handles.push(handle);
-        }
-
-        let results = join_all(handles)
-            .await
-            .into_iter()
-            .filter_map(|r| match r {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    if e.is_panic() {
-                        tracing::warn!("Health check task panicked");
-                    } else {
-                        tracing::warn!("Health check task failed: {:?}", e);
-                    }
-                    None
-                }
+        let results: Vec<HealthCheckResult> = stream::iter(enabled)
+            .map(|proxy| {
+                let checker = self.clone();
+                async move { checker.check(&proxy).await }
             })
-            .collect::<Vec<_>>();
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
 
         let checked_total = results.len();
         let healthy = results.iter().filter(|r| r.is_healthy).count();
@@ -179,15 +182,6 @@ impl HealthChecker {
             unhealthy: checked_total.saturating_sub(healthy),
             results,
         })
-    }
-}
-
-impl Clone for HealthChecker {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            client: self.client.clone(),
-        }
     }
 }
 

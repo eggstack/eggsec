@@ -2,7 +2,7 @@
 
 ## Role & Responsibilities
 
-Outbound upstream-proxy pooling for engine modules. Provides connection routing through SOCKS4/5, HTTP CONNECT, HTTPS CONNECT, and Tor proxies with health checking, rotation strategies, chain proxying, and private-IP blocking. The MITM intercepting proxy is in the `eggsec-web-proxy` domain crate (see [web_proxy.md](web_proxy.md)).
+Outbound upstream-proxy pooling for engine modules. Provides connection routing through SOCKS4/5, HTTP CONNECT, HTTPS CONNECT, and Tor proxies with health checking, rotation strategies, chain proxying, and private-IP blocking. Production dial execution runs on the listener-free `eggress-outbound 1.0.8` engine via `eggress_outbound.rs` (Eggsec owns selection/rotation/health/policy; Eggress executes the selected route; Reqwest remains the explicit health-only owner). The MITM intercepting proxy is in the `eggsec-web-proxy` domain crate (see [web_proxy.md](web_proxy.md)).
 
 The module spans two crates with a clean adapter/domain separation:
 
@@ -20,6 +20,7 @@ crates/eggsec-web-proxy/src/            ← domain crate (full implementation)
 | Proxy pool | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/pool.rs` | `web-proxy` |
 | Rotation strategies | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/rotator.rs` | `web-proxy` |
 | Health checking | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/health.rs` | `web-proxy` |
+| Eggress adapter | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/eggress_outbound.rs` | `web-proxy` |
 | SOCKS4/5 impl | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/socks.rs` | `web-proxy` |
 | HTTP CONNECT impl | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/http_connect.rs` | `web-proxy` |
 | Config types | `eggsec-web-proxy` | `crates/eggsec-web-proxy/src/config.rs` | `web-proxy` |
@@ -63,9 +64,10 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 | `error.rs` | 93 | `WebProxyError` enum (9 variants: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout`) and `Result<T>` type alias |
 | `pool.rs` | 595 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
 | `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
-| `health.rs` | 382 | `HealthChecker`, `HealthCheckResult`, `ProxyHealth` |
-| `socks.rs` | 584 | `SocksProxy`, SOCKS4/4a/5 connection impl, `chain_connect()` for multi-hop |
-| `http_connect.rs` | 336 | `HttpConnectProxy`, HTTP CONNECT tunnel implementation |
+| `health.rs` | 377 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffer_unordered`), `HealthCheckResult`, `ProxyHealth` |
+| `eggress_outbound.rs` | 226 | Eggress adapter: `ProxyEntry`→`ProxyHopSpec`, chain spec, `OutboundConnector::from_chain`, redacted error mapping |
+| `socks.rs` | 605 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
+| `http_connect.rs` | 345 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
 | `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
 | `mcp.rs` | — | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
 
@@ -92,24 +94,35 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 
 ### Health Checking / Rotation / Failover Cycle
 
-1. **Background health check** (`lib.rs:244-286`): `start_background_health_check(interval_secs)` spawns a `tokio::spawn` loop that calls `check_concurrent()` with semaphore-bounded concurrency (default 10).
-2. **Concurrent checks** (`health.rs:127-182`): `check_concurrent()` uses `tokio::sync::Semaphore` to bound concurrent HTTP requests to the test URL. Each proxy gets an independent reqwest client with the proxy's auth credentials.
-3. **Result processing** (`lib.rs:269-278`): Healthy proxies call `pool.mark_healthy()` (resets `consecutive_failures` to 0); unhealthy call `pool.mark_unhealthy()`.
+Health is application-level HTTP(S)-through-proxy validation (2xx via the
+configured `test_url`), never tunnel-only success. Reqwest is the explicit
+health-only owner (Phase B Option B); production dialing is Eggress-backed.
+
+1. **Background health check** (`lib.rs`): `start_background_health_check(interval_secs)` spawns a `tokio::spawn` loop that calls `check_concurrent()` with bounded concurrency (default 10).
+2. **Concurrent checks** (`health.rs`): `check_concurrent()` uses `buffer_unordered(concurrency)` — O(concurrency) in-flight, one result per enabled proxy, no spawn-per-proxy JoinHandle retention. Each proxy gets an independent reqwest client with the proxy's auth credentials.
+3. **Result processing** (`lib.rs`): Healthy proxies call `pool.mark_healthy()` (resets `consecutive_failures` to 0); unhealthy call `pool.mark_unhealthy()`.
 4. **Automatic demotion** (`pool.rs:177-194`): `record_failure()` increments `consecutive_failures`; when it reaches `config.max_failures_before_disable` (default 3), `is_healthy` is set to `false`.
-5. **Selection** (`lib.rs:81-97`): `get_next_proxy()` and `get_healthy_proxy()` use `ProxyRotator::select_with_stats()` which queries pool stats for `LeastUsed` and `LowestLatency` strategies.
-6. **Priority fallback** (`lib.rs:104-116`): `get_highest_priority_proxy(min_priority)` selects from highest-priority proxies; if none match, falls back to `get_healthy_proxy()`.
+5. **Selection** (`lib.rs`): `get_next_proxy()` and `get_healthy_proxy()` use `ProxyRotator::select_with_stats()` which queries pool stats for `LeastUsed` and `LowestLatency` strategies.
+6. **Priority fallback** (`lib.rs`): `get_highest_priority_proxy(min_priority)` selects from highest-priority proxies; if none match, falls back to `get_healthy_proxy()`.
+7. **Protocol disposition**: `Socks5`/`Tor`→SOCKS5, `Http`→HTTP CONNECT, `Https`→plaintext CONNECT (faithful to production dial naming debt) are validated; `Socks4` fails closed with an explicit unsupported error (Reqwest cannot represent SOCKS4 — testing SOCKS5 instead would be false equivalence; behavior fix with fixture, `tests/health_matrix.rs`).
 
 ### Connection Establishment
 
-**Single-hop** (`lib.rs:123-139`):
-- `create_connection(target)` resolves target (private-IP blocked), selects healthy proxy, dispatches to SOCKS or HTTP CONNECT based on `proxy_type`.
-- SOCKS4: `socks.rs:67-103` — 8-byte CONNECT request, checks `0x5A` response.
-- SOCKS5: `socks.rs:139-161` — handshake + auth (method 0x02) + CONNECT with IPv4/IPv6/domain.
-- HTTP CONNECT: `http_connect.rs:43-56` — `CONNECT host:port HTTP/1.1` with optional Basic auth, response capped at 64KB.
+Production execution is Eggress-backed (`eggress_outbound.rs`); Eggsec
+owns resolution/selection, Eggress executes the selected route (no direct
+fallback, redacted errors, aggregate timeout, future-drop cancellation).
 
-**Chain proxying** (`lib.rs:176-238`):
+**Single-hop** (`lib.rs`):
+- `create_connection(target)` resolves target (private-IP blocked), selects healthy proxy, passes the resolved IP literal + port to Eggress with the proxy's `timeout_ms`.
+- Protocol mapping: `Socks4`→Socks4, `Socks5`/`Tor`→Socks5, `Http`/`Https`→Http plaintext CONNECT (`Https` naming debt: `tls=false` until a fixture proves TLS-to-proxy).
+- `ProxiedConnection.local_addr` is an unspecified placeholder: `eggress-outbound 1.0.8` always reports `local_addr=None` (residual upstream debt; no workspace consumer reads the field).
+
+**Remote-domain path**: `create_connection_to_domain(domain, port)` preserves SOCKS5/Tor remote-domain semantics (domain reaches the proxy; SOCKS4/HTTP fail closed as before).
+
+**Chain proxying** (`lib.rs`):
 - `create_chained_connection(target, chain_length)` selects `chain_length` healthy proxies via `rotator.select_chain()`.
-- Chains > 1 hop require all SOCKS5/Tor entries (`lib.rs:203-213`); `chain_connect()` (`socks.rs:417-459`) builds multi-hop tunnel by sending SOCKS5 CONNECT to each intermediate proxy targeting the next.
+- Chains > 1 hop still require all SOCKS5/Tor entries (public contract preserved; mixed chains exercised only internally by the Eggress parity fixture, never exposed).
+- Aggregate timeout is the max per-hop `timeout_ms` around the complete Eggress establishment.
 
 ### CONNECT Tunnel Establishment (Intercept)
 
@@ -210,8 +223,11 @@ Key test categories:
 ## Invariants & Gotchas
 
 1. **Adapter stubs return errors/empty results**: Without `web-proxy`, `HealthChecker::check()` always returns `is_healthy: false` with error message. Code that depends on healthy proxies must handle the feature-gated case.
-2. **Chain proxying limited to SOCKS5/Tor**: `create_chained_connection()` rejects chains with HTTP or SOCKS4 entries (`lib.rs:203-213`, `socks.rs:422-428`).
-3. **`connect_through()` only accepts SOCKS types**: `socks.rs:345-350` returns error for `ProxyType::Http` or `ProxyType::Https`.
+2. **Chain proxying limited to SOCKS5/Tor**: `create_chained_connection()` rejects chains with HTTP or SOCKS4 entries (public contract preserved; Eggress could compose mixed chains but the surface is not broadened silently).
+3. **`socks::connect_through()` only accepts SOCKS types**: returns error for `ProxyType::Http` or `ProxyType::Https` (now Eggress-backed, signature preserved).
+4. **SOCKS4 health fails closed**: `HealthChecker` returns an explicit unsupported error for `Socks4` instead of testing SOCKS5 (behavior fix 2026-09-22; previously a SOCKS5 result was presented as SOCKS4 health).
+5. **`ProxiedConnection.local_addr` is a placeholder**: `eggress-outbound 1.0.8` never populates `OutboundInfo.local_addr`; Eggsec records unspecified `0.0.0.0:0` until upstream exposes the socket address. No workspace consumer reads the field.
+6. **Legacy handshake shims remain for `TcpStream` signatures only**: `SocksProxy`/`chain_connect`/`connect_through_with_domain`/`HttpConnectProxy` keep their implementations because Eggress `BoxStream` cannot satisfy `TcpStream` returns without a forbidden downcast. Do not extend them; do not claim all duplicate code is removed.
 4. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
 5. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
 6. **Background health check never terminates**: `start_background_health_check()` returns a `JoinHandle` but the loop has no break condition (`lib.rs:248-285`).
@@ -224,9 +240,10 @@ Key test categories:
 - [defense_lab.md](defense_lab.md) — defense-lab surface patterns
 - [dispatch.md](dispatch.md) — runtime dispatch flow
 - [websocket.md](websocket.md) — WebSocket protocol support
+- [egress_reuse_decision.md](egress_reuse_decision.md) — Eggress 1.0.8 narrow adoption record (accepted edge, graph, Tokio widening)
 - `architecture/web_proxy.md` — full web proxy feature details
 - `crates/eggsec-web-proxy/` — domain crate source
 - `crates/eggsec/src/proxy/` — adapter layer source
 - `crates/eggsec/src/proxy/AGENTS.override.md` — module-specific agent guidance
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-22*

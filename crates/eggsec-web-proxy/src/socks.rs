@@ -17,6 +17,13 @@ pub enum SocksVersion {
     V5,
 }
 
+/// Compatibility shim retained for `TcpStream`-returning helpers.
+///
+/// Production `ProxyManager` and `connect_through`/`connect_through_tor`
+/// are Eggress-backed. This handshake implementation remains only because
+/// `connect_through_with_domain` and `chain_connect` return a live
+/// `TcpStream`, which the Eggress `BoxStream` cannot supply without a
+/// forbidden downcast. Do not extend; new code must use `ProxyManager`.
 pub struct SocksProxy {
     version: SocksVersion,
     proxy_addr: SocketAddr,
@@ -342,26 +349,30 @@ fn map_socks5_error(code: u8) -> WebProxyError {
     }
 }
 
+/// Production SOCKS path (Eggress-backed).
+///
+/// Delegates to the Eggress adapter, preserving the signature. The legacy
+/// `SocksProxy` handshake below is retained only as a compatibility shim
+/// for the `TcpStream`-returning helpers (`connect_through_with_domain`,
+/// `chain_connect`); new code must use `ProxyManager` (Eggress-backed).
 pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<ProxiedConnection> {
-    let version = match proxy.proxy_type {
-        ProxyType::Socks4 => SocksVersion::V4,
-        ProxyType::Socks5 | ProxyType::Tor => SocksVersion::V5,
+    match proxy.proxy_type {
+        ProxyType::Socks4 | ProxyType::Socks5 | ProxyType::Tor => {}
         _ => return Err(WebProxyError::Proxy("Not a SOCKS proxy".to_string())),
-    };
+    }
 
-    let proxy_addr = proxy.socket_addr()?;
-    let socks = SocksProxy::new(version, proxy_addr);
-
-    let socks = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-        socks.with_auth(user.clone(), pass.expose_secret().to_string())
-    } else {
-        socks
-    };
-
-    let socks = socks.with_timeout(Duration::from_millis(proxy.timeout_ms));
-
-    let stream = socks.connect(target).await?;
-    let local_addr = stream.local_addr()?;
+    let timeout = Duration::from_millis(proxy.timeout_ms);
+    let info = crate::eggress_outbound::establish(
+        std::slice::from_ref(&proxy),
+        &target.ip().to_string(),
+        target.port(),
+        timeout,
+    )
+    .await?;
+    // Same upstream local_addr gap as ProxyManager (see eggress_outbound).
+    let local_addr = info.local_addr.unwrap_or_else(|| {
+        std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+    });
 
     Ok(ProxiedConnection {
         proxy_chain: vec![proxy],
@@ -380,6 +391,11 @@ pub async fn connect_through_tor(
     connect_through(proxy, target).await
 }
 
+/// Compatibility shim (legacy handshake): returns a live `TcpStream`.
+///
+/// Retained because the Eggress `BoxStream` cannot satisfy this signature
+/// without a forbidden downcast. Production `ProxyManager` uses the Eggress
+/// remote-domain path instead. Do not extend.
 pub async fn connect_through_with_domain(
     proxy: &ProxyEntry,
     domain: &str,
@@ -414,6 +430,11 @@ pub async fn connect_through_with_domain(
     socks.connect_with_domain(domain, port).await
 }
 
+/// Compatibility shim (legacy handshake): multi-hop over live `TcpStream`.
+///
+/// Retained because the Eggress `BoxStream` cannot satisfy this signature
+/// without a forbidden downcast. Production `ProxyManager` chains via
+/// Eggress instead. Do not extend.
 pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result<TcpStream> {
     if proxies.is_empty() {
         return Err(WebProxyError::Proxy("No proxies in chain".to_string()));

@@ -21,6 +21,13 @@ eggsec-report-model = { path = "../eggsec-report-model", version = "0.1.0" }
 # TLS in intercept/ never depends on it — see outbound.rs boundary).
 eggsec-transport = { workspace = true }
 
+# Eggress 1.0.8 selective proxy-engine adoption (Phase A, 2026-09-22):
+# listener-free HTTP/SOCKS TCP chain execution only. No umbrella facade,
+# no embed/runtime/server/routing, no optional protocol features.
+# See architecture/egress_reuse_decision.md addendum.
+eggress-outbound = { version = "=1.0.8", default-features = false }
+eggress-uri = { version = "=1.0.8" }
+
 # TLS / certificate generation
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
@@ -42,10 +49,15 @@ prost-types = { version = "0.14", optional = true }
 # No fs/process/signal/io-std; MITM cert gen goes through rcgen (ring).
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
 
-# HTTP client (proxy health probes only: plain GET over SOCKS/HTTP proxy
-# routing; no JSON/form/query bodies, no blocking API, no cookie jar, no
-# client-side HTTP/2 — those reqwest features stay off so this domain does
-# not widen the artifact graph. See outbound.rs boundary.)
+# HTTP client (Phase B decision, Option B: explicit health-only owner).
+# Application-level proxy health probes (GET over SOCKS/HTTP proxy routing
+# to the configured test_url, 2xx only). Production dial execution migrated
+# to eggress-outbound (see eggress_outbound.rs); rebuilding HTTPS
+# verification/redirect/timeout/body-cap semantics over raw Eggress streams
+# would recreate a general HTTP client to remove a dependency line.
+# No JSON/form/query bodies, no blocking API, no cookie jar, no client-side
+# HTTP/2 — those reqwest features stay off so this domain does not widen
+# the artifact graph. See outbound.rs boundary.
 reqwest = { version = "0.13", features = ["rustls-no-provider", "socks"], default-features = false }
 
 # Concurrent collections

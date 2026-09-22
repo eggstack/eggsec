@@ -7,6 +7,7 @@
 //! whether an operation is allowed. Enforcement stays in the main `eggsec` crate.
 
 pub mod config;
+pub mod eggress_outbound;
 pub mod error;
 pub mod health;
 pub mod http_connect;
@@ -30,8 +31,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-
-use socks::connect_through_with_domain;
 
 /// Connection routed through a proxy chain.
 #[derive(Debug, Clone)]
@@ -127,17 +126,36 @@ impl ProxyManager {
             .await
             .ok_or_else(|| WebProxyError::Proxy("No healthy proxies available".to_string()))?;
 
+        // Preserve Eggsec local-resolution + private/internal rejection before
+        // handing the final destination to Eggress. Pass the selected IP
+        // literal (not the original hostname) so this path never becomes
+        // remote DNS inside the engine.
         let target_addr = resolve_target(target).await?;
+        let timeout = Duration::from_millis(proxy.timeout_ms);
+        let info = crate::eggress_outbound::establish(
+            std::slice::from_ref(&proxy),
+            &target_addr.ip().to_string(),
+            target_addr.port(),
+            timeout,
+        )
+        .await?;
+        // Upstream gap: eggress-outbound 1.0.8 never populates the local
+        // address field (always None). Fall back to the unspecified
+        // placeholder rather than failing closed on metadata; the
+        // connection itself was established and verified. Recorded as
+        // residual debt (see the eggress_outbound adapter module docs).
+        let local_addr = info.local_addr.unwrap_or_else(|| {
+            tracing::debug!(
+                "Eggress 1.0.8 reports no local address; using unspecified placeholder"
+            );
+            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+        });
 
-        match proxy.proxy_type {
-            ProxyType::Socks4 | ProxyType::Socks5 => {
-                socks::connect_through(proxy, target_addr).await
-            }
-            ProxyType::Http | ProxyType::Https => {
-                http_connect::connect_through(proxy, target_addr).await
-            }
-            ProxyType::Tor => socks::connect_through_tor(proxy, target_addr).await,
-        }
+        Ok(ProxiedConnection {
+            proxy_chain: vec![proxy],
+            local_addr,
+            target_addr,
+        })
     }
 
     pub async fn create_connection_to_domain(
@@ -150,28 +168,44 @@ impl ProxyManager {
             .await
             .ok_or_else(|| WebProxyError::Proxy("No healthy proxies available".to_string()))?;
 
-        connect_through_with_domain(&proxy, domain, port)
-            .await
-            .map(|stream| {
-                let local_addr = stream.local_addr().unwrap_or_else(|_| {
-                    tracing::warn!(
-                        "Failed to get local address for proxied connection to {}",
-                        domain
-                    );
-                    std::net::SocketAddr::new(
-                        std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
-                        0,
-                    )
-                });
-                ProxiedConnection {
-                    proxy_chain: vec![proxy],
-                    local_addr,
-                    target_addr: std::net::SocketAddr::new(
-                        std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
-                        port,
-                    ),
-                }
-            })
+        // Preserve explicit remote-domain semantics: only SOCKS5/Tor may use
+        // this path; SOCKS4 and HTTP(S) fail closed exactly as before. The
+        // domain is handed to Eggress so the proxy receives the domain
+        // rather than a locally resolved IP (proven by fixture).
+        match proxy.proxy_type {
+            ProxyType::Socks5 | ProxyType::Tor => {}
+            ProxyType::Socks4 => {
+                return Err(WebProxyError::Proxy(
+                    "SOCKS4 does not support domain resolution. Use an IP address or configure a SOCKS5 proxy.".to_string(),
+                ));
+            }
+            _ => {
+                return Err(WebProxyError::Proxy(format!(
+                    "Domain resolution not supported for proxy type {:?}",
+                    proxy.proxy_type
+                )));
+            }
+        }
+
+        let timeout = Duration::from_millis(proxy.timeout_ms);
+        let info =
+            crate::eggress_outbound::establish(std::slice::from_ref(&proxy), domain, port, timeout)
+                .await?;
+        let local_addr = info.local_addr.unwrap_or_else(|| {
+            tracing::warn!(
+                "Eggress established domain connection without local address for {}",
+                domain
+            );
+            std::net::SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), 0)
+        });
+        Ok(ProxiedConnection {
+            proxy_chain: vec![proxy],
+            local_addr,
+            target_addr: std::net::SocketAddr::new(
+                std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
+                port,
+            ),
+        })
     }
 
     pub async fn create_chained_connection(
@@ -201,33 +235,41 @@ impl ProxyManager {
 
         let chain_vec: Vec<ProxyEntry> = chain.to_vec();
 
-        let socks_only = chain_vec
-            .iter()
-            .all(|p| matches!(p.proxy_type, ProxyType::Socks5 | ProxyType::Tor));
-
-        let final_local_addr = if chain_vec.len() > 1 {
+        // Preserve the public SOCKS-only multi-hop contract: chains > 1 hop
+        // require all SOCKS5/Tor entries. Supporting mixed chains is
+        // optional and must not silently broaden the capability surface.
+        // The Eggress parity fixture may exercise mixed chains internally
+        // without exposing them here.
+        if chain_vec.len() > 1 {
+            let socks_only = chain_vec
+                .iter()
+                .all(|p| matches!(p.proxy_type, ProxyType::Socks5 | ProxyType::Tor));
             if !socks_only {
                 return Err(WebProxyError::Proxy(
                     "Proxy chaining currently supports only SOCKS5/Tor proxy chains".to_string(),
                 ));
             }
+        }
 
-            let stream = socks::chain_connect(&chain_vec, target_addr).await?;
-            stream.local_addr()?
-        } else {
-            let proxy = &chain_vec[0];
-            let conn = match proxy.proxy_type {
-                ProxyType::Socks4 | ProxyType::Socks5 => {
-                    socks::connect_through(proxy.clone(), target_addr).await?
-                }
-                ProxyType::Http | ProxyType::Https => {
-                    http_connect::connect_through(proxy.clone(), target_addr).await?
-                }
-                ProxyType::Tor => socks::connect_through_tor(proxy.clone(), target_addr).await?,
-            };
-
-            conn.local_addr
-        };
+        // Aggregate timeout: maximum per-hop timeout across the selected
+        // chain, applied around the complete Eggress establishment operation.
+        let timeout_ms = chain_vec
+            .iter()
+            .map(|p| p.timeout_ms)
+            .max()
+            .unwrap_or(eggsec_core::constants::DEFAULT_PROXY_TIMEOUT_MS);
+        let info = crate::eggress_outbound::establish(
+            &chain_vec,
+            &target_addr.ip().to_string(),
+            target_addr.port(),
+            Duration::from_millis(timeout_ms),
+        )
+        .await?;
+        // Same upstream local_addr gap as create_connection (see above).
+        let final_local_addr = info.local_addr.unwrap_or_else(|| {
+            tracing::debug!("Eggress 1.0.8 reports no local address for chain; using placeholder");
+            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+        });
 
         let proxy_chain: Vec<ProxyEntry> = chain.into_iter().collect();
 

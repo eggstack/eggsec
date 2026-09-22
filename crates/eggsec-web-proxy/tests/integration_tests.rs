@@ -304,14 +304,14 @@ mod integration_tests {
             host: "api.example.com".to_string(),
             path: "/data".to_string(),
             request_headers: {
-                let mut h = HashMap::new();
+                let mut h = rustc_hash::FxHashMap::default();
                 h.insert("Content-Type".to_string(), "application/json".to_string());
                 h
             },
             request_body: Some("{\"key\":\"value\"}".to_string()),
             response_status: 200,
             response_headers: {
-                let mut h = HashMap::new();
+                let mut h = rustc_hash::FxHashMap::default();
                 h.insert("X-Request-Id".to_string(), "abc123".to_string());
                 h
             },

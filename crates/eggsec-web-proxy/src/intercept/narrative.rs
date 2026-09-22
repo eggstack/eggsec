@@ -348,7 +348,6 @@ fn truncate_narrative(s: &str, max: usize) -> String {
 mod tests {
     use super::*;
     use crate::intercept::types::*;
-    use std::collections::HashMap;
 
     fn sample_report() -> WebProxySessionReport {
         let mut report = WebProxySessionReport::new("127.0.0.1:8080", false);
@@ -359,13 +358,13 @@ mod tests {
             host: "example.com".to_string(),
             path: "/".to_string(),
             request_headers: {
-                let mut h = HashMap::new();
+                let mut h = rustc_hash::FxHashMap::default();
                 h.insert("Authorization".to_string(), "Bearer token123".to_string());
                 h
             },
             request_body: None,
             response_status: 200,
-            response_headers: HashMap::new(),
+            response_headers: rustc_hash::FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 150,
@@ -500,10 +499,10 @@ mod tests {
             url: "https://example.com/fail".to_string(),
             host: "example.com".to_string(),
             path: "/fail".to_string(),
-            request_headers: HashMap::new(),
+            request_headers: rustc_hash::FxHashMap::default(),
             request_body: None,
             response_status: 500,
-            response_headers: HashMap::new(),
+            response_headers: rustc_hash::FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 100,
