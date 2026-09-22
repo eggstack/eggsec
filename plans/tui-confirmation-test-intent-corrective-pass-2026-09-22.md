@@ -257,8 +257,11 @@ remains warning-clean and production enforcement behavior is unchanged.
 Status: Executed
 Starting SHA: 4f1d375fd08e547c45ca105e94f7164ef82c6fd8
 Implementation SHA: ead501aabbc8bb8644728e058debeadef56274d8
-Final record SHA: (this commit; see plans/README.md entry)
-Hosted CI: (pending at record time; verified per normal path-filter behavior)
+Final record SHA: e62644feb82158e13cb883c9d4bc9c6ffb23538c
+  (record commit; this hosted-evidence amendment is a docs-only descendant
+  with an identical executable tree)
+Hosted CI: CI 35748922362 success + Code Quality 35748922260 success
+  (head e62644f, push on main)
 
 Final test name: preflight_matches_raw_evaluation_for_confirmation_action
 Preflight assertion: asserts outcome_kind is
