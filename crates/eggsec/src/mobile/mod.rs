@@ -10,7 +10,9 @@
 //! - `to_scan_report_data(report)` for static report bridge.
 //! - `to_scan_report_data_dynamic(report)` for dynamic report bridge.
 
+#[cfg(any(feature = "cli", feature = "mobile-dynamic"))]
 use crate::config::EggsecConfig;
+#[cfg(any(feature = "cli", feature = "mobile-dynamic"))]
 use crate::error::{EggsecError, Result};
 
 // Re-export all domain types from eggsec-mobile-lab

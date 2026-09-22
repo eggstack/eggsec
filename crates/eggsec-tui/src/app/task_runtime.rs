@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn tui_app_binds_to_pre_existing_runtime_session() {
         use crate::app::RuntimeBinding;
-        use eggsec_runtime::{Runtime, RuntimeConfig, RuntimeSurface, SessionId};
+        use eggsec_runtime::{Runtime, RuntimeConfig, RuntimeSurface};
 
         // Create a runtime and a session outside of the TUI.
         let runtime = std::sync::Arc::new(Runtime::new(

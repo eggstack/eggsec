@@ -1,3 +1,4 @@
+use super::utils::truncate_str;
 use super::*;
 
 #[test]

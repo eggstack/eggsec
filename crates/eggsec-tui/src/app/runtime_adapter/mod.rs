@@ -358,7 +358,6 @@ impl TabProgressRouter for Tab {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::create_test_app;
 
     #[test]
     fn adapter_new_is_empty() {
@@ -428,7 +427,6 @@ mod tests {
     #[test]
     fn reduce_task_failed_unregisters_and_returns_error() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
         let task_id = TaskId::new();
         adapter.register_task(task_id, Tab::Recon);
 
@@ -453,7 +451,6 @@ mod tests {
     #[test]
     fn reduce_task_cancelled_unregisters_and_returns_cancel() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
         let task_id = TaskId::new();
         adapter.register_task(task_id, Tab::Recon);
 
@@ -475,7 +472,6 @@ mod tests {
     #[test]
     fn reduce_task_completed_unregisters() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
         let task_id = TaskId::new();
         adapter.register_task(task_id, Tab::Recon);
 
@@ -497,7 +493,6 @@ mod tests {
     #[test]
     fn reduce_task_progress_returns_update() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
         let task_id = TaskId::new();
         adapter.register_task(task_id, Tab::Recon);
 
@@ -522,7 +517,6 @@ mod tests {
     #[test]
     fn reduce_task_log_returns_nothing() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
         let task_id = TaskId::new();
         adapter.register_task(task_id, Tab::Recon);
 
@@ -540,7 +534,6 @@ mod tests {
     #[test]
     fn reduce_session_created_returns_nothing() {
         let mut adapter = TuiRuntimeAdapter::new();
-        let mut app = create_test_app();
 
         let event = RuntimeEvent::SessionCreated {
             session_id: eggsec_runtime::SessionId::new(),

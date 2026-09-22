@@ -102,10 +102,14 @@ mod tests {
             result_tx,
             scope: None,
         }));
-        let dispatcher = TuiTaskDispatcher::new(ctx);
+        let dispatcher = TuiTaskDispatcher::new(Arc::clone(&ctx));
         assert!(
-            std::any::TypeId::of::<TuiTaskDispatcher>()
-                == std::any::TypeId::of::<TuiTaskDispatcher>()
+            Arc::ptr_eq(&dispatcher.executor_context, &ctx),
+            "dispatcher must retain the supplied executor context"
+        );
+        assert!(
+            dispatcher.executor_context.load().scope.is_none(),
+            "dispatcher context scope must match the supplied context"
         );
     }
 

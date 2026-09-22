@@ -563,13 +563,9 @@ mod tests {
             super::super::enforcement::TuiPreflightOutcomeKind::RequireConfirmation
         );
 
-        // Execution path (TuiManual surface uses approve_manual, which may succeed
-        // with a Warn/Confirm outcome — the key is the evaluation agrees)
-        let exec_result = facade.try_approve(desc.clone());
-        // In manual mode, RequireConfirmation triggers a confirmation overlay,
-        // not an immediate deny. The facade's try_approve calls approve_manual
-        // which may succeed (returning Ok) if manual override is available.
-        // What matters is that the evaluation outcome matches.
+        // Execution-path evaluation: the same `evaluate` the manual
+        // approve path uses. In manual mode, RequireConfirmation triggers
+        // a confirmation overlay, not an immediate deny.
         let outcome = facade.state.enforcement.evaluate(&desc);
         let exec_needs_confirmation = matches!(
             outcome,

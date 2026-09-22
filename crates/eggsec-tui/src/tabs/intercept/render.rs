@@ -79,7 +79,7 @@ impl InterceptTab {
                 .border_style(Style::default().fg(tc!(border)))
                 .title(format!(" Flows ({}) ", self.flows.len())),
         )
-        .highlight_style(Style::default().bg(tc!(selected)))
+        .row_highlight_style(Style::default().bg(tc!(selected)))
         .highlight_symbol("> ");
 
         let mut table_state = self.table_state.clone();

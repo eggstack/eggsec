@@ -1,5 +1,5 @@
 use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, ScrollableText};
+use crate::components::ScrollableText;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 
@@ -20,7 +20,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, Row, Table, TableState},
+    widgets::{Block, Borders, TableState},
     Frame,
 };
 
@@ -31,7 +31,7 @@ mod types;
 mod utils;
 
 pub use types::*;
-use utils::{format_bytes, truncate_str};
+use utils::format_bytes;
 
 #[macro_export]
 macro_rules! inner {
