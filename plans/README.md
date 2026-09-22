@@ -14,9 +14,9 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Post-adoption record and TUI warning cleanup (ready for handoff 2026-09-22)
+## Post-adoption record and TUI warning cleanup (executed 2026-09-22)
 
-Ordered plans:
+Ordered plans (both executed; each carries its completion record):
 
 1. [eggfetch-0.2.0-planning-record-duplication-cleanup-2026-09-22.md](eggfetch-0.2.0-planning-record-duplication-cleanup-2026-09-22.md)
 2. [tui-broad-profile-warning-debt-cleanup-2026-09-22.md](tui-broad-profile-warning-debt-cleanup-2026-09-22.md)
@@ -25,6 +25,9 @@ The first pass is documentation-only: remove the duplicated `## Exit criterion`
 from the executed Eggfetch 0.2.0 adoption record without altering its
 qualification evidence or conclusions.
 
+Executed: duplicate block removed in `b1faff04` (9 deletions, single exit
+criterion retained, completion record byte-identical).
+
 The second pass closes the warning debt recorded during the same qualification.
 It targets the 18 warnings emitted by the representative broad
 `eggsec-tui --features db-pentest,web-proxy,c2` lib-test profile plus the two
@@ -32,6 +35,13 @@ adjacent `mobile/mod.rs` feature-profile import warnings. The pass requires
 real cleanup rather than `allow`/underscore suppression, preserves TUI
 rendering/runtime/enforcement behavior and mobile feature semantics, and does
 not expand into unrelated NSE or workspace-wide warning debt.
+
+Executed: broad TUI `--tests` profile now shows 0 owned warnings (only
+third-party sqlx future-incompat remains), mobile/mobile-dynamic profiles show
+0 warnings, with no suppression attributes added. Implementation `1acb0c65`;
+record in the pass plan. An additional `truncate_str` unused import observed
+locally in the same owned surface was also cleaned (total 19 owned warnings
+observed at implementation start, all removed).
 
 ## Eggfetch 0.2.0 adoption and requalification (executed 2026-09-22)
 

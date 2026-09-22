@@ -1,6 +1,6 @@
 # Eggfetch 0.2.0 planning-record duplication cleanup
 
-Status: Ready for handoff
+Status: Executed
 
 Date: 2026-09-22
 
@@ -113,3 +113,19 @@ Verification:
 The documentation defect is closed when the executed Eggfetch 0.2.0 plan has a
 single exit criterion and its implementation/qualification record remains
 otherwise unchanged.
+
+## Completion record (executed 2026-09-22)
+
+```text
+Status: Executed
+Starting SHA: 1bf07b59a12e810013a7af0772940a5b77d60c78 (clean tree)
+Cleanup SHA: b1faff049717ff7d387cf0661a4aa2c7de8efb20
+Diff scope: plans/eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md | 9 deletions
+Exit criterion heading count: 1 (rg -n '^## Exit criterion$' => line 602 only)
+Completion record changed: no
+Other files changed: none (in cleanup commit b1faff04)
+Verification:
+- rg -n '^## Exit criterion$' => exactly one match
+- git diff --check => clean
+- git diff -- plans/eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md => 9 deletions only, no other edits
+```

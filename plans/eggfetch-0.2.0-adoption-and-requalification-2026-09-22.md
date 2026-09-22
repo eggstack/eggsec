@@ -756,3 +756,8 @@ Residual debt: (a) pre-existing HEAD FxHash fallout corrected here to
   (b) TUI broad-profile warnings (unused imports/variables, e.g.
   mobile/mod.rs, task_dispatcher.rs) remain warnings-only, pre-existing.
 ```
+
+Later closure (2026-09-22): residual debt (b) above is now closed by
+[tui-broad-profile-warning-debt-cleanup-2026-09-22.md](tui-broad-profile-warning-debt-cleanup-2026-09-22.md)
+without altering this historical record. Historical statement that warnings
+existed at adoption time is preserved; see the cleanup pass for after-evidence.

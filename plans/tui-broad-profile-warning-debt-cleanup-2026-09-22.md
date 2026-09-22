@@ -1,6 +1,6 @@
 # TUI broad-profile warning-debt cleanup
 
-Status: Ready for handoff
+Status: Executed
 
 Date: 2026-09-22
 
@@ -399,3 +399,55 @@ This line is closed when the representative broad TUI profile and the recorded
 adjacent mobile profile are warning-clean, their tests and TUI rendering
 semantics remain intact, and the repository has current local/hosted evidence
 without using warning suppression or widening into unrelated workspace debt.
+
+## Completion record (executed 2026-09-22)
+
+```text
+Status: Executed
+Starting SHA: b1faff049717ff7d387cf0661a4aa2c7de8efb20 (clean tree; executable tree identical to 17cf8c31)
+Final implementation SHA: 1acb0c658d32835da6c1fa83704dc27a3e63c3f5
+Final record SHA: (record commit; docs-only descendant with identical executable tree)
+Hosted CI: (pending push; local contract green before push)
+Hosted Deep Checks: (manual run if path filters do not auto-start; see Workstream 6)
+
+Broad TUI warning count before: 18 (Deep Checks 35698970796 on 86d2670b)
+  + 1 additional truncate_str unused import observed locally in --tests profile
+  = 19 owned warnings in `cargo check -p eggsec-tui --features db-pentest,web-proxy,c2 --tests`
+Broad TUI warning count after: 0 owned
+  (`cargo check ... --tests` shows only third-party sqlx-postgres future-incompat, out of scope)
+Mobile-profile warning count before: 2
+Mobile-profile warning count after: 0
+
+mobile/mod.rs: gated EggsecConfig + EggsecError/Result behind any(cli, mobile-dynamic); mobile + mobile-dynamic checks clean
+task_runtime.rs: removed unused SessionId from test import (fully qualified spelling retained)
+enforcement_facade.rs: removed redundant try_approve in confirmation test; compares preflight vs direct evaluate with corrected comment
+runtime_adapter/mod.rs: removed 6 vestigial create_test_app locals + now-unused import; assertions unchanged
+task_dispatcher.rs: replaced tautological TypeId check with Arc::ptr_eq retention + scope invariant
+intercept/mod.rs: narrowed to ScrollableText, Block/Borders/TableState, format_bytes only
+intercept/render.rs: highlight_style -> row_highlight_style with identical style + symbol; Clear/Cell/Row/Table retained where used
+Permanent warning gate added: none (warning-free source is the gate; RUSTFLAGS=-D warnings used as proof)
+Suppression attributes added: none
+
+Focused mobile checks:
+- cargo check -p eggsec --features mobile => 0 warnings
+- cargo check -p eggsec --features mobile-dynamic => 0 warnings
+- RUSTFLAGS=-D warnings both mobile profiles => pass
+Focused TUI check:
+- cargo check -p eggsec-tui --features db-pentest,web-proxy,c2 => 0 owned warnings (1 third-party future-incompat only)
+- cargo check -p eggsec-tui --features db-pentest,web-proxy,c2 --tests => 0 owned warnings (1 third-party future-incompat only)
+Focused TUI lib tests:
+- cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib => 944 passed
+- cargo test -p eggsec-tui --lib => 882 passed
+Warning-as-error proof:
+- RUSTFLAGS="-D warnings" cargo check -p eggsec-tui --features db-pentest,web-proxy,c2 --tests => 0 errors (1 third-party future-incompat only, not denied)
+- RUSTFLAGS="-D warnings" cargo check -p eggsec-tui --features db-pentest,web-proxy,c2 => 0 errors
+- RUSTFLAGS="-D warnings" mobile/mobile-dynamic => pass
+make check-feature-profiles: green
+make check: green (fmt, no-default checks, deny, clippy, tests, guards)
+make check-msrv: green (incl. Rust 1.89)
+make test-tui-pty: ALL PASS (warning-suppressed + daemon-attach-failure)
+make check-full: green locally (exit 0)
+
+Behavior/API delta: none (warning hygiene only; TUI layout, runtime dispatch, enforcement, feature contracts, Ratatui selection appearance unchanged)
+Residual warning debt outside scope: third-party sqlx-postgres future-incompat; NSE/integration-helper debt untouched per scope boundary
+```
