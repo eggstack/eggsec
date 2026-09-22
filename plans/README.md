@@ -14,6 +14,23 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+
+## TUI confirmation-test intent corrective pass (ready for handoff 2026-09-22)
+
+Plan:
+[tui-confirmation-test-intent-corrective-pass-2026-09-22.md](tui-confirmation-test-intent-corrective-pass-2026-09-22.md)
+
+This narrow follow-up corrects the remaining test-contract mismatch from the
+completed warning-debt cleanup. The out-of-scope confirmation test now compares
+`preflight()` with raw `EnforcementContext::evaluate()`, but its name/comment/
+locals/assertion still describe the second branch as "execution."
+
+The pass preserves the targeted `RequireConfirmation` case, renames/reframes
+it as preflight-vs-raw-evaluation coverage, strengthens both sides to assert the
+expected confirmation classification independently, and does not reintroduce a
+side-effecting `try_approve` call merely to preserve the old wording. No
+production enforcement/API/feature behavior is intended to change.
+
 ## Post-adoption record and TUI warning cleanup (executed 2026-09-22)
 
 Ordered plans (both executed; each carries its completion record):
