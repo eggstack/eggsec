@@ -550,9 +550,9 @@ mod tests {
         );
     }
 
-    /// Preflight and execution agree: out-of-scope target → RequireConfirmation.
+    /// Preflight and raw enforcement evaluation agree: out-of-scope target → RequireConfirmation.
     #[test]
-    fn preflight_and_execution_agree_on_confirmation_action() {
+    fn preflight_matches_raw_evaluation_for_confirmation_action() {
         let mut facade = test_facade_with_scope(ExecutionSurface::TuiManual);
         let desc = safe_active_descriptor("scan-ports", Some("evil.example.net"));
 
@@ -562,19 +562,28 @@ mod tests {
             preflight.outcome_kind,
             super::super::enforcement::TuiPreflightOutcomeKind::RequireConfirmation
         );
+        assert!(
+            preflight_needs_confirmation,
+            "preflight must classify out-of-scope target as RequireConfirmation, got {:?}",
+            preflight.outcome_kind
+        );
 
-        // Execution-path evaluation: the same `evaluate` the manual
+        // Raw-enforcement evaluation: the same `evaluate` the manual
         // approve path uses. In manual mode, RequireConfirmation triggers
         // a confirmation overlay, not an immediate deny.
         let outcome = facade.state.enforcement.evaluate(&desc);
-        let exec_needs_confirmation = matches!(
+        let raw_needs_confirmation = matches!(
             outcome,
             eggsec::config::EnforcementOutcome::RequireConfirmation(_)
         );
+        assert!(
+            raw_needs_confirmation,
+            "raw enforcement evaluation must classify out-of-scope target as RequireConfirmation, got {outcome:?}"
+        );
 
         assert_eq!(
-            preflight_needs_confirmation, exec_needs_confirmation,
-            "preflight and execution must agree on confirmation requirement"
+            preflight_needs_confirmation, raw_needs_confirmation,
+            "preflight and raw evaluation must agree on confirmation requirement"
         );
     }
 

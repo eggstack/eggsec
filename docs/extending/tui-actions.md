@@ -192,12 +192,14 @@ via `EnforcementFacade::try_approve()` or `evaluate_and_try_approve()`.
 
 ### Preflight and execution must agree
 
-Tests in `enforcement_facade.rs` verify that preflight and execution produce
+Tests in `enforcement_facade.rs` verify that preflight and enforcement produce
 the same outcome for the same descriptor:
 
-- `preflight_and_execution_agree_on_allowed_action`
-- `preflight_and_execution_agree_on_confirmation_action`
-- `preflight_and_execution_agree_on_denied_action`
+- `preflight_and_execution_agree_on_allowed_action` (preflight vs `try_approve`)
+- `preflight_matches_raw_evaluation_for_confirmation_action` (preflight vs raw
+  `EnforcementContext::evaluate` for the out-of-scope `RequireConfirmation`
+  mapping case)
+- `preflight_and_execution_agree_on_denied_action` (preflight vs `try_approve`)
 - `preflight_populates_same_outcome_as_raw_evaluate`
 
 If you add a new enforcement path, ensure it produces the same outcome as
@@ -353,7 +355,8 @@ and cover:
 | `evaluate_and_try_approve_uses_cached_approval` | Cached token is reused |
 | `take_cached_approval_rejects_mismatch` | Mismatched operations are not reused |
 | `confirm_override_sets_manual_override_flags` | Manual override flags are set correctly |
-| `preflight_and_execution_agree_on_*` | Preflight and execution outcomes match |
+| `preflight_and_execution_agree_on_*` | Preflight and `try_approve` execution outcomes match |
+| `preflight_matches_raw_evaluation_for_confirmation_action` | Preflight and raw `evaluate` agree on `RequireConfirmation` |
 
 ### Tests for tabs/spec.rs
 
