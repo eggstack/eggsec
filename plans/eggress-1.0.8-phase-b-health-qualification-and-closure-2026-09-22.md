@@ -1,6 +1,6 @@
 # Eggress 1.0.8 Phase B — health qualification and closure
 
-Status: Ready for handoff
+Status: Executed (2026-09-22)
 
 Date: 2026-09-22
 
@@ -407,4 +407,54 @@ Phase B is complete only when:
     are green;
 14. hosted validation required by current policy is green;
 15. this plan and the roadmap receive completion records with final SHAs,
-    evidence, and any residual upstream Eggress prerequisites.
+     evidence, and any residual upstream Eggress prerequisites.
+
+---
+
+## Completion record (executed 2026-09-22)
+
+- Phase A SHA: `d9749cc`. Implementation SHA (A+B combined): `d9749cc`
+  (health work landed in the same commit; this record documents it).
+- Backend decision WS2: **Option B — Reqwest retained as the explicit
+  health-only owner.** Rebuilding HTTPS verification, redirect, timeout,
+  and body-cap semantics over raw Eggress streams would recreate a general
+  HTTP client to remove a dependency line. `Cargo.toml`, `outbound.rs`,
+  and `health.rs` document the rationale; no Reqwest-free claim is made.
+- Health matrix: `crates/eggsec-web-proxy/tests/health_matrix.rs`,
+  15/15 local fixtures green (SOCKS5→HTTP 200, SOCKS5 auth, non-2xx,
+  HTTP-CONNECT→HTTPS 200, CONNECT auth, tunnel-ok/app-fail stays
+  unhealthy, self-signed HTTPS validates via unchanged lab-insecure mode,
+  bounded timeout, proxy-auth failure redacted, no-direct-fallback with
+  zero target hits, redaction on every failure path, SOCKS4 fail-closed,
+  `Https` plaintext-CONNECT fidelity, bounded concurrent accounting,
+  cheap config-only clone).
+- WS3 disposition: `Socks5`/`Tor`→SOCKS5, `Http`→HTTP, `Https`→HTTP
+  (faithful to plaintext-CONNECT production behavior; naming debt, not a
+  health bug) validated; `Socks4`→explicit unsupported error (behavior fix
+  with fixture: previously a SOCKS5 result was presented as SOCKS4 health).
+- WS4: removed unused stored `client` (Clone is now config-only `derive`);
+  `check_all` stays sequential/deterministic; `check_concurrent` rewritten
+  on `buffer_unordered(concurrency)` — O(concurrency) in-flight, one result
+  per enabled proxy, no spawn-per-proxy JoinHandle retention.
+- WS5: Reqwest stays `default-features = false` with `rustls-no-provider`
+  + `socks` only; `utils::create_insecure_client_with_options` retained as
+  the health-only factory; `From<reqwest::Error>` retained for the health
+  path. Final graph unchanged from Phase A (+11 lock entries, no
+  duplicates, Tokio +fs/+signal recorded, MSRV 1.89, ring-only).
+- WS6 docs: `architecture/proxy.md` (engine ownership, health
+  disposition, placeholder local_addr, shim boundary),
+  `architecture/egress_reuse_decision.md` (1.0.8 addendum),
+  `architecture/overview.md`, `docs/CI_ARCHITECTURE_GUARDS.md`,
+  `README.md`, `eggsec-proxy` + `eggsec-config` skills updated. Historical
+  Phase E records untouched.
+- Residual upstream prerequisites: `OutboundInfo.local_addr` always None
+  (placeholder stands); `Https` TLS-to-proxy meaning unproven; no
+  resolver-injection API for deeper transport integration (deferred per
+  roadmap; `eggsec-transport` unchanged and Eggress-free).
+- Acceptance 1–15 met (criterion 14/hosted: no hosted run required by
+  current policy beyond PR CI; local gates all green, pushed for remote CI
+  verification).
+- Verification: `cargo test -p eggsec-web-proxy` 456 passed (includes 21
+  parity + 15 matrix), `proxy_adapter_smoke` 3 passed, `make check`,
+  `make check-deps`, `make check-feature-profiles`, `make
+  check-features-individual`, `make check-msrv` — all green locally.

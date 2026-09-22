@@ -1,6 +1,6 @@
 # Eggress 1.0.8 Phase A — proxy protocol engine adoption
 
-Status: Ready for handoff
+Status: Executed (2026-09-22)
 
 Date: 2026-09-22
 
@@ -470,4 +470,63 @@ Phase A is complete only when:
 14. focused tests, dependency policy, feature profiles, `make check`, and
     MSRV validation are green;
 15. the plan contains a completion record with exact final SHA and residual
-    debt for Phase B.
+     debt for Phase B.
+
+---
+
+## Completion record (executed 2026-09-22)
+
+- Baseline SHA: `c92e3e70` (clean tree). Implementation SHA: `d9749cc`.
+- Published graph measured from crates.io (`cargo info` + isolated probe):
+  `eggress-outbound =1.0.8` (`default-features = false`, MSRV 1.89) pulls
+  `eggress-core`/`eggress-relay`/`eggress-uri`/`eggress-protocol-http`
+  (over shared `eggfetch-http-connect 0.2.0`)/`eggress-protocol-socks`/
+  `eggress-transport-tls` plus already-present `h2`/`http`/`rustls`
+  (ring)/`tokio-rustls`/`bytes`/`thiserror`/`tracing`/`subtle`/`zeroize`/
+  `base64`. Tokio widens to `fs`+`signal` beyond the web-proxy package's
+  `rt`/`rt-multi-thread`/`macros`/`net`/`io-util`/`sync`/`time` (no
+  `test-util`); recorded in `architecture/egress_reuse_decision.md`
+  addendum and judged tolerable for the specialized crate only.
+- Lockfile delta vs baseline: +11 entries, all 1.0.8 family
+  (`eggress-*` ×7, `trait-variant`, `der`/`pkcs8`/`spki` via transport-tls),
+  zero removals, zero new duplicate-version families (`cargo tree -d`).
+- Adapter: `crates/eggsec-web-proxy/src/eggress_outbound.rs` (native
+  structs, no URI round-trip; `Socks4`→Socks4, `Socks5`/`Tor`→Socks5,
+  `Http`/`Https`→Http plaintext `tls=false`; credentials convert last with
+  short lifetime; `OutboundConnector::from_chain` rejects empty chains;
+  `connect_tcp_timeout` aggregate; future-drop safe; redacted mapping).
+- Parity: `crates/eggsec-web-proxy/tests/eggress_parity.rs`, 21/21 local
+  fixtures green (SOCKS5 auth/failures/domain/IPv4+IPv6, SOCKS4,
+  HTTP-CONNECT auth/failures/malformed, timeout, cancellation, 2-hop
+  ordering, mixed HTTP/SOCKS internally, hop0-vs-later diagnostics,
+  no-direct-fallback, `Https` plaintext characterization, private-target
+  rejection).
+- Production `ProxyManager` (`create_connection`,
+  `create_connection_to_domain`, `create_chained_connection`) routes via
+  the adapter (IP literal for resolved path, domain for remote path,
+  SOCKS-only multi-hop contract preserved, max-per-hop aggregate timeout).
+  `socks::connect_through`/`connect_through_tor` and
+  `http_connect::connect_through` delegate to the adapter (signatures
+  preserved); `SocksProxy`/`chain_connect`/`connect_through_with_domain`/
+  `HttpConnectProxy` retained as documented `TcpStream` compatibility shims
+  (Eggress `BoxStream` cannot satisfy them without forbidden downcast).
+- Residual debt for Phase B / upstream: `OutboundInfo.local_addr` is always
+  `None` in 1.0.8 (connector constructs it unconditionally), so
+  `ProxiedConnection.local_addr` is an unspecified placeholder (no
+  workspace consumer reads the field); `Https` naming debt stands.
+- Check 106 rewritten as the narrow positive boundary (pinned 1.0.8 edge,
+  transport/eggfetch/policy/core forbidden, embed/runtime/server/routing/
+  advanced + optional features forbidden, record names 1.0.8).
+- Acceptance 1–15 all met (decision updated with 1.0.6 history intact;
+  only web-proxy owns the edge; parity evidence above; DNS semantics
+  explicit; no fallback; redaction proven; timeout/cancel proven; shims
+  preserved with documented boundary; Reqwest health untouched for Phase B).
+- Verification: `cargo fmt --check`, `cargo check -p eggsec-web-proxy`
+  (both feature combos), `cargo test -p eggsec-web-proxy` 456 passed,
+  `proxy_adapter_smoke` 3 passed, `make check-deps`, `make
+  check-feature-profiles`, `make check-features-individual`, `make check`,
+  `make check-msrv` — all green locally.
+- Pre-existing breakage fixed to reach green (not plan scope but required):
+  `ProxyFlow` header maps are `FxHashMap`; `HashMap::new()` literals in
+  `redteam.rs`/`narrative.rs`/`stress_tests.rs`/`integration_tests.rs`
+  corrected to `FxHashMap::default()`.

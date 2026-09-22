@@ -1,6 +1,6 @@
 # Eggress 1.0.8 selective proxy-engine adoption roadmap
 
-Status: Ready for handoff
+Status: Executed (2026-09-22)
 
 Date: 2026-09-22
 
@@ -250,3 +250,29 @@ guard changes, and residual debt.
 Do not edit historical plan completion records to pretend the 1.0.6 rejection
 never existed. Current architecture documentation may be updated to state that
 1.0.8 changed the dependency boundary and therefore justified a new decision.
+
+---
+
+## Campaign completion record (executed 2026-09-22)
+
+- Baseline: `c92e3e70`. Implementation: `d9749cc` (both phases).
+- Global criteria 1–12 met: 1.0.8 decision recorded as release-specific
+  supersession (1.0.6 history intact); only `eggsec-web-proxy` consumes
+  Eggress; SOCKS/HTTP-CONNECT/chain execution is Eggress-backed with
+  21 parity fixtures; no proxy failure falls back direct (fixtures prove
+  zero target hits); credentials redacted (unit + integration fixtures);
+  timeout/cancellation tested; health stays application-level (15 matrix
+  fixtures; tunnel-only never reported); Reqwest retained explicitly as
+  health-only (Option B, no Reqwest-free claim);
+  `eggsec-transport` Eggress-free and scope-aware; graph delta recorded
+  (+11 lock entries, no duplicates, Tokio +fs/+signal, MSRV 1.89,
+  ring-only); Check 106 encodes the narrow boundary; focused, feature,
+  MSRV, and repository gates green locally.
+- Ordering honored: Phase A protocol migration landed and proved parity
+  before Phase B health refactoring; health semantics unchanged in
+  meaning (one explicit SOCKS4 fail-closed correction with fixture).
+- Deferred work untouched (transport backend, resolver injection,
+  `eggress-routing`, advanced protocols, interception, public DTOs).
+- Residual debt: `OutboundInfo.local_addr` placeholder; `Https` naming;
+  no upstream resolver-injection API. Phase completion records live in
+  the two phase plans (same SHAs).

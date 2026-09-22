@@ -14,7 +14,7 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## Eggress 1.0.8 selective proxy-engine adoption (ready for handoff)
+## Eggress 1.0.8 selective proxy-engine adoption (executed 2026-09-22)
 
 Roadmap:
 [eggress-1.0.8-adoption-roadmap-2026-09-22.md](eggress-1.0.8-adoption-roadmap-2026-09-22.md)
@@ -38,6 +38,13 @@ The campaign explicitly keeps Eggsec authorization, proxy pool/rotation,
 interception/MITM, and the Eggfetch-backed scoped HTTP transport independent
 from Eggress. No `eggress-embed`, runtime/server, routing, advanced-protocol,
 or pproxy compatibility adoption is planned.
+
+Executed 2026-09-22 (baseline `c92e3e70`, implementation `d9749cc`):
+Phase A migrated dial execution behind `eggress-outbound` with 21 parity
+fixtures; Phase B qualified health (Option B: Reqwest stays the explicit
+health-only owner; SOCKS4 fails closed) with 15 matrix fixtures. Guards,
+dependency policy, feature profiles, MSRV, and `make check` green locally.
+Completion evidence lives in the roadmap and phase-plan completion records.
 
 ## TUI confirmation-test intent corrective pass (executed 2026-09-22)
 
