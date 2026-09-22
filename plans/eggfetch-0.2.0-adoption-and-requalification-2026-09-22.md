@@ -608,15 +608,6 @@ repository guards and living documentation reflect 0.2.0, and the final
 implementation has current local/hosted evidence without introducing a new
 transport behavior or maintenance branch.
 
-## Exit criterion
-
-This line is closed when Eggsec consumes the published `eggfetch-core 0.2.0`
-release, the existing adapter passes its direct/H2/proxy/redirect/timeout
-qualification unchanged, all security and policy invariants remain intact,
-repository guards and living documentation reflect 0.2.0, and the final
-implementation has current local/hosted evidence without introducing a new
-transport behavior or maintenance branch.
-
 ## Completion record (executed 2026-09-22)
 
 ```text
