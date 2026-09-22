@@ -464,3 +464,6 @@ Executed 2026-09-22.
 - Remaining upstream-gated debt: `ProxiedConnection.local_addr` stays
   the unknown sentinel until Eggress publishes the real socket address
   (see removal condition above). No other open items.
+- Hosted CI on the final pushed SHA `5ea4952`: CI run 35788989032
+  successful (Rust, dependency policy, Python; dependency-review
+  skipped per policy), Code Quality push run 35788988435 successful.
