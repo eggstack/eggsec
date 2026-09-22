@@ -265,7 +265,7 @@ mod tests {
             .build_current_operation_descriptor()
             .expect("descriptor");
         // Take without cached approval: facade evaluates fresh.
-        let _ = app.enforcement_state.take_cached_approval(&desc);
+        assert!(app.enforcement_state.take_cached_approval(&desc).is_none());
         app.enforcement_state.clear_cached_approval();
         app.apply_action(crate::app::UiAction::ToggleEnforcementPosture);
         // After toggle, no stale approval may survive.
@@ -273,7 +273,7 @@ mod tests {
             app.enforcement_state.take_cached_approval(&desc).is_none(),
             "posture toggle must invalidate cached approval"
         );
-        let _ = spec_for(Tab::Recon).unwrap();
+        let _recon_spec = spec_for(Tab::Recon).unwrap();
     }
 
     #[test]

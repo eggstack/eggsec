@@ -111,10 +111,10 @@ mod tests {
     #[test]
     fn tab_store_new_initializes_all_tabs() {
         let store = TabStore::new();
-        let _ = &store.recon;
-        let _ = &store.load;
-        let _ = &store.settings;
-        let _ = &store.dashboard;
-        let _ = &store.fuzz;
+        let _recon = &store.recon;
+        let _load = &store.load;
+        let _settings = &store.settings;
+        let _dashboard = &store.dashboard;
+        let _fuzz = &store.fuzz;
     }
 }

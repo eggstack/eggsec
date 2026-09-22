@@ -1,7 +1,6 @@
 use crate::container::Severity;
 use crate::error::{EggsecError, Result};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DockerScanResult {
@@ -214,9 +213,23 @@ impl DockerScanner {
             ));
         }
 
-        let output = Command::new("docker")
-            .args(["inspect", image_name])
-            .output();
+        // Async subprocess with a 60s bound: the blocking
+        // `std::process::Command` would stall the executor, and an
+        // unresponsive daemon must not hang the scan.
+        let output = match tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            tokio::process::Command::new("docker")
+                .args(["inspect", image_name])
+                .output(),
+        )
+        .await
+        {
+            Ok(output) => output,
+            Err(_) => {
+                tracing::warn!("docker inspect timed out for {}", image_name);
+                return Ok(serde_json::Value::Object(serde_json::Map::new()));
+            }
+        };
 
         match output {
             Ok(output) if output.status.success() => {

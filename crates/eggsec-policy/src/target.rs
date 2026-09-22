@@ -141,15 +141,17 @@ fn normalize_url(raw: &str) -> OperationTarget {
             // Lowercase the host.
             if let Some(host) = parsed.host_str() {
                 let lower_host = host.to_lowercase();
-                let _ = parsed.set_host(Some(&lower_host));
+                if parsed.set_host(Some(&lower_host)).is_err() {
+                    tracing::debug!("normalize_url: set_host failed for lowercased host");
+                }
             }
             // Strip default port.
             let needs_port_strip = matches!(
                 (parsed.scheme(), parsed.port()),
                 ("http", Some(80)) | ("https", Some(443))
             );
-            if needs_port_strip {
-                let _ = parsed.set_port(None);
+            if needs_port_strip && parsed.set_port(None).is_err() {
+                tracing::debug!("normalize_url: set_port failed while stripping default port");
             }
             // Normalize path: remove trailing slash unless root.
             let path = parsed.path().to_string();

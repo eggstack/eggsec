@@ -94,7 +94,9 @@ impl TerminalSession {
             // `try_init` enables raw mode before entering the alternate
             // screen; if the latter fails the former would linger, so make a
             // best-effort attempt to hand back a usable terminal.
-            let _ = ratatui::try_restore();
+            if let Err(restore_err) = ratatui::try_restore() {
+                tracing::debug!("terminal rollback restore failed: {restore_err:#}");
+            }
             anyhow::anyhow!("failed to initialize TUI terminal: {e:#}")
         })?;
         let mut session = Self {
@@ -105,7 +107,9 @@ impl TerminalSession {
         if let Err(e) = execute!(io::stdout(), EnableMouseCapture) {
             // Mouse enable failed after raw/alternate-screen acquisition:
             // roll back before returning so no half-owned state escapes.
-            let _ = ratatui::try_restore();
+            if let Err(restore_err) = ratatui::try_restore() {
+                tracing::debug!("terminal rollback restore failed: {restore_err:#}");
+            }
             session.restored = true;
             return Err(anyhow::anyhow!("failed to enable mouse capture: {e:#}"));
         }

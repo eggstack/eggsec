@@ -40,6 +40,18 @@ impl Default for InterceptConfig {
     }
 }
 
+impl InterceptConfig {
+    /// Minimum decision timeout (1s floor).
+    ///
+    /// A zero timeout would make `tokio::time::timeout` fire immediately,
+    /// failing every intercept decision — including WebSocket upgrade
+    /// decisions — before the operator can respond. Clamp instead of
+    /// trusting caller-supplied `Duration`s.
+    pub fn effective_timeout(&self) -> Duration {
+        self.timeout.max(Duration::from_secs(1))
+    }
+}
+
 pub struct InterceptProxy {
     config: InterceptConfig,
     rules: Arc<RwLock<RuleSet>>,
@@ -94,7 +106,7 @@ impl InterceptProxy {
         _event: &InterceptEvent,
     ) -> Result<InterceptDecision> {
         if let Some(ref mut rx) = self.decision_rx {
-            let decision = tokio::time::timeout(self.config.timeout, rx.recv())
+            let decision = tokio::time::timeout(self.config.effective_timeout(), rx.recv())
                 .await
                 .map_err(|_| crate::error::WebProxyError::Proxy("Intercept timeout".to_string()))?
                 .ok_or_else(|| {

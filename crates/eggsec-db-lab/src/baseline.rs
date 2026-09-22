@@ -6,8 +6,8 @@
 
 use crate::types::{DbFinding, DbPentestReport};
 use eggsec_core::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// A captured baseline snapshot for regression comparison.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub struct DbBaseline {
     /// Summary of findings at baseline time.
     pub finding_categories: Vec<String>,
     /// Severity counts at baseline time.
-    pub severity_counts: HashMap<String, usize>,
+    pub severity_counts: FxHashMap<String, usize>,
     /// Total findings count.
     pub total_findings: usize,
     /// The full report data for detailed comparison.
@@ -61,7 +61,7 @@ pub struct SeverityChange {
 
 /// Capture a baseline from a `DbPentestReport`.
 pub fn capture_baseline(report: &DbPentestReport, label: Option<&str>) -> DbBaseline {
-    let mut severity_counts: HashMap<String, usize> = HashMap::new();
+    let mut severity_counts: FxHashMap<String, usize> = FxHashMap::default();
     for finding in &report.findings {
         *severity_counts
             .entry(format!("{:?}", finding.severity))
@@ -82,12 +82,12 @@ pub fn capture_baseline(report: &DbPentestReport, label: Option<&str>) -> DbBase
 
 /// Compare a new report against a baseline to detect regressions and improvements.
 pub fn compare_to_baseline(baseline: &DbBaseline, current: &DbPentestReport) -> DbRegressionResult {
-    let baseline_cats: std::collections::HashSet<&str> = baseline
+    let baseline_cats: rustc_hash::FxHashSet<&str> = baseline
         .finding_categories
         .iter()
         .map(|s| s.as_str())
         .collect();
-    let current_cats: std::collections::HashSet<&str> = current
+    let current_cats: rustc_hash::FxHashSet<&str> = current
         .findings
         .iter()
         .map(|f| f.category.as_str())
@@ -114,7 +114,7 @@ pub fn compare_to_baseline(baseline: &DbBaseline, current: &DbPentestReport) -> 
     let mut severity_increases = Vec::new();
     let mut severity_decreases = Vec::new();
 
-    let baseline_map: HashMap<&str, &Severity> = baseline
+    let baseline_map: FxHashMap<&str, &Severity> = baseline
         .report
         .findings
         .iter()

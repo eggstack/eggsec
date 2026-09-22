@@ -2,7 +2,6 @@ use crate::browser::BrowserConfig;
 use crate::error::Result;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomXssFinding {
@@ -109,7 +108,7 @@ pub async fn scan_dom_xss(
 
     let result = tab.evaluate(&js_script, true)?;
 
-    let findings_list: Vec<HashMap<String, String>> = match result.value.as_ref() {
+    let findings_list: Vec<rustc_hash::FxHashMap<String, String>> = match result.value.as_ref() {
         Some(v) => serde_json::from_value(v.clone()).unwrap_or_else(|e| {
             tracing::warn!("Failed to deserialize DOM XSS findings: {}", e);
             Vec::new()
@@ -208,6 +207,7 @@ mod tests {
     use headless_chrome::Browser;
 
     #[tokio::test]
+    #[ignore = "requires Chrome binary and network access to example.com"]
     async fn test_scan_dom_xss() {
         let browser = Browser::default().unwrap();
         let tab = browser.new_tab().unwrap();

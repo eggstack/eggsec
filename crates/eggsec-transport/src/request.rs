@@ -565,8 +565,11 @@ pub fn reject_url_userinfo(url: &Url) -> Result<(), TransportError> {
 pub fn redact_url_for_debug(url: &Url) -> String {
     let mut redacted = url.clone();
     if !redacted.username().is_empty() || redacted.password().is_some() {
-        let _ = redacted.set_username("");
-        let _ = redacted.set_password(None);
+        // Fail closed: if userinfo cannot be stripped, refuse to render the
+        // URL at all rather than risk leaking credentials into logs.
+        if redacted.set_username("").is_err() || redacted.set_password(None).is_err() {
+            return "[unprintable-url]".to_string();
+        }
     }
     redacted.to_string()
 }

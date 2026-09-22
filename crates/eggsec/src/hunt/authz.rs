@@ -110,7 +110,14 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
     }
 
     for handle in handles {
-        if let Ok((path, Ok(resp))) = handle.await {
+        let (path, resp_result) = match handle.await {
+            Ok(pair) => pair,
+            Err(e) => {
+                tracing::warn!("admin-path probe task panicked: {e}");
+                continue;
+            }
+        };
+        if let Ok(resp) = resp_result {
             let status = resp.status().as_u16();
             if status == 200 {
                 if let Ok(body) = resp.text().await {
@@ -180,7 +187,14 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
     }
 
     for handle in handles {
-        if let Ok((path, Ok(resp))) = handle.await {
+        let (path, resp_result) = match handle.await {
+            Ok(pair) => pair,
+            Err(e) => {
+                tracing::warn!("idor probe task panicked: {e}");
+                continue;
+            }
+        };
+        if let Ok(resp) = resp_result {
             let status = resp.status().as_u16();
             if status == 200 {
                 if let Ok(body) = resp.text().await {

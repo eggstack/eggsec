@@ -460,10 +460,9 @@ mod tests {
         match resp {
             ServerMessage::ClientDeclared {
                 request_id,
-                client_id,
+                client_id: _,
             } => {
                 assert!(!request_id.is_empty());
-                let _ = client_id;
             }
             other => panic!("expected ClientDeclared, got {:?}", other),
         }

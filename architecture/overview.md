@@ -71,7 +71,7 @@ nor hosted CI publishes a package.
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
-| `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints (incl. proxy-peer `authorize_proxy_resolved`/`authorize_proxy_socket`), TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` only). |
+| `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints (incl. proxy-peer `authorize_proxy_resolved`/`authorize_proxy_socket`), TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` + log-only `tracing`). |
 | `eggsec-transport-eggfetch` | Pinned HTTP backend | Yes | `HttpTransport` over published `eggfetch-core 0.1.7` (logical-URL + singular resolved-address direct, manual authorized redirects, H1/H2 route reuse via ALPN, pinned proxy peers/targets where enforceable, total deadline through body EOF). Production direct load-test backend. |
 | `eggsec-policy` | Authorization semantics | Yes | `ExecutionPolicy`, descriptors, catalog, scope data + pure matching, decisions, approval tokens, evaluation over explicit `EnabledFeatures` + `TargetScope` facts. No I/O/runtime/transport/frontend/engine deps. Engine bridges DNS/features/authority via `policy_bridge/` (Phase C). |
 
@@ -477,7 +477,7 @@ eggsec-core (leaf — no workspace deps)
     │       ↑
     │       └── eggsec-output (report formats, dedup, trends over the model — never the reverse)
     ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron)
-    ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror only)
+    ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror + log-only tracing)
     ├── eggsec-transport-eggfetch (pinned HttpTransport over eggfetch-core 0.1.7; logical-URL + singular resolved direct, production direct load-test backend)
     ├── eggsec-policy         (authorization semantics — pure data + algorithms; engine bridges DNS/features/authority)
     │

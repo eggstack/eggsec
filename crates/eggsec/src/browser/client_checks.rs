@@ -253,6 +253,7 @@ mod tests {
     use headless_chrome::Browser;
 
     #[tokio::test]
+    #[ignore = "requires Chrome binary and network access to example.com"]
     async fn test_check_client_security() {
         let browser = Browser::default().unwrap();
         let tab = browser.new_tab().unwrap();

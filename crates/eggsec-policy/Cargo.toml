@@ -23,6 +23,7 @@ sha2 = "0.10"
 uuid = { workspace = true }
 hex = { workspace = true }
 rustc-hash = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = []

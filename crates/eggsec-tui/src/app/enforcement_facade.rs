@@ -413,7 +413,7 @@ mod tests {
     fn try_approve_populates_last_preflight() {
         let mut facade = test_facade(ExecutionSurface::TuiManual);
         let desc = passive_descriptor("recon", Some("example.com"));
-        let _ = facade.try_approve(desc);
+        assert!(facade.try_approve(desc).is_ok());
         assert!(
             facade.state.last_preflight.is_some(),
             "try_approve should set last_preflight"
@@ -741,7 +741,9 @@ mod tests {
         facade.set_cached_approval(approved);
         // confirm_override replaces manual_override state and clears the cache.
         let classes = vec![ConfirmationClass::OutOfScope];
-        let _ = facade.confirm_override(&desc, &classes, Some("reason".to_string()));
+        assert!(facade
+            .confirm_override(&desc, &classes, Some("reason".to_string()))
+            .is_ok());
         assert!(
             !facade.has_pending_approval(),
             "override-state change must invalidate prior cached approval"

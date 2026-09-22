@@ -5,7 +5,7 @@
 //! async runtime. The `clippy::await_holding_lock` deny below enforces this.
 #![warn(clippy::await_holding_lock)]
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use eggsec_runtime::{ClientId, Runtime, RuntimeConfig, RuntimeError, RuntimeTaskExecutor};
@@ -75,7 +75,7 @@ pub struct DaemonHost {
     runtime: Arc<Runtime>,
     config: DaemonConfig,
     client_registry: std::sync::Mutex<ClientRegistry>,
-    session_access: std::sync::Mutex<HashMap<eggsec_runtime::SessionId, SessionAccess>>,
+    session_access: std::sync::Mutex<FxHashMap<eggsec_runtime::SessionId, SessionAccess>>,
     store: Arc<dyn DaemonStore>,
     /// Whether the executor is a no-op stub (rejects all tasks).
     /// Used to report honest capabilities to clients.
@@ -93,7 +93,7 @@ impl DaemonHost {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
-            session_access: std::sync::Mutex::new(HashMap::new()),
+            session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             executor_is_noop: false,
         }
@@ -111,7 +111,7 @@ impl DaemonHost {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
-            session_access: std::sync::Mutex::new(HashMap::new()),
+            session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             executor_is_noop: true,
         }
@@ -132,7 +132,7 @@ impl DaemonHost {
             runtime,
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
-            session_access: std::sync::Mutex::new(HashMap::new()),
+            session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             executor_is_noop,
         }
@@ -1272,10 +1272,9 @@ mod tests {
         match resp {
             ServerMessage::TaskSubmitted {
                 request_id,
-                task_id,
+                task_id: _,
             } => {
                 assert_eq!(request_id, "r2");
-                let _ = task_id;
             }
             other => panic!("expected TaskSubmitted, got {:?}", other),
         }
@@ -1403,10 +1402,9 @@ mod tests {
         match resp {
             ServerMessage::ClientDeclared {
                 request_id,
-                client_id,
+                client_id: _,
             } => {
                 assert_eq!(request_id, "r1");
-                let _ = client_id;
             }
             other => panic!("expected ClientDeclared, got {:?}", other),
         }

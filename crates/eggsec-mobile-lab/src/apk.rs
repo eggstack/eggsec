@@ -21,7 +21,7 @@
 
 use crate::{MobileError, MobileFinding, MobilePlatform, MobileScanReport, Result};
 use eggsec_core::types::Severity;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::Read;
 use std::path::Path;
 use tracing::{debug, warn};
@@ -242,7 +242,7 @@ fn parse_binary_axml(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
                 let raw_ac = read_u32_at(data, body + 24);
                 let attr_count = if raw_ac == 0 { 0 } else { raw_ac };
                 let mut attr_p = body + 40;
-                let mut attrs: HashMap<String, String> = HashMap::new();
+                let mut attrs: FxHashMap<String, String> = FxHashMap::default();
 
                 for _ in 0..attr_count {
                     if attr_p + 20 > data.len() {
@@ -460,7 +460,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                 let tag = std::str::from_utf8(e.name().as_ref())
                     .unwrap_or("")
                     .to_string();
-                let attrs: HashMap<String, String> = e
+                let attrs: FxHashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
                         if let Err(ref e) = a {
@@ -527,7 +527,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                 let tag = std::str::from_utf8(e.name().as_ref())
                     .unwrap_or("")
                     .to_string();
-                let attrs: HashMap<String, String> = e
+                let attrs: FxHashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
                         if let Err(ref e) = a {
@@ -604,7 +604,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
 }
 
 /// Application-level attribute handling (shared by binary and text paths).
-fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut MobileScanReport) {
+fn handle_application_attrs(attrs: &FxHashMap<String, String>, report: &mut MobileScanReport) {
     if attrs
         .get("debuggable")
         .map(|v| v.eq_ignore_ascii_case("true"))
@@ -739,7 +739,7 @@ fn handle_permission(name: &str, report: &mut MobileScanReport) {
 
 fn handle_start_tag(
     tag: &str,
-    attrs: &HashMap<String, String>,
+    attrs: &FxHashMap<String, String>,
     report: &mut MobileScanReport,
     current: &mut Option<Component>,
     _in_application: &mut bool,

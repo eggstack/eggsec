@@ -404,7 +404,9 @@ impl ContentAddressedArtifactStore {
         };
         if removed {
             let file_path = Path::new(&self.base_dir).join(hash);
-            let _ = fs::remove_file(&file_path);
+            if let Err(e) = fs::remove_file(&file_path) {
+                tracing::debug!("content store file already removed: {e}");
+            }
         }
         Ok(removed)
     }
@@ -519,7 +521,9 @@ impl ContentAddressedArtifactStore {
             for hash in &removed_hashes {
                 entries.remove(hash);
                 let file_path = Path::new(&self.base_dir).join(hash);
-                let _ = fs::remove_file(&file_path);
+                if let Err(e) = fs::remove_file(&file_path) {
+                    tracing::debug!("content store file already removed: {e}");
+                }
             }
         }
 
@@ -740,7 +744,9 @@ impl DirectoryArtifactStore {
         };
         if removed {
             let file_path = self.resolve_file_path(name);
-            let _ = fs::remove_file(&file_path);
+            if let Err(e) = fs::remove_file(&file_path) {
+                tracing::debug!("content store file already removed: {e}");
+            }
         }
         Ok(removed)
     }

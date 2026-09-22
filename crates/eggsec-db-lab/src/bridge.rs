@@ -224,6 +224,6 @@ mod tests {
             .iter()
             .any(|f| f.category.contains("db-postgres")));
         // Roundtrip
-        let _ = serde_json::to_string(&srd).unwrap();
+        assert!(serde_json::to_string(&srd).is_ok());
     }
 }

@@ -395,10 +395,10 @@ impl BundleDiff {
 /// Flows are matched by their `index` field; manipulations, rules, and correlations
 /// are compared by count.
 pub fn compare_bundles(baseline: &EvidenceBundle, other: &EvidenceBundle) -> BundleDiff {
-    use std::collections::HashSet;
+    use rustc_hash::FxHashSet;
 
-    let baseline_flow_indices: HashSet<u64> = baseline.flows.iter().map(|f| f.index).collect();
-    let other_flow_indices: HashSet<u64> = other.flows.iter().map(|f| f.index).collect();
+    let baseline_flow_indices: FxHashSet<u64> = baseline.flows.iter().map(|f| f.index).collect();
+    let other_flow_indices: FxHashSet<u64> = other.flows.iter().map(|f| f.index).collect();
 
     let flows_added: Vec<u64> = other_flow_indices
         .difference(&baseline_flow_indices)
@@ -495,7 +495,7 @@ mod tests {
     use crate::intercept::correlation::{CorrelationReference, CorrelationSource};
     use crate::intercept::rules::{EnhancedRule, RuleAction, RuleCondition};
     use crate::intercept::types::*;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
 
     fn sample_report() -> WebProxySessionReport {
         let mut report = WebProxySessionReport::new("127.0.0.1:8080", false);
@@ -506,10 +506,10 @@ mod tests {
             url: "https://example.com/".to_string(),
             host: "example.com".to_string(),
             path: "/".to_string(),
-            request_headers: HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 150,
@@ -696,10 +696,10 @@ mod tests {
             url: "https://example.com/api".to_string(),
             host: "example.com".to_string(),
             path: "/api".to_string(),
-            request_headers: std::collections::HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 201,
-            response_headers: std::collections::HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 50,
@@ -730,10 +730,10 @@ mod tests {
             url: "https://example.com/api".to_string(),
             host: "example.com".to_string(),
             path: "/api".to_string(),
-            request_headers: std::collections::HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 201,
-            response_headers: std::collections::HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 50,

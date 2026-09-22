@@ -290,7 +290,9 @@ mod tests {
     fn temp_theme_dir(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("eggsec_theme_test_{}_{}", std::process::id(), name));
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::debug!(error = %e, "test theme dir already absent");
+        }
         dir
     }
 
@@ -307,7 +309,9 @@ mod tests {
         // File should be unchanged regardless of packaged data decode result
         assert_eq!(fs::read_to_string(&dest).unwrap(), content);
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::debug!(error = %e, "test theme cleanup failed");
+        }
     }
 
     #[test]
@@ -319,7 +323,9 @@ mod tests {
         assert!(dir.exists());
         // Should not panic; errors are collected, not fatal
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::debug!(error = %e, "test theme cleanup failed");
+        }
     }
 
     #[test]
@@ -357,7 +363,9 @@ mod tests {
             assert_eq!(record.source, ThemeSource::Custom);
         }
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::debug!(error = %e, "test theme cleanup failed");
+        }
     }
 
     #[test]
@@ -393,7 +401,9 @@ mod tests {
             .unwrap();
         assert_eq!(custom.source, ThemeSource::Custom);
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::debug!(error = %e, "test theme cleanup failed");
+        }
     }
 
     #[test]

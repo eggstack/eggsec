@@ -3009,7 +3009,7 @@ W/PackageManager: permission denied: READ_SMS
         // new optional fields may be present on the returned note
         assert!(notes.len() >= 1);
         // but even if scored, the DynamicMobileFinding itself is unchanged shape
-        let _ = serde_json::to_string(&dyns[0]).unwrap();
+        assert!(serde_json::to_string(&dyns[0]).is_ok());
     }
 
     #[test]

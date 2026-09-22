@@ -62,6 +62,16 @@ impl WebhookNotifier {
         Ok(Self { client, webhooks })
     }
 
+    /// Infallible disabled notifier (no webhooks, default client).
+    /// Fallback for contexts that must not panic when client construction fails.
+    pub fn empty() -> Self {
+        crate::install_tls_provider();
+        Self {
+            client: reqwest::Client::new(),
+            webhooks: Vec::new(),
+        }
+    }
+
     pub fn is_enabled(&self) -> bool {
         !self.webhooks.is_empty()
     }

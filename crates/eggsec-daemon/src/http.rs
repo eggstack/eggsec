@@ -689,7 +689,12 @@ mod tests {
         // ring provider once per test process before any client is built.
         static CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();
         CRYPTO_PROVIDER.call_once(|| {
-            let _ = rustls::crypto::ring::default_provider().install_default();
+            if rustls::crypto::ring::default_provider()
+                .install_default()
+                .is_err()
+            {
+                tracing::debug!("rustls crypto provider already installed");
+            }
         });
 
         let config = DaemonConfig::default();

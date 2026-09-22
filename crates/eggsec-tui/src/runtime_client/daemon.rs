@@ -36,7 +36,7 @@ struct DaemonConnection {
     request_counter: AtomicU64,
     writer: Mutex<tokio::net::unix::OwnedWriteHalf>,
     pending_responses: std::sync::Arc<
-        std::sync::Mutex<std::collections::HashMap<String, oneshot::Sender<ServerMessage>>>,
+        std::sync::Mutex<rustc_hash::FxHashMap<String, oneshot::Sender<ServerMessage>>>,
     >,
     /// Active event subscriber senders. The reader task fans out
     /// RuntimeEvent messages to all registered channels.
@@ -58,8 +58,8 @@ impl DaemonRuntimeClient {
         let (read_half, write_half) = stream.into_split();
 
         let pending_responses: std::sync::Arc<
-            std::sync::Mutex<std::collections::HashMap<String, oneshot::Sender<ServerMessage>>>,
-        > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+            std::sync::Mutex<rustc_hash::FxHashMap<String, oneshot::Sender<ServerMessage>>>,
+        > = std::sync::Arc::new(std::sync::Mutex::new(rustc_hash::FxHashMap::default()));
 
         let pending_clone = pending_responses.clone();
         let event_channels: EventChannels = Arc::new(tokio::sync::RwLock::new(Vec::new()));

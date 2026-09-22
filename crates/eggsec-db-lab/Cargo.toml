@@ -38,6 +38,9 @@ tokio = { workspace = true, features = ["rt", "macros", "net", "fs"] }
 # Tracing
 tracing.workspace = true
 
+# Fast hash maps (workspace convention)
+rustc-hash.workspace = true
+
 # Database drivers (optional, behind feature flags)
 sqlx = { version = "0.8", optional = true, features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"] }
 tiberius = { version = "0.12", optional = true, default-features = false, features = ["tokio", "rustls"] }

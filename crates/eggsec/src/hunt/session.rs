@@ -223,8 +223,9 @@ async fn check_session_fixation(client: &HuntClient, config: &HuntConfig) -> Vec
 
     let mut all_cookies: Vec<Vec<String>> = Vec::new();
     for handle in handles {
-        if let Ok(cookies) = handle.await {
-            all_cookies.push(cookies);
+        match handle.await {
+            Ok(cookies) => all_cookies.push(cookies),
+            Err(e) => tracing::warn!("session probe task panicked: {e}"),
         }
     }
 

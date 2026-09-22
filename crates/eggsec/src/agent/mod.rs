@@ -399,7 +399,10 @@ impl Agent {
                 Vec::new(),
             );
             let outcome = execution_services.evaluate(&probe);
-            let _ = outcome;
+            tracing::debug!(
+                ?outcome,
+                "injected engine-services probe evaluation (construction-time check)"
+            );
             // Strictness is enforced at approve/dispatch time; construction
             // records the bundle without executing.
         }
@@ -2127,7 +2130,9 @@ mod tests {
 
         // Run scheduled scans - this tests that the machinery works
         // We can't guarantee the cron will match with real Utc::now(), so we just verify no panic
-        let _ = agent.process_scheduled_scans().await;
+        if let Err(e) = agent.process_scheduled_scans().await {
+            tracing::debug!(error = %e, "scheduled scan dispatch failed in test");
+        }
     }
 
     // Phase 8: Alert routing tests
@@ -2524,7 +2529,9 @@ mod tests {
             });
 
         // Process scheduled scans (dispatch will fail)
-        let _ = agent.process_scheduled_scans().await;
+        if let Err(e) = agent.process_scheduled_scans().await {
+            tracing::debug!(error = %e, "expected dispatch failure in test");
+        }
 
         // Verify last_scan was NOT updated (should still be the old value)
         let target = agent.portfolio.get_target("https://example.com").unwrap();

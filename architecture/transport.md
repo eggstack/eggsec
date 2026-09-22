@@ -34,7 +34,7 @@ in the workspace.
 Dependency envelope (`cargo tree -p eggsec-transport`):
 
 - `bytes`, `http` (Method/Status/HeaderMap types), `url`, `thiserror`
-- No `reqwest`/`hyper`/`rustls`/`tokio-rustls`/`hickory-resolver`/`eggfetch`/`eggress`
+- No `reqwest`/`hyper`/`rustls`/`tokio-rustls`/`hickory-resolver`/`eggfetch`/`eggress`, no `tracing`
 - No `tokio`, no `serde`, no `async-trait` (native `async fn` in traits, MSRV 1.89)
 
 ## Architecture

@@ -19,21 +19,21 @@ pub struct Database {
 }
 
 impl Database {
-    pub async fn new(config: &StorageConfig) -> Result<Self> {
+    pub async fn new(_config: &StorageConfig) -> Result<Self> {
         #[cfg(feature = "database")]
         {
             // Build connection options from discrete fields rather than
             // interpolating the password into a URL string, which sqlx may
             // echo in error/log output.
             let options = sqlx::postgres::PgConnectOptions::new()
-                .host(&config.host)
-                .port(config.port)
-                .username(&config.username)
-                .password(config.password.expose_secret())
-                .database(&config.database);
+                .host(&_config.host)
+                .port(_config.port)
+                .username(&_config.username)
+                .password(_config.password.expose_secret())
+                .database(&_config.database);
 
             let pool = PgPoolOptions::new()
-                .max_connections(config.max_connections)
+                .max_connections(_config.max_connections)
                 .connect_with(options)
                 .await
                 .map_err(|e| {
@@ -44,7 +44,6 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = config;
             Err(EggsecError::Config(
                 "database feature not enabled".to_string(),
             ))
@@ -56,10 +55,7 @@ impl Database {
         &self.pool
     }
 
-    pub async fn insert_scan(&self, scan: &StoredScan) -> Result<()> {
-        #[cfg(not(feature = "database"))]
-        let _ = scan;
-
+    pub async fn insert_scan(&self, _scan: &StoredScan) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(
@@ -70,13 +66,13 @@ impl Database {
                      status = EXCLUDED.status,
                      findings_count = EXCLUDED.findings_count"
             )
-            .bind(&scan.id)
-            .bind(&scan.target)
-            .bind(&scan.scan_type)
-            .bind(scan.started_at)
-            .bind(scan.completed_at)
-            .bind(scan.status.to_string())
-            .bind(scan.findings_count as i64)
+            .bind(&_scan.id)
+            .bind(&_scan.target)
+            .bind(&_scan.scan_type)
+            .bind(_scan.started_at)
+            .bind(_scan.completed_at)
+            .bind(_scan.status.to_string())
+            .bind(_scan.findings_count as i64)
             .execute(&self.pool)
             .await
             .map_err(|e| EggsecError::Config(format!("Failed to insert scan: {}", e)))?;
@@ -84,11 +80,11 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_scan(&self, id: &str) -> Result<Option<StoredScan>> {
+    pub async fn get_scan(&self, _id: &str) -> Result<Option<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM scans WHERE id = $1")
-                .bind(id)
+                .bind(_id)
                 .fetch_optional(&self.pool)
                 .await
                 .map_err(|e| EggsecError::Config(format!("Failed to get scan: {}", e)))?;
@@ -105,16 +101,15 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = id;
             Ok(None)
         }
     }
 
-    pub async fn list_scans(&self, limit: usize) -> Result<Vec<StoredScan>> {
+    pub async fn list_scans(&self, _limit: usize) -> Result<Vec<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query("SELECT * FROM scans ORDER BY started_at DESC LIMIT $1")
-                .bind(limit as i64)
+                .bind(_limit as i64)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(|e| EggsecError::Config(format!("Failed to list scans: {}", e)))?;
@@ -134,20 +129,16 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = limit;
             Ok(vec![])
         }
     }
 
-    pub async fn insert_finding(&self, stored: &StoredFinding) -> Result<()> {
-        #[cfg(not(feature = "database"))]
-        let _ = stored;
-
+    pub async fn insert_finding(&self, _stored: &StoredFinding) -> Result<()> {
         #[cfg(feature = "database")]
         {
-            let finding_json = serde_json::to_value(&stored.finding)
+            let finding_json = serde_json::to_value(&_stored.finding)
                 .map_err(|e| EggsecError::Config(format!("Failed to serialize finding: {}", e)))?;
-            let history_json = serde_json::to_value(&stored.status_history).map_err(|e| {
+            let history_json = serde_json::to_value(&_stored.status_history).map_err(|e| {
                 EggsecError::Config(format!("Failed to serialize status history: {}", e))
             })?;
 
@@ -161,12 +152,12 @@ impl Database {
                      updated_at = EXCLUDED.updated_at,
                      status_history = EXCLUDED.status_history"
             )
-            .bind(&stored.finding.id)
-            .bind(&stored.scan_id)
+            .bind(&_stored.finding.id)
+            .bind(&_stored.scan_id)
             .bind(finding_json)
-            .bind(stored.status.to_string())
-            .bind(stored.created_at)
-            .bind(stored.updated_at)
+            .bind(_stored.status.to_string())
+            .bind(_stored.created_at)
+            .bind(_stored.updated_at)
             .bind(history_json)
             .execute(&self.pool)
             .await
@@ -175,11 +166,11 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_finding(&self, id: &str) -> Result<Option<StoredFinding>> {
+    pub async fn get_finding(&self, _id: &str) -> Result<Option<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM findings WHERE id = $1")
-                .bind(id)
+                .bind(_id)
                 .fetch_optional(&self.pool)
                 .await
                 .map_err(|e| EggsecError::Config(format!("Failed to get finding: {}", e)))?;
@@ -188,20 +179,16 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = id;
             Ok(None)
         }
     }
 
-    pub async fn update_finding_status(&self, id: &str, status: FindingStatus) -> Result<()> {
-        #[cfg(not(feature = "database"))]
-        let _ = (id, status);
-
+    pub async fn update_finding_status(&self, _id: &str, _status: FindingStatus) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query("UPDATE findings SET status = $1, updated_at = NOW() WHERE id = $2")
-                .bind(status.to_string())
-                .bind(id)
+                .bind(_status.to_string())
+                .bind(_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| {
@@ -213,18 +200,18 @@ impl Database {
 
     pub async fn list_findings(
         &self,
-        scan_id: &str,
-        offset: usize,
-        limit: usize,
+        _scan_id: &str,
+        _offset: usize,
+        _limit: usize,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query(
                 "SELECT * FROM findings WHERE scan_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
             )
-            .bind(scan_id)
-            .bind(offset as i64)
-            .bind(limit as i64)
+            .bind(_scan_id)
+            .bind(_offset as i64)
+            .bind(_limit as i64)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| EggsecError::Config(format!("Failed to list findings: {}", e)))?;
@@ -235,22 +222,21 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = (scan_id, offset, limit);
             Ok(vec![])
         }
     }
 
     pub async fn list_all_findings(
         &self,
-        offset: usize,
-        limit: usize,
+        _offset: usize,
+        _limit: usize,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let rows =
                 sqlx::query("SELECT * FROM findings ORDER BY created_at DESC OFFSET $1 LIMIT $2")
-                    .bind(offset as i64)
-                    .bind(limit as i64)
+                    .bind(_offset as i64)
+                    .bind(_limit as i64)
                     .fetch_all(&self.pool)
                     .await
                     .map_err(|e| {
@@ -263,18 +249,20 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = (offset, limit);
             Ok(vec![])
         }
     }
 
-    pub async fn get_findings_by_severity(&self, severity: Severity) -> Result<Vec<StoredFinding>> {
+    pub async fn get_findings_by_severity(
+        &self,
+        _severity: Severity,
+    ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query(
                 "SELECT * FROM findings WHERE finding->>'severity' = $1 ORDER BY created_at DESC",
             )
-            .bind(severity.as_str().to_lowercase())
+            .bind(_severity.as_str().to_lowercase())
             .fetch_all(&self.pool)
             .await
             .map_err(|e| {
@@ -287,21 +275,17 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = severity;
             Ok(vec![])
         }
     }
 
-    pub async fn update_scan_findings_count(&self, scan_id: &str) -> Result<()> {
-        #[cfg(not(feature = "database"))]
-        let _ = scan_id;
-
+    pub async fn update_scan_findings_count(&self, _scan_id: &str) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(
                 "UPDATE scans SET findings_count = (SELECT COUNT(*)::int FROM findings WHERE scan_id = $1) WHERE id = $1",
             )
-            .bind(scan_id)
+            .bind(_scan_id)
             .execute(&self.pool)
             .await
             .map_err(|e| {

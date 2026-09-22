@@ -39,6 +39,9 @@ tokio = { workspace = true, features = ["rt", "macros", "net", "fs", "io-util", 
 # Tracing
 tracing.workspace = true
 
+# Fast hash maps (workspace convention)
+rustc-hash.workspace = true
+
 # ZIP parsing (APK/IPA)
 zip = "2"
 

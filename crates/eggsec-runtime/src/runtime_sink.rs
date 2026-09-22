@@ -185,13 +185,15 @@ mod tests {
         // Overflow the channel: lag is recoverable, receiver must not report
         // closure.
         for _ in 0..5 {
-            let _ = tx.send(RuntimeEvent::SessionClosed {
-                session_id: SessionId::new(),
-            });
+            assert!(tx
+                .send(RuntimeEvent::SessionClosed {
+                    session_id: SessionId::new(),
+                })
+                .is_ok());
         }
         // At least one event (or lag recovery) should still yield progress;
         // None only means Closed, which must not happen here.
-        let _ = receiver.try_recv();
+        let _lagged = receiver.try_recv();
     }
 
     #[test]

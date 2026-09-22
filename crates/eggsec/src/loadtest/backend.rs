@@ -528,7 +528,6 @@ impl HttpTransport for ReqwestTransport {
             let response = self.send_one(&client, &request, &current_url).await?;
             let status = response.status();
             let headers = response.headers().clone();
-            let final_url = response.url().clone();
             let remote = response.remote_addr();
             // Drain the body for connection reuse (parity with the
             // pre-migration runner, which consumed every body).
@@ -552,7 +551,11 @@ impl HttpTransport for ReqwestTransport {
                     }),
                 });
             }
-            let location = location.expect("redirect has location");
+            let Some(location) = location else {
+                return Err(TransportError::InvalidRequest(
+                    "redirect status without Location header".to_string(),
+                ));
+            };
             let next_url = current_url.join(&location).map_err(|e| {
                 TransportError::InvalidRequest(format!("bad redirect Location: {e}"))
             })?;
@@ -580,7 +583,6 @@ impl HttpTransport for ReqwestTransport {
             }
             history.push(current_url);
             current_url = next_url;
-            let _ = final_url;
         }
 
         Err(TransportError::denied(
@@ -673,10 +675,10 @@ mod tests {
         let transport = test_transport();
         let req_verified = proxied_request("http://127.0.0.1:8080", "u", "p", true);
         let req_insecure = proxied_request("http://127.0.0.1:8080", "u", "p", false);
-        let _ = transport
+        transport
             .client_for(&req_verified)
             .expect("verified builds");
-        let _ = transport
+        transport
             .client_for(&req_insecure)
             .expect("insecure builds");
         let cache = transport.proxied.lock().expect("cache lock");

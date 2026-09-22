@@ -7,12 +7,12 @@ use parking_lot::RwLock;
 use rcgen::{
     BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
 };
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct CertGenerator {
-    cache: Arc<RwLock<HashMap<String, CachedCert>>>,
+    cache: Arc<RwLock<FxHashMap<String, CachedCert>>>,
     validity_duration: Duration,
 }
 
@@ -32,7 +32,7 @@ fn unix_timestamp_secs() -> u64 {
 impl CertGenerator {
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(FxHashMap::default())),
             validity_duration: Duration::from_secs(86400),
         }
     }

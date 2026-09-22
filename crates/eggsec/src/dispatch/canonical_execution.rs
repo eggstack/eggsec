@@ -51,7 +51,7 @@ use std::sync::{
 
 use tokio::sync::mpsc;
 
-use crate::config::{normalize_target, ApprovedOperation, OperationTarget};
+use crate::config::ApprovedOperation;
 use crate::dispatch::types::TaskResult;
 
 // ── Frontend-neutral execution events (WS 1.4) ──
@@ -1464,7 +1464,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "nse"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "nse".to_string(),
@@ -1487,7 +1487,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "advanced-hunting"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "advanced-hunting".to_string(),
@@ -1510,7 +1510,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "headless-browser"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "headless-browser".to_string(),
@@ -1533,7 +1533,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "compliance"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "compliance".to_string(),
@@ -1592,7 +1592,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "external-integrations"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "external-integrations".to_string(),
@@ -1645,7 +1645,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "vuln-management"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "vuln-management".to_string(),
@@ -1667,7 +1667,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "wireless"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "wireless".to_string(),
@@ -1695,7 +1695,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "wireless-advanced"))]
             {
-                let _ = p;
+                drop(p);
                 // Wireless-active without the advanced gate degrades to the
                 // base wireless gate for a consistent unavailable signal.
                 let feature = if cfg!(feature = "wireless") {
@@ -1767,7 +1767,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "web-proxy"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "web-proxy".to_string(),
@@ -1791,7 +1791,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "c2"))]
             {
-                let _ = p;
+                drop(p);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "c2".to_string(),
@@ -1808,8 +1808,7 @@ async fn execute_canonical_inner(
 
     // Surface normalized-target context for scope decisions without
     // duplicating authorization here (enforcement already approved).
-    let _ = normalize_target("localhost", None);
-    let _ = OperationTarget::None;
+    // (No local target probing: scope decisions use the approved bundle.)
 
     result
 }

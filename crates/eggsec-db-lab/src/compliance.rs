@@ -3,7 +3,7 @@
 //! Maps `DbFinding` categories to compliance control families (PCI-DSS, CIS, HIPAA, SOC2).
 //! Pure rule-based; no external data. Used for reporting enrichment in dry-run and real runs.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ pub struct ComplianceHit {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ComplianceSummary {
     pub total_mappings: usize,
-    pub by_family: HashMap<String, usize>,
+    pub by_family: FxHashMap<String, usize>,
 }
 
 /// Full compliance mapping result.
@@ -196,7 +196,7 @@ pub static COMPLIANCE_RULES: LazyLock<Vec<ComplianceMapping>> = LazyLock::new(||
 pub fn map_findings_to_compliance(findings: &[DbFinding]) -> ComplianceResult {
     let rules = &*COMPLIANCE_RULES;
     let mut hits = Vec::new();
-    let mut by_family: HashMap<String, usize> = HashMap::new();
+    let mut by_family: FxHashMap<String, usize> = FxHashMap::default();
 
     for finding in findings {
         for rule in rules {

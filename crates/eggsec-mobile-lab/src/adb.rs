@@ -1156,7 +1156,9 @@ mod tests {
                     let mut bad = header;
                     bad[20..24].copy_from_slice(&0xdeadbeefu32.to_le_bytes());
                     use tokio::io::AsyncWriteExt as _;
-                    let _ = s.write_all(&bad).await;
+                    if let Err(e) = s.write_all(&bad).await {
+                        tracing::debug!(error = %e, "test bad-header write failed");
+                    }
                 }
             }
         });

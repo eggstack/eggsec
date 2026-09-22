@@ -354,8 +354,8 @@ impl DbCorrelationEngine {
                 reports.iter().flat_map(|r| r.findings.iter()).collect();
 
             // Group findings by pattern family
-            let mut pattern_families: std::collections::HashMap<String, Vec<&DbFinding>> =
-                std::collections::HashMap::new();
+            let mut pattern_families: rustc_hash::FxHashMap<String, Vec<&DbFinding>> =
+                rustc_hash::FxHashMap::default();
             for f in &all_findings {
                 for rule in CORRELATION_RULES {
                     if rule.correlation_type == DbCorrelationType::Behavioral
@@ -371,7 +371,7 @@ impl DbCorrelationEngine {
 
             for (pattern, findings) in &pattern_families {
                 // Check if findings span multiple db_types
-                let types: std::collections::HashSet<&str> =
+                let types: rustc_hash::FxHashSet<&str> =
                     findings.iter().map(|f| f.db_type.as_str()).collect();
                 if types.len() > 1 {
                     // Find the enrichment text from rules

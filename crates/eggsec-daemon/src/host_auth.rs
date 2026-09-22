@@ -12,7 +12,7 @@
 //! recovered sessions stay visible; an explicit owner restricts to the
 //! owner plus allowed clients; everyone else is `Observer`.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use eggsec_runtime::SessionId;
 
@@ -22,7 +22,7 @@ use crate::client_registry::{ClientRole, SessionAccess};
 ///
 /// Pure function over the access map; see `DaemonHost::client_role_for_session`.
 pub fn role_for_session(
-    access: &HashMap<SessionId, SessionAccess>,
+    access: &FxHashMap<SessionId, SessionAccess>,
     client_id: &eggsec_runtime::ClientId,
     session_id: &SessionId,
 ) -> ClientRole {
@@ -44,7 +44,7 @@ pub fn role_for_session(
 /// the caller must be the owner, an allowed client, or (when no client id is
 /// present) the session must be ownerless.
 pub fn may_observe_session(
-    access: &HashMap<SessionId, SessionAccess>,
+    access: &FxHashMap<SessionId, SessionAccess>,
     client_id: Option<eggsec_runtime::ClientId>,
     session_id: &SessionId,
 ) -> bool {
@@ -83,7 +83,7 @@ mod tests {
     fn owner_resolves_to_owner_role() {
         let owner = eggsec_runtime::ClientId::new();
         let session = SessionId::new();
-        let mut access = HashMap::new();
+        let mut access = FxHashMap::default();
         access.insert(session, owner_access(owner));
         assert!(matches!(
             role_for_session(&access, &owner, &session),
@@ -97,7 +97,7 @@ mod tests {
         let owner = eggsec_runtime::ClientId::new();
         let stranger = eggsec_runtime::ClientId::new();
         let session = SessionId::new();
-        let mut access = HashMap::new();
+        let mut access = FxHashMap::default();
         access.insert(session, owner_access(owner));
         assert!(matches!(
             role_for_session(&access, &stranger, &session),
@@ -111,7 +111,7 @@ mod tests {
         let owner = eggsec_runtime::ClientId::new();
         let observer = eggsec_runtime::ClientId::new();
         let session = SessionId::new();
-        let mut access = HashMap::new();
+        let mut access = FxHashMap::default();
         access.insert(
             session,
             SessionAccess {
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn legacy_session_without_owner_stays_visible() {
         let session = SessionId::new();
-        let access: HashMap<SessionId, SessionAccess> = HashMap::new();
+        let access: FxHashMap<SessionId, SessionAccess> = FxHashMap::default();
         let stranger = eggsec_runtime::ClientId::new();
         assert!(may_observe_session(&access, Some(stranger), &session));
     }

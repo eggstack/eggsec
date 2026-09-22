@@ -1371,16 +1371,24 @@ impl SessionCommand {
     fn fail(self, err: EggsecError) {
         match self {
             SessionCommand::Register { reply, .. } => {
-                let _ = reply.send(Err(err));
+                if reply.send(Err(err)).is_err() {
+                    tracing::debug!("session command caller already gone; dropping reply");
+                }
             }
             SessionCommand::Heartbeat { reply, .. } => {
-                let _ = reply.send(Err(err));
+                if reply.send(Err(err)).is_err() {
+                    tracing::debug!("session command caller already gone; dropping reply");
+                }
             }
             SessionCommand::RequestTasks { reply, .. } => {
-                let _ = reply.send(Err(err));
+                if reply.send(Err(err)).is_err() {
+                    tracing::debug!("session command caller already gone; dropping reply");
+                }
             }
             SessionCommand::SendResult { reply, .. } => {
-                let _ = reply.send(Err(err));
+                if reply.send(Err(err)).is_err() {
+                    tracing::debug!("session command caller already gone; dropping reply");
+                }
             }
         }
     }

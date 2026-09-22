@@ -22,7 +22,13 @@ impl AdaptiveScanEngine {
         if let Some(ref client) = self.client {
             let findings_json: Vec<serde_json::Value> = findings
                 .iter()
-                .filter_map(|f| serde_json::to_value(f).ok())
+                .filter_map(|f| match serde_json::to_value(f) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("adaptive planner: dropping unserializable finding: {}", e);
+                        None
+                    }
+                })
                 .collect();
 
             if !findings_json.is_empty() {

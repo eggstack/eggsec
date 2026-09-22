@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "net", "sync", 
 tokio-util = "0.7"
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rustc-hash.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 anyhow.workspace = true

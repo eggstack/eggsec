@@ -1,6 +1,6 @@
 use crate::error::Result;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SpaRoute {
@@ -101,17 +101,17 @@ pub async fn discover_routes(tab: &headless_chrome::Tab) -> Result<Vec<SpaRoute>
         None => serde_json::Value::default(),
     };
 
-    let routes_set: HashSet<String> = data
+    let routes_set: FxHashSet<String> = data
         .get("routes")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let xhr_set: HashSet<String> = data
+    let xhr_set: FxHashSet<String> = data
         .get("xhrEndpoints")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let fetch_set: HashSet<String> = data
+    let fetch_set: FxHashSet<String> = data
         .get("fetchEndpoints")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
@@ -175,6 +175,7 @@ mod tests {
     use headless_chrome::Browser;
 
     #[tokio::test]
+    #[ignore = "requires Chrome binary and network access to example.com"]
     async fn test_discover_routes() {
         let browser = Browser::default().unwrap();
         let tab = browser.new_tab().unwrap();

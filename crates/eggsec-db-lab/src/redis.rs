@@ -17,6 +17,25 @@ mod real {
     use crate::utils;
     use eggsec_core::types::Severity;
 
+    /// Bound for every blocking Redis round-trip.
+    ///
+    /// `spawn_blocking` threads cannot be cancelled, so each call site goes
+    /// through this 30s timeout (well under the 30–300s task-bound policy).
+    /// A timed-out worker is abandoned; the underlying TCP connect still
+    /// releases on the OS timeout.
+    async fn blocking_redis<T>(op: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T>
+    where
+        T: Send + 'static,
+    {
+        let inner = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            tokio::task::spawn_blocking(op),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("redis operation timed out after 30s"))?;
+        inner.map_err(|e| anyhow::anyhow!("redis blocking task failed: {e}"))?
+    }
+
     /// Run Redis security checks.
     ///
     /// If `client` is provided, reuses the existing `redis::Client` (connection reuse).
@@ -40,13 +59,13 @@ mod real {
 
         // Connect using the redis crate (blocking, wrapped for async context)
         let cc = client_ref.clone();
-        tokio::task::spawn_blocking(move || {
+        blocking_redis(move || {
             let mut conn = cc.get_connection()?;
             // Quick connectivity test
             let _: String = ::redis::cmd("PING").query(&mut conn)?;
             Ok::<_, anyhow::Error>(conn)
         })
-        .await??;
+        .await?;
 
         report
             .actions_performed
@@ -76,12 +95,12 @@ mod real {
             )
         }) {
             let cc = client_ref.clone();
-            let info_result = tokio::task::spawn_blocking(move || -> Result<String> {
+            let info_result = blocking_redis(move || -> Result<String> {
                 let mut conn = cc.get_connection()?;
                 let info: String = ::redis::cmd("INFO").arg("server").query(&mut conn)?;
                 Ok(info)
             })
-            .await??;
+            .await?;
             report.queries_executed += 1;
             report
                 .actions_performed
@@ -152,17 +171,16 @@ mod real {
         {
             // Check requirepass via CONFIG GET
             let cc = client_ref.clone();
-            let requirepass_result =
-                tokio::task::spawn_blocking(move || -> Result<Option<String>> {
-                    let mut conn = cc.get_connection()?;
-                    let val: Option<String> = ::redis::cmd("CONFIG")
-                        .arg("GET")
-                        .arg("requirepass")
-                        .arg("1")
-                        .query(&mut conn)?;
-                    Ok(val)
-                })
-                .await??;
+            let requirepass_result = blocking_redis(move || -> Result<Option<String>> {
+                let mut conn = cc.get_connection()?;
+                let val: Option<String> = ::redis::cmd("CONFIG")
+                    .arg("GET")
+                    .arg("requirepass")
+                    .arg("1")
+                    .query(&mut conn)?;
+                Ok(val)
+            })
+            .await?;
             report.queries_executed += 1;
 
             let has_password = requirepass_result.as_ref().and_then(|v| {
@@ -189,12 +207,12 @@ mod real {
 
             // ACL user count (Redis 6+)
             let cc = client_ref.clone();
-            let acl_users_result = tokio::task::spawn_blocking(move || -> Result<Vec<String>> {
+            let acl_users_result = blocking_redis(move || -> Result<Vec<String>> {
                 let mut conn = cc.get_connection()?;
                 let users: Vec<String> = ::redis::cmd("ACL").arg("USERS").query(&mut conn)?;
                 Ok(users)
             })
-            .await??;
+            .await?;
             report.queries_executed += 1;
 
             report.actions_performed.push(format!(
@@ -220,7 +238,7 @@ mod real {
         if checks.iter().any(|c| matches!(c, CheckType::Misconfig)) {
             // Bind address
             let cc = client_ref.clone();
-            let bind_result = tokio::task::spawn_blocking(move || -> Result<Option<String>> {
+            let bind_result = blocking_redis(move || -> Result<Option<String>> {
                 let mut conn = cc.get_connection()?;
                 let val: Option<String> = ::redis::cmd("CONFIG")
                     .arg("GET")
@@ -229,7 +247,7 @@ mod real {
                     .query(&mut conn)?;
                 Ok(val)
             })
-            .await??;
+            .await?;
             report.queries_executed += 1;
 
             if let Some(ref bind_val) = bind_result {
@@ -250,17 +268,16 @@ mod real {
 
             // Protected mode
             let cc = client_ref.clone();
-            let protected_result =
-                tokio::task::spawn_blocking(move || -> Result<Option<String>> {
-                    let mut conn = cc.get_connection()?;
-                    let val: Option<String> = ::redis::cmd("CONFIG")
-                        .arg("GET")
-                        .arg("protected-mode")
-                        .arg("1")
-                        .query(&mut conn)?;
-                    Ok(val)
-                })
-                .await??;
+            let protected_result = blocking_redis(move || -> Result<Option<String>> {
+                let mut conn = cc.get_connection()?;
+                let val: Option<String> = ::redis::cmd("CONFIG")
+                    .arg("GET")
+                    .arg("protected-mode")
+                    .arg("1")
+                    .query(&mut conn)?;
+                Ok(val)
+            })
+            .await?;
             report.queries_executed += 1;
 
             if let Some(ref prot_val) = protected_result {
@@ -285,12 +302,12 @@ mod real {
             .any(|c| matches!(c, CheckType::Privs | CheckType::Enum))
         {
             let cc = client_ref.clone();
-            let acl_list_result = tokio::task::spawn_blocking(move || -> Result<Vec<String>> {
+            let acl_list_result = blocking_redis(move || -> Result<Vec<String>> {
                 let mut conn = cc.get_connection()?;
                 let entries: Vec<String> = ::redis::cmd("ACL").arg("LIST").query(&mut conn)?;
                 Ok(entries)
             })
-            .await??;
+            .await?;
             report.queries_executed += 1;
 
             let mut total_users = 0usize;
@@ -335,12 +352,12 @@ mod real {
             && report.queries_executed < max_queries
         {
             let cc = client_ref.clone();
-            let keyspace_result = tokio::task::spawn_blocking(move || -> Result<String> {
+            let keyspace_result = blocking_redis(move || -> Result<String> {
                 let mut conn = cc.get_connection()?;
                 let info: String = ::redis::cmd("INFO").arg("keyspace").query(&mut conn)?;
                 Ok(info)
             })
-            .await??;
+            .await?;
             report.queries_executed += 1;
 
             let mut db_keys: Vec<(String, u64)> = Vec::new();
@@ -399,8 +416,8 @@ mod real {
             // Bounded SCAN sampling (one pass over db0)
             if report.queries_executed < max_queries {
                 let cc = client_ref.clone();
-                let scan_result = tokio::task::spawn_blocking(
-                    move || -> Result<(::redis::Value, Vec<String>)> {
+                let scan_result =
+                    blocking_redis(move || -> Result<(::redis::Value, Vec<String>)> {
                         let mut conn = cc.get_connection()?;
                         let (cursor, sample_keys): (::redis::Value, Vec<String>) =
                             ::redis::cmd("SCAN")
@@ -409,9 +426,8 @@ mod real {
                                 .arg(20u64)
                                 .query(&mut conn)?;
                         Ok((cursor, sample_keys))
-                    },
-                )
-                .await??;
+                    })
+                    .await?;
                 report.queries_executed += 1;
 
                 report.actions_performed.push(format!(
@@ -444,7 +460,7 @@ mod real {
 
                 let cc = client_ref.clone();
                 let cmd_owned = cmd_name.to_string();
-                let cmd_result = tokio::task::spawn_blocking(move || -> Result<bool> {
+                let cmd_result = blocking_redis(move || -> Result<bool> {
                     let mut conn = cc.get_connection()?;
                     // DRYRUN executes the command without side effects; if the command
                     // is blocked via rename-command or ACL, this returns an error.
@@ -454,7 +470,7 @@ mod real {
                         .query(&mut conn);
                     Ok(result.is_ok())
                 })
-                .await??;
+                .await?;
                 report.queries_executed += 1;
 
                 if cmd_result {

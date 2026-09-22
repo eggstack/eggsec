@@ -1,8 +1,8 @@
 use crate::error;
 use crate::intercept::correlation::{CorrelationContext, CorrelationReference};
 use crate::intercept::protocols::{GrpcSession, Http2Session, WebSocketSession};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Direction of a captured flow relative to the client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,13 +28,13 @@ pub struct ProxyFlow {
     /// Request path.
     pub path: String,
     /// Request headers (key-value pairs).
-    pub request_headers: HashMap<String, String>,
+    pub request_headers: FxHashMap<String, String>,
     /// Request body (truncated/redacted).
     pub request_body: Option<String>,
     /// Response status code (0 if not yet received).
     pub response_status: u16,
     /// Response headers.
-    pub response_headers: HashMap<String, String>,
+    pub response_headers: FxHashMap<String, String>,
     /// Response body (truncated/redacted).
     pub response_body: Option<String>,
     /// Whether this was an HTTPS CONNECT tunnel.
@@ -696,10 +696,10 @@ mod tests {
             url: "https://example.com/path".to_string(),
             host: "example.com".to_string(),
             path: "/path".to_string(),
-            request_headers: HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 150,
@@ -733,10 +733,10 @@ mod tests {
             url: "https://example.com/".to_string(),
             host: "example.com".to_string(),
             path: "/".to_string(),
-            request_headers: HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 100,
@@ -843,10 +843,10 @@ mod tests {
             url: format!("https://example.com/{}", index),
             host: "example.com".to_string(),
             path: format!("/{}", index),
-            request_headers: HashMap::new(),
+            request_headers: FxHashMap::default(),
             request_body: None,
             response_status: 200,
-            response_headers: HashMap::new(),
+            response_headers: FxHashMap::default(),
             response_body: None,
             is_https: true,
             duration_ms: 100,

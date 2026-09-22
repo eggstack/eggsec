@@ -94,8 +94,9 @@ async fn check_concurrent_requests(client: &HuntClient, config: &HuntConfig) -> 
         }
 
         for handle in handles {
-            if let Ok(status) = handle.await {
-                status_codes.push(status);
+            match handle.await {
+                Ok(status) => status_codes.push(status),
+                Err(e) => tracing::warn!("race probe task panicked: {e}"),
             }
         }
 

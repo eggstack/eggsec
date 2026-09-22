@@ -1003,7 +1003,9 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let r = execute_script(&sess, &script);
-            let _ = tx.send(r);
+            if tx.send(r).is_err() {
+                tracing::debug!("frida test receiver already gone");
+            }
         });
         // Simulation executes in milliseconds; a 5s bound proves no hang.
         // A timeout here would mean the instrumentation path hung.

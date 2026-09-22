@@ -276,7 +276,21 @@ async fn run_udp_flood_spoofed(
         }
     }
 
-    futures::future::join_all(handles).await;
+    // Drain bound: single-syscall workers always finish promptly, but a
+    // wedged raw socket must not stall the flood past the 300s task cap.
+    let results =
+        tokio::time::timeout(Duration::from_secs(300), futures::future::join_all(handles))
+            .await
+            .map_err(|_| {
+                EggsecError::Runtime(
+                    "UDP spoofed flood worker drain timed out after 300s".to_string(),
+                )
+            })?;
+    for result in results {
+        if let Err(e) = result {
+            tracing::warn!("UDP spoofed flood worker panicked: {e}");
+        }
+    }
 
     match socket.lock() {
         Ok(guard) => {
@@ -398,7 +412,19 @@ async fn run_udp_flood_standard(
         }
     }
 
-    futures::future::join_all(handles).await;
+    // Drain bound: socket workers are request-scoped, but a wedged send
+    // must not stall the flood past the 300s task cap.
+    let results =
+        tokio::time::timeout(Duration::from_secs(300), futures::future::join_all(handles))
+            .await
+            .map_err(|_| {
+                EggsecError::Runtime("UDP flood worker drain timed out after 300s".to_string())
+            })?;
+    for result in results {
+        if let Err(e) = result {
+            tracing::warn!("UDP flood worker panicked: {e}");
+        }
+    }
 
     Ok(metrics.to_stats())
 }

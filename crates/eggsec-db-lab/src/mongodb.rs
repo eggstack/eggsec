@@ -21,18 +21,17 @@ use mongodb::{
 };
 
 pub async fn run_mongodb_checks(
-    target: &DbTarget,
-    report: &mut DbPentestReport,
-    checks: &[CheckType],
-    max_queries: u64,
+    _target: &DbTarget,
+    _report: &mut DbPentestReport,
+    _checks: &[CheckType],
+    _max_queries: u64,
 ) -> Result<()> {
     #[cfg(feature = "mongodb")]
     {
-        run_mongodb_real(target, report, checks, max_queries).await
+        run_mongodb_real(_target, _report, _checks, _max_queries).await
     }
     #[cfg(not(feature = "mongodb"))]
     {
-        let _ = (target, report, checks, max_queries);
         Err(anyhow::anyhow!(
             "MongoDB real path requires db-pentest-mongodb marker feature; this build uses synthetic population"
         ))
@@ -242,8 +241,9 @@ async fn run_mongodb_real(
 
             // Check net.maxIncomingConnections (0 = default/unlimited)
             if let Ok(net_doc) = status.get_document("network") {
-                if let Ok(transport) = net_doc.get_document("transportSecurity") {
-                    let _ = transport; // present means TLS is configured
+                if let Ok(_transport) = net_doc.get_document("transportSecurity") {
+                    // Present means TLS is configured; no finding needed.
+                    tracing::debug!("mongodb: transportSecurity present, TLS configured");
                 }
             }
 
@@ -321,9 +321,9 @@ async fn run_mongodb_real(
 
             // WiredTiger cache size (info on memory usage)
             if let Ok(wt) = status.get_document("wiredTiger") {
-                if let Ok(cache) = wt.get_document("cache") {
-                    let _ = cache;
-                    // Presence of wiredTiger confirms storage engine; no finding needed
+                if let Ok(_cache) = wt.get_document("cache") {
+                    // Presence of wiredTiger confirms storage engine; no finding needed.
+                    tracing::debug!("mongodb: wiredTiger cache present");
                 }
             }
         }

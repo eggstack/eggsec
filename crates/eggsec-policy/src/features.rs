@@ -10,7 +10,7 @@
 //! Fail-closed: unknown names are simply absent from the set, so any
 //! `required_features` entry not present in [`EnabledFeatures`] denies.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 /// Immutable set of enabled feature identifiers supplied by the caller.
 ///
@@ -19,14 +19,14 @@ use std::collections::HashSet;
 /// live in this crate.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EnabledFeatures {
-    features: HashSet<String>,
+    features: FxHashSet<String>,
 }
 
 impl EnabledFeatures {
     /// Create an empty set (no features enabled; every gated operation denies).
     pub fn empty() -> Self {
         Self {
-            features: HashSet::new(),
+            features: FxHashSet::default(),
         }
     }
 

@@ -145,9 +145,7 @@ pub async fn run_cli_with_scope(
         );
         Some(pb)
     };
-    let sink = FnSink(|event| {
-        let _ = event;
-    });
+    let sink = FnSink(|_event| {});
     // Drive progress manually: poll via a channel sink when a bar exists,
     // otherwise run silently. The executor emits per-request events; the
     // bar increments here, in CLI code — never in the core.

@@ -88,7 +88,7 @@ pub struct PostexSummary {
     pub total: usize,
     pub simulated: usize,
     pub not_simulated: usize,
-    pub categories: std::collections::HashMap<String, usize>,
+    pub categories: rustc_hash::FxHashMap<String, usize>,
 }
 
 /// Profile controlling which techniques are exercised.
@@ -219,7 +219,7 @@ impl PostexScanner {
 
     fn build_summary(&self, detections: &[PostexDetection]) -> PostexSummary {
         let simulated = detections.iter().filter(|d| d.simulated).count();
-        let mut categories = std::collections::HashMap::new();
+        let mut categories = rustc_hash::FxHashMap::default();
         for d in detections {
             *categories
                 .entry(d.technique.category.to_string())

@@ -3,8 +3,8 @@
 //! Provides lightweight correlation context objects that can be shared between
 //! the web proxy and other loadouts (db-pentest, auth-test, mobile-dynamic, etc.).
 
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Source of a correlation reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ pub struct CorrelationReference {
     /// Timestamp when the correlation was established.
     pub timestamp: String,
     /// Additional metadata for the correlation.
-    pub metadata: HashMap<String, String>,
+    pub metadata: FxHashMap<String, String>,
 }
 
 impl CorrelationReference {
@@ -49,7 +49,7 @@ impl CorrelationReference {
             description: description.to_string(),
             confidence: 1.0,
             timestamp: chrono::Utc::now().to_rfc3339(),
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
         }
     }
 
@@ -70,7 +70,7 @@ pub struct CorrelationContext {
     /// All correlation references in this session.
     pub references: Vec<CorrelationReference>,
     /// Mapping from proxy flow index to correlated references.
-    pub flow_correlations: HashMap<u64, Vec<usize>>,
+    pub flow_correlations: FxHashMap<u64, Vec<usize>>,
     /// Summary statistics.
     pub summary: CorrelationSummary,
 }
@@ -141,7 +141,7 @@ impl CorrelationContext {
             .references
             .iter()
             .map(|r| r.source)
-            .collect::<std::collections::HashSet<_>>()
+            .collect::<FxHashSet<_>>()
             .len() as u64;
         let correlated_flows = self.flow_correlations.len() as u64;
         let avg_confidence = if total > 0 {
@@ -168,7 +168,7 @@ pub struct CorrelationHook {
     /// Function-like callback metadata (for serialization).
     pub hook_type: String,
     /// Parameters for the hook.
-    pub parameters: HashMap<String, String>,
+    pub parameters: FxHashMap<String, String>,
 }
 
 impl CorrelationHook {
@@ -176,7 +176,7 @@ impl CorrelationHook {
         Self {
             description: description.to_string(),
             hook_type: hook_type.to_string(),
-            parameters: HashMap::new(),
+            parameters: FxHashMap::default(),
         }
     }
 
@@ -319,8 +319,7 @@ impl CorrelationEngine {
     pub fn match_behavioral(&self, context: &CorrelationContext) -> Vec<(BehavioralPattern, f64)> {
         let mut matches = Vec::new();
         for pattern in &self.patterns {
-            let mut matched_sources: std::collections::HashSet<CorrelationSource> =
-                std::collections::HashSet::new();
+            let mut matched_sources: FxHashSet<CorrelationSource> = FxHashSet::default();
             for reference in &context.references {
                 let source_match = pattern.required_sources.contains(&reference.source);
                 if source_match {
@@ -432,7 +431,7 @@ impl ConfidenceScorer {
 
     /// Calculate confidence score for source diversity.
     pub fn score_source_diversity(&self, sources: &[CorrelationSource]) -> f64 {
-        let unique_sources: std::collections::HashSet<_> = sources.iter().collect();
+        let unique_sources: FxHashSet<_> = sources.iter().collect();
         let diversity_score = unique_sources.len() as f64 / sources.len().max(1) as f64;
         diversity_score * self.source_diversity_weight
     }
@@ -451,11 +450,11 @@ impl ConfidenceScorer {
     /// Calculate confidence score for metadata similarity.
     pub fn score_metadata_similarity(
         &self,
-        metadata1: &HashMap<String, String>,
-        metadata2: &HashMap<String, String>,
+        metadata1: &FxHashMap<String, String>,
+        metadata2: &FxHashMap<String, String>,
     ) -> f64 {
-        let keys1: std::collections::HashSet<_> = metadata1.keys().collect();
-        let keys2: std::collections::HashSet<_> = metadata2.keys().collect();
+        let keys1: FxHashSet<_> = metadata1.keys().collect();
+        let keys2: FxHashSet<_> = metadata2.keys().collect();
         let common_keys = keys1.intersection(&keys2).count();
         let total_keys = keys1.union(&keys2).count();
         let similarity = common_keys as f64 / total_keys.max(1) as f64;
@@ -491,7 +490,8 @@ impl ConfidenceScorer {
         let temporal_score = self.temporal_weight; // Base score for single reference
         let sources: Vec<_> = all_references.iter().map(|r| r.source).collect();
         let diversity_score = self.score_source_diversity(&sources);
-        let metadata_score = self.score_metadata_similarity(&reference.metadata, &HashMap::new());
+        let metadata_score =
+            self.score_metadata_similarity(&reference.metadata, &FxHashMap::default());
         let severity_score = self.score_severity(0); // Default severity
 
         self.calculate_combined_confidence(
@@ -687,7 +687,7 @@ mod tests {
             description: format!("Finding {}", id),
             confidence: 0.8,
             timestamp: ts.to_string(),
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
         }
     }
 
@@ -755,7 +755,7 @@ mod tests {
     #[test]
     fn test_behavioral_pattern_match() {
         let mut ctx = CorrelationContext::new();
-        let mut meta_a = HashMap::new();
+        let mut meta_a = FxHashMap::default();
         meta_a.insert("host".to_string(), "api.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::DbPentest,
@@ -765,7 +765,7 @@ mod tests {
             timestamp: chrono::Utc::now().to_rfc3339(),
             metadata: meta_a,
         });
-        let mut meta_b = HashMap::new();
+        let mut meta_b = FxHashMap::default();
         meta_b.insert("host".to_string(), "api.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::AuthTest,
@@ -841,7 +841,7 @@ mod tests {
     #[test]
     fn test_behavioral_pattern_host_mismatch() {
         let mut ctx = CorrelationContext::new();
-        let mut meta = HashMap::new();
+        let mut meta = FxHashMap::default();
         meta.insert("host".to_string(), "other.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::DbPentest,
@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn test_behavioral_pattern_path_matching() {
         let mut ctx = CorrelationContext::new();
-        let mut meta_a = HashMap::new();
+        let mut meta_a = FxHashMap::default();
         meta_a.insert("host".to_string(), "api.example.com".to_string());
         meta_a.insert("path".to_string(), "/admin/users".to_string());
         ctx.add_reference(CorrelationReference {
@@ -903,7 +903,7 @@ mod tests {
             timestamp: chrono::Utc::now().to_rfc3339(),
             metadata: meta_a,
         });
-        let mut meta_b = HashMap::new();
+        let mut meta_b = FxHashMap::default();
         meta_b.insert("host".to_string(), "api.example.com".to_string());
         meta_b.insert("path".to_string(), "/admin/config".to_string());
         ctx.add_reference(CorrelationReference {
@@ -932,7 +932,7 @@ mod tests {
     #[test]
     fn test_behavioral_pattern_path_mismatch() {
         let mut ctx = CorrelationContext::new();
-        let mut meta = HashMap::new();
+        let mut meta = FxHashMap::default();
         meta.insert("host".to_string(), "api.example.com".to_string());
         meta.insert("path".to_string(), "/public/data".to_string());
         ctx.add_reference(CorrelationReference {
@@ -1010,7 +1010,7 @@ mod tests {
     #[test]
     fn test_correlation_engine_both_temporal_and_behavioral() {
         let mut ctx = CorrelationContext::new();
-        let mut meta_a = HashMap::new();
+        let mut meta_a = FxHashMap::default();
         meta_a.insert("host".to_string(), "api.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::DbPentest,
@@ -1020,7 +1020,7 @@ mod tests {
             timestamp: "2026-01-01T00:00:00Z".to_string(),
             metadata: meta_a,
         });
-        let mut meta_b = HashMap::new();
+        let mut meta_b = FxHashMap::default();
         meta_b.insert("host".to_string(), "api.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::AuthTest,
@@ -1057,7 +1057,7 @@ mod tests {
             description: "Low confidence".to_string(),
             confidence: 0.0,
             timestamp: chrono::Utc::now().to_rfc3339(),
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
         });
         assert_eq!(ctx.references.len(), 1);
         assert_eq!(ctx.references[0].confidence, 0.0);
@@ -1066,7 +1066,7 @@ mod tests {
     #[test]
     fn test_behavioral_pattern_min_sources_partial_match() {
         let mut ctx = CorrelationContext::new();
-        let mut meta = HashMap::new();
+        let mut meta = FxHashMap::default();
         meta.insert("host".to_string(), "api.example.com".to_string());
         ctx.add_reference(CorrelationReference {
             source: CorrelationSource::DbPentest,
@@ -1211,11 +1211,11 @@ mod tests {
     #[test]
     fn test_confidence_scorer_score_metadata_similarity() {
         let scorer = ConfidenceScorer::default();
-        let mut meta1 = HashMap::new();
+        let mut meta1 = FxHashMap::default();
         meta1.insert("host".to_string(), "api.example.com".to_string());
         meta1.insert("path".to_string(), "/data".to_string());
 
-        let mut meta2 = HashMap::new();
+        let mut meta2 = FxHashMap::default();
         meta2.insert("host".to_string(), "api.example.com".to_string());
 
         let score = scorer.score_metadata_similarity(&meta1, &meta2);

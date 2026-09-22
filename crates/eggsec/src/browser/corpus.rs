@@ -4,8 +4,8 @@
 //! them into a corpus that can feed scanner and fuzzer workflows.
 
 use chrono::{DateTime, Utc};
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 /// A normalized request corpus entry captured from browser crawling
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,7 +65,7 @@ pub struct RequestCorpus {
     pub crawl_duration_ms: u64,
     pub pages_visited: usize,
     #[serde(skip)]
-    seen_keys: HashSet<String>,
+    seen_keys: FxHashSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,7 +88,7 @@ impl RequestCorpus {
             openapi_links: Vec::new(),
             crawl_duration_ms: 0,
             pages_visited: 0,
-            seen_keys: HashSet::new(),
+            seen_keys: FxHashSet::default(),
         }
     }
 

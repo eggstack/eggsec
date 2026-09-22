@@ -17,15 +17,14 @@ fn generate_shell_completion(shell: Shell) -> Result<()> {
     Ok(())
 }
 
-fn agent_log_dir(cli: &Cli) -> Option<PathBuf> {
+fn agent_log_dir(_cli: &Cli) -> Option<PathBuf> {
     #[cfg(feature = "rest-api")]
     {
-        if let Some(eggsec::cli::Commands::Agent(ref args)) = cli.command {
+        if let Some(eggsec::cli::Commands::Agent(ref args)) = _cli.command {
             let memory_dir = shellexpand::tilde(&args.memory_dir);
             return Some(PathBuf::from(memory_dir.as_ref()).join("logs"));
         }
     }
-    let _ = &cli;
     None
 }
 

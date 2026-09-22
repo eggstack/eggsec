@@ -62,11 +62,19 @@ pub fn redacted_headers_debug(map: &HeaderMap) -> String {
 
 /// Parse `name`/`value` pairs into a [`HeaderMap`].
 ///
+/// Accepts any string-pair map (`std` or `FxHashMap`): the parameter is a
+/// generic pair iterator so this crate stays free of hashing dependencies.
+///
 /// Invalid names or non-visible-ASCII values are rejected with
 /// [`TransportError::InvalidRequest`] (fail-closed, no silent truncation).
-pub fn header_map_from_pairs(pairs: &HashMap<String, String>) -> Result<HeaderMap, TransportError> {
-    let mut map = HeaderMap::with_capacity(pairs.len());
-    for (k, v) in pairs {
+pub fn header_map_from_pairs<'a, I>(pairs: I) -> Result<HeaderMap, TransportError>
+where
+    I: IntoIterator<Item = (&'a String, &'a String)>,
+    I::IntoIter: ExactSizeIterator,
+{
+    let iter = pairs.into_iter();
+    let mut map = HeaderMap::with_capacity(iter.len());
+    for (k, v) in iter {
         let name: HeaderName = k.parse().map_err(|e| {
             TransportError::InvalidRequest(format!("invalid header name '{k}': {e}"))
         })?;

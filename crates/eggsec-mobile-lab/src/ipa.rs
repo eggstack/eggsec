@@ -22,8 +22,8 @@ use crate::{MobileError, MobileFinding, MobilePlatform, MobileScanReport, Result
 use eggsec_core::types::Severity;
 use plist::from_bytes;
 use regex::Regex;
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::io::{Read, Seek};
 use std::path::Path;
 use std::sync::LazyLock;
@@ -109,7 +109,7 @@ struct AtsDict {
     #[serde(rename = "NSAllowsArbitraryLoadsInWebContent")]
     ns_allows_arbitrary_loads_in_web_content: Option<bool>,
     #[serde(rename = "NSExceptionDomains")]
-    ns_exception_domains: Option<HashMap<String, AtsException>>,
+    ns_exception_domains: Option<FxHashMap<String, AtsException>>,
 }
 
 /// One entry in CFBundleURLTypes.
