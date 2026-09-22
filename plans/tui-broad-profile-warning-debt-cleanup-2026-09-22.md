@@ -406,9 +406,14 @@ without using warning suppression or widening into unrelated workspace debt.
 Status: Executed
 Starting SHA: b1faff049717ff7d387cf0661a4aa2c7de8efb20 (clean tree; executable tree identical to 17cf8c31)
 Final implementation SHA: 1acb0c658d32835da6c1fa83704dc27a3e63c3f5
-Final record SHA: (record commit; docs-only descendant with identical executable tree)
-Hosted CI: (pending push; local contract green before push)
-Hosted Deep Checks: (manual run if path filters do not auto-start; see Workstream 6)
+Final record SHA: dfd1308cd1de096213590f60459f00bb5b4db342
+  (record commit; this hosted-evidence amendment is a docs-only descendant
+  with an identical executable tree)
+Hosted CI: CI 35738696392 success + Code Quality 35738695643 success
+  (head dfd1308, push on main)
+Hosted Deep Checks: Deep Checks 35741083218 success (manual
+  workflow_dispatch on main @ dfd1308; sub-jobs incl. MSRV 1.89,
+  portability macos/windows, platform integration all success)
 
 Broad TUI warning count before: 18 (Deep Checks 35698970796 on 86d2670b)
   + 1 additional truncate_str unused import observed locally in --tests profile
