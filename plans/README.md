@@ -14,6 +14,31 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggress 1.0.8 selective proxy-engine adoption (ready for handoff)
+
+Roadmap:
+[eggress-1.0.8-adoption-roadmap-2026-09-22.md](eggress-1.0.8-adoption-roadmap-2026-09-22.md)
+
+Ordered implementation plans:
+
+1. [eggress-1.0.8-phase-a-proxy-engine-adoption-2026-09-22.md](eggress-1.0.8-phase-a-proxy-engine-adoption-2026-09-22.md)
+2. [eggress-1.0.8-phase-b-health-qualification-and-closure-2026-09-22.md](eggress-1.0.8-phase-b-health-qualification-and-closure-2026-09-22.md)
+
+This release-specific campaign reopens only the Eggress transport-stack portion
+of the executed 2026-09-13 dependency decision. Eggress 1.0.8 adds the new
+listener-free `eggress-outbound` crate, creating a narrow reuse seam that did
+not exist in the evaluated 1.0.6 release. Phase A measures the published graph,
+updates the historical decision/guard, and migrates Eggsec's duplicated
+SOCKS/HTTP CONNECT/chain execution behind the specialized web-proxy boundary
+without touching `eggsec-transport`. Phase B separately qualifies
+application-level proxy health semantics and removes Reqwest only if an
+equivalent HTTP(S)-through-proxy probe is simpler and demonstrably correct.
+
+The campaign explicitly keeps Eggsec authorization, proxy pool/rotation,
+interception/MITM, and the Eggfetch-backed scoped HTTP transport independent
+from Eggress. No `eggress-embed`, runtime/server, routing, advanced-protocol,
+or pproxy compatibility adoption is planned.
+
 ## TUI confirmation-test intent corrective pass (executed 2026-09-22)
 
 Plan:
