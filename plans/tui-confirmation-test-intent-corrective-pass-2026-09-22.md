@@ -1,6 +1,6 @@
 # TUI confirmation-test intent corrective pass
 
-Status: Ready for handoff
+Status: Executed
 
 Date: 2026-09-22
 
@@ -250,3 +250,52 @@ This line is closed when the out-of-scope confirmation test's name, comments,
 locals, and assertions accurately describe and strongly prove its actual
 preflight-vs-raw-evaluation contract, while the completed TUI warning cleanup
 remains warning-clean and production enforcement behavior is unchanged.
+
+## Completion record
+
+```text
+Status: Executed
+Starting SHA: 4f1d375fd08e547c45ca105e94f7164ef82c6fd8
+Implementation SHA: ead501aabbc8bb8644728e058debeadef56274d8
+Final record SHA: (this commit; see plans/README.md entry)
+Hosted CI: (pending at record time; verified per normal path-filter behavior)
+
+Final test name: preflight_matches_raw_evaluation_for_confirmation_action
+Preflight assertion: asserts outcome_kind is
+  TuiPreflightOutcomeKind::RequireConfirmation independently (not only a
+  boolean probe compared against the other side)
+Raw-evaluation assertion: asserts raw EnforcementContext::evaluate outcome is
+  EnforcementOutcome::RequireConfirmation(_) independently
+Redundant try_approve reintroduced: no
+Production source delta: none
+Public API/feature delta: none
+
+Focused test: cargo test -p eggsec-tui
+  preflight_matches_raw_evaluation_for_confirmation_action --lib
+  → 1 passed
+Default TUI lib tests: cargo test -p eggsec-tui --lib --no-fail-fast
+  → 882 passed
+Broad-profile TUI lib tests: cargo test -p eggsec-tui
+  --features db-pentest,web-proxy,c2 --lib --no-fail-fast
+  → 944 passed
+Warning-as-error broad-profile proof: RUSTFLAGS="-D warnings" cargo check
+  -p eggsec-tui --features db-pentest,web-proxy,c2 --tests
+  → 0 errors (only third-party sqlx future-incompat notice remains)
+cargo fmt --all --check: clean
+make check-feature-profiles: green
+make check: green
+make check-msrv: not rerun; change is test-body/name plus a docs reference
+  update only, so the already-green Rust 1.89 Deep Checks baseline remains
+  applicable per the plan's focused-validation note
+Hosted Deep Checks: not required (test-only contract rename/assertion
+  strengthening; hosted CI for the resulting state follows the repository's
+  normal path-filter behavior)
+
+Residual debt: none. Repo-wide sweep confirms the only remaining
+  `preflight_and_execution_agree_on_confirmation_action` mentions are the
+  historical baseline quotes in this plan's "Confirmed defect" section and
+  the parent warning-cleanup plan, both intentionally retained as record.
+  README.md, AGENTS.md, skills, and architecture docs contain no stale
+  references; docs/extending/tui-actions.md was updated to the new test
+  name and contract.
+```

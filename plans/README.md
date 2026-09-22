@@ -14,21 +14,28 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-## TUI confirmation-test intent corrective pass (ready for handoff 2026-09-22)
+## TUI confirmation-test intent corrective pass (executed 2026-09-22)
 
 Plan:
 [tui-confirmation-test-intent-corrective-pass-2026-09-22.md](tui-confirmation-test-intent-corrective-pass-2026-09-22.md)
 
-This narrow follow-up corrects the remaining test-contract mismatch from the
-completed warning-debt cleanup. The out-of-scope confirmation test now compares
+This narrow follow-up corrected the remaining test-contract mismatch from the
+completed warning-debt cleanup. The out-of-scope confirmation test compared
 `preflight()` with raw `EnforcementContext::evaluate()`, but its name/comment/
-locals/assertion still describe the second branch as "execution."
+locals/assertion described the second branch as "execution."
 
-The pass preserves the targeted `RequireConfirmation` case, renames/reframes
-it as preflight-vs-raw-evaluation coverage, strengthens both sides to assert the
-expected confirmation classification independently, and does not reintroduce a
-side-effecting `try_approve` call merely to preserve the old wording. No
-production enforcement/API/feature behavior is intended to change.
+Executed: implementation `ead501aa` renames the test to
+`preflight_matches_raw_evaluation_for_confirmation_action`, reframes the
+comment/locals/assertion around raw evaluation, and asserts the expected
+`RequireConfirmation` classification independently on both sides instead of
+only comparing two booleans. No side-effecting `try_approve` call was
+reintroduced; no production enforcement/API/feature behavior changed.
+`docs/extending/tui-actions.md` test references updated. Evidence: focused
+test 1 passed, default TUI lib 882 passed, broad-profile TUI lib 944 passed,
+broad `--tests` profile warning-clean under `-D warnings` (only third-party
+sqlx future-incompat remains), `cargo fmt --check` clean,
+`make check-feature-profiles` and `make check` green. Completion record in
+the pass plan.
 
 ## Post-adoption record and TUI warning cleanup (executed 2026-09-22)
 
