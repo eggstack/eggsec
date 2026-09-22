@@ -14,7 +14,6 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
-
 ## TUI confirmation-test intent corrective pass (ready for handoff 2026-09-22)
 
 Plan:
