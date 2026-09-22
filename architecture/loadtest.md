@@ -6,7 +6,7 @@ The load testing module provides HTTP performance benchmarking — measuring ser
 
 **Phase D (2026-09-16):** the module was decoupled into a transport-neutral core (`plan` + `executor` + `metrics` + `progress`) with engine adaptation above it (`adapter`) and a scope-aware Reqwest backend (`backend`) behind the `eggsec-transport` seam. The core constructs no Reqwest client, owns no Clap/TUI/indicatif/config-file behavior, and never prints. `LoadTestRunner`/`LoadTestRunConfig` remain as compatibility facades. No `eggsec-loadtest` crate was created (Gate D1: rejected — single consumer, thin dependency payoff; see [capability_segregation.md](capability_segregation.md)).
 
-**Corrective pass (2026-09-17):** authorization and physical-route gaps closed without a new crate. Execution scope is mandatory (`LoadTestRunner` stores `Option<Scope>`; ordinary `run()` fails closed without the `EnforcementContext` snapshot; no `default_facade_scope()` wildcard). Strict approval carries scope via engine-owned `ApprovedExecution` (`EnforcementContext::approve_execution()` / `approve_manual_execution()`); canonical execution uses `execute_approved_execution()` / `execute_canonical_with_scope()`; tool dispatch uses `ToolExecutionContext` + `execute_with_context()` via `EnforcedDispatcher::dispatch_execution()` (raw `LoadTestTool::execute()` fails closed). Direct and supported proxied load testing dispatches through the pinned Eggfetch backend (`eggsec-transport-eggfetch` over `eggfetch-core 0.1.7`, H1/H2 route reuse via ALPN, logical-URL + singular resolved-address direct pinning, pinned proxy peers/targets where enforceable, aggregate total deadline through body EOF). The Reqwest backend remains as a fail-closed transition backend (no semantic fallbacks, no direct-for-proxy fallback, credential-partitioned cache) but is no longer the production load-test path.
+**Corrective pass (2026-09-17):** authorization and physical-route gaps closed without a new crate. Execution scope is mandatory (`LoadTestRunner` stores `Option<Scope>`; ordinary `run()` fails closed without the `EnforcementContext` snapshot; no `default_facade_scope()` wildcard). Strict approval carries scope via engine-owned `ApprovedExecution` (`EnforcementContext::approve_execution()` / `approve_manual_execution()`); canonical execution uses `execute_approved_execution()` / `execute_canonical_with_scope()`; tool dispatch uses `ToolExecutionContext` + `execute_with_context()` via `EnforcedDispatcher::dispatch_execution()` (raw `LoadTestTool::execute()` fails closed). Direct and supported proxied load testing dispatches through the pinned Eggfetch backend (`eggsec-transport-eggfetch` over `eggfetch-core 0.2.0`, H1/H2 route reuse via ALPN, logical-URL + singular resolved-address direct pinning, pinned proxy peers/targets where enforceable, aggregate total deadline through body EOF). The Reqwest backend remains as a fail-closed transition backend (no semantic fallbacks, no direct-for-proxy fallback, credential-partitioned cache) but is no longer the production load-test path.
 
 **Feature gate:** None on the module itself (always compiled). The CLI entry points `run_cli()`/`run_cli_with_scope()` are gated behind the `cli` feature (`mod.rs`).
 
@@ -103,9 +103,9 @@ TOCTOU note: Reqwest re-resolves hostnames (and proxies) internally, so this bac
 
 | Route | Proxy peer pin | Ultimate pin | Disposition |
 |---|---|---|---|
-| direct HTTP/HTTPS | n/a | required, singular (`RequestBuilder::resolved_addresses([selected_target])` on the logical URL) | supported via Eggfetch 0.1.7 |
-| HTTP/HTTPS proxy → HTTPS origin (CONNECT) | required, singular (`Proxy::resolved_addresses([proxy_peer])`) | required, singular (`proxy_target_addresses([ultimate_peer])`) | supported via Eggfetch 0.1.7 |
-| SOCKS5 local-resolution → HTTP/HTTPS | required, singular | required, singular | supported via Eggfetch 0.1.7 |
+| direct HTTP/HTTPS | n/a | required, singular (`RequestBuilder::resolved_addresses([selected_target])` on the logical URL) | supported via Eggfetch 0.2.0 |
+| HTTP/HTTPS proxy → HTTPS origin (CONNECT) | required, singular (`Proxy::resolved_addresses([proxy_peer])`) | required, singular (`proxy_target_addresses([ultimate_peer])`) | supported via Eggfetch 0.2.0 |
+| SOCKS5 local-resolution → HTTP/HTTPS | required, singular | required, singular | supported via Eggfetch 0.2.0 |
 | SOCKS5H remote-resolution | required | cannot be locally enforced | fail closed (explicit `Proxy` denial) |
 | HTTP forward proxy → plaintext HTTP | required | standard proxy cannot enforce requested IP | fail closed (explicit `Proxy` denial) |
 
@@ -327,7 +327,7 @@ Unit coverage: plan validation/rate/method, adapter auth/proxy/timeout shapes, m
 - [defense_lab.md](defense_lab.md) — defense-lab profiles and risk budgets
 - [stress.md](stress.md) — raw network flood testing
 - [transport.md](transport.md) — scoped transport contract (incl. proxy-peer checkpoints)
-- [transport_eggfetch.md](transport_eggfetch.md) — Eggfetch backend (logical-URL + singular resolved direct + qualified proxy routes, H1/H2 reuse, total through EOF; `eggfetch-core 0.1.7`)
+- [transport_eggfetch.md](transport_eggfetch.md) — Eggfetch backend (logical-URL + singular resolved direct + qualified proxy routes, H1/H2 reuse, total through EOF; `eggfetch-core 0.2.0`)
 - [capability_segregation.md](capability_segregation.md) — Gate D1/D2 rejection records
 - [utils.md](utils.md) — engine utility ownership (Phase D `cache` removal)
 

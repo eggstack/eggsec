@@ -69,14 +69,14 @@ pub async fn handle_proxy_intercept(
                 host: "httpbin.org".to_string(),
                 path: "/get".to_string(),
                 request_headers: {
-                    let mut h = std::collections::HashMap::new();
+                    let mut h = rustc_hash::FxHashMap::default();
                     h.insert("User-Agent".to_string(), "eggsec-dry-run/1.0".to_string());
                     h
                 },
                 request_body: None,
                 response_status: 200,
                 response_headers: {
-                    let mut h = std::collections::HashMap::new();
+                    let mut h = rustc_hash::FxHashMap::default();
                     h.insert("Content-Type".to_string(), "application/json".to_string());
                     h
                 },
@@ -97,13 +97,13 @@ pub async fn handle_proxy_intercept(
                 host: "httpbin.org".to_string(),
                 path: "/post".to_string(),
                 request_headers: {
-                    let mut h = std::collections::HashMap::new();
+                    let mut h = rustc_hash::FxHashMap::default();
                     h.insert("Content-Type".to_string(), "application/json".to_string());
                     h
                 },
                 request_body: Some("{\"token\":\"REDACTED_IN_LIVE\"}".to_string()),
                 response_status: 200,
-                response_headers: std::collections::HashMap::new(),
+                response_headers: rustc_hash::FxHashMap::default(),
                 response_body: None,
                 is_https: true,
                 duration_ms: 62,

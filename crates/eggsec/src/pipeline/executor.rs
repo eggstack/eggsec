@@ -869,7 +869,7 @@ impl Pipeline {
 
             if let Ok(resp) = client.get(&url).send().await {
                 let status = resp.status().as_u16();
-                let headers: std::collections::HashMap<String, String> = resp
+                let headers: rustc_hash::FxHashMap<String, String> = resp
                     .headers()
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
@@ -897,7 +897,7 @@ impl Pipeline {
                     host,
                     path,
                     request_headers: {
-                        let mut h = std::collections::HashMap::new();
+                        let mut h = rustc_hash::FxHashMap::default();
                         h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
                         h
                     },

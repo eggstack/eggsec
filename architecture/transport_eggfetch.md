@@ -1,4 +1,4 @@
-# Eggfetch Transport Adapter (Phase C + corrective passes + 0.1.7 adoption + 2026-09-19 qualification)
+# Eggfetch Transport Adapter (Phase C + corrective passes + 0.1.7 adoption + 2026-09-19 qualification + 0.2.0 adoption)
 
 Status: adapter implemented 2026-09-12 (`eggsec-transport-eggfetch`).
 Corrective pass (2026-09-17): production load-test backend over published
@@ -13,12 +13,20 @@ Qualification (2026-09-19 corrective): Eggsec-local H2 ALPN/multiplex/reuse
 proof (`tests/h2_mux.rs`, 5 tests) + supported local-resolution SOCKS5
 success/pinning proof (`tests/socks5_local.rs`, 4 tests); deep gates +
 concurrency 1/10/50/100 evidence recorded (see Completion addendum).
+Adoption (2026-09-22): published `eggfetch-core 0.2.0` (explicit pre-1.0
+version-line adoption; upstream states no intentional public API/feature/MSRV
+break from 0.1.7; issue-24 streaming-decompression correction is outside
+Eggsec's decompression-off production path). The adapter compiles and
+requalifies unchanged: logical-URL + singular resolved direct, H1/H2 route
+reuse, `Timeout.total` through body EOF, manual per-hop redirect
+authorization, singular per-leg proxy pins, fail-closed unsupported proxy
+shapes, no H3/retries/env-proxies/decompression.
 
 ## Role & Responsibilities
 
 [`EggfetchTransport`](../../../crates/eggsec-transport-eggfetch/src/adapter.rs)
 implements [`HttpTransport`](transport.md) over the **published**
-`eggfetch-core 0.1.7` client using only stable public APIs.
+`eggfetch-core 0.2.0` client using only stable public APIs.
 
 **Non-responsibilities:**
 
@@ -45,7 +53,7 @@ implements [`HttpTransport`](transport.md) over the **published**
 
 Dependency envelope (`cargo tree -p eggsec-transport-eggfetch -e features`):
 
-- `eggsec-transport`, `eggfetch-core` (published `0.1.7`,
+- `eggsec-transport`, `eggfetch-core` (published `0.2.0`,
   `default-features = false`, `features = ["http1", "http2", "tls-rustls", "proxy"]`),
   `bytes`, `http`, `url`, `tracing`
 - NOT enabled: `http3`, `cookies`, `multipart`, any compression codec
@@ -57,8 +65,8 @@ Dependency envelope (`cargo tree -p eggsec-transport-eggfetch -e features`):
   target, where enforceable). Direct hops set `without_proxy` so
   environment-style proxy selection cannot divert them (`ProxyEnvironment`
   never constructed); proxied hops configure exactly one pinned peer + one
-  pinned ultimate (singular per-leg rule below). `Timeout.total` spans
-  response-body EOF/trailers (0.1.7 correction); redirect downgrade stays
+   pinned ultimate (singular per-leg rule below). `Timeout.total` spans
+   response-body EOF/trailers (0.1.7 correction, retained in 0.2.0); redirect downgrade stays
   compatibility-`Allow` (no silent `Deny`).
 
 ## Architecture
@@ -169,7 +177,7 @@ both bindings recorded/tested separately).
 | Hostname/SNI mismatch | rejected | rejected (SNI = logical host) | wrong-SAN cert rejected |
 | Custom CA / client identity / version bounds | unused (Phase A) | not representable in `TlsPolicy` | none needed |
 | Misconfigured TLS | build error, no fallback | stock configs only; backend surfaces errors at dispatch, never falls back | unit: roots build |
-| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off; 0.1.7 bounded route-keyed reuse) | H1 keep-alive reuse (5 reqs, 1 accept) + origin/socket isolation; H2 Eggsec-local (`h2_mux`: warmed-route 4-concurrent on 1 accept/4 streams/max≥2 + 5-sequential on 1 accept + selected-address-only and logical-origin isolation, ALPN h2, `:authority` = logical host) |
+| ALPN/HTTP2 | negotiated where enabled | H1/H2 via ALPN (`Auto { allow_http3: false }`; HTTP/3 off; 0.2.0 bounded route-keyed reuse) | H1 keep-alive reuse (5 reqs, 1 accept) + origin/socket isolation; H2 Eggsec-local (`h2_mux`: warmed-route 4-concurrent on 1 accept/4 streams/max≥2 + 5-sequential on 1 accept + selected-address-only and logical-origin isolation, ALPN h2, `:authority` = logical host) |
 
 Verified-success-over-TLS has no local e2e fixture (no custom-CA row in
 `TlsPolicy` to trust a fixture CA with); the insecure-success test proves
@@ -179,7 +187,7 @@ consumer needs it.
 
 ### Timeouts / cancellation / bodies (parity notes)
 
-- `total` = remaining aggregate Eggsec budget per hop (0.1.7 absolute
+- `total` = remaining aggregate Eggsec budget per hop (0.2.0 absolute
   deadline through body EOF/trailers, never reset by chunks; proven by
   headers-fast/body-slow, post-first-chunk stall, trickle, redirect-remainder,
   and post-timeout-reuse fixtures); `connect` mirrors the optional connect
@@ -219,25 +227,30 @@ consumer needs it.
 - Phase A `network_policy_invariants.rs` (12) and Phase B
   `transport_contract.rs` (13) remain green.
 - Correctness vs upstream vs performance: Eggsec-local fixtures prove H1
-  reuse, H2 multiplex/reuse/selected-address and origin isolation, and
-  SOCKS5-local success/pinning
-  through `EggfetchTransport`. Upstream 0.1.7 qualification (Tier 1 +
-  extended + HTTPX/HTTPX2 exact-SHA per the adoption plan) remains the
-  release gate for the published crate, not a substitute for the local
-  proofs above. Measured 1/10/50/100 throughput/latency/connection evidence
-  lives in `architecture/loadtest.md` (noisy, not a CI threshold).
+   reuse, H2 multiplex/reuse/selected-address and origin isolation, and
+   SOCKS5-local success/pinning
+   through `EggfetchTransport`. Upstream 0.1.7 qualification (Tier 1 +
+   extended + HTTPX/HTTPX2 exact-SHA per the adoption plan) remains the
+   historical upstream release-gate record; the 0.2.0 adoption reran the
+   Eggsec-local suites above unchanged against the published 0.2.0 crate
+   (private upstream refactors/performance work claimed as no Eggsec
+   behavior change without Eggsec measurements). Measured 1/10/50/100 throughput/latency/connection evidence
+   lives in `architecture/loadtest.md` (noisy, not a CI threshold).
 
 ## Upstream assessment (WS1–WS2 handoff input, closed)
 
 No `eggfetch` fork/change was required: the adapter pins published
-`eggfetch-core` from crates.io (`0.1.7`) rather than a branch reference,
+`eggfetch-core` from crates.io (`0.2.0`) rather than a branch reference,
 and `eggfetch` remains independent of EggSec (no new dependency in either
-direction beyond the versioned client use). The `0.1.7` release supplies
+direction beyond the versioned client use). The `0.2.0` release retains
 the qualified direct resolved-route reuse (`RequestBuilder::resolved_addresses`
 with logical-URL authority + bounded Hyper H1/H2 route cache), the
 `Timeout.total`-through-body correction, and the proxy-pinning APIs
 (`Proxy::resolved_addresses`, `RequestBuilder::proxy_target_addresses`,
-route/cache identity with pin state). The 0.1.6 redirect-downgrade controls
+route/cache identity with pin state) first qualified on the `0.1.7` line;
+upstream adds the issue-24 streaming-decompression correction (outside
+Eggsec's decompression-off production path) plus API-preserving private
+architecture/performance maintenance. The 0.1.6 redirect-downgrade controls
 and environment-proxy support are available upstream but deliberately unused
 (downgrade stays compatibility-`Allow`; no `ProxyEnvironment`).
 
@@ -283,4 +296,4 @@ assumption).
 
 See also: [transport.md](transport.md) (Phase B contract + Phase D increment 1), [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D §7), [overview.md](overview.md)
 
-*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/selected-address/origin isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 5 H2 + 4 SOCKS5 + 5 interop green; repeated current-only 1/10/50/100 evidence in [loadtest.md](loadtest.md), version-to-version performance inconclusive; retained report in [network_dependency_closure.md](network_dependency_closure.md); cites re-verified 2026-09-22 (systematic review))*
+*Last verified against source: 2026-09-22 (0.2.0 adoption requalification: logical-URL + singular resolved direct, total through body EOF, H1 reuse/isolation + H2 local multiplex/reuse/selected-address/origin isolation + SOCKS5-local success/pinning; 6 mapping + 52 parity + 5 H2 + 4 SOCKS5 + 5 interop green on published 0.2.0 with no adapter semantic change; repeated current-only 1/10/50/100 evidence in [loadtest.md](loadtest.md), version-to-version performance inconclusive; retained report in [network_dependency_closure.md](network_dependency_closure.md); cites re-verified 2026-09-22 (systematic review))*

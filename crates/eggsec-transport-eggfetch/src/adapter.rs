@@ -234,7 +234,7 @@ impl EggfetchTransport {
         // 7. Proxy endpoint vs ultimate destination are distinct decisions.
         // Both legs are resolved/authorized/bound independently through the
         // proxy-peer checkpoints. Supported matrix (published eggfetch-core
-        // 0.1.7 route-pinning release):
+        // 0.2.0 route-pinning release):
         // - direct HTTP/HTTPS: logical URL + singular `resolved_addresses`
         //   pin (below);
         // - HTTP/HTTPS proxy -> HTTPS origin (CONNECT) with both pins: supported;

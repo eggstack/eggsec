@@ -15,7 +15,7 @@ the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
 
-## Eggfetch 0.2.0 adoption and requalification (ready for handoff 2026-09-22)
+## Eggfetch 0.2.0 adoption and requalification (executed 2026-09-22)
 
 Plan:
 [eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md](eggfetch-0.2.0-adoption-and-requalification-2026-09-22.md)
@@ -35,6 +35,11 @@ and reruns the existing direct/H2/CONNECT/SOCKS5/redirect/timeout/security
 qualification. Upstream issue #24 is fixed in 0.2.0, but Eggsec must not use
 that as a reason to enable automatic decompression or compression features.
 Historical 0.1.7 plans remain unchanged.
+
+Executed: manifest/lockfile moved to published `eggfetch-core 0.2.0` /
+`eggfetch-http-connect 0.2.0` with no adapter semantic change; guard
+Check 134 advanced to the 0.2.0 line; current-state docs name 0.2.0;
+completion record appended to the plan.
 
 ## Performance and resource-efficiency optimization campaign (executed 2026-09-21)
 

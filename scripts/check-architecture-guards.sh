@@ -2374,7 +2374,7 @@ fi
 # multipart/compression), no concrete client types in its sources, no eggfetch
 # types in its public surface, and the engine may depend on it in production
 # for pinned load-test execution only (direct + supported proxied; no Reqwest
-# fallback). Requires eggfetch-core 0.1.7+ for direct resolved-route reuse + proxy pinning APIs.
+# fallback). Requires eggfetch-core 0.2.0+ for direct resolved-route reuse + proxy pinning APIs.
 echo ""
 echo "--- Check 102: Eggfetch adapter stays narrow; load-test production backend ---"
 SECTION_FAIL=0
@@ -2401,8 +2401,8 @@ else
       echo "$DEP_LINE"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
-    if ! echo "$DEP_LINE" | rg -q '0\.1\.[7-9]|0\.[2-9]'; then
-      echo "FAIL: adapter must require eggfetch-core 0.1.7+ (resolved-route reuse + proxy pinning APIs)."
+    if ! echo "$DEP_LINE" | rg -q '0\.[2-9]'; then
+      echo "FAIL: adapter must require eggfetch-core 0.2.0+ (resolved-route reuse + proxy pinning APIs)."
       echo "$DEP_LINE"
       SECTION_FAIL=$((SECTION_FAIL + 1))
     fi
@@ -3429,16 +3429,16 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 134. Corrective pass: MSRV truthful for eggfetch-core 0.1.7.
+# 134. 0.2.0 adoption: MSRV truthful for eggfetch-core 0.2.0.
 echo ""
 echo "--- Check 134: MSRV compatible with eggfetch-core ---"
 SECTION_FAIL=0
 if ! rg -q 'rust-version = "1.89"' Cargo.toml 2>/dev/null; then
-  echo "FAIL: workspace rust-version is not 1.89 (eggfetch-core 0.1.7 declares 1.89)."
+  echo "FAIL: workspace rust-version is not 1.89 (eggfetch-core 0.2.0 declares 1.89)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'version = "0.1.7"' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
-  echo "FAIL: adapter does not require eggfetch-core 0.1.7+."
+if ! rg -q 'version = "0.2.0"' crates/eggsec-transport-eggfetch/Cargo.toml 2>/dev/null; then
+  echo "FAIL: adapter does not require eggfetch-core 0.2.0+."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then

@@ -506,14 +506,14 @@ impl ProxyTool {
                 host: listen_addr.clone(),
                 path: format!("/path{}", i),
                 request_headers: {
-                    let mut h = std::collections::HashMap::new();
+                    let mut h = rustc_hash::FxHashMap::default();
                     h.insert("User-Agent".to_string(), "eggsec-proxy/1.0".to_string());
                     h
                 },
                 request_body: None,
                 response_status: 200,
                 response_headers: {
-                    let mut h = std::collections::HashMap::new();
+                    let mut h = rustc_hash::FxHashMap::default();
                     h.insert("Content-Type".to_string(), "text/html".to_string());
                     h
                 },

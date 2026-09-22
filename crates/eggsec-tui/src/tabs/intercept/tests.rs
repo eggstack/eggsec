@@ -347,7 +347,7 @@ url: format!("https://example.com/api/endpoint/{}", i),
 host: "example.com".to_string(),
 path: format!("/api/endpoint/{}", i),
 request_headers: {
-let mut h = std::collections::HashMap::new();
+let mut h = rustc_hash::FxHashMap::default();
 h.insert("User-Agent".to_string(), "stress-test/1.0".to_string());
 h.insert("Accept".to_string(), "application/json".to_string());
 h
@@ -363,7 +363,7 @@ Some(format!(
 },
 response_status: if i % 10 == 0 { 404 } else { 200 },
 response_headers: {
-let mut h = std::collections::HashMap::new();
+let mut h = rustc_hash::FxHashMap::default();
 h.insert("Content-Type".to_string(), "application/json".to_string());
 h
 },

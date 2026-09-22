@@ -63,7 +63,7 @@ pub(crate) fn host_header_value(url: &Url) -> Result<String, TransportError> {
 /// `total` is the caller budget shrunk by already-elapsed time (the redirect
 /// loop passes the remainder); `connect` mirrors the optional connect
 /// timeout. Pool/read/write phases stay unset: the contract carries no such
-/// values and parity configures none. Under `eggfetch-core 0.1.7` the mapped
+/// values and parity configures none. Under `eggfetch-core 0.2.0` the mapped
 /// `total` is an absolute wall-clock deadline through response-body
 /// EOF/trailers (never reset by chunk arrival), so the remaining-budget
 /// mapping enforces the Eggsec aggregate request timeout through body

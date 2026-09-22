@@ -12,7 +12,7 @@
 //!   singular socket-authorized address. Direct hops keep the logical URL as
 //!   the request URL and supply exactly that address via
 //!   `RequestBuilder::resolved_addresses` (no origin DNS inside Eggfetch;
-//!   `eggfetch-core 0.1.7` reuses the Hyper H1/H2 client for equal
+//!   `eggfetch-core 0.2.0` reuses the Hyper H1/H2 client for equal
 //!   logical-origin + ordered-address + SNI route keys). Proxied hops keep
 //!   the logical URL and pin both legs via `Proxy::resolved_addresses`
 //!   (proxy peer) + `proxy_target_addresses` (ultimate target, where
@@ -28,14 +28,14 @@
 //!   clients use [`eggfetch_core::HttpVersionPolicy::Auto`] with
 //!   `allow_http3: false`; H1/H2 negotiate via ALPN).
 //! - Timeouts map the remaining Eggsec aggregate request budget to
-//!   `eggfetch_core::Timeout { total, connect }` per hop; under 0.1.7 `total`
+//!   `eggfetch_core::Timeout { total, connect }` per hop; under 0.2.0 `total`
 //!   spans response-body EOF/trailers (never reset by chunks), so the manual
 //!   redirect loop enforces one aggregate deadline without per-hop restart.
 //! - Environment proxy discovery is never used (direct hops force
 //!   `.without_proxy()`; proxied hops originate only from explicit
 //!   `ProxyIntent`); environment discovery APIs do not appear
 //!   in the adapter.
-//! - Proxy routing uses the qualified `eggfetch-core 0.1.7` pinning release:
+//! - Proxy routing uses the qualified `eggfetch-core 0.2.0` pinning release:
 //!   proxy peers and ultimate targets are independently resolved/authorized
 //!   through `authorize_proxy_resolved` / `authorize_proxy_socket` plus the
 //!   ultimate checkpoints. Supported: direct, HTTP/HTTPS proxy → HTTPS origin

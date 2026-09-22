@@ -5,17 +5,17 @@ description: "HTTP load testing and performance benchmarking - use when working 
 
 # Eggsec Loadtest Skill
 
-HTTP load testing module workflows and patterns (Phase D core + 2026-09-17 corrective pass + 2026-09-19 0.1.7 adoption: mandatory execution scope, logical-URL + resolved-address Eggfetch backend).
+HTTP load testing module workflows and patterns (Phase D core + 2026-09-17 corrective pass + 2026-09-19 0.1.7 adoption + 2026-09-22 0.2.0 adoption: mandatory execution scope, logical-URL + resolved-address Eggfetch backend).
 
 Qualification evidence: the Eggfetch adapter has 5 Eggsec-local H2 tests
 (including selected-address-only route isolation with unchanged logical origin)
-and 4 local-resolution SOCKS5 tests. Treat the repeated 0.1.7 loopback
+and 4 local-resolution SOCKS5 tests. Treat the repeated 0.1.7-era loopback
 measurements in `architecture/loadtest.md` as current transport smoke evidence:
 they include five trials at concurrency 1/10/50/100, but do not by themselves
 establish a version-to-version performance regression comparison. Preserve that
 distinction when adding or updating benchmark claims.
 
-Execution scope is mandatory: `LoadTestRunner` stores `Option<Scope>` and ordinary `run()` fails closed without the `EnforcementContext` snapshot (no wildcard default). New entry points require execution context — never synthesize `allowed_targets = ["*"]`. Strict paths carry scope via `ApprovedExecution` (`approve_execution()` → `execute_approved_execution()` / `execute_canonical_with_scope()`) and `ToolExecutionContext` (`execute_with_context()` via `dispatch_execution()`); raw `LoadTestTool::execute()` fails closed. Direct + supported proxied traffic uses the pinned Eggfetch backend (`eggfetch-core 0.1.7`, logical-URL + singular resolved-address direct, H1/H2 route reuse, total deadline through body EOF, proxy peers/targets); Reqwest is fail-closed transition only (no fallback, credential-partitioned cache).
+Execution scope is mandatory: `LoadTestRunner` stores `Option<Scope>` and ordinary `run()` fails closed without the `EnforcementContext` snapshot (no wildcard default). New entry points require execution context — never synthesize `allowed_targets = ["*"]`. Strict paths carry scope via `ApprovedExecution` (`approve_execution()` → `execute_approved_execution()` / `execute_canonical_with_scope()`) and `ToolExecutionContext` (`execute_with_context()` via `dispatch_execution()`); raw `LoadTestTool::execute()` fails closed. Direct + supported proxied traffic uses the pinned Eggfetch backend (`eggfetch-core 0.2.0`, logical-URL + singular resolved-address direct, H1/H2 route reuse, total deadline through body EOF, proxy peers/targets); Reqwest is fail-closed transition only (no fallback, credential-partitioned cache).
 
 ## Key Types and Patterns
 
@@ -28,8 +28,8 @@ Generic executor over the scoped transport seam. Each worker owns a private `Met
 ### ReqwestTransport (`loadtest/backend.rs`, transition/fail-closed)
 Scope-aware Reqwest `HttpTransport` (verified + insecure clients, proxied cache keyed by endpoint + mode + TLS + credential fingerprint). Construction fails closed (`Result`; no `Client::new()` default, no verified/insecure fallback, no placeholder proxy, no direct-for-proxy fallback). Proxy peers authorized via `authorize_proxy_resolved`/`authorize_proxy_socket` (no pinning under Reqwest). Production load-test traffic uses Eggfetch, not this backend.
 
-### Eggfetch production backend (`eggsec-transport-eggfetch`, `eggfetch-core 0.1.7`)
-Logical-URL + singular `resolved_addresses([selected_target])` direct (no IP-literal shim; no origin DNS; Hyper H1/H2 route reuse) + qualified proxy routes (singular `proxy_peer` / `ultimate_peer` → single-element `Proxy::resolved_addresses` + `proxy_target_addresses`; CONNECT + SOCKS5 local supported, SOCKS5H/plaintext fail closed). H1/H2 via ALPN (`Auto { allow_http3: false }`, H3 off, env proxy never used, downgrade stays Allow). Aggregate `Timeout.total` spans body EOF per hop (remaining-budget mapping). One authorization cycle pins one address per leg — backend has no authorized alternate to fail over to; failure fails the request (fresh cycle required to try another candidate). `ConnectionInfo.remote_addr` is the socket-authorized peer by construction. Evidence split: Eggsec-local H1/H2/SOCKS5-local fixtures (`parity` + `h2_mux` + `socks5_local`) prove correctness through `EggfetchTransport`; upstream 0.1.7 Tier 1/extended/HTTPX exact-SHA gates qualify the published crate; `architecture/loadtest.md` records noisy 1/10/50/100 measurements (never a CI threshold).
+### Eggfetch production backend (`eggsec-transport-eggfetch`, `eggfetch-core 0.2.0`)
+Logical-URL + singular `resolved_addresses([selected_target])` direct (no IP-literal shim; no origin DNS; Hyper H1/H2 route reuse) + qualified proxy routes (singular `proxy_peer` / `ultimate_peer` → single-element `Proxy::resolved_addresses` + `proxy_target_addresses`; CONNECT + SOCKS5 local supported, SOCKS5H/plaintext fail closed). H1/H2 via ALPN (`Auto { allow_http3: false }`, H3 off, env proxy never used, downgrade stays Allow). Aggregate `Timeout.total` spans body EOF per hop (remaining-budget mapping). One authorization cycle pins one address per leg — backend has no authorized alternate to fail over to; failure fails the request (fresh cycle required to try another candidate). `ConnectionInfo.remote_addr` is the socket-authorized peer by construction. Evidence split: Eggsec-local H1/H2/SOCKS5-local fixtures (`parity` + `h2_mux` + `socks5_local`) prove correctness through `EggfetchTransport`; upstream 0.1.7 Tier 1/extended/HTTPX exact-SHA gates remain the historical upstream record; the 0.2.0 adoption requalifies the unchanged adapter locally with decompression still off; `architecture/loadtest.md` records noisy 1/10/50/100 measurements (never a CI threshold).
 
 ### LoadTestRunner / LoadTestRunConfig (`loadtest/runner.rs`)
 Compatibility facades. `tui_mode` is retained for source compat but **ignored** — progress is structured events (`progress.rs`: `NoopSink`, `FnSink`, `ChannelSink`). Scope is `Option<Scope>`: attach via `with_scope()`/`set_scope()` or `run()` fails before I/O; `run_with(transport, authority, ...)` stays explicit (facade scope ignored).
