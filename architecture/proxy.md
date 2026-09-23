@@ -35,7 +35,7 @@ When `feature = "web-proxy"` is **disabled**: provides stub/no-op types so downs
 
 ## Architecture
 
-### Adapter Layer (`crates/eggsec/src/proxy/mod.rs`, 288 lines)
+### Adapter Layer (`crates/eggsec/src/proxy/mod.rs`, 289 lines)
 
 When `web-proxy` is disabled, the adapter provides minimal stubs:
 
@@ -62,7 +62,7 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 | `lib.rs` | 421 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
 | `config.rs` | 626 | `ProxyConfig`, `ProxyEntry`, `ProxyType`, `RotationStrategy`, `HealthCheckConfig`, file loading (JSON/YAML/plaintext) |
 | `error.rs` | 93 | `WebProxyError` enum (9 variants: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout`) and `Result<T>` type alias |
-| `pool.rs` | 595 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
+| `pool.rs` | 631 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
 | `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
 | `health.rs` | 416 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffered` preserving enabled-input order), `HealthCheckResult`, `ProxyHealth` |
 | `eggress_outbound.rs` | 341 | Eggress adapter: literal-gated `ProxyEntry`→`ProxyHopSpec` (`socket_addr()` validation, hostname entries rejected), chain spec, `OutboundConnector::from_chain`, centralized unknown-`local_addr` sentinel, redacted error mapping |
@@ -229,11 +229,11 @@ Key test categories:
 4. **SOCKS4 health fails closed**: `HealthChecker` returns an explicit unsupported error for `Socks4` instead of testing SOCKS5 (behavior fix 2026-09-22; previously a SOCKS5 result was presented as SOCKS4 health).
 5. **`ProxiedConnection.local_addr` is the centralized unknown sentinel**: `eggress-outbound 1.0.8` never populates `OutboundInfo.local_addr`; all production call sites share `eggress_outbound::unknown_local_addr()` (`0.0.0.0:0`), documented as unknown metadata — never logged as measured, never read by policy/authorization/routing/evidence. Removal condition: a published Eggress release exposes the established-socket local address.
 6. **Legacy handshake shims remain for `TcpStream` signatures only**: `SocksProxy`/`chain_connect`/`connect_through_with_domain`/`HttpConnectProxy` keep their implementations because Eggress `BoxStream` cannot satisfy `TcpStream` returns without a forbidden downcast. Do not extend them; do not claim all duplicate code is removed.
-4. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
-5. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
-6. **Background health check never terminates**: `start_background_health_check()` returns a `JoinHandle` but the loop has no break condition (`lib.rs:248-285`).
-7. **`FlowBuffer::flows()` linearizes in place (Phase E)**: `flows(&mut self)` calls `make_contiguous()` and returns a real ordered slice over every buffered flow; `flows_vec()`/`iter()` remain for shared-access callers (`intercept/types.rs:605-650`).
-8. **`is_private_ip` differs between layers**: The outbound `is_private_ip` (`lib.rs:336-356`) also blocks multicast and broadcast; the intercept `is_private_ip` (`intercept/mod.rs:157-174`) only blocks RFC 1918, loopback, link-local, and unspecified.
+7. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
+8. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
+9. **Background health check never terminates**: `start_background_health_check()` returns a `JoinHandle` but the loop has no break condition (`lib.rs:289-331`).
+10. **`FlowBuffer::flows()` linearizes in place (Phase E)**: `flows(&mut self)` calls `make_contiguous()` and returns a real ordered slice over every buffered flow; `flows_vec()`/`iter()` remain for shared-access callers (`intercept/types.rs:605-650`).
+11. **`is_private_ip` differs between layers**: The outbound `is_private_ip` (`lib.rs:381-401`) also blocks multicast and broadcast; the intercept `is_private_ip` (`intercept/mod.rs:157-174`) only blocks RFC 1918, loopback, link-local, and unspecified.
 
 ## References
 
