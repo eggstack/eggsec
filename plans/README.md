@@ -14,6 +14,30 @@ When a plan is completed, preserve it and record the outcome in the plan or in
 the associated release/validation document. Do not delete useful handoff
 history solely to satisfy a static guard.
 
+## Eggress 1.0.10 adoption and socket-metadata closure (ready 2026-09-24)
+
+Plan:
+[eggress-1.0.10-adoption-and-metadata-closure-2026-09-24.md](eggress-1.0.10-adoption-and-metadata-closure-2026-09-24.md)
+
+This is the active narrow Eggress handoff for `eggsec-web-proxy`. It moves
+only the already-approved listener-free dependency edge from exact 1.0.8 to
+exact 1.0.10, updates Check 106 without widening the allowlist, and closes the
+remaining upstream-gated `ProxiedConnection.local_addr` debt now that Eggress
+preserves first-hop TCP socket metadata.
+
+Implementation must remove the `0.0.0.0:0` unknown-local-address sentinel
+rather than treating it as measured data, add deterministic SOCKS4/SOCKS5/Tor/
+HTTP CONNECT and multi-hop metadata assertions, and document that the measured
+address is the local endpoint of the physical TCP connection to the first
+proxy hop—not the final external egress address.
+
+No Eggress capability expansion is authorized: routing, embed/runtime/server,
+H2, SSH, QUIC/H3, UDP, pproxy compatibility, insecure TLS, and advanced
+protocol features remain out of scope. Reqwest remains the application-level
+proxy-health owner. Eggress 1.0.10 typed detailed failure classification is a
+separate future behavior-change decision and is not required for this
+version/metadata adoption.
+
 ## Eggress 1.0.8 post-adoption compatibility corrective pass (executed 2026-09-22)
 
 Plan:
