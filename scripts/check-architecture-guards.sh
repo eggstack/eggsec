@@ -457,9 +457,9 @@ if [[ -n "$FABRICATION_HITS" ]]; then
 else
   SECTION_FAIL=0
 fi
-# Also detect the narrow co-occurrence in lib.rs/executor.rs (original check)
-REGISTRY_HITS=$(rg -n 'registry::all_libraries\(\)' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
-LOADED_HITS=$(rg -n 'loaded:\s*true' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
+# Also detect the narrow co-occurrence in run.rs/executor.rs (canonical report owner)
+REGISTRY_HITS=$(rg -n 'registry::all_libraries\(\)' crates/eggsec-nse/src/run.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
+LOADED_HITS=$(rg -n 'loaded:\s*true' crates/eggsec-nse/src/run.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
 if [[ -n "$REGISTRY_HITS" && -n "$LOADED_HITS" ]]; then
   echo "$REGISTRY_HITS"
   echo "$LOADED_HITS"
@@ -468,11 +468,12 @@ if [[ -n "$REGISTRY_HITS" && -n "$LOADED_HITS" ]]; then
   FAIL=$((FAIL + 1))
   SECTION_FAIL=1
 fi
-# Positive evidence: production lib.rs uses runtime observation
-if rg -q 'library_use_reports_from_required_modules|library_use_reports_from_static_requires|executor\.library_reports' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
-  echo "PASS: Production report path uses runtime observation functions."
+# Positive evidence: canonical run.rs uses runtime observation (lib.rs is a
+# thin adapter delegating to execute_nse_run since Milestone 001)
+if rg -q 'library_use_reports_from_required_modules|library_use_reports_from_static_requires|executor\.library_reports' crates/eggsec-nse/src/run.rs 2>/dev/null; then
+  echo "PASS: Canonical report path uses runtime observation functions."
 else
-  echo "WARN: Could not confirm runtime observation functions in lib.rs."
+  echo "WARN: Could not confirm runtime observation functions in run.rs."
   echo "      Expected: library_use_reports_from_required_modules, library_use_reports_from_static_requires, or executor.library_reports()."
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
@@ -608,27 +609,36 @@ else
   echo "PASS: NseLibraryDescriptor instantiation is registry-owned."
 fi
 
-# 30. run_cli_with_profile() JSON path must populate library and rule metadata.
-# The NseRunReport must include library use reports and rule evaluation reports
-# for structured output to be complete. Once these APIs exist, skipping them
-# produces empty arrays that hide compatibility truth.
+# 30. Canonical NSE pipeline populates library and rule metadata; the CLI
+# helper stays a thin adapter.
+# Since Milestone 001, `run_cli_with_profile()` in lib.rs delegates to
+# `execute_nse_run()` in run.rs, which owns the single report-assembly path.
+# The NseRunReport must include library use reports and rule evaluation
+# reports for structured output to be complete. Skipping them produces empty
+# arrays that hide compatibility truth.
 echo ""
-echo "--- Check 30: run_cli_with_profile() JSON path populates report metadata ---"
+echo "--- Check 30: canonical NSE report path populates library/rule metadata ---"
 SECTION_FAIL=0
-# Check that the JSON path calls with_rules()
-if ! rg -q 'with_rules\(' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
-  echo "FAIL: run_cli_with_profile() does not call .with_rules() on NseRunReport."
-  echo "      Rule evaluation metadata must be included in structured JSON output."
+# Check that the canonical pipeline calls with_rules()
+if ! rg -q 'with_rules\(' crates/eggsec-nse/src/run.rs 2>/dev/null; then
+  echo "FAIL: Canonical NSE pipeline (run.rs) does not call .with_rules() on NseRunReport."
+  echo "      Rule evaluation metadata must be included in structured output."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-# Check that the JSON path calls with_libraries()
-if ! rg -q 'with_libraries\(' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
-  echo "FAIL: run_cli_with_profile() does not call .with_libraries() on NseRunReport."
-  echo "      Library use metadata must be included in structured JSON output."
+# Check that the canonical pipeline calls with_libraries()
+if ! rg -q 'with_libraries\(' crates/eggsec-nse/src/run.rs 2>/dev/null; then
+  echo "FAIL: Canonical NSE pipeline (run.rs) does not call .with_libraries() on NseRunReport."
+  echo "      Library use metadata must be included in structured output."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Check that the CLI helper delegates instead of assembling its own report
+if ! rg -q 'execute_nse_run' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
+  echo "FAIL: run_cli_with_profile() in lib.rs does not delegate to execute_nse_run()."
+  echo "      The CLI helper must stay a thin adapter over the canonical pipeline."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: run_cli_with_profile() JSON path populates library and rule metadata."
+  echo "PASS: Canonical NSE report path populates library/rule metadata; CLI delegates."
 else
   FAIL=$((FAIL + 1))
 fi
@@ -763,17 +773,17 @@ fi
 # hardcodes ManualPermissive + AllowAllManual in the capability context.
 # See plans/nse-milestone-3-corrective-pass.md (Workstream 2).
 echo ""
-echo "--- Check 35: run_cli_with_profile must use with_profile/with_full_policy (FAIL) ---"
-NSE_RUNCLI_WITH_POLICY_HITS=$(rg -n 'NseExecutor::with_policy' --glob='*.rs' crates/eggsec-nse/src/lib.rs 2>/dev/null \
-  | grep -E 'run_cli_with_profile|run_cli\b' || true)
+echo "--- Check 35: NSE executor construction uses with_profile/with_full_policy (FAIL) ---"
+NSE_RUNCLI_WITH_POLICY_HITS=$(rg -n 'NseExecutor::with_policy' --glob='*.rs' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/run.rs 2>/dev/null \
+  | grep -E 'run_cli_with_profile|run_cli\b|execute_nse_run' || true)
 if [[ -n "$NSE_RUNCLI_WITH_POLICY_HITS" ]]; then
   echo "$NSE_RUNCLI_WITH_POLICY_HITS"
-  echo "FAIL: run_cli_with_profile() constructs NseExecutor with with_policy()."
+  echo "FAIL: NSE entry paths construct NseExecutor with with_policy()."
   echo "      Use NseExecutor::with_profile(&resolved_profile) or NseExecutor::with_full_policy(...)"
   echo "      so capability context profile_kind/network_policy match the resolved profile."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: run_cli_with_profile() does not use with_policy() for executor construction."
+  echo "PASS: NSE entry paths do not use with_policy() for executor construction."
 fi
 
 # 36. NSE automated surfaces must not use with_policy() (manual-only API)
@@ -3906,6 +3916,54 @@ if rg -Fq 'self.template.scoped_request' "$LT_EXEC" 2>/dev/null; then
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: Load-test prototype compiled once per run."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 143. NSE canonical execution/report convergence (Milestone 001).
+# Production Eggsec/Python NSE paths must use the runtime-owned
+# `execute_nse_run()` orchestration API rather than constructing their own
+# report pipelines. Concretely:
+# - engine dispatch (dispatch/api.rs) references execute_nse_run/NseRunRequest,
+#   performs no direct custom-file read, and assembles no report via build_report;
+# - the Python binding (eggsec-python/src/nse.rs) references execute_nse_run
+#   and owns no duplicated static-require fallback;
+# - the runtime CLI helper (eggsec-nse/src/lib.rs) delegates to execute_nse_run.
+echo ""
+echo "--- Check 143: NSE surfaces use the canonical runtime pipeline (FAIL) ---"
+SECTION_FAIL=0
+if ! rg -q 'execute_nse_run|NseRunRequest' crates/eggsec/src/dispatch/api.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec/src/dispatch/api.rs does not use the canonical NSE pipeline."
+  echo "      Engine NSE dispatch must construct NseRunRequest and call execute_nse_run()."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'std::fs::read_to_string' crates/eggsec/src/dispatch/api.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec/src/dispatch/api.rs reads files directly."
+  echo "      Custom script files must resolve through ScriptResolver via NseScriptSource::File."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q '\.build_report\(' crates/eggsec/src/dispatch/api.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec/src/dispatch/api.rs assembles its own NSE report via build_report()."
+  echo "      Report assembly is runtime-owned in execute_nse_run()."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'execute_nse_run' crates/eggsec-python/src/nse.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec-python/src/nse.rs does not use the canonical NSE pipeline."
+  echo "      The Python binding must construct NseRunRequest and call execute_nse_run()."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'fn extract_static_requires' crates/eggsec-python/src/nse.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec-python/src/nse.rs duplicates the static-require fallback."
+  echo "      Static require reconciliation is runtime-owned (eggsec-nse/src/run.rs)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'execute_nse_run' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
+  echo "FAIL: crates/eggsec-nse/src/lib.rs does not delegate to execute_nse_run()."
+  echo "      run_cli_with_profile must stay a thin adapter over the canonical pipeline."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: NSE surfaces use the canonical runtime pipeline."
 else
   FAIL=$((FAIL + 1))
 fi

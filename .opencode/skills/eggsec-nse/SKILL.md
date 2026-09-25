@@ -65,6 +65,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | Component | File | Purpose |
 |-----------|------|---------|
 | `NseExecutor` | `src/executor.rs` | Sync Lua VM wrapper with NSE rule execution |
+| `execute_nse_run` / `NseRunRequest` | `src/run.rs` | Canonical runtime-owned execution/report pipeline (all surfaces) |
 | `AsyncNseExecutor` | `src/async_executor.rs` | Async wrapper with tokio runtime |
 | `ExecutorCore` | `src/executor_core.rs` | Shared Lua VM, globals, library registration |
 | `ScriptResolver` | `src/resolver.rs` | Policy-enforcing script/module resolver with diagnostics |
@@ -79,8 +80,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `NseResourceCounters` | `src/limits.rs` | Atomic counters for network/filesystem operations |
 | `NseExecutionStats` | `src/limits.rs` | Execution stats snapshot (elapsed, instructions, bytes, violation) |
 | `evaluate_rule()` | `src/report.rs` | Converts Lua rule results to structured `NseRuleEvaluationReport` |
-| runtime `require()` tracking | `src/executor_core.rs` / `src/lib.rs` | Populates per-run library usage entries in `NseRunReport.libraries` |
-| `build_failure_report()` | `src/lib.rs` | Builds full `NseRunReport` for error paths with library data |
+| runtime `require()` tracking | `src/executor_core.rs` / `src/run.rs` | Populates per-run library usage entries in `NseRunReport.libraries` |
+| `NseRunError::failure_report()` | `src/run.rs` | Builds full `NseRunReport` for error paths with diagnostics and error |
 
 ## Rule Evaluation Reports
 
@@ -94,7 +95,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | Non-boolean | false | false | `"unsupported"` | Some | Return type not supported by NSE semantics |
 | Lua error | false | false | `"exact"` | None | `error` field populated with error message |
 
-Runtime `require()` tracking in `executor_core.rs`, surfaced through `run_cli_with_profile()` and `NseExecutor::build_report()`, populates `NseRunReport.libraries` with per-run observed or attempted `require()` activity, including error paths. Each entry has a `loaded` field: `true` means the runtime observed a successful module load; `false` means a `require()` was attempted but the module failed, was blocked, was missing, had an invalid name, or was statically detected without runtime confirmation. Static `require()` detection is approximate and labeled with a warning. The field records per-run usage and diagnostics; it is not a capability snapshot. `build_failure_report()` produces a full `NseRunReport` for error paths with library data and error information.
+Runtime `require()` tracking in `executor_core.rs`, surfaced through the canonical `execute_nse_run()` pipeline (`src/run.rs`), populates `NseRunReport.libraries` with per-run observed or attempted `require()` activity, including error paths. Each entry has a `loaded` field: `true` means the runtime observed a successful module load; `false` means a `require()` was attempted but the module failed, was blocked, was missing, had an invalid name, or was statically detected without runtime confirmation. Static `require()` detection is approximate and labeled with a warning. The field records per-run usage and diagnostics; it is not a capability snapshot. `NseRunError::failure_report()` produces a full `NseRunReport` for error paths with resolver diagnostics and error information.
 
 The `unsupported` field on `NseRuleEvaluationReport` is `Option<String>` and is `#[serde(skip_serializing_if = "Option::is_none")]` — it only appears in serialized output when present (non-boolean return types).
 
@@ -149,14 +150,19 @@ let profile = ResolvedNseExecutionProfile::ci_safe();
 ### Running with Profile
 
 ```rust
-// Profile-aware execution — capability context matches the resolved profile
+// Canonical pipeline — preferred for every production surface.
+// Select request/profile/context, invoke, render the returned report.
+let request = eggsec_nse::NseRunRequest::new(target, source, profile);
+let report = eggsec_nse::execute_nse_run(request)?;
+
+// Thin CLI adapter (output rendering only, no orchestration)
 eggsec_nse::run_cli_with_profile(config, Some(profile)).await?;
 
 // Fallback to manual_permissive if None
 eggsec_nse::run_cli_with_profile(config, None).await?;
 ```
 
-`run_cli_with_profile()` constructs the executor via `NseExecutor::with_profile(&resolved_profile)` so the capability context matches the resolved profile. `NseExecutor::with_profile()` is the preferred constructor for CLI and automated surfaces.
+`execute_nse_run()` owns script resolution, executor setup, rule/action execution, and complete `NseRunReport` assembly (resolver diagnostics, rules, stats, libraries, capability events, compatibility/fidelity, output, evidence). Callers must not reproduce that orchestration or assemble reports via `build_report()`. `run_cli_with_profile()` is a thin CLI adapter (profile default, request construction, JSON/text rendering). The Eggsec dispatch path (`dispatch/api.rs::run_nse`) and the Python binding (`run_nse_inner`) are thin adapters over the same API. The executor is constructed via `NseExecutor::with_full_policy(...)` from the effective profile so the capability context matches the resolved profile.
 
 ### CLI Handler Integration
 

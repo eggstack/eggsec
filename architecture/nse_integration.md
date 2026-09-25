@@ -1595,3 +1595,26 @@ Phase 06 closes TLS/sslcert test symmetry gaps and strengthens the per-connect a
 4. **Architecture guard count**: 53 → 56 (56 checks pass).
 
 **Verification:** 522 eggsec-nse tests pass (1 ignored), 56 architecture guards pass. 9 local sslcert tests (5 success + 2 AgentSafe + 1 CiSafe + 1 new CiSafe).
+
+## Canonical Execution/Report Convergence (Extraction Milestone 001)
+
+**Status:** Implemented. `crates/eggsec-nse/src/run.rs` owns the single authoritative runtime pipeline: `NseRunRequest` (target, `NseScriptSource`, script args, resolved profile, optional host/port context, explicit limits/cancellation overrides) through `execute_nse_run()` (resolver-first resolution, `with_full_policy` executor setup, rule/action execution, stats, dynamic library-use plus the one runtime-owned static-`require` fallback, capability events, resolver diagnostics, report build, single compatibility/fidelity computation, single evidence extraction).
+
+**Allowed callers** (thin adapters only — select request/profile, render the report):
+
+| Surface | Adapter | Profile |
+|---|---|---|
+| Runtime CLI helper | `run_cli_with_profile()` (`lib.rs`) | caller-provided, defaults to `ManualPermissive` |
+| Eggsec dispatch/TUI | `dispatch/api.rs::run_nse` | `ManualPermissive` (manual surface) |
+| Python binding | `run_nse_inner()` (`eggsec-python/src/nse.rs`) | `AgentSafe` + supported limit overrides |
+
+`NseExecutor::build_report()` remains for low-level consumers/tests; production Eggsec adapters must not rebuild orchestration from it (architecture guard 143). `NseRunError` carries request context plus resolver diagnostics; `failure_report()` preserves the historical failure-report shape (`Failed` compatibility). Cancellation is never converted into a successful empty report.
+
+**Intentional deltas** (converged on richest semantics, encoded in tests):
+
+1. Named scripts report `script_source.kind = "builtin"` on every surface (CLI/Python previously used `inline`). No field removed; kind value unified.
+2. CLI/Python reports now include execution stats and extracted evidence (previously CLI lacked stats; Python lacked stats and evidence).
+3. Engine dispatch now sets the executor target and preserves resolver diagnostics, rule reports, and evidence (previously target unset, diagnostics empty, rules/evidence dropped).
+4. Engine custom-file errors propagate as dispatch failures instead of bypassing `ScriptResolver` via direct `std::fs::read_to_string` (removed).
+
+**Verification:** `report_contract_tests` (WP-A baselines), `canonical_run_tests` (16 parity/ownership tests incl. manual-vs-automated field parity, concurrency isolation, negatives), engine `dispatch::api::nse_canonical_dispatch_tests` (builtin completeness, file-via-resolver, missing-file error), clean-room corpus through the canonical path, architecture guards 143 (ownership) plus updated 25/30/35. Plan: `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md`.

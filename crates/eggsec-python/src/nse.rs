@@ -725,13 +725,8 @@ pub(crate) async fn run_nse_inner(
     config: eggsec::nse::NseConfig,
     user_limits: Option<eggsec::nse::NseExecutionLimits>,
 ) -> anyhow::Result<eggsec::nse::NseRunReport> {
-    use eggsec::nse::NseRunReport;
-
-    let target = config.target.clone();
-    let script = config.script.clone();
-
-    // Build the execution profile (AgentSafe for automated Python surface)
-    let mut profile = eggsec::nse::ResolvedNseExecutionProfile::agent_safe(&target, &[]);
+    // Build the execution profile (AgentSafe for automated Python surface).
+    let mut profile = eggsec::nse::ResolvedNseExecutionProfile::agent_safe(&config.target, &[]);
 
     // Override profile limits with user-supplied limits when provided.
     // This ensures user-supplied limits from NseRuntimePy are actually
@@ -740,177 +735,30 @@ pub(crate) async fn run_nse_inner(
         profile.limits = limits;
     }
 
-    let report_profile = profile.clone();
-    let execution_profile = profile.clone();
-
-    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<(
-        String,
-        eggsec::nse::NseScriptSource,
-        Vec<eggsec::nse::NseLoadDiagnostic>,
-        Vec<eggsec::nse::NseRuleEvaluationReport>,
-        Vec<eggsec::nse::NseLibraryUseReport>,
-        Vec<eggsec::nse::NseCapabilityEvent>,
-    )> {
-        let mut executor = eggsec::nse::NseExecutor::with_profile(&execution_profile)
-            .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
-        executor
-            .set_target(&target)
-            .map_err(|e| anyhow::anyhow!("Failed to set target: {}", e))?;
-        if let Some(ref args) = config.script_args {
-            executor
-                .set_script_args(args)
-                .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
+    // Thin adapter over the canonical runtime pipeline: named scripts use
+    // the built-in source identity; file sources resolve through
+    // ScriptResolver under the AgentSafe policy (script files denied).
+    // Report assembly (stats, libraries, capability events, compatibility,
+    // evidence) is runtime-owned.
+    let source = if let Some(ref script_file) = config.script_file {
+        eggsec::nse::NseScriptSource::File {
+            path: std::path::PathBuf::from(script_file),
         }
-
-        let mut resolver = eggsec::nse::ScriptResolver::new(
-            execution_profile.script_policy.clone(),
-            execution_profile.module_policy.clone(),
-            execution_profile.limits.clone(),
-        );
-
-        let (script_content, script_source) = if let Some(ref script_file) = config.script_file {
-            let source = eggsec::nse::NseScriptSource::File {
-                path: std::path::PathBuf::from(script_file),
-            };
-            let src = source.clone();
-            match resolver.resolve_script(source) {
-                Ok(resolved) => (resolved.content, src),
-                Err(e) => {
-                    anyhow::bail!("Script file resolution failed: {}", e);
-                }
-            }
-        } else {
-            let content = eggsec::nse::get_builtin_script(&script);
-            let source = eggsec::nse::NseScriptSource::InlineManual {
-                label: script.clone(),
-                content: content.clone(),
-            };
-            let src = source.clone();
-            match resolver.resolve_script(source) {
-                Ok(_) => (content, src),
-                Err(e) => {
-                    anyhow::bail!("Built-in script resolution failed: {}", e);
-                }
-            }
-        };
-
-        let diagnostics = resolver.take_diagnostics();
-
-        let (output, _raw_outputs, rule_reports) = executor
-            .run_script_with_rules(&script_content)
-            .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
-
-        let mut library_reports = executor.library_reports();
-        if library_reports.is_empty() {
-            // Fallback: extract static requires from script content and build reports
-            let static_requires = extract_static_requires(&script_content);
-            if !static_requires.is_empty() {
-                library_reports = static_requires
-                    .iter()
-                    .map(|name| {
-                        let mut warnings = Vec::new();
-                        warnings.push(
-                            "detected statically; runtime require tracking did not complete"
-                                .to_string(),
-                        );
-                        if let Some(desc) = eggsec::nse::find_library(name) {
-                            let side_effects = desc
-                                .sandbox_side_effects
-                                .iter()
-                                .map(|se| se.to_string())
-                                .collect();
-                            eggsec::nse::NseLibraryUseReport {
-                                name: desc.name.to_string(),
-                                category: desc.category.to_string(),
-                                registered: true,
-                                side_effects,
-                                fallback_behavior: desc.fallback_behavior.to_string(),
-                                notes: desc.notes.to_string(),
-                                loaded: false,
-                                warnings,
-                            }
-                        } else {
-                            eggsec::nse::NseLibraryUseReport {
-                                name: name.clone(),
-                                category: "Unknown".to_string(),
-                                registered: false,
-                                side_effects: Vec::new(),
-                                fallback_behavior: "Unknown".to_string(),
-                                notes: "not present in NSE library registry".to_string(),
-                                loaded: false,
-                                warnings,
-                            }
-                        }
-                    })
-                    .collect();
-            }
+    } else {
+        eggsec::nse::NseScriptSource::Builtin {
+            name: config.script.clone(),
         }
+    };
+    let mut request = eggsec::nse::NseRunRequest::new(&config.target, source, profile);
+    if let Some(ref args) = config.script_args {
+        request = request.with_script_args(args);
+    }
 
-        let capability_events = executor.capability_events();
-
-        Ok((
-            output,
-            script_source,
-            diagnostics,
-            rule_reports,
-            library_reports,
-            capability_events,
-        ))
+    tokio::task::spawn_blocking(move || {
+        eggsec::nse::execute_nse_run(request).map_err(|e| anyhow::anyhow!("{}", e))
     })
     .await
-    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))??;
-
-    let (output, script_source, diagnostics, rule_reports, library_reports, capability_events) =
-        result;
-
-    let report = NseRunReport::new(&config.target, &config.script)
-        .with_profile(&report_profile)
-        .with_script_source(&script_source)
-        .with_resolver_diagnostics(&diagnostics)
-        .with_libraries(library_reports)
-        .with_rules(rule_reports)
-        .with_capability_events(capability_events)
-        .with_output(&output)
-        .compute_compatibility();
-
-    Ok(report)
-}
-
-// Minimal static require extraction for fallback when no dynamic reports exist.
-fn extract_static_requires(script_content: &str) -> Vec<String> {
-    use std::collections::HashSet;
-    let mut seen = HashSet::new();
-    let mut names = Vec::new();
-    // Simple regex-like matching for require("name") patterns
-    for line in script_content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("--") {
-            continue;
-        }
-        if let Some(start) = trimmed.find("require") {
-            let rest = &trimmed[start + 7..];
-            // Match require "name" or require("name")
-            let rest = rest.trim_start();
-            if rest.starts_with('(') {
-                let rest = rest[1..].trim_start();
-                if let Some(end) = rest.find(')') {
-                    let inner = rest[..end].trim().trim_matches(|c| c == '"' || c == '\'');
-                    if !inner.is_empty() && seen.insert(inner.to_string()) {
-                        names.push(inner.to_string());
-                    }
-                }
-            } else if rest.starts_with('"') || rest.starts_with('\'') {
-                let quote = rest.as_bytes()[0] as char;
-                if let Some(end) = rest[1..].find(quote) {
-                    let inner = &rest[1..1 + end];
-                    if !inner.is_empty() && seen.insert(inner.to_string()) {
-                        names.push(inner.to_string());
-                    }
-                }
-            }
-        }
-    }
-    names
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?
 }
 
 // ═══════════════════════════════════════════════════════════════════

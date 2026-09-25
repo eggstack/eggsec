@@ -3,8 +3,6 @@ use std::time::Duration;
 #[cfg(feature = "nse")]
 use crate::dispatch::types::NseResults;
 use crate::dispatch::types::{send_progress, GraphQlResults, OAuthResults, TaskResult};
-#[cfg(feature = "nse")]
-use eggsec_nse::NseScriptSource;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_graphql(
@@ -310,8 +308,7 @@ pub async fn run_nse(
     custom_script: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::nse::NseExecutor;
-    use eggsec_nse::ResolvedNseExecutionProfile;
+    use crate::nse::{NseRunRequest, ResolvedNseExecutionProfile};
 
     send_progress(&progress_tx, 0, 100).await;
 
@@ -323,42 +320,35 @@ pub async fn run_nse(
             // NOTE: This dispatch path is currently only reached from TUI
             // (a manual surface). When automated surfaces (agent/MCP/daemon)
             // are added, they must pass an appropriate profile through
-            // RunRequest and construct the executor with that profile.
+            // RunRequest and construct the request with that profile.
             let profile = ResolvedNseExecutionProfile::manual_permissive(Some(&target_clone));
-            let mut executor = NseExecutor::with_profile(&profile)
-                .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
-
-            if let Some(ref args) = script_args {
-                executor
-                    .set_script_args(args)
-                    .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
-            }
-
-            let (script_content, script_source) = if let Some(ref script_path) = custom_script {
-                let content = std::fs::read_to_string(script_path).map_err(|e| {
-                    anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
-                })?;
-                let source = NseScriptSource::File {
+            // Custom script files resolve through ScriptResolver (no direct
+            // filesystem read); named scripts use the built-in source
+            // identity. Execution and report assembly are runtime-owned.
+            let source = if let Some(ref script_path) = custom_script {
+                crate::nse::NseScriptSource::File {
                     path: std::path::PathBuf::from(script_path),
-                };
-                (content, source)
+                }
             } else {
-                let content = crate::nse::get_builtin_script(&script_clone);
-                let source = NseScriptSource::Builtin {
+                crate::nse::NseScriptSource::Builtin {
                     name: script_clone.clone(),
-                };
-                (content, source)
+                }
             };
+            let mut request = NseRunRequest::new(&target_clone, source, profile);
+            if let Some(ref args) = script_args {
+                request = request.with_script_args(args);
+            }
+            let report =
+                crate::nse::execute_nse_run(request).map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            let (output, _outputs, rule_reports) = executor
-                .run_script_with_rules(&script_content)
-                .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
+            let success = report.rules.iter().any(|r| r.matched) || report.output.has_output;
 
-            let success = rule_reports.iter().any(|r| r.matched) || !output.is_empty();
-
-            let report = executor.build_report(&profile, &script_source, &output, &[]);
-
-            Ok::<_, anyhow::Error>((output, String::new(), success, Some(report)))
+            Ok::<_, anyhow::Error>((
+                report.output.content.clone(),
+                String::new(),
+                success,
+                Some(report),
+            ))
         }),
     )
     .await
@@ -388,4 +378,86 @@ pub async fn run_nse(
     };
 
     Ok(TaskResult::Nse(results))
+}
+
+#[cfg(all(test, feature = "nse"))]
+mod nse_canonical_dispatch_tests {
+    use super::*;
+
+    fn test_channel() -> tokio::sync::mpsc::Sender<(u64, u64)> {
+        tokio::sync::mpsc::channel(100).0
+    }
+
+    #[tokio::test]
+    async fn dispatch_nse_builtin_report_is_complete() {
+        let result = run_nse(
+            "127.0.0.1".to_string(),
+            "banner".to_string(),
+            None,
+            None,
+            test_channel(),
+        )
+        .await
+        .expect("dispatch builtin run succeeds");
+        let TaskResult::Nse(results) = result else {
+            panic!("expected TaskResult::Nse");
+        };
+        let report = results.report.expect("dispatch must return a report");
+        // Convergence fix: the dispatch path now sets the executor target.
+        assert_eq!(report.target, "127.0.0.1");
+        assert_eq!(report.script_name, "banner");
+        assert_eq!(report.script_source.kind, "builtin");
+        assert_eq!(report.profile.kind, "manual-permissive");
+        // Resolver diagnostics are no longer dropped by dispatch.
+        assert_eq!(report.resolver.total_diagnostics, 1);
+        assert_eq!(report.resolver.resolved_count, 1);
+        // Evidence is now extracted on the dispatch path.
+        assert!(
+            !report.evidence.is_empty(),
+            "dispatch reports must carry evidence when output exists"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatch_nse_custom_file_resolves_through_resolver() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("dispatch-parity.nse");
+        std::fs::write(&path, "hostrule = function(host) return false end").expect("write fixture");
+
+        let result = run_nse(
+            "127.0.0.1".to_string(),
+            "custom".to_string(),
+            None,
+            Some(path.display().to_string()),
+            test_channel(),
+        )
+        .await
+        .expect("dispatch file run succeeds");
+        let TaskResult::Nse(results) = result else {
+            panic!("expected TaskResult::Nse");
+        };
+        assert!(results.success, "non-empty output marks success");
+        let report = results.report.expect("dispatch must return a report");
+        assert_eq!(report.script_source.kind, "file");
+        assert_eq!(report.resolver.resolved_count, 1);
+        assert_eq!(report.rules.len(), 1);
+        assert!(!report.rules[0].matched);
+        assert!(!report.evidence.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dispatch_nse_missing_file_is_an_error_not_empty_success() {
+        let result = run_nse(
+            "127.0.0.1".to_string(),
+            "custom".to_string(),
+            None,
+            Some("/tmp/eggsec-dispatch-missing-does-not-exist.nse".to_string()),
+            test_channel(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "unresolvable custom files must fail dispatch, not empty-succeed"
+        );
+    }
 }

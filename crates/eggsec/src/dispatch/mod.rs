@@ -275,18 +275,20 @@ mod tests {
 
     #[test]
     fn executor_registry_feature_gated_operations() {
+        // Named `_reg`: only referenced under feature cfgs below, so the
+        // leading underscore keeps the no-feature build warning-free.
         let _reg = executors::build_default_registry();
 
         // Feature-gated operations (only check if feature is enabled)
         #[cfg(feature = "nse")]
         assert!(
-            reg.find_executor("nse").is_some(),
+            _reg.find_executor("nse").is_some(),
             "No executor registered for nse operation"
         );
 
         #[cfg(feature = "db-pentest")]
         assert!(
-            reg.find_executor("db-pentest").is_some(),
+            _reg.find_executor("db-pentest").is_some(),
             "No executor registered for db-pentest operation"
         );
     }
