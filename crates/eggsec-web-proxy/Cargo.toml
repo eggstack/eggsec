@@ -21,12 +21,12 @@ eggsec-report-model = { path = "../eggsec-report-model", version = "0.1.0" }
 # TLS in intercept/ never depends on it — see outbound.rs boundary).
 eggsec-transport = { workspace = true }
 
-# Eggress 1.0.8 selective proxy-engine adoption (Phase A, 2026-09-22):
+# Eggress 1.0.10 selective proxy-engine adoption (2026-09-24):
 # listener-free HTTP/SOCKS TCP chain execution only. No umbrella facade,
 # no embed/runtime/server/routing, no optional protocol features.
 # See architecture/egress_reuse_decision.md addendum.
-eggress-outbound = { version = "=1.0.8", default-features = false }
-eggress-uri = { version = "=1.0.8" }
+eggress-outbound = { version = "=1.0.10", default-features = false }
+eggress-uri = { version = "=1.0.10" }
 
 # TLS / certificate generation
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }

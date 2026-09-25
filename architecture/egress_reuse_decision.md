@@ -1,9 +1,10 @@
-# Egress Reuse Decision Record (Phase E WS1 + Eggress 1.0.8 addendum)
+# Egress Reuse Decision Record (Phase E WS1 + Eggress 1.0.10 addendum)
 
 Status: Decided 2026-09-13 (1.0.6: all candidates rejected). Superseded
 2026-09-22 for the narrow `eggsec-web-proxy` edge only by Eggress 1.0.8
 (`eggress-outbound` / `eggress-uri` accepted; all other Eggress surfaces
-remain rejected).
+remain rejected), then moved 2026-09-25 to exact Eggress 1.0.10 on the same
+narrow edge (socket-metadata closure; capability boundary unchanged).
 
 Evaluated `eggress-uri 1.0.6` (checksum `414a171b…6090e1`) and
 `eggress-routing 1.0.6` (checksum `86fe780d…0f79c7af`) plus `eggress-core 1.0.6`
@@ -314,3 +315,59 @@ Review of the successful 1.0.8 adoption found four bounded defects; the
    Prior all-acceptance-criteria-met wording is superseded for this item.
 
 *Corrective addendum verified against source: 2026-09-22.*
+
+---
+
+# Addendum 2026-09-25 — Eggress 1.0.10 adoption and socket-metadata closure
+
+Status: Accepted (narrow version/metadata adoption, architecture unchanged).
+Plan: `plans/eggress-1.0.10-adoption-and-metadata-closure-2026-09-24.md`.
+
+The 1.0.6 rejection and the 1.0.8 narrow acceptance above remain historically
+valid. Eggress 1.0.10 is a published crates.io line on the same narrow edge
+that additionally recovers first-hop socket metadata upstream
+(`eggress-core::ChainExecutor::execute_with_metadata()` captures
+`TcpStream::local_addr()` / `peer_addr()` before stream boxing;
+`eggress-outbound::OutboundConnector` surfaces them in `OutboundInfo`).
+This addendum records the version move and closes the 1.0.8
+upstream-gated `local_addr` debt. It does not rewrite the 1.0.6/1.0.8
+records.
+
+1. **Direct approved edge moved from exact 1.0.8 to exact 1.0.10.**
+   `eggsec-web-proxy` pins `eggress-outbound = "=1.0.10"` with
+   `default-features = false` and `eggress-uri = "=1.0.10"`. No Git/path
+   override, no umbrella facade, no optional Eggress features. Check 106
+   enforces the exact two-crate 1.0.10 allowlist.
+2. **Architecture/capability boundary is unchanged.** No H2/SSH/QUIC-H3/UDP
+   adoption; no `eggress-routing`, runtime, server, embed, or pproxy-compat;
+   no proxy-hostname support; no change to authorization/scope policy,
+   rotation/health ownership, or the public `ProxiedConnection` field types.
+3. **1.0.10 resolves the upstream socket-metadata gate.** For Eggsec's
+   approved ordinary TCP-backed protocols (SOCKS4, SOCKS5, Tor-as-SOCKS5,
+   plaintext HTTP CONNECT), successful chain execution now reports a real
+   `OutboundInfo.local_addr`.
+4. **The 1.0.8 unknown sentinel is removed.** `unknown_local_addr()` and
+   `local_addr_or_unknown()` are deleted; `require_local_addr()` fails
+   closed on a missing address rather than fabricating one. No successful
+   path uses an unspecified/port-zero sentinel.
+5. **Measured `local_addr` / `peer_addr` refer to the first-hop TCP
+   socket.** `local_addr` is the local endpoint of Eggsec's physical TCP
+   connection to the first proxy hop (still the first hop for multi-hop
+   chains); `peer_addr` is that hop's remote address. Neither is the final
+   destination socket nor the public/external egress IP, and neither must
+   be used as evidence of final egress identity or read by
+   policy/authorization/routing/evidence paths.
+6. **Eggsec still does not adopt routing/runtime/server/embed/advanced
+   features.** The 1.0.10 pooled-transport and TLS-policy hardening is
+   inherited upstream safety, not a widened capability surface.
+7. **Reqwest health ownership remains unchanged.** Application-level
+   HTTP(S)-through-proxy validation stays Reqwest-owned; SOCKS4 health
+   still fails closed.
+8. **Typed detailed outbound errors are deliberately deferred.**
+   `connect_tcp_detailed()` / `connect_tcp_timeout_detailed()` (structured
+   failure kind/stage/hop-index/protocol label) are not adopted: mapping
+   them onto `WebProxyError` variants would be an observable error
+   classification change requiring its own consumer audit. The
+   credential-safe `map_outbound_error()` path remains canonical.
+
+*Addendum verified against published crates: 2026-09-25.*

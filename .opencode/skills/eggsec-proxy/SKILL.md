@@ -63,10 +63,10 @@ The following 12 tools are available when the `web-proxy-mcp` feature is enabled
 
 **Tool implementation:** `tool/implementations/proxy.rs` implements the `SecurityTool` trait with all 12 actions. Tools use a shared `PROXY_SESSION` static for session state.
 
-### Outbound proxy engine (Eggress 1.0.8, 2026-09-22; corrective pass 2026-09-22)
+### Outbound proxy engine (Eggress 1.0.10, 2026-09-25; corrective pass 2026-09-22)
 Production SOCKS/HTTP-CONNECT/chain dialing runs on listener-free
-`eggress-outbound 1.0.8` via `crates/eggsec-web-proxy/src/eggress_outbound.rs`
-(pinned `=1.0.8`, `default-features = false`; plus `eggress-uri =1.0.8`).
+`eggress-outbound 1.0.10` via `crates/eggsec-web-proxy/src/eggress_outbound.rs`
+(pinned `=1.0.10`, `default-features = false`; plus `eggress-uri =1.0.10`).
 Eggsec owns pool/rotation/health/policy/selection; Eggress executes the
 already-selected route (no direct fallback, redacted errors). Do NOT rebuild
 SOCKS handshakes or CONNECT framing: `socks.rs`/`http_connect.rs` production
@@ -79,10 +79,13 @@ through `ProxyEntry::socket_addr()` and rejects hostname-valued endpoints
 before any network behavior (SOCKS5/Tor remote-domain *targets* stay
 supported as a separate concern). `check_concurrent()` uses `buffered`
 (enabled-input result order, still O(concurrency)). `ProxiedConnection.local_addr`
-is the centralized unknown sentinel (`unknown_local_addr()`, upstream-gated
-until Eggress exposes the real socket address) — never a measured address,
-never a routing/policy input. Guard Check 106 encodes the exact two-crate
-allowlist (`eggress-outbound` + `eggress-uri` only).
+is measured first-hop socket metadata (`require_local_addr()`, fail-closed) —
+the local endpoint of the physical TCP connection to the first proxy hop,
+never the final destination or external egress IP, never a routing/policy
+input. Guard Check 106 encodes the exact two-crate allowlist
+(`eggress-outbound` + `eggress-uri` only). Typed detailed Eggress failures
+(`connect_tcp_detailed`) are deliberately not adopted (separate
+behavior-change decision).
 
 ### Safe Logging
 `proxy` module uses `to_log_key()` for safe logging of sensitive data.

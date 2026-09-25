@@ -2,7 +2,7 @@
 
 ## Role & Responsibilities
 
-Outbound upstream-proxy pooling for engine modules. Provides connection routing through SOCKS4/5, HTTP CONNECT, HTTPS CONNECT, and Tor proxies with health checking, rotation strategies, chain proxying, and private-IP blocking. Production dial execution runs on the listener-free `eggress-outbound 1.0.8` engine via `eggress_outbound.rs` (Eggsec owns selection/rotation/health/policy; Eggress executes the selected route; Reqwest remains the explicit health-only owner). The MITM intercepting proxy is in the `eggsec-web-proxy` domain crate (see [web_proxy.md](web_proxy.md)).
+Outbound upstream-proxy pooling for engine modules. Provides connection routing through SOCKS4/5, HTTP CONNECT, HTTPS CONNECT, and Tor proxies with health checking, rotation strategies, chain proxying, and private-IP blocking. Production dial execution runs on the listener-free `eggress-outbound 1.0.10` engine via `eggress_outbound.rs` (Eggsec owns selection/rotation/health/policy; Eggress executes the selected route; Reqwest remains the explicit health-only owner). The MITM intercepting proxy is in the `eggsec-web-proxy` domain crate (see [web_proxy.md](web_proxy.md)).
 
 The module spans two crates with a clean adapter/domain separation:
 
@@ -59,13 +59,13 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `lib.rs` | 421 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
+| `lib.rs` | 407 | `ProxyManager`, `ProxiedConnection`, connection logic, private-IP blocking, `is_private_ip()` |
 | `config.rs` | 626 | `ProxyConfig`, `ProxyEntry`, `ProxyType`, `RotationStrategy`, `HealthCheckConfig`, file loading (JSON/YAML/plaintext) |
 | `error.rs` | 93 | `WebProxyError` enum (9 variants: `Proxy`, `Network`, `Config`, `Io`, `Tls`, `Intercept`, `Rule`, `Protocol`, `Timeout`) and `Result<T>` type alias |
 | `pool.rs` | 631 | `ProxyPool` (DashMap-backed), `ProxyStats`, `ProxyPoolBuilder` |
 | `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
 | `health.rs` | 416 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffered` preserving enabled-input order), `HealthCheckResult`, `ProxyHealth` |
-| `eggress_outbound.rs` | 341 | Eggress adapter: literal-gated `ProxyEntry`→`ProxyHopSpec` (`socket_addr()` validation, hostname entries rejected), chain spec, `OutboundConnector::from_chain`, centralized unknown-`local_addr` sentinel, redacted error mapping |
+| `eggress_outbound.rs` | 348 | Eggress adapter: literal-gated `ProxyEntry`→`ProxyHopSpec` (`socket_addr()` validation, hostname entries rejected), chain spec, `OutboundConnector::from_chain`, fail-closed `require_local_addr()` first-hop socket metadata, redacted error mapping |
 | `socks.rs` | 604 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
 | `http_connect.rs` | 344 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
 | `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
@@ -116,7 +116,7 @@ fallback, redacted errors, aggregate timeout, future-drop cancellation).
 - `create_connection(target)` resolves target (private-IP blocked), selects healthy proxy, passes the resolved IP literal + port to Eggress with the proxy's `timeout_ms`.
 - Protocol mapping: `Socks4`→Socks4, `Socks5`/`Tor`→Socks5, `Http`/`Https`→Http plaintext CONNECT (`Https` naming debt: `tls=false` until a fixture proves TLS-to-proxy).
 - Proxy hop endpoints are literal-address-only: `hop_from_entry()` validates each entry through `ProxyEntry::socket_addr()` and builds the Eggress endpoint from the IP literal (corrective pass 2026-09-22; hostname-valued proxy endpoints fail closed before any network behavior). SOCKS5/Tor remote-domain *targets* remain supported as a separate concern.
-- `ProxiedConnection.local_addr` is the centralized unknown sentinel (`eggress_outbound::unknown_local_addr()`, `0.0.0.0:0`): `eggress-outbound 1.0.8` always reports `local_addr=None` (upstream-gated debt; no policy/routing/evidence path reads it, and it is never logged as a measured address). Removal condition: a published Eggress release exposes the established-socket local address.
+- `ProxiedConnection.local_addr` is measured first-hop socket metadata (`eggress_outbound::require_local_addr()`, fail-closed): `eggress-outbound 1.0.10` reports the local endpoint of the physical TCP connection to the first proxy hop (still the first hop for multi-hop chains) — never the final destination or external egress IP, never logged as egress identity, and never read by policy/routing/evidence paths. A missing address on the approved TCP-backed path fails rather than fabricating a socket address.
 
 **Remote-domain path**: `create_connection_to_domain(domain, port)` preserves SOCKS5/Tor remote-domain semantics (domain reaches the proxy; SOCKS4/HTTP fail closed as before).
 
@@ -227,7 +227,7 @@ Key test categories:
 2. **Chain proxying limited to SOCKS5/Tor**: `create_chained_connection()` rejects chains with HTTP or SOCKS4 entries (public contract preserved; Eggress could compose mixed chains but the surface is not broadened silently).
 3. **`socks::connect_through()` only accepts SOCKS types**: returns error for `ProxyType::Http` or `ProxyType::Https` (now Eggress-backed, signature preserved).
 4. **SOCKS4 health fails closed**: `HealthChecker` returns an explicit unsupported error for `Socks4` instead of testing SOCKS5 (behavior fix 2026-09-22; previously a SOCKS5 result was presented as SOCKS4 health).
-5. **`ProxiedConnection.local_addr` is the centralized unknown sentinel**: `eggress-outbound 1.0.8` never populates `OutboundInfo.local_addr`; all production call sites share `eggress_outbound::unknown_local_addr()` (`0.0.0.0:0`), documented as unknown metadata — never logged as measured, never read by policy/authorization/routing/evidence. Removal condition: a published Eggress release exposes the established-socket local address.
+5. **`ProxiedConnection.local_addr` is measured first-hop socket metadata**: `eggress-outbound 1.0.10` populates `OutboundInfo.local_addr` for the approved TCP-backed path; all production call sites share the fail-closed `eggress_outbound::require_local_addr()` (local endpoint of the physical TCP connection to the first proxy hop — never the final destination or external egress IP, never logged as egress identity, never read by policy/authorization/routing/evidence). No successful path uses an unspecified/port-zero sentinel.
 6. **Legacy handshake shims remain for `TcpStream` signatures only**: `SocksProxy`/`chain_connect`/`connect_through_with_domain`/`HttpConnectProxy` keep their implementations because Eggress `BoxStream` cannot satisfy `TcpStream` returns without a forbidden downcast. Do not extend them; do not claim all duplicate code is removed.
 7. **Health check URL**: Defaults to `"https://api.ipify.org"` (`config.rs:332`); falls back to `"https://api.ipify.org"` if both `health_check_url` and `test_url` are None (`config.rs:397-401`).
 8. **Cert cache is per-`CertGenerator` instance**: Two independent `CertGenerator` instances have separate caches; a cloned instance shares the cache via `Arc`.
@@ -241,10 +241,10 @@ Key test categories:
 - [defense_lab.md](defense_lab.md) — defense-lab surface patterns
 - [dispatch.md](dispatch.md) — runtime dispatch flow
 - [websocket.md](websocket.md) — WebSocket protocol support
-- [egress_reuse_decision.md](egress_reuse_decision.md) — Eggress 1.0.8 narrow adoption record (accepted edge, graph, Tokio widening)
+- [egress_reuse_decision.md](egress_reuse_decision.md) — Eggress 1.0.10 narrow adoption record (accepted edge, graph, Tokio widening, socket-metadata closure)
 - `architecture/web_proxy.md` — full web proxy feature details
 - `crates/eggsec-web-proxy/` — domain crate source
 - `crates/eggsec/src/proxy/` — adapter layer source
 - `crates/eggsec/src/proxy/AGENTS.override.md` — module-specific agent guidance
 
-*Last verified against source: 2026-09-22*
+*Last verified against source: 2026-09-25*

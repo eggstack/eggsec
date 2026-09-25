@@ -369,9 +369,10 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
         timeout,
     )
     .await?;
-    // Same upstream local_addr gap as ProxyManager (see eggress_outbound):
-    // centralized unknown sentinel, never a measured address.
-    let local_addr = crate::eggress_outbound::local_addr_or_unknown(&info);
+    // Measured first-hop socket metadata (Eggress 1.0.10): local endpoint
+    // of the physical TCP connection to the first proxy hop; a missing
+    // address fails closed rather than fabricating one.
+    let local_addr = crate::eggress_outbound::require_local_addr(&info)?;
 
     Ok(ProxiedConnection {
         proxy_chain: vec![proxy],

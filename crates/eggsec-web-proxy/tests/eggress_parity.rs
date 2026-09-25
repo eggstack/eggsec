@@ -1,4 +1,4 @@
-//! Eggress 1.0.8 Phase A protocol parity fixtures (local-only).
+//! Eggress 1.0.10 protocol parity fixtures (local-only).
 //!
 //! Deterministic fixtures proving production `ProxyManager` execution via
 //! the Eggress adapter matches legacy SOCKS/HTTP-CONNECT behavior. No
@@ -7,6 +7,13 @@
 //! Targets use documentation IPs (`203.0.113.1`, `2001:db8::1`) for
 //! `ProxyManager` paths (which retain private-IP rejection), and loopback
 //! for adapter-direct paths (which bypass resolution policy by design).
+//!
+//! First-hop socket metadata (Eggress 1.0.10): successful connections carry
+//! a measured `local_addr` — the local endpoint of the physical TCP
+//! connection to the **first proxy hop** — with `peer_addr` equal to that
+//! hop's listener address. Multi-hop chains still report the first hop, not
+//! the final target. The metadata is never the external egress IP and never
+//! a routing/policy input.
 
 use eggsec_web_proxy::eggress_outbound as adapter;
 use eggsec_web_proxy::{ProxyConfig, ProxyEntry, ProxyManager, ProxyType};
@@ -191,7 +198,28 @@ async fn spawn_socks5(
     seen: Option<Arc<tokio::sync::Mutex<Option<SeenTarget>>>>,
     forward: bool,
 ) -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    spawn_socks5_on(
+        "127.0.0.1:0",
+        require_auth,
+        user,
+        pass,
+        fail_code,
+        seen,
+        forward,
+    )
+    .await
+}
+
+async fn spawn_socks5_on(
+    bind: &str,
+    require_auth: bool,
+    user: &str,
+    pass: &str,
+    fail_code: Option<u8>,
+    seen: Option<Arc<tokio::sync::Mutex<Option<SeenTarget>>>>,
+    forward: bool,
+) -> SocketAddr {
+    let listener = TcpListener::bind(bind).await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (u, p) = (user.to_string(), pass.to_string());
     tokio::spawn(async move {
@@ -383,6 +411,53 @@ async fn manager_with(entry: ProxyEntry) -> ProxyManager {
     mgr
 }
 
+/// Assert measured first-hop socket metadata on an adapter-level result:
+/// a real local endpoint (loopback/probe-local, nonzero port, never
+/// unspecified) for the physical TCP connection, with `peer_addr` equal to
+/// the selected first proxy hop and the expected hop count.
+fn assert_real_first_hop_metadata(
+    info: &adapter::OutboundInfo,
+    proxy_addr: SocketAddr,
+    hops: usize,
+) {
+    assert_eq!(info.hop_count, hops);
+    let local = info
+        .local_addr
+        .expect("approved TCP-backed path must report a measured local address");
+    assert!(
+        !local.ip().is_unspecified(),
+        "local address must be measured, got {local}"
+    );
+    assert_ne!(local.port(), 0, "local port must be measured, got {local}");
+    assert!(
+        local.ip().is_loopback(),
+        "probe-local dial must originate from loopback, got {local}"
+    );
+    assert_eq!(
+        info.peer_addr,
+        Some(proxy_addr),
+        "peer metadata must describe the first proxy hop"
+    );
+}
+
+/// Assert a manager-level connection carries a real measured local socket
+/// address (never unspecified, never port-zero).
+fn assert_real_manager_local_addr(local: SocketAddr) {
+    assert!(
+        !local.ip().is_unspecified(),
+        "manager local address must be measured, got {local}"
+    );
+    assert_ne!(
+        local.port(),
+        0,
+        "manager local port must be measured, got {local}"
+    );
+    assert!(
+        local.ip().is_loopback(),
+        "probe-local dial must originate from loopback, got {local}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Parity tests
 // ---------------------------------------------------------------------------
@@ -394,6 +469,19 @@ async fn socks5_no_auth_success_via_manager() {
     let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
     assert_eq!(conn.proxy_chain.len(), 1);
     assert_eq!(conn.target_addr.ip().to_string(), "203.0.113.1");
+    assert_real_manager_local_addr(conn.local_addr);
+}
+
+#[tokio::test]
+async fn socks5_first_hop_metadata_is_measured() {
+    // Canonical 1.0.10 single-hop SOCKS5 metadata: real local socket plus
+    // correct first-hop peer address.
+    let proxy_addr = spawn_socks5(false, "", "", None, None, false).await;
+    let e = entry_with_addr(ProxyType::Socks5, proxy_addr);
+    let info = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
+        .await
+        .unwrap();
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
 }
 
 #[tokio::test]
@@ -404,9 +492,8 @@ async fn socks5_auth_success() {
     let info = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
         .await
         .unwrap();
-    // Upstream 1.0.8 gap: local_addr is always None; hop_count/peer_addr prove establishment.
-    assert_eq!(info.hop_count, 1);
-    assert!(info.peer_addr.is_some());
+    // Measured first-hop metadata: real local socket, first-hop peer.
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
 }
 
 #[tokio::test]
@@ -442,7 +529,7 @@ async fn socks5_domain_target_reaches_proxy_as_domain() {
     let info = adapter::establish(std::slice::from_ref(&e), "example.com", 443, TIMEOUT)
         .await
         .unwrap();
-    assert_eq!(info.hop_count, 1);
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
     let seen = seen.lock().await;
     let seen = seen.as_ref().unwrap();
     assert_eq!(seen.atyp, 0x03, "proxy must receive domain encoding");
@@ -460,6 +547,8 @@ async fn socks5_manager_domain_path() {
         .await
         .unwrap();
     assert_eq!(conn.proxy_chain.len(), 1);
+    // Remote-domain target semantics unchanged; local socket still measured.
+    assert_real_manager_local_addr(conn.local_addr);
     let seen = seen.lock().await;
     assert_eq!(seen.as_ref().unwrap().host, "example.com");
 }
@@ -487,7 +576,17 @@ async fn socks4_ip_target_success() {
     let info = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
         .await
         .unwrap();
-    assert_eq!(info.hop_count, 1);
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
+}
+
+#[tokio::test]
+async fn socks4_first_hop_metadata_is_measured() {
+    // SOCKS4 via the manager path: real local socket on success.
+    let proxy_addr = spawn_socks4(false).await;
+    let mgr = manager_with(entry_with_addr(ProxyType::Socks4, proxy_addr)).await;
+    let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
+    assert_eq!(conn.proxy_chain.len(), 1);
+    assert_real_manager_local_addr(conn.local_addr);
 }
 
 #[tokio::test]
@@ -507,6 +606,19 @@ async fn http_connect_success() {
     let mgr = manager_with(entry_with_addr(ProxyType::Http, proxy_addr)).await;
     let conn = mgr.create_connection("203.0.113.1:443").await.unwrap();
     assert_eq!(conn.proxy_chain.len(), 1);
+    assert_real_manager_local_addr(conn.local_addr);
+}
+
+#[tokio::test]
+async fn http_connect_first_hop_metadata_is_measured() {
+    // HTTP CONNECT via the adapter path: real local socket plus correct
+    // first-hop peer address.
+    let proxy_addr = spawn_http(false, "", 200, false, false).await;
+    let e = entry_with_addr(ProxyType::Http, proxy_addr);
+    let info = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 443, TIMEOUT)
+        .await
+        .unwrap();
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
 }
 
 #[tokio::test]
@@ -647,6 +759,19 @@ async fn two_hop_chain_ordering() {
     .await
     .unwrap();
     assert_eq!(info.hop_count, 2);
+    // Multi-hop metadata describes the first physical proxy hop: real local
+    // socket with peer equal to the entry hop, not the exit or the target.
+    let local = info
+        .local_addr
+        .expect("two-hop chain must report a measured local address");
+    assert!(!local.ip().is_unspecified());
+    assert_ne!(local.port(), 0);
+    assert!(local.ip().is_loopback());
+    assert_eq!(
+        info.peer_addr,
+        Some(hop0),
+        "chain metadata must describe the first hop"
+    );
     let entry_seen = seen_entry.lock().await;
     assert_eq!(entry_seen.as_ref().unwrap().host, hop1.ip().to_string());
     assert_eq!(entry_seen.as_ref().unwrap().port, hop1.port());
@@ -901,6 +1026,8 @@ async fn literal_ipv4_and_ipv6_proxy_endpoints_still_work() {
     let mgr = manager_with(entry_with_addr(ProxyType::Socks5, proxy_addr)).await;
     let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
     assert_eq!(conn.proxy_chain.len(), 1);
+    // IPv4 metadata is mandatory: real local socket on the manager path.
+    assert_real_manager_local_addr(conn.local_addr);
     // IPv6 literal endpoint converts through the adapter boundary
     // (bracketed form, matching the pre-adoption `socket_addr` contract).
     let e = ProxyEntry::new(ProxyType::Socks5, "[::1]".to_string(), 1080);
@@ -908,6 +1035,32 @@ async fn literal_ipv4_and_ipv6_proxy_endpoints_still_work() {
     let parsed: std::net::IpAddr = hop.endpoint.host.parse().unwrap();
     assert!(parsed.is_loopback());
     assert_eq!(hop.endpoint.port, 1080);
+    // Live IPv6 metadata is opportunistic: prove a real IPv6 local socket
+    // against a genuine IPv6 fixture when the platform provides IPv6
+    // loopback, and document a skip otherwise rather than weakening the
+    // cross-platform suite. IPv4 metadata above remains mandatory.
+    match tokio::net::TcpListener::bind("[::1]:0").await {
+        Ok(probe) => {
+            let _ = probe.local_addr().unwrap();
+            drop(probe);
+            let v6_proxy = spawn_socks5_on("[::1]:0", false, "", "", None, None, false).await;
+            assert!(v6_proxy.ip().is_ipv6());
+            // Bracketed literal form, matching the `socket_addr()` contract.
+            let e6 = ProxyEntry::new(ProxyType::Socks5, "[::1]".to_string(), v6_proxy.port());
+            let info = adapter::establish(std::slice::from_ref(&e6), "::1", 80, TIMEOUT)
+                .await
+                .unwrap();
+            assert_real_first_hop_metadata(&info, v6_proxy, 1);
+            let local = info.local_addr.unwrap();
+            assert!(
+                local.ip().is_ipv6(),
+                "IPv6 fixture dial must originate from an IPv6 socket, got {local}"
+            );
+        }
+        Err(e) => {
+            eprintln!("SKIP: no IPv6 loopback on this host ({e}); IPv4 metadata remains mandatory");
+        }
+    }
 }
 
 #[tokio::test]
@@ -922,6 +1075,8 @@ async fn tor_remote_domain_preserved_after_literal_gate() {
         .await
         .unwrap();
     assert_eq!(conn.proxy_chain.len(), 1);
+    // Tor target-domain semantics preserved; local socket still measured.
+    assert_real_manager_local_addr(conn.local_addr);
     let seen = seen.lock().await;
     let seen = seen.as_ref().unwrap();
     assert_eq!(seen.atyp, 0x03, "proxy must receive domain encoding");
@@ -929,17 +1084,22 @@ async fn tor_remote_domain_preserved_after_literal_gate() {
 }
 
 #[tokio::test]
-async fn local_addr_is_unknown_sentinel_not_measured() {
-    // Production connections carry the centralized unknown sentinel while
-    // routing-relevant fields (chain, target) stay truthful. No
-    // authorization/routing decision branches on `local_addr`: selection
-    // used the healthy pool entry and the resolved documentation target.
+async fn local_addr_is_measured_first_hop_socket_not_sentinel() {
+    // Supersedes `local_addr_is_unknown_sentinel_not_measured` (Eggress
+    // 1.0.8): production connections now carry the measured local endpoint
+    // of the physical TCP connection to the first proxy hop. No successful
+    // path uses an unspecified/port-zero sentinel, and the metadata is the
+    // first hop — never the final target or external egress identity.
     let proxy_addr = spawn_socks5(false, "", "", None, None, false).await;
     let mgr = manager_with(entry_with_addr(ProxyType::Socks5, proxy_addr)).await;
     let conn = mgr.create_connection("203.0.113.1:80").await.unwrap();
-    assert_eq!(conn.local_addr, adapter::unknown_local_addr());
-    assert!(conn.local_addr.ip().is_unspecified());
-    assert_eq!(conn.local_addr.port(), 0);
+    assert_real_manager_local_addr(conn.local_addr);
     assert_eq!(conn.target_addr.ip().to_string(), "203.0.113.1");
     assert_eq!(conn.proxy_chain.len(), 1);
+    // The adapter-level view agrees: peer metadata is the selected proxy.
+    let e = entry_with_addr(ProxyType::Socks5, proxy_addr);
+    let info = adapter::establish(std::slice::from_ref(&e), "127.0.0.1", 80, TIMEOUT)
+        .await
+        .unwrap();
+    assert_real_first_hop_metadata(&info, proxy_addr, 1);
 }

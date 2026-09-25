@@ -2646,7 +2646,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 106. Eggress 1.0.8 narrow boundary (supersedes Phase E WS1 blanket reject).
+# 106. Eggress 1.0.10 narrow boundary (supersedes Phase E WS1 blanket reject).
 # Only eggsec-web-proxy may own the reviewed eggress-outbound/eggress-uri
 # edge; transport/eggfetch/policy/core/DTO layers and unrelated domains stay
 # Eggress-free; embed/runtime/server/routing/advanced crates stay forbidden.
@@ -2654,7 +2654,7 @@ fi
 # 2026-09-22): any third `eggress-*` edge fails even if no forbidden regex
 # matches it.
 echo ""
-echo "--- Check 106: Eggress narrow boundary (1.0.8) ---"
+echo "--- Check 106: Eggress narrow boundary (1.0.10) ---"
 SECTION_FAIL=0
 # Exact direct-dependency allowlist via manifest parse (tomllib): the complete
 # set of direct dependencies whose package key begins with `eggress` must be
@@ -2678,8 +2678,8 @@ if missing:
     sys.exit(1)
 # Exact version/feature constraints on the approved edge.
 outbound = deps.get("eggress-outbound")
-if not isinstance(outbound, dict) or outbound.get("version") != "=1.0.8":
-    print(f"FAIL: eggress-outbound must be pinned to version \"=1.0.8\", got {outbound!r}")
+if not isinstance(outbound, dict) or outbound.get("version") != "=1.0.10":
+    print(f"FAIL: eggress-outbound must be pinned to version \"=1.0.10\", got {outbound!r}")
     sys.exit(1)
 if outbound.get("default-features", True) is not False:
     print(f"FAIL: eggress-outbound must set default-features = false, got {outbound!r}")
@@ -2689,27 +2689,27 @@ if outbound.get("features"):
     sys.exit(1)
 uri = deps.get("eggress-uri")
 if isinstance(uri, dict):
-    if uri.get("version") != "=1.0.8":
-        print(f"FAIL: eggress-uri must be pinned to version \"=1.0.8\", got {uri!r}")
+    if uri.get("version") != "=1.0.10":
+        print(f"FAIL: eggress-uri must be pinned to version \"=1.0.10\", got {uri!r}")
         sys.exit(1)
     if uri.get("features"):
         print(f"FAIL: eggress-uri must enable no optional features, got {uri.get('features')!r}")
         sys.exit(1)
-elif uri != "=1.0.8":
-    print(f"FAIL: eggress-uri must be pinned to version \"=1.0.8\", got {uri!r}")
+elif uri != "=1.0.10":
+    print(f"FAIL: eggress-uri must be pinned to version \"=1.0.10\", got {uri!r}")
     sys.exit(1)
-print(f"PASS: exact Eggress allowlist holds: {allowed} (1.0.8 pinned, no optional features).")
+print(f"PASS: exact Eggress allowlist holds: {allowed} (1.0.10 pinned, no optional features).")
 PYEOF
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 # Approved edge regex backstop (kept for message stability alongside the
 # manifest-aware check above).
-if ! rg -q 'eggress-outbound = \{ version = "=1\.0\.8", default-features = false \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
-  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-outbound = \"=1.0.8\" with default-features = false."
+if ! rg -q 'eggress-outbound = \{ version = "=1\.0\.10", default-features = false \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-outbound = \"=1.0.10\" with default-features = false."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'eggress-uri = \{ version = "=1\.0\.8" \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
-  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-uri = \"=1.0.8\"."
+if ! rg -q 'eggress-uri = \{ version = "=1\.0\.10" \}' crates/eggsec-web-proxy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-web-proxy/Cargo.toml must pin eggress-uri = \"=1.0.10\"."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 # No other workspace manifest may gain an eggress edge.
@@ -2750,16 +2750,16 @@ if [[ -n "$EGRESS_SRC_OUTSIDE" ]]; then
   echo "FAIL: Eggress source references outside eggsec-web-proxy adapter/tests."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-# Decision record exists and names 1.0.8.
+# Decision record exists and names 1.0.10.
 if [[ ! -f "architecture/egress_reuse_decision.md" ]]; then
   echo "FAIL: missing decision record: architecture/egress_reuse_decision.md"
   SECTION_FAIL=$((SECTION_FAIL + 1))
-elif ! rg -q '1\.0\.8' architecture/egress_reuse_decision.md 2>/dev/null; then
-  echo "FAIL: decision record must name the 1.0.8 adoption."
+elif ! rg -q '1\.0\.10' architecture/egress_reuse_decision.md 2>/dev/null; then
+  echo "FAIL: decision record must name the 1.0.10 adoption."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: Eggress narrow boundary holds (web-proxy only, 1.0.8 pinned, record current)."
+  echo "PASS: Eggress narrow boundary holds (web-proxy only, 1.0.10 pinned, record current)."
 else
   FAIL=$((FAIL + 1))
 fi

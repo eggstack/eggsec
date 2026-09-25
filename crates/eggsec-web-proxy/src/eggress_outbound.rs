@@ -1,4 +1,4 @@
-//! Eggress 1.0.8 outbound adapter (Phase A, 2026-09-22).
+//! Eggress 1.0.10 outbound adapter (2026-09-24; Phase A 2026-09-22).
 //!
 //! Narrow internal boundary between Eggsec-owned proxy policy and the
 //! listener-free `eggress-outbound` protocol engine. Responsibilities only:
@@ -18,6 +18,22 @@
 //! Ownership: pool/rotation/health/selection stay Eggsec-owned. Eggress
 //! executes the already-selected route. No route selection, no
 //! authorization, no direct fallback.
+//!
+//! Socket-metadata semantics (Eggress 1.0.10): for Eggsec's approved
+//! ordinary TCP-backed protocols (SOCKS4, SOCKS5, Tor-as-SOCKS5, plaintext
+//! HTTP CONNECT), `OutboundInfo.local_addr` is the local socket endpoint of
+//! the physical TCP connection to the **first proxy hop**, and
+//! `OutboundInfo.peer_addr` is that first hop's remote socket address. For
+//! a multi-hop chain the metadata still describes the first hop, never the
+//! second hop or the final destination. It is not the public/external egress
+//! IP and must never be used as evidence of final egress identity, nor read
+//! by policy/authorization/routing/evidence paths.
+//!
+//! Typed detailed Eggress failures (`connect_tcp_detailed`,
+//! `connect_tcp_timeout_detailed`) are deliberately not adopted here: mapping
+//! them onto `WebProxyError` variants would be an observable error
+//! classification change requiring its own consumer audit. The
+//! credential-safe `map_outbound_error()` path below remains canonical.
 //!
 //! Protocol mapping preserves current Eggsec behavior:
 //! `Socks4 -> Socks4`, `Socks5 -> Socks5`, `Tor -> Socks5`, `Http -> Http`,
@@ -127,14 +143,10 @@ pub fn chain_from_entries(entries: &[ProxyEntry]) -> Result<eggress_uri::ProxyCh
 /// spawned. Failures map to `WebProxyError` without credentials and never
 /// fall back direct.
 ///
-/// Known upstream gap (recorded, not hidden): `eggress-outbound 1.0.8`
-/// always reports `OutboundInfo.local_addr = None` on the chain path
-/// (`connector.rs` constructs `OutboundInfo { local_addr: None, .. }`
-/// unconditionally). Callers needing `ProxiedConnection.local_addr` must
-/// apply [`unknown_local_addr()`] via [`local_addr_or_unknown()`] until an
-/// upstream release exposes the underlying socket address. `peer_addr`
-/// (first-hop proxy address) and `hop_count` are populated and asserted by
-/// fixtures.
+/// Measured first-hop socket metadata (Eggress 1.0.10): `local_addr` is the
+/// local endpoint of the physical TCP connection to the first proxy hop and
+/// `peer_addr` is that hop's remote address (for multi-hop chains, still the
+/// first hop — never the final destination or external egress IP).
 pub async fn establish(
     entries: &[ProxyEntry],
     host: &str,
@@ -151,29 +163,22 @@ pub async fn establish(
     Ok(info)
 }
 
-/// Unknown local-address sentinel for Eggress-backed production paths.
+/// Require measured first-hop socket metadata for Eggsec's approved
+/// TCP-backed proxy path.
 ///
-/// `eggress-outbound 1.0.8` always reports `OutboundInfo.local_addr = None`
-/// on the chain path. Because `ProxiedConnection.local_addr` is a
-/// non-optional `SocketAddr`, callers use this explicitly-named unspecified
-/// placeholder. It is unknown metadata, never a measured socket address:
-/// do not log it as measured, and never branch policy, authorization,
-/// routing, or evidence on it.
-///
-/// Removal condition: a published Eggress release exposes the actual local
-/// `SocketAddr` for the established outbound chain connection; replace
-/// every `unknown_local_addr()` call with the real value at that point.
-pub fn unknown_local_addr() -> std::net::SocketAddr {
-    std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
-}
-
-/// Map an Eggress `OutboundInfo` local address into the public placeholder.
-///
-/// Returns the real address when upstream eventually populates it;
-/// otherwise the [`unknown_local_addr()`] sentinel. Centralizes the
-/// fallback so no call site invents its own literal.
-pub fn local_addr_or_unknown(info: &OutboundInfo) -> std::net::SocketAddr {
-    info.local_addr.unwrap_or_else(unknown_local_addr)
+/// `eggress-outbound 1.0.10` captures the underlying TCP socket's local
+/// address before stream boxing for ordinary TCP-backed chains (SOCKS4,
+/// SOCKS5, Tor-as-SOCKS5, plaintext HTTP CONNECT). A missing address on such
+/// a path is an upstream regression, not unknown metadata: fail closed
+/// rather than fabricate a socket address. The returned address is the local
+/// endpoint of the physical TCP connection to the first proxy hop — never
+/// the final destination or external egress identity.
+pub fn require_local_addr(info: &OutboundInfo) -> Result<std::net::SocketAddr> {
+    info.local_addr.ok_or_else(|| {
+        WebProxyError::Proxy(
+            "Eggress returned no local address for TCP-backed proxy connection".to_string(),
+        )
+    })
 }
 
 /// Map Eggress outbound errors without leaking credentials.
@@ -318,24 +323,26 @@ mod tests {
     }
 
     #[test]
-    fn unknown_local_addr_is_explicitly_unspecified() {
-        let sentinel = unknown_local_addr();
-        assert!(sentinel.ip().is_unspecified());
-        assert_eq!(sentinel.port(), 0);
-        // `local_addr_or_unknown` passes through a real address untouched
-        // and maps `None` to the same sentinel.
+    fn require_local_addr_passes_through_measured_and_fails_closed_on_missing() {
+        // A measured first-hop address passes through untouched.
         let real: std::net::SocketAddr = "10.1.2.3:4567".parse().unwrap();
         let info = OutboundInfo {
             local_addr: Some(real),
             peer_addr: None,
             hop_count: 1,
         };
-        assert_eq!(local_addr_or_unknown(&info), real);
+        assert_eq!(require_local_addr(&info).unwrap(), real);
+        // A missing address on the approved TCP-backed path fails closed
+        // rather than fabricating a sentinel.
         let missing = OutboundInfo {
             local_addr: None,
             peer_addr: None,
             hop_count: 1,
         };
-        assert_eq!(local_addr_or_unknown(&missing), unknown_local_addr());
+        let err = require_local_addr(&missing).unwrap_err();
+        assert!(
+            err.to_string().contains("no local address"),
+            "must fail closed without fabricating an address, got: {err}"
+        );
     }
 }
