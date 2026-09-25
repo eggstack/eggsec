@@ -72,7 +72,7 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 - Platform: `eggsec doctor` + `bash scripts/check_platform.sh` are hermetic (no root/hardware). Live scripts SKIP on missing prerequisites. Never run the full suite as root.
 - Python fixtures: `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1`. Stable/provisional/experimental boundary: `docs/python/domain-maturity.md`; extras source of truth: `[project.optional-dependencies]` in `crates/eggsec-python/pyproject.toml`.
 - Keep high-cardinality fan-out bounded by configured concurrency (`WorkerConfig::max_concurrency` is a real capacity contract; no spawn-per-payload retention).
-- Plans in `plans/` are retained (mark `Status: Executed`); don't delete phase plans ad hoc.
+- Plans: `plans/registry.md` is the authoritative milestone/roadmap status — check it before assuming any roadmap state. New work follows `plans/003-planning-process.md` (canonical `000`/`001`/`002`, ADRs, subsystem roadmaps, bounded milestone plans, closure records). Flat-era plans at `plans/` top level are immutable history (mark `Status: Executed`); don't delete or rewrite them ad hoc.
 
 ## Where to look
 

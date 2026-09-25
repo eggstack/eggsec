@@ -86,7 +86,7 @@ fi
 # Agent self.dispatch() is internal implementation (trait method), not a bypass
 # The enforced_dispatch_regression test validates the actual invariant
 
-# 6. Plan retention - handoff plans are retained intentionally
+# 6. Plan retention - handoff plans are retained intentionally; planning hierarchy is governed
 echo ""
 echo "--- Check 6: Plan retention ---"
 SECTION_FAIL=0
@@ -95,7 +95,17 @@ if [[ ! -f "plans/README.md" ]]; then
   FAIL=$((FAIL + 1))
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-PLAN_COUNT=$(find plans -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | wc -l)
+if [[ ! -f "plans/registry.md" ]]; then
+  echo "FAIL: plans/registry.md is missing; planning control surface is undocumented."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "plans/003-planning-process.md" ]]; then
+  echo "FAIL: plans/003-planning-process.md is missing; planning governance is undocumented."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+PLAN_COUNT=$(find plans -type f -name '*.md' ! -name 'README.md' | wc -l)
 if [[ "$PLAN_COUNT" -eq 0 ]]; then
   echo "FAIL: No retained implementation or handoff plans found in plans/."
   FAIL=$((FAIL + 1))
