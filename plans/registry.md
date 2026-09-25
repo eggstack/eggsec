@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestone 001 canonical execution/report convergence closed; Milestone 002 ready |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-002 closed; Milestone 003 (standalone repository extraction) ready for planning |
 
 ## Grandfathered file index
 
@@ -147,12 +147,12 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **ready** (Milestone 001 closed: `plans/closure/nse-runtime-extraction/001-closure.md`). Removes `eggsec-*` dependencies from the runtime crate, moves Eggsec-specific adapters upward, and collapses TUI/Python consumption through `eggsec::nse`.
+- `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **closed** (`plans/closure/nse-runtime-extraction/002-closure.md`). Runtime crate has zero `eggsec-*` dependencies; report bridge and scoped-transport HTTP adapter moved into the engine; only `eggsec` directly depends on `eggsec-nse`; TUI/Python consume through `eggsec::nse`; guards 144/145/146 enforce it.
 - `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` — **closed**. One runtime-owned resolver/execution/report pipeline; runtime CLI, Eggsec manual dispatch/TUI, and Python migrated.
 
 ## Blocked work
 
-- Standalone repository extraction is intentionally unplanned at implementation level until Milestone 002 closure proves the zero-inward-dependency and single-direct-consumer gates.
+- Standalone repository extraction: unblocked as of Milestone 002 closure (`plans/closure/nse-runtime-extraction/002-closure.md`), which proves the zero-inward-dependency and single-direct-consumer gates. It stays intentionally unplanned at implementation level until a Milestone 003 plan is authored (roadmap §6); the two preconditions in 002 closure §16 must be carried into it.
 
 ## Closure work and current control points
 
@@ -167,4 +167,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/closure/nse-runtime-extraction/001-closure.md`; Milestone 002 is the current handoff boundary |
+| NSE runtime extraction | `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/closure/nse-runtime-extraction/002-closure.md`; Milestone 003 (standalone repository extraction) is the current handoff boundary |

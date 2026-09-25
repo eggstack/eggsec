@@ -77,6 +77,8 @@ Second, the runtime manifest still depends inward on `eggsec-core`, `eggsec-repo
 
 Direct consumers are also wider than necessary: `eggsec` correctly re-exports `eggsec_nse` as `eggsec::nse`, but `eggsec-tui` and `eggsec-python` still declare direct optional `eggsec-nse` dependencies. Python source already primarily consumes the engine facade, so that direct edge is unnecessary.
 
+**Status update (Milestones 001-002 closed):** both reasons above are resolved. `execute_nse_run` is the single canonical pipeline (001 closure), and `crates/eggsec-nse` now has zero `eggsec-*` dependencies in manifest, source, and tests, with `nse_bridge`/`nse_http_capability` owned by the engine and only `eggsec` consuming the runtime (002 closure). Guards 144/145/146 prevent regression. The crate is therefore extraction-ready in-tree; the remaining work is the physical split itself (Milestone 003), subject to the two preconditions recorded in 002 closure §16.
+
 ## 5. Target architecture
 
 The end state is:
@@ -320,7 +322,7 @@ This roadmap is complete when:
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
 | 001 canonical execution/report convergence | closed | `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` | `plans/closure/nse-runtime-extraction/001-closure.md` | — |
-| 002 runtime dependency decoupling + consumer consolidation | ready | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | — | — |
-| 003 standalone repository extraction | not started | — | — | Milestone 002 closure |
+| 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
+| 003 standalone repository extraction | not started | — | — | Milestone 002 closure (satisfied; see 002 closure §16 preconditions) |
 | 004 versioned release + Eggsec adoption | not started | — | — | Milestone 003 qualification |
 | 005 provider inversion / portability hardening | not started | — | — | post-extraction evidence |
