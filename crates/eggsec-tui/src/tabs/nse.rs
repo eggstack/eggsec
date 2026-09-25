@@ -17,7 +17,7 @@ pub struct NseTab {
     pub script_selector: Selector,
     pub focus_area: NseFocusArea,
     #[cfg(feature = "nse")]
-    pub structured_report: Option<eggsec_nse::NseRunReport>,
+    pub structured_report: Option<eggsec::nse::NseRunReport>,
     #[cfg(feature = "nse")]
     pub report_sections: Vec<NseSectionContent>,
     #[cfg(feature = "nse")]

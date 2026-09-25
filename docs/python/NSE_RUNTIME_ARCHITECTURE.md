@@ -179,11 +179,17 @@ operation registry:
 
 ## Feature Gating
 
-NSE support requires the `nse` feature flag:
+NSE support requires the `nse` feature flag. Downstream crates consume the
+runtime through the engine facade (runtime-extraction Milestone 002: only
+`eggsec` directly depends on `eggsec-nse`):
 
 ```toml
 [dependencies]
-eggsec-nse = { path = "../eggsec-nse", features = ["nse"] }
+eggsec = { path = "../eggsec", features = ["nse"] }
+```
+
+```rust
+use eggsec::nse::{execute_nse_run, NseRunRequest};
 ```
 
 For Python bindings:

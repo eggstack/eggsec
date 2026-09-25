@@ -485,6 +485,8 @@ fi
 #             crates/eggsec-nse/src/lib.rs (run_cli_with_profile default fallback),
 #             crates/eggsec-nse/src/resolver.rs (inline tests),
 #             crates/eggsec-nse/tests/* (regression coverage),
+#             crates/eggsec/tests/nse_bridge_tests.rs (engine-owned bridge
+#               regression coverage driving the facade with a manual profile),
 #             crates/eggsec/src/commands/handlers/scan.rs (CLI handler),
 #             crates/eggsec/src/dispatch/api.rs (CLI dispatch).
 echo ""
@@ -496,6 +498,7 @@ HITS=$(rg -n 'ResolvedNseExecutionProfile::manual_permissive' \
   --glob='!crates/eggsec-nse/src/resolver.rs' \
   --glob='!crates/eggsec-nse/src/resolver/mod.rs' \
   --glob='!crates/eggsec-nse/tests/*' \
+  --glob='!crates/eggsec/tests/nse_bridge_tests.rs' \
   --glob='!crates/eggsec/src/commands/handlers/scan.rs' \
   --glob='!crates/eggsec/src/dispatch/api.rs' \
   2>/dev/null || true)
@@ -870,12 +873,13 @@ fi
 
 echo ""
 echo "--- Check 40: NSE bridge module exists for ReportEnvelope (INFO) ---"
-if [[ ! -f crates/eggsec-nse/src/bridge.rs ]]; then
-  echo "FAIL: crates/eggsec-nse/src/bridge.rs does not exist."
-  echo "      NSE evidence must bridge to ReportEnvelope via bridge.rs."
+if [[ ! -f crates/eggsec/src/nse_bridge.rs ]]; then
+  echo "FAIL: crates/eggsec/src/nse_bridge.rs does not exist."
+  echo "      NSE evidence must bridge to ReportEnvelope via the engine-owned nse_bridge."
+  echo "      (Moved out of eggsec-nse in runtime-extraction Milestone 002.)"
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: NSE bridge module exists."
+  echo "PASS: Engine-owned NSE bridge module exists."
 fi
 
 echo ""
@@ -2546,7 +2550,9 @@ if ! rg -q 'apply_auth_context_to_map' crates/eggsec/src/fuzzer/engine/utils.rs 
 fi
 # WS3: NSE narrow capability exists with no concrete clients in code
 # (scan only above the #[cfg(test)] module so test string fixtures don't match).
-NSE_CAP="crates/eggsec-nse/src/http_capability.rs"
+# Engine-owned since runtime-extraction Milestone 002 (moved out of eggsec-nse
+# so the runtime has no eggsec-transport edge).
+NSE_CAP="crates/eggsec/src/nse_http_capability.rs"
 if [[ ! -f "$NSE_CAP" ]]; then
   echo "FAIL: missing NSE script capability: $NSE_CAP"
   SECTION_FAIL=$((SECTION_FAIL + 1))
@@ -3207,10 +3213,14 @@ else
 fi
 
 # 120. Phase B: DTO-only domain crates depend on the model, not the renderer.
+# NOTE: eggsec-nse is intentionally absent from this list since
+# runtime-extraction Milestone 002: its report-envelope conversion moved to
+# the engine (`eggsec::nse_bridge`), so the runtime has no report-model edge
+# at all (see check 144). The engine-side model use is covered by check 40.
 echo ""
 echo "--- Check 120: domain DTO consumers use the model, not output ---"
 SECTION_FAIL=0
-for crate in eggsec-db-lab eggsec-mobile-lab eggsec-web-proxy eggsec-nse; do
+for crate in eggsec-db-lab eggsec-mobile-lab eggsec-web-proxy; do
   if rg -q '^eggsec-output' "crates/${crate}/Cargo.toml" 2>/dev/null; then
     echo "FAIL: crates/${crate}/Cargo.toml still depends on eggsec-output (use eggsec-report-model for DTOs)."
     rg -n '^eggsec-output' "crates/${crate}/Cargo.toml" 2>/dev/null || true
@@ -3966,6 +3976,59 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: NSE surfaces use the canonical runtime pipeline."
 else
   FAIL=$((FAIL + 1))
+fi
+
+# 144. NSE runtime has zero inward Eggsec dependencies (Milestone 002).
+# `crates/eggsec-nse/Cargo.toml` must not depend on any `eggsec-*` crate:
+# report conversion lives in `eggsec::nse_bridge`, the scoped-transport
+# adapter in `eggsec::nse_http_capability`. (Self-name `eggsec-nse`
+# excluded via the trailing-pattern match.)
+echo ""
+echo "--- Check 144: eggsec-nse manifest has no eggsec-* dependencies (FAIL) ---"
+INWARD_MANIFEST_HITS=$(rg -n 'eggsec-(core|report-model|transport|transport-eggfetch|runtime|policy|output|tool-core|agent|daemon|daemon-protocol|db-lab|web-proxy|mobile-lab|ui-model|python)\b|path\s*=\s*"\.\./eggsec' crates/eggsec-nse/Cargo.toml 2>/dev/null || true)
+if [[ -n "$INWARD_MANIFEST_HITS" ]]; then
+  echo "$INWARD_MANIFEST_HITS"
+  echo "FAIL: crates/eggsec-nse/Cargo.toml depends on an Eggsec workspace crate."
+  echo "      The runtime must own NSE semantics with public-ecosystem/std types only."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: eggsec-nse has no inward Eggsec manifest dependencies."
+fi
+
+# 145. NSE runtime source imports no Eggsec crate (Milestone 002).
+# Comment lines (`// ... eggsec::...`) are excluded: only code imports count.
+echo ""
+echo "--- Check 145: eggsec-nse source imports no eggsec_* crate (FAIL) ---"
+INWARD_SOURCE_HITS=$(rg -n 'use eggsec_[a-z]|eggsec_(core|report_model|transport|runtime|policy)::|eggsec::' crates/eggsec-nse/src/ 2>/dev/null | grep -v '//' || true)
+if [[ -n "$INWARD_SOURCE_HITS" ]]; then
+  echo "$INWARD_SOURCE_HITS"
+  echo "FAIL: eggsec-nse source imports an Eggsec crate."
+  echo "      Move Eggsec adapters up into the engine (see nse_bridge, nse_http_capability)."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: eggsec-nse source is free of Eggsec imports."
+fi
+
+# 146. Only the engine directly consumes the NSE runtime (Milestone 002).
+# Production graph must be eggsec-nse <- eggsec <- {CLI,TUI,Python,...}.
+# Matches dependency declarations (`eggsec-nse =`, `eggsec-nse/`,
+# `dep:eggsec-nse`); comments and the crate's own manifest name do not match.
+echo ""
+echo "--- Check 146: only eggsec directly depends on eggsec-nse (FAIL) ---"
+DIRECT_CONSUMERS=$(rg -l 'eggsec-nse\s*=|eggsec-nse/|dep:eggsec-nse' crates/*/Cargo.toml 2>/dev/null || true)
+UNEXPECTED_CONSUMERS=$(printf '%s\n' "$DIRECT_CONSUMERS" | grep -v '^crates/eggsec/Cargo.toml$' || true)
+if [[ -n "$UNEXPECTED_CONSUMERS" ]]; then
+  echo "$UNEXPECTED_CONSUMERS"
+  echo "FAIL: Workspace crates outside the engine declare a direct eggsec-nse edge."
+  echo "      Downstream surfaces must consume NSE through the eggsec::nse facade."
+  FAIL=$((FAIL + 1))
+else
+  if ! printf '%s\n' "$DIRECT_CONSUMERS" | grep -q '^crates/eggsec/Cargo.toml$'; then
+    echo "FAIL: crates/eggsec/Cargo.toml has no direct eggsec-nse edge (engine must consume the runtime)."
+    FAIL=$((FAIL + 1))
+  else
+    echo "PASS: Only the engine directly depends on eggsec-nse."
+  fi
 fi
 
 echo ""

@@ -1,4 +1,4 @@
-use eggsec_nse::report::{
+use eggsec::nse::report::{
     NseCapabilityEventSummary, NseCompatibilitySummary, NseEvidenceItem, NseLibraryUseReport,
     NseOutputSummary, NseRuleEvaluationReport, NseRunCompatibilityStatus, NseRunFidelity,
     NseRunReport,
@@ -714,7 +714,7 @@ fn evidence_confidence_style(confidence: &str) -> Style {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eggsec_nse::report::{
+    use eggsec::nse::report::{
         NseCapabilityEventSummary, NseCompatibilitySummary, NseEvidenceItem, NseEvidenceKind,
         NseLibraryUseReport, NseOutputSummary, NseRuleEvaluationReport, NseRunCompatibilityStatus,
         NseRunFidelity, NseRunReport,
@@ -733,12 +733,12 @@ mod tests {
 
     fn make_compatible_report() -> NseRunReport {
         let mut report = NseRunReport::new("192.168.1.1", "ssl-cert");
-        report.profile = eggsec_nse::report::NseProfileSummary {
+        report.profile = eggsec::nse::report::NseProfileSummary {
             kind: "ManualPermissive".to_string(),
             audit_label: "manual".to_string(),
             warnings: vec![],
         };
-        report.script_source = eggsec_nse::report::NseScriptSourceSummary {
+        report.script_source = eggsec::nse::report::NseScriptSourceSummary {
             kind: "builtin".to_string(),
             label: "ssl-cert".to_string(),
             size: 0,

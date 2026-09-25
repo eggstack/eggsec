@@ -1596,6 +1596,23 @@ Phase 06 closes TLS/sslcert test symmetry gaps and strengthens the per-connect a
 
 **Verification:** 522 eggsec-nse tests pass (1 ignored), 56 architecture guards pass. 9 local sslcert tests (5 success + 2 AgentSafe + 1 CiSafe + 1 new CiSafe).
 
+## Runtime Dependency Decoupling (Extraction Milestone 002)
+
+**Status:** Implemented. `eggsec-nse` has zero `eggsec-*` dependencies (`cargo tree -p eggsec-nse` shows public-ecosystem/std only) and no `eggsec_*` imports in runtime source. Only the engine directly consumes the runtime; TUI/Python go through the `eggsec::nse` facade.
+
+**Relocations** (Eggsec composition concerns moved up, runtime semantics untouched):
+
+| Item | From | To |
+|---|---|---|
+| `to_report_envelope()` (`NseRunReport` → `ReportEnvelope`) | `eggsec-nse/src/bridge.rs` | `eggsec::nse_bridge` (new engine module, `nse`-gated; engine gained an optional `eggsec-report-model` edge on its `nse` feature) |
+| Scoped-transport HTTP adapter (`ScopedHttpRequest` builder, method/TLS policy) | `eggsec-nse/src/http_capability.rs` | `eggsec::nse_http_capability` (new engine module, `nse`-gated; dormant seam — no Lua library calls it yet, network behavior unchanged) |
+
+**Consumer consolidation:** TUI (`tabs/nse.rs`, `tabs/nse_report_view.rs`) imports via `eggsec::nse::...`; Python already did. Both manifests dropped their direct optional `eggsec-nse` edges (`nse = ["eggsec/nse"]` forwarding only). Production graph is `eggsec-nse <- eggsec <- {CLI,TUI,Python,...}`.
+
+**Test ownership:** bridge/envelope tests moved to `crates/eggsec/tests/nse_bridge_tests.rs` (14 tests incl. a live facade-execution→envelope case); runtime keeps execution/report/evidence coverage (`evidence_tests` split, `runtime_smoke_tests` and one local-protocol case rescoped to the report boundary). No `eggsec` dev-dependency was added to the runtime crate.
+
+**Guards:** 144 (manifest has no `eggsec-*` deps), 145 (source imports no `eggsec_*` crate), 146 (only the engine declares a direct `eggsec-nse` edge); check 40 now asserts the engine-owned bridge; check 120 no longer lists `eggsec-nse` as a model consumer; the NSE capability path check follows the moved module. Plan: `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md`.
+
 ## Canonical Execution/Report Convergence (Extraction Milestone 001)
 
 **Status:** Implemented. `crates/eggsec-nse/src/run.rs` owns the single authoritative runtime pipeline: `NseRunRequest` (target, `NseScriptSource`, script args, resolved profile, optional host/port context, explicit limits/cancellation overrides) through `execute_nse_run()` (resolver-first resolution, `with_full_policy` executor setup, rule/action execution, stats, dynamic library-use plus the one runtime-owned static-`require` fallback, capability events, resolver diagnostics, report build, single compatibility/fidelity computation, single evidence extraction).

@@ -237,8 +237,8 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 ### Smoke Tests (`runtime_smoke_tests.rs`)
 
-- Exercise the full pipeline (profile → context → execution → report → `ReportEnvelope` bridge).
-- Verify envelope shape (findings, severity, domain_id) for representative scenarios.
+- Exercise the runtime pipeline (profile → context → execution → report).
+- Envelope conversion is engine-owned (`eggsec::nse_bridge`, covered by `crates/eggsec/tests/nse_bridge_tests.rs`); runtime smoke tests stop at the report boundary.
 - 2 tests: `CompatibilityLab` clean execution and `AgentSafe` capability-denial surfacing.
 
 ### Test Status
@@ -247,7 +247,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
 | `local_protocol_tests` | 40 | any | Local TCP/HTTP/UDP/TLS fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phases 02-03; TLS/sslcert fixtures added |
-| `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
+| `runtime_smoke_tests` | 2 | any | Smoke (runtime report boundary; envelope in engine `nse_bridge_tests`) |
 | `compatibility_corpus_tests` | 49 | any | Resolver-only assertions (6 new Phase 04 upstream fixtures) |
 
 ### Known Limitations
@@ -283,7 +283,7 @@ The display model for TUI and future frontends is defined in `architecture/nse_r
 
 ### ReportEnvelope Bridge
 
-`bridge.rs` maps `NseRunReport` → `ReportEnvelope` for cross-domain report aggregation. Each `NseEvidenceItem` maps to a `FindingRecord` with associated `EvidenceItem`. Capability denials are informational (`Severity::Info`), not target vulnerabilities. The bridge is tested by 11 evidence tests and 4 envelope shape tests.
+`eggsec::nse_bridge` (engine-owned; moved out of `eggsec-nse` in runtime-extraction Milestone 002 so the runtime has no inward Eggsec dependencies) maps `NseRunReport` → `ReportEnvelope` for cross-domain report aggregation. Each `NseEvidenceItem` maps to a `FindingRecord` with associated `EvidenceItem`. Capability denials are informational (`Severity::Info`), not target vulnerabilities. The bridge is tested by `crates/eggsec/tests/nse_bridge_tests.rs` (mapping + live facade-execution coverage).
 
 ---
 

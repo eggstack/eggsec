@@ -50,7 +50,6 @@ arc-swap = "1"
 # Feature-gated dependencies forwarded from eggsec
 pnet = { version = "0.35", optional = true }
 pnet_packet = { version = "0.35", optional = true }
-eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }
 
 # Feature forwarding model:
 #
@@ -66,13 +65,16 @@ eggsec-nse = { path = "../eggsec-nse", version = "0.1.0", optional = true }
 # 2. Local dependency forwarding: `stress-testing` and `packet-inspection`
 #    add local `pnet`/`pnet_packet` dependencies for raw packet crafting
 #    and inspection, in addition to forwarding to `eggsec`.
-#    `nse` adds the `eggsec-nse` dependency for NSE script support.
+#    `nse` is engine-only forwarding (category 1): the TUI consumes NSE
+#    types through the `eggsec::nse` compatibility facade and must not
+#    declare its own direct `eggsec-nse` edge (runtime-extraction
+#    Milestone 002: only `eggsec` directly depends on `eggsec-nse`).
 #
 # 3. Combined feature: `full` enables all of the above for maximum
 #    capability — every tab and control is available.
 [features]
 default = []
-nse = ["dep:eggsec-nse", "eggsec/nse"]
+nse = ["eggsec/nse"]
 headless-browser = ["eggsec/headless-browser"]
 compliance = ["eggsec/compliance"]
 database = ["eggsec/database"]

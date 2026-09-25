@@ -164,6 +164,11 @@ eggsec_nse::run_cli_with_profile(config, None).await?;
 
 `execute_nse_run()` owns script resolution, executor setup, rule/action execution, and complete `NseRunReport` assembly (resolver diagnostics, rules, stats, libraries, capability events, compatibility/fidelity, output, evidence). Callers must not reproduce that orchestration or assemble reports via `build_report()`. `run_cli_with_profile()` is a thin CLI adapter (profile default, request construction, JSON/text rendering). The Eggsec dispatch path (`dispatch/api.rs::run_nse`) and the Python binding (`run_nse_inner`) are thin adapters over the same API. The executor is constructed via `NseExecutor::with_full_policy(...)` from the effective profile so the capability context matches the resolved profile.
 
+### Consumer ownership (runtime extraction)
+
+- The runtime crate (`eggsec-nse`) has zero `eggsec-*` dependencies. Report-envelope conversion is engine-owned (`eggsec::nse_bridge::to_report_envelope`); the scoped-transport HTTP adapter is engine-owned (`eggsec::nse_http_capability`).
+- Only the engine directly depends on `eggsec-nse`. TUI/Python/CLI consume NSE types through the `eggsec::nse` facade — never declare a direct `eggsec-nse` edge (enforced by architecture guards 144/145/146).
+
 ### CLI Handler Integration
 
 The CLI handler (`handle_nse` in `crates/eggsec/src/commands/handlers/scan.rs`) constructs a `ManualPermissive` profile and passes it to `run_cli_with_profile`. Profile warnings (sandbox disabled, scope implications) are logged at startup.

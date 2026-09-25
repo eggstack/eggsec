@@ -1,5 +1,12 @@
 //! Narrow NSE HTTP script capability backed by the scoped transport contract.
 //!
+//! Engine-owned Eggsec adapter (moved out of `eggsec-nse` during the
+//! runtime-extraction Milestone 002; the runtime crate must not depend on
+//! `eggsec-transport`). No Lua `http`-family library calls this module yet;
+//! it preserves the tested DTO/TLS-policy seam for the later
+//! provider-inversion milestone without misrepresenting current network
+//! behavior (those libraries still use native/reqwest paths).
+//!
 //! Phase D workstream 3 separates language/runtime compatibility from
 //! ordinary HTTP implementation. Lua scripts never receive a raw
 //! unrestricted `reqwest`/`eggfetch` client. Instead, script-facing HTTP
@@ -37,7 +44,7 @@ use eggsec_transport::{
     TlsPolicy,
 };
 
-use crate::capabilities::NseCapabilityContext;
+use crate::nse::capabilities::NseCapabilityContext;
 
 /// Re-exported for script-capability dispatch sites (keeps call sites on
 /// transport-neutral types without a direct `http`/`url` dependency).
@@ -161,12 +168,12 @@ pub async fn dispatch_scoped_request<T: HttpTransport>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::NseCapabilityContext;
-    use crate::limits::{NseCancellationToken, NseExecutionLimits, NseResourceCounters};
-    use crate::profile::{
+    use crate::nse::capabilities::NseCapabilityContext;
+    use crate::nse::limits::{NseCancellationToken, NseExecutionLimits, NseResourceCounters};
+    use crate::nse::profile::{
         NseExecutionProfileKind, NseModulePolicy, NseNetworkPolicy, NseScriptPolicy,
     };
-    use crate::SandboxConfig;
+    use crate::nse::SandboxConfig;
     use std::sync::Arc;
 
     fn test_context(kind: NseExecutionProfileKind) -> NseCapabilityContext {
@@ -321,7 +328,7 @@ mod tests {
         // imports here, this test's source scan fails loudly.
         // (Banned literals are concat-built so this test does not match
         // itself in the include_str! scan.)
-        let src = include_str!("http_capability.rs");
+        let src = include_str!("nse_http_capability.rs");
         let banned: Vec<String> = vec![
             ["reqwest", "::"].concat(),
             "eggfetch".to_string(),
@@ -349,7 +356,7 @@ mod tests {
             let joined = code_lines.join("\n");
             assert!(
                 !joined.contains(b.as_str()),
-                "http_capability.rs code must not mention '{b}'"
+                "nse_http_capability.rs code must not mention '{b}'"
             );
         }
     }

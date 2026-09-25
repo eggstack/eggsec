@@ -176,6 +176,12 @@ pub mod agent;
 #[cfg(feature = "nse")]
 pub use eggsec_nse as nse;
 
+#[cfg(feature = "nse")]
+pub mod nse_bridge;
+
+#[cfg(feature = "nse")]
+pub mod nse_http_capability;
+
 #[cfg(all(feature = "nse", feature = "tool-api"))]
 pub mod nse_tool;
 

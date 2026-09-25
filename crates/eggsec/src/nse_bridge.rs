@@ -1,13 +1,16 @@
-//! Bridge from NseRunReport to normalized ReportEnvelope.
+//! Bridge from `NseRunReport` to the normalized `ReportEnvelope`.
 //!
 //! Maps NSE evidence items and report metadata into the eggsec-report-model
 //! normalized report envelope for cross-domain report integration.
 //!
-//! This module follows the same pattern as `eggsec-db-lab/src/bridge.rs`:
-//! domain-internal types are mapped to the generic envelope types without
-//! creating a circular dependency.
+//! This is an Eggsec composition/reporting adapter, not NSE runtime
+//! semantics. It lives in the engine (moved out of `eggsec-nse` during the
+//! runtime-extraction Milestone 002) so the runtime crate has no inward
+//! dependency on Eggsec report contracts. It follows the same pattern as
+//! `eggsec-db-lab/src/bridge.rs`: domain-internal types are mapped to the
+//! generic envelope types without creating a circular dependency.
 
-use crate::report::NseRunReport;
+use crate::nse::report::NseRunReport;
 use eggsec_core::types::Severity;
 use eggsec_report_model::{
     EvidenceItem as OutputEvidenceItem, EvidenceKind as OutputEvidenceKind, EvidenceSource,
@@ -15,28 +18,28 @@ use eggsec_report_model::{
 };
 
 /// Map NseEvidenceKind to report-model EvidenceKind.
-fn evidence_kind_to_output(kind: &crate::report::NseEvidenceKind) -> OutputEvidenceKind {
+fn evidence_kind_to_output(kind: &crate::nse::report::NseEvidenceKind) -> OutputEvidenceKind {
     match kind {
-        crate::report::NseEvidenceKind::ServiceFingerprint => OutputEvidenceKind::Banner,
-        crate::report::NseEvidenceKind::VersionInfo => OutputEvidenceKind::Banner,
-        crate::report::NseEvidenceKind::CertificateInfo => OutputEvidenceKind::Certificate,
-        crate::report::NseEvidenceKind::VulnerabilitySignal => OutputEvidenceKind::Generic,
-        crate::report::NseEvidenceKind::Misconfiguration => OutputEvidenceKind::Generic,
-        crate::report::NseEvidenceKind::CapabilityDenial => {
+        crate::nse::report::NseEvidenceKind::ServiceFingerprint => OutputEvidenceKind::Banner,
+        crate::nse::report::NseEvidenceKind::VersionInfo => OutputEvidenceKind::Banner,
+        crate::nse::report::NseEvidenceKind::CertificateInfo => OutputEvidenceKind::Certificate,
+        crate::nse::report::NseEvidenceKind::VulnerabilitySignal => OutputEvidenceKind::Generic,
+        crate::nse::report::NseEvidenceKind::Misconfiguration => OutputEvidenceKind::Generic,
+        crate::nse::report::NseEvidenceKind::CapabilityDenial => {
             OutputEvidenceKind::RuntimeInstrumentation
         }
-        crate::report::NseEvidenceKind::CompatibilityWarning => OutputEvidenceKind::LogLine,
-        crate::report::NseEvidenceKind::ScriptOutput => OutputEvidenceKind::Generic,
+        crate::nse::report::NseEvidenceKind::CompatibilityWarning => OutputEvidenceKind::LogLine,
+        crate::nse::report::NseEvidenceKind::ScriptOutput => OutputEvidenceKind::Generic,
     }
 }
 
 /// Map NseEvidenceKind to severity.
-fn evidence_kind_to_severity(kind: &crate::report::NseEvidenceKind) -> Severity {
+fn evidence_kind_to_severity(kind: &crate::nse::report::NseEvidenceKind) -> Severity {
     match kind {
-        crate::report::NseEvidenceKind::VulnerabilitySignal => Severity::Medium,
-        crate::report::NseEvidenceKind::Misconfiguration => Severity::Medium,
-        crate::report::NseEvidenceKind::CapabilityDenial => Severity::Info,
-        crate::report::NseEvidenceKind::CompatibilityWarning => Severity::Info,
+        crate::nse::report::NseEvidenceKind::VulnerabilitySignal => Severity::Medium,
+        crate::nse::report::NseEvidenceKind::Misconfiguration => Severity::Medium,
+        crate::nse::report::NseEvidenceKind::CapabilityDenial => Severity::Info,
+        crate::nse::report::NseEvidenceKind::CompatibilityWarning => Severity::Info,
         _ => Severity::Info,
     }
 }
