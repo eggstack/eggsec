@@ -44,14 +44,14 @@ crates/eggsec-mobile-lab/src/
 | File | Lines | Description |
 |------|-------|-------------|
 | `lib.rs` | 500 | `MobilePlatform`, `MobileFinding`, `MobileScanReport`, `run_static_cli()`, `format_mobile_report()`, `to_scan_report_data()`, `to_report_envelope()`, `build_general_recommendations()`, tests |
-| `apk.rs` | 1262 | `analyze_apk()` — ZIP open (ZipSlip rejection, 50 MiB extraction budget, 128 KiB per-text scan), binary AXML decoder (string pool + linear chunk walk for START_TAG/END_TAG), text XML fallback (quick-xml), permission/manifest/application analysis, network_security_config parsing, secret scanning, debug cert detection |
-| `ipa.rs` | 782 | `analyze_ipa()` — ZIP open (ZipSlip rejection, 200 MiB guard), Info.plist deserialization (plist + serde), NSAppTransportSecurity exceptions, embedded.mobileprovision markers, _CodeSignature presence, secret scanning in .app assets |
-| `adb.rs` | 1200 | Pure-Rust ADB TCP protocol: `AdbClient`/`AdbConnection`, CNXN/AUTH/OPEN/OKAY/WRTE/CLSE framing, `list_devices()`, `connect()`, `shell()`, `install()`, `launch()`, `uninstall()`, `capture_logcat()`, `set_global_proxy()`/`clear_global_proxy()`, `grant()`/`revoke()`/`list_permissions()` |
-| `dynamic.rs` | 3264 | `DynamicMobileReport`, `DynamicMobileFinding`, `LabManifest`, `DynamicMobileArgs`, `run_dynamic_cli()`, `CorrelatedFinding`, `CorrelationEngine`, `CorrelationResult`, `capture_baseline()`, `compare_to_baseline()`, `correlate_findings()`, `correlate_reports()`, `export_evidence_bundle()`, `to_scan_report_data_dynamic()`, formatting, tests |
-| `frida.rs` | 961 | `FridaSession`, `FridaScriptResult`, `FridaInstrumentation`, `connect()`, `execute_script()`, `basic_method_trace()`, builtin scripts (basic_method_trace, crypto_keystore, bypass_validation, api_trace), `resolve_frida_script_spec()`, `run_frida_spec()`, `run_builtin()`, `generate_*()`, `redact_frida_evidence()`, embedded `FRIDA_LIB_COMMON_HOOKS` |
-| `traffic.rs` | 479 | `TrafficSummary`, `parse_traffic_capture()` — text log parser (mitmproxy-style), minimal HAR JSON parser, 1 MiB safety cap, domain/cleartext/suspicious analysis |
-| `runtime.rs` | 248 | `parse_logcat_findings()` — high-signal logcat parser: permission grant/deny, crashes/exceptions, cleartext HTTP hints, secret-like patterns; basic redaction |
-| `adapter` (`mobile/mod.rs`) | 272 | Re-exports all domain types, `run_cli()` (static dispatch), `run_dynamic_cli()` (dynamic dispatch), backward-compatible paths |
+| `apk.rs` | 1260 | `analyze_apk()` — ZIP open (ZipSlip rejection, 50 MiB extraction budget, 128 KiB per-text scan), binary AXML decoder (string pool + linear chunk walk for START_TAG/END_TAG), text XML fallback (quick-xml), permission/manifest/application analysis, network_security_config parsing, secret scanning, debug cert detection |
+| `ipa.rs` | 782 | `analyze_ipa()` (`ipa.rs:224`) — ZIP open (ZipSlip rejection, 200 MiB guard), Info.plist deserialization (plist + serde), NSAppTransportSecurity exceptions, embedded.mobileprovision markers, _CodeSignature presence, secret scanning in .app assets |
+| `adb.rs` | 1202 | Pure-Rust ADB TCP protocol: `AdbClient`/`AdbConnection`, CNXN/AUTH/OPEN/OKAY/WRTE/CLSE framing, `list_devices()`, `connect()`, `shell()`, `install()`, `launch()`, `uninstall()`, `capture_logcat()`, `set_global_proxy()`/`clear_global_proxy()`, `grant()`/`revoke()`/`list_permissions()` |
+| `dynamic.rs` | 3284 | `DynamicMobileReport` (`dynamic.rs:521`), `DynamicMobileFinding` (`dynamic.rs:338`), `LabManifest` (`dynamic.rs:316`), `DynamicMobileArgs` (`dynamic.rs:54`), `run_dynamic_cli()` (`dynamic.rs:583`), `CorrelatedFinding` (`dynamic.rs:362`), `CorrelationEngine` (`dynamic.rs:420`), `capture_baseline()` (`dynamic.rs:115`), `compare_to_baseline()` (`dynamic.rs:144`), `correlate_findings()` (`dynamic.rs:1635`), `correlate_reports()` (`dynamic.rs:485`), `export_evidence_bundle()` (`dynamic.rs:212`), `to_scan_report_data_dynamic()` (`dynamic.rs:1509`), formatting, tests |
+| `frida.rs` | 1036 | `FridaSession` (`frida.rs:22`), `connect()` (`frida.rs:61`), `execute_script()` (`frida.rs:613`), `basic_method_trace()` (`frida.rs:571`), builtin scripts (basic_method_trace, crypto_keystore, bypass_validation, api_trace), `resolve_frida_script_spec()`, `run_frida_spec()`, `run_builtin()`, `generate_*()`, `redact_frida_evidence()`, embedded `FRIDA_LIB_COMMON_HOOKS` |
+| `traffic.rs` | 479 | `TrafficSummary` (`traffic.rs:22`), `parse_traffic_capture()` (`traffic.rs:49`) — text log parser (mitmproxy-style), minimal HAR JSON parser, 1 MiB safety cap, domain/cleartext/suspicious analysis |
+| `runtime.rs` | 248 | `parse_logcat_findings()` (`runtime.rs:25`) — high-signal logcat parser: permission grant/deny, crashes/exceptions, cleartext HTTP hints, secret-like patterns; basic redaction |
+| `adapter` (`mobile/mod.rs`) | 274 | Re-exports all domain types, `run_cli()` (static dispatch), `run_dynamic_cli()` (dynamic dispatch), backward-compatible paths |
 
 ### Key Types
 
@@ -60,13 +60,13 @@ crates/eggsec-mobile-lab/src/
 | `MobilePlatform` | `lib.rs:81` | Enum: `Android`, `Ios` |
 | `MobileFinding` | `lib.rs:96` | Severity-rated finding: category, severity, title, description, recommendation, evidence |
 | `MobileScanReport` | `lib.rs:107` | Static report: target, scan_type="mobile-static", platform, app_id, version, findings, recommendations, duration_ms |
-| `DynamicMobileReport` | `dynamic.rs` | Dynamic report: target, scan_type="mobile-dynamic", platform, device_serial, app_id, findings, actions_performed, dry_run, traffic_summary, permission_state, correlation_result, regression_notes, frida_instrumentation |
-| `DynamicMobileFinding` | `dynamic.rs` | Runtime finding: category, severity, title, description, recommendation, evidence, static_correlation |
+| `DynamicMobileReport` | `dynamic.rs:521` | Dynamic report: target, scan_type="mobile-dynamic", platform, device_serial, app_id, findings, actions_performed, dry_run, traffic_summary, permission_state, correlation_result, regression_notes, frida_instrumentation |
+| `DynamicMobileFinding` | `dynamic.rs:338` | Runtime finding: category, severity, title, description, recommendation, evidence, static_correlation |
 | `DynamicMobileArgs` | `dynamic.rs:54` | Internal CLI args: target, device, install/launch/capture_logs/duration/uninstall_after/dry_run, proxy, permissions, traffic_capture, frida_script(s), allow_frida, baseline, evidence_bundle |
-| `LabManifest` | `dynamic.rs` | Advisory TOML allowlist: allowed_device_serials, allowed_packages |
-| `CorrelatedFinding` | `dynamic.rs` | Static↔dynamic correlation result: score, correlation_type, enrichment |
-| `CorrelationEngine` | `dynamic.rs` | Core correlation: ingests static + dynamic + Frida reports, produces CorrelationResult |
-| `MobileBaseline` | `dynamic.rs` | Captured baseline for regression comparison |
+| `LabManifest` | `dynamic.rs:316` | Advisory TOML allowlist: allowed_device_serials, allowed_packages |
+| `CorrelatedFinding` | `dynamic.rs:362` | Static↔dynamic correlation result: score, correlation_type, enrichment |
+| `CorrelationEngine` | `dynamic.rs:420` | Core correlation: ingests static + dynamic + Frida reports, produces CorrelationResult |
+| `MobileBaseline` | `dynamic.rs:105` | Captured baseline for regression comparison |
 | `FridaSession` | `frida.rs:22` | Frida session handle: device_id, is_simulation |
 | `FridaScriptResult` | `frida.rs:29` | Script result: script_source, output, findings, duration_ms, structured_output |
 | `FridaInstrumentation` | `frida.rs:42` | Frida summary: sessions, script_results, enabled_builtins, structured_results, correlation_notes, regression_notes |
@@ -170,22 +170,22 @@ resolve_frida_script_spec("builtin:basic_method_trace") → embedded script sour
 | Function | Location | Description |
 |----------|----------|-------------|
 | `analyze_apk(path)` | `apk.rs:30` | Async APK static analysis → `MobileScanReport` |
-| `analyze_ipa(path)` | `ipa.rs` | Async IPA static analysis → `MobileScanReport` |
-| `run_static_cli(path, json, output, quiet)` | `lib.rs:137` | CLI entry for static analysis |
-| `run_dynamic_cli(args)` | `dynamic.rs` | CLI entry for dynamic analysis |
+| `analyze_ipa(path)` | `ipa.rs:224` | Async IPA static analysis → `MobileScanReport` |
+| `run_static_cli(path, json, output, quiet)` | `lib.rs` | CLI entry for static analysis |
+| `run_dynamic_cli(args)` | `dynamic.rs:583` | CLI entry for dynamic analysis |
 | `to_scan_report_data(report)` | `lib.rs:296` | Bridge static report → `ScanReportData` |
 | `to_report_envelope(report)` | `lib.rs:332` | Bridge static report → `ReportEnvelope` |
-| `to_scan_report_data_dynamic(report)` | `dynamic.rs` | Bridge dynamic report → `ScanReportData` |
+| `to_scan_report_data_dynamic(report)` | `dynamic.rs:1509` | Bridge dynamic report → `ScanReportData` |
 | `format_mobile_report(report)` | `lib.rs:249` | Human-readable formatting |
 | `format_dynamic_report(report)` | `dynamic.rs` | Dynamic human-readable formatting |
-| `correlate_findings(dynamic, static)` | `dynamic.rs` | Correlate static findings with dynamic observations |
-| `correlate_reports(static, dynamic)` | `dynamic.rs` | CorrelationEngine: full correlation with scoring |
-| `capture_baseline(report)` | `dynamic.rs` | Capture MobileBaseline from report |
-| `compare_to_baseline(baseline, report)` | `dynamic.rs` | Compare report to prior baseline |
-| `export_evidence_bundle(...)` | `dynamic.rs` | Gzipped evidence bundle export |
+| `correlate_findings(dynamic, static)` | `dynamic.rs:1635` | Correlate static findings with dynamic observations |
+| `correlate_reports(static, dynamic)` | `dynamic.rs:485` | CorrelationEngine: full correlation with scoring |
+| `capture_baseline(report)` | `dynamic.rs:115` | Capture MobileBaseline from report |
+| `compare_to_baseline(baseline, report)` | `dynamic.rs:144` | Compare report to prior baseline |
+| `export_evidence_bundle(...)` | `dynamic.rs:212` | Gzipped evidence bundle export |
 | `connect(device)` | `frida.rs:61` | Connect to Frida server on device |
-| `execute_script(session, script)` | `frida.rs` | Execute Frida script |
-| `basic_method_trace()` | `frida.rs` | Built-in method tracing script |
+| `execute_script(session, script)` | `frida.rs:613` | Execute Frida script |
+| `basic_method_trace()` | `frida.rs:571` | Built-in method tracing script |
 | `parse_traffic_capture(input)` | `traffic.rs:49` | Parse traffic capture → `TrafficSummary` |
 | `parse_logcat_findings(log)` | `runtime.rs:25` | Parse logcat → `DynamicMobileFinding` entries |
 
@@ -235,4 +235,4 @@ resolve_frida_script_spec("builtin:basic_method_trace") → embedded script sour
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-25 (apk 1260 / adb 1202 / dynamic 3284 / frida 1036 / adapter 274 lines; dynamic/frida/traffic/runtime entry lines refreshed)*

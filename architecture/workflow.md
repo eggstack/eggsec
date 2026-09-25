@@ -16,9 +16,9 @@ See also: [overview.md](overview.md), [findings.md](findings.md), [output.md](ou
 
 | Item | Location | Feature |
 |------|----------|---------|
-| Module declaration | `lib.rs:155-159` | `finding-workflow` |
-| Public module | `lib.rs:155` (`pub mod workflow`) | `finding-workflow` |
-| Stub module | `lib.rs:157` (`mod workflow`) | `not(finding-workflow)` |
+| Module declaration | `lib.rs:161-165` | `finding-workflow` |
+| Public module | `lib.rs:161` (`pub mod workflow`) | `finding-workflow` |
+| Stub module | `lib.rs:163` (`mod workflow`) | `not(finding-workflow)` |
 | Feature flag | `Cargo.toml` `finding-workflow` | Marker feature (no extra dependencies) |
 
 When `finding-workflow` is disabled, the module compiles with empty/stub types. The TUI workflow tab and dispatch worker are feature-gated on the same flag.
@@ -284,7 +284,7 @@ These are independent state machines — the workflow module's `FindingStatus` i
 
 ### Findings Store Relationship
 
-- The workflow module's `Finding` is **not** the same as `findings::Finding` (the 17-field canonical type)
+- The workflow module's `Finding` is **not** the same as `findings::Finding` (the 19-field canonical type)
 - Workflow `Finding` is a lightweight operational record (8 fields) focused on triage/assignment/SLA
 - `StoredFinding` (in `findings::lifecycle`) uses the lifecycle `FindingStatus` (6 variants), not the workflow `FindingStatus` (5 variants)
 - These two systems are independent — no automatic synchronization between workflow findings and stored findings
@@ -367,4 +367,4 @@ These are independent state machines — the workflow module's `FindingStatus` i
 | `calculate_metrics()` is `&mut self` | `mod.rs:38` | Low | Requires mutable access to recalculate, but all fields are simple counters. Could be `&self` with interior mutability or returning a new struct. |
 | SLA violations disappear on status change | `mod.rs:46-62` | Info | SLA violation count is computed from current status, not historical. A finding that was `Open` and violated, then moved to `InProgress`, will no longer be counted. This is intentional but may surprise users expecting historical violation tracking. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (systematic review: lib.rs gate lines, canonical Finding field count 19)*

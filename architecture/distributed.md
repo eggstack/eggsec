@@ -22,13 +22,13 @@ The distributed module enables horizontal scaling of security assessments:
 | Worker node | `crates/eggsec/src/distributed/worker.rs` | None |
 | CLI cluster command | `crates/eggsec/src/commands/handlers/cluster.rs` | `cli` |
 
-**No feature gate**: the entire distributed module compiles unconditionally. Task processing in `worker.rs` uses `EnforcementContext` and `EnforcedDispatcher` only when `tool-api`, `rest-api`, or `grpc-api` is enabled; without those features, `process_task()` returns an error (`worker.rs:517-523`).
+**No feature gate**: the entire distributed module compiles unconditionally. Task processing in `worker.rs` uses `EnforcementContext` and `EnforcedDispatcher` only when `tool-api`, `rest-api`, or `grpc-api` is enabled; without those features, `process_task()` returns an error (`worker.rs:693-699`).
 
 ## Architecture
 
 ### Protocol Message Inventory
 
-#### CommandMessage Variants (`command.rs:28-70`)
+#### CommandMessage Variants (`command.rs:30-71`)
 
 8 variants (tagged union via `#[serde(tag = "type")]`):
 
@@ -43,7 +43,7 @@ The distributed module enables horizontal scaling of security assessments:
 | 7 | `EnqueueTask` | Client → Coordinator | `id`, `task: Task` |
 | 8 | `StatusRequest` | Client → Coordinator | `id` |
 
-#### ResponseMessage (`command.rs:72-125`)
+#### ResponseMessage (`command.rs:73-126`)
 
 8 `msg_type` values:
 
@@ -60,7 +60,7 @@ The distributed module enables horizontal scaling of security assessments:
 
 ### Component Inventory
 
-#### RemoteListener (`remote.rs:27-39`)
+#### RemoteListener (`remote.rs:30-45`)
 
 ```rust
 pub struct RemoteListener {
@@ -75,6 +75,9 @@ pub struct RemoteListener {
     plaintext_allowed: bool,
     task_queue: Arc<TaskQueue>,
     workers: Arc<RwLock<FxHashMap<String, WorkerRegistration>>>,
+    accepted: Arc<AtomicUsize>,       // monotonic accepted-connection counter
+    tls_handshakes: Arc<AtomicUsize>, // successful TLS handshakes
+    authenticated: Arc<AtomicUsize>,  // successful PSK authentications
 }
 ```
 
@@ -92,7 +95,7 @@ pub struct RemoteListener {
 | `connection_count()` | Current active connections |
 | `is_tls()` | Whether TLS is enabled |
 
-#### RemoteClient (`remote.rs:650-1206`)
+#### RemoteClient (`remote.rs:732-1300`)
 
 ```rust
 pub struct RemoteClient {
@@ -161,7 +164,7 @@ handshakes 2, auths 2, Register replayed before heartbeat on the fresh
 connection). Evidence: `architecture/performance.md` (Phase E + polish
 addendum).
 
-#### WorkerConfig (`worker.rs:46-54`)
+#### WorkerConfig (`worker.rs:133-141`)
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -171,7 +174,7 @@ addendum).
 | `heartbeat_interval_secs` | 30 | Heartbeat interval |
 | `tls_domain` | `Some("localhost")` | TLS domain for verification |
 
-#### WorkerStats (`worker.rs:68-75`)
+#### WorkerStats (`worker.rs:155-161`)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -208,13 +211,13 @@ pub struct Heartbeat {
 }
 ```
 
-Note: The `Heartbeat` struct is defined but not directly serialized for the wire protocol. Workers send heartbeat data as a JSON string in `CommandMessage::Heartbeat.status`, containing `worker_id`, `status` (idle/busy), `current_jobs`, `completed_jobs`, and `failed_jobs` (`worker.rs:222-228`).
+Note: The `Heartbeat` struct is defined but not directly serialized for the wire protocol. Workers send heartbeat data as a JSON string in `CommandMessage::Heartbeat.status`, containing `worker_id`, `status` (idle/busy), `current_jobs`, `completed_jobs`, and `failed_jobs` (`worker.rs:306-316`).
 
 #### WorkerStatus (`mod.rs:110-115`)
 
 3 variants: `Idle`, `Busy`, `Disconnected`.
 
-#### TaskType (`mod.rs:64-73`)
+#### TaskType (`mod.rs:65-73`)
 
 7 variants: `PortScan`, `ServiceFingerprint`, `EndpointDiscovery`, `Fuzz`, `WafTest`, `LoadTest`, `Recon`.
 
@@ -227,7 +230,7 @@ pub const CAPABILITIES: &[&str] = &[
 ];
 ```
 
-#### Task (`queue.rs:7-18`)
+#### Task (`queue.rs:8-19`)
 
 ```rust
 pub struct Task {
@@ -241,7 +244,7 @@ pub struct Task {
 }
 ```
 
-#### TaskResult (`queue.rs:20-27`)
+#### TaskResult (`queue.rs:21-29`)
 
 ```rust
 pub struct TaskResult {
@@ -267,7 +270,7 @@ and in_progress→completed are short atomic transitions (no cross-lock
 ordering inversion). The owned-return/in-progress representation still
 requires one task clone at dequeue.
 
-#### QueueError (`queue.rs:155-169`)
+#### QueueError (`queue.rs:147-161`)
 
 2 variants: `QueueFull`, `TaskNotFound`.
 
@@ -300,7 +303,7 @@ Implements `AsyncRead` + `AsyncWrite` by delegating to the inner stream.
   use this path with the production `TlsServer::from_pem` accept path.
 - Tracks `insecure_connection_count` when using `NoVerifier`.
 
-#### LineWriter (`io.rs:315-349`)
+#### LineWriter (`io.rs:339-380`)
 
 Wraps a `StreamWrapper` with newline-delimited JSON framing:
 - `write_line(line)`: writes `line + "\n"`, flushes.
@@ -314,7 +317,7 @@ Wraps a `StreamWrapper` with newline-delimited JSON framing:
 | `MAX_OUTPUT_SIZE` | 10 MB (10,485,760) | Max command output size |
 | `MAX_ARGS` | 50 | Max command arguments |
 | `MAX_ARG_LENGTH` | 1000 | Max characters per argument |
-| `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:18`) |
+| `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:22`) |
 | `FORBIDDEN_PATTERNS` | 13 patterns | `../`, `..\`, `/etc/`, `/root/`, `/proc/`, `/sys/`, `~/.ssh/`, `~/.aws/`, `.pem`, `.key`, `--config`, `--config-file`, `--credentials` |
 
 ### Infrastructure Constants (`remote.rs:17-19`, `eggsec-core/src/constants.rs:27-28`)
@@ -326,16 +329,16 @@ Wraps a `StreamWrapper` with newline-delimited JSON framing:
 | `RATE_LIMIT_WINDOW_SECS` | 60 seconds | `remote.rs:19` |
 | `DEFAULT_TASK_QUEUE_CAPACITY` | 10,000 | `eggsec-core/src/constants.rs:27` |
 | `WORKER_STALE_TIMEOUT_SECS` | 90 seconds | `eggsec-core/src/constants.rs:28` |
-| DNS cache TTL | 60 seconds | `remote.rs:705` |
+| DNS cache TTL | 60 seconds | `remote.rs:803` |
 | Connect timeout | 5 seconds | `remote.rs:742` |
 | Auth response timeout | 10 seconds | `remote.rs:788` |
-| Heartbeat response timeout | 5 seconds | `remote.rs:883` |
-| Result response timeout | 10 seconds | `remote.rs:928` |
-| Task request response timeout | 10 seconds | `remote.rs:975` |
-| Worker task processing timeout | 300 seconds | `worker.rs:409-410` |
-| Task request polling interval | 5 seconds | `worker.rs:269` |
-| Heartbeat interval | 30 seconds (configurable) | `worker.rs:62,198` |
-| Stale task reassignment interval | 30 seconds | `remote.rs:237` |
+| Heartbeat response timeout | 5 seconds | `remote.rs:948` |
+| Result response timeout | 10 seconds | `remote.rs:994` |
+| Task request response timeout | 10 seconds | `remote.rs:1039` |
+| Worker task processing timeout | 300 seconds | `worker.rs:26` |
+| Task request polling interval | 5 seconds | `worker.rs:350` |
+| Heartbeat interval | 30 seconds (configurable) | `worker.rs:149,301` |
+| Stale task reassignment interval | 30 seconds | `remote.rs:304` |
 
 ## Behavior / Flow
 
@@ -364,7 +367,7 @@ Worker                                          Coordinator
   │   [connection stays open for command loop]     │
 ```
 
-### PSK Authentication (`remote.rs:340-355`)
+### PSK Authentication (`remote.rs:385-427`)
 
 The PSK comparison uses `subtle::ConstantTimeEq`:
 
@@ -393,7 +396,7 @@ This prevents timing side-channel attacks on the PSK comparison. The PSK is gene
                → tasks assigned > 90s ago return to pending with cleared worker_id/assigned_at
 ```
 
-### Worker Start Flow (`worker.rs:140-152`)
+### Worker Start Flow (`worker.rs:233-252`)
 
 ```rust
 worker.start().await?;
@@ -404,11 +407,11 @@ worker.start().await?;
   └─ start_task_processing_loop()     // tokio::spawn, per-task dispatch
 ```
 
-### Worker Shutdown (`worker.rs:434-464`)
+### Worker Shutdown (`worker.rs:603-640`)
 
 `shutdown()` sends `true` via `watch::Sender<bool>`, then aborts all three `JoinHandle`s (heartbeat, task request, task processor). `Drop` performs the same cleanup defensively.
 
-### Worker Task Processing (`worker.rs:332-427`)
+### Worker Task Processing (`worker.rs:416-600`)
 
 Each task is spawned as an independent tokio task with a 300-second timeout:
 
@@ -422,25 +425,25 @@ tokio::spawn(async move {
 });
 ```
 
-With `tool-api`/`rest-api`/`grpc-api`, `process_task()` (`worker.rs:468-515`) routes through `EnforcedDispatcher::dispatch_checked()` with an `AgentStrict` enforcement context. Without those features, it returns an error.
+With `tool-api`/`rest-api`/`grpc-api`, `process_task()` (`worker.rs:644-692`) routes through `EnforcedDispatcher::dispatch_checked()` with a `SecurityAgent` enforcement context. Without those features, it returns an error.
 
 ### Background Tasks
 
 | Task | Interval | Location | Purpose |
 |------|----------|----------|---------|
-| Rate limit cleanup | 60s | `remote.rs:219-232` | Remove stale per-IP timestamp vectors |
-| Stale task reassignment | 30s | `remote.rs:236-250` | Return timed-out tasks to pending queue |
+| Rate limit cleanup | 60s | `remote.rs:286-302` | Remove stale per-IP timestamp vectors |
+| Stale task reassignment | 30s | `remote.rs:303-310` | Return timed-out tasks to pending queue |
 
 ### Capability Matching
 
-When a worker registers, the coordinator filters its claimed capabilities against `CAPABILITIES` (`remote.rs:440-444`). Unknown capabilities are logged and discarded. The coordinator stores only validated capabilities in `WorkerRegistration`.
+When a worker registers, the coordinator filters its claimed capabilities against `CAPABILITIES` (`remote.rs:524-530`). Unknown capabilities are logged and discarded. The coordinator stores only validated capabilities in `WorkerRegistration`.
 
 ## Security Model
 
 ### PSK + TLS
 
 - **PSK**: 32-byte random hex string (`generate_psk()` at `command.rs:279-287`). Generated via `OsRng` (getrandom), not a fork-reproducible PRNG.
-- **Constant-time compare**: `subtle::ConstantTimeEq` prevents timing attacks on PSK validation (`remote.rs:346`).
+- **Constant-time compare**: `subtle::ConstantTimeEq` prevents timing attacks on PSK validation (`remote.rs:427`).
 - **TLS**: Optional, using `rustls`. Server loads PEM cert/key. Client uses `NoVerifier` (insecure-tls feature) or webpki_roots for proper verification.
 - **Plaintext fallback**: `new_plaintext()` methods exist but log warnings. Both `start()` and `connect_to_coordinator_with_addr()` reject plaintext unless explicitly opted in.
 
@@ -451,7 +454,7 @@ When a worker registers, the coordinator filters its claimed capabilities agains
 3. **Rate limiting**: 60 connections/minute per IP prevents rapid brute-force attempts.
 4. **Connection limits**: Max 100 concurrent connections prevents resource exhaustion.
 5. **Command executor sandboxing** (`command.rs:129-249`): Only `eggsec` binary allowed; forbidden path patterns; max 50 args, 1000 chars each; 10MB output limit; no custom environment variables.
-6. **Enforcement context**: When `tool-api` is enabled, workers wrap task processing in `EnforcementContext::agent_strict()`, which validates scope and policy for every dispatched task (`worker.rs:490-498`).
+6. **Enforcement context**: When `tool-api` is enabled, workers wrap task processing in an `EnforcementContext` approving against the `SecurityAgent` surface, which validates scope and policy for every dispatched task (`worker.rs:671-677`).
 
 ### Command Executor Security (`command.rs:129-249`)
 
@@ -541,7 +544,7 @@ pub use remote::{RemoteClient, RemoteListener, TlsConfig};
 | CLI `cluster execute` | `handle_cluster()` | Creates `RemoteClient`, calls `execute()` |
 | CLI `cluster generate-psk` | `handle_cluster()` | Calls `generate_psk()` |
 
-### Worker Task Processors (`worker.rs:525-870`)
+### Worker Task Processors (`worker.rs:694-1000`)
 
 | Processor | Function | Engine call |
 |-----------|----------|-------------|
@@ -553,7 +556,7 @@ pub use remote::{RemoteClient, RemoteListener, TlsConfig};
 | LoadTest | `process_load_test()` | `loadtest::LoadTestRunner::from_config_with_engine().run()` |
 | Recon | `process_recon()` | `recon::runner::run_full_recon_from_request()` |
 
-Note: The standalone `process_*` functions (`worker.rs:525-870`) are marked `#[allow(dead_code)]`. When `tool-api`/`rest-api`/`grpc-api` is enabled, `process_task()` routes through `EnforcedDispatcher` instead of calling these functions directly.
+Note: The standalone `process_*` functions (`worker.rs:694-1010`) are marked `#[allow(dead_code)]`. When `tool-api`/`rest-api`/`grpc-api` is enabled, `process_task()` routes through `EnforcedDispatcher` instead of calling these functions directly.
 
 ## Testing
 
@@ -574,11 +577,11 @@ cargo test -p eggsec --test distributed_tests
 
 1. **One-shot vs session connections**: the one-shot `RemoteClient` methods (`register_worker`, `send_heartbeat`, `send_result`, `request_tasks`, `execute`, `request_status`, `enqueue_task`) each open a fresh connection, authenticate, send one message, wait for response, and drop it. The worker's steady-state path instead multiplexes over one `CoordinatorSession` per healthy lifetime (one setup, not one per message); only the session reuses connections.
 2. **DNS caching**: `RemoteClient` caches DNS resolution for 60 seconds (`remote.rs:702-715`). Cached addresses are not re-validated for reachability.
-3. **Worker registration requires TLS domain**: `WorkerConfig::default()` sets `tls_domain: Some("localhost")`. If `tls_domain` is `None`, registration, heartbeat, and task processing all fail (`worker.rs:159-161,208-211,394-397`).
+3. **Worker registration requires TLS domain**: `WorkerConfig::default()` sets `tls_domain: Some("localhost")`. If `tls_domain` is `None`, registration fails (`worker.rs:262`).
 4. **Completed results eviction**: `TaskQueue::complete()` evicts the oldest results when completed count exceeds `max_size` (`queue.rs:117-119`).
 5. **No task cancellation**: Once a task is spawned for processing, there is no mechanism to cancel it. The 300-second timeout is the only abort path.
-6. **`process_task()` returns error without `tool-api`**: Without `tool-api`, `rest-api`, or `grpc-api`, the worker's task processor always fails (`worker.rs:517-523`).
-7. **Rate limit cleanup is background-only**: The periodic cleanup task (`remote.rs:219-232`) runs every 60 seconds. Burst connections within a window may not be cleaned until the next tick.
+6. **`process_task()` returns error without `tool-api`**: Without `tool-api`, `rest-api`, or `grpc-api`, the worker's task processor always fails (`worker.rs:693-699`).
+7. **Rate limit cleanup is background-only**: The periodic cleanup task (`remote.rs:286-302`) runs every 60 seconds. Burst connections within a window may not be cleaned until the next tick.
 8. **`env` field in `CommandMessage::Execute` is accepted but rejected**: The protocol accepts the field for backward compatibility, but `CommandExecutor::execute()` always rejects it with an error (`command.rs:169-178`).
 
 ## Links
@@ -590,4 +593,4 @@ cargo test -p eggsec --test distributed_tests
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; line cites + worker/remote struct ranges corrected 2026-09-25 (systematic review)*

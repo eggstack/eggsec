@@ -185,7 +185,7 @@ Utility function that warns if a config file has overly permissive permissions.
 
 Uses `std::os::unix::fs::PermissionsExt` to read mode. Recommended mode: `0o600`.
 
-**Used by**: `crates/eggsec/src/config/loader.rs:9` — called during config file loading.
+**Used by**: `crates/eggsec/src/config/loader.rs:10` (imported; called at `:54` and `:93`) — called during config file loading.
 
 ---
 
@@ -210,7 +210,7 @@ Uses `std::os::unix::fs::PermissionsExt` to read mode. Recommended mode: `0o600`
 | Engine `compliance/` (4 files) | `crate::types::Severity` | Compliance finding severity |
 | Engine `config/` | `crate::types::SensitiveString` | Config secrets (settings, HTTP, scan) |
 | Engine `pipeline/` | `crate::types::{CommonHttpArgs, ScanProfile}` | Pipeline stage configuration |
-| Engine `cli/mod.rs` | Re-exported at `:570` | `pub use crate::types::{CommonHttpArgs, OutputFormat, ScanProfile}` |
+| Engine `cli/mod.rs` | Re-exported at `:578` | `pub use crate::types::{CommonHttpArgs, OutputFormat, ScanProfile}` |
 | `eggsec-tui` (10+ files) | `eggsec::types::*` | Scan profile selection, output format, proxy credentials |
 
 ### SensitiveString — workspace usage
@@ -286,4 +286,4 @@ Tests live in both `crates/eggsec-core/src/types.rs:282-477` and `crates/eggsec/
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; cites re-verified and 2 line cites fixed (`cli/mod.rs:578`, `config/loader.rs:10`) 2026-09-25 (systematic review)*

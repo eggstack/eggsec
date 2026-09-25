@@ -62,7 +62,7 @@ Defined at `probe.rs:33`. Derives `Hash`, `Copy`, `Clone`, `Debug`, `PartialEq`,
 
 ### ProbeRisk → OperationRisk Mapping
 
-`ProbeRisk::to_operation_risk()` (`probe.rs:69`) converts the 6-tier probe vocabulary to the 15-tier enforcement vocabulary defined in `config/policy.rs:9`:
+`ProbeRisk::to_operation_risk()` (`probe.rs:69-79`) converts the 6-tier probe vocabulary to the 15-tier enforcement vocabulary defined in `eggsec-policy/src/policy.rs:9` (re-exported as `crate::config::OperationRisk`):
 
 | ProbeRisk | OperationRisk | Enforcement Gate |
 |-----------|---------------|-----------------|
@@ -160,10 +160,10 @@ The module defines only enums — no configuration structs. Risk budgets are con
 
 ## Testing
 
-- **Serialization round-trip**: All 7 `ProbeIntent` and 6 `ProbeRisk` variants verified to serialize to expected kebab-case JSON (`probe.rs:86-128`).
-- **Risk ordering**: Explicit assertions that `Passive < SafeActive < Intrusive < Credentialed < Stress < ExploitAdjacent` (`probe.rs:131-137`).
-- **Opt-in gating**: All 6 variants verified for `requires_opt_in()` correctness (`probe.rs:140-147`).
-- **OperationRisk mapping**: Each `ProbeRisk` variant maps to the correct `OperationRisk` variant (`probe.rs:69-78`).
+- **Serialization round-trip**: All 7 `ProbeIntent` and 6 `ProbeRisk` variants verified to serialize to expected kebab-case JSON (`probe.rs:86-129`).
+- **Risk ordering**: Explicit assertions that `Passive < SafeActive < Intrusive < Credentialed < Stress < ExploitAdjacent` (`probe.rs:131-138`).
+- **Opt-in gating**: All 6 variants verified for `requires_opt_in()` correctness (`probe.rs:140-148`).
+- **OperationRisk mapping**: `to_operation_risk()` body at `probe.rs:69-79`; no dedicated mapping test exists (only serialization/ordering/opt-in tests) — mapping verified by inspection.
 
 ## Invariants & Gotchas
 
@@ -185,4 +185,4 @@ The module defines only enums — no configuration structs. Risk budgets are con
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; paths/test-lines re-verified 2026-09-25 (systematic review)*

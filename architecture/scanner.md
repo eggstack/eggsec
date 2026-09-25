@@ -35,13 +35,13 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 112 | Module declarations, re-exports, doc examples |
-| `ports/mod.rs` | 781 | TCP connect scan, `scan_ports()`, CLI/tool-api paths |
-| `ports/spoofed.rs` | 647 | Raw-socket spoofed scanning, packet trace, response parsing |
-| `endpoints.rs` | 1168 | HTTP endpoint discovery, `scan_endpoints()`, wordlist integration |
-| `fingerprint.rs` | 837 | TCP service fingerprinting, `fingerprint_services()`, `fingerprint_port()` |
+| `mod.rs` | 116 | Module declarations, re-exports, doc examples |
+| `ports/mod.rs` | 810 | TCP connect scan, `scan_ports()`, CLI/tool-api paths |
+| `ports/spoofed.rs` | 665 | Raw-socket spoofed scanning, packet trace, response parsing |
+| `endpoints.rs` | 1202 | HTTP endpoint discovery, `scan_endpoints()`, wordlist integration |
+| `fingerprint.rs` | 841 | TCP service fingerprinting, `fingerprint_services()`, `fingerprint_port()` |
 | `fingerprint_types.rs` | 188 | `FingerprintConfidence`, `ServiceIdentity`, `EnhancedFingerprint` |
-| `udp_fingerprint.rs` | 533 | UDP service fingerprinting, `fingerprint_udp_services()` |
+| `udp_fingerprint.rs` | 601 | UDP service fingerprinting, `fingerprint_udp_services()` |
 | `icmp_probe.rs` | 293 | ICMP echo, `ping_host()` |
 | `timing.rs` | 275 | `TimingPreset` (6 presets T0–T5), `TimingConfig`, `PortPriority`, `RetryConfig` |
 | `spoof.rs` | 599 | `SpoofConfig`, `ScanType`, `DecoyMode`, packet builders, CIDR utilities |
@@ -63,29 +63,29 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 
 | Type | Location | Fields/Variants | Notes |
 |------|----------|-----------------|-------|
-| `PortScanConfig` | `ports/mod.rs:36` | `ports`, `concurrency`, `timeout_duration`, `tui_mode`, `spoof_config`, `progress_tx`, `max_results` | Default: concurrency=100, timeout=3s |
-| `PortScanRequest` | `ports/mod.rs:74` | `host`, `ports`, `concurrency`, `timeout`, `spoof_config`, `dry_run` | Engine-facing contract (no Clap) |
-| `PortResult` | `ports/mod.rs:131` | `port`, `status`, `service` | Per-port result |
-| `PortScanResults` | `ports/mod.rs:137` | `host`, `ports_scanned`, `open_ports`, `total_open_ports`, `duration_ms`, `spoof_stats` | Aggregate results |
-| `MAX_SCAN_RESULTS` | `ports/mod.rs:29` | `10000` | Hard cap to bound memory |
+| `PortScanConfig` | `ports/mod.rs:41` | `ports`, `concurrency`, `timeout_duration`, `tui_mode`, `spoof_config`, `progress_tx`, `max_results` | Default: concurrency=100, timeout=3s |
+| `PortScanRequest` | `ports/mod.rs:79` | `host`, `ports`, `concurrency`, `timeout`, `spoof_config`, `dry_run` | Engine-facing contract (no Clap) |
+| `PortResult` | `ports/mod.rs:136` | `port`, `status`, `service` | Per-port result |
+| `PortScanResults` | `ports/mod.rs:143` | `host`, `ports_scanned`, `open_ports`, `total_open_ports`, `duration_ms`, `spoof_stats` | Aggregate results |
+| `MAX_SCAN_RESULTS` | `ports/mod.rs:34` | `10000` | Hard cap to bound memory |
 | `ScanType` | `spoof.rs:21` | `Syn`, `Null`, `Fin`, `Xmas` | Default: `Syn` |
 
 ### Key Types — Endpoint Discovery
 
 | Type | Location | Fields | Notes |
 |------|----------|--------|-------|
-| `EndpointScanConfig` | `endpoints.rs:23` | `base_url`, `endpoints`, `concurrency`, `timeout_duration`, `include_404`, `tui_mode`, `spoof_config`, `verify_tls`, `progress_tx`, `max_results` | |
-| `EndpointScanRequest` | `endpoints.rs:42` | `url`, `wordlist`, `concurrency`, `timeout`, `include_404`, `spoof_config` | Engine-facing contract |
-| `EndpointResult` | `endpoints.rs:446` | `path`, `status_code`, `status_text`, `content_length`, `response_time_ms`, `redirect`, `interesting` | `interesting` set by `is_interesting()` |
-| `EndpointScanResults` | `endpoints.rs:457` | `base_url`, `endpoints_scanned`, `endpoints_found`, `total_endpoints_matched`, `interesting_findings`, `duration_ms`, `results` | |
+| `EndpointScanConfig` | `endpoints.rs:26` | `base_url`, `endpoints`, `concurrency`, `timeout_duration`, `include_404`, `tui_mode`, `spoof_config`, `verify_tls`, `progress_tx`, `max_results` | |
+| `EndpointScanRequest` | `endpoints.rs:45` | `url`, `wordlist`, `concurrency`, `timeout`, `include_404`, `spoof_config` | Engine-facing contract |
+| `EndpointResult` | `endpoints.rs:449` | `path`, `status_code`, `status_text`, `content_length`, `response_time_ms`, `redirect`, `interesting` | `interesting` set by `is_interesting()` |
+| `EndpointScanResults` | `endpoints.rs:460` | `base_url`, `endpoints_scanned`, `endpoints_found`, `total_endpoints_matched`, `interesting_findings`, `duration_ms`, `results` | |
 
 ### Key Types — Fingerprinting
 
 | Type | Location | Notes |
 |------|----------|-------|
-| `FingerprintRequest` | `fingerprint.rs:30` | `host`, `ports`, `timeout`, `udp`, `concurrency` |
-| `ServiceFingerprint` | `fingerprint.rs:117` | `port`, `service`, `banner`, `version`, `product`, `extra`, `confidence` (u8) |
-| `FingerprintResults` | `fingerprint.rs:128` | `host`, `ports_scanned`, `services_identified`, `total_services_identified`, `duration_ms`, `results` |
+| `FingerprintRequest` | `fingerprint.rs:34` | `host`, `ports`, `timeout`, `udp`, `concurrency` |
+| `ServiceFingerprint` | `fingerprint.rs:121` | `port`, `service`, `banner`, `version`, `product`, `extra`, `confidence` (u8) |
+| `FingerprintResults` | `fingerprint.rs:132` | `host`, `ports_scanned`, `services_identified`, `total_services_identified`, `duration_ms`, `results` |
 | `FingerprintConfidence` | `fingerprint_types.rs:9` | `Unknown` < `Low` < `Medium` < `High` < `Confirmed` (5 levels, derives `Ord`) |
 | `EvidenceType` | `fingerprint_types.rs:45` | `Banner`, `TlsCertificate`, `TlsAlpn`, `HttpHeader`, `HttpResponse`, `ProtocolNegotiation`, `DnsRecord`, `PortState` (8 variants) |
 | `FingerprintEvidence` | `fingerprint_types.rs:36` | `kind`, `raw_value`, `redacted_value`, `confidence_contribution` |
@@ -145,7 +145,7 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 ### Port Scan Lifecycle
 
 ```
-scan_ports(host, config)                     [ports/mod.rs:531]
+scan_ports(host, config)                     [ports/mod.rs:538]
   ├─ concurrency == 0? → error
   ├─ spoof_config.enabled && use_raw_sockets?
   │   └─ YES → scan_ports_spoofed()          [ports/spoofed.rs:106]
@@ -172,12 +172,12 @@ scan_ports(host, config)                     [ports/mod.rs:531]
       └─ truncate to MAX_SCAN_RESULTS (10,000)
 ```
 
-**Result bounds**: `MAX_SCAN_RESULTS = 10,000` (`ports/mod.rs:29`) caps returned results. The `max_results` field on config provides a caller-requested lower cap. Both enforce memory safety under high-port-count scans.
+**Result bounds**: `MAX_SCAN_RESULTS = 10,000` (`ports/mod.rs:34`) caps returned results. The `max_results` field on config provides a caller-requested lower cap. Both enforce memory safety under high-port-count scans.
 
 ### Endpoint Discovery Flow
 
 ```
-scan_endpoints(config)                       [endpoints.rs:992]
+scan_endpoints(config)                       [endpoints.rs:995]
   ├─ install_tls_provider()
   ├─ concurrency == 0? → error
   ├─ build reqwest::Client (timeout, TLS verification, redirect policy: max 5)
@@ -198,19 +198,19 @@ scan_endpoints(config)                       [endpoints.rs:992]
   └─ truncate to MAX_SCAN_RESULTS (100,000)
 ```
 
-**Wordlist integration**: Custom wordlists are loaded via `Wordlist::from_file()` (`wordlist.rs:19`) which normalizes paths (ensures leading `/`), skips `#` comments and blank lines, rejects paths > 2048 chars, whitespace, control characters, and traversal components (`.`/`..`). If no wordlist is provided, `DEFAULT_ENDPOINTS` (347 paths, `endpoints.rs:95`) is used.
+**Wordlist integration**: Custom wordlists are loaded via `Wordlist::from_file()` (`wordlist.rs:19`) which normalizes paths (ensures leading `/`), skips `#` comments and blank lines, rejects paths > 2048 chars, whitespace, control characters, and traversal components (`.`/`..`). If no wordlist is provided, `DEFAULT_ENDPOINTS` (347 paths, `endpoints.rs:98`) is used.
 
-**Interesting path detection**: `is_interesting()` (`endpoints.rs:497`) matches against 88 sensitive patterns (`.env`, `.git`, `credentials`, `admin`, `wp-config`, `actuator/heapdump`, `swagger`, `jenkins`, etc.) only on HTTP 200, 403, or 401 status codes. Matching is case-insensitive with segment-based partial matching.
+**Interesting path detection**: `is_interesting()` (`endpoints.rs:500`) matches against 88 sensitive patterns (86 unique — `wp-config` and `id_rsa` each listed twice; `.env`, `.git`, `credentials`, `admin`, `wp-config`, `actuator/heapdump`, `swagger`, `jenkins`, etc.) only on HTTP 200, 403, or 401 status codes. Matching is case-insensitive with segment-based partial matching.
 
 ### Fingerprint Scoring Flow
 
 ```
-fingerprint_services(host, ports, ...)       [fingerprint.rs:316]
+fingerprint_services(host, ports, ...)       [fingerprint.rs:320]
   ├─ concurrency == 0? → error
   ├─ resolve_host()
   ├─ for each port (semaphore-controlled):
   │   ├─ tokio::spawn with 300s timeout wrapper
-  │   ├─ fingerprint_port(resolved_ip, port, timeout)  [fingerprint.rs:431]
+  │   ├─ fingerprint_port(resolved_ip, port, timeout)  [fingerprint.rs:435]
   │   │   ├─ select probes_to_try:
   │   │   │   ├─ Known port → port-specific probe (e.g., 22→SSH, 3306→MySQL)
   │   │   │   └─ Unknown port → fall back to static PROBES list (45 entries)
@@ -229,9 +229,9 @@ fingerprint_services(host, ports, ...)       [fingerprint.rs:316]
   └─ aggregate results, sort by port
 ```
 
-**PROBES static** (`fingerprint.rs:68-114`): **45** protocol probes covering HTTP, SSH, SMTP, FTP, MySQL, Redis, MongoDB, PostgreSQL, Memcached, RDP, VNC, Telnet, XMPP, LDAP, SMB, Elasticsearch, Kafka, Zookeeper, RabbitMQ, Cassandra, CouchDB, Docker, Kubernetes, Etcd, Consul, Nats, InfluxDB, MSSQL, Oracle, Rsyncd, Couchbase, OpenVPN, WinRM, Jenkins, ActiveMQ, WebSocket, gRPC, Caddy, Harbor, GitLab, MinIO, Nginx, Apache, and IIS.
+**PROBES static** (`fingerprint.rs:72-118`): **45** protocol probes covering HTTP, SSH, SMTP, FTP, MySQL, Redis, MongoDB, PostgreSQL, Memcached, RDP, VNC, Telnet, XMPP, LDAP, SMB, Elasticsearch, Kafka, Zookeeper, RabbitMQ, Cassandra, CouchDB, Docker, Kubernetes, Etcd, Consul, Nats, InfluxDB, MSSQL, Oracle, Rsyncd, Couchbase, OpenVPN, WinRM, Jenkins, ActiveMQ, WebSocket, gRPC, Caddy, Harbor, GitLab, MinIO, Nginx, Apache, and IIS.
 
-**Port-specific overrides**: `fingerprint_port()` (`fingerprint.rs:438`) uses targeted single-probe arrays for ~35 known ports (e.g., 22→SSH, 53→DNS, 3306→MySQL, 6379→Redis, 27017→MongoDB, 502→Modbus/ICS, 47808→BACnet) before falling back to the full PROBES list for unknown ports.
+**Port-specific overrides**: `fingerprint_port()` (`fingerprint.rs:435`) uses targeted single-probe arrays for ~35 known ports (e.g., 22→SSH, 53→DNS, 3306→MySQL, 6379→Redis, 27017→MongoDB, 502→Modbus/ICS, 47808→BACnet) before falling back to the full PROBES list for unknown ports.
 
 ### CMS Scanning Flow
 
@@ -315,11 +315,11 @@ TemplateEngine::scan(target)                [executor.rs:290]
 ```rust
 // Port scanning
 pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanResults>;
-// ports/mod.rs:531
+// ports/mod.rs:538
 
 // Endpoint discovery
 pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanResults>;
-// endpoints.rs:992
+// endpoints.rs:995
 
 // Service fingerprinting (TCP)
 pub async fn fingerprint_services(
@@ -327,7 +327,7 @@ pub async fn fingerprint_services(
     tui_mode: bool, concurrency: usize,
     progress_tx: Option<Sender<(u64, u64)>>, max_results: Option<usize>,
 ) -> Result<FingerprintResults>;
-// fingerprint.rs:316
+// fingerprint.rs:320
 
 // ICMP host discovery (feature-gated: stress-testing)
 pub async fn ping_host(target: &str, count: u32, timeout: Duration, interval: Duration)
@@ -344,9 +344,9 @@ pub async fn fingerprint_udp_services(
 ### CLI Wrappers (feature-gated: cli)
 
 ```rust
-pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()>;           // ports/mod.rs:169
-pub async fn run_cli(args: EndpointScanArgs, config: &EggsecConfig) -> Result<()>;       // endpoints.rs:744
-pub async fn run_cli(args: FingerprintArgs, config: &EggsecConfig) -> Result<()>;        // fingerprint.rs:182
+pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()>;           // ports/mod.rs:175
+pub async fn run_cli(args: EndpointScanArgs, config: &EggsecConfig) -> Result<()>;       // endpoints.rs:747
+pub async fn run_cli(args: FingerprintArgs, config: &EggsecConfig) -> Result<()>;        // fingerprint.rs:186
 ```
 
 ### Tool-API Callbacks (feature-gated: tool-api)
@@ -441,17 +441,17 @@ impl TemplateEngine {
 | `ports/spoofed.rs:288-295` | Fragmented packets never populated `sent_packets` map, causing all responses to be silently dropped | Added `sent_packets.insert()` after sending fragments |
 | `spoof.rs:126` | `max_rate=0` caused division by zero panic in spoofed scan rate limiting | Added validation: `max_rate` must be > 0 |
 | `templates/marketplace.rs:176` | `template_id` path traversal via unsanitized IDs | Added validation rejecting `/`, `\`, `..` in template IDs |
-| `udp_fingerprint.rs:301-320` | `TokenBucket` race condition in refill (non-atomic read-modify-write) | Refactored to use `compare_exchange` loop in `refill()` |
+| `udp_fingerprint.rs:334-347` | `TokenBucket` race condition in refill (non-atomic read-modify-write) | Refactored to use `compare_exchange` loop in `refill()` |
 | `spoof.rs:432` | `build_fragmented_packets` over-allocated buffer causing trailing zeros on wire for last fragment | Changed to `vec![0u8; 20 + chunk.len()]` for exact per-fragment sizing |
 
 ## Invariants & Gotchas
 
 1. **Policy-free executors**: Scanner modules never touch `EnforcementContext`. All authorization is upstream in dispatch.
 2. **Timeout wrapper invariant**: Every `tokio::spawn` in scanner code carries a `tokio::time::timeout(300s)` wrapper. Stuck sends/receives cannot leak forever.
-3. **MAX_SCAN_RESULTS differs**: Port scanning caps at 10,000 (`ports/mod.rs:29`); endpoint scanning caps at 100,000 (`endpoints.rs:21`). Both truncate silently.
+3. **MAX_SCAN_RESULTS differs**: Port scanning caps at 10,000 (`ports/mod.rs:34`); endpoint scanning caps at 100,000 (`endpoints.rs:24`). Both truncate silently.
 4. **Concurrency = 0 rejected**: `scan_ports()`, `scan_endpoints()`, and `fingerprint_services()` all return an error for `concurrency == 0`.
 5. **ICMP/raw sockets require both `stress-testing` feature AND Unix**: `icmp_probe.rs` is `#![cfg(feature = "stress-testing")]`; spoofed scanning is `#[cfg(all(feature = "stress-testing", unix))]`.
-6. **Endpoint path traversal blocked**: `join_endpoint_url()` (`endpoints.rs:621`) rejects `.` and `..` path components. `Wordlist` parser also rejects traversal.
+6. **Endpoint path traversal blocked**: `join_endpoint_url()` (`endpoints.rs:624`) rejects `.` and `..` path components. `Wordlist` parser also rejects traversal.
 7. **Template ID traversal blocked**: Both `TemplateLoader::validate_template()` (`loader.rs:48`) and `validate_template_id()` (`marketplace.rs:42`) reject `/`, `\`, `..`, and `\0` in template IDs.
 8. **CMS version compare is numeric-only**: `version_lt()` (`cms/mod.rs:315`) strips non-digit suffixes and compares component-wise. Pre-release suffixes are ignored.
 9. **Regex cache unbounded**: `REGEX_CACHE` (`matcher.rs:15`) is a global `DashMap` with no eviction. Templates with many unique regex patterns will grow memory monotonically.
@@ -470,4 +470,4 @@ impl TemplateEngine {
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; counts/line-cites re-verified 2026-09-25 (systematic review)*

@@ -15,7 +15,7 @@ Compliance scanning and reporting against four major security frameworks: OWASP 
 | `crates/eggsec/src/compliance/soc2.rs` | `compliance` |
 | `crates/eggsec/src/compliance/report.rs` | `compliance` |
 
-When the feature is disabled, `lib.rs:94-96` compiles the module as `#[allow(dead_code)] mod compliance` (private, unused). The `ComplianceReport` variant in `TaskResult` is gated at `dispatch/types.rs:118-119`.
+When the feature is disabled, `lib.rs:94-96` compiles the module as `#[allow(dead_code)] mod compliance` (private, unused). The `ComplianceReport` variant in `TaskResult` is gated at `dispatch/types.rs:119`.
 
 ## Key Types
 
@@ -23,10 +23,10 @@ When the feature is disabled, `lib.rs:94-96` compiles the module as `#[allow(dea
 |------|----------|-------------|
 | `ComplianceFramework` | `compliance/mod.rs:64` | Enum (4 variants): `OWASP`, `PCIDSS`, `HIPAA`, `SOC2` |
 | `ComplianceReport` | `compliance/mod.rs:22` | Report: framework, target, overall_score, total_requirements, passed, failed, findings |
-| `ComplianceFinding` | `compliance/mod.rs:32` | Individual check: requirement_id, description, severity, status, remediation |
-| `ComplianceStatus` | `compliance/mod.rs:41` | Enum (4 variants): `Pass`, `Fail`, `NotApplicable`, `NeedsReview` |
-| `ComplianceSummary` | `compliance/report.rs:4` | Summary: framework, score, risk_level, top_findings (up to 5 critical/high IDs) |
-| `RiskLevel` | `compliance/report.rs:12` | Enum (4 variants): `Low` (>=90), `Medium` (>=70), `High` (>=50), `Critical` (<50) |
+| `ComplianceFinding` | `compliance/mod.rs:33` | Individual check: requirement_id, description, severity, status, remediation |
+| `ComplianceStatus` | `compliance/mod.rs:42` | Enum (4 variants): `Pass`, `Fail`, `NotApplicable`, `NeedsReview` |
+| `ComplianceSummary` | `compliance/report.rs:5` | Summary: framework, score, risk_level, top_findings (up to 5 critical/high IDs) |
+| `RiskLevel` | `compliance/report.rs:13` | Enum (4 variants): `Low` (>=90), `Medium` (>=70), `High` (>=50), `Critical` (<50) |
 
 ## Architecture
 
@@ -125,9 +125,9 @@ Each framework module:
 - `target: &str` — Target URL. Checked for `https://` prefix (`target.starts_with("https://")`).
 - `findings: &[Severity]` — List of severity levels from scan results. Used to detect presence of Critical/High/Medium/Low findings.
 
-### Dispatch flow (`dispatch/security.rs:59-114`)
+### Dispatch flow (`dispatch/security.rs:60-206`)
 
-`run_compliance_task()` performs a lightweight pre-scan:
+`run_compliance_task()` (`dispatch/security.rs:60`) performs a lightweight pre-scan:
 1. HTTP GET to target (10s timeout).
 2. Collects severity findings from response headers:
    - Non-HTTPS → `Severity::High`
@@ -171,16 +171,16 @@ No credentials are involved. The compliance module operates on in-memory data (f
 ### Dispatch
 
 - `TaskKind::Compliance` (`dispatch/mod.rs:268-276`): Dispatches to `run_compliance_task()`. Returns `TaskResult::Compliance(ComplianceReport)`.
-- `dispatch/security.rs:59-114`: Pre-scan collects header-based findings, then calls `generate_compliance_report()`.
+- `dispatch/security.rs:60-206`: Pre-scan collects header-based findings, then calls `generate_compliance_report()` (`security.rs:196`).
 
 ### TUI
 
-- **Compliance tab** (`tabs/compliance.rs`): Gated behind `compliance` feature (`tabs/mod.rs:8,70`).
+- **Compliance tab** (`tabs/compliance.rs`): Gated behind `compliance` feature (`tabs/mod.rs:8-9,75-76`).
 - **Framework selector**: 4-item selector mapping to `ComplianceFramework` variants (`compliance.rs:37-42, 65-71`).
 - **Results display**: Score, risk level, pass/fail counts, finding details (`compliance.rs:74-128`).
-- **Tab spec** (`tabs/spec.rs:484-493`): CLI command `eggsec compliance`, description "Generate compliance reports".
-- **Task dispatch** (`app/task_dispatcher.rs:160-161`): Handles `TaskResult::Compliance(r)`.
-- **State update** (`app/state_update.rs:359-361`): Stores report in `tabs.compliance.set_report(r)`.
+- **Tab spec** (`tabs/spec.rs:538-542`): CLI command `eggsec compliance`, description "Generate compliance reports (OWASP, PCI, HIPAA, SOC2)".
+- **Task dispatch** (`app/task_dispatcher.rs`): Handles `TaskResult::Compliance(r)`.
+- **State update** (`app/state_update.rs:361`): Stores report in `tabs.compliance.set_report(r)`.
 
 ### Python bindings
 
@@ -221,4 +221,4 @@ No credentials are involved. The compliance module operates on in-memory data (f
 | NeedsReview not counted as failed | `mod.rs:119-132` | Design | Controls with `NeedsReview` status are not counted toward `failed` in the score. This is intentional but may understate risk for controls that require human review. |
 | No `NotApplicable` in generated reports | All framework files | Note | While `ComplianceStatus::NotApplicable` is defined, no framework module currently generates this status. All controls always produce `Pass`, `Fail`, or `NeedsReview`. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25*

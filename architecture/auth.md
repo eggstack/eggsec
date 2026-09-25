@@ -23,11 +23,11 @@ This is a **standalone defense-lab surface** — it emits local `AuthTestReport`
 | File | Lines | Types Defined |
 |------|-------|---------------|
 | `auth/mod.rs` | 309 | `AuthEngine`, `AuthTestReport`, `AuthTestType`, `AuthFinding`, `AUTH_BANNER` |
-| `auth/brute_force.rs` | 181 | `BruteForceTester`, `BruteForceResult`, `WeakCredential` |
-| `auth/credential_stuffing.rs` | 201 | `CredentialStuffer`, `CredentialStuffingResult`, `CompromisedAccount`, `CredentialPair` |
-| `auth/lockout.rs` | 217 | `LockoutDetector`, `LockoutDetectionResult`, `LockoutType` |
-| `auth/mfa.rs` | 170 | `MfaTester`, `MfaTestResult`, `MfaBypassMethod` |
-| `auth/password_policy.rs` | 229 | `PasswordPolicyTester`, `PasswordPolicyResult` |
+| `auth/brute_force.rs` | 201 | `BruteForceTester`, `BruteForceResult`, `WeakCredential` |
+| `auth/credential_stuffing.rs` | 217 | `CredentialStuffer`, `CredentialStuffingResult`, `CompromisedAccount`, `CredentialPair` |
+| `auth/lockout.rs` | 236 | `LockoutDetector`, `LockoutDetectionResult`, `LockoutType` |
+| `auth/mfa.rs` | 176 | `MfaTester`, `MfaTestResult`, `MfaBypassMethod` |
+| `auth/password_policy.rs` | 247 | `PasswordPolicyTester`, `PasswordPolicyResult` |
 | `auth/rate_limit.rs` | 162 | `RateLimitTester`, `RateLimitResult`, `RateLimitBypassResult` |
 | `auth/session.rs` | 95 | `SessionTester`, `SessionTestResult` |
 | `auth/timing.rs` | 145 | `TimingTester`, `TimingTestResult`, `TimingMeasurement` |
@@ -179,8 +179,8 @@ All multi-protocol functions use `tokio::time::timeout()` wrapping blocking `std
 | `LockoutDetector::detect()` | `lockout.rs:34` | `(&self, target, username, max_attempts) -> Result<LockoutDetectionResult>` |
 | `MfaTester::new()` | `mfa.rs:27` | `(timeout_secs) -> Result<Self>` |
 | `MfaTester::test()` | `mfa.rs:32` | `(&self, target) -> Result<MfaTestResult>` |
-| `PasswordPolicyTester::new()` | `password_policy.rs:23` | `(timeout_secs) -> Result<Self>` |
-| `PasswordPolicyTester::test()` | `password_policy.rs:28` | `(&self, target) -> Result<PasswordPolicyResult>` |
+| `PasswordPolicyTester::new()` | `password_policy.rs:29` | `(timeout_secs) -> Result<Self>` |
+| `PasswordPolicyTester::test()` | `password_policy.rs:34` | `(&self, target) -> Result<PasswordPolicyResult>` |
 | `RateLimitTester::new()` | `rate_limit.rs:27` | `(timeout_secs) -> Result<Self>` |
 | `RateLimitTester::test()` | `rate_limit.rs:32` | `(&self, target) -> Result<RateLimitResult>` |
 | `SessionTester::new()` | `session.rs:19` | `(timeout_secs) -> Result<Self>` |
@@ -259,4 +259,4 @@ Handler-level tests in `commands/handlers/` plus 17 wiremock `auth_tests` + enfo
 8. **`auth/mod.rs:171` uses `.unwrap_or_default()` on `Vec<CredentialPair>`**: This is a sync `Option::unwrap_or_default()`, not async — safe. (There is no `auth_engine.rs`; the engine logic lives in `auth/mod.rs`.)
 9. **Timing tester uses `std::time::Instant`** (`timing.rs:88`): Fine for wall-clock measurement but susceptible to NTP adjustments; 50ms threshold is conservative enough.
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); file lengths + password_policy lines corrected 2026-09-25 (systematic review)*

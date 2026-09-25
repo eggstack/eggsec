@@ -1,6 +1,6 @@
 # Compile Time Baseline
 
-> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 20 crates (this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
+> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 20 crates (verified 2026-09-25: `members` in root `Cargo.toml:2` lists 20 paths including `eggsec-policy`, `eggsec-report-model`, `eggsec-transport`, `eggsec-transport-eggfetch`, `eggsec-python`; this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
 
 ## Context
 
@@ -143,4 +143,4 @@ cargo test -p eggsec --lib
 This completes the initial crate modularization phase. The `eggsec-agent` crate was extracted from `tool/agents/` with zero blockers — all constants already lived in `eggsec-core` and the module had no coupling to engine types. Further splits should be driven by measured compile-time hot paths or clearly isolated adapter boundaries.
 
 - `eggsec-agent` owns the agent coordination implementation; `eggsec::tool::agents` is only a compatibility facade.
-- `reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.
+- ~~`reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.~~ **Superseded (Phase D, 2026-09-12):** `reqwest`/`rustls` were removed from `eggsec-agent` (`crates/eggsec-agent/Cargo.toml` has no `reqwest`/`rustls`; transport via `eggsec-transport` + `url`, guard Check 103 enforces). Health probes inject `HttpTransport` + `NetworkAuthority` (`LifecycleManager<T: HttpTransport>`).

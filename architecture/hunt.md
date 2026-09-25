@@ -23,11 +23,11 @@ This is an **advanced threat hunting** surface — all sub-modules make real HTT
 | File | Lines | Types Defined |
 |------|-------|---------------|
 | `hunt/mod.rs` | 276 | `HuntClient`, `HuntReport`, `HuntConfig`, `run_hunt()` |
-| `hunt/authz.rs` | 314 | `AuthzBypass`, `BypassType`, `check_authz_bypass()` |
-| `hunt/business.rs` | 389 | `BusinessLogicFlaw`, `FlawType`, `check_business_logic()` |
+| `hunt/authz.rs` | 328 | `AuthzBypass`, `BypassType`, `check_authz_bypass()` |
+| `hunt/business.rs` | 396 | `BusinessLogicFlaw`, `FlawType`, `check_business_logic()` |
 | `hunt/chain.rs` | 338 | `AttackChain`, `ChainType`, `ChainStep`, `detect_attack_chains()` |
-| `hunt/race.rs` | 251 | `RaceCondition`, `RaceType`, `check_race_conditions()` |
-| `hunt/session.rs` | 297 | `SessionIssue`, `SessionIssueType`, `check_session_security()` |
+| `hunt/race.rs` | 252 | `RaceCondition`, `RaceType`, `check_race_conditions()` |
+| `hunt/session.rs` | 298 | `SessionIssue`, `SessionIssueType`, `check_session_security()` |
 
 ### Type Table
 
@@ -250,4 +250,4 @@ Total: 9 tests across 6 files.
 8. **No `auth/` module interaction**: Hunt's `session` sub-module checks HTTP cookie/header security; `auth/session.rs` tests session fixation via login flow. They are independent.
 9. **`HuntClient::build_url()`** (`mod.rs:62-76`): Handles absolute paths, relative paths, and full URLs — used by all sub-modules.
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); file lengths corrected 2026-09-25 (systematic review)*

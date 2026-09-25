@@ -18,7 +18,7 @@ Key capabilities:
 
 - Source: `crates/eggsec/src/api_schema/mod.rs` (single file, ~457 lines incl. tests)
 - Feature gate: `api-schema` (`lib.rs:81`)
-- Always-declared module; without the feature it compiles as an empty/private stub
+- No stub module — when disabled, the module does not exist (same pattern as `websocket`, `evasion`)
 
 ## Architecture
 
@@ -171,7 +171,7 @@ The `FuzzTarget` output is compatible with the findings store and output report 
 
 ## Invariants & Gotchas
 
-1. **Feature-gated**: Module compiles as empty stub without `api-schema` feature — consumers must `cfg(feature = "api-schema")`
+1. **Feature-gated**: Module is absent without the `api-schema` feature (no `#[cfg(not(...))]` stub) — consumers must gate uses with `cfg(feature = "api-schema")`
 2. **`anyhow::Result` not `EggsecError`**: This module uses `anyhow` for error handling, unlike most engine modules that use `EggsecError`. This is deliberate for the standalone parsing use case.
 3. **No validation of OpenAPI version**: Accepts any document with `paths` object — does not verify `openapi: "3.0.x"` field
 4. **Single server only**: `base_url` takes only `servers[0].url` — ignores additional servers
@@ -181,4 +181,4 @@ The `FuzzTarget` output is compatible with the findings store and output report 
 8. **Parameter location fallback**: Unknown `in` values default to `Query` (`mod.rs:171`)
 9. **Deliberate non-interoperability**: `api_schema::FuzzTarget` and `fuzzer::api_schema::SchemaFuzzTarget` are unrelated types — converting requires manual mapping
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; feature-gate stub claim corrected 2026-09-25 (systematic review: `lib.rs:81-82` has no `not(feature)` stub)*

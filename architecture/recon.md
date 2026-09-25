@@ -11,16 +11,16 @@ The reconnaissance module performs **passive and active information gathering** 
 - **Path**: `crates/eggsec/src/recon/` (35 `.rs` files: 30 top-level + 5 in `cloud/`)
 - **Declared modules** (`mod.rs:78-102`): 21 unconditional `pub mod` + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = 23 total
 - **Feature-gated modules**: `cloud` (feature `cloud`), `git_secrets` (feature `git-secrets`)
-- **Detached utilities** (7 files exist on disk but are NOT declared as `pub mod` — `mod.rs:497-505`): `asn`, `cve_lookup`, `dns_enhanced`, `ftp_auth`, `smtp_auth`, `ssh_auth`, `ssl_audit`
+- **Detached utilities** (7 files exist on disk but are NOT declared as `pub mod` — `mod.rs:520-528`): `asn`, `cve_lookup`, `dns_enhanced`, `ftp_auth`, `smtp_auth`, `ssh_auth`, `ssl_audit`
 
 ## Module Inventory
 
 | File / Directory | Lines | Purpose | Pipeline? | Notes |
 |------------------|-------|---------|:---------:|-------|
-| `mod.rs` | 520 | Module declarations, `FullReconResult`, `ReconRequest`, entry points, `FULL_RECON_PIPELINE_MODULES` constant | — | 17-module list at `mod.rs:435-453` |
+| `mod.rs` | 543 | Module declarations, `FullReconResult`, `ReconRequest`, entry points, `FULL_RECON_PIPELINE_MODULES` constant | — | 17-module list at `mod.rs:458-476` |
 | `runner.rs` | 1107 | Pipeline orchestrator (`run_full_recon_from_request`), all `run_*` wrappers, result aggregation, human-readable formatter | — | `runner.rs:536` is the primary entry |
 | `techdetect.rs` | 538 | Technology stack detection via HTTP headers + body signatures (servers, frameworks, CMS, CDNs, JS libs, languages) | Yes | 8 detection categories |
-| `subdomain.rs` | 454 | Subdomain enumeration via crt.sh certificate transparency, Threatminer API, DNS brute-force | Yes | Uses `hickory_resolver` with configurable concurrency |
+| `subdomain.rs` | 461 | Subdomain enumeration via crt.sh certificate transparency, Threatminer API, DNS brute-force | Yes | Uses `hickory_resolver` with configurable concurrency |
 | `ssl.rs` | 339 | SSL/TLS certificate analysis: chain inspection, protocol versions, cipher suites, expiry checks | Yes | Extracts `CertificateDer` from reqwest extensions |
 | `cve.rs` | 498 | CVE mapping: built-in database (7 product families) + NVD API v2.0 fallback | Yes | Global `OnceLock` cache (`CVE_CACHE`); optional NVD API key |
 | `secrets.rs` | 492 | Secret detection in HTTP responses via 25 regex patterns (30 `SecretType` enum variants, 20 with dedicated patterns) | Yes | LazyLock patterns; entropy filter for AWS secrets |
@@ -88,7 +88,7 @@ Each `ReconStep` result is checked: `.is_failed()` populates error strings on `F
 
 ### Pipeline Module List
 
-`FULL_RECON_PIPELINE_MODULES` (`mod.rs:435-453`) = 17 canonical modules:
+`FULL_RECON_PIPELINE_MODULES` (`mod.rs:458-476`) = 17 canonical modules:
 
 ```
 reverse_dns, geolocation, threatintel, ssl, whois, subdomain,
@@ -113,7 +113,7 @@ email, takeover, cve, secrets
 
 ### secrets — Secret Detection (`secrets.rs`)
 
-- **Pattern count**: 25 regex patterns covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the enum but have no dedicated pattern in `build_patterns()`.
+- **Pattern count**: 26 regex patterns in `build_patterns()` (`secrets.rs:103`) covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the 30-variant enum but have no dedicated pattern in `build_patterns()`.
 - **High-confidence types**: AWS keys (3 variants), GitHub tokens (PAT + OAuth), GitLab PAT, Slack tokens, OpenAI keys, Stripe keys, GCP API keys, private keys, JWT tokens, Discord tokens, Twilio/SendGrid/Mailchimp keys, database connection strings (MongoDB/PostgreSQL/MySQL URIs), password-in-URL, GitHub credentials in URL
 - **Entropy filter**: AWS secret key candidates with Shannon entropy < 3.5 are discarded (`secrets.rs:334`)
 - **Output**: `Vec<SecretFinding>` with type, value preview (truncated to 20 chars), confidence, severity
@@ -155,15 +155,15 @@ email, takeover, cve, secrets
 |-------------|-----------|-----------|--------------|
 | `run_full_recon_from_request()` | `pub async fn run_full_recon_from_request(request: &ReconRequest, config: &EggsecConfig, stage: Arc<Mutex<String>>, verbose: bool) -> Result<FullReconResult>` | `runner.rs:536` | — |
 | `run_full_recon()` | `pub async fn run_full_recon(args: &ReconArgs, config: &EggsecConfig, stage: Arc<Mutex<String>>, verbose: bool) -> Result<FullReconResult>` | `runner.rs:520` | `cli` |
-| `run_cli()` | `pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()>` | `mod.rs:417` | `cli` |
-| `run_with_callback()` | `pub async fn run_with_callback(request: &ReconRequest, config: &EggsecConfig, callback: F) -> Result<FullReconResult>` | `mod.rs:324` | `tool-api` |
-| `run_cli_with_callback()` | `pub async fn run_cli_with_callback(args: ReconArgs, config: &EggsecConfig, callback: F) -> Result<()>` | `mod.rs:301` | `tool-api` + `cli` |
-| `ReconRequest` | `pub struct ReconRequest` (target + 16 `no_*` toggles + concurrency) | `mod.rs:238` | — |
-| `FullReconResult` | `pub struct FullReconResult` (18 `Option` result fields + errors) | `mod.rs:183` | — |
+| `run_cli()` | `pub async fn run_cli(args: ReconArgs, config: &EggsecConfig) -> Result<()>` | `mod.rs:440` | `cli` |
+| `run_with_callback()` | `pub async fn run_with_callback(request: &ReconRequest, config: &EggsecConfig, callback: F) -> Result<FullReconResult>` | `mod.rs:347` | `tool-api` |
+| `run_cli_with_callback()` | `pub async fn run_cli_with_callback(args: ReconArgs, config: &EggsecConfig, callback: F) -> Result<()>` | `mod.rs:324` | `tool-api` + `cli` |
+| `ReconRequest` | `pub struct ReconRequest` (target + 16 `no_*` toggles + concurrency) | `mod.rs:262` | — |
+| `FullReconResult` | `pub struct FullReconResult` (18 `Option` result fields + errors) | `mod.rs:207` | — |
 | `print_recon_results_string()` | `pub fn print_recon_results_string(recon: &FullReconResult) -> String` | `runner.rs:767` | — |
-| `FULL_RECON_PIPELINE_MODULES` | `pub const FULL_RECON_PIPELINE_MODULES: &[&str]` (17 entries) | `mod.rs:435` | — |
+| `FULL_RECON_PIPELINE_MODULES` | `pub const FULL_RECON_PIPELINE_MODULES: &[&str]` (17 entries) | `mod.rs:458` | — |
 
-### ReconRequest (`mod.rs:238-258`)
+### ReconRequest (`mod.rs:262-281`)
 
 Plain struct (no Clap derives — CLI parsing converts `ReconArgs` to this via `From`):
 
@@ -182,7 +182,7 @@ pub struct ReconRequest {
 }
 ```
 
-### FullReconResult (`mod.rs:183-223`)
+### FullReconResult (`mod.rs:207-246`)
 
 18 result fields + 14 error fields:
 
@@ -227,13 +227,13 @@ Each has a corresponding `*_error: Option<String>` field (except `secrets` and `
 ## Testing
 
 - **Unit tests**: Present in every submodule (`#[cfg(test)] mod tests`). Test serialization round-trips, scanner creation, pattern matching, and result construction.
-- **Module registration test**: `mod.rs:456-519` (`recon_modules_match_filesystem`) asserts that `pub mod` declarations match the filesystem, accounting for the `intentionally_detached` set.
-- **Runner tests**: `runner.rs:981-1107` cover target resolution (HTTP/HTTPS/IP/IPv6/port), `FullReconResult` construction, serialization, and NVD API key extraction.
+- **Module registration test**: `mod.rs:479-543` (`recon_modules_match_filesystem`) asserts that `pub mod` declarations match the filesystem, accounting for the `intentionally_detached` set.
+- **Runner tests**: `runner.rs:982-1107` cover target resolution (HTTP/HTTPS/IP/IPv6/port), `FullReconResult` construction, serialization, and NVD API key extraction.
 
 ## Invariants & Gotchas
 
 1. **Policy-free modules**: Recon functions never reference `EnforcementContext`. Scope enforcement is upstream in dispatch.
-2. **Detached files exist for a reason**: The 7 `intentionally_detached` modules (`mod.rs:497-505`) are standalone utilities that exist on disk but are NOT wired into the module tree. They are available for direct internal use but are excluded from the public API and pipeline. The `recon_modules_match_filesystem` test enforces this separation.
+2. **Detached files exist for a reason**: The 7 `intentionally_detached` modules (`mod.rs:520-528`) are standalone utilities that exist on disk but are NOT wired into the module tree. They are available for direct internal use but are excluded from the public API and pipeline. The `recon_modules_match_filesystem` test enforces this separation.
 3. **Cloud runs separately**: The `cloud` module executes AFTER the main `tokio::join!` parallel block (`runner.rs:644-648`) because it is feature-gated and cannot participate in the uniform join tuple.
 4. **Takeover depends on subdomains**: `run_takeover_check()` (`runner.rs:398-429`) receives the subdomain result by reference and only proceeds if subdomains were found. This is a sequential dependency.
 5. **CVE depends on tech detection**: `run_cve_check()` (`runner.rs:434-451`) receives the tech detection result by reference. CVE mapping cannot run without a detected tech stack.
@@ -257,4 +257,4 @@ No critical bugs found. Minor observations:
 - [dispatch.md](dispatch.md) — task dispatch and enforcement flow
 - [config.md](config.md) — configuration, scope, enforcement model
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites + secret-pattern count refreshed 2026-09-25*

@@ -75,11 +75,11 @@ All methods are under the `eggsec.tool.v1.ToolService` service prefix (e.g., `/e
 | Type | Fields | Line |
 |------|--------|------|
 | `ListToolsRequest` | `category: String` | `:17` |
-| `ListToolsResponse` | `tools: Vec<ToolInfo>`, `categories: Vec<String>` | `:21` |
-| `GetToolRequest` | `tool_id: String` | `:28` |
-| `GetToolResponse` | `tool: Option<ToolInfo>` | `:33` |
-| `ExecuteToolRequest` | `tool_id`, `target`, `params`, `options` | `:38` |
-| `ExecuteToolResponse` | `request_id`, `tool_id`, `status`, `results`, `metadata`, `errors`, `findings` | `:49` |
+| `ListToolsResponse` | `tools: Vec<ToolInfo>`, `categories: Vec<String>` | `:22` |
+| `GetToolRequest` | `tool_id: String` | `:29` |
+| `GetToolResponse` | `tool: Option<ToolInfo>` | `:34` |
+| `ExecuteToolRequest` | `tool_id`, `target`, `params`, `options` | `:39` |
+| `ExecuteToolResponse` | `request_id`, `tool_id`, `status`, `results`, `metadata`, `errors`, `findings` | `:50` |
 | `CapabilitiesRequest` | `tool_id: String` | `:112` |
 | `CapabilitiesResponse` | `capabilities: Vec<ToolCapability>` | `:117` |
 
@@ -224,4 +224,4 @@ All are optional and behind `grpc-api`.
 - [dispatch.md](dispatch.md) — How gRPC requests flow through enforcement and dispatch
 - [runtime_bridge.md](runtime_bridge.md) — Surface conversion for daemon gRPC transport
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); 5 off-by-one struct line cites fixed 2026-09-25 (systematic review)*

@@ -10,18 +10,18 @@ WebSocket security testing including connection validation, message injection, c
 
 | Item | Location | Gate |
 |------|----------|------|
-| Module declaration | `crates/eggsec/src/lib.rs:155-156` | `#[cfg(feature = "websocket")]` |
+| Module declaration | `crates/eggsec/src/lib.rs:159-160` | `#[cfg(feature = "websocket")]` |
 | No stub module | — | When disabled, the module simply does not exist |
-| `WebSocketTestConfig` | `websocket/mod.rs:34-44` | `#[cfg(feature = "websocket")]` |
-| `run_live_tests()` | `websocket/mod.rs:46-79` | `#[cfg(feature = "websocket")]` |
-| `test_connection()` | `websocket/connection.rs:14` | `#[cfg(feature = "websocket")]` |
-| `test_injection()` | `websocket/injection.rs:13` | `#[cfg(feature = "websocket")]` |
-| `test_origins()` | `websocket/origin.rs:11` | `#[cfg(feature = "websocket")]` |
-| `test_dos()`, `test_message_fuzz()` | `websocket/fuzz.rs:14`, `:26` | `#[cfg(feature = "websocket")]` |
+| `WebSocketTestConfig` | `websocket/mod.rs:35-44` | `#[cfg(feature = "websocket")]` |
+| `run_live_tests()` | `websocket/mod.rs:47-79` | `#[cfg(feature = "websocket")]` |
+| `test_connection()` | `websocket/connection.rs:15` | `#[cfg(feature = "websocket")]` |
+| `test_injection()` | `websocket/injection.rs:14` | `#[cfg(feature = "websocket")]` |
+| `test_origins()` | `websocket/origin.rs:12` | `#[cfg(feature = "websocket")]` |
+| `test_dos()`, `test_message_fuzz()` | `websocket/fuzz.rs:15`, `:27` | `#[cfg(feature = "websocket")]` |
 | `tokio-tungstenite` dep | `crates/eggsec/Cargo.toml:167-170` | `version = "0.27"`, `features = ["rustls-tls-native-roots"]`, optional |
 | Feature flag | `crates/eggsec/Cargo.toml:348` | `websocket = ["dep:tokio-tungstenite"]` |
 
-**Important asymmetry note**: The task description claims `WebSocketTestReport`/`WebSocketFinding` are NOT cfg-gated and always available. This is **incorrect** per source: the entire `websocket` module is gated at `lib.rs:155-156` with no `#[cfg(not(...))]` stub. When the `websocket` feature is disabled, none of these types exist in the public API.
+**Important asymmetry note**: The task description claims `WebSocketTestReport`/`WebSocketFinding` are NOT cfg-gated and always available. This is **incorrect** per source: the entire `websocket` module is gated at `lib.rs:159-160` with no `#[cfg(not(...))]` stub. When the `websocket` feature is disabled, none of these types exist in the public API.
 
 The `WebSocketTestReport`, `WebSocketFinding`, `ConnectionTestResult`, `InjectionTestResult`, `OriginTestResult`, and `FuzzTestResult` structs are all defined inside the feature-gated module and therefore only available with `--features websocket`. The only always-available WebSocket types live in the fuzzer (`fuzzer/payloads/websocket.rs`), which is not gated.
 
@@ -43,7 +43,7 @@ The `WebSocketTestReport`, `WebSocketFinding`, `ConnectionTestResult`, `Injectio
 | Type | Location | Description |
 |------|----------|-------------|
 | `WebSocketTestReport` | `mod.rs:16` | `target`, `connection_test` (Option), `injection_tests`, `origin_tests`, `fuzz_tests`, `findings` |
-| `WebSocketFinding` | `mod.rs:25` | `category`, `severity`, `title`, `description`, `recommendation` |
+| `WebSocketFinding` | `mod.rs:26` | `category`, `severity`, `title`, `description`, `recommendation` |
 | `WebSocketTestConfig` | `mod.rs:35` | `url`, `timeout_secs`, `injection_payloads`, `test_connection`, `test_origins`, `test_injection`, `test_dos`, `test_message_fuzz` |
 | `ConnectionTestResult` | `connection.rs:4` | `url`, `connected`, `response_headers`, `subprotocols`, `extensions`, `latency_ms`, `error` |
 | `InjectionTestResult` | `injection.rs:4` | `payload`, `sent`, `received_response`, `response_content`, `vulnerability_detected`, `details` |
@@ -62,7 +62,7 @@ The `WebSocketTestReport`, `WebSocketFinding`, `ConnectionTestResult`, `Injectio
 
 ### `run_live_tests(config)` — `mod.rs:47-79`
 
-Global timeout: `config.timeout_secs * 10` seconds. Wraps `run_live_tests_inner()` in `tokio::time::timeout()`. On timeout, returns a report with a single `Timeout` finding at `Severity::Medium`.
+Global timeout: `config.timeout_secs.saturating_mul(10)` seconds (`mod.rs:50`). Wraps `run_live_tests_inner()` in `tokio::time::timeout()`. On timeout, returns a report with a single `Timeout` finding at `Severity::Medium`.
 
 ### `run_live_tests_inner(config)` — `mod.rs:82-197`
 
@@ -136,7 +136,7 @@ The websocket module is standalone. It does not register as an MCP tool and is n
 ## Invariants & Gotchas
 
 1. **No stub module**: Unlike `browser`, there is no `#[cfg(not(...))]` fallback. When `websocket` is disabled, the types simply don't exist. Callers that reference `WebSocketTestReport` must be gated.
-2. **Global timeout**: `run_live_tests()` applies `timeout_secs * 10` as a global ceiling (`mod.rs:50`).
+2. **Global timeout**: `run_live_tests()` applies `timeout_secs.saturating_mul(10)` as a global ceiling (`mod.rs:50`).
 3. **Per-operation timeouts**: Each connection/send/receive uses `timeout_secs` as an individual deadline.
 4. **Close frame cleanup**: `test_connection()` and `test_single_origin()` send a close frame before returning (`connection.rs:66-76`, `origin.rs:72-82`). This prevents resource leaks.
 5. **Injection detection false positives**: `detect_injection_vulnerability()` checks for exact phrases ("syntax error", "unhandled exception") rather than generic substrings, reducing false positives.
@@ -151,4 +151,4 @@ The websocket module is standalone. It does not register as an MCP tool and is n
 | `mod.rs:50` | Global timeout is `timeout_secs * 10` — if `timeout_secs` is 0, the global timeout is also 0, causing immediate timeout | Medium |
 | `origin.rs:18-20` | Malicious origins are hardcoded (4 values). Not configurable via `WebSocketTestConfig` | Informational |
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); lib.rs gate + fn lines corrected 2026-09-25 (systematic review)*

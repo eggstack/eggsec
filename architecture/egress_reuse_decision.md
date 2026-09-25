@@ -371,3 +371,5 @@ records.
    credential-safe `map_outbound_error()` path remains canonical.
 
 *Addendum verified against published crates: 2026-09-25.*
+
+> Re-verified 2026-09-25: `crates/eggsec-web-proxy/Cargo.toml:28-29` pins exactly `eggress-outbound = "=1.0.10"` (`default-features = false`) + `eggress-uri = "=1.0.10"`; `Cargo.lock` resolves both to `1.0.10`; Check 106 (`scripts/check-architecture-guards.sh:2667`) enforces the exact two-crate 1.0.10 allowlist; `eggsec-transport` / `eggsec-transport-eggfetch` remain Eggress-free.

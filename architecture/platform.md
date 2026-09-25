@@ -2,7 +2,7 @@
 
 ## Overview
 
-Read-only environment detection for platform-sensitive domains, so tests and `eggsec doctor` report the same facts. Implemented in `crates/eggsec/src/platform/` (`mod.rs` + `prereqs.rs`, ~800 lines). Centralizes OS/arch/kernel, binary-presence, Linux capability, and interface checks behind a stable matrix — no privilege acquisition, no transmission, no mutation of namespaces/interfaces/devices.
+Read-only environment detection for platform-sensitive domains, so tests and `eggsec doctor` report the same facts. Implemented in `crates/eggsec/src/platform/` (`mod.rs` 18 lines + `prereqs.rs` 818 lines). Centralizes OS/arch/kernel, binary-presence, Linux capability, and interface checks behind a stable matrix — no privilege acquisition, no transmission, no mutation of namespaces/interfaces/devices.
 
 Parent overview: [overview.md](overview.md). Related: [mobile.md](mobile.md), [networking.md](networking.md), [wireless.md](wireless.md).
 
@@ -106,4 +106,4 @@ Live scripts (`setup_packet_netns.sh`, `setup_android_emulator.sh`) SKIP on miss
 
 ---
 
-*Last verified against source: 2026-09-11*
+*Last verified against source: 2026-09-11; line counts refreshed (mod.rs 18 + prereqs.rs 818) 2026-09-25 (systematic review)*

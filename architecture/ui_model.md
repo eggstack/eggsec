@@ -34,22 +34,22 @@ Architecture guards: no TUI, CLI, transport, or engine dependencies.
 
 | Type | Source Type | Key Fields | File:Line |
 |------|------------|-----------|-----------|
-| `SessionSummaryView` | `SessionSummary` | `session_id`, `surface`, `surface_label`, `scope_source`, `has_explicit_scope`, `active_count`, `completed_count`, `created_at_secs` | `session_view.rs:7-17` |
-| `SessionView` | `SessionSnapshot` | `session_id`, `surface`, `surface_label`, `scope: Option<SessionScopeView>`, `created_at_secs`, `generation`, `active_tasks`, `completed_tasks`, `capabilities_summary` | `session_view.rs:35-48` |
-| `SessionScopeView` | `SessionScope` | `is_explicit`, `source`, `path` | `session_view.rs:50-55` |
-| `SessionCapabilitiesSummary` | `RuntimeCapabilities` | `task_kind_count`, `supports_cancellation`, `transports` | `session_view.rs:67-72` |
-| `TaskView` | `TaskSnapshot` | `task_id`, `status`, `status_label`, `task_kind`, `task_kind_label`, `request_summary`, `progress`, `last_error`, `has_outcome`, `outcome_kind` | `task_view.rs:9-21` |
-| `TaskProgressView` | `TaskProgress` | `completed`, `total`, `percentage`, `message` | `task_view.rs:41-47` |
-| `OutcomeView` | `TaskOutcome` | `outcome_type`, `summary`, `envelope`, `text_content`, `artifact_ref` | `result_view.rs:38-45` |
-| `ResultEnvelopeView` | `TaskResultEnvelope` | `kind`, `kind_label`, `summary`, `payload`, `artifacts`, `artifact_count`, `supports_rich_tui`, `supports_json_detail` | `result_view.rs:8-18` |
-| `ArtifactView` | `ArtifactRef` | `id`, `kind`, `path`, `mime_type`, `summary` | `artifact_view.rs:6-13` |
-| `EventView` | `RuntimeEvent` | `session_id`, `event_type`, `task_id`, `message`, `timestamp_hint` | `event_view.rs:7-14` |
-| `DashboardSummaryView` | `Vec<SessionSummary>` | `total_sessions`, `active_sessions`, `total_active_tasks`, `total_completed_tasks`, `sessions` | `dashboard_view.rs:6-13` |
-| `ClientRoleView` | (manual) | `role`, `role_label`, `can_submit`, `can_cancel`, `can_close`, `can_approve_policy` | `permission_view.rs:4-12` |
-| `PermissionView` | (manual) | `client_kind`, `client_kind_label`, `session_role`, `is_session_owner`, `surface`, `surface_label` | `permission_view.rs:58-66` |
-| `PolicyPromptView` | `PolicyPrompt` | `message`, `confirmation_class`, `requires_explicit_approval`, `can_auto_approve` | `policy_view.rs:6-12` |
+| `SessionSummaryView` | `SessionSummary` | `session_id`, `surface`, `surface_label`, `scope_source`, `has_explicit_scope`, `active_count`, `completed_count`, `created_at_secs` | `session_view.rs:8` |
+| `SessionView` | `SessionSnapshot` | `session_id`, `surface`, `surface_label`, `scope: Option<SessionScopeView>`, `created_at_secs`, `generation`, `active_tasks`, `completed_tasks`, `capabilities_summary` | `session_view.rs:36` |
+| `SessionScopeView` | `SessionScope` | `is_explicit`, `source`, `path` | `session_view.rs:51` |
+| `SessionCapabilitiesSummary` | `RuntimeCapabilities` | `task_kind_count`, `supports_cancellation`, `transports` | `session_view.rs:68` |
+| `TaskView` | `TaskSnapshot` | `task_id`, `status`, `status_label`, `task_kind`, `task_kind_label`, `request_summary`, `progress`, `last_error`, `has_outcome`, `outcome_kind` | `task_view.rs:10` |
+| `TaskProgressView` | `TaskProgress` | `completed`, `total`, `percentage`, `message` | `task_view.rs:42` |
+| `OutcomeView` | `TaskOutcome` | `outcome_type`, `summary`, `envelope`, `text_content`, `artifact_ref` | `result_view.rs:39` |
+| `ResultEnvelopeView` | `TaskResultEnvelope` | `kind`, `kind_label`, `summary`, `payload`, `artifacts`, `artifact_count`, `supports_rich_tui`, `supports_json_detail` | `result_view.rs:9` |
+| `ArtifactView` | `ArtifactRef` | `id`, `kind`, `path`, `mime_type`, `summary` | `artifact_view.rs:7` |
+| `EventView` | `RuntimeEvent` | `session_id`, `event_type`, `task_id`, `message`, `timestamp_hint` | `event_view.rs:8` |
+| `DashboardSummaryView` | `Vec<SessionSummary>` | `total_sessions`, `active_sessions`, `total_active_tasks`, `total_completed_tasks`, `sessions` | `dashboard_view.rs:7` |
+| `ClientRoleView` | (manual) | `role`, `role_label`, `can_submit`, `can_cancel`, `can_close`, `can_approve_policy` | `permission_view.rs:5` |
+| `PermissionView` | (manual) | `client_kind`, `client_kind_label`, `session_role`, `is_session_owner`, `surface`, `surface_label` | `permission_view.rs:59` |
+| `PolicyPromptView` | `PolicyPrompt` | `message`, `confirmation_class`, `requires_explicit_approval`, `can_auto_approve` | `policy_view.rs:7` |
 
-### EventView — 12 RuntimeEvent variant handlers (`event_view.rs:17-141`)
+### EventView — 12 RuntimeEvent variant handlers (`event_view.rs:19-141`, all 12 variants covered; `SessionClosed` handled at `:134`)
 
 | # | RuntimeEvent Variant | event_type String |
 |---|---------------------|-------------------|
@@ -66,7 +66,7 @@ Architecture guards: no TUI, CLI, transport, or engine dependencies.
 | 11 | `Audit` | `audit` |
 | 12 | `SessionClosed` | `session-closed` |
 
-### ResultRendererRegistry — 23 entries (`renderer_registry.rs:27-212`)
+### ResultRendererRegistry — 23 entries (`renderer_registry.rs:27`; lookup at `:218`)
 
 | # | Kind | Title | Rich TUI | JSON | Summary Fields |
 |---|------|-------|:--------:|:----:|----------------|
@@ -155,4 +155,4 @@ View DTOs never depend on engine types. This ensures frontends can render withou
 - [overview.md](overview.md) — System-wide architecture
 - [cli_commands.md](cli_commands.md) — CLI headless output using view DTOs
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; view lines, renderer flags (all 23 verified), and event coverage re-verified 2026-09-25*

@@ -12,8 +12,9 @@ API/agent modules are split across crates:
 
 Phase D (2026-09-09) completed the injected boundary without moving crates:
 `tool::service::{OperationCatalog, CheckedExecutor, PreflightService, EngineServices}`
-is the adapter boundary; `agent::services::AgentExecutionService` is the agent
-boundary; `mcp::bridge::McpEngineBridge` is the MCP narrow bridge. Adapters take
+(`crates/eggsec/src/tool/service.rs`) is the adapter boundary; `agent::services::AgentExecutionService`
+(`crates/eggsec/src/agent/services.rs:42`) is the agent
+boundary; `tool::protocol::mcp::bridge::McpEngineBridge` (`crates/eggsec/src/tool/protocol/mcp/bridge.rs:35`) is the MCP narrow bridge. Adapters take
 `EngineServices` via `with_services`/`router_with_services`; only composition
 roots call `EngineServices::new`. A separate `eggsec-api` crate was deliberately
 not created: it would become a second composition root (TLS types, Axum/tonic
@@ -23,7 +24,7 @@ acceptance criteria.
 
 Feature gates:
 - `rest-api` = `["tool-api", "axum", "tower", "tower-http", "async-stream", "email-notifications", "config-watch"]`
-- `grpc-api` = `["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "async-stream", "tokio-stream"]`
+- `grpc-api` = `["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost", "tonic-reflection", "dep:prost-build", "async-stream", "tokio-stream"]` (`crates/eggsec/Cargo.toml:302`; doc shorthand `prost`/`prost-types`/`prost-build` omits the `dep:` prefix)
 - `ai-integration` = `["tool-api", "eventsource-stream", "semver"]`
 - `ws-api` = `["axum/ws"]`
 
@@ -42,7 +43,7 @@ These modules are server adapters that translate between wire protocols and the 
 - **Files:**
   - `crates/eggsec/src/tool/protocol/mcp/mod.rs`
   - `crates/eggsec/src/tool/protocol/mcp/routes.rs` - axum HTTP + stdio transport
-  - `crates/eggsec/src/tool/protocol/mcp/handlers/server.rs` - McpServer (1686 lines, deeply coupled)
+  - `crates/eggsec/src/tool/protocol/mcp/handlers/server.rs` - McpServer (1981 lines as of 2026-09-25, deeply coupled; was 1686 lines when first documented)
   - `crates/eggsec/src/tool/protocol/mcp/handlers/helpers.rs`
   - `crates/eggsec/src/tool/protocol/mcp/auth.rs`
   - `crates/eggsec/src/tool/protocol/mcp/types.rs` - McpRequest, McpResponse, McpError, McpTool, McpResource, McpRoot
@@ -178,7 +179,7 @@ To enable extraction of the server adapters into `eggsec-api`:
 
 ---
 
-*Last verified against source: 2026-09-09 (Phase D); agent deps re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-09 (Phase D); agent deps re-verified 2026-09-22 (systematic review); spot re-verified 2026-09-25: `rest-api`/`ws-api`/`ai-integration` gates match `crates/eggsec/Cargo.toml:293-345`, McpServer is 1981 lines, `McpEngineBridge` at `tool/protocol/mcp/bridge.rs:35`, `eggsec-agent` manifest has no `reqwest`/`rustls`, `eggsec-tool-core/src/` additionally contains `operation_request.rs` alongside the DTO modules tabled below*
 
 ## Known blockers — Phase D resolution
 

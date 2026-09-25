@@ -64,7 +64,7 @@ All source files live under `crates/eggsec/src/config/`:
 
 | File | Lines | Feature Gate | Purpose |
 |------|-------|:---:|---------|
-| `mod.rs` | 127 | — | Re-exports, `ENV_PREFIX`, default config template |
+| `mod.rs` | 145 | — | Re-exports, `ENV_PREFIX`, default config template |
 | `policy.rs` | facade | — | Re-exports `eggsec-policy` vocabulary: `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor` (plus target/catalog re-exports) |
 | `policy_target.rs` | facade | — | Re-exports `TargetHint`, `OperationTarget`, `normalize_target()`, `TargetPolicyKind`, `DescriptorError` |
 | `policy_catalog.rs` | facade | — | Re-exports `OperationMetadata`, `ALL_OPERATION_METADATA`, `ALL_OPERATION_METADATA_ALIASES`, lookup helpers; plus engine-only `derive_operation_integration` extension |
@@ -74,15 +74,15 @@ All source files live under `crates/eggsec/src/config/`:
 | `scope_address.rs` | facade | — | Re-exports `AddressClass` (7), `classify_address()`, `is_private_ip()` |
 | `scope_resolver.rs` | facade | — | Re-exports bridge `ResolutionResult`, `HostResolver`, `SystemResolver`, `default_resolver()`, resolve fns, `ScopeResolution` |
 | `scope_transport.rs` | facade | — | Re-exports bridge `ScopeAuthority` |
-| `scope_spec.rs` | — | — | `scope_from_spec()`, `ScopeSpecError`, `is_target_allowed_by_scope_and_spec[_with_resolver]()`, `is_parsed_target_allowed_by_scope_and_spec()` — conservative `ScopeSpec`→`Scope` conversion plus intersection evaluation |
+| `scope_spec.rs` | 750 | — | `scope_from_spec()`, `ScopeSpecError`, `is_target_allowed_by_scope_and_spec[_with_resolver]()`, `is_parsed_target_allowed_by_scope_and_spec()` — conservative `ScopeSpec`→`Scope` conversion plus intersection evaluation |
 | `settings.rs` | 744 | — | `EggsecConfig`, `ScanConfig`, `HttpConfig`, `OutputConfig`, `NotificationConfig`, `AiConfig`, `ReconConfig`, `RemoteConfig`, `SearchConfig`, `AlertChannelsConfig`, `ProxyConfigEntry`, `ConfigError`, validation impls |
-| `loader.rs` | 478 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
-| `scan.rs` | 267 | — | `ScanConfig`, `ScanProfile`, `FuzzProfile`, `OutputConfig`, `NotificationConfig`, `WebhookConfig`, `WebhookEvent` |
+| `loader.rs` | 479 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
+| `scan.rs` | 258 | — | `ScanConfig`, `ScanProfile`, `FuzzProfile`, `OutputConfig`, `NotificationConfig`, `WebhookConfig`, `WebhookEvent` |
 | `http.rs` | 75 | — | `HttpConfig`, `Verbosity` (4 variants) |
 | `api.rs` | 76 | — | `ApiConfig`, `ApiKeyConfig`, `IpApiConfig`, `MaxMindConfig`, `NvdConfig`, `WaybackConfig` |
 | `budget.rs` | 217 | — | `ExecutionBudget`, `BudgetError` (3 variants) |
 | `discovery.rs` | 70 | — | `DiscoveredTargetStatus` (4 variants) |
-| `feature_registry.rs` | 531 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (49 entries, one per Cargo feature except `default`), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
+| `feature_registry.rs` | 690 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (49 entries, one per Cargo feature except `default`), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
 | `presets.rs` | 233 | — | `DefenseLabPreset` (7 built-in presets) |
 
 **Feature gating:** The config module itself requires no feature gates. Individual `OperationMetadata` entries declare `required_features` that are checked at evaluation time via `feature_registry::is_feature_enabled()`.
@@ -104,7 +104,7 @@ All source files live under `crates/eggsec/src/config/`:
 | `EnforcementOutcome` | `policy_decision.rs` | 4 | Profile-aware enforcement result |
 | `AddressClass` | `scope_address.rs` | 7 | IP address classification |
 | `ScopeSource` | `scope.rs` | 4 | Scope provenance |
-| `DescriptorError` | `policy_target.rs` (facade; canonical `eggsec-policy/src/target.rs:194`) | 3 | Target-policy violation errors |
+| `DescriptorError` | `policy_target.rs` (facade; canonical `eggsec-policy/src/target.rs`) | 3 (`UnexpectedTarget`, `MissingTarget`, `UnknownOperation`) | Target-policy violation errors |
 | `DiscoveredTargetStatus` | `discovery.rs:10` | 4 | Discovery promotion model |
 | `BudgetError` | `budget.rs:107` | 3 | Budget validation errors |
 | `ConfigError` | `settings.rs:708` | 4 | Config loading/parsing errors |
@@ -138,7 +138,7 @@ All source files live under `crates/eggsec/src/config/`:
 |----------|-----------|-------|---------|
 | `ALL_OPERATION_METADATA` | `eggsec-policy/src/catalog.rs:291` (facade: `policy_catalog.rs`) | 34 | Canonical operation definitions |
 | `ALL_OPERATION_METADATA_ALIASES` | `eggsec-policy/src/catalog.rs:875` (facade: `policy_catalog.rs`) | 42 | Tool-ID → canonical-ID mappings |
-| `ALL_FEATURES` | `feature_registry.rs:110` (generated) | ~48 | Compile-time feature registry |
+| `ALL_FEATURES` | `feature_registry.rs:110` (generated by `feature_registry!` macro) | 49 | Compile-time feature registry |
 
 ### ExecutionSurface → ExecutionProfile Mapping
 
@@ -360,13 +360,13 @@ REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `
 
 | File | Test Module | Count | Key Coverage |
 |------|-------------|-------|--------------|
-| `policy.rs` | `tests` | 15 | Risk ordering, profile display, capability display, serialization roundtrips |
-| `policy.rs` | `operation_metadata_tests` | 13 | Metadata uniqueness, alias resolution, descriptor generation, feature-gated ops |
-| `policy_decision.rs` | `tests` | 48 | Manual-mode invariants, downgrade logic, confirmation classes, approval tokens, preflight |
-| `scope.rs` | `tests` | ~40 | Scope rules, CIDR matching, address classification, resolver tests, loaded scope provenance |
+| `policy.rs` | facade (tests live in `eggsec-policy/src/policy.rs::tests`, 29) | Risk ordering, profile display, capability display, serialization roundtrips |
+| `policy.rs` | `operation_metadata_tests` (in `eggsec-policy/src/catalog.rs`, 16) | Metadata uniqueness, alias resolution, descriptor generation, feature-gated ops |
+| `policy_decision.rs` | facade (unit tests in `eggsec-policy/src/decision.rs`, 7; bulk coverage in `enforcement_matrix` integration tests, 105+) | Manual-mode invariants, downgrade logic, confirmation classes, approval tokens, preflight |
+| `scope.rs` | facade (tests live in `eggsec-policy/src/scope.rs`, 15) | Scope rules, CIDR matching, address classification, resolver tests, loaded scope provenance |
 | `settings.rs` | `tests` | 1 | Config default path |
-| `loader.rs` | `tests` | 12 | Config/scope loading, format support, source tracking |
-| `budget.rs` | `tests` | 8 | Budget validation, defaults, serialization |
+| `loader.rs` | `tests` | 22 | Config/scope loading, format support, source tracking |
+| `budget.rs` | `tests` | 9 | Budget validation, defaults, serialization |
 | `discovery.rs` | `tests` | 3 | Status display, scannability, serialization |
 | `feature_registry.rs` | `tests` | 4 | Registry coverage, category matching |
 | `presets.rs` | `tests` | 4 | Built-in count, find by name, serialization |
@@ -423,4 +423,4 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 |----------|---------|----------|
 | `policy_decision.rs:727` | `expect("ExecutionPolicy is JSON-serializable")` in `policy_hash()` — will panic on serialization failure | Low (in practice, always serializable) |
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review; enforcement paths re-pointed to `eggsec-policy` kernel)*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review; enforcement paths re-pointed to `eggsec-policy` kernel); file sizes, registry/test counts, and facade test locations re-verified 2026-09-25*

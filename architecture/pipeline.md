@@ -23,8 +23,8 @@ The pipeline module provides a deterministic, repeatable execution harness that:
 | Session persistence | `crates/eggsec/src/pipeline/session.rs` | None |
 | Report generation | `crates/eggsec/src/pipeline/report.rs` | None |
 | PipelineTool (tool registry) | `crates/eggsec/src/tool/implementations/pipeline.rs` | `tool-api` |
-| CLI entry points (`run_cli`, `resume_cli`) | `crates/eggsec/src/pipeline/mod.rs:248-312` | `cli` |
-| Callback entry points (`run_with_callback`, `run_with_callback_for_profile`) | `crates/eggsec/src/pipeline/mod.rs:137-184` | `tool-api` |
+| CLI entry points (`run_cli`, `resume_cli`) | `crates/eggsec/src/pipeline/mod.rs:257-320` | `cli` |
+| Callback entry points (`run_with_callback`, `run_with_callback_for_profile`) | `crates/eggsec/src/pipeline/mod.rs:146-195` | `tool-api` |
 | CLI args (`ScanArgs`, `ResumeArgs`) | `crates/eggsec/src/cli/` | `cli` |
 | `DbPentest` stage variant | `crates/eggsec/src/pipeline/stage.rs:17` | `db-pentest` |
 | `WebProxy` stage variant | `crates/eggsec/src/pipeline/stage.rs:19` | `web-proxy` |
@@ -33,7 +33,7 @@ The pipeline module provides a deterministic, repeatable execution harness that:
 
 ## Architecture
 
-### Stage Enum (`pipeline/stage.rs:6-20`)
+### Stage Enum (`pipeline/stage.rs:7-21`)
 
 10 variants, 8 unconditional + 2 feature-gated:
 
@@ -113,7 +113,7 @@ Each profile carries additional policy metadata:
 | `operation_mode()` | StandardAssessment vs DefenseLab | Standard: Quick…Auth; DefenseLab: DefenseLab…WebProxy |
 | `intended_uses()` | Policy categories | Maps to `WebAssessment`, `ApiAssessment`, `WafRegression`, `SynvoidRegression`, `ProtocolEdgeValidation`, `CodingAgentVerification` |
 
-### Dependency Waves for Concurrent Execution (`executor.rs:233-268`)
+### Dependency Waves for Concurrent Execution (`executor.rs:274-310`)
 
 When `concurrent_stages = true`, `Pipeline::run_concurrent()` partitions stages into waves:
 
@@ -132,8 +132,8 @@ Stages within a wave execute via `futures::future::join_all()`. Waves execute se
 |----------|-------|----------|
 | `DEFAULT_SCAN_PORTS` | `"80,443"` | `stage.rs:229` |
 | `EXTENDED_SCAN_PORTS` | 37 ports (21–9090) | `stage.rs:231` |
-| Stage timeout | 300 seconds | `executor.rs:387` |
-| Default concurrency | 10 | `executor.rs:64,92,126` |
+| Stage timeout | 300 seconds | `executor.rs:428` |
+| Default concurrency | 10 | `executor.rs:90,119` |
 | Load test requests | 100 | `executor.rs:1110` |
 | Load test timeout | 10 seconds | `executor.rs:1112` |
 | Endpoint scan timeout | 10 seconds | `executor.rs:1028` |
@@ -160,7 +160,7 @@ Pipeline::run()
        └─ build PipelineReport + RunManifest
 ```
 
-### Stage Dispatch (`executor.rs:595-610`)
+### Stage Dispatch (`executor.rs:685-700`)
 
 `execute_stage()` routes to type-specific runners:
 
@@ -198,7 +198,7 @@ PipelineContext::new(target)
 - **Checkpoint timing**: After each stage completes (sequential), or once after all waves complete (concurrent).
 - **Resume**: `Pipeline::from_session(session)` restores remaining stages, context, spoof config, concurrency, and config.
 
-### PipelineSession Fields (`session.rs:9-23`)
+### PipelineSession Fields (`session.rs:10-27`)
 
 ```rust
 pub struct PipelineSession {
@@ -221,31 +221,31 @@ pub struct PipelineSession {
 | Format | Function | Location |
 |--------|----------|----------|
 | Display (console) | `impl Display` | `report.rs:34-147` |
-| HTML | `report::generate_html()` (free fn) | `report.rs:172` |
-| CSV | `report::generate_csv()` (free fn) | `report.rs:304` |
-| Markdown | `report::generate_markdown()` (free fn) | `report.rs:373` |
+| HTML | `report::generate_html()` (free fn) | `report.rs:179` |
+| CSV | `report::generate_csv()` (free fn) | `report.rs:311` |
+| Markdown | `report::generate_markdown()` (free fn) | `report.rs:380` |
 | JSON | `serde_json::to_string_pretty()` | `mod.rs:78-92` |
-| SARIF | `SarifBuilder::with_report()` | `mod.rs:98-101` |
-| JUnit | `JUnitBuilder::with_report()` | `mod.rs:104-107` |
+| SARIF | `SarifBuilder::new()` | `mod.rs:106` |
+| JUnit | `JUnitBuilder::new()` | `mod.rs:112` |
 
-A `RunManifest` is populated after execution for regression workflows (`executor.rs:462-465`).
+A `RunManifest` is populated after execution for regression workflows (`executor.rs:504-505`).
 
 ## Security Model
 
 The pipeline itself is a **policy-free executor**. All authorization and scope enforcement happens upstream:
 
-- **CLI**: `handle_scan()` (`commands/handlers/scan.rs:176`) calls `pipeline::run_cli()` after scope validation.
+- **CLI**: `handle_scan()` (`commands/handlers/scan.rs:148`) calls `pipeline::run_cli()` after scope validation.
 - **Tool API**: `PipelineTool::execute()` (`tool/implementations/pipeline.rs:48`) runs through the `SecurityTool` trait, which is invoked by `EnforcedDispatcher::dispatch_checked()`.
 - **Dispatch**: The runtime bridge converts `TaskKind::Pipeline` → `OperationDescriptor` and issues an `ApprovedOperation` (or an `ApprovedExecution` bundle for scope-sensitive paths) before invoking the pipeline.
 
 Within the pipeline, the only security-relevant checks are:
-1. **Defense-lab scope validation** (`executor.rs:271-312`): rejects public targets for defense-lab profiles.
-2. **Feature-gate validation** (`executor.rs:314-333`): rejects profiles requiring `packet-inspection` or `nse` when those features are absent.
-3. **Risk-budget enforcement** (`executor.rs:339-351`): skips stages whose `ProbeRisk` exceeds the profile's budget.
+1. **Defense-lab scope validation** (`executor.rs:312-354`): rejects public targets for defense-lab profiles.
+2. **Feature-gate validation** (`executor.rs:356-392`): rejects profiles requiring `packet-inspection` or `nse` when those features are absent.
+3. **Risk-budget enforcement** (`executor.rs:380-392`): skips stages whose `ProbeRisk` exceeds the profile's budget.
 
 ## Public API
 
-### Pipeline Struct (`executor.rs:41-54`)
+### Pipeline Struct (`executor.rs:63-80`)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -297,8 +297,8 @@ Implements `SecurityTool` trait:
 
 | Test suite | Path | What it covers |
 |------------|------|----------------|
-| Unit tests | `crates/eggsec/src/pipeline/stage.rs:259-458` | Stage parsing, aliases, profile mapping, probe intent/risk, defense-lab profile stage counts |
-| Unit tests | `crates/eggsec/src/pipeline/executor.rs:1275-1513` | Profile constructor state, risk budget regression, defense-lab scope validation, concurrent wave assignment |
+| Unit tests | `crates/eggsec/src/pipeline/stage.rs:260-458` | Stage parsing, aliases, profile mapping, probe intent/risk, defense-lab profile stage counts |
+| Unit tests | `crates/eggsec/src/pipeline/executor.rs:1367-1604` | Profile constructor state, risk budget regression, defense-lab scope validation, concurrent wave assignment |
 | Integration tests | `crates/eggsec/tests/pipeline_stage_tests.rs` | Display, from_string aliases, case insensitivity, profile stage invariants |
 | Integration tests | `crates/eggsec/tests/pipeline_tests.rs` | Context, profile mapping, builder, report failure helpers |
 | Integration tests | `crates/eggsec/tests/pipeline_e2e_tests.rs` | Port parsing, config defaults, scope rules |
@@ -312,15 +312,15 @@ cargo test -p eggsec --test pipeline_e2e_tests
 
 ## Invariants & Gotchas
 
-1. **Stage timeout is 300s per stage** (`executor.rs:387`), not per-pipeline. A pipeline with 6 stages may run up to 30 minutes.
+1. **Stage timeout is 300s per stage** (`executor.rs:428`), not per-pipeline. A pipeline with 6 stages may run up to 30 minutes.
 2. **Session checkpointing is not atomic across stages**: if the process crashes mid-stage, the stage's results are lost but earlier checkpoints survive.
-3. **Concurrent mode checkpoints after each wave**: the session is saved after every wave (`executor.rs:587-611`), plus a final save after concurrent execution (`executor.rs:633-639`). An interrupt loses at most the in-flight wave, not the whole run.
+3. **Concurrent mode checkpoints after each wave**: the session is saved after every wave (`executor.rs:608-622`), plus a final save after concurrent execution (`executor.rs:640-652`). An interrupt loses at most the in-flight wave, not the whole run.
 4. **`run_concurrent()` does not check feature gates or defense-lab scope**: those are checked in `run()` before dispatching to `run_concurrent()`.
 5. **`StageResult.duration_ms` is `#[serde(skip)]`**: it is not serialized to JSON output.
 6. **`generate_html()` and `generate_csv()` are free functions**, not methods on `PipelineReport`. Call as `report::generate_html(&report)`.
 7. **The `DbRegression` and `WebProxy` profiles have conditional stage lists**: they map to a single feature-gated stage when the feature is enabled, or fall back to a defense-lab-like stage sequence when disabled.
-8. **Fuzz stage adapts payload types by profile**: Api → `"graphql,jwt,oauth"`, Stealth → `"all"` (no mutation), Deep → `"all"` with mutation, Auth → `"jwt,oauth,idor"`, others → `"all"` (`executor.rs:1055-1062`).
-9. **Defense-lab scope validation** (`executor.rs:271-312`) only checks the target string — it does not resolve DNS, so domain names that resolve to public IPs may bypass this check.
+8. **Fuzz stage adapts payload types by profile**: Api → `"graphql,jwt,oauth"`, Stealth → `"all"` (no mutation), Deep → `"all"` with mutation, Auth → `"jwt,oauth,idor"`, others → `"all"` (`executor.rs:1140-1150`).
+9. **Defense-lab scope validation** (`executor.rs:312-354`) only checks the target string — it does not resolve DNS, so domain names that resolve to public IPs may bypass this check.
 
 ## Links
 
@@ -331,4 +331,4 @@ cargo test -p eggsec --test pipeline_e2e_tests
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites + executor/struct/report/test ranges corrected 2026-09-25 (systematic review)*

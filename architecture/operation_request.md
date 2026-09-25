@@ -114,4 +114,4 @@ Canonical request structs expose `normalize()`; normalization helpers (`parse_po
 
 ---
 
-*Last verified against source: 2026-09-11; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-11; counts re-verified 2026-09-22 (systematic review); canonical cites (`DbPentestRequest:938`, `StorageRequest:1006`, re-export `:19`, `cli` gates) re-verified 2026-09-25*

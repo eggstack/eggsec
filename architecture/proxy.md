@@ -51,11 +51,11 @@ When `web-proxy` is disabled, the adapter provides minimal stubs:
 | `intercept::correlation::CorrelationId` | `mod.rs:58-60` | Empty struct |
 | `intercept::protocols::ProtocolDetection` | `mod.rs:61-63` | Empty struct |
 
-### Domain Crate (`crates/eggsec-web-proxy/src/`, 24 Rust source files)
+### Domain Crate (`crates/eggsec-web-proxy/src/`, 26 Rust source files)
 
 Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool management, and MITM security testing. Owns all domain logic, types, and tests but does NOT decide whether an operation is allowed — enforcement stays in the main `eggsec` crate.
 
-#### Root files (10 files)
+#### Root files (12 files)
 
 | File | Lines | Description |
 |------|-------|-------------|
@@ -66,24 +66,25 @@ Standalone defense-lab surface for HTTP/HTTPS traffic interception, proxy pool m
 | `rotator.rs` | 418 | `ProxyRotator` — round-robin, random, weighted, least-used, lowest-latency strategies |
 | `health.rs` | 416 | `HealthChecker` (config-only clone, SOCKS4 fail-closed, bounded `buffered` preserving enabled-input order), `HealthCheckResult`, `ProxyHealth` |
 | `eggress_outbound.rs` | 348 | Eggress adapter: literal-gated `ProxyEntry`→`ProxyHopSpec` (`socket_addr()` validation, hostname entries rejected), chain spec, `OutboundConnector::from_chain`, fail-closed `require_local_addr()` first-hop socket metadata, redacted error mapping |
-| `socks.rs` | 604 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
-| `http_connect.rs` | 344 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
+| `socks.rs` | 605 | Production `connect_through`/`connect_through_tor` delegate to Eggress; `SocksProxy`/handshake/`chain_connect`/`connect_through_with_domain` retained as `TcpStream` compatibility shims |
+| `http_connect.rs` | 345 | Production `connect_through` delegates to Eggress; `HttpConnectProxy` framing retained as compatibility shim |
+| `outbound.rs` | 181 | Outbound upstream connection helpers |
 | `utils.rs` | 61 | `ensure_rustls_provider()`, `create_insecure_client_with_options()`, `connect_with_nodelay_timeout()` |
-| `mcp.rs` | — | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
+| `mcp.rs` | 484 | MCP/Agent tool registration (gated behind `web-proxy-mcp` feature) |
 
 #### Intercept submodule (`crates/eggsec-web-proxy/src/intercept/`, 14 files)
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `mod.rs` | 1272 | `ProxyServer` TCP listener, `handle_connection()`, CONNECT/HTTP dispatch, TLS termination, WebSocket/HTTP2 dispatch, private IP validation |
+| `mod.rs` | 1283 | `ProxyServer` TCP listener, `handle_connection()`, CONNECT/HTTP dispatch, TLS termination, WebSocket/HTTP2 dispatch, private IP validation |
 | `cert.rs` | 180 | `CertGenerator` (per-host cache, 24h validity), `CertMaterial` (cert_der, key_der), rcgen on-the-fly CA generation |
-| `interceptor.rs` | 251 | `InterceptProxy`, `InterceptConfig`, `InterceptMode` (Monitor/Intercept/Allow), request/response modification with CRLF validation |
-| `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule`, `EnhancedRuleSet`, `RuleCondition` (And/Or/Not/HostMatches/PathMatches/BodyContains etc.), `RuleAction` (8 variants), `InjectResponseConfig`, indexed prefix evaluation, async evaluation |
-| `types.rs` | 1040 | `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `RedactionPattern`, `ManipulationRecord`, `FlowAction`, `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR export types |
+| `interceptor.rs` | 263 | `InterceptProxy`, `InterceptConfig`, `InterceptMode` (Monitor/Intercept/Allow), request/response modification with CRLF validation |
+| `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule`, `EnhancedRuleSet`, `RuleCondition` (13 variants: And/Or/Not/HostMatches/PathMatches/BodyContains etc.), `RuleAction` (8 variants), `InjectResponseConfig`, indexed prefix evaluation, async evaluation |
+| `types.rs` | 1055 | `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `RedactionPattern`, `ManipulationRecord`, `FlowAction`, `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR export types |
 | `protocols.rs` | 1868 | `WebSocketSession`, `WebSocketMessage`, `Http2Session`, `Http2Stream`, `GrpcSession`, `GrpcCall`, `GrpcStreamFrame`, `GrpcStreamingState`, `GrpcReflectionInfo`, `ProtocolDetection`, `detect_grpc_security_issues()` |
 | `bridge.rs` | 493 | `to_scan_report_data_proxy()` — converts `WebProxySessionReport` to `ScanReportData` |
 | `correlation.rs` | — | `CorrelationEngine`, `CorrelationContext`, `CorrelationReference`, `CorrelationSource`, `ConfidenceScorer`, `BehavioralPattern`, `TemporalCorrelation` |
-| `bundle.rs` | 779 | `EvidenceBundle`, `BundleManifest`, gzip JSON archive, HMAC-SHA256 signing/verification, `compare_bundles()` diff |
+| `bundle.rs` | 797 | `EvidenceBundle`, `BundleManifest`, gzip JSON archive, HMAC-SHA256 signing/verification, `compare_bundles()` diff |
 | `narrative.rs` | — | `AttackNarrative`, `NarrativeEvent`, `build_narrative()` |
 | `plugins.rs` | — | `PluginRegistry`, `PluginSandbox`, `ProtocolHandler` trait, `PluginCapability`, capability-based sandbox |
 | `dynamic_plugins.rs` | — | `DynamicPluginRegistry` — shared-library plugin loading (gated behind `dynamic-plugins` feature) |

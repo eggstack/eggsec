@@ -10,12 +10,12 @@ Defense-lab-only module for validating that security controls detect common evas
 
 | Item | Location | Gate |
 |------|----------|------|
-| Module declaration | `crates/eggsec/src/lib.rs:187-188` | `#[cfg(feature = "evasion")]` |
+| Module declaration | `crates/eggsec/src/lib.rs:191-192` | `#[cfg(feature = "evasion")]` |
 | No stub module | — | When disabled, the module does not exist |
-| Feature flag | `crates/eggsec/Cargo.toml:381` | `evasion = []` (marker, no deps) |
-| C2 dependency | `crates/eggsec/Cargo.toml:389` | `c2 = ["postex", "evasion"]` |
+| Feature flag | `crates/eggsec/Cargo.toml:396` | `evasion = []` (marker, no deps) |
+| C2 dependency | `crates/eggsec/Cargo.toml:404` | `c2 = ["postex", "evasion"]` |
 | CLI handler | `crates/eggsec/src/commands/handlers/evasion.rs:5` | `#[cfg(feature = "cli")]` |
-| `run_cli()` | `evasion/mod.rs:824` | `#[cfg(feature = "cli")]` |
+| `run_cli()` | `evasion/mod.rs:825` | `#[cfg(feature = "cli")]` |
 
 ## Architecture
 
@@ -153,7 +153,7 @@ Handler forces `dry_run: true` (`:25`) for safety, regardless of user input.
 
 ### C2 Dependency
 
-`c2 = ["postex", "evasion"]` (`Cargo.toml:389`). The C2 module depends on evasion for integrated campaign orchestration. See [c2.md](c2.md) for details.
+`c2 = ["postex", "evasion"]` (`Cargo.toml:404`). The C2 module depends on evasion for integrated campaign orchestration. See [c2.md](c2.md) for details.
 
 ### Defense Lab Framing
 
@@ -206,4 +206,4 @@ The evasion module is standalone. It does not register as an MCP tool, is not wi
 | `mod.rs:654` | Same pattern in `check_anti_analysis` — reads entire binary | Medium |
 | `commands/handlers/evasion.rs:25-28` | Handler silently overrides `dry_run` to `true` without returning the override to the caller. User sees no indication their `--dry-run false` was ignored unless `!args.quiet` | Low |
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); lib.rs/Cargo.toml/run_cli lines corrected 2026-09-25 (systematic review)*

@@ -34,7 +34,7 @@ The domain module defines a **static metadata interface** (`DomainDescriptor`) t
 
 | Type | File:Line | Fields | Purpose |
 |------|-----------|--------|---------|
-| `DomainDescriptor` | `domain/mod.rs:233` | 15 | Central static metadata struct for a capability domain |
+| `DomainDescriptor` | `domain/mod.rs:233` | 16 | Central static metadata struct for a capability domain |
 | `DomainCategory` | `domain/mod.rs:27` | 5 variants | Classifies domains by risk/operating mode |
 | `OperationIntegration` | `domain/mod.rs:67` | 9 | Maps a domain operation to `OperationMetadata` |
 | `CliIntegration` | `domain/mod.rs:90` | 3 | Maps an operation to a CLI command |
@@ -203,4 +203,4 @@ This contract was defined in Phase 3. Phase 4 completed metadata unification:
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); `DomainDescriptor` field count (16) re-verified 2026-09-25*

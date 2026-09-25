@@ -17,7 +17,7 @@ See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md)
 
 ### Tab Inventory (33 variants)
 
-The `Tab` enum at `tabs/mod.rs:142-176` declares 33 variants. `Tab::all()` at `tabs/mod.rs:191-220` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:113-717` has exactly 33 entries; the tests `test_tab_spec_count_matches_all_tab_variants` (`spec.rs:1136`, asserts `tab_specs().len() == all_variants.len()`) and `test_tab_specs_returns_all_33` (`spec.rs:1183`, asserts `len == 33`) pin the count.
+The `Tab` enum at `tabs/mod.rs:147-182` declares 33 variants. `Tab::all()` at `tabs/mod.rs:196-227` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:113-717` has exactly 33 entries; the tests `test_tab_spec_count_matches_all_tab_variants` (`spec.rs:1136`, asserts `tab_specs().len() == all_variants.len()`) and `test_tab_specs_returns_all_33` (`spec.rs:1183`, asserts `len == 33`) pin the count.
 
 | # | Variant | stable_id | Feature Gate | Category | Risk | Operation | direct_launch | Source Module |
 |---|---------|-----------|-------------|----------|------|-----------|--------------|---------------|
@@ -65,7 +65,7 @@ Phase 0 parity resolutions (see `crates/eggsec-tui/src/parity.rs` and `crates/eg
 - `compliance`/`storage`/`integrations`/`workflow`/`vuln` are operation-backed TUI/runtime tabs; their CLI commands (where present) are helper-only.
 - No TUI tabs for `waf-bypass`, `remote`, `search`, `mobile-static`, `mobile-dynamic`, `evasion`, `postex` (intentionally CLI/programmatic-only; `wireless-deauth` via Wireless active-mode override).
 
-Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:500-546`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
+Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:468-560`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
 
 ### Surface Model (Phase 2)
 
@@ -99,7 +99,7 @@ implying a live reload.
 
 `TabStore` owns all tab instances as named fields (one per variant). When a feature is disabled, the gated field still exists but is only accessible through the `dashboard` fallback in the dispatch macro.
 
-### Tab Traits (`tabs/mod.rs:563-627`)
+### Tab Traits (`tabs/mod.rs:568-632`)
 
 | Trait | Methods | Purpose |
 |-------|---------|---------|
@@ -302,7 +302,7 @@ Every input handler (`handle_up`, `handle_down`, `handle_left`, `handle_right`, 
 
 `RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
 
-### Attach Mode (`app/runner.rs:399-498`)
+### Attach Mode (`app/runner.rs:403-494`)
 
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
 
@@ -390,14 +390,14 @@ assert!(text.contains("Mode:"));
 
 ### Test Counts
 
-- `ui/tests.rs`: 14 tests (shell rendering, overlays, preflight indicators, empty states)
-- `ui/shell.rs`: 8 tests (status bar, tab bar, breadcrumb)
-- `tabs/core.rs`: 9 tests (field helpers, start/render patterns)
-- `app/navigation.rs`: 16 tests (tab switching, edge detection)
+- `ui/tests.rs`: 16 tests (shell rendering, overlays, preflight indicators, empty states)
+- `ui/shell.rs`: 7 tests (status bar, tab bar, breadcrumb)
+- `tabs/core.rs`: 96 tests (field helpers, start/render patterns, per-tab cases)
+- `app/navigation.rs`: 53 tests (tab switching, edge detection)
 - `tabs/handle_enter_regression.rs`: 40 table-driven tests across 12 tabs
 - `tabs/input_accessibility.rs`: `#[cfg(test)]` module verifying unique input labels and focus traversal
 - `app/task_management.rs`: builder semantic tests for feature-gated runtime request construction (db-pentest, intercept, C2) plus canonical-conversion round trips
-- Total TUI crate: ~479 tests
+- Total TUI crate: ~983 tests
 
 ### Runtime Request Builders (`app/task_management.rs`)
 
@@ -482,4 +482,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review); tab/trait/runner cites + test counts corrected 2026-09-25 (systematic review)*

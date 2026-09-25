@@ -19,7 +19,7 @@ Standalone defense-lab module for simulating post-exploitation techniques agains
 
 ## Architecture
 
-### Files (7 total)
+### Files (6 source + AGENTS.override.md)
 
 | File | Lines | Description |
 |------|-------|-------------|
@@ -87,10 +87,10 @@ All 16 default techniques are defined in `PostexScanner::default_techniques()` a
 
 The domain modules (`lotl.rs`, `persistence.rs`, `lateral.rs`, `credential.rs`) define richer enums used by the CLI and simulation logic:
 
-- `LotpCommand` — 10 variants in `lotl.rs:3-16`: PowerShell, Wmic, Certutil, Rundll32, Msiexec, Mshta, Regsvr32, Bash, Curl, Wget
-- `PersistenceType` — 6 variants in `persistence.rs:5-12`: RegistryRunKey, ScheduledTask, ServiceCreation, DllHijack, StartupFolder, WmiEventSubscription
-- `LateralTechnique` — 6 variants in `lateral.rs:5-12`: SmbShare, RdpSession, PortForward, SocksProxy, WinRm, PsExec
-- `CredentialTechnique` — 6 variants in `credential.rs:5-12`: LsassDump, TokenImpersonation, PasswordSpray, Kerberoasting, Dcsync, LdapQuery
+- `LotlCommand` — 10 variants in `lotl.rs:5`: PowerShell, Wmic, Certutil, Rundll32, Msiexec, Mshta, Regsvr32, Bash, Curl, Wget
+- `PersistenceType` — 6 variants in `persistence.rs:5`: RegistryRunKey, ScheduledTask, ServiceCreation, DllHijack, StartupFolder, WmiEventSubscription
+- `LateralTechnique` — 6 variants in `lateral.rs:5`: SmbShare, RdpSession, PortForward, SocksProxy, WinRm, PsExec
+- `CredentialTechnique` — 6 variants in `credential.rs:5`: LsassDump, TokenImpersonation, PasswordSpray, Kerberoasting, Dcsync, LdapQuery
 
 These produce additional `PostexTechnique` instances via `to_technique()` with their own IDs (e.g., `lotl-T1059-001`, `persist-registry`, `lateral-smb`, `cred-lsass`) and MITRE mappings, but the **default technique registry** that defines the canonical 16 is the one at `mod.rs:236-389`.
 
@@ -118,7 +118,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 - **Mode**: `DefenseLab`
 - **Risk**: `SafeActive` for dry-run, `ExploitAdjacent` for real
-- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (line 16). Real mode is effectively unreachable from the CLI handler.
+- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (`commands/handlers/postex.rs:15-16`). Real mode is effectively unreachable from the CLI handler.
 
 ### Cleanup Commands
 
@@ -180,7 +180,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Invariants & Gotchas
 
-1. **Handler forces dry-run**: `postex.rs:16` always sets `dry_run: true` — real mode is unreachable from CLI
+1. **Handler forces dry-run**: `commands/handlers/postex.rs:15-16` always sets `dry_run: true` — real mode is unreachable from CLI
 2. **16 default techniques**: Exactly 4 categories × 4 techniques each, defined at `mod.rs:236-389`
 3. **Minimal profile filters**: Uses `risk <= Medium` ordering (`mod.rs:127`), not explicit list
 4. **`Aggressive == Standard`**: Both return all 16 techniques; `Aggressive` is a future expansion point (`mod.rs:130`)
@@ -191,4 +191,4 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (LotlCommand typo fixed, Minimal filter mod.rs:122-130 verified, handler path clarified)*

@@ -331,4 +331,4 @@ Unit coverage: plan validation/rate/method, adapter auth/proxy/timeout shapes, m
 - [capability_segregation.md](capability_segregation.md) — Gate D1/D2 rejection records
 - [utils.md](utils.md) — engine utility ownership (Phase D `cache` removal)
 
-*Last verified against source: 2026-09-19 (corrective qualification: logical-URL + singular resolved direct, total through body EOF, H1/H2 reuse/isolation + SOCKS5-local success/pinning; 1/10/50/100 evidence above with env metadata; scope propagation, Reqwest fail-closed, qualified proxy, MSRV 1.89)*
+*Last verified against source: 2026-09-25 (all 8 file line counts + 4 key type lines re-verified; eggfetch-core 0.2.0 confirmed in eggsec-transport-eggfetch/Cargo.toml:30; no changes needed)*

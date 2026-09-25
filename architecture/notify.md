@@ -34,8 +34,8 @@ Email notifications (SMTP via `lettre`) live in `crates/eggsec/src/agent/alerts/
 
 | File | Lines | Role |
 |------|-------|------|
-| `notify/mod.rs` | 377 | `NotifyManager` definition, dispatch orchestration, event filtering, tests |
-| `notify/webhook.rs` | 783 | `WebhookNotifier`, HMAC signing, retry logic, Slack/Discord/Teams payload builders, tests |
+| `notify/mod.rs` | 380 | `NotifyManager` definition, dispatch orchestration, event filtering, tests |
+| `notify/webhook.rs` | 793 | `WebhookNotifier`, HMAC signing, retry logic, Slack/Discord/Teams payload builders, tests |
 | `commands/handlers/notify.rs` | 101 | CLI `handle_notify` (test + send subcommands) |
 | `commands/webhook.rs` | 95 | `WebhookTestConfig`, `send_webhook_notifications`, `has_any_webhook` helpers |
 
@@ -76,7 +76,7 @@ pub struct NotifyManager {
 
 ## Behavior & Flow
 
-### Dispatch flow (`notify/mod.rs:144-177`)
+### Dispatch flow (`notify/mod.rs:147-180`)
 
 1. `NotifyManager::dispatch()` iterates `notifier.notify()` results (generic webhooks).
 2. If `slack_webhook` is `Some`, calls `notifier.notify_slack()` with `platform_event_filter`.
@@ -88,7 +88,7 @@ pub struct NotifyManager {
 
 - **Generic webhooks** (`webhook.rs:72-75`): Each `WebhookConfig.events` is checked; payload skipped if event not in list.
 - **Platform notifiers** (`webhook.rs:133-137`, `149-153`, `169-173`): Filtered by `platform_event_filter` from `NotificationConfig`. `None` = all events delivered.
-- **`notify_scan_complete` suppression** (`mod.rs:87-91`): Skipped when `notify_on_complete == false` AND (no findings OR `notify_on_findings == false`). Prevents duplicate scan-complete when findings are reported separately via `notify_findings`.
+- **`notify_scan_complete` suppression** (`mod.rs:90-91`): Skipped when `notify_on_complete == false` AND (no findings OR `notify_on_findings == false`). Prevents duplicate scan-complete when findings are reported separately via `notify_findings`.
 
 ### Lifecycle hook points
 
@@ -144,11 +144,11 @@ When `WebhookConfig.secret` is `Some`:
 3. Signature set as `X-Signature-256: sha256=<hex>` header.
 4. Custom headers from `WebhookConfig.headers` are merged after the signature.
 
-### Retry logic (`webhook.rs:180-226`)
+### Retry logic (`webhook.rs:190-230`)
 
 Shared across all paths (generic, Slack, Discord, Teams):
-- **Max 3 attempts** (`MAX_RETRIES = 3`, line 187).
-- **Exponential backoff**: delays of 0ms, 1000ms, 2000ms (`BASE_DELAY_MS = 1000`, line 188).
+- **Max 3 attempts** (`MAX_RETRIES = 3`, line 197).
+- **Exponential backoff**: delays of 0ms, 1000ms, 2000ms (`BASE_DELAY_MS = 1000`, line 198).
 - **Success check**: `response.status().is_success()` (line 205).
 - **Retried on**: non-success HTTP status, network errors.
 - **Not retried on**: serialization errors, HMAC key errors (immediate failure).
@@ -215,14 +215,14 @@ TUI Settings tab exposes notification configuration (`tabs/settings/main.rs`):
 
 ## Testing
 
-- **Unit tests** (`notify/mod.rs:193-377`): 9 tests covering defaults, `is_enabled`, serialization, scan-complete suppression logic.
-- **Unit tests** (`notify/webhook.rs:376-783`): 17 tests covering event serialization, payload serialization, finding summary, scan stats, webhook config, notifier enablement, platform payload builders (Slack/Discord/Teams), HMAC signature generation, event filtering, platform event filtering.
-- **Total**: 26 tests.
+- **Unit tests** (`notify/mod.rs:193-380`): 8 tests covering defaults, `is_enabled`, serialization, scan-complete suppression logic.
+- **Unit tests** (`notify/webhook.rs:376-793`): 13 tests covering event serialization, payload serialization, finding summary, scan stats, webhook config, notifier enablement, platform payload builders (Slack/Discord/Teams), HMAC signature generation, event filtering, platform event filtering.
+- **Total**: 21 tests.
 
 ## Invariants & Gotchas
 
 1. **Fire-and-forget**: Notification failures never abort scans. Errors are logged via `tracing::warn!` only (`mod.rs:148-149`).
-2. **Scan-complete suppression**: `notify_scan_complete` is suppressed when `notify_on_complete == false` AND (no findings OR `notify_on_findings == false`) (`mod.rs:87-91`). This prevents duplicate notifications when findings are sent separately.
+2. **Scan-complete suppression**: `notify_scan_complete` is suppressed when `notify_on_complete == false` AND (no findings OR `notify_on_findings == false`) (`mod.rs:90-91`). This prevents duplicate notifications when findings are sent separately.
 3. **Platform event filter**: When `platform_event_filter` is `None`, all events pass. When set, only matching events are delivered to Slack/Discord/Teams.
 4. **Webhook event filter**: Per-webhook `events` field is checked before delivery. Empty events vec means no events are delivered.
 5. **HTTP client**: Created via `create_http_client(10)` with 10-second timeout (`webhook.rs:60`).
@@ -244,4 +244,4 @@ TUI Settings tab exposes notification configuration (`tabs/settings/main.rs`):
 | SSRF no address restriction | `config/scan.rs:177-187` | Design | `WebhookConfig::validate()` allows any `http://`/`https://` URL including internal addresses. Consider adding `classify_address()` check for strict environments. |
 | Teams `potentialAction` URI | `webhook.rs:369` | Low | `payload.target` is used as the URI. If target is not a valid URL, the card action link is broken. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (systematic review: file/test counts, dispatch/retry line cites)*

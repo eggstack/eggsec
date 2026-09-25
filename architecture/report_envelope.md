@@ -7,8 +7,8 @@ The normalized report/evidence envelope provides a protocol-neutral contract for
 ## Key Types
 
 - `ReportEnvelope` - Top-level container with report_id, operation_id, domain_id, target, generated_at, findings, evidence_manifest, policy_summary, baseline, tool_metadata
-- `FindingRecord` - Normalized finding with id, domain, operation_id, severity, title, description, evidence items, remediation, references, category, location
-- `EvidenceItem` - Single evidence entry with id, kind, source, summary, data_ref, redaction state
+- `FindingRecord` - Normalized finding with id, domain, operation_id, severity, title, description, evidence items, remediation, references, category, location (11 fields, `envelope.rs:279-304`)
+- `EvidenceItem` - Single evidence entry with id, kind, source, summary, data_ref, redaction state, collected_at (7 fields, `envelope.rs:148-164`)
 - `EvidenceManifest` - Manifest tracking all evidence items with total/redacted counts and redaction policy
 - `BaselineSummary` - Standardized baseline comparison with added/resolved/unchanged counts and severity deltas
 - `ToolMetadata` - Tool name and version information
@@ -17,8 +17,8 @@ The normalized report/evidence envelope provides a protocol-neutral contract for
 
 Domain crates maintain their domain-specific types and provide `to_report_envelope()` functions:
 
-1. mobile-static: `MobileScanReport` → `ReportEnvelope` (lib.rs:327)
-2. db-pentest: `DbPentestReport` → `ReportEnvelope` (bridge.rs:76)
+1. mobile-static: `MobileScanReport` → `ReportEnvelope` (lib.rs:332)
+2. db-pentest: `DbPentestReport` → `ReportEnvelope` (bridge.rs:81)
 
 Existing `to_scan_report_data()` bridges are preserved for backward compatibility.
 
@@ -47,4 +47,4 @@ Existing `to_scan_report_data()` bridges are preserved for backward compatibilit
 - `crates/eggsec-output/tests/report_envelope.rs` - Integration tests (via re-export)
 - `docs/REPORT_EVIDENCE_MODEL.md` - Full inventory and design doc
 
-*Last verified against source: 2026-09-16*
+*Last verified against source: 2026-09-25 (systematic review: conversion line numbers, field counts)*

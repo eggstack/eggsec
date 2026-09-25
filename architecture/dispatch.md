@@ -40,8 +40,8 @@ The public entry points are:
 
 | File | Lines | Contents |
 |------|-------|----------|
-| `canonical_execution.rs` | 2006 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
-| `mod.rs` | ~310 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
+| `canonical_execution.rs` | 2123 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
+| `mod.rs` | 309 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
 | `types.rs` | 156 | `TaskResult` enum (34 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
 | `executor.rs` | 64 | `OperationExecutor` trait (object-safe: no generic self, no generic associated types), `ExecutionOutput` enum (`Success`/`FeatureUnavailable`/`Failed`) |
 | `executors/mod.rs` | 43 | `build_default_registry()` — registers 5 always-compiled + 2 feature-gated adapters |
@@ -77,7 +77,7 @@ These are the actual task implementations invoked by `dispatch_inner()`:
 (converted exhaustively from `TaskKind` via `from_task_kind`, or from CLI adapters).
 Each arm normalizes through canonical contracts, then delegates to the corresponding
 domain worker. `dispatch_inner()` no longer owns a `TaskKind` match; it converts and
-delegates. The `TaskKind` variants (defined at `eggsec-runtime/src/request.rs:53–83`)
+delegates. The `TaskKind` variants (defined at `eggsec-runtime/src/request.rs:64`)
 route as follows:
 
 | # | TaskKind | Worker Call | Feature Gate |
@@ -217,7 +217,7 @@ Daemon/Runtime
 
 ## TaskResult Variants
 
-`TaskResult` (`types.rs:80`) is a typed enum with 34 data variants + `Error`. Feature-gated variants compile out with their features:
+`TaskResult` (`types.rs:80`) is a typed enum with 35 variants total (34 data variants + `Error`). Feature-gated variants compile out with their features:
 
 | Variant | Feature | Source Type |
 |---------|---------|------------|
@@ -320,4 +320,4 @@ conversion (explicit, exhaustive); `ExecutorRegistry` adapter registry (tool-pat
 composition, validation converges via shared canonical contracts); helper/lifecycle
 routes (explicit non-operation); compatibility aliases at input/wire boundaries only.
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); counts/cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); counts/cites re-verified 2026-09-22 (systematic review); file sizes and `TaskKind`/`TaskResult` counts re-verified 2026-09-25*

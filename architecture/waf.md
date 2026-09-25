@@ -94,30 +94,30 @@ All signatures defined in `data/patterns.rs` inside a `LazyLock<FxHashMap<String
 
 | Type | File | Line | Purpose |
 |------|------|------|---------|
-| `WafSignature` | `data/patterns.rs` | 4 | Header/cookie/body/ip signature for a WAF product |
-| `WafSignatureLower` | `detector/types.rs` | 23 | Pre-lowered version for case-insensitive matching |
+| `WafSignature` | `data/patterns.rs` | 5 | Header/cookie/body/ip signature for a WAF product |
+| `WafSignatureLower` | `detector/types.rs` | 23 | Pre-lowered version for case-insensitive matching (pub(crate)) |
 | `WafDetector` | `detector/mod.rs` | 21 | HTTP client + signatures + circuit breaker; `detect()`, `compare_responses()`, `check_waf_block()` |
-| `WafDetectionResult` | `detector/types.rs` | 5 | Detection output: waf_name, confidence (0–100), matched indicators, status_code |
-| `ResponseDiff` | `detector/types.rs` | 29 | Baseline vs malicious comparison: status, length, headers, body_diffs |
+| `WafDetectionResult` | `detector/types.rs` | 6 | Detection output: waf_name, confidence (0–100), matched indicators, status_code |
+| `ResponseDiff` | `detector/types.rs` | 30 | Baseline vs malicious comparison: status, length, headers, body_diffs |
 | `WafEngine` | `mod.rs` | 115 | Top-level orchestrator: detect → profile select → bypass → output |
 | `BypassEngine` | `bypass/mod.rs` | 73 | Dispatches to HeaderBypass, EvasionBypass, SmugglingBypass |
-| `BypassResult` | `bypass/mod.rs` | 62 | Per-technique result: success, payload, status_code, error |
-| `BypassTechnique` | `bypass/mod.rs` | 43 | 15-variant enum of bypass technique categories |
-| `TestType` | `bypass/mod.rs` | 19 | Payload family selector: All, Sql, Xss, Ssrf, Cmd, Traversal |
+| `BypassResult` | `bypass/mod.rs` | 63 | Per-technique result: success, payload, status_code, error |
+| `BypassTechnique` | `bypass/mod.rs` | 44 | 15-variant enum of bypass technique categories |
+| `TestType` | `bypass/mod.rs` | 20 | Payload family selector: All, Sql, Xss, Ssrf, Cmd, Traversal |
 | `HeaderBypass` | `bypass/headers.rs` | 9 | Header-based bypass: UA rotation, XFF spoof, Content-Type, encoding, method override |
 | `EvasionBypass` | `bypass/evasion.rs` | 13 | Payload obfuscation: case rotation, homoglyphs, zero-width, comments, whitespace, unicode, double encoding |
 | `SmugglingBypass` | `bypass/smuggling.rs` | 22 | Raw TCP/TLS smuggling: CL.TE, TE.CL, chunked, tunneling, H2C, double CL, multipart |
-| `SmugglingType` | `bypass/smuggling.rs` | 27 | 8-variant enum of HTTP smuggling techniques |
-| `WafProfile` | `bypass/profiles.rs` | 8 | Named profile with detection_signatures + Vec<ProfileBypass> |
+| `SmugglingType` | `bypass/smuggling.rs` | 29 | 8-variant enum of HTTP smuggling techniques |
+| `WafProfile` | `bypass/profiles.rs` | 9 | Named profile with detection_signatures + Vec<ProfileBypass> |
 | `ProfileBypass` | `bypass/profiles.rs` | 15 | Single bypass: technique, headers, payloads, description |
-| `OwaspCategory` | `types.rs` | 7 | OWASP Top 10 2021 (10 variants) + API Top 10 2023 (11 variants) = 21 total |
-| `Finding` | `types.rs` | 138 | Bypass finding with OWASP category, severity, technique, payload |
-| `ScanResults` | `types.rs` | 183 | Full scan output: detection + findings + summary |
-| `WafBehavior` | `regression_report.rs` | 4 | Regression behavior: Blocked, Allowed, Challenged, Tarpitted, Errored, Skipped |
-| `WafRegressionCase` | `regression_report.rs` | 28 | Individual regression test case with baseline comparison |
-| `WafRegressionReport` | `regression_report.rs` | 104 | Full regression report: cases, summary, baseline_id, termination_reason |
-| `WafPayload` | `payloads/encoding.rs` | 3 | Structured payload with name, description, and bypass_types |
-| `BypassType` | `payloads/encoding.rs` | 11 | Payload classification: SqlInjection, Xss, CommandInjection, PathTraversal, Ssrf |
+| `OwaspCategory` | `types.rs` | 8 | OWASP Top 10 2021 (10 variants) + API Top 10 2023 (11 variants) = 21 total |
+| `Finding` | `types.rs` | 139 | Bypass finding with OWASP category, severity, technique, payload |
+| `ScanResults` | `types.rs` | 184 | Full scan output: detection + findings + summary |
+| `WafBehavior` | `regression_report.rs` | 6 | Regression behavior: Blocked, Allowed, Challenged, Tarpitted, Errored, Skipped |
+| `WafRegressionCase` | `regression_report.rs` | 29 | Individual regression test case with baseline comparison |
+| `WafRegressionReport` | `regression_report.rs` | 105 | Full regression report: cases, summary, baseline_id, termination_reason |
+| `WafPayload` | `payloads/encoding.rs` | 4 | Structured payload with name, description, and bypass_types |
+| `BypassType` | `payloads/encoding.rs` | 12 | Payload classification: SqlInjection, Xss, CommandInjection, PathTraversal, Ssrf |
 
 ## Detection Flow
 
@@ -216,7 +216,7 @@ Raw TCP/TLS HTTP/1.1 probes — does not use the `reqwest` client. 8 `SmugglingT
 
 Additional chunked variants: chunked with smuggled request in body (`smuggling.rs:237`), invalid chunk size prefix (`smuggling.rs:247`), TE.CL with trailing headers (`smuggling.rs:258`).
 
-TLS uses `rustls` with `webpki_roots` — ring-only provider (`smuggling.rs:415`). `H2CUpgrade` and `Http2Frame` variants exist in the enum but are currently dead code (`#[allow(dead_code)]` at `smuggling.rs:32-34`).
+TLS uses `rustls` with `webpki_roots` — ring-only provider (`smuggling.rs:415`). `H2CUpgrade` and `Http2Frame` variants exist in the enum but are currently dead code (`#[allow(dead_code)]` at `smuggling.rs:34-36`).
 
 ### Bypass Profiles (`bypass/profiles.rs`)
 
@@ -269,8 +269,8 @@ For **empty payloads**: checks 1–5 only (block-to-non-block transition require
 
 - **`WafBehavior`** (6 variants): Blocked, Allowed, Challenged, Tarpitted, Errored, Skipped
 - **`WafRegressionCase`**: payload_family, payload_type, request_summary, status_code, behavior, response_time_ms, baseline_behavior, regression flag, confidence
-- **`WafBehaviorSummary::from_cases()`** (`regression_report.rs:54`): aggregates counts and computes `regression_count` and `new_bypass_count` (Allowed when baseline was Blocked)
-- **`WafRegressionReport`** (`regression_report.rs:104`): full report with target, profile, scope_file, baseline_id, budget_consumed, termination_reason
+- **`WafBehaviorSummary::from_cases()`** (`regression_report.rs:55`): aggregates counts and computes `regression_count` and `new_bypass_count` (Allowed when baseline was Blocked)
+- **`WafRegressionReport`** (`regression_report.rs:105`): full report with target, profile, scope_file, baseline_id, budget_consumed, termination_reason
 - **`to_human_readable()`** (`regression_report.rs:120`): human-readable text rendering
 
 ## Public API

@@ -27,7 +27,7 @@ When `container` is disabled, the module compiles with stub types. No container 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `container/mod.rs` | 66 | `ContainerScanReport`, `ContainerScanType` enum (5 variants), `ContainerFinding` struct |
-| `container/docker.rs` | 343 | `DockerScanner`, `DockerScanResult`, `ImageLayer`, `DockerMisconfiguration`, Dockerfile analysis |
+| `container/docker.rs` | 356 | `DockerScanner`, `DockerScanResult`, `ImageLayer`, `DockerMisconfiguration`, Dockerfile analysis |
 | `container/kubernetes.rs` | 394 | `KubernetesScanner`, `KubernetesScanResult`, `ClusterInfo`, `K8sFinding`, live K8s API scanning |
 | `container/escape.rs` | 245 | `EscapeDetector`, `EscapeDetectionResult`, `EscapeRisk`, `EscapeRiskLevel` enum (5 variants) |
 | `container/cis.rs` | 366 | `CisBenchmarkChecker`, `CisBenchmarkResult`, `CisCheck`, `CisCheckStatus` enum (3 variants) |
@@ -100,12 +100,12 @@ Unit struct — stateless. Created via `DockerScanner::new()` or `DockerScanner:
 
 ### Docker Scan Flow
 
-1. `scan_image(image_name)` (`docker.rs:45-85`):
-   - Calls `inspect_image()` → runs `docker inspect <image>` via `std::process::Command`
+1. `scan_image(image_name)` (`docker.rs:44-`):
+   - Calls `inspect_image()` (`docker.rs:209`) → runs `docker inspect <image>` via `std::process::Command`
    - Parses JSON output, extracts `Config.User`, `Config.Healthcheck`, `Config.Image`, `Config.ExposedPorts`
-   - Validates image name characters (`is_valid_image_name()` at `docker.rs:198-208`)
-   - Calls `check_misconfigurations()` for runtime-level checks
-2. `check_misconfigurations()` (`docker.rs:263-299`):
+   - Validates image name characters (`is_valid_image_name()` at `docker.rs:197-`)
+   - Calls `check_misconfigurations()` (`docker.rs:276-`) for runtime-level checks
+2. `check_misconfigurations()` (`docker.rs:276-`):
    - Running as root → High
    - No healthcheck → Low
    - Management ports (22/23/3389) exposed → High
@@ -113,17 +113,17 @@ Unit struct — stateless. Created via `DockerScanner::new()` or `DockerScanner:
    - Reads file via `tokio::fs::read_to_string()`
    - Delegates to `analyze_dockerfile(content)`
 
-### Dockerfile Analysis Checks (`docker.rs:95-196`)
+### Dockerfile Analysis Checks (`docker.rs:94-193`)
 
 | Check | Severity | Condition | Line |
 |-------|----------|-----------|------|
-| No specific image tag | Medium | `FROM` with `latest` or no tag | `docker.rs:104-114` |
-| Running as root | High | `USER root` or `USER 0` | `docker.rs:116-123` |
-| Dangerous port exposed | High | `EXPOSE 22/23/3389` | `docker.rs:125-146` |
+| No specific image tag | Medium | `FROM` with `latest` or no tag | `docker.rs:103-` |
+| Running as root | High | `USER root` or `USER 0` | `docker.rs:115-` |
+| Dangerous port exposed | High | `EXPOSE 22/23/3389` | `docker.rs:124-` |
 | Secret in ENV | Critical | `ENV` contains `PASSWORD/SECRET/API_KEY/TOKEN` | `docker.rs:148-163` |
-| ADD instead of COPY | Low | `ADD` for local files (not URLs) | `docker.rs:165-173` |
-| No USER instruction | Medium | No `USER` directive anywhere | `docker.rs:176-184` |
-| No HEALTHCHECK | Low | No `HEALTHCHECK` directive | `docker.rs:186-193` |
+| ADD instead of COPY | Low | `ADD` for local files (not URLs) | `docker.rs:164-` |
+| No USER instruction | Medium | No `USER` directive anywhere | `docker.rs:175-` |
+| No HEALTHCHECK | Low | No `HEALTHCHECK` directive | `docker.rs:185-` |
 
 ---
 
@@ -174,13 +174,13 @@ Unit struct — stateless. Created via `DockerScanner::new()` or `DockerScanner:
 
 | Method | API Endpoint | Purpose | Line |
 |--------|-------------|---------|------|
-| `get_cluster_info()` | `GET /version` | Server version | `kubernetes.rs:87-93` |
-| `get_item_count("/api/v1/nodes")` | `GET /api/v1/nodes` | Node count | `kubernetes.rs:95` |
-| `get_item_count("/api/v1/namespaces")` | `GET /api/v1/namespaces` | Namespace count | `kubernetes.rs:96` |
-| `check_rbac()` | `GET /apis/rbac.authorization.k8s.io/v1/clusterroles` | RBAC issues | `kubernetes.rs:141-144` |
-| `check_network_policies()` | `GET /apis/networking.k8s.io/v1/networkpolicies` | Network policy count | `kubernetes.rs:205-208` |
-| `check_pod_security()` | `GET /api/v1/pods` | Privileged containers | `kubernetes.rs:245` |
-| `check_secret_exposure()` | `GET /api/v1/secrets` | Opaque secrets | `kubernetes.rs:312` |
+| `get_cluster_info()` | `GET /version` | Server version | `kubernetes.rs:86-` |
+| `get_item_count("/api/v1/nodes")` | `GET /api/v1/nodes` | Node count | `kubernetes.rs:108` |
+| `get_item_count("/api/v1/namespaces")` | `GET /api/v1/namespaces` | Namespace count | `kubernetes.rs:108` |
+| `check_rbac()` | `GET /apis/rbac.authorization.k8s.io/v1/clusterroles` | RBAC issues | `kubernetes.rs:138-` |
+| `check_network_policies()` | `GET /apis/networking.k8s.io/v1/networkpolicies` | Network policy count | `kubernetes.rs:202-` |
+| `check_pod_security()` | `GET /api/v1/pods` | Privileged containers | `kubernetes.rs:242` |
+| `check_secret_exposure()` | `GET /api/v1/secrets` | Opaque secrets | `kubernetes.rs:309` |
 
 All requests use `bearer_auth(token)` when a token is present (`kubernetes.rs:89-91, 111-113, 146-148, 209-211, 247-249, 314-316`).
 
@@ -372,11 +372,11 @@ Unit struct — stateless. Created via `CisBenchmarkChecker::new()` or `CisBench
 
 ## Testing
 
-### Docker Tests (`docker.rs:302-342`)
+### Docker Tests (`docker.rs:326-`)
 
 | Test | Lines | What It Verifies |
 |------|-------|------------------|
-| `test_docker_scanner_creation` | 307-310 | Scanner instantiation |
+| `test_docker_scanner_creation` | 326- | Scanner instantiation |
 | `test_analyze_dockerfile_root_user` | 313-318 | `USER root` detected |
 | `test_analyze_dockerfile_secret_in_env` | 321-326 | `ENV API_KEY=secret` → Critical |
 | `test_analyze_dockerfile_no_user` | 329-334 | No USER instruction detected |
@@ -427,10 +427,10 @@ Unit struct — stateless. Created via `CisBenchmarkChecker::new()` or `CisBench
 
 | Finding | File:Line | Severity | Description |
 |---------|-----------|----------|-------------|
-| `docker inspect` via process spawn | `docker.rs:217-219` | Info | Uses `std::process::Command` instead of Docker API. Requires `docker` binary in PATH; no timeout on process execution. |
+| `docker inspect` via process spawn | `docker.rs:209` | Info | Uses `std::process::Command` instead of Docker API. Requires `docker` binary in PATH; no timeout on process execution. |
 | No request timeout on K8s API | `kubernetes.rs:39` | Low | `create_insecure_http_client(timeout_secs)` sets a timeout, but individual request methods don't enforce timeouts beyond the client-level setting. |
 | String-matching false positives | `cis.rs`, `escape.rs` | Medium | All checks use `lower.contains("pattern")` which matches substrings in comments, values, and unrelated contexts. No AST parsing. |
 | `lower_contains` helper inconsistency | `escape.rs:164-166` | Low | Converts needle to lowercase but haystack is already lowered — works correctly but the function name suggests it handles both. |
-| No process timeout | `docker.rs:217-219` | Medium | `Command::new("docker").args(["inspect", image_name]).output()` has no timeout. A hung docker daemon blocks the async task indefinitely. |
+| No process timeout | `docker.rs:209` | Medium | `Command::new("docker").args(["inspect", image_name]).output()` has no timeout. A hung docker daemon blocks the async task indefinitely. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (docker.rs 356 lines, k8s method lines refreshed)*

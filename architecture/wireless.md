@@ -13,10 +13,10 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 
 | Component | Feature gate | `cfg` line |
 |-----------|-------------|------------|
-| Passive scan (`WirelessScanner::scan`) | `wireless` | `wireless/mod.rs:86` |
+| Passive scan (`WirelessScanner::scan`) | `wireless` | `wireless/mod.rs:88` |
 | Active attacks module | `wireless-advanced` | `wireless/mod.rs:9` (`#[cfg(feature = "wireless-advanced")] pub mod active;`) |
-| CLI handler scan path | `cli` | `commands/handlers/wireless.rs:11` |
-| CLI handler deauth path | `wireless-advanced` | `commands/handlers/wireless.rs:7` (`#[cfg(feature = "wireless-advanced")]`) |
+| CLI handler scan path | `cli` | `commands/handlers/wireless.rs:4` (`handle_wireless`) |
+| CLI handler deauth path | `wireless-advanced` | `commands/handlers/wireless.rs:6,61` (`#[cfg(feature = "wireless-advanced")]`) |
 | TUI integration | `wireless` (passive) + `wireless-advanced` (active) | `eggsec-tui/src/tabs/wireless.rs` |
 
 ## Architecture
@@ -25,14 +25,14 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `WirelessScanner` | `wireless/mod.rs:72` | Main scanning engine. `new()`, `with_interface()`, `scan()` (async, iwlist), `parse_scan_output()`, `analyze_networks()`, `generate_recommendations()` |
-| `WirelessNetwork` | `wireless/mod.rs:17` | Discovered network: `ssid`, `bssid`, `channel`, `security_type`, `signal_strength`, `last_seen`, `wps_enabled`, `is_hidden`, `transition_mode` (9 fields) |
-| `SecurityType` | `wireless/mod.rs:30` | Enum: `Open`, `WEP`, `WPA`, `WPA2`, `WPA3`, `Enterprise`, `Unknown` — **7 variants** |
-| `WirelessScanResult` | `wireless/mod.rs:54` | Scan output: `interface`, `networks`, `scan_duration_secs`, `recommendations` |
-| `WirelessVulnerability` | `wireless/mod.rs:62` | Finding from `analyze_networks`: `ssid`, `bssid`, `vulnerability_type`, `severity`, `description`, `recommendation` |
-| `ActiveAttackConfig` | `wireless/active/mod.rs:68` | Attack configuration: `interface`, `bssid` (`Option<[u8; 6]>`), `client`, `reason_code`, `max_frames`, `frames_per_second`, `dry_run` |
+| `WirelessScanner` | `wireless/mod.rs:74` | Main scanning engine. `new()`, `with_interface()`, `scan()` (async, iwlist), `parse_scan_output()`, `analyze_networks()`, `generate_recommendations()` |
+| `WirelessNetwork` | `wireless/mod.rs:19` | Discovered network: `ssid`, `bssid`, `channel`, `security_type`, `signal_strength`, `last_seen`, `wps_enabled`, `is_hidden`, `transition_mode` (9 fields) |
+| `SecurityType` | `wireless/mod.rs:32` | Enum: `Open`, `WEP`, `WPA`, `WPA2`, `WPA3`, `Enterprise`, `Unknown` — **7 variants** |
+| `WirelessScanResult` | `wireless/mod.rs:57` | Scan output: `interface`, `networks`, `scan_duration_secs`, `recommendations` |
+| `WirelessVulnerability` | `wireless/mod.rs:65` | Finding from `analyze_networks`: `ssid`, `bssid`, `vulnerability_type`, `severity`, `description`, `recommendation` |
+| `ActiveAttackConfig` | `wireless/active/mod.rs:69` | Attack configuration: `interface`, `bssid` (`Option<[u8; 6]>`), `client`, `reason_code`, `max_frames`, `frames_per_second`, `dry_run` |
 | `ActiveWirelessAttackResult` | `wireless/active/mod.rs:29` | Attack result: `interface`, `attack_type`, `target_bssid`, `target_client`, `frames_sent`, `duration_secs`, `dry_run`, `findings`, `raw_output`, `recommendations` |
-| `ActiveWirelessFinding` | `wireless/active/mod.rs:53` | Finding from active attack: `attack_type`, `severity`, `description`, `evidence`, `remediation` |
+| `ActiveWirelessFinding` | `wireless/active/mod.rs:54` | Finding from active attack: `attack_type`, `severity`, `description`, `evidence`, `remediation` |
 
 ### Files
 
@@ -54,8 +54,8 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 
 1. **Invoke**: `eggsec wireless <iface>` → `handle_wireless()` → `handle_scan()`
 2. **Policy gate**: `EnforcementContext::evaluate()` with `OperationRisk::SafeActive`, `required_features: ["wireless"]`; no `requires_explicit_scope` (target is local interface name)
-3. **Scan**: `WirelessScanner::scan()` spawns `iwlist <iface> scan` via `tokio::process::Command` (`mod.rs:87`)
-4. **Parse**: `parse_scan_output()` (`mod.rs:152`) iterates iwlist line-by-line. State resets per `Cell` line. Handles:
+3. **Scan**: `WirelessScanner::scan()` spawns `iwlist <iface> scan` via `tokio::process::Command` (`mod.rs:89`)
+4. **Parse**: `parse_scan_output()` (`mod.rs:154`) iterates iwlist line-by-line. State resets per `Cell` line. Handles:
    - `Address:` → BSSID
    - `ESSID:"..."` → SSID (empty/`<hidden>`/`""` normalized to `<hidden>`)
    - `Channel:` → channel
@@ -66,19 +66,19 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
    - `Authentication Suites: 802.1X` → Enterprise
    - State also tracks `saw_wpa2`/`saw_wpa3` for transition detection (both present → `transition_mode = true`)
    - Incomplete cells (missing SSID or BSSID) are skipped with a warning
-5. **Analyze**: `analyze_networks()` (`mod.rs:324`) generates `WirelessVulnerability` findings:
+5. **Analyze**: `analyze_networks()` (`mod.rs:326`) generates `WirelessVulnerability` findings:
    - Signal ≤ -80 dBm → "Weak Signal Strength" (Low if ≤ -90, else Medium)
    - WPS enabled → "WPS Enabled" (Medium)
    - Hidden SSID → "Hidden SSID" (Low)
    - Transition mode → "WPA2/WPA3 Transition Mode" (Low)
    - Security type findings: Open (Medium), WEP (High), WPA (Medium), Enterprise (Low), Unknown (Medium)
-   - **Rogue AP / Evil Twin heuristic** (`mod.rs:456-511`): Groups networks by SSID; if ≥2 distinct BSSIDs or ≥2 distinct security configs, emits a rogue candidate. Severity: Medium if security diff, Low otherwise. Description includes BSSID list and explicit "passive heuristic" caveat. Suppressed if any network in the group matches `known_good` (by SSID, BSSID, or `"SSID,BSSID"` format)
-6. **Recommendations**: `generate_recommendations()` (`mod.rs:516`) deduplicates by security type and per-BSSID for WPS/transition/hidden/weak, using `FxHashSet`
+    - **Rogue AP / Evil Twin heuristic** (`mod.rs:456-511`): Groups networks by SSID; if ≥2 distinct BSSIDs or ≥2 distinct security configs, emits a rogue candidate. Severity: Medium if security diff, Low otherwise. Description includes BSSID list and explicit "passive heuristic" caveat. Suppressed if any network in the group matches `known_good` (by SSID, BSSID, or `"SSID,BSSID"` format)
+6. **Recommendations**: `generate_recommendations()` (`mod.rs:517`) deduplicates by security type and per-BSSID for WPS/transition/hidden/weak, using `FxHashSet`
 7. **Output**: Human (default: rogue candidates summarized by count; `--detect-suspicious` for full list) or JSON
 
 ### Temporal Analysis (Repeat Scans)
 
-`compute_changes_since()` (`mod.rs:916-998`) and `build_temporal_summary()` (`mod.rs:1001-1066`) implement repeated-scan diffing:
+`compute_changes_since()` (`mod.rs:917-999`) and `build_temporal_summary()` (`mod.rs:1002-1067`) implement repeated-scan diffing:
 
 - **New networks**: SSID+BSSID not in previous scan
 - **Security changes**: Same BSSID, different `SecurityType`
@@ -118,7 +118,7 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 
 **Attack runners**: `run_deauth()` (`deauth.rs:270`) and `run_disassoc()` (`deauth.rs:381`) build N frames (from `max_frames`), optionally inject them, and return `ActiveWirelessAttackResult` with findings and remediation advice (WIDS/WIPS verification, 802.11w PMF recommendation).
 
-**Safety constraints** (enforced in `commands/handlers/wireless.rs:90-96`):
+**Safety constraints** (enforced in `commands/handlers/wireless.rs:61-98`):
 - Non-dry-run requires `--allow-active-wireless` flag
 - `max_frames` hard-capped to 1000, `frames_per_second` capped to 100
 - Policy gate: `OperationRisk::Intrusive` + `OperationMode::DefenseLab`
@@ -213,7 +213,7 @@ status. See `docs/PLATFORM.md`.
 Hermetic: parser on canned `iwlist`, rogue heuristic, known-good
 suppression, frame bytes + repetition loops. No interface or privilege.
 
-### Unit Tests (`wireless/mod.rs:1068-1568`)
+### Unit Tests (`wireless/mod.rs:1069-1568`)
 
 14 tests covering:
 - `SecurityType::as_str()` round-trip
@@ -226,11 +226,11 @@ suppression, frame bytes + repetition loops. No interface or privilege.
 - Empty known-good set (rogue not suppressed)
 - `to_scan_report_data` bridge validation (evidence format, categories, serde roundtrip)
 
-### Active Tests (`wireless/active/mod.rs:168-297`)
+### Active Tests (`wireless/active/mod.rs:169-298`)
 
 7 tests: MAC parse/format, serde roundtrips for `ActiveWirelessAttackResult` and `ActiveWirelessFinding`, `to_active_scan_report_data` bridge with and without BSSID.
 
-### Deauth Tests (`wireless/active/attacks/deauth.rs:475-555`)
+### Deauth Tests (`wireless/active/attacks/deauth.rs:476-555`)
 
 11 tests: frame length (34 bytes), broadcast vs targeted addresses, frame control fields (0xC000 deauth, 0xA000 disassoc), radiotap header, reason code encoding, multi-frame batch building.
 
@@ -251,4 +251,4 @@ suppression, frame bytes + repetition loops. No interface or privilege.
 
 See also: [overview.md](overview.md), [probe.md](probe.md), [stress.md](stress.md), [defense_lab.md](defense_lab.md)
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; type/flow/test line-cites re-verified 2026-09-25 (systematic review)*

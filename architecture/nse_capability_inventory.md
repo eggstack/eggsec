@@ -8,7 +8,9 @@
 
 The `eggsec-nse` crate provides Lua 5.4 script execution via `mlua`. Lua execution hooks can interrupt Lua bytecode, but once a Lua script enters Rust helper code, blocking filesystem, network, DNS, process, crypto, compression, time, or randomness work must enforce limits and cancellation cooperatively inside the helper path.
 
-This inventory classifies every side-effecting helper operation across the 167 library implementation files in `crates/eggsec-nse/src/libraries/` (168 `.rs` files total; `mod.rs` is module declarations only), plus the executor core, to guide Milestone 3 wrapper migration.
+This inventory classifies every side-effecting helper operation across the 167 library implementation files in `crates/eggsec-nse/src/libraries/` (168 `.rs` files total; `mod.rs` is module declarations only — verified 2026-09-25), plus the executor core, to guide Milestone 3 wrapper migration.
+
+> Line numbers below are approximate as of 2026-09-25 (registration sites drift with edits); function/registration names are the stable cite.
 
 ### Capability Classes
 
@@ -44,10 +46,10 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/io.rs:263-359` | `io.popen(cmd, mode)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — arbitrary command execution via `sh -c`; routed through `check_process_exec()` capability wrapper |
-| `libraries/os.rs:145-156` | `os.execute(cmd)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | needs check | `process_exec` | **Safe stub** — returns status=1, no real execution |
-| `libraries/nmap.rs:715-729` | `nmap.is_admin()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
-| `libraries/nmap.rs:1124-1139` | `nmap.is_privileged()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
+| `libraries/io.rs:323-348` (`io.set("popen", …)` at `io.rs:323-324`, `check_process_exec` at `io.rs:328`) | `io.popen(cmd, mode)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — arbitrary command execution via `sh -c`; routed through `check_process_exec()` capability wrapper |
+| `libraries/os.rs:150-161` (`execute_fn` at `os.rs:150`, `nse_os.set("execute", …)` at `os.rs:161`) | `os.execute(cmd)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | needs check | `process_exec` | **Safe stub** — returns status=1, no real execution |
+| `libraries/nmap.rs:737-744` (`"is_admin"` at `nmap.rs:737`, `check_process_exec` at `nmap.rs:744`) | `nmap.is_admin()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
+| `libraries/nmap.rs:1148-1155` (`"is_privileged"` at `nmap.rs:1148`, `check_process_exec` at `nmap.rs:1155`) | `nmap.is_privileged()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
 
 ---
 
@@ -153,8 +155,8 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/os.rs:103-110` | `os.getenv(name)` | `environment` | EnvAccess | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | `env_read` | Sandboxed — reads NSE_ENV only |
-| `libraries/os.rs:114-127` | `os.setenv(name, value)` | `environment` | EnvAccess | low | `manual_allowed`, `agent_deny`, `ci_deny` | none | none | `env_write` | Blocked in sandbox |
+| `libraries/os.rs:108-116` (`getenv_fn` at `os.rs:108`, `nse_os.set("getenv", …)` at `os.rs:116`) | `os.getenv(name)` | `environment` | EnvAccess | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | `env_read` | Sandboxed — reads NSE_ENV only |
+| `libraries/os.rs:119-132` (`setenv_fn` at `os.rs:119`, `nse_os.set("setenv", …)` at `os.rs:132`) | `os.setenv(name, value)` | `environment` | EnvAccess | low | `manual_allowed`, `agent_deny`, `ci_deny` | none | none | `env_write` | Blocked in sandbox |
 | `libraries/os.rs:130-142` | `os.unsetenv(name)` | `environment` | EnvAccess | low | `manual_allowed`, `agent_deny`, `ci_deny` | none | none | `env_write` | Blocked in sandbox |
 | `libraries/os.rs:209-212` | `os.getcwd()` | `environment` | EnvAccess | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | `env_read` | No sandbox check |
 | `libraries/os.rs:314-316` | `os.tmpdir()` | `environment` | EnvAccess | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | `env_read` | No sandbox check |
@@ -168,9 +170,9 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/stdnse.rs:172-191` | `stdnse.sleep(seconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **needs check** | `sleep` | **Blocks the thread** — no cancellation checks |
-| `libraries/stdnse.rs:172-191` | `stdnse.usleep(useconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **needs check** | `sleep` | **Blocks the thread** — no cancellation checks |
-| `libraries/stdnse.rs:172-191` | `stdnse.nsleep(nanoseconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **needs check** | `sleep` | **Blocks the thread** — no cancellation checks |
+| `libraries/stdnse.rs:173-192` (`sleep_fn` at `stdnse.rs:174`, chunked 100ms loop with `cancel.is_cancelled()` at `stdnse.rs:176-189`) | `stdnse.sleep(seconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **migrated (cooperative)** | `sleep` | **Chunked sleep with cancellation checks** (100ms steps, errors on cancel) — chunked threading still blocks the worker thread between checks |
+| `libraries/stdnse.rs:203-222` (`usleep_fn` at `stdnse.rs:204`, same 100ms chunked pattern) | `stdnse.usleep(useconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **migrated (cooperative)** | `sleep` | **Chunked sleep with cancellation checks** — same pattern as `sleep` |
+| `libraries/stdnse.rs:203-222` (adjacent `nsleep` registration; same chunked pattern) | `stdnse.nsleep(nanoseconds)` | `time_clock` | none | high | `manual_allowed`, `agent_deny`, `ci_deny` | none | **migrated (cooperative)** | `sleep` | **Chunked sleep with cancellation checks** — verify `nsleep` registration alongside `usleep` |
 | `libraries/stdnse.rs:178-185` | `stdnse.clock()`, `stdnse.get_time()` | `time_clock` | none | none | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | none | Time reads; non-blocking |
 | `libraries/os.rs:238-305` | `os.clock()`, `os.date()`, `os.time()`, `os.difftime()` | `time_clock` | none | none | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | none | Time reads; non-blocking |
 

@@ -236,11 +236,11 @@ Two separate process-global Tokio runtimes exist:
 - **Async runtime** (`runtime_async.rs`): `OnceLock<Runtime>` with 2 worker
   threads. All `PyFuture` instances share this runtime. Converting results back
   to Python objects acquires the GIL via `Python::attach()` from the worker
-  thread (`runtime_async.rs:98`).
+  thread (`runtime_async.rs:129`).
 
 - **Sync runtime** (`runtime_sync.rs`): Separate `OnceLock<Runtime>` with 2
   worker threads. `block_on()` uses `py.detach()` to release the GIL during I/O
-  (`runtime_sync.rs:28`), preventing deadlock when sync wrappers call async
+  (`runtime_sync.rs:52`), preventing deadlock when sync wrappers call async
   engine internals.
 
 ### Result envelope
@@ -480,9 +480,9 @@ Low-level network primitives (`Target`, `TcpSession`, `UdpSocket`,
 3. **Confirmation required** for: `NseRun`, `DbProbe`, `FuzzHttp`, `LoadTest`
    (`operation_registry.rs:92-98`).
 
-4. **Sync `block_on()` releases the GIL** via `py.detach()` (`runtime_sync.rs:28`).
+4. **Sync `block_on()` releases the GIL** via `py.detach()` (`runtime_sync.rs:52`).
    Async `spawn_async()` acquires the GIL from worker threads via `Python::attach()`
-   for result conversion (`runtime_async.rs:98`).
+   for result conversion (`runtime_async.rs:129`).
 
 5. **Engine and AsyncEngine share `Arc<EngineState>`** — scope, registry, events,
    and audit log are consistent across sync and async paths.
@@ -515,4 +515,4 @@ Low-level network primitives (`Target`, `TcpSession`, `UdpSocket`,
 - [config.md](config.md) — enforcement model, LoadedScope, policy system
 - [docs/python/domain-maturity.md](../docs/python/domain-maturity.md) — domain maturity classifications and graduation checklist
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); runtime GIL-bridging line cites fixed (`runtime_async.rs:129`, `runtime_sync.rs:52`) 2026-09-25 (systematic review)*

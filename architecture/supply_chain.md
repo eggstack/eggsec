@@ -8,20 +8,20 @@ Supply chain security analysis including SBOM generation (CycloneDX and SPDX for
 
 | Crate | Module path | Feature gate | lib.rs lines | Visibility |
 |-------|-------------|-------------|--------------|------------|
-| `eggsec` | `supply_chain/` | `sbom` | `lib.rs:140-144` | `pub mod` when enabled, `mod` (dead_code) when disabled |
+| `eggsec` | `supply_chain/` | `sbom` | `lib.rs:146-148` | `pub mod` when enabled, `mod` (dead_code) when disabled |
 
-The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.) The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:58`.
+The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.) The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:82`.
 
 ## Files
 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `mod.rs` | 52 | Module root: `SupplyChainReport`, `SupplyChainFinding`, re-exports |
-| `sbom.rs` | 766 | `SbomGenerator`: Cargo/npm/requirements.txt parsing, CycloneDX and SPDX exporters |
-| `scanner.rs` | 744 | `ManifestType` enum, `scan_repo()` directory walker, Dockerfile/GitHub Actions analysis, `collect_package_names()` |
+| `sbom.rs` | 790 | `SbomGenerator`: Cargo/npm/requirements.txt parsing, CycloneDX and SPDX exporters |
+| `scanner.rs` | 767 | `ManifestType` enum, `scan_repo()` directory walker, Dockerfile/GitHub Actions analysis, `collect_package_names()` |
 | `typosquat.rs` | 353 | `TyposquatDetector`: Levenshtein distance, 42-package known list, technique classification |
 
-**Total: 4 files, 1,915 lines (including tests).**
+**Total: 4 files, 1,962 lines (including tests).**
 
 ## Architecture
 
@@ -36,7 +36,7 @@ The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (No
 | `SbomComponent` | `sbom.rs:22` | `name`, `version`, `ecosystem`, `purl`, `licenses`, `is_direct` | Dependency entry |
 | `SbomVulnerability` | `sbom.rs:32` | `component`, `cve_id`, `severity`, `description` | CVE reference (populated by external consumers) |
 | `SbomGenerator` | `sbom.rs:40` | Unit struct (stateless) | SBOM generation facade |
-| `ManifestType` | `scanner.rs:8` | 10 variants: `CargoToml`, `CargoLock`, `PackageJson`, `PackageLockJson`, `YarnLock`, `PnpmLockYaml`, `GoMod`, `GoSum`, `Dockerfile`, `GitHubActions` | File type classification |
+| `ManifestType` | `scanner.rs:31` | 10 variants: `CargoToml`, `CargoLock`, `PackageJson`, `PackageLockJson`, `YarnLock`, `PnpmLockYaml`, `GoMod`, `GoSum`, `Dockerfile`, `GitHubActions` | File type classification |
 | `DiscoveredManifest` | `scanner.rs:40` | `path`, `manifest_type`, `dependency_count: Option<usize>` | Discovery result |
 | `SupplyChainScanResult` | `scanner.rs:48` | `repo_path`, `manifests`, `findings`, `dockerfile_found`, `github_actions_found`, `total_dependencies` | Scan output |
 | `TyposquatReport` | `typosquat.rs:6` | `packages_checked`, `suspicious_packages`, `risk_level` | Detection output |
@@ -51,9 +51,9 @@ The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (No
 
 | Method | Input File | Ecosystem | Parses | File:line |
 |--------|-----------|-----------|--------|-----------|
-| `generate_from_cargo()` | `Cargo.toml` + `Cargo.lock` | cargo | Package name/version from `[package]`, deps from `[[package]]` blocks, direct deps from `[dependencies]` | `sbom.rs:53-96` |
-| `generate_from_npm()` | `package.json` + `package-lock.json` | npm | `dependencies` object, lockfile `packages` map | `sbom.rs:98-183` |
-| `generate_from_requirements()` | `requirements.txt` | pypi | Lines with `==`, `===`, `~=`, `!=`, `>=`, `<=`, `>`, `<` operators | `sbom.rs:185-279` |
+| `generate_from_cargo()` | `Cargo.toml` + `Cargo.lock` | cargo | Package name/version from `[package]`, deps from `[[package]]` blocks, direct deps from `[dependencies]` | `sbom.rs:77-` |
+| `generate_from_npm()` | `package.json` + `package-lock.json` | npm | `dependencies` object, lockfile `packages` map | `sbom.rs:122-` |
+| `generate_from_requirements()` | `requirements.txt` | pypi | Lines with `==`, `===`, `~=`, `!=`, `>=`, `<=`, `>`, `<` operators | `sbom.rs:209-` |
 
 #### Cargo.toml Parsing (`sbom.rs:376-416`)
 
@@ -241,14 +241,14 @@ scan_repo(repo_path)                  [scanner.rs:59]
 
 | Function / Method | Signature | Location |
 |-------------------|-----------|----------|
-| `SbomGenerator::new` | `fn() -> Self` | `sbom.rs:49` |
-| `SbomGenerator::generate_from_cargo` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:53` |
-| `SbomGenerator::generate_from_npm` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:98` |
-| `SbomGenerator::generate_from_requirements` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:185` |
-| `SbomGenerator::export_cyclonedx` | `fn(&self, report) -> Result<String>` | `sbom.rs:281` |
-| `SbomGenerator::export_spdx` | `fn(&self, report) -> Result<String>` | `sbom.rs:328` |
-| `scan_repo` | `fn(repo_path: &Path) -> Result<SupplyChainScanResult>` | `scanner.rs:59` |
-| `collect_package_names` | `fn(project_path: &Path) -> Result<Vec<String>>` | `scanner.rs:180` |
+| `SbomGenerator::new` | `fn() -> Self` | `sbom.rs:73` |
+| `SbomGenerator::generate_from_cargo` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:77` |
+| `SbomGenerator::generate_from_npm` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:122` |
+| `SbomGenerator::generate_from_requirements` | `fn(&self, path, format) -> Result<SbomReport>` | `sbom.rs:209` |
+| `SbomGenerator::export_cyclonedx` | `fn(&self, report) -> Result<String>` | `sbom.rs:305` |
+| `SbomGenerator::export_spdx` | `fn(&self, report) -> Result<String>` | `sbom.rs:352` |
+| `scan_repo` | `fn(repo_path: &Path) -> Result<SupplyChainScanResult>` | `scanner.rs:82` |
+| `collect_package_names` | `fn(project_path: &Path) -> Result<Vec<String>>` | `scanner.rs:203` |
 | `TyposquatDetector::new` | `fn(threshold: f64) -> Self` | `typosquat.rs:92` |
 | `TyposquatDetector::check_packages` | `fn(&self, &[String]) -> Result<TyposquatReport>` | `typosquat.rs:96` |
 | `TyposquatDetector::check_package` | `fn(&self, &str) -> Option<TyposquatFinding>` | `typosquat.rs:114` |
@@ -324,7 +324,7 @@ Total: **41 unit tests** across all files.
 3. **Cargo.toml parsing is not TOML-compliant**: The custom line parser does not handle inline tables, multi-line values, or dotted keys. Edge cases with complex `Cargo.toml` formats may produce incorrect dependency counts.
 4. **`requirements.txt` operator priority**: The parser checks `===` before `==` to avoid false splits. However, it does not handle environment markers (`; python_version >= "3.6"`), extras (`requests[security]`), or pip flags (`-r`, `-e`, `-c`).
 5. **npm version prefix stripping**: `^` and `~` are stripped for display but the raw version from `package.json` (with prefix) is used for the purl `@version` field.
-6. **Typosquat false positives**: The 44-package known list is static. Packages with names similar to each other (not just to well-known packages) are not cross-compared.
+6. **Typosquat false positives**: The 42-package known list is static. Packages with names similar to each other (not just to well-known packages) are not cross-compared.
 7. **Levenshtein is character-level**: Multi-byte Unicode characters are handled correctly (char iteration), but the similarity score normalizes by byte length of chars, not grapheme clusters.
 8. **Dockerfile ADD-archive exclusion** is heuristic: it checks for `.tar`, `.gz`, `.zip`, `.xz`, `.bz2` substrings in the entire line, which could match non-archive filenames containing those strings.
 
@@ -344,4 +344,4 @@ Total: **41 unit tests** across all files.
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites refreshed 2026-09-25 (sbom 790 / scanner 767, ManifestType scanner.rs:31, known list 42 verified)*

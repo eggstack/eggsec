@@ -35,7 +35,7 @@ Multi-provider LLM client for security analysis: payload generation, WAF-bypass 
 
 ### Gating
 
-The entire `ai` module is feature-gated at `crates/eggsec/src/lib.rs:164-165`:
+The entire `ai` module is feature-gated at `crates/eggsec/src/lib.rs:170-171`:
 
 ```rust
 #[cfg(feature = "ai-integration")]
@@ -60,10 +60,10 @@ All other sub-modules (`client`, `cache`, `errors`, `types`, `payloads`, `waf_by
 | File | Purpose | Key type(s) |
 |------|---------|-------------|
 | `mod.rs:1-25` | Module root; re-exports | — |
-| `client.rs:8-14` | LLM provider abstraction | `Provider` (4 variants: `OpenAI`, `Azure`, `Anthropic`, `OpenAICompatible`), `AiClient` |
+| `client.rs:9-15` | LLM provider abstraction | `Provider` (4 variants: `OpenAI`, `Azure`, `Anthropic`, `OpenAICompatible`), `AiClient` |
 | `errors.rs:6-33` | Error domain | `AiError` (9 variants) |
 | `types.rs:4-33` | Shared DTOs | `AiAnalysisResult`, `AiPayloadSuggestion`, `AiWafBypassSuggestion`, `ScanFinding` |
-| `cache.rs:1-16` | TTL cache with disk persistence | `AiCache`, `CacheEntry`, `CacheKeyBuilder`, `CacheStats` |
+| `cache.rs` | TTL cache with disk persistence (369 lines) | `AiCache`, `CacheEntry`, `CacheKeyBuilder`, `CacheStats` |
 | `payloads.rs` | AI payload generator | `AiPayloadGenerator` |
 | `waf_bypass.rs:23-30` | WAF bypass knowledge base + AI suggestions | `SmartWafBypass`, `WafBypassEntry` |
 | `adaptive.rs` | Adaptive scan strategy engine | `AdaptiveScanEngine` |
@@ -71,7 +71,7 @@ All other sub-modules (`client`, `cache`, `errors`, `types`, `payloads`, `waf_by
 | `script_gen.rs` | Python security script generator (**feature-gated**) | `ScriptGenerator`, `ScriptTarget`, `PluginLanguage`, `GeneratedScript`, `ScriptMetadata` |
 | `AGENTS.override.md` | Module-specific guidance | — |
 
-**Provider enum** (`client.rs:8-14`):
+**Provider enum** (`client.rs:9-15`):
 
 ```rust
 pub enum Provider { OpenAI, Azure, Anthropic, OpenAICompatible }
@@ -123,12 +123,12 @@ find_bypass(waf_name, payload)
   → persist to waf_bypasses.json
 ```
 
-Default capacity: 1000 knowledge-base entries (`waf_bypass.rs:29`). Constructor `with_config(client, max_bypasses)` is configurable.
+Default capacity: 1000 knowledge-base entries (`waf_bypass.rs:66`). Constructor `with_config(client, max_bypasses)` is configurable.
 
 ### Integration Points
 
 - **Engine modules**: `waf/` uses `SmartWafBypass` for bypass suggestions; `fuzzer/` uses `AiPayloadGenerator` for context-aware payloads.
-- **Agent** (`agent/mod.rs:197-198`): `#[cfg(feature = "ai-integration")] ai_client: Option<AiClient>` — the agent optionally holds an AI client for adaptive scan decisions.
+- **Agent** (`agent/mod.rs:211`): `#[cfg(feature = "ai-integration")] ai_client: Option<AiClient>` — the agent optionally holds an AI client for adaptive scan decisions.
 - **Agent skills** (`agent/skills.rs`): feature-gated `ai-integration` — loads discrete capabilities for AI assistants.
 - **REST AI routes** (`protocol/ai_routes.rs:7-8`): AI endpoint state holds `Option<AiClient>` behind `ai-integration`.
 - **Adaptive engine**: `AdaptiveScanEngine` wraps `Option<AiClient>` and falls back to severity-based heuristics when AI is unavailable.
@@ -141,7 +141,7 @@ cargo test --lib -p eggsec ai::
 
 ### Gotchas
 
-- `chat_completion()` is **private** — external callers must use `chat_completion_from_messages()` (`client.rs:154-168`).
+- `chat_completion()` is **private** — external callers must use `chat_completion_from_messages()` (`client.rs:177-193`).
 - `Provider::from_str()` never fails; unknown strings become `OpenAICompatible` (`client.rs:22-23`).
 - Azure provider **requires** `base_url` or construction fails with `AiError::InvalidConfig` (`client.rs:69-73`).
 - Anthropic responses are normalized to OpenAI format; original lives under `provider_response`.
@@ -156,7 +156,7 @@ Engine-side autonomous security agent: event-driven polling loop, scheduled scan
 
 ### Gating
 
-The entire `agent` module is feature-gated at `crates/eggsec/src/lib.rs:167-168`:
+The entire `agent` module is feature-gated at `crates/eggsec/src/lib.rs:173-174`:
 
 ```rust
 #[cfg(feature = "rest-api")]
@@ -192,17 +192,17 @@ use crate::ai::AiClient;
 | `config_watcher.rs` | `ConfigWatcher`, `ConfigReloader`, `EggsecConfigReloader` |
 | `AGENTS.override.md` | Module-specific guidance |
 
-**Key types** (`agent/mod.rs:119-219`):
+**Key types** (`agent/mod.rs:125-194`):
 
 - `AgentConfig` — portfolio path, memory dir, poll interval, AI config, operational constraints, enforcement context.
 - `AgentRuntimeStatus` — runtime status reportable via `agent status` (14 fields: running, started_at, scans_completed/failed, alerts_sent, last_preflight_denial, etc.).
 - `AgentRuntimePersisted` — persisted metadata written to disk at start/scan/shutdown.
 - `AgentPreflightDenial` — recorded enforcement denial with operation, target, timestamp, reasons.
-- `Agent` struct (`mod.rs:190-219`) — holds `ToolRegistry`, `ConstraintScanner`, `EnforcedDispatcher`, optional `AiClient`, `CronScheduler`, `TargetPortfolio`, `LongitudinalMemory`, `AlertRouter`, event handlers, runtime status counters.
+- `Agent` struct (`mod.rs:195-232`) — holds `ToolRegistry`, `ConstraintChecker`, dispatchers, optional `AiClient`, `TargetPortfolio`, `LongitudinalMemory`, alert sender, event handlers, runtime status counters.
 
 ### Flows
 
-**Agent startup** (`Agent::new()` at `mod.rs:222-299`):
+**Agent startup** (`Agent::new()` at `mod.rs:230-260`):
 
 ```
 Agent::new(config)
@@ -232,8 +232,8 @@ run_once()
 
 ### Integration Points
 
-- **AI module**: Optional `AiClient` for adaptive scan decisions (`agent/mod.rs:197-198`).
-- **Tool registry**: Creates its own `create_default_registry()` instance (`agent/mod.rs:239`).
+- **AI module**: Optional `AiClient` for adaptive scan decisions (`agent/mod.rs:211`).
+- **Tool registry**: Creates its own `create_default_registry()` instance (`agent/mod.rs:251`).
 - **Enforcement**: Requires `AgentStrict` profile; per-scan enforcement via `enforcement.rs` helpers.
 - **REST API**: Agent routes (`protocol/agent_routes.rs`) expose agent/task CRUD over HTTP.
 
@@ -245,9 +245,9 @@ cargo test --lib -p eggsec agent::
 
 ### Gotchas
 
-- `Agent::new()` **panics** if `config.enforcement` is `None` or not `AgentStrict` (`mod.rs:226-237`). Use `Agent::new_for_test()` for test construction.
-- `config_watcher` field is `#[allow(dead_code)]` (`mod.rs:207`) — hot-reload is wired but not yet consumed by the polling loop.
-- `memory.warm_cache().await.ok()` silently ignores warm-cache errors (`mod.rs:252`).
+- `Agent::new()` **rejects** if `config.enforcement` is `None` or not `AgentStrict` (`mod.rs:235-246`). Use `Agent::new_for_test()` for test construction.
+- `config_watcher` field is `#[allow(dead_code)]` (`mod.rs:219`) — hot-reload is wired but not yet consumed by the polling loop.
+- `memory.warm_cache().await.ok()` silently ignores warm-cache errors (`mod.rs:264`).
 
 ---
 
@@ -267,11 +267,11 @@ No feature gates — always compiled as a standalone crate.
 
 | File | Purpose | Key type(s) |
 |------|---------|-------------|
-| `lib.rs:1-29` | Crate root; re-exports | — |
+| `lib.rs:1-35` | Crate root; re-exports | — |
 | `cron.rs` | Cron scheduling primitives | `CronScheduler` |
 | `registry.rs:1-125` | Agent registration and lookup | `AgentRegistry` (FxHashMap<Uuid, AgentInfo> + tokio::RwLock), `AgentInfo`, `AgentStatus` |
-| `scheduler.rs:1-400` | Task queue with priority, leasing, retry | `TaskScheduler`, `TaskQueue`, `ScheduledTask`, `TaskStatus` (5 variants), `TaskPriority` (4 variants: Critical/High/Normal/Low) |
-| `lifecycle.rs:1-881` | Health checking, stale detection, graceful shutdown | `LifecycleManager`, `AgentHealth`, `HealthIssue` (5 variants), `LifecycleEvent`, `LifecycleConfig` |
+| `scheduler.rs:1-404` | Task queue with priority, leasing, retry | `TaskScheduler`, `TaskQueue`, `ScheduledTask`, `TaskStatus` (5 variants), `TaskPriority` (4 variants: Critical/High/Normal/Low) |
+| `lifecycle.rs:1-1177` | Health checking, stale detection, graceful shutdown | `LifecycleManager`, `AgentHealth`, `HealthIssue` (5 variants), `LifecycleEvent`, `LifecycleConfig` |
 | `delegation.rs:1-19` | Task delegation DTOs | `DelegationRequest`, `DelegationResponse` |
 | `aggregator.rs:1-291` | Multi-stage result aggregation | `ResultAggregator`, `AggregatedResult`, `StageSummary`, `ToolSummary`, `AggregatedError` |
 | `communication.rs:1-630` | Inter-agent messaging, capability advertisement | `MultiAgentCoordinator`, `AgentCapability`, `HealthMetrics`, `HealthStatus` (4 variants), `InterAgentChannel` |
@@ -324,7 +324,8 @@ LifecycleManager::start()
   → periodic interval (default 30s)
   → for each registered agent:
       → check heartbeat staleness (default 120s threshold)
-      → probe callback URL via reqwest
+      → probe callback URL (no reqwest/rustls in this crate; transport
+        goes through `eggsec-transport`)
       → update AgentHealth with issues
       → if consecutive_failures > max (default 5): mark Offline
 ```
@@ -343,7 +344,7 @@ cargo test -p eggsec-agent
 
 ### Gotchas
 
-- `LifecycleManager` health checks use `reqwest` with `rustls` — requires `libssl-dev` at build time if TLS is needed (currently ring-only via `rustls-no-provider`).
+- `LifecycleManager` health checks carry no `reqwest`/`rustls` dependency (removed Phase D; guard 103 enforces). Callback probing goes through `eggsec-transport`, not a direct HTTP client.
 - `now_ms()` in scheduler uses `SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default()` (`scheduler.rs:17-22`) — handles clock skew gracefully.
 - `AgentInfo.last_heartbeat` is `u64` (epoch seconds), not `DateTime<Utc>`.
 
@@ -365,9 +366,9 @@ No feature gates — always compiled.
 
 | File | Purpose | Key type(s) |
 |------|---------|-------------|
-| `lib.rs:1-26` | Crate root; re-exports at crate level | — |
+| `lib.rs:1-29` | Crate root; re-exports at crate level | — |
 | `operation_request.rs` | Canonical execution-parameter contracts (typed per-family requests, `normalize()`) | `*Request` family types |
-| `request.rs:1-356` | Tool invocation request | `ToolRequest` (id, tool, target, params, options, cancel_token), `Target`, `TargetType`, `AuthConfig`, `AuthType`, `Scope`, `RequestOptions`, `CancellationToken`, `CancellationTokenHandle` |
+| `request.rs:1-409` | Tool invocation request | `ToolRequest` (id, tool, target, params, options, cancel_token), `Target`, `TargetType`, `AuthConfig`, `AuthType`, `Scope`, `RequestOptions`, `CancellationToken`, `CancellationTokenHandle` |
 | `response.rs:1-321` | Tool execution response | `ToolResponse` (request_id, tool_id, status, results, metadata, errors, findings), `ResponseStatus` (6 variants: Success/PartialSuccess/Failed/Timeout/ScopeViolation/Cancelled), `ResponseMetadata`, `StreamEvent`, `StreamEventType`, `ProgressUpdate`, `PortData`, `PortState`, `EndpointData`, `TechnologyData` |
 | `tool_error.rs:1-97` | Structured error type | `ToolError` (code, message, details, target, recoverable, error_type, retry_after_ms), `ToolErrorType` (11 variants) |
 | `finding.rs:1-177` | Security finding DTO | `Finding` (id, finding_type, severity, title, description, location, evidence, cve_ids, remediation, references, metadata), `FindingType` (12 variants), `ResponseSeverity` |
@@ -383,11 +384,11 @@ serde, serde_json, chrono, rustc-hash, parking_lot, uuid, toml
 
 No network dependencies. No engine dependencies.
 
-**ToolErrorType** (`tool_error.rs:50-63`) — 11 variants:
+**ToolErrorType** (`tool_error.rs:51-64`) — 11 variants:
 
 `Validation`, `Authentication`, `Authorization`, `RateLimit`, `Network`, `Timeout`, `ScopeViolation`, `NotFound`, `Configuration`, `Internal`, `ToolNotFound`.
 
-Recoverable types (`tool_error.rs:66-74`): `RateLimit`, `Timeout`, `Network`, `Internal`.
+Recoverable types (`tool_error.rs:66-76`): `RateLimit`, `Timeout`, `Network`, `Internal`.
 
 **CancellationToken** (`request.rs:8-48`): AtomicBool-backed cooperative cancellation. `CancellationTokenHandle` wraps it with an optional `request_id` for serialization.
 
@@ -431,7 +432,7 @@ Centralized tool management: registry (FxHashMap-backed), tool trait abstraction
 
 ### Gating
 
-The `tool` module is gated at `lib.rs:161-162`:
+The `tool` module is gated at `lib.rs:167-168`:
 
 ```rust
 #[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
@@ -452,10 +453,10 @@ Protocol sub-modules carry per-feature gating (`protocol/mod.rs:1-16`):
 | Module | Purpose |
 |--------|---------|
 | `registry.rs:23-25` | `ToolRegistry` — `FxHashMap<String, Arc<dyn SecurityTool>>` behind `parking_lot::RwLock` |
-| `traits.rs:1-319` | `SecurityTool` trait, `ToolCategory` (7 variants), `ToolCapability`, `ToolInfo` |
-| `dispatcher.rs:1-288` | `ToolDispatcher` (raw) + `EnforcedDispatcher` (requires `ApprovedOperation`) |
+| `traits.rs:1-359` | `SecurityTool` trait, `ToolCategory` (7 variants), `ToolCapability`, `ToolInfo` |
+| `dispatcher.rs:1-442` | `ToolDispatcher` (raw) + `EnforcedDispatcher` (requires `ApprovedOperation`) |
 | `registration.rs:1-367` | `ToolRegistration` derivation from `OperationMetadata` + `DomainDescriptor`; filter functions for each surface |
-| `mod.rs:99-157` | `create_default_registry()` — registers 11 base tools + 3 gated tools |
+| `mod.rs:105-170` | `create_default_registry()` — registers 11 base tools + 3 gated tools |
 | `metadata.rs` | Operation metadata lookup helpers |
 | `finding.rs` | Engine-side finding enrichment |
 | `convert.rs` | DTO conversion between engine and tool-core types |
@@ -545,7 +546,7 @@ default_mcp_visible_for_operation(meta) =
 
 | Path | Purpose | Feature |
 |------|---------|---------|
-| `rest.rs:1-1377` | Axum REST server with rate limiting, CORS, API-key auth, max payload 10MB | `rest-api` |
+| `rest.rs:1-1420` | Axum REST server with rate limiting, CORS, API-key auth, max payload 10MB | `rest-api` |
 | `auth.rs:1-138` | Constant-time API key validation, X-API-Key/Bearer token extraction | `rest-api` |
 | `agent_routes.rs:1-1573` | Agent/task CRUD endpoints, SSRF-protected callback URL validation | `rest-api` |
 | `ai_routes.rs:1-598` | AI payload/WAF-bypass suggestion endpoints | `rest-api` |
@@ -556,7 +557,8 @@ default_mcp_visible_for_operation(meta) =
 | `openresponses/mod.rs` | OpenAI Responses API adapter | `rest-api` |
 | `openresponses/handlers.rs` | Handlers | `rest-api` |
 | `openresponses/types.rs` | Types | `rest-api` |
-| `mcp/mod.rs:1-963` | MCP server module root (11 sub-files) | `rest-api` |
+| `mcp/mod.rs:1-965` | MCP server module root | `rest-api` |
+| `mcp/bridge.rs` | `McpEngineBridge` — narrow engine bridge behind `EngineServices` | `rest-api` |
 | `mcp/handlers/server.rs` | MCP request handler, enforcement boundary | `rest-api` |
 | `mcp/handlers/helpers.rs` | Helper functions | `rest-api` |
 | `mcp/handlers/mod.rs` | Handler module root | `rest-api` |
@@ -569,9 +571,9 @@ default_mcp_visible_for_operation(meta) =
 | `mcp/coding_agent_output.rs` | `CodingAgentFindingReport` typed output | `rest-api` |
 | `mcp/prompts.rs` | MCP prompt templates | `rest-api` |
 | `mcp/streaming.rs` | Stream events | `rest-api` |
-| `grpc.rs:1-1145` | tonic gRPC service, checked-in proto-generated code | `grpc-api` |
+| `grpc.rs:1-1171` | tonic gRPC service, checked-in proto-generated code | `grpc-api` |
 | `grpc.proto` | Protobuf service definition | `grpc-api` |
-| `mod.rs:1-16` | Protocol module root with per-feature gates | — |
+| `mod.rs:1-8` | Protocol module root with per-feature gates | — |
 
 ### Enforced Dispatch Flow
 
@@ -601,8 +603,8 @@ cargo test --lib -p eggsec tool::
 
 ### Gotchas
 
-- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`dispatcher.rs:177-178`) — strict surfaces must use `EnforcedDispatcher::dispatch_checked()`.
-- `ToolRegistry::register()` rejects duplicate IDs with `EggsecError::Config` (`registry.rs:59-64`).
+- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`dispatcher.rs:227-228`) — strict surfaces must use `EnforcedDispatcher::dispatch_checked()`.
+- `ToolRegistry::register()` rejects duplicate IDs with `EggsecError::Config` (`registry.rs:59-66`).
 - `rest.rs` enforces `MAX_PAYLOAD_SIZE = 10MB` and `MAX_URL_LENGTH = 2048` (`rest.rs:28-29`).
 - MCP `tools/call` enforcement uses error codes: `-32020` (tool denied), `-32021` (argument denied), `-32022` (concurrency exceeded), `-32024` (target denied), `-32025` (enforcement denial).
 
@@ -628,7 +630,7 @@ cargo test --lib -p eggsec tool::
 
 9. **Timeout wrappers**: All outbound HTTP calls need explicit timeouts. AI client uses 60s (`client.rs:76`). MCP routes use 30s. Tool execution uses 60s.
 
-10. **eggsec-agent dependency boundary**: The `eggsec-agent` crate depends only on `eggsec-core` (internal) plus `reqwest`/`rustls` (external). It must never depend on the engine crate.
+10. **eggsec-agent dependency boundary**: The `eggsec-agent` crate depends only on `eggsec-core` + `eggsec-transport` (internal) plus `tokio`/`tokio-util`/`uuid`/`chrono`/`serde`/`rustc-hash`/`url`/`tracing` (external). It carries no `reqwest`/`rustls` and must never depend on the engine crate.
 
 ---
 
@@ -638,7 +640,7 @@ cargo test --lib -p eggsec tool::
 
 | File:line | Issue | Severity |
 |-----------|-------|----------|
-| `agent/mod.rs:252` | `memory.warm_cache().await.ok()` silently discards warm-cache errors without logging. Should use `tracing::warn!` on `Err`. | Low |
+| `agent/mod.rs:264` | `memory.warm_cache().await.ok()` silently discards warm-cache errors without logging. Should use `tracing::warn!` on `Err`. | Low |
 
 ### Potential issues (verify before fixing)
 
@@ -661,4 +663,4 @@ None found. The overview.md references to `ai_agents.md` are consistent:
 
 The overview.md correctly states `eggsec-agent` internal deps are `eggsec-core` only (line 60) and that `eggsec-tool-core` contains `ToolRequest`, `ToolResponse`, `ToolError`, finding/history/rate-limit types, cancellation tokens (line 262).
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites, Agent::new error semantics, eggsec-agent reqwest claims corrected 2026-09-25 (systematic review)*

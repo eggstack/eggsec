@@ -33,7 +33,7 @@ Removed in Phase A (see completion record in `plans/crate-boundary-consolidation
 
 Removed in Phase D (see completion record in `plans/crate-boundary-consolidation-phase-d-loadtest-resilience-reuse-closure.md`): `cache` (`ApiCache`, zero production consumers; the `ai::cache::AiCache` used by AI code is a separate module and is unaffected).
 
-**Verified count**: 13 `pub mod` declarations in `mod.rs` (all unconditional). Note: `serialization.rs` exists on disk but is **not** declared in `mod.rs` and has no references outside itself — orphan dead file, candidate for deletion.
+**Verified count**: 13 `pub mod` declarations in `mod.rs` (all unconditional), matching the 14 `.rs` files on disk (`mod.rs` + 13 modules). Note: the former orphan `serialization.rs` referenced in earlier revisions no longer exists on disk — it has been deleted, so there is no orphan file.
 
 ## Key Re-exports
 
@@ -66,8 +66,8 @@ Both `strip_controls` and `preserve_all` are verified by proptest to never excee
 ### Regex Conventions
 
 All regexes use `std::sync::LazyLock` for one-time initialization (no runtime allocation). Found in:
-- `redaction.rs:10-53` — 9 `LazyLock<Regex>` patterns
-- `error.rs:9-28` — 7 `LazyLock<Regex>` patterns
+- `redaction.rs:10-53` — 10 `LazyLock<Regex>` patterns (`RE_BEARER`, `RE_BASIC_AUTH`, `RE_API_KEY`, `RE_AWS_KEY`, `RE_JWT`, `RE_COOKIE`, `RE_PRIVATE_KEY`, `RE_SECRET_VALUE`, `RE_CONNECTION_STRING`, `RE_SENSITIVE_KEY`)
+- `error.rs:9-29` — 8 `LazyLock<Regex>` patterns (`PATH_PATTERN`, `STACK_TRACE_PATTERN`, `INTERNAL_PATTERN`, `RATE_LIMIT_DETAIL`, `RUST_PANIC`, `PYTHON_TRACEBACK`, `GO_PANIC`, `WINDOWS_PATH`)
 
 ### Circuit Breaker (`circuit_breaker.rs`)
 
@@ -96,7 +96,7 @@ DTO separation: `RateLimitStatus` conversion lives in a dedicated adapter block;
 
 ### Redaction (`redaction.rs`)
 
-`redact_sensitive()` applies 10 regex patterns in sequence:
+`redact_sensitive()` applies 9 regex patterns in sequence:
 1. Bearer tokens → `[REDACTED]`
 2. Basic auth → `[REDACTED]`
 3. API keys (16+ char values) → `[REDACTED]`
@@ -106,7 +106,8 @@ DTO separation: `RateLimitStatus` conversion lives in a dedicated adapter block;
 7. Private key PEM blocks → `[REDACTED PRIVATE KEY]`
 8. Secret/password/token key-value pairs → `[REDACTED]`
 9. Connection strings (mysql/postgres/mongodb/redis) → `[REDACTED CONNECTION STRING]`
-10. Sensitive key names (password/passwd/secret/token/access_token/auth_token/client_secret/secret_key/api_key/credential/cookie/auth) → `[REDACTED]`
+
+The 10th static (`RE_SENSITIVE_KEY`, sensitive key names like password/passwd/secret/token/access_token/auth_token/client_secret/secret_key/api_key/credential/cookie/auth) is **not** applied inside `redact_sensitive()` — it backs `is_sensitive_key()`, used by `redact_json()` to redact values and rename sensitive object keys (e.g., `"password"` → `"[REDACTED PASSWORD]"`).
 
 `redact_json()` recursively walks JSON trees, redacting string values and renaming sensitive object keys (e.g., `"password"` → `"[REDACTED PASSWORD]"`).
 
@@ -188,7 +189,7 @@ Every sub-module has `#[cfg(test)] mod tests` with unit tests. Several modules i
 ## Invariants & Gotchas
 
 1. **`strip_controls` pads, doesn't truncate short strings**: If input is shorter than `max_len`, output is padded with spaces to exactly `max_len`. This is intentional for column alignment in terminal output.
-2. **`redact_sensitive` is sequential**: All 10 regex patterns are applied in order. Each `.replace_all()` allocates a new `String`. For high-throughput paths, consider pre-compiled regex sets.
+2. **`redact_sensitive` is sequential**: All 9 regex patterns are applied in order (plus `RE_SENSITIVE_KEY` via `is_sensitive_key()` in the `redact_json()` path). Each `.replace_all()` allocates a new `String`. For high-throughput paths, consider pre-compiled regex sets.
 3. **`RateLimiter::acquire()` blocks**: The async `acquire()` sleeps in bounded waits until a permit is available. Callers must `.await` and should race with cancellation (`eggsec-runtime::race_with_cancel`); the future is drop-cancellable.
 4. **`parse_host_port` default_port**: The function signature is `parse_host_port(target, default_port)` — it silently returns the default when no port is present. The two-argument form differs from `extract_host_port` which returns `Option<(String, u16)>`.
 5. **Privilege lives in `platform`**: `check_privileged`, `is_root`, `require_root` are unconditional in `platform` (moved from feature-gated `utils::privilege` in Phase A). Callers use `crate::platform::…`.
@@ -198,4 +199,4 @@ Every sub-module has `#[cfg(test)] mod tests` with unit tests. Several modules i
 
 - [logging.md](logging.md) — `utils/logging.rs` provides `sanitize_for_logging()` for stripping ANSI escapes and control characters from log output (used across scanner, fuzzer, pipeline, recon, stress, and waf modules).
 
-*Last verified against source: 2026-09-16 (Phase A ownership cleanup); counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-16 (Phase A ownership cleanup); counts re-verified 2026-09-22 (systematic review); regex counts, redact_sensitive pattern ownership, and orphan-file note fixed 2026-09-25 (systematic review)*

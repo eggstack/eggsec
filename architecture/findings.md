@@ -211,4 +211,4 @@ Finding → ReportEnvelope::FindingRecord (via envelope.rs From impl for AgentFi
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (systematic review: field/variant counts, fingerprint/store line cites confirmed)*

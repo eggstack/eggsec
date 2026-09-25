@@ -14,15 +14,15 @@ The stress testing module provides denial-of-service simulation capabilities for
 |------|-------|---------------|---------|
 | `mod.rs` | 216 | no | Orchestrator: `StressTest`, `StressType`, `StressConfig`, `StressResult`, `StressConfigSummary` |
 | `syn.rs` | 284 | `stress-testing` + unix | SYN flood via raw Ethernet frames (IPv4 + IPv6) |
-| `udp.rs` | 427 | `stress-testing` | UDP flood: standard socket + raw socket spoofed mode |
+| `udp.rs` | 453 | `stress-testing` | UDP flood: standard socket + raw socket spoofed mode |
 | `http.rs` | 204 | `stress-testing` | HTTP GET flood with proxy pool support |
 | `icmp.rs` | 247 | `stress-testing` + unix | ICMP echo request flood (IPv4 + IPv6) via raw Ethernet |
 | `metrics.rs` | 222 | always compiled | Thread-safe atomic counters: `StressMetrics`, `StressStats` |
-| `authorization.rs` | 272 | always compiled | Scope enforcement, rate/duration caps, TOML config |
+| `authorization.rs` | 273 | always compiled | Scope enforcement, rate/duration caps, TOML config |
 | `warning.rs` | 89 | always compiled | Legal warning banner, interactive confirmation prompt |
 | `utils.rs` | 207 | `stress-testing` | DNS resolution, interface detection, channel creation, spoofed IPs, payload generation |
 
-**Total:** 10 files, 2168 lines.
+**Total:** 10 files (9 source + `AGENTS.override.md`), 2195 lines.
 
 ### Compilation model
 
@@ -35,7 +35,7 @@ The stress testing module provides denial-of-service simulation capabilities for
 
 ### `StressType` enum
 
-Five variants, serializable via serde (`mod.rs:23-35`):
+Five variants, serializable via serde (`mod.rs:24-`):
 
 ```rust
 pub enum StressType {
@@ -47,13 +47,13 @@ pub enum StressType {
 }
 ```
 
-**⚠ TCP flood is declared but NOT IMPLEMENTED.** Selecting `StressType::Tcp` returns `Err(EggsecError::Runtime(...))` at `mod.rs:139-144` with the message: *"TCP flood is not yet implemented. Use HTTP flood for application-layer testing."* This is not a compile-time error — it surfaces at runtime only when the operator explicitly selects TCP.
+**⚠ TCP flood is declared but NOT IMPLEMENTED.** Selecting `StressType::Tcp` returns `Err(EggsecError::Runtime(...))` at `mod.rs:141` with the message: *"TCP flood is not yet implemented. Use HTTP flood for application-layer testing."* This is not a compile-time error — it surfaces at runtime only when the operator explicitly selects TCP.
 
 `Display` impl (`mod.rs:37-47`) produces human-readable names for all five variants.
 
 ### `StressConfig`
 
-Runtime configuration for a test run (`mod.rs:49-63`):
+Runtime configuration for a test run (`mod.rs:50-`):
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -217,9 +217,9 @@ Constructed via `from_scope()` (`authorization.rs:48-56`) which loads both the m
 
 Verification chain (called in `StressTest::new()`, `mod.rs:95-97`):
 
-1. **`verify_target(target)`** (`authorization.rs:85-111`) — Checks `scope.is_target_allowed(target)` AND `stress_scope.allow_stress_test`.
-2. **`verify_rate(rate_pps)`** (`authorization.rs:113-123`) — Enforces `max_rate_pps` if set.
-3. **`verify_duration(duration_secs)`** (`authorization.rs:125-135`) — Enforces `max_duration_secs` if set.
+1. **`verify_target(target)`** (`authorization.rs:86-`) — Checks `scope.is_target_allowed(target)` AND `stress_scope.allow_stress_test`.
+2. **`verify_rate(rate_pps)`** (`authorization.rs:114-`) — Enforces `max_rate_pps` if set.
+3. **`verify_duration(duration_secs)`** (`authorization.rs:126-`) — Enforces `max_duration_secs` if set.
 
 ### `create_example_stress_config()`
 
@@ -315,4 +315,4 @@ Tests are gated behind `#[cfg(all(test, feature = "stress-testing"))]` (`mod.rs:
 - [defense_lab.md](defense_lab.md) — defense-lab profiles and risk budgets
 - [networking.md](networking.md) — packet capture, crafting, and low-level network access
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (udp 453 / authorization 273 lines, total 2195; StressType mod.rs:24, TCP stub mod.rs:141)*

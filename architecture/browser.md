@@ -16,15 +16,15 @@ Headless Chrome integration for browser-based security testing. Provides:
 | Item | Location | Gate |
 |------|----------|------|
 | Module declaration | `crates/eggsec/src/lib.rs:86-87` | `#[cfg(feature = "headless-browser")]` |
-| Real `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:41` | `#[cfg(feature = "headless-browser")]` |
-| Error-stub `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:213` | `#[cfg(not(feature = "headless-browser"))]` — **dead code**: `lib.rs` declares no `#[cfg(not(...))] mod browser`, so this stub never compiles. Feature-off means no browser surface at all (callers are hard-gated) |
-| `capture_requests()` | `crates/eggsec/src/browser/mod.rs:112` | `#[cfg(feature = "headless-browser")]` |
+| Real `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:43` | `#[cfg(feature = "headless-browser")]` |
+| Error-stub `run_browser_scan()` | `crates/eggsec/src/browser/mod.rs:214` | `#[cfg(not(feature = "headless-browser"))]` — **dead code**: `lib.rs` declares no `#[cfg(not(...))] mod browser`, so this stub never compiles. Feature-off means no browser surface at all (callers are hard-gated) |
+| `capture_requests()` | `crates/eggsec/src/browser/mod.rs:114` | `#[cfg(feature = "headless-browser")]` |
 | Submodules (xss_dom, spa_discovery, client_checks, corpus) | `crates/eggsec/src/browser/mod.rs:12-15` | Gated by parent module |
 | CLI handler | `crates/eggsec/src/commands/handlers/browser.rs:5` | `#[cfg(feature = "cli")]` |
 | Feature flag | `crates/eggsec/Cargo.toml:351` | `headless-browser = ["headless_chrome"]` |
 | `headless_chrome` dep | `crates/eggsec/Cargo.toml:204-206` | `version = "1"`, optional |
 
-Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature = "headless-browser"))] mod browser`, so the `not(feature)` stub at `browser/mod.rs:213-218` never compiles (dead code) and `BrowserConfig`/`BrowserReport` are also unavailable. Callers are hard-gated (`commands/handlers/mod.rs`, `cli/mod.rs`).
+Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature = "headless-browser"))] mod browser`, so the `not(feature)` stub at `browser/mod.rs:214-219` never compiles (dead code) and `BrowserConfig`/`BrowserReport` are also unavailable. Callers are hard-gated (`commands/handlers/mod.rs`, `cli/mod.rs`).
 
 ## Architecture
 
@@ -35,21 +35,21 @@ Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature 
 | `browser/mod.rs` | 239 | `BrowserConfig`, `BrowserReport`, `run_browser_scan()` entry point, XHR/Fetch interceptor injection, `capture_requests()` |
 | `browser/backend.rs` | 279 | Phase E WS1/WS3: `BrowserBackendKind`, `BrowserBackendCapabilities`, `BrowserBackend` trait, `capabilities_for_current_build()`, `validate_browser_url()` URL policy gate |
 | `browser/xss_dom.rs` | 323 | `DomXssFinding`, `XssSource` (8 variants), `XssSink` (10 variants), `scan_dom_xss()`, `calculate_severity()`, `get_remediation()` |
-| `browser/spa_discovery.rs` | 259 | `SpaRoute`, `DiscoveryMethod` (4 variants), `discover_routes()`, `extract_parameters()` |
-| `browser/client_checks.rs` | 346 | `ClientIssue`, `ClientIssueType` (6 variants), `check_client_security()`, `get_remediation()` |
+| `browser/spa_discovery.rs` | 260 | `SpaRoute`, `DiscoveryMethod` (4 variants), `discover_routes()`, `extract_parameters()` |
+| `browser/client_checks.rs` | 347 | `ClientIssue`, `ClientIssueType` (6 variants), `check_client_security()`, `get_remediation()` |
 | `browser/corpus.rs` | 187 | `CorpusEntry`, `CorpusHeader`, `BodyShape`, `BodyField`, `RequestSource` (7 variants), `RequestCorpus`, `FormInfo` |
 
 ### Key Types
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `BrowserConfig` | `mod.rs:218` | `check_dom_xss`, `discover_spa_routes`, `check_client_security`, `timeout_ms`, `xss_payload` |
-| `BrowserReport` | `mod.rs:22` | `target`, `dom_xss` (Vec), `spa_routes` (Vec), `client_issues` (Vec), `corpus`, `total_findings` |
-| `DomXssFinding` | `xss_dom.rs:8` | `id`, `source`, `sink`, `location`, `severity`, `description`, `evidence`, `remediation`, `cvss_score` |
-| `XssSource` | `xss_dom.rs:21` | 8 variants: `LocationHash`, `LocationSearch`, `DocumentCookie`, `DocumentReferrer`, `LocalStorage`, `SessionStorage`, `WebSocket`, `PostMessage` |
-| `XssSink` | `xss_dom.rs:33` | 10 variants: `InnerHTML`, `OuterHTML`, `JQueryHtml`, `DocumentWrite`, `Eval`, `SetTimeout`, `SetInterval`, `FunctionConstructor`, `ScriptSrc`, `OnEventHandler` |
+| `BrowserConfig` | `mod.rs:221` | `check_dom_xss`, `discover_spa_routes`, `check_client_security`, `timeout_ms`, `xss_payload` |
+| `BrowserReport` | `mod.rs:24` | `target`, `dom_xss` (Vec), `spa_routes` (Vec), `client_issues` (Vec), `corpus`, `total_findings` |
+| `DomXssFinding` | `xss_dom.rs:7` | `id`, `source`, `sink`, `location`, `severity`, `description`, `evidence`, `remediation`, `cvss_score` |
+| `XssSource` | `xss_dom.rs:20` | 8 variants: `LocationHash`, `LocationSearch`, `DocumentCookie`, `DocumentReferrer`, `LocalStorage`, `SessionStorage`, `WebSocket`, `PostMessage` |
+| `XssSink` | `xss_dom.rs:32` | 10 variants: `InnerHTML`, `OuterHTML`, `JQueryHtml`, `DocumentWrite`, `Eval`, `SetTimeout`, `SetInterval`, `FunctionConstructor`, `ScriptSrc`, `OnEventHandler` |
 | `SpaRoute` | `spa_discovery.rs:6` | `path`, `method`, `parameters`, `discovered_via` |
-| `DiscoveryMethod` | `spa_discovery.rs:13` | 4 variants: `Crawl`, `XhrInterception`, `FetchInterception`, `RouteParsing` |
+| `DiscoveryMethod` | `spa_discovery.rs:14` | 4 variants: `Crawl`, `XhrInterception`, `FetchInterception`, `RouteParsing` |
 | `ClientIssue` | `client_checks.rs:6` | `id`, `issue_type`, `severity`, `location`, `description`, `evidence`, `remediation`, `cvss_score` |
 | `ClientIssueType` | `client_checks.rs:18` | 6 variants: `LocalStorageSensitive`, `CorsMisconfiguration`, `CSPSourceMap`, `DebugMode`, `SourceMapsExposed`, `CORSWildcard` |
 | `RequestCorpus` | `corpus.rs:56` | `entries`, `urls`, `api_endpoints`, `forms`, `websocket_urls`, `javascript_urls`, `graphql_candidates`, `openapi_links`, `crawl_duration_ms`, `pages_visited` |
@@ -59,15 +59,15 @@ Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature 
 
 | Enum | Variants | Source |
 |------|----------|--------|
-| `XssSource` | 8 | `xss_dom.rs:21-30` |
-| `XssSink` | 10 | `xss_dom.rs:33-44` |
-| `DiscoveryMethod` | 4 | `spa_discovery.rs:13-19` |
+| `XssSource` | 8 | `xss_dom.rs:20-28` |
+| `XssSink` | 10 | `xss_dom.rs:32-43` |
+| `DiscoveryMethod` | 4 | `spa_discovery.rs:14-19` |
 | `ClientIssueType` | 6 | `client_checks.rs:18-25` |
 | `RequestSource` | 7 | `corpus.rs:44-52` |
 
 ## Behavior / Flow
 
-### `run_browser_scan(target, config)` — `mod.rs:41-109`
+### `run_browser_scan(target, config)` — `mod.rs:43-109`
 
 1. Create `BrowserReport` with target
 2. Launch headless Chrome via `headless_chrome::Browser::default()` (`:45`)
@@ -169,4 +169,4 @@ Integration tests in `xss_dom.rs`, `spa_discovery.rs`, and `client_checks.rs` re
 | `client_checks.rs:153` | CORS test sends synchronous XHR in a try-catch — silently catches errors without logging | Low |
 | Browser tests (`xss_dom.rs:211`, `spa_discovery.rs:178`, `client_checks.rs:256`) | Integration tests require Chrome; will fail in CI without it. No `#[ignore]` or conditional compilation | Medium |
 
-*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review); line numbers corrected 2026-09-25 (systematic review)*

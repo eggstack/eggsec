@@ -181,3 +181,5 @@ dev-gated with no production consumers).
 
 *Measured against source: 2026-09-13 (code SHA `f4ba2198`; toolchain stable +
 1.89; MSRV 1.89 per workspace `rust-version`).*
+
+> Drift note (2026-09-25, docs-only review; closure measurements above unchanged): `Cargo.lock` now shows `eggfetch-core 0.2.0` (was `0.1.3`), `rustls 0.23.45` (was `0.23.43`), `eggress-outbound`/`eggress-uri 1.0.10` (narrow `eggsec-web-proxy` edge, Check 106 exact allowlist), `cargo metadata --locked` 608 packages (vs 592 — registry drift + Phase C/D crates, no new capability edge). `eggsec-agent` still has 11 direct deps and no `reqwest`/`rustls`; `eggsec-transport` still exactly `bytes`/`http`/`url`/`thiserror`.

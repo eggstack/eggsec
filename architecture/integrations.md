@@ -8,7 +8,7 @@ Issue tracker connectors for Jira, GitHub, and GitLab. Provides a common `IssueT
 
 | Path | Feature Gate |
 |------|-------------|
-| `crates/eggsec/src/integrations/mod.rs` | `external-integrations` (`lib.rs:116`) |
+| `integrations/mod.rs` | `external-integrations` (`lib.rs:115`) |
 | `crates/eggsec/src/integrations/common.rs` | `external-integrations` |
 | `crates/eggsec/src/integrations/jira.rs` | `external-integrations` |
 | `crates/eggsec/src/integrations/github.rs` | `external-integrations` |
@@ -38,7 +38,7 @@ When the feature is disabled, `lib.rs:118-120` compiles the module as `#[allow(d
 | File | Lines | Role |
 |------|-------|------|
 | `integrations/mod.rs` | 77 | `IntegrationConfig`, `IssueTracker` trait, `Issue`, `IssueUpdate`, tests |
-| `integrations/common.rs` | 159 | `send_with_retry`, `handle_response_error`, `truncate_utf8`, tests |
+| `integrations/common.rs` | 177 | `send_with_retry`, `handle_response_error`, `truncate_utf8`, tests |
 | `integrations/jira.rs` | 416 | `JiraClient`, Jira REST API v3, issue parsing, transition logic, tests |
 | `integrations/github.rs` | 298 | `GitHubClient`, GitHub Issues API, issue parsing, tests |
 | `integrations/gitlab.rs` | 282 | `GitLabClient`, GitLab Issues API v4, issue parsing, tests |
@@ -163,7 +163,7 @@ All constructors build a `reqwest::Client` with 30-second timeout, falling back 
 
 ## Integration Points
 
-### Dispatch (`dispatch/mod.rs:289-299`, `dispatch/security.rs:330-434`)
+### Dispatch (`dispatch/security.rs:331-...`)
 
 `TaskKind::Integrations` dispatches to `run_integrations_task()` which:
 1. Selects tracker from `IntegrationConfig` (Jira > GitHub > GitLab priority).
@@ -194,11 +194,11 @@ TaskResult::IntegrationsSearchIssues { issues: Vec<Issue> }, // search results
 ## Testing
 
 - **Unit tests** (`integrations/mod.rs:57-77`): 1 test for `Issue` creation.
-- **Unit tests** (`integrations/common.rs:105-159`): 7 tests for `truncate_utf8` (boundary, multibyte, 4-byte, empty, zero-max).
+- **Unit tests** (`integrations/common.rs:105-177`): 8 tests for `truncate_utf8` (boundary, multibyte, 4-byte, empty, zero-max) plus retry/error helpers.
 - **Unit tests** (`integrations/jira.rs:373-416`): 2 tests for client config and transition matching.
 - **Unit tests** (`integrations/github.rs:271-298`): 2 tests for client config and API URL construction.
 - **Unit tests** (`integrations/gitlab.rs:255-282`): 2 tests for client config and API URL construction.
-- **Total**: 14 tests. No integration tests (all tests are unit-level, no live API calls).
+- **Total**: 15 tests. No integration tests (all tests are unit-level, no live API calls).
 
 ## Invariants & Gotchas
 
@@ -225,4 +225,4 @@ TaskResult::IntegrationsSearchIssues { issues: Vec<Issue> }, // search results
 | GitLab create_issue labels type mismatch | `gitlab.rs:108` | Low | `labels` field is sent as `serde_json::json!(issue.labels)` (JSON array), but GitLab API expects a comma-separated string for the `labels` field on issue creation. This may cause label creation to fail silently. |
 | GitHub search scoped query encoding | `github.rs:229-234` | Low | The scoped query `repo:{owner}/{repo} {query}` is URL-encoded as a single parameter. Complex queries with spaces may not parse correctly. |
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (systematic review: common.rs line/test counts, dispatch path)*

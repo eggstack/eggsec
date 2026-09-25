@@ -16,9 +16,9 @@ See also: [overview.md](overview.md), [findings.md](findings.md), [output.md](ou
 
 | Item | Location | Feature |
 |------|----------|---------|
-| Module declaration | `lib.rs:133-137` | `database` |
-| Public module | `lib.rs:133` (`pub mod storage`) | `database` |
-| Stub module | `lib.rs:135` (`mod storage`) | `not(database)` |
+| Module declaration | `lib.rs:140-143` | `database` |
+| Public module | `lib.rs:140` (`pub mod storage`) | `database` |
+| Stub module | `lib.rs:142` (`mod storage`) | `not(database)` |
 | Feature flag | `Cargo.toml` `database` | Depends on: `sqlx`, `sqlx/postgres`, `serde_json`, `uuid`, `chrono` |
 
 When `database` is disabled, `init_storage()` returns `Err(Config("database feature not enabled"))` (`storage/mod.rs:61-64`), and all `Database` methods degrade to no-op stubs returning empty results or `Ok(())`.
@@ -29,7 +29,7 @@ When `database` is disabled, `init_storage()` returns `Err(Config("database feat
 |------|-------|---------|
 | `storage/mod.rs` | 65 | `StorageConfig` struct, `init_storage()` factory, feature-gated stub |
 | `storage/models.rs` | 66 | `StoredScan`, `ScanStatus` enum (4 variants), re-export of `StoredFinding`/`FindingStatus`/`StatusChange` from `findings::lifecycle` |
-| `storage/postgres.rs` | 450 | `Database` struct wrapping `PgPool`, all CRUD methods, `row_to_stored_finding()`, `parse_scan_status()` |
+| `storage/postgres.rs` | 434 | `Database` struct wrapping `PgPool`, all CRUD methods, `row_to_stored_finding()`, `parse_scan_status()` |
 | `storage/queries.rs` | 64 | `QueryBuilder` with 5 static predefined SQL queries |
 
 ## Architecture
@@ -69,7 +69,7 @@ Connection setup (`Database::new()` at `postgres.rs:22-52`):
 
 4 variants: `Running`, `Completed`, `Failed`, `Cancelled`
 
-Implements `Display` (capitalized strings), `PartialEq`, `Eq`. Unknown values from DB default to `Running` with a `tracing::warn!` (`postgres.rs:323`).
+Implements `Display` (capitalized strings), `PartialEq`, `Eq`. Unknown values from DB default to `Running` with a `tracing::warn!` (`postgres.rs:300-312`).
 
 ### Schema (Migrations)
 
@@ -79,7 +79,7 @@ Implements `Display` (capitalized strings), `PartialEq`, `Eq`. Unknown values fr
 | `002_create_findings.sql` | `migrations/002_create_findings.sql` | `findings` table: `id TEXT PK`, `scan_id TEXT FK→scans`, `finding JSONB`, `status TEXT DEFAULT 'new'`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`, `status_history JSONB DEFAULT '[]'`. Enables `pg_trgm` extension. Creates indexes on `scan_id` and `status` |
 | `003_create_users.sql` | `migrations/003_create_users.sql` | `users` table: `id TEXT PK`, `username TEXT UNIQUE`, `email TEXT UNIQUE`, `role TEXT DEFAULT 'Viewer'` |
 
-Migrations are applied via `handle_storage_init` (`commands/handlers/storage.rs:186-239`) using `include_str!()` to embed the SQL files. No versioned migration runner — init runs all three with `CREATE TABLE IF NOT EXISTS`.
+Migrations are applied via `handle_storage_init` (`commands/handlers/storage.rs:211-225`) using `include_str!()` to embed the SQL files. No versioned migration runner — init runs all three with `CREATE TABLE IF NOT EXISTS`.
 
 ## Behavior / Flow
 
@@ -113,7 +113,7 @@ Findings are stored with:
 - `finding`: JSONB column containing the full `Finding` struct (19 fields) serialized via `serde_json::to_value()` (`postgres.rs:148`)
 - `status`: Text column using `FindingStatus::Display` (`"new"`, `"confirmed"`, `"accepted_risk"`, `"false_positive"`, `"remediated"`, `"reopened"`)
 - `status_history`: JSONB column containing `Vec<StatusChange>` serialized via `serde_json::to_value()` (`postgres.rs:150`)
-- Deserialization on read: `row_to_stored_finding()` (`postgres.rs:330-384`) deserializes JSON fields and parses status strings; unknown statuses default to `FindingStatus::New` with a `tracing::warn!`
+- Deserialization on read: `row_to_stored_finding()` (`postgres.rs:314-365`) deserializes JSON fields and parses status strings; unknown statuses default to `FindingStatus::New` with a `tracing::warn!`
 
 ### Predefined Queries (`queries.rs`)
 
@@ -190,7 +190,7 @@ All methods have feature-gated dual implementations — full SQLx body behind `#
 
 - `handle_storage()` (`commands/handlers/storage.rs:5-12`) dispatches `StorageCommand::{Query,Export,Stats,Init}`
 - `handle_storage_query()` (`:14-73`) supports `--sql` for raw queries and named query types (`recent_scans`, `all_findings`)
-- `handle_storage_init()` (`:186-239`) runs the 3 migrations via `include_str!()` with optional `--force` to drop tables first
+- `handle_storage_init()` (`:211-225`) runs the 3 migrations via `include_str!()` with optional `--force` to drop tables first
 - `handle_storage_stats()` (`:125-184`) shows scan counts by status
 - `handle_storage_export()` (`:75-123`) exports findings to JSON files
 
@@ -214,20 +214,20 @@ All methods have feature-gated dual implementations — full SQLx body behind `#
 
 ## Testing
 
-- `models.rs:56-66`: `test_scan_creation` — verifies initial state
-- `postgres.rs:386-449`: Feature-gated database tests:
+- `models.rs:55-66`: `test_scan_creation` — verifies initial state
+- `postgres.rs:370-434`: Feature-gated database tests:
   - `test_scan_status_parse_roundtrip` — all 4 `ScanStatus` variants roundtrip through `Display`/`parse_scan_status`
   - `test_scan_status_parse_unknown` — unknown strings default to `Running`
   - `test_scan_status_parse_case_insensitive` — mixed-case parsing
-- `postgres.rs:390-398`: `test_storage_config_defaults` — verifies default values
+- `postgres.rs:375-383`: `test_storage_config_defaults` — verifies default values
 - `queries.rs:28-63`: 5 tests verifying query string content
 
 ## Invariants & Gotchas
 
 1. **No pool acquisition timeout**: `PgPoolOptions` does not set `.acquire_timeout()` — uses sqlx default (30s). For high-concurrency deployments, this may need configuration.
 2. **Upsert on conflict**: Both `insert_scan` and `insert_finding` use `ON CONFLICT DO UPDATE`, meaning re-inserting with the same ID silently overwrites. This is by design for idempotent writes.
-3. **`findings_count` cast**: `StoredScan.findings_count` is `usize` in Rust but `INTEGER` in PostgreSQL. The cast uses `as i64` / `as usize` (`postgres.rs:79, 103, 131`). Large counts (> i64::MAX) would wrap, but this is practically impossible for finding counts.
-4. **JSONB deserialization failure**: If `finding` JSONB becomes corrupted, `row_to_stored_finding()` returns an error (`postgres.rs:338-344`). Status history deserialization failure logs a warning and defaults to empty vec (`postgres.rs:364-371`) — non-fatal but lossy.
+3. **`findings_count` cast**: `StoredScan.findings_count` is `usize` in Rust but `INTEGER` in PostgreSQL.
+4. **JSONB deserialization failure**: If `finding` JSONB becomes corrupted, `row_to_stored_finding()` returns an error (`postgres.rs:322-330`). Status history deserialization failure logs a warning and defaults to empty vec (`postgres.rs:349-357`) — non-fatal but lossy.
 5. **QueryBuilder is unused**: `queries.rs` defines 5 queries but `Database` does not call them. They are available for external callers but are dead code within the module itself.
 6. **Users table**: Migration 003 creates a `users` table but no Rust code references it — it exists for future use.
 7. **No connection pool lifecycle**: No `close()` or shutdown method on `Database`. The pool drops when `Database` is dropped.
@@ -238,8 +238,8 @@ All methods have feature-gated dual implementations — full SQLx body behind `#
 | Finding | File:Line | Severity | Description |
 |---------|-----------|----------|-------------|
 | Raw SQL in CLI handler | `commands/handlers/storage.rs:24` | Medium | `sqlx::query(sql)` where `sql` is user-provided (`--sql` arg) — **SQL injection vector**. The handler passes user-supplied SQL directly to `sqlx::query()` with no parameterization or sanitization. |
-| `unwrap_or_default` on history | `postgres.rs:364` | Low | `serde_json::from_value(history_json).unwrap_or_else(...)` — defaults to empty vec on deserialization failure, losing history. Logged but silent to caller. |
+| `unwrap_or_default` on history | `postgres.rs:349` | Low | `serde_json::from_value(history_json).unwrap_or_else(...)` — defaults to empty vec on deserialization failure, losing history. Logged but silent to caller. |
 | No pool timeout config | `postgres.rs:35-37` | Low | `PgPoolOptions::new()` uses default `acquire_timeout` (30s). Under load, connections may queue without explicit timeout. |
 | Missing connection validation | `postgres.rs:22-52` | Low | `Database::new()` connects but does not run `SELECT 1` or similar to validate the connection is live. Pool creation may succeed with a lazy connection that fails on first use. |
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-25 (systematic review: lib.rs gates, postgres line count 434, handler/migration lines)*

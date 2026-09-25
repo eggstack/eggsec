@@ -422,3 +422,5 @@ invariants 12 + agent 24, all green. Gates: `make check`, `check-deps`,
 `check-python`, `check-msrv` (1.89) all exit 0; guards ALL PASSED (99–112).
 
 *Last verified against source: 2026-09-13 (Phase G closure)*
+
+> Drift note (2026-09-25, docs-only review; historical §§2–10 above unchanged): `Cargo.lock` now resolves `rustls 0.23.45` (was `0.23.43` at baseline; `0.21.12` is a second transitive family), `eggfetch-core 0.2.0` (was `0.1.3`), `eggress-outbound`/`eggress-uri 1.0.10` on the narrow web-proxy edge, and `cargo metadata --locked` reports 608 packages (vs 587/591/592 historical — delta is Phase C/D crates plus registry drift, not a scope change). `openssl`/`native-tls` still match no default-closure package (feature-gated NSE only). Reproduce with the §1 commands.

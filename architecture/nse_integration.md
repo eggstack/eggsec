@@ -118,11 +118,11 @@ NSE execution profiles provide explicit presets that resolve into sandbox config
 
 | Profile | Trust Level | Scripts | Modules | Network | Limits |
 |---------|-------------|---------|---------|---------|--------|
-| `ManualPermissive` | User-controlled, full trust | All builtin + files | Builtin only (filesystem modules require explicit `allowed_module_roots`) | AllowAllManual | 120s / 100M instr / 50MiB |
-| `ManualStrict` | User-controlled, restricted | Builtin only, restricted roots | Builtin only | AllowCidrs from scope | 120s / 100M / 50MiB |
-| `AgentSafe` | Autonomous agent | Builtin only | Builtin only | Derived from target/scope | 15s / 5M / 2MiB |
-| `CiSafe` | CI pipeline | Builtin only | Builtin only | DenyAll | 15s / 5M / 2MiB |
-| `CompatibilityLab` | Nmap compat testing | All + Nmap paths | All + Nmap paths | AllowAllManual | 120s / 100M / 50MiB |
+| `ManualPermissive` | User-controlled, full trust | All builtin + files | Builtin only (filesystem modules require explicit `allowed_module_roots`) | AllowAllManual | 120s / 100M instr / 50MiB (`limits.rs:65-71` `manual_defaults`) |
+| `ManualStrict` | User-controlled, restricted | Builtin only, restricted roots | Builtin only | AllowCidrs from scope | 60s wall-clock + 200 FS ops / 20MiB read (`profile.rs:200-204`); instruction/output caps inherit defaults |
+| `AgentSafe` | Autonomous agent | Builtin only | Builtin only | Derived from target/scope | 15s / 5M / 2MiB (`limits.rs:82-94` `automated_defaults`) |
+| `CiSafe` | CI pipeline | Builtin only | Builtin only | DenyAll | 5s / 1M instr / 512KiB output, zero network ops (`profile.rs:281-293`) — stricter than `automated_defaults` |
+| `CompatibilityLab` | Nmap compat testing | All + Nmap paths | All + Nmap paths | AllowAllManual | 120s / 100M / 50MiB (`profile.rs:335`, `manual_defaults`) |
 
 ### Resolution Flow
 

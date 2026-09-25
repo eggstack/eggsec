@@ -109,7 +109,7 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 
 **Visual treatment**: Confidence-based coloring (confirmed > likely > possible > low). CapabilityDenial evidence items are informational, not vulnerabilities.
 
-**Evidence generation**: `NseRunReport.evidence` is populated by `extract_evidence()` in `report.rs:844`, which conservatively produces evidence from capability denials (CapabilityDenial), unsupported features/approximations (CompatibilityWarning), rule evaluation errors (CompatibilityWarning), and non-empty script output (ScriptOutput). Direct `NseEvidenceItem` construction outside `extract_evidence()` is flagged by architecture guard Check 45.
+**Evidence generation**: `NseRunReport.evidence` is populated by `extract_evidence()` in `report.rs:845` (`pub fn extract_evidence` at `report.rs:845`), which conservatively produces evidence from capability denials (CapabilityDenial), unsupported features/approximations (CompatibilityWarning), rule evaluation errors (CompatibilityWarning), and non-empty script output (ScriptOutput). Direct `NseEvidenceItem` construction outside `extract_evidence()`/`report.rs` (plus tests) is flagged by architecture guard Check 39 (`scripts/check-architecture-guards.sh:849`).
 
 **Empty state**: If `evidence` is empty, display "No structured evidence."
 
@@ -120,7 +120,7 @@ The TUI may accept either type. `NseRunReport` provides richer per-section detai
 | Field | Source | Display |
 |-------|--------|---------|
 | Content | `.content` | Full script stdout/stderr |
-| Truncated | `.truncated` | Whether output was truncated (constant `MAX_RAW_OUTPUT_LINES = 200` in `nse_report_view.rs`) |
+| Truncated | `.truncated` | Whether output was truncated (constant `MAX_RAW_OUTPUT_LINES = 200` in `crates/eggsec-tui/src/tabs/nse_report_view.rs:13`) |
 
 **Rendering**: Full content in scrollable panel. Truncation indicator when `.truncated == true`.
 
@@ -176,7 +176,7 @@ When rendering from `ReportEnvelope` instead of `NseRunReport`:
 
 ### Data Flow
 
-The NSE dispatch layer (`run_nse()` in `crates/eggsec/src/dispatch/api.rs`) builds an `NseRunReport` after `run_script_with_rules()` completes. The report is carried through `NseResults { report: Option<NseRunReport>, output: String, ... }` into the TUI rendering path.
+The NSE dispatch layer (`run_nse()` at `crates/eggsec/src/dispatch/api.rs:306`) builds an `NseRunReport` after `run_script_with_rules()` completes. The report is carried through `NseResults { report: Option<NseRunReport>, output: String, ... }` (imported at `dispatch/api.rs:4` from `dispatch::types`) into the TUI rendering path.
 
 The TUI consumes `NseRunReport` directly via `nse_report_view::render_report()` in `crates/eggsec-tui/src/tabs/nse_report_view.rs`. When `NseRunReport` is absent (e.g. legacy dispatch path or parse failure), the TUI falls back to simple text rendering of the raw output string.
 

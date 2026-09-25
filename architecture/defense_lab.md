@@ -55,11 +55,11 @@ The `DomainCategory` enum (`crates/eggsec/src/domain/mod.rs:27-38`) classifies d
 
 ### DefenseLab vs. HazardousLab Semantics
 
-`DefenseLab` (`OperationMode::DefenseLab`, `policy.rs:184`) provides a local/private/scope-constrained environment for WAF and distributed-system validation. Its `default_max_risk()` is `OperationRisk::Intrusive` (`policy.rs:205`), meaning Intrusive operations are allowed by default without explicit policy approval.
+`DefenseLab` (`OperationMode::DefenseLab`, `eggsec-policy/src/policy.rs`) provides a local/private/scope-constrained environment for WAF and distributed-system validation. Its default max risk is `OperationRisk::Intrusive` (`eggsec-policy/src/policy.rs:102-`), meaning Intrusive operations are allowed by default without explicit policy approval.
 
-`HazardousLab` (`OperationMode::HazardousLab`, `policy.rs:188`) covers raw packet operations, flood-style stress tests, proxy rotation, low-level protocol edge cases, and other aggressive tests. Its `default_max_risk()` is `OperationRisk::AgentAutonomous` (`policy.rs:206`), the highest risk tier.
+`HazardousLab` (`OperationMode::HazardousLab`) covers raw packet operations, flood-style stress tests, proxy rotation, low-level protocol edge cases, and other aggressive tests. Its default max risk is the highest risk tier (see `eggsec-policy/src/policy.rs:102-`).
 
-Both modes require explicit scope and are distinct from `StandardAssessment` (which defaults to `SafeActive`). The enforcement engine (`policy_decision.rs:1171`) treats them differently: DefenseLab operations can proceed with `Intrusive` risk under default policy, while HazardousLab operations require explicit `allow_*` flags in `ExecutionPolicy`.
+Both modes require explicit scope and are distinct from `StandardAssessment` (which defaults to `SafeActive`). The enforcement engine (`eggsec-policy/src/decision.rs`, `ConfirmationClass` at `decision.rs:347`) treats them differently: DefenseLab operations can proceed with `Intrusive` risk under default policy, while HazardousLab operations require explicit `allow_*` flags in `ExecutionPolicy`.
 
 ## Lab-Gated Module Inventory
 
@@ -286,4 +286,4 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 
 Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-25 (policy paths corrected to eggsec-policy/src/policy.rs + decision.rs:347; presets/names re-verified)*

@@ -1,6 +1,6 @@
 # Runtime Bridge
 
-**Module:** `crates/eggsec/src/runtime_bridge/` (6 files, ~1,792 lines)
+**Module:** `crates/eggsec/src/runtime_bridge/` (6 files, ~1,851 lines)
 
 Bridges frontend-neutral `eggsec-runtime` DTOs to the engine's enforcement model. This is the security boundary between the daemon/runtime layer and the engine's policy system. The dependency direction is one-way: `eggsec` depends on `eggsec-runtime`, never vice versa.
 
@@ -16,12 +16,12 @@ The bridge is the **only** place where runtime DTOs are converted to enforcement
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 35 | Module root; re-exports all public types; documents invariants |
-| `surface.rs` | ~210 | Bidirectional surface conversion (`RuntimeSurface` ↔ `ExecutionSurface`, exhaustive; `Unknown` rejected wire → engine); `RuntimeBridgeError` enum (7 variants) |
+| `mod.rs` | 38 | Module root; re-exports all public types; documents invariants |
+| `surface.rs` | 221 | Bidirectional surface conversion (`RuntimeSurface` ↔ `ExecutionSurface`, exhaustive; `Unknown` rejected wire → engine); `RuntimeBridgeError` enum (7 variants) |
 | `descriptor.rs` | 444 | `TaskKind` → `OperationDescriptor` via `OperationMetadata` lookup; `resolve_operation_and_target()` delegates to the single wire-side match |
-| `manual.rs` | 438 | `preflight_run_request()` and `approve_run_request()` entry points |
-| `bundle.rs` | 355 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
-| `executor.rs` | ~300 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; envelope via engine-owned `dispatch::task_result_envelope`; cancellation via shared `race_with_cancel` |
+| `manual.rs` | 479 | `preflight_run_request()`, `approve_run_request()`, and `approve_run_request_execution()` entry points |
+| `bundle.rs` | 374 | `ApprovedRunRequest` bundle type; `approve_run_request_bundle()`; `dispatch_approved_runtime_request()` with anti-tamper validation → canonical `execute_approved` |
+| `executor.rs` | 295 | `EggsecRuntimeExecutor` implementing `RuntimeTaskExecutor` trait; envelope via engine-owned `dispatch::task_result_envelope`; cancellation via shared `race_with_cancel` |
 
 ## Key Types
 
@@ -41,12 +41,14 @@ Error enum with **7 variants** covering all bridge failure modes (`surface.rs:6�
 
 ### `ApprovedRunRequest`
 
-Couples an `ApprovedOperation` token with the original `RunRequest` (`bundle.rs:34–57`). Private fields prevent construction outside the bridge. This prevents approve-one-dispatch-another attacks where the request might be mutated between approval and dispatch.
+Couples an `ApprovedExecution` bundle (token + scope snapshot from the same enforcement context) with the original `RunRequest` (`bundle.rs:34–57`). Private fields prevent construction outside the bridge. This prevents approve-one-dispatch-another attacks where the request might be mutated between approval and dispatch. Per-hop transport authorization uses the approval scope carried in the bundle, never a reloaded config or wildcard.
 
 Methods:
-- `approved()` → `&ApprovedOperation`
+- `approved()` → `&ApprovedOperation` (via the inner execution bundle)
+- `execution()` → `&ApprovedExecution`
 - `request()` → `&RunRequest`
 - `into_parts()` → `(ApprovedOperation, RunRequest)`
+- `into_execution_parts()` → `(ApprovedExecution, RunRequest)`
 
 ## Flow
 
@@ -149,9 +151,9 @@ older serialized requests retain their existing defaults. For compatibility,
 `LoadTestParams.connections` supplies both the request count and concurrency
 when the newer `requests` field is absent.
 
-### Preflight & Approval (`manual.rs:17–77`)
+### Preflight & Approval (`manual.rs:17–86`)
 
-Two entry points for callers (daemon, MCP server, etc.):
+Three entry points for callers (daemon, MCP server, etc.):
 
 ```rust
 pub fn preflight_run_request(
@@ -169,9 +171,17 @@ pub fn approve_run_request(
     request: &RunRequest,
     manual_override: Option<&ManualOverride>,
 ) -> Result<ApprovedOperation, RuntimeBridgeError>   // manual.rs:47
+
+pub fn approve_run_request_execution(
+    surface: RuntimeSurface,
+    policy: ExecutionPolicy,
+    loaded_scope: LoadedScope,
+    request: &RunRequest,
+    manual_override: Option<&ManualOverride>,
+) -> Result<ApprovedExecution, RuntimeBridgeError>   // manual.rs:86
 ```
 
-Both functions:
+Both functions (all three entry points):
 1. Convert `RuntimeSurface` → `ExecutionSurface` (rejects `Unknown`)
 2. Convert `RunRequest` → `OperationDescriptor` (rejects unsupported task kinds)
 3. Create `EnforcementContext::for_surface(exec_surface, policy, loaded_scope)`
@@ -181,9 +191,9 @@ Both functions:
 
 The `approve_manual` vs `approve` split is the core security distinction: permissive manual surfaces can escalate through overrides, strict surfaces cannot.
 
-### Bundle & Dispatch (`bundle.rs:64–116`)
+### Bundle & Dispatch (`bundle.rs:81–116`)
 
-`approve_run_request_bundle()` creates the coupled `ApprovedRunRequest` (`bundle.rs:64`):
+`approve_run_request_bundle()` creates the coupled `ApprovedRunRequest` (`bundle.rs:81`):
 
 ```rust
 pub fn approve_run_request_bundle(
@@ -205,7 +215,7 @@ pub fn approve_run_request_bundle(
 
 These anti-tamper checks prevent approve-one-dispatch-another attacks. The checks are **fail-closed** — any mismatch returns an error before any engine code executes.
 
-### Executor (`executor.rs:33–373`)
+### Executor (`executor.rs:33–295`)
 
 `EggsecRuntimeExecutor` implements `eggsec_runtime::RuntimeTaskExecutor`, the trait the daemon runtime calls to execute tasks (`executor.rs:283`):
 
@@ -287,4 +297,4 @@ The bridge module has extensive test coverage across all files:
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Section 4.8 (Daemon / Runtime execution flow)
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); cites re-verified 2026-09-22 (systematic review); file sizes and `ApprovedExecution` bundle shape re-verified 2026-09-25*

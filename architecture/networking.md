@@ -12,10 +12,10 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 |-----------|-------------|------------|
 | Whole `packet` module | `packet-inspection` OR `stress-testing` | `lib.rs:183` (`#[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]`) |
 | `packet/cli` module | `packet-inspection` + `cli` (both) | `packet/mod.rs:21-23` |
-| `PacketCapture::start()` | `packet-inspection` + unix | `capture.rs:151` |
-| `list_interfaces()` (real) | `packet-inspection` + unix | `capture.rs:414` |
-| `list_interfaces()` (stub) | non-packet-inspection | `capture.rs:434` |
-| Raw ICMP send (`send_raw_icmp`) | `packet-inspection` + unix | `cli.rs:148` |
+| `PacketCapture::start()` | `packet-inspection` + unix | `capture.rs:165` (real) / `capture.rs:391` (stub) |
+| `list_interfaces()` (real) | `packet-inspection` + unix | `capture.rs:439` |
+| `list_interfaces()` (stub) | non-packet-inspection | `capture.rs:459` |
+| Raw ICMP send (`send_raw_icmp`) | `packet-inspection` + unix | `cli.rs:149` |
 | ICMP probe (`icmp_probe.rs`) | `stress-testing` | `#![cfg(feature = "stress-testing")]` (traceroute itself ships with `packet`; only the ICMP probe helper is separately gated) |
 
 ## Architecture
@@ -63,41 +63,41 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `PacketCapture` | `capture.rs:115` | Main capture engine: `new()`, `is_running()`, `stop()`, `stats()`, `running()`, `start()` (async) |
-| `CaptureConfig` | `capture.rs:80` | Builder input: interface, filter, promiscuous, snapshot_len, timeout, max_packets, save_to_file, validate_checksums |
-| `CaptureStats` | `capture.rs:107` | Post-capture metrics: packets_captured, bytes_captured, packets_dropped, runtime_ms |
-| `CaptureBuilder` | `capture.rs:466` | Fluent builder for `PacketCapture` |
-| `PcapWriter` | `capture.rs:14` | PCAP file writer: 24-byte global header + per-packet headers |
-| `CaptureError` | `capture.rs:448` | Error enum: `AlreadyRunning`, `NoInterface`, `InterfaceNotFound`, `RequiresRoot`, `UnsupportedChannel`, `ChannelError`, `IoError` — **7 variants** |
-| `NetworkInterfaceInfo` | `capture.rs:439` | Interface metadata: name, ips, mac, is_up, is_loopback |
-| `PacketInfo` | `mod.rs:26` | Parsed captured packet: timestamp, ethernet, ip, transport, app, raw_size, hex_dump |
+| `PacketCapture` | `capture.rs:125` | Main capture engine: `new()`, `is_running()`, `stop()`, `stats()`, `running()`, `start()` (async) |
+| `CaptureConfig` | `capture.rs:91` | Builder input: interface, filter, promiscuous, snapshot_len, timeout, max_packets, save_to_file, validate_checksums |
+| `CaptureStats` | `capture.rs:118` | Post-capture metrics: packets_captured, bytes_captured, packets_dropped, runtime_ms |
+| `CaptureBuilder` | `capture.rs:490` | Fluent builder for `PacketCapture` |
+| `PcapWriter` | `capture.rs:17` | PCAP file writer: 24-byte global header + per-packet headers |
+| `CaptureError` | `capture.rs:473` | Error enum: `AlreadyRunning`, `NoInterface`, `InterfaceNotFound`, `RequiresRoot`, `UnsupportedChannel`, `ChannelError`, `IoError` — **7 variants** |
+| `NetworkInterfaceInfo` | `capture.rs:464` | Interface metadata: name, ips, mac, is_up, is_loopback |
+| `PacketInfo` | `mod.rs:28` | Parsed captured packet: timestamp, ethernet, ip, transport, app, raw_size, hex_dump |
 
 #### Crafting (`craft.rs`)
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `PacketBuilder` | `craft.rs:189` | Top-level builder: `ethernet()`, `ipv4()`, `ipv6()`, `tcp()`, `udp()`, `icmp()`, `payload()`, `validate()`, `build()` |
-| `EthernetBuilder` | `craft.rs:434` | 14-byte Ethernet frame builder |
-| `Ipv4Builder` | `craft.rs:451` | 20-byte IPv4 header builder (with random ID) |
-| `Ipv6Builder` | `craft.rs:480` | 40-byte IPv6 header builder |
-| `TcpBuilder` | `craft.rs:505` | TCP segment builder with pseudo-header checksum |
-| `UdpBuilder` | `craft.rs:576` | UDP datagram builder with pseudo-header checksum |
-| `IcmpBuilder` | `craft.rs:595` | ICMP message builder with checksum |
-| `TransportBuilder` | `craft.rs:743` | Enum: `Tcp`, `Udp`, `Icmp` |
-| `PacketValidationError` | `craft.rs:156` | Validation error: `AddressFamilyMismatch`, `InvalidTtl`, `InvalidHopLimit`, `InvalidTcpOptionsLength`, `PacketTooLarge`, `PayloadTooLarge` — **6 variants** |
+| `PacketBuilder` | `craft.rs:190` | Top-level builder: `ethernet()`, `ipv4()`, `ipv6()`, `tcp()`, `udp()`, `icmp()`, `payload()`, `validate()`, `build()` |
+| `EthernetBuilder` | `craft.rs:491` | 14-byte Ethernet frame builder |
+| `Ipv4Builder` | `craft.rs:508` | 20-byte IPv4 header builder (with random ID) |
+| `Ipv6Builder` | `craft.rs:537` | 40-byte IPv6 header builder |
+| `TcpBuilder` | `craft.rs:562` | TCP segment builder with pseudo-header checksum |
+| `UdpBuilder` | `craft.rs:633` | UDP datagram builder with pseudo-header checksum |
+| `IcmpBuilder` | `craft.rs:663` | ICMP message builder with checksum |
+| `TransportBuilder` | `craft.rs:811` | Enum: `Tcp`, `Udp`, `Icmp` |
+| `PacketValidationError` | `craft.rs:157` | Validation error: `AddressFamilyMismatch`, `InvalidTtl`, `InvalidHopLimit`, `InvalidTcpOptionsLength`, `PacketTooLarge`, `PayloadTooLarge` — **6 variants** |
 
 #### Traceroute (`traceroute.rs`)
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `Traceroute` | `traceroute.rs:113` | Traceroute engine: `new()`, `run()` (async) |
-| `TracerouteConfig` | `traceroute.rs:13` | Config: target, max_hops(30), timeout(3s), max_retries, first_ttl(1), port(33434), use_icmp(false), packet_size(32), parallel_probes(true), resolve_names(true), max_concurrent_probes(6) |
-| `TracerouteBuilder` | `traceroute.rs:574` | Fluent builder for `Traceroute` |
-| `TracerouteResult` | `traceroute.rs:104` | Result: target, resolved_address, hops, total_hops, success |
-| `TracerouteHop` | `traceroute.rs:46` | Hop: hop number, address, rtt, rtt_ms, name, is_final, probes |
-| `HopProbe` | `traceroute.rs:57` | Individual probe: address, rtt, success |
-| `TracerouteError` | `traceroute.rs:548` | Error: `ResolveError`, `ProbeError`, `RequiresRoot`, `Unsupported` |
-| `ProbeError` | `traceroute.rs:560` | Probe error: `SocketError`, `SendError`, `ReceiveError`, `Timeout`, `PortUnreachable` |
+| `Traceroute` | `traceroute.rs:114` | Traceroute engine: `new()`, `run()` (async) |
+| `TracerouteConfig` | `traceroute.rs:14` | Config: target, max_hops(30), timeout(3s), max_retries, first_ttl(1), port(33434), use_icmp(false), packet_size(32), parallel_probes(true), resolve_names(true), max_concurrent_probes(6) |
+| `TracerouteBuilder` | `traceroute.rs:625` | Fluent builder for `Traceroute` |
+| `TracerouteResult` | `traceroute.rs:106` | Result: target, resolved_address, hops, total_hops, success |
+| `TracerouteHop` | `traceroute.rs:47` | Hop: hop number, address, rtt, rtt_ms, name, is_final, probes |
+| `HopProbe` | `traceroute.rs:58` | Individual probe: address, rtt, success |
+| `TracerouteError` | `traceroute.rs:591` | Error: `ResolveError`, `ProbeError`, `RequiresRoot`, `Unsupported` |
+| `ProbeError` | `traceroute.rs:603` | Probe error: `SocketError`, `SendError`, `ReceiveError`, `Timeout` |
 
 #### Hexdump (`hexdump.rs`)
 
@@ -121,8 +121,8 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 | `HttpResponse::parse(data)` | `parse_impl.rs:540` | HTTP response parsing |
 | `hexdump(data)` | `hexdump.rs:5` | Convenience hex dump to string |
 | `hexdump_with_offset(data, offset, bpl)` | `hexdump.rs:9` | Hex dump with custom start offset and bytes per line |
-| `parse_dns_name(data, offset)` | `validation.rs:10` | DNS name parsing with compression pointer support (max 100 jumps) |
-| `parse_dns_rdata(data, offset, rtype, rdlen)` | `validation.rs:70` | DNS RData formatting (A, AAAA, NS, CNAME, PTR, MX, TXT, SOA) |
+| `parse_dns_name(data, offset)` | `validation.rs:12` | DNS name parsing with compression pointer support (max 100 jumps) |
+| `parse_dns_rdata(data, offset, rtype, rdlen)` | `validation.rs:93` | DNS RData formatting (A, AAAA, NS, CNAME, PTR, MX, TXT, SOA) |
 
 ## Behavior / Flow
 
@@ -231,12 +231,12 @@ named prerequisite when root/pcap is absent.
 
 ### Unit Tests
 
-- **`capture.rs:523-557`**: 2 tests — packet filter matching (TCP/UDP protocol, port filtering)
-- **`craft.rs:399-432`**: 2 tests — UDP checksum presence for IPv4/IPv6, mixed address family rejection
-- **`hexdump.rs:134-191`**: 7 tests — empty input, basic dump, offset, non-printable, 16-byte boundary, >16 bytes, zero bytes-per-line safety
-- **`traceroute.rs:651-676`**: 2 tests — ICMP unsupported error, PTR name normalization
-- **`validation.rs:57-68`**: 1 test — compressed DNS name offset
-- **`cli.rs:725-757`**: 1 test — PCAP record parsing with `incl_len`
+- **`capture.rs:548-590`**: 2 tests — packet filter matching (TCP/UDP protocol, port filtering)
+- **`craft.rs:425-460`**: 2 tests — UDP checksum presence for IPv4/IPv6, mixed address family rejection
+- **`hexdump.rs:135-191`**: 7 tests — empty input, basic dump, offset, non-printable, 16-byte boundary, >16 bytes, zero bytes-per-line safety
+- **`traceroute.rs:703-744`**: 2 tests — ICMP unsupported error, PTR name normalization
+- **`validation.rs:67-100`**: 1 test — compressed DNS name offset
+- **`cli.rs:726-758`**: 1 test — PCAP record parsing with `incl_len`
 
 ### Test Data
 
@@ -247,17 +247,17 @@ named prerequisite when root/pcap is absent.
 
 1. **ICMP traceroute disabled**: `Traceroute::run()` returns `Unsupported` when `use_icmp` is true (`traceroute.rs:123`). This is documented as a TTL control issue. Use UDP mode.
 2. **Filter is string-based**: `packet_matches_filter()` does simple string comparison, not true BPF. Only supports `tcp`, `udp`, `icmp`, `ip`, and `port N`.
-3. **PCAP timestamp saturation**: Y2038 boundary handled by saturating to `u32::MAX` instead of panicking (`capture.rs:59`).
+3. **PCAP timestamp saturation**: Y2038 boundary handled by saturating to `u32::MAX` instead of panicking (`capture.rs:67-69`).
 4. **Frame capture thread**: Uses `crossbeam::channel::bounded(100)` as bridge between sync capture thread and async caller. Disconnection breaks the loop.
 5. **Duplicate `TcpFlags`**: Defined in both `types.rs:71` and `craft.rs:635`. The `craft.rs` version adds `to_byte()` and convenience constructors (`syn()`, `ack()`, `syn_ack()`, `fin()`, `rst()`).
 6. **DNS compression jump limit**: `parse_dns_name()` limits compression pointer chains to 100 jumps to prevent infinite loops (`validation.rs:33`).
 7. **ICMP checksum uses `0xffff` for zero**: UDP checksum normalizes 0 to 0xffff per RFC 768 (`craft.rs:133-137`).
 8. **PacketBuilder random ID**: `Ipv4Builder` uses `rand::random()` for IP identification field (`craft.rs:224`).
-9. **PacketInfo.summary()**: Produces human-readable one-liner with `→` separator and `|` between layers (`mod.rs:38-91`).
+9. **PacketInfo.summary()**: Produces human-readable one-liner with `→` separator and `|` between layers (`mod.rs:39-91`).
 10. **CaptureBuilder defaults**: promiscuous=true, snapshot_len=65535, timeout=1s, no max_packets, no file output, no checksum validation (`capture.rs:92-105`).
 
 ---
 
 See also: [overview.md](overview.md), [probe.md](probe.md), [stress.md](stress.md), [defense_lab.md](defense_lab.md)
 
-*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts/gates re-verified 2026-09-22 (systematic review); type/test line-cites refreshed 2026-09-25*

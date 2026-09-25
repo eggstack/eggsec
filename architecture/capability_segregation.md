@@ -230,4 +230,4 @@ evaluated against the roadmap's decision rule and rejected:
   no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
   `utils::cache` stays removed.
 
-*Last verified against source: 2026-09-16 (Phase D closure)*
+*Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:274`), workspace Tokio `default-features = false` (root `Cargo.toml:48`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*

@@ -256,4 +256,4 @@ concrete-client leakage is possible:
 
 See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
-*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green); cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green); cites re-verified 2026-09-22 (systematic review); test counts (18 unit + 13 closure) and dependency envelope re-verified 2026-09-25*

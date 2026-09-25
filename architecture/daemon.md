@@ -36,7 +36,7 @@ Architecture guards enforce:
 | `protocol` | `src/protocol.rs` | `ClientCommand` (15 variants), `ServerMessage` (14 variants), `ErrorCode` (11 variants), `TransportKind` (4 variants), `DaemonCapabilities`, `TransportCapability`, `DaemonRequestContext`, `DAEMON_PROTOCOL_VERSION` (= 2; v2 adds `GetTaskResult`/`TaskResult`) |
 | `client_registry` | `src/client_registry.rs` | `ClientKind` (7 variants), `ClientRole` (4 variants), `CommandPermission` (6 variants), `ClientInfo`, `ClientAccessRule`, `SessionAccess`, `ClientRegistry`, `check_permission()`, `command_permission()` |
 
-#### ClientCommand — 15 variants (`protocol.rs:71-145`)
+#### ClientCommand — 15 variants (`protocol.rs:75`)
 
 | # | Variant | Fields | Permission |
 |---|---------|--------|-----------|
@@ -56,7 +56,7 @@ Architecture guards enforce:
 | 14 | `ListPersistedSessions` | `request_id` | DeclaredClient |
 | 15 | `GetPersistedSnapshot` | `request_id`, `session_id: SessionId` | DeclaredClient |
 
-#### ServerMessage — 14 variants (`protocol.rs`)
+#### ServerMessage — 14 variants (`protocol.rs:215`)
 
 | # | Variant | Fields |
 |---|---------|--------|
@@ -79,7 +79,7 @@ Architecture guards enforce:
 first, persisted snapshot fallback, `None` outcome while active. See
 [docs/DAEMON_PARITY.md](../docs/DAEMON_PARITY.md) for reconnect semantics.
 
-#### ErrorCode — 11 variants (`protocol.rs:51-66`)
+#### ErrorCode — 11 variants (`protocol.rs:55`)
 
 | # | Variant | Meaning |
 |---|---------|---------|
@@ -95,19 +95,19 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | 10 | `Unsupported` | Operation not wired yet (e.g. ApprovePolicy) |
 | 11 | `InvalidState` | Operation cannot proceed in current state |
 
-#### ClientKind — 7 variants (`client_registry.rs:11-19`)
+#### ClientKind — 7 variants (`client_registry.rs:11`)
 
 `Cli`, `Tui`, `DaemonInternal`, `Mcp`, `Rest`, `Agent`, `Unknown` (default)
 
-#### ClientRole — 4 variants (`client_registry.rs:25-30`)
+#### ClientRole — 4 variants (`client_registry.rs:25`)
 
 `Owner`, `Controller`, `Observer`, `Approver`
 
-#### CommandPermission — 6 variants (`client_registry.rs:37-50`)
+#### CommandPermission — 6 variants (`client_registry.rs:37`)
 
 `Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`
 
-### eggsec-daemon (10 compiled source files + store/, plus 1 orphan)
+### eggsec-daemon (12 source files)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -122,8 +122,8 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | `error` | `src/error.rs` | `DaemonError`: Io, Serialization, Protocol, Runtime |
 | `store/mod` | `src/store/mod.rs` | `DaemonStore` trait, `PersistedAuditEvent`, `noop_store()` |
 | `store/sqlite` | `src/store/sqlite.rs` | `SqliteStore` (WAL, foreign keys, schema version 2), `NoopStore` |
-| `client_registry` | `src/client_registry.rs` | **Orphan (uncompiled)**: this 16.9K file is never declared as a module (`lib.rs` only re-exports `eggsec_daemon_protocol::client_registry`), so `host.rs`/`server.rs`/`client.rs` all resolve the RBAC types from the single protocol-crate source. There is no sync obligation; the file should be deleted or wired up |
-| `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum routes, SSE streaming, auth header, bind validation |
+| `client_registry` | (single source: `eggsec-daemon-protocol/src/client_registry.rs`, re-exported via `eggsec-daemon/src/lib.rs:1`) | **No orphan**: `host.rs`/`server.rs`/`client.rs` all resolve RBAC types from the protocol crate; the former duplicate `eggsec-daemon/src/client_registry.rs` has been deleted |
+| `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum `.route()` calls (15 method rows; `GET`+`POST /sessions` share one route), SSE streaming, auth header, bind validation |
 
 ## Behavior & Flows
 
@@ -141,10 +141,10 @@ Client connects to Unix socket
 ```
 
 Key behaviors:
-- **Idle timeout**: 300s read timeout per connection (`server.rs:193`)
-- **Max line**: 1 MiB per JSON frame (`server.rs:17`)
+- **Idle timeout**: 300s read timeout per connection (`server.rs:202`)
+- **Max line**: 1 MiB per JSON frame (`server.rs:17`, `MAX_LINE_LEN`)
 - **Max clients**: semaphore-limited (default 10)
-- **Socket permissions**: 0o600 after bind (`server.rs:95`)
+- **Socket permissions**: 0o600 after bind (`server.rs:100`)
 - **Subscribe**: long-lived; receives broadcast events filtered by session ID; further commands handled inline during streaming
 
 ### Startup Recovery
@@ -280,7 +280,7 @@ schema_meta (
 
 Schema version: `2` (stored in `schema_meta`). Migration refuses to load when stored version > current.
 
-## Configuration (`config.rs:5-17`)
+## Configuration (`config.rs:7-26`)
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
@@ -320,4 +320,4 @@ Schema version: `2` (stored in `schema_meta`). Migration refuses to load when st
 - [tui.md](tui.md) — TUI daemon attach mode
 - [cli_commands.md](cli_commands.md) — CLI daemon/session/task commands
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review); orphan-file claim, protocol lines, and server cites re-verified 2026-09-25*

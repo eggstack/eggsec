@@ -78,9 +78,9 @@ A minimal numeric summary struct for attaching diff results to pipeline run mani
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `DiffSummary` | `diff.rs:4` | Counts of new, resolved, escalated, de-escalated findings plus net change |
+| `DiffSummary` | `summary.rs` (canonical) / `diff.rs` (re-export) | Counts of new, resolved, escalated, de-escalated findings plus net change |
 
-### Fields (`diff.rs:4-10`)
+### Fields (`summary.rs:42-48`)
 
 | Field | Type |
 |-------|------|
@@ -92,7 +92,7 @@ A minimal numeric summary struct for attaching diff results to pipeline run mani
 
 ### Usage
 
-- Re-exported at `output/mod.rs:58`
+- Re-exported at `output/mod.rs` via `pub use eggsec_report_model::*` (canonical `DiffSummary` in `summary.rs:42-48`)
 - Used in `RunManifest` (`output/run_manifest.rs:56`) as `diff_summary: Option<DiffSummary>`
 - Populated via `with_baseline()` at `run_manifest.rs:93`
 - `net_change` = `total_new - total_resolved` (caller must compute)
@@ -185,7 +185,7 @@ Used in `FuzzEngine` (`fuzzer/engine/core.rs:106`) as `differ: Option<ResponseDi
 
 ## 4. WAF Response Diff (Separate)
 
-**File:** `crates/eggsec/src/waf/detector/types.rs:25-34`
+**File:** `crates/eggsec/src/waf/detector/types.rs:30-40`
 
 A completely separate `ResponseDiff` type for WAF detection, comparing normal vs. malicious request responses. Uses different logic (`is_waf_blocked()`) checking status codes, length diffs, and header keywords. Not related to the output or fuzzer diff modules.
 
@@ -246,4 +246,4 @@ The following capabilities are **not implemented** despite being plausible:
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-09-25 (systematic review: DiffSummary canonical path, WAF line numbers)*

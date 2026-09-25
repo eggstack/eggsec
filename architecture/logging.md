@@ -130,7 +130,7 @@ Strips ANSI CSI escape sequences (`\x1B[...`), control chars (preserving tabs), 
 | Engine modules (scanner, fuzzer, etc.) | Use `tracing::{info!, warn!, error!}` facade only — never configure subscribers |
 | `utils/logging.rs` | `sanitize_for_logging()` used before logging user-controlled strings |
 
-**Dependency boundary**: `tracing-subscriber` and `tracing-appender` are optional engine dependencies behind `logging-subscriber`. The CLI crate owns these dependencies unconditionally since it is the process host. See `Cargo.toml:64-65`:
+**Dependency boundary**: `tracing-subscriber` and `tracing-appender` are optional engine dependencies behind `logging-subscriber`. The CLI crate owns these dependencies unconditionally since it is the process host. See `Cargo.toml:67-68`:
 ```toml
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 tracing-appender = { version = "0.2", optional = true }
@@ -173,4 +173,4 @@ The `WorkerGuard` **must** be held for the process lifetime when `log_dir` is `S
 - [config.md](config.md) — Configuration system may set log-related options
 - [tui.md](tui.md) — Single-terminal-writer ownership contract and in-frame error routing
 
-*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review); Cargo.toml line cite fixed (`:67-68`) 2026-09-25 (systematic review)*

@@ -20,7 +20,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | Feature | Declared | Has deps | In `full` | Primary module | Stability |
 |---------|----------|----------|-----------|----------------|-----------|
 | `default` | yes | no | - | (core) | Stable |
-| `test-helpers` | yes | no | - | (test support) | Testing-only |
+| `test-helpers` | yes | yes (`eggsec-policy/test-helpers`) | - | (test support) | Testing-only |
 | `tool-api` | yes | no | - | `tool/` | Stable |
 | `insecure-tls` | yes | no | - | `utils/` | Testing-only |
 | `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable |
@@ -122,9 +122,11 @@ full WebSocket pub/sub support.
 Pure marker gates (empty feature arrays; compile-time gate only, no activated
 dependencies): `tool-api`, `insecure-tls`, `advanced-hunting`, `compliance`,
 `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`,
-`git-secrets`, `wireless`, `evasion`, `postex`, `api-schema`, `daemon-client`,
-and `test-helpers`. They gate module compilation via `#[cfg(feature = "...")]`
-in `lib.rs`.
+`git-secrets`, `wireless`, `evasion`, `postex`, `api-schema`, and
+`daemon-client` (14 non-default markers; plus `default = []` itself, making 15
+empty arrays total against 35 non-empty — see Summary). They gate module
+compilation via `#[cfg(feature = "...")]` in `lib.rs`. Note: `test-helpers`
+is **not** a pure marker — it activates `eggsec-policy/test-helpers`.
 
 Feature-coupled markers reference a base feature and/or a domain-crate feature
 without pulling new third-party dependency closures: `wireless-advanced`
@@ -169,4 +171,4 @@ mod example;
 This ensures the module always compiles (for internal use) but is only publicly
 exposed when the feature is enabled.
 
-*Last verified against source: 2026-09-09 (Phase B: curated `full` contract, `cli` row, marker taxonomy)*
+*Last verified against source: 2026-09-09 (Phase B: curated `full` contract, `cli` row, marker taxonomy); `test-helpers` dep flag and marker-gate list fixed 2026-09-25 (systematic review)*

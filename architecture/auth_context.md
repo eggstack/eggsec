@@ -15,8 +15,8 @@
 | Item | Path | Feature Gate |
 |------|------|:------------:|
 | Auth context module | `crates/eggsec/src/auth_context/mod.rs` | None (always compiled) |
-| Fuzzer consumer (apply) | `crates/eggsec/src/fuzzer/engine/utils.rs:96,141,237` | None |
-| Fuzzer consumer (load) | `crates/eggsec/src/fuzzer/engine/core.rs:184` | None |
+| Fuzzer consumer (apply) | `crates/eggsec/src/fuzzer/engine/utils.rs:30,120,165,261` | None |
+| Fuzzer consumer (load) | `crates/eggsec/src/fuzzer/engine/core.rs:181` | None |
 
 ## Architecture
 
@@ -159,4 +159,4 @@ All tests are in `auth_context/mod.rs`. Test count: 12 tests total
 
 See also: [transport.md](transport.md), [network_dependency_baseline.md](network_dependency_baseline.md)
 
-*Last verified against source: 2026-09-12*
+*Last verified against source: 2026-09-12; fuzzer consumer cites re-verified 2026-09-25*

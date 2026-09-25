@@ -15,8 +15,8 @@ Related: [types.md](types.md), [constants.md](constants.md), [overview.md](overv
 | `EggsecError` enum | `crates/eggsec/src/error/mod.rs:44` | 23 variants |
 | `Result<T>` alias | `crates/eggsec/src/error/mod.rs:173` | `std::result::Result<T, EggsecError>` |
 | Helper methods | `crates/eggsec/src/error/mod.rs:121-170` | `is_timeout()`, `is_network()`, `http_status()`, `with_timeout()` |
-| Non-feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:85-277` | 19 impls (1 `#[from]` + 18 manual) |
-| Feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:279-368` | 3 impls: `ai-integration`, `packet-inspection`, `web-proxy` |
+| Non-feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:85-277` | 18 impls (1 `#[from]` + 17 manual) |
+| Feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:279-368` | 4 impls: `ai-integration`, `packet-inspection`, `packet-inspection` OR `stress-testing`, `web-proxy` |
 | Sanitization utilities | `crates/eggsec/src/utils/error.rs` | 3 public functions |
 
 No feature gating on the enum itself — `EggsecError` is always compiled.
@@ -149,17 +149,17 @@ These domain-specific error types serve specialized purposes and intentionally d
 
 | Type | Location | Purpose | Converts to `EggsecError`? |
 |------|----------|---------|-----------------------------|
-| `ConfigError` | `config/settings.rs:707` | Config file IO/parse/serialize errors | No (config boundary) |
+| `ConfigError` | `config/settings.rs:708` | Config file IO/parse/serialize errors | No (config boundary) |
 | `ScopeError` | `eggsec-policy/src/scope.rs:509` (facade: `config/scope.rs`) | Target scope validation errors | Yes (via `From` impl) |
 | `AiError` | `ai/errors.rs:6` | AI/LLM API errors (9 variants) | Yes (feature-gated) |
-| `CaptureError` | `packet/capture.rs:440` | Packet capture errors (7 variants) | Yes (feature-gated) |
-| `TracerouteError` | `packet/traceroute.rs:543` | Traceroute errors (4 variants) | Yes (feature-gated) |
-| `ProbeError` | `packet/traceroute.rs:555` | Traceroute probe errors (5 variants) | No (encapsulated by `TracerouteError`) |
-| `ToolError` / `ToolErrorType` | `tool/tool_error.rs:4` / `:51` | Serializable API/MCP error (11 types) | No (serializable JSON schema) |
-| `QueueError` | `distributed/queue.rs:155` | Distributed task queue errors | No (queue boundary) |
+| `CaptureError` | `packet/capture.rs:473` | Packet capture errors (7 variants) | Yes (feature-gated) |
+| `TracerouteError` | `packet/traceroute.rs:591` | Traceroute errors (4 variants) | Yes (feature-gated) |
+| `ProbeError` | `packet/traceroute.rs:603` | Traceroute probe errors (4 variants) | No (encapsulated by `TracerouteError`) |
+| `ToolError` / `ToolErrorType` | `eggsec-tool-core/src/tool_error.rs:4` / `:51` | Serializable API/MCP error (11 types) | No (serializable JSON schema) |
+| `QueueError` | `distributed/queue.rs:147` | Distributed task queue errors | No (queue boundary) |
 | `CallbackUrlValidationError` | `tool/protocol/agent_routes.rs:28` | MCP callback URL validation | No (validation boundary) |
-| `PacketValidationError` | `packet/craft.rs:68` | Packet crafting validation | No (crafting boundary) |
-| `CiError` | `commands/handlers/ci.rs:9` | CI exit code semantics | No (not `std::error::Error`) |
+| `PacketValidationError` | `packet/craft.rs:157` | Packet crafting validation | No (crafting boundary) |
+| `CiError` | `commands/handlers/ci.rs:15` | CI exit code semantics | No (not `std::error::Error`) |
 | `TabError` | `tui/app/tab_error.rs:4` | TUI tab error categorization | No (TUI boundary) |
 
 ### Design Rationale
@@ -230,4 +230,4 @@ Sanitization tests in `crates/eggsec/src/utils/error.rs:82-112`:
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); From-count table and 8 related-type line cites fixed 2026-09-25 (systematic review)*

@@ -22,7 +22,7 @@ Key capabilities:
 
 ## Location & Feature Gating
 
-- Source: `crates/eggsec/src/fuzzer/` — 73 `.rs` files across 6 directories (`fuzzer/`, `api_schema/`, `detection/`, `engine/`, `payloads/`, `targets/`)
+- Source: `crates/eggsec/src/fuzzer/` — 73 `.rs` files across 5 subdirectories + root (`api_schema/`, `detection/`, `engine/`, `payloads/`, `targets/`)
 - Feature gate: **none** (always compiled)
 - Bidirectional type sharing with `waf`: fuzzer uses `waf::types::{OwaspCategory, Severity}` (`fuzzer/engine/types.rs:5`); WAF uses `fuzzer::config::WafConfig` (`waf/mod.rs:86`)
 
@@ -97,7 +97,7 @@ Exact variant list in declaration order:
 ### Payload Structure
 
 ```rust
-// payloads/mod.rs:160-168
+// payloads/mod.rs:160-166
 pub struct Payload {
     pub payload_type: PayloadType,
     pub payload: String,
@@ -121,11 +121,11 @@ Payloads are cached via `LazyLock` maps (`payloads/mod.rs:170-180`): `PAYLOAD_CA
 | `FuzzEngine::run_all_types()` | `engine/core.rs:463` | WAF stress: all payloads across all types |
 | `FuzzEngine::run_advanced_fuzzer()` | `engine/advanced.rs:14` | Dispatches to GraphQL/JWT/OAuth/IDOR/SSTI/WebSocket/gRPC fuzzers |
 | `FuzzEngine::parse_payload_types()` | `engine/advanced.rs:115` | Parses comma-separated payload type strings with aliases |
-| `FuzzMode` | `config.rs:9` | `Sequential` (default), `Burst`, `Adaptive` |
-| `send_payload_async()` | `engine/utils.rs:218` | HTTP request + timing + leak detection + WAF block check → `FuzzResult` |
-| `compute_severity()` | `engine/utils.rs:342` | Severity escalation: ReDoS→Critical, WAF+leak→Critical, leak→High, WAF→Medium |
+| `FuzzMode` | `config.rs:10` | `Sequential` (default), `Burst`, `Adaptive` |
+| `send_payload_async()` | `engine/utils.rs:243` | HTTP request + timing + leak detection + WAF block check → `FuzzResult` |
+| `compute_severity()` | `engine/utils.rs:373` | Severity escalation: ReDoS→Critical, WAF+leak→Critical, leak→High, WAF→Medium |
 | `FuzzResult` | `engine/types.rs:10` | Per-payload result: status, timing, anomalies, leaks, WAF blocked, OWASP category |
-| `FuzzSession` | `engine/types.rs:152` | Aggregate: counts, OWASP summary, baseline, results |
+| `FuzzSession` | `engine/types.rs:153` | Aggregate: counts, OWASP summary, baseline, results |
 | `OwaspSummary` | `engine/types.rs:36` | OWASP Top 10 (2021+2023) mapping from `FuzzResult` set |
 
 ### Detection Pipeline
@@ -169,7 +169,7 @@ Pattern functions in `detection/patterns.rs` (each returns a `Vec`; aggregated b
 | `ExtractRule` | From: `ResponseBody`, `ResponseHeader(name)`, `ResponseStatus`, `Cookie(name)` |
 | `ConditionCheck` | `StatusCode`, `StatusCodeRange`, `Contains`, `RegexMatch`, `VariableExists`, `VariableEquals` |
 | `AutoExploiter` | Automated SSRF/SQLi exploitation chain generation |
-| Sleep clamp | Max 60,000ms (`chain.rs:172`) |
+| Sleep clamp | Max 60,000ms (`chain.rs:171`) |
 | Variable interpolation | `LazyLock<Regex>` at `chain.rs:425` (cached, `\$\{(\w+)\}`) |
 
 ### Grammar-Based Fuzzing
@@ -353,7 +353,7 @@ ChainExecutor::execute(actions)
   └─ → ChainExecutionResult
 ```
 
-### Severity Escalation (`engine/utils.rs:342`)
+### Severity Escalation (`engine/utils.rs:373`)
 
 ```
 compute_severity(base, waf_blocked, redos, has_leak):
@@ -429,9 +429,9 @@ Pipeline stages invoke fuzzer via `FuzzExecutor`. The `ScanProfile` enum determi
 
 **File:** `fuzzer/config.rs`
 
-### FuzzConfig (37 fields)
+### FuzzConfig (50 fields)
 
-Core: `url`, `payload_type`, `mode`, `method`, `param`, `concurrency`, `timeout`
+Core: `url`, `payload_type`, `mode`, `method`, `param`, `concurrency`, `timeout`, `target`
 
 Payload control: `mutate`, `mutation_count`, `grammar_fuzz`, `grammar_type`
 
@@ -486,7 +486,7 @@ Conversions: `FuzzArgs` → `FuzzConfig` (feature `cli`), `WafStressArgs` → `W
 3. **Bounded concurrent scheduler** (performance Phase B): `run_concurrent_inner` admits at most `concurrency` payload futures through a `JoinSet` loop and carries original indices for deterministic output — peak live work is O(concurrency), not O(payloads). The `TimingAnalyzer` mutex guards only the `record()` mutation, never the response-body await.
 4. **Regex caching**: `ChainExecutor` uses LRU (size 100) for extraction patterns (`chain.rs:9`); `PatternMatcher` uses `LazyLock` static Aho-Corasick (`detection/aho_corasick.rs:48`)
 5. **NaN handling**: `TimingAnalyzer` sorts with explicit NaN ordering to prevent panics (`detection/analyzer.rs:168-178`)
-6. **Sleep clamping**: Chain sleep actions max 60s (`chain.rs:172`)
+6. **Sleep clamping**: Chain sleep actions max 60s (`chain.rs:171`)
 7. **WebSocket in advanced check**: `PayloadType::Websocket` has a dedicated `AdvancedFuzzer` impl but is NOT in `is_advanced()` — dispatched as a regular payload type, not through `run_advanced_fuzzer()`
 8. **`is_advanced()` mapping is incomplete**: `parse_payload_types()` in `engine/advanced.rs:115-166` only maps 30 of 40 payload types by string alias; `saml`, `html_inject`, `css_inject`, `ssi`, `dom_clobber`, `xslt`, `viewstate`, `dep_confusion`, `xs_leak`, and `latex` have no comma-separated string aliases (only reachable via `"all"`)
 9. **`TimingAnalyzer` requires `&mut self`**: wrapped in `Arc<Mutex<>>` at call site (`engine/core.rs:108`)
@@ -501,9 +501,9 @@ Conversions: `FuzzArgs` → `FuzzConfig` (feature `cli`), `WafStressArgs` → `W
 | # | File:Line | Issue | Severity |
 |---|-----------|-------|----------|
 | 1 | `engine/advanced.rs:155-156` | 10 PayloadType variants (`Saml`, `HtmlInject`, `CssInject`, `Ssi`, `DomClobber`, `Xslt`, `Viewstate`, `DepConfusion`, `XsLeak`, `Latex`) have no string alias in `parse_payload_types()` — unreachable via CLI comma-separated list | Low (can use `"all"`) |
-| 2 | `engine/execution.rs:88` | `ProgressStyle::template()` uses `format!` with user-controlled mode_name; invalid template characters cause `unwrap_or_else` fallback (safe but noisy) | Low |
+| 2 | `engine/execution.rs:93-94` | `ProgressStyle::template()` uses `format!` with user-controlled mode_name; invalid template characters cause `unwrap_or_else` fallback (safe but noisy) | Low |
 | 3 | `calibration.rs:89` | Uses `eprintln!` directly instead of `tracing` — inconsistent with codebase logging convention | Low |
 | 4 | `calibration.rs:171` | Uses `eprintln!` for calibration sample failure — same logging inconsistency | Low |
 | 5 | `chain.rs:480-489` | `AutoExploiter::try_sqli_exploitation()` always returns `None` — dead code | Low |
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line numbers + FuzzConfig count corrected 2026-09-25 (systematic review)*

@@ -8,7 +8,7 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 
 | Crate | Module path | Feature gate | lib.rs lines | Visibility |
 |-------|-------------|-------------|--------------|------------|
-| `eggsec` | `vuln/` | `vuln-management` | `lib.rs:147-151` | `pub mod` when enabled, `mod` (dead_code) when disabled |
+| `eggsec` | `vuln/` | `vuln-management` | `lib.rs:153-157` | `pub mod` when enabled, `mod` (dead_code) when disabled |
 
 The `vuln-management` feature is a **marker-level dependency** — no external system dependencies required. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.)
 
@@ -33,14 +33,14 @@ The `vuln-management` feature is a **marker-level dependency** — no external s
 | Type | File:line | Fields / Variants | Role |
 |------|-----------|-------------------|------|
 | `VulnAssessment` | `mod.rs:37` | `mode`, `assessed_at`, `cvss_score`, `exploit_info`, `asset_criticality`, `prioritized_findings`, `triage_results`, `remediation_plans`, `summary` | Top-level aggregate |
-| `CvssScore` | `cvss.rs:4` | `base_score: f32`, `temporal_score: f32`, `environmental_score: f32`, `vector: String` | CVSS 3.1 score container |
-| `ParsedVector` | `cvss.rs:189` | 22 fields: 8 base + 3 temporal + 4 environmental requirement + 7 modified | Internal vector representation |
-| `ExploitInfo` | `exploit.rs:4` | `cve_id`, `has_public_exploit`, `exploit_db_id`, `metasploit_module`, `in_cisa_kev`, `is_actively_exploited`, `exploit_score` | Exploit availability |
-| `AssetCriticality` | `asset.rs:3` | `asset_id`, `technology_score`, `environment_score`, `data_sensitivity`, `user_base`, `overall_score` | Asset risk scoring |
+| `CvssScore` | `cvss.rs:5` | `base_score: f32`, `temporal_score: f32`, `environmental_score: f32`, `vector: String` | CVSS 3.1 score container |
+| `ParsedVector` | `cvss.rs:189` | 22 fields: 8 base + 3 temporal + 4 environmental requirement + 7 modified (private `struct`, not `pub`) | Internal vector representation |
+| `ExploitInfo` | `exploit.rs:5` | `cve_id`, `has_public_exploit`, `exploit_db_id`, `metasploit_module`, `in_cisa_kev`, `is_actively_exploited`, `exploit_score` | Exploit availability |
+| `AssetCriticality` | `asset.rs:4` | `asset_id`, `technology_score`, `environment_score`, `data_sensitivity`, `user_base`, `overall_score` | Asset risk scoring |
 | `RiskScore` | `prioritizer.rs:7` | `cvss_score`, `exploitability_score`, `asset_criticality`, `combined_score`, `priority_level` | Combined risk |
 | `PriorityLevel` | `prioritizer.rs:16` | `P0`, `P1`, `P2`, `P3` (ordered) | Priority classification |
 | `PrioritizedFinding` | `prioritizer.rs:80` | `finding_id`, `title`, `severity`, `risk_score`, `exploit_info`, `asset_criticality`, `priority_rank` | Ranked finding |
-| `TriageResult` | `triage.rs:4` | `finding_id`, `triage_status`, `confidence: f32`, `reason` | Triage decision |
+| `TriageResult` | `triage.rs:5` | `finding_id`, `triage_status`, `confidence: f32`, `reason` | Triage decision |
 | `TriageStatus` | `triage.rs:13` | `New`, `TruePositive`, `FalsePositive`, `NeedsReview`, `Duplicate` | 5-variant triage enum |
 | `Remediation` | `remediation.rs:5` | `finding_id`, `title`, `severity`, `effort_hours: f32`, `steps`, `references`, `priority` | Remediation plan |
 | `RemediationPriority` | `remediation.rs:16` | `Critical`, `High`, `Medium`, `Low` (ordered) | Remediation urgency |
@@ -254,10 +254,10 @@ VulnAssessment::new(mode)            [mod.rs:50]
 - **Dispatch**: `Commands::Vuln(args)` → `handle_vuln()` (`handlers/mod.rs:571`) → sub-handler (`handlers/vuln.rs:6-111`)
 - **Output**: Plain-text println to stdout; no JSON output mode.
 
-### Dispatch (`dispatch/security.rs:460-638`, `dispatch/mod.rs:307-321`)
+### Dispatch (`dispatch/security.rs:465-`, `dispatch/canonical_execution.rs:278,1629`)
 
-- `TaskKind::Vuln(VulnParams)` → `run_vuln_task()` with mode strings: `"cvss_calc"`, `"exploit_check"`, `"asset_assess"`, `"prioritize"`, `"triage"`, `"remediation"`
-- Result type: `TaskResult::Vuln(VulnAssessment)` (`dispatch/types.rs:142-143`)
+- `TaskKind::Vuln(VulnParams)` → `run_vuln_task()` (`dispatch/security.rs:465`) with mode strings: `"cvss_calc"`, `"exploit_check"`, `"asset_assess"`, `"prioritize"`, `"triage"`, `"remediation"`
+- Result type: `TaskResult::Vuln(VulnAssessment)` (`dispatch/types.rs:143`)
 - 120-second timeout wrapper (`dispatch/security.rs:477`)
 
 ### TUI (`crates/eggsec-tui/src/tabs/vuln.rs`)
@@ -320,14 +320,14 @@ Each sub-module has inline `#[cfg(test)] mod tests`:
 
 | Module | Tests | Key assertions |
 |--------|-------|----------------|
-| `cvss.rs` | 8 tests | NVD-calculated values (9.8 for full impact), scope-changed PR weight, zero-impact returns 0.0, round-up behavior, severity classification |
+| `cvss.rs` | 9 tests | NVD-calculated values (9.8 for full impact), scope-changed PR weight, zero-impact returns 0.0, round-up behavior, severity classification |
 | `exploit.rs` | 5 tests | Year parsing, pre-2010 → KEV, pre-2015 → public exploit, recent → no exploit |
 | `asset.rs` | 3 tests | Database criticality ≥ 7.0, builder composition, clamp behavior |
 | `prioritizer.rs` | 3 tests | Sort order (critical > high > low), P0 > P1 > P2 > P3, stable sort |
 | `triage.rs` | 3 tests | Duplicate keyword match, CVSS ≥ 9.0 → true positive, false positive keyword match |
 | `remediation.rs` | 4 tests | Critical = 24h, Info = 0h, priority ordering, priority sort |
 
-Total: **26 unit tests** across all sub-modules.
+Total: **27 unit tests** across all sub-modules.
 
 ## Invariants & Gotchas
 
@@ -352,4 +352,4 @@ Total: **26 unit tests** across all sub-modules.
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites refreshed 2026-09-25*

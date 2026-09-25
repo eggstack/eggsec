@@ -17,7 +17,7 @@
 | Audit module | `crates/eggsec/src/audit.rs` | None (always compiled) |
 | Re-exports | `crates/eggsec/src/lib.rs:205-206` | None |
 | `AuditSummary` (consumer) | `crates/eggsec-output/src/audit_summary.rs` | None |
-| Agent denial recording (consumer) | `crates/eggsec/src/agent/mod.rs:466` | None |
+| Agent denial recording (consumer) | `crates/eggsec/src/agent/mod.rs:574` | None |
 | REST integration (consumer) | `crates/eggsec/src/tool/protocol/rest.rs` | `rest-api` |
 | gRPC integration (consumer) | `crates/eggsec/src/tool/protocol/grpc.rs` | `grpc-api` |
 | MCP integration (consumer) | `crates/eggsec/src/tool/protocol/mcp/handlers/server.rs` | `rest-api` |
@@ -148,16 +148,16 @@ Delegates to `audit_event_from_enforcement_outcome` with hardcoded:
 | REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:743` |
 | MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:592` |
 | gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:641` |
-| Agent | Yes | Never (Agent never confirms) | None | `agent/mod.rs:1087` (`emit_audit_event` call sites: `:1087,:1150,:1185,:1208,:1242`) |
+| Agent | Yes | Never (Agent never confirms) | None | `agent/mod.rs:1090` (`emit_audit_event` call sites: `:1090,:1153,:1188,:1211,:1245`) |
 | CI | Yes | Never | None | Via `EnforcementContext` |
 
-### Agent Denial Recording (`agent/mod.rs:572`)
+### Agent Denial Recording (`agent/mod.rs:574`)
 
 The `Agent` struct maintains a bounded list of recent policy denial events:
-- Field: `recent_policy_denials: Mutex<Vec<EnforcementAuditEvent>>` (`:218`).
-- Capacity: **50** events max (`:579-580`). Old events are drained from the front.
-- Only `Deny` and `ConfirmationRequired` outcomes are recorded (`:573-574`).
-- Exposed via `Agent::recent_policy_denials()` (`:585`) and included in `AgentRuntimeStatus` as `recent_denial_count` (`:622,638`).
+- Field: `recent_policy_denials: Mutex<Vec<EnforcementAuditEvent>>` (`:230`).
+- Capacity: **50** events max (`:579-583`). Old events are drained from the front.
+- Only `Deny` and `ConfirmationRequired` outcomes are recorded (`:575-576`).
+- Exposed via `Agent::recent_policy_denials()` (`:588`) and included in `AgentRuntimeStatus` as `recent_denial_count` (`:167`) and in `AgentRuntimePersisted` (`:192`).
 
 ### AuditSummary (`eggsec-output/src/audit_summary.rs:4`)
 
@@ -212,4 +212,4 @@ All tests are in `audit.rs:222-765`. Test count: 21 tests total.
 
 ---
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review)*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review); agent cites re-verified 2026-09-25*

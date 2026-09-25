@@ -37,18 +37,18 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 |------|----------|---------|
 | `Runtime` | `runtime.rs` | Main orchestrator: `create_session()`, `submit()`, `cancel()`, `cancel_active()`, `snapshot()`, `subscribe()`, `close_session()`, `hydrate_session()` |
 | `RuntimeConfig` | `runtime_config.rs` | `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`, `capabilities` |
-| `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic |
+| `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic (defined at `runtime.rs:40`) |
 | `RuntimeEventSink` | `runtime_sink.rs` | Progress/log/completion/failure reporting for executors |
 | `RuntimeEventReceiver` | `runtime_sink.rs` | Broadcast receiver with lag recovery |
-| `RuntimeExecutionContext` | `session.rs:34-42` | Per-execution context: session_id, surface, scope |
-| `RuntimeSession` | `session.rs:91-120` | Mutable session state (tasks, surface, scope, generation, capabilities) |
-| `SessionSnapshot` | `session.rs:349-370` | Immutable snapshot for persistence/transport |
-| `TaskSnapshot` | `session.rs:331-341` | Per-task snapshot within a session |
-| `SessionSummary` | `session.rs:374-384` | Lightweight summary for listing |
-| `SessionScope` | `session.rs:57-65` | Scope metadata: `is_explicit`, `source`, `path` |
-| `RunRequest` | `request.rs:86-92` | Task submission: `task_kind`, `requested_by`, `surface`, `labels` |
+| `RuntimeExecutionContext` | `session.rs:35` | Per-execution context: session_id, surface, scope |
+| `RuntimeSession` | `session.rs:91` | Mutable session state (tasks, surface, scope, generation, capabilities) |
+| `SessionSnapshot` | `session.rs:350` | Immutable snapshot for persistence/transport |
+| `TaskSnapshot` | `session.rs:332` | Per-task snapshot within a session |
+| `SessionSummary` | `session.rs:374` | Lightweight summary for listing |
+| `SessionScope` | `session.rs:58` | Scope metadata: `is_explicit`, `source`, `path` |
+| `RunRequest` | `request.rs:98` | Task submission: `task_kind`, `requested_by`, `surface`, `labels` |
 
-### RuntimeSurface — 10 variants (`request.rs:10-22`)
+### RuntimeSurface — 10 variants (`request.rs:21`)
 
 | # | Variant | Label | Automated |
 |---|---------|-------|:---------:|
@@ -63,7 +63,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 9 | `SecurityAgent` | `security-agent` | Yes |
 | 10 | `Unknown` | `unknown` (default) | — |
 
-### TaskKind — 29 variants (`request.rs:53-83`)
+### TaskKind — 29 variants (`request.rs:64`)
 
 | # | Variant | Capability Name | Params Struct |
 |---|---------|----------------|---------------|
@@ -97,7 +97,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 28 | `Intercept` | `intercept` | `InterceptParams` |
 | 29 | `C2` | `c2` | `C2Params` |
 
-### RuntimeEvent — 12 variants (`event.rs:114-169`)
+### RuntimeEvent — 12 variants (`event.rs:115`)
 
 | # | Variant | Fields |
 |---|---------|--------|
@@ -114,7 +114,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 11 | `SessionClosed` | `session_id` |
 | 12 | `Audit` | `session_id`, `event: RuntimeAuditEvent` |
 
-### TaskOutcome — 5 variants (`event.rs:70-84`)
+### TaskOutcome — 5 variants (`event.rs:70`)
 
 | # | Variant | Description |
 |---|---------|-------------|
@@ -124,7 +124,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 4 | `Result(TaskResultEnvelope)` | Structured envelope with kind + artifacts (preferred) |
 | 5 | `Empty` | No result |
 
-### TaskStatus — 6 variants (`event.rs:8-15`)
+### TaskStatus — 6 variants (`event.rs:8`)
 
 `Queued`, `Running`, `Completed`, `Failed`, `Cancelled`, `TimedOut`
 
@@ -193,7 +193,7 @@ Events broadcast via `tokio::sync::broadcast` channel (default capacity: 256).
 | Full lab | `full_lab()` | All 29 kinds |
 | No-op | `noop()` | Empty (no task kinds) |
 
-### RuntimeTaskExecutor Trait (`runtime.rs:212-228`)
+### RuntimeTaskExecutor Trait (`runtime.rs:40`)
 
 ```rust
 fn execute(
@@ -242,11 +242,11 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 
 ## Testing
 
-- `runtime.rs`: 17 tests covering session creation, submit, cancel, timeout, stale completion guard, event emission, multiple sessions, cancel_active, session timeout override
-- `session.rs`: 12 tests for snapshot roundtrip, hydration, scope, capabilities, close
-- `request.rs`: roundtrip and label tests
-- `event.rs`: roundtrip and terminal-state tests
-- `capabilities.rs`: conservative/full/noop mode tests, `supports_task_kind` positive/negative
+- `runtime.rs`: 36 tests covering session creation, submit, cancel, timeout, stale completion guard, event emission, multiple sessions, cancel_active, session timeout override
+- `session.rs`: 13 tests for snapshot roundtrip, hydration, scope, capabilities, close
+- `request.rs`: 2 roundtrip and label tests
+- `event.rs`: 4 roundtrip and terminal-state tests
+- `capabilities.rs`: 10 conservative/full/noop mode tests, `supports_task_kind` positive/negative
 
 ## Invariants & Gotchas
 
@@ -272,4 +272,4 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-09-11 (Phase 3 closure)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25*

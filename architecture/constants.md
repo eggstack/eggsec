@@ -189,4 +189,4 @@ This ensures the constant stays in sync with the actual WAF signature registry (
 
 ---
 
-*Last verified against source: 2026-08-25*
+*Last verified against source: 2026-08-25; all values and line cites re-verified, no changes 2026-09-25 (systematic review)*
