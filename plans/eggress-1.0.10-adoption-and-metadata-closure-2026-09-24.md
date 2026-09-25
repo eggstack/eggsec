@@ -2,7 +2,7 @@
 
 ## Status
 
-**READY FOR IMPLEMENTATION — 2026-09-24**
+**EXECUTED — 2026-09-25**
 
 ## Target repository
 
@@ -561,4 +561,55 @@ This adoption is complete only when:
 
 ## Completion record
 
-Not yet executed.
+Executed 2026-09-25.
+
+- Implementation SHA: `fe5ec2d2d0fe0557fd5559bf6a0720d04776023f`
+  (pre-implementation HEAD `e601ee3e`; plan baseline `6d25b1c8` plus the
+  two handoff-registration commits).
+- Exact resolved Eggress family from `Cargo.lock` (all published
+  crates.io, no Git/path override):
+  - `eggress-outbound 1.0.10` (`b022665c…8ab89ad`);
+  - `eggress-uri 1.0.10` (`eaa253b7…f61736f60a`);
+  - `eggress-core 1.0.10` (`1522de7d…21efaa8b75f`);
+  - `eggress-relay 1.0.10` (`a8577196…379ea1f355`);
+  - `eggress-protocol-http 1.0.10` (`a673bca0…e801a62494cb451`);
+  - `eggress-protocol-socks 1.0.10` (`b039b603…941f1f6ea755`);
+  - `eggress-transport-tls 1.0.10` (`f0dcaec1…023d36693c0`).
+- Check 106 result: PASS — exact allowlist
+  (`eggress-outbound` + `eggress-uri`, 1.0.10 pinned, no optional
+  features); full guard suite: ALL PASSED.
+- Focused parity: `eggress_parity` 30 passed (was 27 at 1.0.8: sentinel
+  test superseded, 4 metadata tests added); `health_matrix` 15 passed;
+  `eggsec-web-proxy --lib` 395 passed.
+- New metadata tests: `socks5_first_hop_metadata_is_measured`,
+  `socks4_first_hop_metadata_is_measured`,
+  `http_connect_first_hop_metadata_is_measured`,
+  `local_addr_is_measured_first_hop_socket_not_sentinel` (supersedes
+  `local_addr_is_unknown_sentinel_not_measured`); extended with real
+  first-hop assertions: `socks5_no_auth_success_via_manager`,
+  `socks5_auth_success`, `socks5_domain_target_reaches_proxy_as_domain`,
+  `socks5_manager_domain_path`, `socks4_ip_target_success`,
+  `http_connect_success`, `two_hop_chain_ordering` (peer == entry hop),
+  `tor_remote_domain_preserved_after_literal_gate`,
+  `literal_ipv4_and_ipv6_proxy_endpoints_still_work` (IPv4 mandatory,
+  live IPv6 opportunistic with documented skip).
+- Workspace gates: `cargo fmt --check` clean; `make check` exit 0
+  (includes `check-deps`/clippy/doc/tool-registration/rest-api-cli/
+  output/report/policy/eggfetch/tui/guards); `make check-feature-profiles`
+  exit 0.
+- Dependency graph delta from the 1.0.8 baseline: same 7-crate Eggress
+  family, versions `1.0.8` → `1.0.10` only; no new crates, no new
+  duplicate families; transitive Eggress features remain `default`-only
+  (no udp/ssh/quic/toml/pproxy-compat/extended/insecure-tls unification).
+- No sentinel helper/reference remains in `src/` or `tests/`
+  (`unknown_local_addr` / `local_addr_or_unknown` / `0.0.0.0:0` gone;
+  only historical prose in decision-record/test-supersession comments).
+- No optional Eggress features or direct crates added (Check 106 exact
+  allowlist proves the complete direct set).
+- `eggsec-transport` and Eggfetch integration remain Eggress-free
+  (guard-enforced, green).
+- Health still uses Reqwest (untouched; `health_matrix` green, SOCKS4
+  still fails closed).
+- Typed detailed Eggress failures (`connect_tcp_detailed`) explicitly
+  deferred per Workstream 8 (recorded in the 1.0.10 decision addendum,
+  adapter docs, and proxy skill).
