@@ -21,7 +21,7 @@ CVSS scoring, exploitability assessment, and risk-based prioritization.
 
 ## Operation & Gating
 
-- Operation id `vuln` (`config/policy_catalog.rs`): `StandardAssessment` / `SafeActive`, requires feature `vuln-management` and explicit scope.
+- Operation id `vuln` (`eggsec-policy/src/catalog.rs`, re-exported via `config/policy_catalog.rs`): `StandardAssessment` / `SafeActive`, requires feature `vuln-management` and explicit scope.
 - CLI: `eggsec vuln <score|exploitability|prioritize|triage|remediate>` (`cli/vuln.rs`: `VulnArgs`/`VulnCommand`; handler in `commands/handlers/vuln.rs`). The `Vuln` CLI variant itself is unconditional; the operation still enforces the feature gate at dispatch.
 - TUI tab `Vuln` (`tabs/spec.rs`, feature `vuln-management`, operation `vuln`).
 

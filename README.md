@@ -194,7 +194,7 @@ See [docker-compose.yml](docker-compose.yml) for configuration.
 | [Releasing](docs/RELEASING.md) | Manual maintainer-controlled release procedure |
 | [Extending Eggsec](docs/EXTENSIBILITY.md) | Adding operations, domains, commands, tools |
 
-Additional docs: [Web Proxy](docs/WEB_PROXY.md), [Database Pentesting](docs/DATABASE_PENTEST.md), [Wireless Testing](docs/WIRELESS.md), [Mobile Analysis](docs/MOBILE.md), [Auth Testing](docs/AUTH_LAB.md), [Agent](docs/AGENT.md), [Usage Guide](docs/USAGE.md), [Findings Schema](docs/FINDINGS_SCHEMA.md).
+Additional docs: [Web Proxy](docs/WEB_PROXY.md), [Proxy Plugin API](docs/PLUGIN_API.md), [Database Pentesting](docs/DATABASE_PENTEST.md), [Wireless Testing](docs/WIRELESS.md), [Mobile Analysis](docs/MOBILE.md), [Auth Testing](docs/AUTH_LAB.md), [Auth Contexts](docs/AUTH_CONTEXT.md), [Agent](docs/AGENT.md), [Usage Guide](docs/USAGE.md), [Findings Schema](docs/FINDINGS_SCHEMA.md).
 
 ## Responsible Use
 

@@ -1,5 +1,10 @@
 # Baselines and Differential Scans
 
+> Status: historical. There is no `eggsec report diff` subcommand in the
+> current CLI. Compare scans over time with per-command `--baseline` flags
+> (e.g. mobile, fuzz, CI) and the trend/baseline/diff analysis in
+> `eggsec-output` (see `architecture/output.md`).
+
 Compare scan results over time to track changes.
 
 ## Diff Command

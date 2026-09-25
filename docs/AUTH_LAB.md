@@ -102,6 +102,7 @@ The TUI `AuthTab` (`Tab::Auth`) is fully integrated with `TabSpec` (Intrusive ri
 
 ## See Also
 
+- `docs/AUTH_CONTEXT.md` — multi-role auth-context files (`--auth-context`/`--auth-role`)
 - `docs/SAFETY.md` — risk tiers, execution profiles, `EnforcementContext`
 - `docs/SAFETY.md` — "Authentication Testing" section with lab requirements
 - `architecture/auth.md` — module types, CLI surface, policy integration, TUI status, local-findings-only decision

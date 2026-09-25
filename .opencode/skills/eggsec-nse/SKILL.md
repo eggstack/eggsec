@@ -165,12 +165,12 @@ The CLI handler (`handle_nse` in `crates/eggsec/src/commands/handlers/scan.rs`) 
 ## Features
 
 ```
-nse = ["mlua", "mlua-luau-scheduler", "openssl", "des"]
-nse-ssh2 = ["nse", "dep:ssh2"]
-nse-sandbox = []  # Enables SandboxConfig enforcement
+nse = ["tool-api", "dep:eggsec-nse", "eggsec-nse/nse"]
+nse-ssh2 = ["nse", "eggsec-nse/nse-ssh2", "dep:ssh2"]
+nse-sandbox = ["nse", "eggsec-nse/sandbox"]  # Enables SandboxConfig enforcement
 ```
 
-## Libraries (166 implementations, 43 registry descriptors)
+## Libraries (167 implementations, 44 registry descriptors)
 
 Located in `src/libraries/`:
 - **socket.rs** (907 lines) - TCP/UDP/SCTP sockets with sandbox enforcement

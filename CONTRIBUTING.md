@@ -21,7 +21,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- Rust 1.88 or later
+- Rust 1.89 or later (workspace MSRV; verify with `make check-msrv`)
 - Git
 - A GitHub account
 
@@ -43,37 +43,35 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 ### Build
 
 ```bash
-# Debug build
-cargo build
+# Debug check (workspace root is a virtual manifest; always use -p)
+cargo check -p eggsec-cli
 
-# Release build
-cargo build --release
-
-# With all features
-cargo build --all-features
+# Release build of the CLI binary
+cargo build --release -p eggsec-cli
+# or: make build
 ```
 
 ### Run Tests
 
 ```bash
-# Run all tests
-cargo test
+# Unit tests (fast feedback loop)
+make test            # cargo test --lib -p eggsec
+
+# Full package suite (integration tests)
+make test-ci         # -p eggsec --features rest-api,cli
 
 # Run specific test
-cargo test test_name
-
-# Run with all features
-cargo test --all-features
+cargo test -p eggsec --features rest-api,cli test_name
 
 # Run with verbose output
-cargo test -- --nocapture
+cargo test -p eggsec --features rest-api,cli -- --nocapture
 ```
 
 ### Linting
 
 ```bash
-# Run clippy
-cargo clippy --all-features -- -D warnings
+# Run clippy (engine + leaf crates)
+make clippy
 
 # Format check
 cargo fmt --check
@@ -82,14 +80,19 @@ cargo fmt --check
 cargo fmt
 ```
 
-### Security Audit
+### Dependency Policy
+
+`deny.toml` via `cargo-deny` is the canonical advisory/license/ban/source
+policy (`cargo audit` is diagnostic only; do not reintroduce
+`.cargo/audit.toml`). Record exceptions in `deny.toml` +
+`docs/DEPENDENCY_EXCEPTIONS.md` with owner and review-by date.
 
 ```bash
-# Install cargo-audit
-cargo install cargo-audit
+# Install cargo-deny (CI uses a SHA-pinned version)
+cargo install cargo-deny
 
-# Run audit
-cargo audit
+# Run the policy gate (fails closed when cargo-deny is absent)
+make check-deps
 ```
 
 ### Feature Flags
@@ -171,7 +174,7 @@ Routine CI runs on every push/PR (`ci.yml`):
 Scheduled/manual CI runs weekly or on manual trigger (`deep-checks.yml`):
 
 - `make check-full` — broad validation (cargo-deny advisories, representative feature profiles)
-- Exact MSRV 1.88 compile check
+- Exact MSRV 1.89 compile check
 - macOS/Windows portability compile checks
 
 This catches undeclared or miswired features early without burning routine PR capacity on broad validation.

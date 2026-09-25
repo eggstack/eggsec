@@ -16,7 +16,7 @@ Authentication security testing module.
 ## Key Types
 
 - `AuthEngine` - Main authentication testing engine
-- `AuthTestReport`, `AuthFinding`, `AuthTestType` (8 variants: BruteForce, CredentialStuffing, Lockout, Mfa, RateLimit, PasswordPolicy, Session, Timing)
+- `AuthTestReport`, `AuthFinding`, `AuthTestType` (8 variants: BruteForce, CredentialStuffing, AccountLockout, RateLimitBypass, MfaBypass, SessionFixation, TimingAttack, PasswordPolicy)
 - `BruteForceTester` - Credential brute force testing
 - `CredentialStuffer` - Breach credential testing
 - `LockoutDetector` - Account lockout detection

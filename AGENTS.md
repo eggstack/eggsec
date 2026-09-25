@@ -9,11 +9,11 @@ Guidelines for AI agents working on this codebase.
 ```bash
 make check                  # mandatory Rust contract: fmt, no-default checks, check-deps, clippy, tests, guards
 make check-deps             # dependency policy only: cargo deny over --workspace --all-features
-make check-python           # only when Python bindings/stubs/docs/scripts change
+make check-python           # only when Python bindings/stubs/docs/scripts change, plus eggsec-core or engine dispatch consumed by bindings
 ```
 
 - `make test` = `cargo test --lib -p eggsec` only. Full suite: `make test-ci` (`-p eggsec --features rest-api,cli`).
-- `deny.toml` is canonical; do not reintroduce `.cargo/audit.toml`. `make check-deps` fails closed when `cargo-deny` is absent.
+- `deny.toml` is canonical; do not reintroduce `.cargo/audit.toml`. `make check-deps` fails closed when `cargo-deny` is absent. Record new dependency exceptions in `deny.toml` + `docs/DEPENDENCY_EXCEPTIONS.md` (owner + review-by date), never `cargo audit` config.
 - Guards need `ripgrep` (`rg`): `bash scripts/check-architecture-guards.sh`.
 - `make check-full` / `make check-features-individual` / `make clippy-domain` / `make test-tui-pty` are deep-checks only, not per-PR. Contract: `docs/VERIFICATION.md`.
 - `make check-python` builds into `.venv-ci/` (override: `EGGSEC_PYTHON_VENV`); pytest excludes `network`-marked tests by default.
@@ -78,4 +78,5 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 
 - Contract/docs: `docs/VERIFICATION.md`, `docs/ARCHITECTURE.md`, `docs/ENFORCEMENT_MODES.md`, `docs/CI_ARCHITECTURE_GUARDS.md`, `docs/EXTENSIBILITY.md` (adding operations/domains/commands).
 - Module index: `architecture/overview.md`. Per-module guidance: `crates/eggsec/src/<module>/AGENTS.override.md` + `architecture/<topic>.md` + skill in `.opencode/skills/`. Load all three when working in a module.
+- Skills drift: when you rename a feature, change a public signature, or change a counted set (operations, aliases, tabs, payloads, techniques, endpoints, probes, descriptors), update the matching skill's claims alongside `architecture/<topic>.md` — skills are not covered by type checks, only by guard check 32 (Nmap-parity wording).
 - Skills: `.opencode/skills/` is canonical; `.skills/`, `.agents/skills/`, `.claude/skills/` are symlinks to it (edit once).

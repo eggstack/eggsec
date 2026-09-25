@@ -96,7 +96,7 @@ eggsec evasion --target /path/to/binary --dry-run --json -o report.json
 
 ## Architecture
 
-- Module: `crates/eggsec/src/evasion/mod.rs` (1022 lines, 16 techniques, 6 categories)
+- Module: `crates/eggsec/src/evasion/mod.rs` (1208 lines, 16 techniques, 6 categories)
 - CLI: `crates/eggsec/src/cli/evasion.rs` (EvasionArgs, EVASION_ABOUT)
 - Handler: `crates/eggsec/src/commands/handlers/evasion.rs` (EnforcementContext, EvasionTesting risk)
 - Feature: `evasion` (marker-only, no deps)

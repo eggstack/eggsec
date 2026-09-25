@@ -10,7 +10,7 @@ Tool abstraction layer workflows and patterns for security tool integration.
 ## Key Types and Patterns
 
 ### SecurityTool Trait
-`tool/traits.rs:159` has `SecurityTool` trait for tool abstraction.
+`tool/traits.rs:185` has `SecurityTool` trait for tool abstraction.
 
 ### ToolRegistry
 `tool/registry.rs:23` has `ToolRegistry` for managing tool instances. Feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`).

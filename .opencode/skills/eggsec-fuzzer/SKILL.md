@@ -49,7 +49,7 @@ Fuzzing engine module workflows and patterns for security testing.
 - Uses `FxHashMap` for vulnerable payload tracking
 
 ### WAF Fingerprinting (`fuzzer/waf_fingerprint.rs`)
-- Supports 18 WAF products (Cloudflare, Akamai, AWS WAF, Imperva, etc.)
+- Supports 34 WAF fingerprints (Cloudflare, Akamai, AWS WAF, Imperva, etc.)
 - Header-based signatures and body pattern matching
 - Confidence scoring with 0.2 threshold
 

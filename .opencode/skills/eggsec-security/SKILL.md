@@ -320,7 +320,7 @@ eggsec scan example.com --scope scope.toml --strict-scope
 | `web-proxy` | Interactive web proxy (HTTP/HTTPS/WebSocket/HTTP2/gRPC) |
 | `pdf` | PDF report generation |
 | `api-schema` | OpenAPI v3 schema-based fuzzing (marker-only) |
-| `full` | Most non-default features combined (excludes `grpc-api`, `ws-api`, `pdf`, `nse-ssh2`, `nse-sandbox`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `api-schema`, `git-secrets`, `cloud`, `insecure-tls`, `tool-api`) |
+| `full` | Most non-default features combined (excludes `grpc-api`, `ws-api`, `pdf`, `nse-ssh2`, `nse-sandbox`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `api-schema`, `git-secrets`, `cloud`, `insecure-tls`, `tool-api`, `daemon-client`, `test-helpers`) |
 
 ## Error Handling
 

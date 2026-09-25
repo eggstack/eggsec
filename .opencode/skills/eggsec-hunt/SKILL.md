@@ -23,9 +23,8 @@ Hunt tab is one of the 33 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 
 ### Running a Hunt
 ```rust
-let config = HuntConfig::new("https://example.com");
-let mut client = HuntClient::new("https://example.com", &config)?;
-let report = client.run_all_checks().await?;
+let config = HuntConfig { check_session: true, ..Default::default() };
+let report = run_hunt("https://example.com", config).await?;
 ```
 
 ## Key Files

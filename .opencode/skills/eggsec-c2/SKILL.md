@@ -17,7 +17,7 @@ C2 framework simulation for defense-lab purple teaming and red-team rehearsal. H
 
 ## Key Types (`mod.rs`)
 
-- `C2Scanner` - Main scanner: `new()`, `scan()`, `campaign()`, `to_scan_report_data()`
+- `C2Scanner` - Main scanner: `new(dry_run, campaign_profile)`, `scan()`, `campaign()`, `to_scan_report_data()`
 - `C2Report` / `C2Summary` - Aggregated results
 - `C2Campaign` / `CampaignPhase` - Multi-phase campaign orchestration
 - `BeaconResult` / `BeaconProtocol` - Simulated beacon outcomes and protocols (`beacon.rs`)
