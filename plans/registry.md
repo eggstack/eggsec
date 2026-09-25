@@ -38,6 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestone 001 canonical execution/report convergence ready; Milestone 002 blocked on 001 closure |
 
 ## Grandfathered file index
 
@@ -146,11 +147,12 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-None. All flat-era milestones are closed; no new-style milestone plan is registered. New plans are registered here before handoff per `plans/003-planning-process.md` §9.
+- `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` — **ready**. Establish one runtime-owned resolver/execution/report pipeline and migrate runtime CLI, Eggsec manual dispatch/TUI, and Python to it before any dependency or repository move.
 
 ## Blocked work
 
-None.
+- `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **blocked** on accepted Milestone 001 closure. Removes `eggsec-*` dependencies from the runtime crate, moves Eggsec-specific adapters upward, and collapses TUI/Python consumption through `eggsec::nse`.
+- Standalone repository extraction is intentionally unplanned at implementation level until Milestone 002 closure proves the zero-inward-dependency and single-direct-consumer gates.
 
 ## Closure work and current control points
 
@@ -165,3 +167,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
+| NSE runtime extraction | `plans/subsystems/nse-runtime-extraction-roadmap.md`; Milestone 001 is the current handoff boundary |
