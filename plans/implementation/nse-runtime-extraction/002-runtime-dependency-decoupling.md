@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 002 — Runtime Dependency Decoupling and Consumer Consolidation
 
-Status: blocked
+Status: ready for handoff
+
+Milestone 001 closure: `plans/closure/nse-runtime-extraction/001-closure.md` (closed; hard dependency satisfied).
 
 Repository baseline: `2ef67febf17a2ae42e2b8863b140f6c47cb7f387`
 

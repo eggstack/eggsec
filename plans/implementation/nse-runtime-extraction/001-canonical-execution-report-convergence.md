@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 001 — Canonical Execution and Report Convergence
 
-Status: ready for handoff
+Status: implemented
+
+Closure record: `plans/closure/nse-runtime-extraction/001-closure.md` (closed; Milestone 002 unblocked).
 
 Repository baseline: `2ef67febf17a2ae42e2b8863b140f6c47cb7f387`
 

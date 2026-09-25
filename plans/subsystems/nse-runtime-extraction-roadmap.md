@@ -319,8 +319,8 @@ This roadmap is complete when:
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| 001 canonical execution/report convergence | ready | `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` | — | — |
-| 002 runtime dependency decoupling + consumer consolidation | blocked | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | — | Milestone 001 closure |
+| 001 canonical execution/report convergence | closed | `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` | `plans/closure/nse-runtime-extraction/001-closure.md` | — |
+| 002 runtime dependency decoupling + consumer consolidation | ready | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | — | — |
 | 003 standalone repository extraction | not started | — | — | Milestone 002 closure |
 | 004 versioned release + Eggsec adoption | not started | — | — | Milestone 003 qualification |
 | 005 provider inversion / portability hardening | not started | — | — | post-extraction evidence |
