@@ -38,7 +38,7 @@ Every number in this document was verified against source on 2026-09-22. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 20 crates. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with 19 crates plus the standalone NSE runtime. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -62,7 +62,6 @@ nor hosted CI publishes a package.
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
-| `eggsec-nse` | NSE compatibility | Yes | Lua 5.4 VM (mlua), 167 library implementation files / 44 registered descriptors, sandbox, ScriptResolver, canonical `NseRunRequest`/`execute_nse_run` pipeline. Optional. Zero `eggsec-*` dependencies (extraction Milestone 002); consumed only by the engine via the `eggsec::nse` facade. |
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
@@ -75,7 +74,7 @@ nor hosted CI publishes a package.
 | `eggsec-transport-eggfetch` | Pinned HTTP backend | Yes | `HttpTransport` over published `eggfetch-core 0.2.0` (logical-URL + singular resolved-address direct, manual authorized redirects, H1/H2 route reuse via ALPN, pinned proxy peers/targets where enforceable, total deadline through body EOF). Production direct load-test backend. |
 | `eggsec-policy` | Authorization semantics | Yes | `ExecutionPolicy`, descriptors, catalog, scope data + pure matching, decisions, approval tokens, evaluation over explicit `EnabledFeatures` + `TargetScope` facts. No I/O/runtime/transport/frontend/engine deps. Engine bridges DNS/features/authority via `policy_bridge/` (Phase C). |
 
-**Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); `eggsec-policy` owns authorization semantics (engine `config` stays a facade; `policy_bridge/` owns the feature/resolver/`NetworkAuthority` adapters; never `policy` → `transport`); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`) depend on the model, not the renderer. `eggsec-nse` has zero `eggsec-*` dependencies: its former report-envelope conversion and scoped-transport adapter moved up into the engine (`eggsec::nse_bridge`, `eggsec::nse_http_capability`), and only the engine directly consumes the runtime (TUI/Python go through the `eggsec::nse` facade). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
+**Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); `eggsec-policy` owns authorization semantics (engine `config` stays a facade; `policy_bridge/` owns the feature/resolver/`NetworkAuthority` adapters; never `policy` → `transport`); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`) depend on the model, not the renderer. The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) has zero `eggsec-*` dependencies; Eggsec consumes it at an exact Git revision only through the engine, while TUI/Python use the `eggsec::nse` facade. Report-envelope conversion and scoped-transport adaptation remain engine-owned (`eggsec::nse_bridge`, `eggsec::nse_http_capability`). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
 ---
 
@@ -252,7 +251,7 @@ Modules that connect to external platforms and AI services.
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | AI/LLM | `crates/eggsec/src/ai/` | Multi-provider client (OpenAI, Anthropic, Azure, OpenAI-compatible), response cache, adaptive planner + script generation behind `ai-integration`; WAF-bypass suggestions, payload suggestion | [ai_agents.md](ai_agents.md) |
-| NSE | `crates/eggsec-nse/` | Nmap Scripting Engine compatibility: Lua 5.4 VM (mlua), **167 library implementation files** exposing the NSE stdlib, **44 registered library descriptors**, `ScriptResolver`, sandbox (`SandboxConfig`), execution profiles, CVE integration; feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
+| NSE | [eggstack/eggsec-nse](https://github.com/eggstack/eggsec-nse) | Standalone Nmap Scripting Engine compatibility runtime: Lua 5.4 VM (mlua), curated libraries, `ScriptResolver`, sandbox, execution profiles, and CVE integration; Eggsec feature-gated: `nse` | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md) |
 | Integrations | `crates/eggsec/src/integrations/` | Jira, GitHub, GitLab connectors behind a common `IssueTracker` trait; feature-gated: `external-integrations` | [integrations.md](integrations.md) |
 | Notifications | `crates/eggsec/src/notify/` | Webhook delivery plus Slack/Discord/MS Teams channels via `NotifyManager`; always compiled | [notify.md](notify.md) |
 
@@ -387,7 +386,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities. 
 | `rest-api` | `tool/protocol/*` (REST/MCP/ws/agent/AI routes) | HTTP REST + MCP API servers |
 | `grpc-api` | `tool/protocol/grpc` | gRPC API server |
 | `ws-api` | `tool/protocol/ws` | WebSocket pub/sub |
-| `nse` | `eggsec-nse`, engine `nse_bridge`/`nse_http_capability`/`nse_tool` | Nmap NSE script support (Lua VM) |
+| `nse` | Pinned `eggsec-nse` Git dependency, engine `nse_bridge`/`nse_http_capability`/`nse_tool` | Nmap NSE script support (Lua VM) |
 | `nse-ssh2` | NSE SSH2 libs, `auth/multi_protocol` | SSH2/libssh2 support |
 | `nse-sandbox` | NSE sandbox | Restrict dangerous Lua operations |
 | `ai-integration` | `ai/planner`, `ai/script_gen` | AI planner, script generation |
@@ -490,7 +489,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-db-lab        (database pentest domain)
     ├── eggsec-web-proxy     (MITM proxy domain)
     ├── eggsec-mobile-lab    (mobile analysis domain)
-    ├── eggsec-nse           (Nmap NSE/Lua VM)
+    ├── eggstack/eggsec-nse  (external pinned Nmap NSE/Lua runtime)
     │
     └── eggsec               (ALL above incl. transport — main engine, lib only)
             ↑

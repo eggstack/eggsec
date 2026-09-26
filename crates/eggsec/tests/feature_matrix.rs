@@ -852,7 +852,8 @@ fn individual_sweep_covers_every_feature() {
 
     // Domain crates, daemon/CLI sets, and Python-crate profiles.
     for profile in [
-        "eggsec-nse --features nse",
+        "cargo check -p eggsec --features nse",
+        "cargo check -p eggsec --features nse-sandbox",
         "eggsec-db-lab --features db-drivers",
         "eggsec-web-proxy --features web-proxy",
         "eggsec-mobile-lab --features mobile-dynamic",

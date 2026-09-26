@@ -1,5 +1,7 @@
 # Network Dependency Baseline — Phase A (measurement only)
 
+> Historical workspace baseline: `eggsec-nse` has since moved to the [standalone runtime repository](https://github.com/eggstack/eggsec-nse). Workspace package-tree commands and dependency counts below describe the pre-extraction state.
+
 Status: Baseline recorded 2026-09-12; Phase D increment-1 addendum §7
 (2026-09-12); Phase E closure addendum §8 (2026-09-13, no HTTP client
 migration in Phase A, no egress/new-crate additions in Phase E); Phase F

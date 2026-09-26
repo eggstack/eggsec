@@ -17,7 +17,7 @@ and metadata querying.
 │  PyO3 Bindings (crates/eggsec-python/src/nse.rs)    │
 │  DTOs, conversion, sync/async dispatch              │
 ├─────────────────────────────────────────────────────┤
-│  Eggsec NSE Engine (crates/eggsec-nse)              │
+│  Standalone NSE Runtime (eggstack/eggsec-nse)        │
 │  NseExecutor, ScriptResolver, NseRunReport          │
 ├─────────────────────────────────────────────────────┤
 │  Lua 5.4 VM (mlua)                                 │

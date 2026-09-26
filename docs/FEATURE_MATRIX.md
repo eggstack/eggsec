@@ -41,7 +41,7 @@ Categories:
 | `grpc-api` | Protocol/front-end adapter | `tool-api` | eggsec | No | Yes (gRPC surface) | all (gRPC-exposed) | all (gRPC-exposed) |
 | `stress-testing` | Domain capability | `pnet`, `pnet_packet`, `socket2`, `nix`, `libc`, `surge-ping`, `eggsec-nse?/stress-testing` | eggsec | No | No | `stress-test` | — |
 | `packet-inspection` | Domain capability | `pnet`, `pnet_packet`, `libc` | eggsec | No | No | `packet` | — |
-| `nse` | Domain capability | `tool-api`, `eggsec-nse` | eggsec | No | Yes (MCP-exposed) | `nse` | — |
+| `nse` | Domain capability | `tool-api`, pinned external `eggsec-nse` | eggsec | No | Yes (MCP-exposed) | `nse` | — |
 | `nse-ssh2` | Backend/driver dependency | `nse`, `ssh2`, `eggsec-nse/nse-ssh2` | eggsec | No | No | `nse` | — |
 | `nse-sandbox` | Domain capability | `nse`, `eggsec-nse/sandbox` | eggsec | No | No | `nse` | — |
 | `advanced-hunting` | Marker-only | — | eggsec | No | Yes (MCP-exposed) | `hunt` | — |
@@ -109,10 +109,10 @@ Categories:
 
 | Crate | Feature | Category | Implies | Notes |
 |-------|---------|----------|---------|-------|
-| `eggsec-nse` | `nse` | Domain capability | — | Lua VM for NSE script execution |
-| `eggsec-nse` | `nse-ssh2` | Backend/driver dependency | `nse`, `ssh2` | SSH2/libssh2-backed NSE support |
-| `eggsec-nse` | `sandbox` | Domain capability | — | Restrict dangerous Lua operations |
-| `eggsec-nse` | `stress-testing` | Domain capability | — | NSE stress-testing primitives |
+| Standalone [`eggsec-nse`](https://github.com/eggstack/eggsec-nse) | `nse` | Domain capability | — | Lua VM for NSE script execution |
+| Standalone `eggsec-nse` | `nse-ssh2` | Backend/driver dependency | `nse`, `ssh2` | SSH2/libssh2-backed NSE support |
+| Standalone `eggsec-nse` | `sandbox` | Domain capability | — | Restrict dangerous Lua operations |
+| Standalone `eggsec-nse` | `stress-testing` | Domain capability | — | NSE stress-testing primitives |
 | `eggsec-db-lab` | `db-drivers` | Domain capability | — | Core DB pentest driver abstractions |
 | `eggsec-db-lab` | `mssql` | Backend/driver dependency | — | Real MSSQL client (tiberius) |
 | `eggsec-db-lab` | `mongodb` | Backend/driver dependency | — | Real MongoDB client |
@@ -235,7 +235,8 @@ cargo test --lib -p eggsec --features evasion
 cargo test --lib -p eggsec --features postex
 cargo test --lib -p eggsec --features c2
 cargo test --lib -p eggsec --features stress-testing
-cargo test -p eggsec-nse --features nse
+cargo test -p eggsec --features nse,cli --test nse_tests --test nse_integration_tests
+# Runtime-owned checks run in https://github.com/eggstack/eggsec-nse/actions.
 ```
 
 #### docs-metadata — Broad metadata/doc validation without heavy optional dependencies

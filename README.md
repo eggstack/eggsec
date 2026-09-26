@@ -77,7 +77,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope ru
 | `eggsec-core` | Dependency-light types, constants, shared primitives |
 | `eggsec-tool-core` | Core data types for the tool abstraction layer |
 | `eggsec` | Assessment engine library (no binary) |
-| `eggsec-nse` | Optional Nmap NSE compatibility runtime |
+| [`eggsec-nse`](https://github.com/eggstack/eggsec-nse) | Optional standalone Nmap NSE compatibility runtime, pinned by Eggsec to an exact revision |
 | `eggsec-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
 | `eggsec-cli` | CLI binary entry point |
 | `eggsec-output` | Report rendering/conversion/analysis over `eggsec-report-model` (JSON, CSV, HTML, SARIF, JUnit, Markdown; no scheduling/session) |

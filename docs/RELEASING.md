@@ -18,12 +18,17 @@ Eggsec. Release cadence and publication are explicit maintainer decisions.
 
 | Registry | Package | Publication method |
 |----------|---------|-------------------|
-| crates.io | `eggsec-core`, `eggsec`, `eggsec-nse`, `eggsec-output`, `eggsec-report-model`, `eggsec-tool-core`, `eggsec-agent`, `eggsec-runtime`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-daemon-protocol`, `eggsec-daemon`, `eggsec-ui-model` | `cargo publish` (manual) |
+| crates.io | `eggsec-core`, `eggsec`, `eggsec-output`, `eggsec-report-model`, `eggsec-tool-core`, `eggsec-agent`, `eggsec-runtime`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-daemon-protocol`, `eggsec-daemon`, `eggsec-ui-model` | `cargo publish` (manual) |
 | PyPI | `eggsec` | `maturin publish` (manual) |
 | TestPyPI | `eggsec` | Optional, manual rehearsal |
 
 Note: `eggsec-cli`, `eggsec-tui`, and `eggsec-python` have `publish = false`
 and are not published to crates.io.
+
+The workspace currently consumes `eggsec-nse` from an exact Git revision.
+Publishing `eggsec` is gated on Milestone 004 replacing that temporary source
+with the qualified registry release; the current package graph must not be
+treated as publish-ready.
 
 ## Supported release host
 
@@ -115,13 +120,12 @@ command above after any manifest change — last refreshed for Phase B,
 3. `eggsec-report-model` (depends on `eggsec-core`)
 4. `eggsec-db-lab` (depends on `eggsec-core`, `eggsec-report-model`)
 5. `eggsec-mobile-lab` (depends on `eggsec-core`, `eggsec-report-model`)
-6. `eggsec-nse` (depends on `eggsec-core`, `eggsec-report-model`)
-7. `eggsec-output` (depends on `eggsec-core`, `eggsec-report-model`)
-8. `eggsec-runtime` (no internal dependencies)
-9. `eggsec-daemon-protocol` (depends on `eggsec-runtime`)
-10. `eggsec-tool-core` (depends on `eggsec-core`)
-11. `eggsec-transport` (no internal dependencies)
-12. `eggsec-transport-eggfetch` (no internal dependencies)
+6. `eggsec-output` (depends on `eggsec-core`, `eggsec-report-model`)
+7. `eggsec-runtime` (no internal dependencies)
+8. `eggsec-daemon-protocol` (depends on `eggsec-runtime`)
+9. `eggsec-tool-core` (depends on `eggsec-core`)
+10. `eggsec-transport` (no internal dependencies)
+11. `eggsec-transport-eggfetch` (no internal dependencies)
 13. `eggsec-ui-model` (depends on `eggsec-runtime`)
 14. `eggsec-web-proxy` (depends on `eggsec-core`, `eggsec-report-model`)
 15. `eggsec` (depends on `eggsec-core`, `eggsec-runtime`, `eggsec-output`, `eggsec-tool-core`, `eggsec-agent`, plus optional domain crates)
@@ -142,7 +146,7 @@ repeat
 A registry failure, timeout, or unavailable dependency remains a failure or
 unavailable result; it is never converted into a local archive pass.
 
-Private crates (not published to crates.io): `eggsec-cli`, `eggsec-tui`, `eggsec-python`.
+Private crates (not published to crates.io): `eggsec-cli`, `eggsec-tui`, `eggsec-python`. The standalone `eggsec-nse` runtime is released from [its own repository](https://github.com/eggstack/eggsec-nse); it is not a member of this workspace release sequence.
 
 ### Commands
 
@@ -153,8 +157,8 @@ cargo publish -p eggsec-agent
 cargo publish -p eggsec-output
 cargo publish -p eggsec-db-lab
 cargo publish -p eggsec-mobile-lab
-cargo publish -p eggsec-nse
-# wait for availability...
+# Release eggsec-nse independently from its standalone repository before
+# publishing an Eggsec version that adopts a crates.io runtime dependency.
 cargo publish -p eggsec-runtime
 cargo publish -p eggsec-tool-core
 cargo publish -p eggsec-ui-model

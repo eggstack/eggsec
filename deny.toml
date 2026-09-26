@@ -79,8 +79,9 @@ deny = ["aws-lc-rs"]
 [sources]
 # Fail closed for unexpected registries/git sources (Phase F WS3).
 # crates.io is the default allowed registry; no custom registries are used.
-# No git dependencies exist in Cargo.lock — any new git dep fails until it is
-# explicitly allowed here with an owner and removal criterion.
+# The one allowed Git source is the extracted NSE runtime, pinned by exact rev
+# during Milestone 003. Milestone 004 replaces it with the published crate.
 unknown-registry = "deny"
 unknown-git = "deny"
+allow-git = ["https://github.com/eggstack/eggsec-nse"]
 required-git-spec = "rev"

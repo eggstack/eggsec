@@ -2,7 +2,6 @@
 members = [
     "crates/eggsec-core",
     "crates/eggsec",
-    "crates/eggsec-nse",
     "crates/eggsec-tui",
     "crates/eggsec-cli",
     "crates/eggsec-output",

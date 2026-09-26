@@ -1,5 +1,9 @@
 # Policy Validation Results
 
+> Historical record from before the NSE runtime extraction. Workspace-local
+> `eggsec-nse` paths and test commands below describe the old layout; current
+> runtime qualification runs in [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions).
+
 Date: 2026-06-10
 Branch/commit: main (working tree)
 
@@ -75,3 +79,4 @@ Branch/commit: main (working tree)
 - Feature-gate build failures are pre-existing on main and unrelated to this change.
 - The NSE sandbox test failure is pre-existing and unrelated.
 - Pre-existing clippy warnings (18 total) are unchanged by this work.
+# Historical policy validation record

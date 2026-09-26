@@ -1,5 +1,9 @@
 # Network-Dependency Roadmap Closure Report (Phase G)
 
+> Historical pre-extraction workspace closure. The `eggsec-nse` dependency
+> graph is now independently maintained and qualified in the [standalone
+> repository](https://github.com/eggstack/eggsec-nse).
+
 Status: Closed 2026-09-13. The roadmap is executed; no new architecture was
 introduced in this phase (measurement, verification, and documentation only).
 

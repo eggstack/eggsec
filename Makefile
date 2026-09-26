@@ -40,15 +40,11 @@ clippy:
 
 # Lint domain/platform crates with their relevant features (deep checks only:
 # heavier closures, may need system prerequisites like libssl-dev).
-# eggsec-nse is warn-only: it carries pre-existing warning debt (dead_code in
-# optional paths, deprecated openssl calls) that predates lint ownership.
-# Promoting it to -D warnings is tracked future work; the warn-only run keeps
-# new lints visible in deep-check logs without failing the gate.
+# The standalone NSE runtime owns its own lint gate in eggstack/eggsec-nse CI.
 clippy-domain:
 	cargo clippy -p eggsec-db-lab --features db-drivers -- -D warnings
 	cargo clippy -p eggsec-web-proxy --features web-proxy -- -D warnings
 	cargo clippy -p eggsec-mobile-lab -- -D warnings
-	cargo clippy -p eggsec-nse --features nse
 	cargo clippy -p eggsec-daemon -- -D warnings
 
 # Run format check

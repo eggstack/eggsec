@@ -54,7 +54,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
 | `eggsec-tui` | TUI frontend | No | No | **Yes** | No | 33 tabs, enforcement toggle, packaged themes. |
-| `eggsec-nse` | NSE compatibility | No | Domain execution | No | Yes | Lua VM, 166 NSE libraries. Optional. |
+| `eggsec-nse` (external) | NSE compatibility runtime | No | Domain execution | No | Yes | [Standalone repository](https://github.com/eggstack/eggsec-nse), consumed by Eggsec at an exact Git revision. |
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
 | `eggsec-mobile-lab` | Mobile analysis domain | No | Domain execution | No | Yes | APK/IPA static analysis + Android dynamic runtime testing (ADB, Frida, behavioral correlation). |

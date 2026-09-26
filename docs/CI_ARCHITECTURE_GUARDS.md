@@ -199,12 +199,9 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Load-test prototype stays compiled once per run (Check 142): `crates/eggsec/src/loadtest/executor.rs` dispatches `prototype.clone()` in the worker loop with no `self.template.scoped_request` per-request rebuild.
 
 ### NSE Subsystem Invariants
-- NSE script/module loading flows through `ScriptResolver`.
-- `NseRunReport.libraries` is per-run require activity, not registry dump.
-- `ManualPermissive` stays in manual CLI/TUI surfaces only.
-- NSE automated surfaces use `with_profile()` not `with_policy()`.
-- `NseLibraryDescriptor` instantiation is registry-owned.
-- NSE registry entries have corresponding Rust modules.
+- The standalone [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions) owns runtime-internal checks: resolver-only script/module loading, per-run `NseRunReport.libraries`, profile/executor construction, library registry consistency, capability wrappers, and runtime corpus assertions.
+- Eggsec Checks 143–146 enforce canonical engine/Python dispatch, no local re-vendoring, an exact Git SHA shared by `crates/eggsec/Cargo.toml` and `Cargo.lock`, a single direct runtime consumer, the `eggsec::nse` facade, TUI/Python feature forwarding, and engine ownership of `nse_bridge`/`nse_http_capability`.
+- Runtime revisions are qualified in the standalone repository before Eggsec updates its pin. A branch-only Git dependency fails Check 144.
 
 ### Python-Specific Guards
 These checks enforce invariants for the `eggsec-python` bindings and run within
@@ -224,7 +221,7 @@ These checks require specific system dependencies or privileges and are never pa
 
 | Check | Dependency | Notes |
 |-------|-----------|-------|
-| NSE tests | `libssl-dev` | Lua VM, sandbox |
+| NSE runtime qualification | None for normal feature tests; local OpenSSH service in dedicated CI job | Runtime OpenSSL is vendored; SSH integration binds loopback only |
 | Stress testing | Root/CAP_NET_RAW | Raw sockets, IP spoofing |
 | Packet inspection | `libpcap-dev` | Live capture |
 | Mobile dynamic | ADB + emulator | Frida, device interaction |

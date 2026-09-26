@@ -141,7 +141,7 @@ run_check "eggsec/full" cargo check -p eggsec --features full
 #   link required for compilation). They are NOT gated on libpcap here
 #   because the TUI profiles compile without it; a Rust compile failure is
 #   always FAIL, never SKIP.
-# - `nse` uses vendored openssl via eggsec-nse; no system libssl-dev gate.
+# - `nse` uses vendored OpenSSL through the standalone eggsec-nse runtime.
 # - `wireless` / `wireless-advanced` need wireless-tools only at runtime
 #   (root/hardware for real scans), not for compilation.
 # If a future TUI feature gains a real build-time system prerequisite, gate
@@ -190,14 +190,14 @@ run_check "eggsec-tui/full" cargo check -p eggsec-tui --features full
 # ── 3. Domain crates ─────────────────────────────────────────────────────
 echo ""
 echo "--- Domain crates ---"
-run_check "eggsec-nse/nse" cargo check -p eggsec-nse --features nse
+run_check "eggsec/nse" cargo check -p eggsec --features nse
 if have_libssh2; then
-  run_check "eggsec-nse/nse-ssh2" cargo check -p eggsec-nse --features nse-ssh2
+  run_check "eggsec/nse-ssh2" cargo check -p eggsec --features nse-ssh2
 else
-  note_skip "eggsec-nse/nse-ssh2" "$PREREQ_NSE_SSH2"
+  note_skip "eggsec/nse-ssh2" "$PREREQ_NSE_SSH2"
 fi
-run_check "eggsec-nse/sandbox" cargo check -p eggsec-nse --features sandbox
-run_check "eggsec-nse/stress-testing" cargo check -p eggsec-nse --features stress-testing
+run_check "eggsec/nse-sandbox" cargo check -p eggsec --features nse-sandbox
+run_check "eggsec/stress-testing" cargo check -p eggsec --features stress-testing
 run_check "eggsec-db-lab/db-drivers" cargo check -p eggsec-db-lab --features db-drivers
 run_check "eggsec-db-lab/mssql" cargo check -p eggsec-db-lab --features mssql
 run_check "eggsec-db-lab/mongodb" cargo check -p eggsec-db-lab --features mongodb

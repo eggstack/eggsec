@@ -59,7 +59,7 @@ Every retained advisory ignore must include:
 | API used | No — fxhash is an internal hash map inside selectors, not exposed |
 | Exploitability | Low — unmaintained, not a vulnerability |
 | Compensating control | None needed; no known security impact |
-| Owner | eggsec (recon) / eggsec-nse |
+| Owner | eggsec (recon) / standalone eggstack/eggsec-nse runtime |
 | Created | 2025-07-01 |
 | Review-by | 2026-12-12 |
 | Blocker | scraper v0.22+ must drop fxhash dependency; no alternative available |
@@ -264,3 +264,9 @@ active at review time must be re-evaluated for:
 2. Whether the dependency path has changed
 3. Whether the exploitability assessment still holds
 4. Whether the review-by date should be extended (max 90 days)
+# Approved Git source (temporary)
+
+`https://github.com/eggstack/eggsec-nse` is the sole allowed Git source while
+Milestone 003 qualifies the standalone runtime. `deny.toml` still requires an
+exact `rev`; the dependency owner is the Eggsec NSE maintainers. Remove this
+allow-list entry when Milestone 004 switches Eggsec to the published crate.

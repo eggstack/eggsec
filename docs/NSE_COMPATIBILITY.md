@@ -1,5 +1,10 @@
 # NSE Compatibility Matrix — Expansion Phase 05
 
+The runtime source, package metadata, tests, and runtime-owned compatibility
+guidance now live in the [standalone `eggsec-nse` repository](https://github.com/eggstack/eggsec-nse).
+This Eggsec document records product integration and historical compatibility
+evidence; it is not the runtime source of truth.
+
 > **Scope**: This document describes the NSE compatibility status for Expansion Phase 05 — a sandboxed Lua execution environment with capability-gated side effects, comprehensive HTTP method enforcement, and selective deferred library migration. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
 
 ---
@@ -262,7 +267,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 ### CLI Human-Readable Output
 
-The CLI produces human-readable output via `format_human_report()` in `crates/eggsec-nse/src/format.rs`. The formatter is testable independently of terminal rendering.
+The CLI produces human-readable output via `format_human_report()` in `eggsec-nse/src/format.rs`. The formatter is testable independently of terminal rendering.
 
 **Sections rendered:**
 1. **Header** — target, script, source, profile, elapsed

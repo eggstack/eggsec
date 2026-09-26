@@ -57,7 +57,7 @@ experimental to stable:
 | `mobile-dynamic` | `mobile-dynamic` | ADB + device | no | Android dynamic testing |
 | `packet-inspection` | `packet-inspection` | `libpcap-dev` | no | Packet capture |
 | `stress-testing` | `stress-testing` | none | no | Stress testing (raw sockets) |
-| `nse` | `nse` | `libssl-dev` | no | Nmap NSE scripts (requires `eggsec-nse`) |
+| `nse` | `nse` | none (runtime OpenSSL is vendored) | no | Nmap NSE scripts (requires standalone `eggsec-nse`) |
 | `container` | `container` | none | no | K8s/Docker scanning |
 | `daemon-client` | — | none | no | Daemon session access |
 | `headless-browser` | `headless-browser` | Chrome | no | DOM XSS, SPA routes, client checks |

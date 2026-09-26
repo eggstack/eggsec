@@ -1,6 +1,6 @@
 # Compile Time Baseline
 
-> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 20 crates (verified 2026-09-25: `members` in root `Cargo.toml:2` lists 20 paths including `eggsec-policy`, `eggsec-report-model`, `eggsec-transport`, `eggsec-transport-eggfetch`, `eggsec-python`; this document covers up to the third pass with 12 crates). For current workspace structure, see `architecture/overview.md`.
+> **Note:** This document is a historical record of crate-splitting passes. The workspace now has 19 crates (verified 2026-09-26); the NSE runtime shown in this older layout was subsequently extracted to [eggstack/eggsec-nse](https://github.com/eggstack/eggsec-nse). This document covers up to the third pass with 12 crates. For current workspace structure, see `architecture/overview.md`.
 
 ## Context
 

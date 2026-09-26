@@ -1,5 +1,14 @@
 # NSE Integration
 
+The runtime package is now maintained in the [standalone `eggsec-nse`
+repository](https://github.com/eggstack/eggsec-nse). Eggsec consumes it from an
+exact Git revision through the `eggsec::nse` facade. Runtime resolver,
+profiles, execution/report pipeline, library implementation, and runtime tests
+are owned there; Eggsec dispatch, TUI/Python adapters, report-envelope bridge,
+and scoped-transport adapter remain owned here. Historical verification
+tables below describe the former in-workspace crate and are retained as dated
+evidence; current runtime commands run from the standalone checkout and its CI.
+
 Eggsec includes optional Nmap Scripting Engine (NSE) compatibility through the `eggsec-nse` crate. The goal is broad practical compatibility for useful script categories, not perfect Nmap runtime parity.
 
 ## NSE (Nmap Scripting Engine) Compatibility (`eggsec-nse`)
@@ -42,7 +51,7 @@ pub struct SandboxConfig {
 
 ### NSE Libraries
 
-167 library implementation files in `crates/eggsec-nse/src/libraries/` including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. The library registry (`LIBRARY_REGISTRY`) contains 43 curated descriptors covering Nmap's standard Lua library set — registry metadata is the source of truth for compatibility claims, not implementation file counts.
+167 library implementation files in `eggsec-nse/src/libraries/` including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. The library registry (`LIBRARY_REGISTRY`) contains 43 curated descriptors covering Nmap's standard Lua library set — registry metadata is the source of truth for compatibility claims, not implementation file counts.
 
 ### CVE Integration
 
@@ -288,7 +297,7 @@ The following remain **deferred to Milestone 3**:
 
 - Rust-side blocking helper cancellation. ~170 calls across 40+ library files do not have individual cancellation checks. They are bounded by the Lua interrupt hook and resource counters. Milestone 3 will introduce capability wrappers with explicit cancellation points.
 
-The empty-roots semantic table above and the read/write helper split are the contractual surface that future maintainers must preserve. Tests in `crates/eggsec-nse/tests/script_file_policy_tests.rs` are the regression net.
+The empty-roots semantic table above and the read/write helper split are the contractual surface that future maintainers must preserve. Tests in `eggsec-nse/tests/script_file_policy_tests.rs` are the regression net.
 
 ## Milestone 1 Closure Index
 
@@ -296,17 +305,17 @@ The following files are the canonical implementation, test, and doc anchors for 
 
 ### Canonical Implementation
 
-- `crates/eggsec-nse/src/resolver/mod.rs` — `ScriptResolver`, `validate_existing_path_under_roots` (read-only), `validate_parent_under_roots` (write/create, `#[allow(dead_code)]`), module-name grammar, structured diagnostics.
-- `crates/eggsec-nse/src/profile.rs` — `ResolvedNseExecutionProfile` constructors (`manual_permissive`, `manual_strict`, `agent_safe`, `ci_safe`, `compatibility_lab`), `NseScriptPolicy` and `NseModulePolicy` doc tables defining empty-roots semantics.
-- `crates/eggsec-nse/src/executor_core.rs` — `setup_require()` delegates Lua `require()` filesystem loading to `ScriptResolver::resolve_module()`. `default_script_policy()` / `default_module_policy()` mirror `ManualPermissive` and are reserved for manual constructors.
+- `eggsec-nse/src/resolver/mod.rs` — `ScriptResolver`, `validate_existing_path_under_roots` (read-only), `validate_parent_under_roots` (write/create, `#[allow(dead_code)]`), module-name grammar, structured diagnostics.
+- `eggsec-nse/src/profile.rs` — `ResolvedNseExecutionProfile` constructors (`manual_permissive`, `manual_strict`, `agent_safe`, `ci_safe`, `compatibility_lab`), `NseScriptPolicy` and `NseModulePolicy` doc tables defining empty-roots semantics.
+- `eggsec-nse/src/executor_core.rs` — `setup_require()` delegates Lua `require()` filesystem loading to `ScriptResolver::resolve_module()`. `default_script_policy()` / `default_module_policy()` mirror `ManualPermissive` and are reserved for manual constructors.
 
 ### Canonical Tests
 
-- `crates/eggsec-nse/tests/script_file_policy_tests.rs` — Milestone 1 regression net: manual permissive, strict, agent/CI, module-root, symlink, and CLI resolver-path cases.
-- `crates/eggsec-nse/tests/profile_guard_tests.rs` — Architecture guards: `AgentSafe`/`CiSafe` deny script files and filesystem modules, `CiSafe` has zero network ops, automated timeouts, manual-only constructor warnings.
-- `crates/eggsec-nse/tests/execution_limits_tests.rs` — Wall-clock, instruction-budget, output/script/module size, resource-counter, and cooperative cancellation behavior.
-- `crates/eggsec-nse/tests/profile_tests.rs` — Profile-level invariants: scoped targets, network-policy precedence, audit labels, script-policy consistency, automated vs manual limits.
-- `crates/eggsec-nse/tests/sandbox_tests.rs` — `SandboxConfig` enforcement: path restrictions, command allowlist, CIDR filtering, host resolution.
+- `eggsec-nse/tests/script_file_policy_tests.rs` — Milestone 1 regression net: manual permissive, strict, agent/CI, module-root, symlink, and CLI resolver-path cases.
+- `eggsec-nse/tests/profile_guard_tests.rs` — Architecture guards: `AgentSafe`/`CiSafe` deny script files and filesystem modules, `CiSafe` has zero network ops, automated timeouts, manual-only constructor warnings.
+- `eggsec-nse/tests/execution_limits_tests.rs` — Wall-clock, instruction-budget, output/script/module size, resource-counter, and cooperative cancellation behavior.
+- `eggsec-nse/tests/profile_tests.rs` — Profile-level invariants: scoped targets, network-policy precedence, audit labels, script-policy consistency, automated vs manual limits.
+- `eggsec-nse/tests/sandbox_tests.rs` — `SandboxConfig` enforcement: path restrictions, command allowlist, CIDR filtering, host resolution.
 
 ### Canonical Policy Contract
 
@@ -484,7 +493,7 @@ Unscoped filesystem reads (reading arbitrary paths outside any configured root) 
 
 ### New Integration Tests
 
-New integration tests in `crates/eggsec-nse/tests/profile_propagation_tests.rs` verify:
+New integration tests in `eggsec-nse/tests/profile_propagation_tests.rs` verify:
 - `run_cli_with_profile()` constructs a capability context matching the resolved profile
 - AgentSafe profile denies unscoped filesystem reads
 - `with_full_policy()` constructors produce correct policy states
@@ -500,7 +509,7 @@ New integration tests in `crates/eggsec-nse/tests/profile_propagation_tests.rs` 
 
 ### New Profile/Report Tests
 
-End-to-end verification tests in `crates/eggsec-nse/tests/profile_report_tests.rs` exercise the full profile→context→event→report pipeline:
+End-to-end verification tests in `eggsec-nse/tests/profile_report_tests.rs` exercise the full profile→context→event→report pipeline:
 
 | Test | Profile | Capability | Verifies |
 |------|---------|------------|----------|
@@ -558,7 +567,7 @@ Milestone 4 expanded the compatibility corpus (39 fixtures across 9 categories) 
 
 ### Milestone 4 Closure Verification (2026-07-06)
 
-Final verification pass: 369 tests pass (1 ignored), architecture guards all pass (37 checks), fmt/clippy clean. New end-to-end profile/report tests in `crates/eggsec-nse/tests/profile_report_tests.rs` verify the profile→context→event→report pipeline for AgentSafe (process exec denial, unscoped/scoped FS read), CiSafe (network/DNS denial), and ManualPermissive (process exec warning). See [Milestone 3 Final Verification](./nse_integration.md#milestone-3-final-verification).
+Final verification pass: 369 tests pass (1 ignored), architecture guards all pass (37 checks), fmt/clippy clean. New end-to-end profile/report tests in `eggsec-nse/tests/profile_report_tests.rs` verify the profile→context→event→report pipeline for AgentSafe (process exec denial, unscoped/scoped FS read), CiSafe (network/DNS denial), and ManualPermissive (process exec warning). See [Milestone 3 Final Verification](./nse_integration.md#milestone-3-final-verification).
 
 ### Milestone 5 Phase 01: Runtime Corpus Flake Isolation (2026-07-06)
 
@@ -653,8 +662,8 @@ Phase 05 polished user-facing report output and improved runtime corpus usabilit
 
 #### WS1: CLI Report Formatting
 
-- Created `crates/eggsec-nse/src/format.rs` — testable `format_human_report()` returning `String`
-- Created `crates/eggsec-nse/tests/format_tests.rs` — 29 snapshot-lite tests asserting headings, status labels, visual markers
+- Created `eggsec-nse/src/format.rs` — testable `format_human_report()` returning `String`
+- Created `eggsec-nse/tests/format_tests.rs` — 29 snapshot-lite tests asserting headings, status labels, visual markers
 - Rewrote `print_human_report()` to delegate to formatter; fixed unused `target_str` bug
 - Visual improvements: UPPERCASE status labels, `[!]` prefix for denials, `[*]` prefix for warnings, `~` prefix for approximate fidelity
 
@@ -678,8 +687,8 @@ Phase 05 polished user-facing report output and improved runtime corpus usabilit
 
 #### WS5: ReportEnvelope Bridge Hardening
 
-- Extended `crates/eggsec-nse/tests/evidence_tests.rs` (363→693 lines) — 7 new bridge tests: compatible/partial envelopes, denial severity, rule-error/raw-output evidence, weak-evidence-not-high-severity, metadata fields
-- Created `crates/eggsec-nse/tests/bridge_tests.rs` — 4 envelope shape tests: manifest counts, finding categories, multiple evidence, no circular deps
+- Extended `eggsec-nse/tests/evidence_tests.rs` (363→693 lines) — 7 new bridge tests: compatible/partial envelopes, denial severity, rule-error/raw-output evidence, weak-evidence-not-high-severity, metadata fields
+- Created `eggsec-nse/tests/bridge_tests.rs` — 4 envelope shape tests: manifest counts, finding categories, multiple evidence, no circular deps
 
 **Verification:** All tests pass, architecture guards pass, clippy clean.
 
@@ -735,7 +744,7 @@ Check 27 in `scripts/check-architecture-guards.sh` verifies:
 
 ## Compatibility Matrix
 
-The compatibility matrix summarizes the registry's 43 library descriptors. The authoritative source is `LIBRARY_REGISTRY` in `crates/eggsec-nse/src/resolver/registry.rs` — the table below is a representative subset covering all categories.
+The compatibility matrix summarizes the registry's 43 library descriptors. The authoritative source is `LIBRARY_REGISTRY` in `eggsec-nse/src/resolver/registry.rs` — the table below is a representative subset covering all categories.
 
 ### Representative Subset (15 of 43)
 
@@ -780,7 +789,7 @@ The compatibility matrix summarizes the registry's 43 library descriptors. The a
 
 ## Report Examples
 
-`NseRunReport` (defined in `crates/eggsec-nse/src/report.rs`) is the structured output of an NSE script execution. Field names are illustrative — the schema follows the Rust struct definitions and may evolve.
+`NseRunReport` (defined in `eggsec-nse/src/report.rs`) is the structured output of an NSE script execution. Field names are illustrative — the schema follows the Rust struct definitions and may evolve.
 
 `NseRunReport.libraries` is a per-run record of the libraries required or attempted by that execution, together with any diagnostics from the run. It does not describe the full capability set of Eggsec NSE support. In denied or blocked runs, the field may be empty because no script execution occurred.
 
@@ -1250,9 +1259,9 @@ A representative corpus of NSE script fixtures verifies supported, partial, appr
 
 ### Location
 
-- **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
-- **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification per fixture
-- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`, plus `crates/eggsec-nse/tests/context_fidelity_tests.rs` — 8 context fidelity unit tests
+- **Fixtures**: `eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
+- **Manifest**: `eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification per fixture
+- **Tests**: `eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`, plus `eggsec-nse/tests/context_fidelity_tests.rs` — 8 context fidelity unit tests
 
 ### Corpus Categories
 
@@ -1351,7 +1360,7 @@ Phase 03 introduces structured context types for host, port, and service data, r
 **What was added**:
 - 4 new context types in `context.rs` with Lua table builders and provenance tracking
 - 3 new corpus fixtures: `portrule_host_port.nse`, `hostrule_host_context.nse`, `portrule_service_context.nse`
-- 8 new unit tests in `crates/eggsec-nse/tests/context_fidelity_tests.rs`
+- 8 new unit tests in `eggsec-nse/tests/context_fidelity_tests.rs`
 - Manifest entries with `gap_classification = "approximate"` and `expected_fidelity = "approximate"`
 - 402 tests pass (1 ignored), 0 compilation errors
 
@@ -1377,7 +1386,7 @@ Phase 04 introduces structured evidence extraction from NSE run reports, bridgin
 - `extract_evidence()` wired into `run_cli_with_profile()` JSON path
 - `bridge.rs` module with `to_report_envelope()` and mapping functions
 - `eggsec-core` and `eggsec-output` dependencies in `Cargo.toml`
-- 12 evidence tests in `crates/eggsec-nse/tests/evidence_tests.rs` — all pass
+- 12 evidence tests in `eggsec-nse/tests/evidence_tests.rs` — all pass
 
 ### Milestone 4 Closure Note
 
@@ -1615,7 +1624,7 @@ Phase 06 closes TLS/sslcert test symmetry gaps and strengthens the per-connect a
 
 ## Canonical Execution/Report Convergence (Extraction Milestone 001)
 
-**Status:** Implemented. `crates/eggsec-nse/src/run.rs` owns the single authoritative runtime pipeline: `NseRunRequest` (target, `NseScriptSource`, script args, resolved profile, optional host/port context, explicit limits/cancellation overrides) through `execute_nse_run()` (resolver-first resolution, `with_full_policy` executor setup, rule/action execution, stats, dynamic library-use plus the one runtime-owned static-`require` fallback, capability events, resolver diagnostics, report build, single compatibility/fidelity computation, single evidence extraction).
+**Status:** Implemented. `eggsec-nse/src/run.rs` owns the single authoritative runtime pipeline: `NseRunRequest` (target, `NseScriptSource`, script args, resolved profile, optional host/port context, explicit limits/cancellation overrides) through `execute_nse_run()` (resolver-first resolution, `with_full_policy` executor setup, rule/action execution, stats, dynamic library-use plus the one runtime-owned static-`require` fallback, capability events, resolver diagnostics, report build, single compatibility/fidelity computation, single evidence extraction).
 
 **Allowed callers** (thin adapters only — select request/profile, render the report):
 

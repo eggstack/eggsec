@@ -113,7 +113,7 @@ platform.
 | `wireless-advanced` | wireless + root | `cargo check -p eggsec --features wireless-advanced` |
 | `packet-inspection` | libpcap-dev | `cargo check -p eggsec --features packet-inspection` |
 | `db-pentest` | database drivers | `cargo test -p eggsec-db-lab` |
-| `nse` | libssl-dev | `cargo test -p eggsec-nse --features nse` |
+| `nse` | none (runtime OpenSSL is vendored) | `cargo test -p eggsec --features nse,cli --test nse_tests --test nse_integration_tests` (runtime tests: [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions)) |
 
 These checks are excluded from the default `make check-feature-profiles`
 target because they fail on platforms without the required system

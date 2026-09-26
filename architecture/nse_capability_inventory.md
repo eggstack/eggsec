@@ -1,5 +1,10 @@
 # NSE Capability Inventory
 
+Runtime source and runtime-level capability behavior are maintained in the
+[standalone `eggsec-nse` repository](https://github.com/eggstack/eggsec-nse).
+This Eggsec inventory records the integration-era capability migration
+evidence; runtime file paths below refer to the standalone repository root.
+
 > **Milestone 3 Phase 05 Complete** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. All primary helper classes (filesystem, process, network TCP/UDP, DNS, time, randomness, environment, compression, crypto/TLS) are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
 
 > **Milestone 4 complete.** Structured evidence reports are now extracted from capability events, compatibility diagnostics, rule evaluation, and script output. See `NseRunReport.evidence` and `docs/NSE_COMPATIBILITY.md`.
@@ -8,7 +13,7 @@
 
 The `eggsec-nse` crate provides Lua 5.4 script execution via `mlua`. Lua execution hooks can interrupt Lua bytecode, but once a Lua script enters Rust helper code, blocking filesystem, network, DNS, process, crypto, compression, time, or randomness work must enforce limits and cancellation cooperatively inside the helper path.
 
-This inventory classifies every side-effecting helper operation across the 167 library implementation files in `crates/eggsec-nse/src/libraries/` (168 `.rs` files total; `mod.rs` is module declarations only — verified 2026-09-25), plus the executor core, to guide Milestone 3 wrapper migration.
+This inventory classifies every side-effecting helper operation across the 167 library implementation files in `eggsec-nse/src/libraries/` (168 `.rs` files total; `mod.rs` is module declarations only — verified 2026-09-25), plus the executor core, to guide Milestone 3 wrapper migration.
 
 > Line numbers below are approximate as of 2026-09-25 (registration sites drift with edits); function/registration names are the stable cite.
 
@@ -550,8 +555,9 @@ Phase 01 is complete when:
 ### Verification Commands
 
 ```bash
-cargo check -p eggsec-nse --features nse
-cargo test -p eggsec-nse --features nse
+# Run from the standalone eggsec-nse repository root:
+cargo check --features nse
+cargo test --features nse
 bash scripts/check-architecture-guards.sh
 ```
 

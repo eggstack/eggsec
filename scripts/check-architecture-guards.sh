@@ -394,6 +394,11 @@ else
   echo "PASS: Output free of reverse dependencies."
 fi
 
+# NSE runtime-internal guards moved with the runtime in Milestone 003. The
+# standalone repository runs these checks in its own CI. Keep the historical
+# in-tree checks available for branches that still carry the local crate.
+if [[ -d crates/eggsec-nse ]]; then
+
 # 24. NSE script/module loading flows through ScriptResolver.
 # Direct `std::fs::read_to_string` / `std::fs::read` is only allowed in resolver.rs,
 # executor_core.rs (load_script + setup_require), public_api/api.rs (manual-only),
@@ -1282,6 +1287,11 @@ else
     echo "SKIP: creds source or executor_core not found."
 fi
 
+else
+  echo "--- NSE runtime internal guards ---"
+  echo "SKIP: runtime-owned checks run in eggstack/eggsec-nse CI."
+fi
+
 echo ""
 echo "--- Check 56: Every sslcert TcpStream::connect must have a network gate within 30 lines ---"
 SSLCERT_FILE="crates/eggsec-nse/src/libraries/sslcert.rs"
@@ -1518,6 +1528,7 @@ else
 fi
 
 # 67. NSE libraries must not use unsafe Handle::current().block_on
+if [[ -d crates/eggsec-nse ]]; then
 echo ""
 echo "--- Check 67: NSE libraries avoid Handle::current().block_on ---"
 HANDLE_BLOCK_HITS=$(rg -n 'Handle::current\(\)\.block_on' crates/eggsec-nse/src/libraries/ 2>/dev/null \
@@ -1572,6 +1583,11 @@ if [[ -n "$MISSING_RESET" ]]; then
   FAIL=$((FAIL + 1))
 else
   echo "PASS: NSE library globals expose reset_for_run()."
+fi
+
+else
+  echo "--- NSE runtime async/TLS/global-state guards ---"
+  echo "SKIP: runtime-owned checks run in eggstack/eggsec-nse CI."
 fi
 
 # 70. Protocol-neutral scope DTO must not authorize (Phase A scope contract)
@@ -2817,7 +2833,8 @@ echo "--- Check 108: Manifest graph direction holds ---"
 if ! python3 - <<'PYEOF' 2>&1; then
 import sys, tomllib, pathlib
 root = pathlib.Path(".")
-members = ["eggsec-core","eggsec","eggsec-nse","eggsec-tui","eggsec-cli","eggsec-output","eggsec-tool-core","eggsec-agent","eggsec-db-lab","eggsec-web-proxy","eggsec-mobile-lab","eggsec-runtime","eggsec-daemon","eggsec-daemon-protocol","eggsec-ui-model","eggsec-python","eggsec-transport","eggsec-transport-eggfetch"]
+with open(root/"Cargo.toml", "rb") as f:
+    members = [pathlib.Path(path).name for path in tomllib.load(f)["workspace"]["members"]]
 def deps_of(crate):
     p = root / "crates" / crate / "Cargo.toml"
     with open(p,"rb") as f:
@@ -3938,7 +3955,7 @@ fi
 #   performs no direct custom-file read, and assembles no report via build_report;
 # - the Python binding (eggsec-python/src/nse.rs) references execute_nse_run
 #   and owns no duplicated static-require fallback;
-# - the runtime CLI helper (eggsec-nse/src/lib.rs) delegates to execute_nse_run.
+# - the standalone runtime CI tests the runtime CLI helper delegation.
 echo ""
 echo "--- Check 143: NSE surfaces use the canonical runtime pipeline (FAIL) ---"
 SECTION_FAIL=0
@@ -3967,68 +3984,90 @@ if rg -q 'fn extract_static_requires' crates/eggsec-python/src/nse.rs 2>/dev/nul
   echo "      Static require reconciliation is runtime-owned (eggsec-nse/src/run.rs)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'execute_nse_run' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
-  echo "FAIL: crates/eggsec-nse/src/lib.rs does not delegate to execute_nse_run()."
-  echo "      run_cli_with_profile must stay a thin adapter over the canonical pipeline."
-  SECTION_FAIL=$((SECTION_FAIL + 1))
-fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: NSE surfaces use the canonical runtime pipeline."
+  echo "PASS: Eggsec dispatch and Python use the canonical NSE runtime pipeline."
 else
   FAIL=$((FAIL + 1))
 fi
 
-# 144. NSE runtime has zero inward Eggsec dependencies (Milestone 002).
-# `crates/eggsec-nse/Cargo.toml` must not depend on any `eggsec-*` crate:
-# report conversion lives in `eggsec::nse_bridge`, the scoped-transport
-# adapter in `eggsec::nse_http_capability`. (Self-name `eggsec-nse`
-# excluded via the trailing-pattern match.)
+# 144. The in-tree runtime must not reappear and strict Cargo rev pinning must
+# match the lockfile source. Runtime crate internals are guarded by its own CI.
 echo ""
-echo "--- Check 144: eggsec-nse manifest has no eggsec-* dependencies (FAIL) ---"
-INWARD_MANIFEST_HITS=$(rg -n 'eggsec-(core|report-model|transport|transport-eggfetch|runtime|policy|output|tool-core|agent|daemon|daemon-protocol|db-lab|web-proxy|mobile-lab|ui-model|python)\b|path\s*=\s*"\.\./eggsec' crates/eggsec-nse/Cargo.toml 2>/dev/null || true)
-if [[ -n "$INWARD_MANIFEST_HITS" ]]; then
-  echo "$INWARD_MANIFEST_HITS"
-  echo "FAIL: crates/eggsec-nse/Cargo.toml depends on an Eggsec workspace crate."
-  echo "      The runtime must own NSE semantics with public-ecosystem/std types only."
+echo "--- Check 144: no local runtime and exact external revision (FAIL) ---"
+if [[ -e crates/eggsec-nse ]]; then
+  echo "FAIL: crates/eggsec-nse has reappeared in the Eggsec workspace."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: eggsec-nse has no inward Eggsec manifest dependencies."
+  echo "PASS: no local eggsec-nse source tree."
 fi
-
-# 145. NSE runtime source imports no Eggsec crate (Milestone 002).
-# Comment lines (`// ... eggsec::...`) are excluded: only code imports count.
-echo ""
-echo "--- Check 145: eggsec-nse source imports no eggsec_* crate (FAIL) ---"
-INWARD_SOURCE_HITS=$(rg -n 'use eggsec_[a-z]|eggsec_(core|report_model|transport|runtime|policy)::|eggsec::' crates/eggsec-nse/src/ 2>/dev/null | grep -v '//' || true)
-if [[ -n "$INWARD_SOURCE_HITS" ]]; then
-  echo "$INWARD_SOURCE_HITS"
-  echo "FAIL: eggsec-nse source imports an Eggsec crate."
-  echo "      Move Eggsec adapters up into the engine (see nse_bridge, nse_http_capability)."
+NSE_REV=$(sed -n 's/.*git = "https:\/\/github.com\/eggstack\/eggsec-nse", rev = "\([0-9a-f]\{40\}\)".*/\1/p' crates/eggsec/Cargo.toml)
+if [[ -z "$NSE_REV" ]]; then
+  echo "FAIL: engine dependency is not pinned to the canonical repository and a full commit SHA."
+  FAIL=$((FAIL + 1))
+elif ! rg -q -F "git+https://github.com/eggstack/eggsec-nse?rev=${NSE_REV}#${NSE_REV}" Cargo.lock; then
+  echo "FAIL: Cargo.lock does not resolve eggsec-nse to the manifest's exact revision ($NSE_REV)."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: eggsec-nse source is free of Eggsec imports."
+  echo "PASS: canonical external source and lockfile share rev $NSE_REV."
 fi
 
-# 146. Only the engine directly consumes the NSE runtime (Milestone 002).
-# Production graph must be eggsec-nse <- eggsec <- {CLI,TUI,Python,...}.
-# Matches dependency declarations (`eggsec-nse =`, `eggsec-nse/`,
-# `dep:eggsec-nse`); comments and the crate's own manifest name do not match.
+# 145. Only the engine directly consumes the runtime; frontends forward NSE
+# through the engine facade and Eggsec-only adapters remain engine-owned.
 echo ""
-echo "--- Check 146: only eggsec directly depends on eggsec-nse (FAIL) ---"
-DIRECT_CONSUMERS=$(rg -l 'eggsec-nse\s*=|eggsec-nse/|dep:eggsec-nse' crates/*/Cargo.toml 2>/dev/null || true)
+echo "--- Check 145: single consumer and Eggsec adapter ownership (FAIL) ---"
+DIRECT_CONSUMERS=$(rg -l '^\s*eggsec-nse\s*=' crates/*/Cargo.toml 2>/dev/null || true)
 UNEXPECTED_CONSUMERS=$(printf '%s\n' "$DIRECT_CONSUMERS" | grep -v '^crates/eggsec/Cargo.toml$' || true)
+NSE_SURFACE_HITS=""
 if [[ -n "$UNEXPECTED_CONSUMERS" ]]; then
   echo "$UNEXPECTED_CONSUMERS"
   echo "FAIL: Workspace crates outside the engine declare a direct eggsec-nse edge."
-  echo "      Downstream surfaces must consume NSE through the eggsec::nse facade."
+  FAIL=$((FAIL + 1))
+fi
+if ! printf '%s\n' "$DIRECT_CONSUMERS" | grep -q '^crates/eggsec/Cargo.toml$'; then
+  echo "FAIL: engine lacks its direct runtime dependency."
+  FAIL=$((FAIL + 1))
+fi
+if ! rg -q 'pub use eggsec_nse as nse' crates/eggsec/src/lib.rs; then
+  echo "FAIL: engine no longer exposes the eggsec::nse facade."
+  FAIL=$((FAIL + 1))
+fi
+if ! rg -q '^nse = \["eggsec/nse"\]' crates/eggsec-tui/Cargo.toml || ! rg -q '^nse = \["eggsec/nse"\]' crates/eggsec-python/Cargo.toml; then
+  echo "FAIL: TUI and Python must forward NSE through eggsec."
+  FAIL=$((FAIL + 1))
+fi
+if [[ ! -f crates/eggsec/src/nse_bridge.rs || ! -f crates/eggsec/src/nse_http_capability.rs ]]; then
+  echo "FAIL: Eggsec-owned NSE report/transport adapters are missing from the engine."
+  FAIL=$((FAIL + 1))
+fi
+if [[ $FAIL -eq 0 ]]; then
+  echo "PASS: only eggsec consumes the runtime; frontend facade and engine adapters remain."
+fi
+
+# 146. Engine dispatch remains on the canonical request/report API and strict
+# surfaces do not use manual-only executor constructors.
+echo ""
+echo "--- Check 146: canonical NSE integration surfaces (FAIL) ---"
+SECTION_FAIL=0
+if ! rg -q 'execute_nse_run|NseRunRequest' crates/eggsec/src/dispatch/api.rs; then
+  echo "FAIL: engine dispatch does not call the canonical NSE runtime pipeline."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'execute_nse_run' crates/eggsec-python/src/nse.rs; then
+  echo "FAIL: Python NSE binding does not call the canonical runtime pipeline."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+NSE_AUTOMATED_HITS=$(rg -n 'NseExecutor::with_policy|NseExecutor::new|NseExecutor::with_sandbox|NseExecutor::with_target' \
+  crates/eggsec/src/dispatch crates/eggsec/src/agent crates/eggsec/src/mcp crates/eggsec/src/rest \
+  crates/eggsec/src/grpc crates/eggsec-daemon/src --glob='*.rs' 2>/dev/null || true)
+if [[ -n "$NSE_AUTOMATED_HITS" ]]; then
+  echo "$NSE_AUTOMATED_HITS"
+  echo "FAIL: automated NSE surface uses a manual-only executor constructor."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -gt 0 ]]; then
   FAIL=$((FAIL + 1))
 else
-  if ! printf '%s\n' "$DIRECT_CONSUMERS" | grep -q '^crates/eggsec/Cargo.toml$'; then
-    echo "FAIL: crates/eggsec/Cargo.toml has no direct eggsec-nse edge (engine must consume the runtime)."
-    FAIL=$((FAIL + 1))
-  else
-    echo "PASS: Only the engine directly depends on eggsec-nse."
-  fi
+  echo "PASS: engine NSE dispatch/Python integration stays canonical and strict."
 fi
 
 echo ""

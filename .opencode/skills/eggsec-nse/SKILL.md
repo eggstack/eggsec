@@ -15,7 +15,14 @@ metadata:
 
 ## Overview
 
-The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. It allows running standard NSE scripts within Eggsec.
+The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. Eggsec pins an exact Git revision and re-exports the runtime as `eggsec::nse`.
+
+**Ownership:** Runtime APIs, Lua libraries, resolver, profiles, runtime tests,
+clean-room fixtures, and runtime docs are changed in the standalone repository.
+Eggsec dispatch, `nse_bridge`, `nse_http_capability`, CLI/TUI/Python adapters,
+workspace dependency pin, and product integration docs remain in this checkout.
+Run `cargo test --features nse` and other runtime-only commands from the
+standalone repository root. Run Eggsec adapter tests from the Eggsec workspace.
 
 > **Milestone 1 (loader/profile) is closed.** Canonical implementation, tests, policy contract, and deferred work are listed in the [Milestone 1 Closure Index](../../architecture/nse_integration.md#milestone-1-closure-index). Future work should treat that index as the authoritative pointer and not reopen loader/profile policy unless a regression is found.
 
@@ -451,13 +458,13 @@ A representative corpus of NSE script fixtures verifies supported, partial, appr
 
 ```bash
 # Data-driven harness (all fixtures from manifest)
-cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- corpus_harness
+cargo test --features nse --test compatibility_corpus_tests -- corpus_harness
 
 # Legacy individual tests
-cargo test -p eggsec-nse --features nse compatibility_corpus
+cargo test --features nse compatibility_corpus
 
 # Local protocol fixtures (TCP/HTTP/UDP with real listeners)
-cargo test -p eggsec-nse --features nse --test local_protocol_tests
+cargo test --features nse --test local_protocol_tests
 ```
 
 Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, `capability_events`, provenance metadata, and gap classification. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry with provenance and gap classification. All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have local fixture scripts with zero-hit denial tests for automated profiles.
@@ -500,22 +507,22 @@ The NSE report view supports section-aware filtering and search in the TUI.
 ## Testing
 
 ```bash
-cargo test -p eggsec-nse
-cargo check --lib -p eggsec-nse --features nse
-cargo test -p eggsec-nse --features nse --test script_file_policy_tests
-cargo test -p eggsec-nse --features nse --test profile_guard_tests
-cargo test -p eggsec-nse --features nse --test profile_tests
-cargo test -p eggsec-nse --features nse --test execution_limits_tests
-cargo test -p eggsec-nse --features nse --test sandbox_tests
-cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests
-cargo test -p eggsec-nse --features nse --test rule_evaluation_tests
-cargo test -p eggsec-nse --features nse --test profile_propagation_tests
-cargo test -p eggsec-nse --features nse --test profile_report_tests
-cargo test -p eggsec-nse --features nse --test format_tests
-cargo test -p eggsec-nse --features nse --test evidence_tests
-cargo test -p eggsec-nse --features nse --test bridge_tests
-cargo test -p eggsec-nse --features nse --test runtime_corpus_tests
-cargo test -p eggsec-nse --features nse --test runtime_smoke_tests
-cargo test -p eggsec-nse --features nse --test local_protocol_tests
+cargo test
+cargo check --lib --features nse
+cargo test --features nse --test script_file_policy_tests
+cargo test --features nse --test profile_guard_tests
+cargo test --features nse --test profile_tests
+cargo test --features nse --test execution_limits_tests
+cargo test --features nse --test sandbox_tests
+cargo test --features nse --test compatibility_corpus_tests
+cargo test --features nse --test rule_evaluation_tests
+cargo test --features nse --test profile_propagation_tests
+cargo test --features nse --test profile_report_tests
+cargo test --features nse --test format_tests
+cargo test --features nse --test evidence_tests
+cargo test --features nse --test bridge_tests
+cargo test --features nse --test runtime_corpus_tests
+cargo test --features nse --test runtime_smoke_tests
+cargo test --features nse --test local_protocol_tests
 cargo test -p eggsec-tui --features nse -- nse_report_view
 ```
