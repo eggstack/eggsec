@@ -1,8 +1,14 @@
 # NSE Runtime Extraction Milestone 003 — Standalone Repository Extraction and Cross-Repository Qualification
 
-Status: ready for handoff
+Status: closed
 
 Repository baseline: `d412e204e1866a8ea09d1d9d6e8be66f4a9097e2`
+
+Implementation baseline reviewed: `d743ef2e6064a2a9d2ab575e1c4e3f996f3f7c61`
+
+Qualified standalone revision: `3f57e6c33c8fb17f39ddfcd3bde80a2bde6769a2`
+
+Closure evidence: `plans/closure/nse-runtime-extraction/003-closure.md`
 
 Source roadmap:
 

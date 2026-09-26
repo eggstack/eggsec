@@ -215,6 +215,8 @@ Deferred work: repository split and publication.
 
 ### Milestone 003 — Standalone repository extraction and cross-repository qualification
 
+Status: closed. Closure evidence: `plans/closure/nse-runtime-extraction/003-closure.md`. Standalone revision: `3f57e6c33c8fb17f39ddfcd3bde80a2bde6769a2`.
+
 Class: infrastructure
 
 Objective: move the now-independent runtime into its own repository without semantic changes.
@@ -233,6 +235,8 @@ Class: capability
 
 Objective: publish a semver-tagged runtime release and replace temporary git-revision consumption with the released dependency.
 
+Status: ready for planning after Milestone 003 closure. The `eggsec-nse` package-name availability and release infrastructure remain operational gates before implementation.
+
 Dependencies: hard dependency on Milestone 003; operational dependency on release infrastructure and package-name availability.
 
 Deliverable boundary: release metadata, versioned dependency, reproducible package verification, and documentation.
@@ -244,6 +248,8 @@ Exit conditions: published artifact is reproducible/qualified and Eggsec consume
 Class: infrastructure
 
 Objective: replace remaining direct side-effect implementations with narrow provider interfaces where doing so improves embeddability and authority preservation.
+
+Status: planning may proceed in parallel. Implementation scope remains evidence-gated; the soft dependency on a standalone release does not block plan authoring.
 
 Dependencies: soft dependency on standalone release; may be split further after measurement.
 
