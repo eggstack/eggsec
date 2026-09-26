@@ -323,6 +323,6 @@ This roadmap is complete when:
 |---|---|---|---|---|
 | 001 canonical execution/report convergence | closed | `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` | `plans/closure/nse-runtime-extraction/001-closure.md` | — |
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
-| 003 standalone repository extraction | not started | — | — | Milestone 002 closure (satisfied; see 002 closure §16 preconditions) |
+| 003 standalone repository extraction | ready | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | — | Milestone 002 closure satisfied; carried SSH/seam-disposition qualifications encoded in plan |
 | 004 versioned release + Eggsec adoption | not started | — | — | Milestone 003 qualification |
 | 005 provider inversion / portability hardening | not started | — | — | post-extraction evidence |
