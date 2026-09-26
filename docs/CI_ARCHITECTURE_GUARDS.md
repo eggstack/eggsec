@@ -200,8 +200,8 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 
 ### NSE Subsystem Invariants
 - The standalone [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions) owns runtime-internal checks: resolver-only script/module loading, per-run `NseRunReport.libraries`, profile/executor construction, library registry consistency, capability wrappers, and runtime corpus assertions.
-- Eggsec Checks 143–146 enforce canonical engine/Python dispatch, no local re-vendoring, an exact Git SHA shared by `crates/eggsec/Cargo.toml` and `Cargo.lock`, a single direct runtime consumer, the `eggsec::nse` facade, TUI/Python feature forwarding, and engine ownership of `nse_bridge`/`nse_http_capability`.
-- Runtime revisions are qualified in the standalone repository before Eggsec updates its pin. A branch-only Git dependency fails Check 144.
+- Eggsec Checks 143–146 enforce canonical engine/Python dispatch, no local re-vendoring, the released crates.io version shared by `crates/eggsec/Cargo.toml` and `Cargo.lock`, a single direct runtime consumer, the `eggsec::nse` facade, TUI/Python feature forwarding, and engine ownership of `nse_bridge`/`nse_http_capability`.
+- Runtime revisions are qualified in the standalone repository before Eggsec updates its version. A Git/path/branch/tag/rev runtime source fails Check 144.
 
 ### Python-Specific Guards
 These checks enforce invariants for the `eggsec-python` bindings and run within

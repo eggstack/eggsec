@@ -3990,25 +3990,31 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 144. The in-tree runtime must not reappear and strict Cargo rev pinning must
-# match the lockfile source. Runtime crate internals are guarded by its own CI.
+# 144. The in-tree runtime must not reappear and the engine must consume the
+# released crates.io runtime (Milestone 004). Runtime crate internals are
+# guarded by its own CI.
 echo ""
-echo "--- Check 144: no local runtime and exact external revision (FAIL) ---"
+echo "--- Check 144: no local runtime and released registry source (FAIL) ---"
 if [[ -e crates/eggsec-nse ]]; then
   echo "FAIL: crates/eggsec-nse has reappeared in the Eggsec workspace."
   FAIL=$((FAIL + 1))
 else
   echo "PASS: no local eggsec-nse source tree."
 fi
-NSE_REV=$(sed -n 's/.*git = "https:\/\/github.com\/eggstack\/eggsec-nse", rev = "\([0-9a-f]\{40\}\)".*/\1/p' crates/eggsec/Cargo.toml)
-if [[ -z "$NSE_REV" ]]; then
-  echo "FAIL: engine dependency is not pinned to the canonical repository and a full commit SHA."
+if rg -q 'eggsec-nse\s*=\s*\{[^}]*(git|path|branch|tag|rev)\s*=' crates/eggsec/Cargo.toml; then
+  echo "FAIL: engine declares a Git/path/branch/tag/rev eggsec-nse source; only the crates.io release is accepted."
   FAIL=$((FAIL + 1))
-elif ! rg -q -F "git+https://github.com/eggstack/eggsec-nse?rev=${NSE_REV}#${NSE_REV}" Cargo.lock; then
-  echo "FAIL: Cargo.lock does not resolve eggsec-nse to the manifest's exact revision ($NSE_REV)."
+elif ! rg -q 'eggsec-nse = \{ version = "0\.1\.0"' crates/eggsec/Cargo.toml; then
+  echo "FAIL: engine does not consume the released eggsec-nse 0.1.0 crates.io dependency."
+  FAIL=$((FAIL + 1))
+elif rg -q -F "git+https://github.com/eggstack/eggsec-nse" Cargo.lock; then
+  echo "FAIL: Cargo.lock still resolves eggsec-nse from the temporary Git source."
+  FAIL=$((FAIL + 1))
+elif ! rg -q -U 'name = "eggsec-nse"\nversion = "0\.1\.0"\nsource = "registry\+https://github\.com/rust-lang/crates\.io-index"' Cargo.lock; then
+  echo "FAIL: Cargo.lock does not resolve eggsec-nse 0.1.0 from the crates.io registry."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: canonical external source and lockfile share rev $NSE_REV."
+  echo "PASS: engine consumes released eggsec-nse 0.1.0 from crates.io; lockfile agrees."
 fi
 
 # 145. Only the engine directly consumes the runtime; frontends forward NSE

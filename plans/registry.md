@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-003 closed; Milestone 004 versioned release + Eggsec registry adoption ready for handoff |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-004 closed (`eggsec-nse 0.1.0` published, Eggsec on registry release); Milestone 005 provider inversion ready for planning, implementation evidence-gated |
 
 ## Grandfathered file index
 
@@ -147,14 +147,14 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` — **ready for handoff**. Qualify and publish `eggsec-nse 0.1.0`, bind the published artifact to its source tag/release, then move Eggsec from the temporary Git revision to the crates.io package and requalify the registry artifact. First-publish name/auth checks are operational gates inside the plan.
+- `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` — **closed** (`plans/closure/nse-runtime-extraction/004-closure.md`). Published `eggsec-nse 0.1.0` (standalone `9982c7f`, tag `v0.1.0`) and moved Eggsec from the temporary Git revision to the crates.io package with full requalification.
 - `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` — **closed** (`plans/closure/nse-runtime-extraction/003-closure.md`). Standalone extraction and cross-repository qualification are complete at a pinned revision. Publication/provider inversion remain deferred.
 - `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **closed** (`plans/closure/nse-runtime-extraction/002-closure.md`). Runtime crate has zero `eggsec-*` dependencies; report bridge and scoped-transport HTTP adapter moved into the engine; only `eggsec` directly depends on `eggsec-nse`; TUI/Python consume through `eggsec::nse`; guards 144/145/146 enforce it.
 - `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` — **closed**. One runtime-owned resolver/execution/report pipeline; runtime CLI, Eggsec manual dispatch/TUI, and Python migrated.
 
 ## Blocked work
 
-- No implementation work is currently blocked. Milestone 004 is dependency-ready with crates.io name/authentication/publication checks as in-plan operational gates. Milestone 005 remains not started and any provider-interface implementation must be justified by measured behavior or concrete consumers after 004 closure.
+- No implementation work is currently blocked. Milestone 005 (provider inversion / portability hardening) is unblocked for planning now that the standalone `0.1.0` release exists; provider-interface implementation remains evidence-gated (measured behavior or concrete consumers required).
 
 ## Closure work and current control points
 
@@ -169,4 +169,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md`; Milestone 004 is the current handoff boundary |
+| NSE runtime extraction | `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/closure/nse-runtime-extraction/004-closure.md`; Milestones 001-004 closed, Milestone 005 ready for planning |

@@ -146,7 +146,7 @@ repeat
 A registry failure, timeout, or unavailable dependency remains a failure or
 unavailable result; it is never converted into a local archive pass.
 
-Private crates (not published to crates.io): `eggsec-cli`, `eggsec-tui`, `eggsec-python`. The standalone `eggsec-nse` runtime is released from [its own repository](https://github.com/eggstack/eggsec-nse); it is not a member of this workspace release sequence.
+Private crates (not published to crates.io): `eggsec-cli`, `eggsec-tui`, `eggsec-python`. The standalone `eggsec-nse` runtime is released from [its own repository](https://github.com/eggstack/eggsec-nse) — first release `eggsec-nse 0.1.0` on crates.io, consumed by Eggsec as a registry dependency; it is not a member of this workspace release sequence.
 
 ### Commands
 

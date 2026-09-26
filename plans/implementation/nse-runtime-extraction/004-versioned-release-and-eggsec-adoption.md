@@ -1,6 +1,11 @@
 # NSE Runtime Extraction Milestone 004 — Versioned Release and Eggsec Registry Adoption
 
-Status: ready for handoff
+Status: closed
+
+Closure evidence: `plans/closure/nse-runtime-extraction/004-closure.md`
+
+Published artifact: `eggsec-nse 0.1.0` (crates.io) from standalone
+`eggstack/eggsec-nse@9982c7fc060bb8d9cfe7b5549ba3f8a83336c00c`, tag `v0.1.0`
 
 Eggsec repository baseline: `86dd20c4df4b4d9e6ece1282e158bf096816190a`
 

@@ -15,7 +15,7 @@ metadata:
 
 ## Overview
 
-The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. Eggsec pins an exact Git revision and re-exports the runtime as `eggsec::nse`.
+The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. Eggsec consumes the published `eggsec-nse 0.1.0` crates.io release and re-exports the runtime as `eggsec::nse`.
 
 **Ownership:** Runtime APIs, Lua libraries, resolver, profiles, runtime tests,
 clean-room fixtures, and runtime docs are changed in the standalone repository.

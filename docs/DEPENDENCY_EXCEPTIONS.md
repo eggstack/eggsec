@@ -264,9 +264,10 @@ active at review time must be re-evaluated for:
 2. Whether the dependency path has changed
 3. Whether the exploitability assessment still holds
 4. Whether the review-by date should be extended (max 90 days)
-# Approved Git source (temporary)
+# Retired Git source (Milestone 004)
 
-`https://github.com/eggstack/eggsec-nse` is the sole allowed Git source while
-Milestone 003 qualifies the standalone runtime. `deny.toml` still requires an
-exact `rev`; the dependency owner is the Eggsec NSE maintainers. Remove this
-allow-list entry when Milestone 004 switches Eggsec to the published crate.
+`https://github.com/eggstack/eggsec-nse` was the sole allowed Git source while
+Milestone 003 qualified the standalone runtime. Milestone 004 switched Eggsec
+to the published `eggsec-nse 0.1.0` crates.io release and removed the
+allow-list entry from `deny.toml`; `unknown-git = "deny"` remains fail-closed
+with no allowed Git source. This section is retained as history only.

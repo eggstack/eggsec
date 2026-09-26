@@ -3,8 +3,8 @@
 Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 The runtime behind `nse` is the standalone
-[`eggsec-nse`](https://github.com/eggstack/eggsec-nse) package, pinned by the
-engine to an exact Git revision. Its package-level feature definitions are
+[`eggsec-nse`](https://github.com/eggstack/eggsec-nse) package, consumed by the
+engine as a versioned crates.io release. Its package-level feature definitions are
 qualified in that repository.
 
 > **Canonical reference**: For the full feature inventory with categories, naming conventions,

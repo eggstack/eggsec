@@ -1,8 +1,8 @@
 # NSE Integration
 
 The runtime package is now maintained in the [standalone `eggsec-nse`
-repository](https://github.com/eggstack/eggsec-nse). Eggsec consumes it from an
-exact Git revision through the `eggsec::nse` facade. Runtime resolver,
+repository](https://github.com/eggstack/eggsec-nse). Eggsec consumes the published
+crates.io release through the `eggsec::nse` facade. Runtime resolver,
 profiles, execution/report pipeline, library implementation, and runtime tests
 are owned there; Eggsec dispatch, TUI/Python adapters, report-envelope bridge,
 and scoped-transport adapter remain owned here. Historical verification

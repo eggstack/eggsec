@@ -231,13 +231,13 @@ Deferred work: crates.io publication and host-provider redesign.
 
 ### Milestone 004 — Versioned release and Eggsec adoption
 
+Status: closed. Closure evidence: `plans/closure/nse-runtime-extraction/004-closure.md`. Published artifact: `eggsec-nse 0.1.0` (crates.io) from standalone `9982c7fc060bb8d9cfe7b5549ba3f8a83336c00c`, tag `v0.1.0`; Eggsec consumes the registry release.
+
 Class: capability
 
 Objective: publish a semver-tagged runtime release and replace temporary git-revision consumption with the released dependency.
 
-Status: ready for planning after Milestone 003 closure. The `eggsec-nse` package-name availability and release infrastructure remain operational gates before implementation.
-
-Dependencies: hard dependency on Milestone 003; operational dependency on release infrastructure and package-name availability.
+Dependencies: hard dependency on Milestone 003 (closed); operational dependency on release infrastructure and package-name availability (satisfied in-milestone).
 
 Deliverable boundary: release metadata, versioned dependency, reproducible package verification, and documentation.
 
@@ -249,9 +249,9 @@ Class: infrastructure
 
 Objective: replace remaining direct side-effect implementations with narrow provider interfaces where doing so improves embeddability and authority preservation.
 
-Status: planning may proceed in parallel. Implementation scope remains evidence-gated; the soft dependency on a standalone release does not block plan authoring.
+Status: ready for planning. The soft dependency on a standalone release is satisfied by published `eggsec-nse 0.1.0` (Milestone 004 closed). Implementation scope remains evidence-gated.
 
-Dependencies: soft dependency on standalone release; may be split further after measurement.
+Dependencies: soft dependency on standalone release (satisfied); may be split further after measurement.
 
 Deliverable boundary: narrow network/filesystem/DNS/clock/random/process provider seams, a native default implementation, and an Eggsec host adapter where useful.
 
@@ -330,5 +330,5 @@ This roadmap is complete when:
 | 001 canonical execution/report convergence | closed | `plans/implementation/nse-runtime-extraction/001-canonical-execution-report-convergence.md` | `plans/closure/nse-runtime-extraction/001-closure.md` | — |
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
-| 004 versioned release + Eggsec adoption | ready | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | — | Milestone 003 closed; crates.io name/auth/release readiness are operational gates inside the plan |
-| 005 provider inversion / portability hardening | not started | — | — | post-extraction evidence |
+| 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
+| 005 provider inversion / portability hardening | ready for planning | — | — | implementation evidence-gated |
