@@ -147,7 +147,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md` — **ready for handoff**. Establish the per-run host-service bundle, native defaults, capability-aware broker sequencing, and deterministic clock/random/environment providers without touching raw network/filesystem/process domains.
+- `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` — **ready for handoff**. Establish the per-run host-service bundle, native defaults, capability-aware broker sequencing, and deterministic clock/random/environment providers without touching raw network/filesystem/process domains.
 - `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` — **closed** (`plans/closure/nse-runtime-extraction/004-closure.md`). Published `eggsec-nse 0.1.0` (standalone `9982c7f`, tag `v0.1.0`) and moved Eggsec from the temporary Git revision to the crates.io package with full requalification.
 - `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` — **closed** (`plans/closure/nse-runtime-extraction/003-closure.md`). Standalone extraction and cross-repository qualification are complete at a pinned revision. Publication/provider inversion remain deferred.
 - `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **closed** (`plans/closure/nse-runtime-extraction/002-closure.md`). Runtime crate has zero `eggsec-*` dependencies; report bridge and scoped-transport HTTP adapter moved into the engine; only `eggsec` directly depends on `eggsec-nse`; TUI/Python consume through `eggsec::nse`; guards 144/145/146 enforce it.
@@ -155,10 +155,10 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Blocked work
 
-- `plans/implementation/nse-runtime-extraction/005b-authority-preserving-network-dns.md` — **blocked on accepted 005A closure**. Resolve/authorize/connect exact endpoints through DNS/TCP/UDP providers and migrate shared/core network paths.
-- `plans/implementation/nse-runtime-extraction/005c-http-provider-eggsec-adapter.md` — **blocked on accepted 005B closure**. Add runtime-neutral HTTP provider, migrate HTTP-family paths, and activate the Eggsec `HttpTransport` + `NetworkAuthority` adapter without adding Eggsec dependencies to the runtime.
-- `plans/implementation/nse-runtime-extraction/005d-filesystem-process-portability.md` — **blocked on accepted 005A closure**. Add filesystem/process providers, per-run CWD, localized platform mechanics, and Windows qualification; may proceed in parallel with 005B after A closes.
-- `plans/implementation/nse-runtime-extraction/005e-provider-coverage-qualification.md` — **blocked on accepted 005B, 005C, and 005D closures**. Source-audit provider coverage, qualify authority/accounting/cancellation/portability across both repos, and determine parent-M005 closure/release disposition.
+- `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` — **blocked on accepted 005A closure**. Resolve/authorize/connect exact endpoints through DNS/TCP/UDP providers and migrate shared/core network paths.
+- `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md` — **blocked on accepted 005B closure**. Add runtime-neutral HTTP provider, migrate HTTP-family paths, and activate the Eggsec `HttpTransport` + `NetworkAuthority` adapter without adding Eggsec dependencies to the runtime.
+- `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` — **blocked on accepted 005A closure**. Add filesystem/process providers, per-run CWD, localized platform mechanics, and Windows qualification; may proceed in parallel with 005B after A closes.
+- `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **blocked on accepted 005B, 005C, and 005D closures**. Source-audit provider coverage, qualify authority/accounting/cancellation/portability across both repos, and determine parent-M005 closure/release disposition.
 
 ## Closure work and current control points
 
@@ -173,4 +173,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md`; M005 active with 005A as the current handoff boundary |
+| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md`; M005 active with 005A as the current handoff boundary |
