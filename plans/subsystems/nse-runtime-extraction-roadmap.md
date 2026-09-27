@@ -271,7 +271,7 @@ Provider mechanics never authorize an Eggsec operation. Eggsec's canonical enfor
 
 Status: **ready for handoff**.
 
-Plan: `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md`
 
 Boundary: establish the per-run service bundle, native defaults, additive request injection, broker sequencing, and low-risk clock/random/environment providers with deterministic/concurrent tests.
 
@@ -281,7 +281,7 @@ Exit gate: provider injection is proven on real NSE execution without changing e
 
 Status: **blocked on accepted M005A closure**.
 
-Plan: `plans/implementation/nse-runtime-extraction/005b-authority-preserving-network-dns.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md`
 
 Boundary: runtime-neutral DNS/TCP/UDP providers, opaque/runtime-owned handle types, resolve-authorize-connect identity, and migration of the shared/core `socket`/`comm`/`nmap`/`dns` paths.
 
@@ -291,7 +291,7 @@ Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint a
 
 Status: **blocked on accepted M005B closure**.
 
-Plan: `plans/implementation/nse-runtime-extraction/005c-http-provider-eggsec-adapter.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`
 
 Boundary: runtime-neutral HTTP DTO/provider contract, native reqwest provider, migration of the HTTP-family libraries where parity permits, and activation of Eggsec's existing `HttpTransport` + `NetworkAuthority` seam as an engine-owned provider adapter.
 
@@ -301,7 +301,7 @@ Exit gate: Eggsec-injected HTTP execution carries existing approved authority wi
 
 Status: **blocked on accepted M005A closure**. May proceed in parallel with M005B after A closes.
 
-Plan: `plans/implementation/nse-runtime-extraction/005d-filesystem-process-portability.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md`
 
 Boundary: narrow filesystem/process providers, runtime-owned metadata/process DTOs and opaque file handles, per-run virtual CWD, localized Unix/Windows mechanics, and Windows CI qualification.
 
@@ -311,7 +311,7 @@ Exit gate: shared/core filesystem/process paths are brokered, process-global CWD
 
 Status: **blocked on accepted M005B, M005C, and M005D closures**.
 
-Plan: `plans/implementation/nse-runtime-extraction/005e-provider-coverage-qualification.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md`
 
 Boundary: source-derived host-side-effect inventory, cross-domain provider composition, authority/accounting/cancellation qualification, portability matrix, Eggsec consumer verification, documentation reconciliation, and release/versioning recommendation.
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md` (first child; 005B-E linked in §7) | — | 005A ready; 005B/C/D/E dependency-gated |
+| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (first child; 005B-E linked in §7) | — | 005A ready; 005B/C/D/E dependency-gated |
