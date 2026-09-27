@@ -12,7 +12,9 @@ Long-term references:
 
 Related ADRs:
 
-- none at roadmap creation; create an ADR only if extraction changes a durable cross-subsystem authorization, transport, or public-contract decision.
+- `plans/adrs/ADR-0003-nse-host-provider-boundary.md` — accepted provider/broker boundary for Milestone 005.
+- `plans/adrs/ADR-0001-scoped-transport-eggfetch-backend.md` remains controlling for the Eggsec-owned HTTP transport adapter.
+- `plans/adrs/ADR-0002-eggress-selective-reuse-boundary.md` remains unaffected.
 
 ## 1. Purpose and ownership boundary
 
@@ -247,15 +249,101 @@ Exit conditions: published artifact is reproducible/qualified and Eggsec consume
 
 Class: infrastructure
 
-Objective: replace remaining direct side-effect implementations with narrow provider interfaces where doing so improves embeddability and authority preservation.
+Objective: move selected runtime host side effects behind narrow, per-run provider interfaces so capability policy, cancellation/resource accounting, actual host execution, deterministic testing, authority preservation, and platform specialization share one auditable boundary.
 
-Status: ready for planning. The soft dependency on a standalone release is satisfied by published `eggsec-nse 0.1.0` (Milestone 004 closed). Implementation scope remains evidence-gated.
+Status: active/planned. The evidence gate is satisfied by direct source inspection of the standalone `0.1.0` runtime and the concrete Eggsec scoped-HTTP consumer. ADR-0003 defines the durable provider/broker contract. M005 is decomposed into five bounded handoff slices because one network + HTTP + filesystem + process + portability rewrite would violate milestone sizing guidance.
 
-Dependencies: soft dependency on standalone release (satisfied); may be split further after measurement.
+Dependencies: Milestone 004 is closed. Child dependencies are explicit below.
 
-Deliverable boundary: narrow network/filesystem/DNS/clock/random/process provider seams, a native default implementation, and an Eggsec host adapter where useful.
+Provider/broker invariant:
 
-Exit conditions: no monolithic host trait, current behavior preserved, and provider injection is justified by tests or concrete consumers.
+```text
+runtime capability decision
+-> cancellation/resource preflight
+-> narrow provider operation
+-> resource accounting
+-> capability/report event
+```
+
+Provider mechanics never authorize an Eggsec operation. Eggsec's canonical enforcement and `NetworkAuthority` remain external to `eggsec-nse`.
+
+#### M005A — Provider broker foundation and deterministic host services
+
+Status: **ready for handoff**.
+
+Plan: `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md`
+
+Boundary: establish the per-run service bundle, native defaults, additive request injection, broker sequencing, and low-risk clock/random/environment providers with deterministic/concurrent tests.
+
+Exit gate: provider injection is proven on real NSE execution without changing existing caller construction or profile/report semantics.
+
+#### M005B — Authority-preserving network and DNS providers
+
+Status: **blocked on accepted M005A closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/005b-authority-preserving-network-dns.md`
+
+Boundary: runtime-neutral DNS/TCP/UDP providers, opaque/runtime-owned handle types, resolve-authorize-connect identity, and migration of the shared/core `socket`/`comm`/`nmap`/`dns` paths.
+
+Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint and connects to that same endpoint; actual provider calls own cancellation/accounting; remaining specialized network bypasses are explicitly inventoried.
+
+#### M005C — HTTP provider and Eggsec scoped-transport adapter
+
+Status: **blocked on accepted M005B closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/005c-http-provider-eggsec-adapter.md`
+
+Boundary: runtime-neutral HTTP DTO/provider contract, native reqwest provider, migration of the HTTP-family libraries where parity permits, and activation of Eggsec's existing `HttpTransport` + `NetworkAuthority` seam as an engine-owned provider adapter.
+
+Exit gate: Eggsec-injected HTTP execution carries existing approved authority with no native fallback on denial, while standalone remains Eggsec-independent.
+
+#### M005D — Filesystem, process, and cross-platform host portability
+
+Status: **blocked on accepted M005A closure**. May proceed in parallel with M005B after A closes.
+
+Plan: `plans/implementation/nse-runtime-extraction/005d-filesystem-process-portability.md`
+
+Boundary: narrow filesystem/process providers, runtime-owned metadata/process DTOs and opaque file handles, per-run virtual CWD, localized Unix/Windows mechanics, and Windows CI qualification.
+
+Exit gate: shared/core filesystem/process paths are brokered, process-global CWD mutation is removed, and declared Windows build/check support is green.
+
+#### M005E — Provider coverage qualification and parent-milestone closure
+
+Status: **blocked on accepted M005B, M005C, and M005D closures**.
+
+Plan: `plans/implementation/nse-runtime-extraction/005e-provider-coverage-qualification.md`
+
+Boundary: source-derived host-side-effect inventory, cross-domain provider composition, authority/accounting/cancellation qualification, portability matrix, Eggsec consumer verification, documentation reconciliation, and release/versioning recommendation.
+
+Exit gate: all direct host operations in the audited source scope are classified; provider-backed claims match source and guards; no high-severity bypass remains; parent M005 receives an evidence-backed closure disposition.
+
+Child dependency graph:
+
+```text
+005A provider/broker foundation
+  |\
+  | \
+  v  v
+005B 005D
+  |
+  v
+005C
+  \   /
+   \ /
+   005E qualification/closure
+```
+
+Parent Milestone 005 exit conditions:
+
+- no monolithic host trait;
+- current native-default behavior remains source-compatible;
+- provider-backed operations use one capability-aware broker sequence;
+- network resolution/authorization/connection preserves concrete endpoint identity;
+- Eggsec provider adapters remain engine-owned and carry existing authority rather than reconstructing it;
+- per-run provider/CWD state is isolated;
+- Windows qualification is explicit;
+- residual specialized direct host operations are inventoried rather than hidden;
+- closure determines the semver/release follow-up for the newly public provider surface.
 
 ## 8. Cross-cutting requirements
 
@@ -331,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | ready for planning | — | — | implementation evidence-gated |
+| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005a-provider-broker-foundation.md` (first child; 005B-E linked in §7) | — | 005A ready; 005B/C/D/E dependency-gated |
