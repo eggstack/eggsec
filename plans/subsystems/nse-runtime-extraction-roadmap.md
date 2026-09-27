@@ -269,9 +269,9 @@ Provider mechanics never authorize an Eggsec operation. Eggsec's canonical enfor
 
 #### M005A — Provider broker foundation and deterministic host services
 
-Status: **ready for handoff**.
+Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005a-closure.md` (standalone `675269e`, branch `m005a-provider-broker-foundation`).
 
-Plan: `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (status: implemented)
 
 Boundary: establish the per-run service bundle, native defaults, additive request injection, broker sequencing, and low-risk clock/random/environment providers with deterministic/concurrent tests.
 
@@ -279,7 +279,7 @@ Exit gate: provider injection is proven on real NSE execution without changing e
 
 #### M005B — Authority-preserving network and DNS providers
 
-Status: **blocked on accepted M005A closure**.
+Status: **ready for handoff** (unblocked by accepted 005A closure).
 
 Plan: `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md`
 
@@ -299,7 +299,7 @@ Exit gate: Eggsec-injected HTTP execution carries existing approved authority wi
 
 #### M005D — Filesystem, process, and cross-platform host portability
 
-Status: **blocked on accepted M005A closure**. May proceed in parallel with M005B after A closes.
+Status: **ready for handoff** (unblocked by accepted 005A closure). May proceed in parallel with M005B.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md`
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (first child; 005B-E linked in §7) | — | 005A ready; 005B/C/D/E dependency-gated |
+| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A) | 005B/D ready; 005C blocked on 005B; 005E blocked on 005B/C/D |

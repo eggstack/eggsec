@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 005B — Authority-Preserving Network and DNS Providers
 
-Status: blocked
+Status: ready for handoff
+
+Unblocked by accepted 005A closure (`plans/closure/nse-runtime-extraction/005a-closure.md`).
 
 Eggsec planning baseline: `b5d27348a829a4c1c2a49fbc267349c52e86a1f6`
 

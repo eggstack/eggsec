@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 005A — Provider Broker Foundation and Deterministic Host Services
 
-Status: ready for handoff
+Status: implemented
+
+Closure: `plans/closure/nse-runtime-extraction/005a-closure.md` (closed; unblocks 005B and 005D).
 
 Eggsec planning baseline: `b5d27348a829a4c1c2a49fbc267349c52e86a1f6`
 
