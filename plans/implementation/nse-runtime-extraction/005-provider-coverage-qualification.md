@@ -12,10 +12,10 @@ Source roadmap:
 
 Hard dependencies:
 
-- accepted closure of `005a-provider-broker-foundation.md`;
-- accepted closure of `005b-authority-preserving-network-dns.md`;
-- accepted closure of `005c-http-provider-eggsec-adapter.md`;
-- accepted closure of `005d-filesystem-process-portability.md`.
+- accepted closure of `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md`;
+- accepted closure of `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md`;
+- accepted closure of `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`;
+- accepted closure of `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md`.
 
 Long-term requirements:
 
