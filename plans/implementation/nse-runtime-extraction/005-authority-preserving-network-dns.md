@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 005B — Authority-Preserving Network and DNS Providers
 
-Status: ready for handoff
+Status: implemented
+
+Closure: `plans/closure/nse-runtime-extraction/005b-closure.md` (closed; unblocks 005C).
 
 Unblocked by accepted 005A closure (`plans/closure/nse-runtime-extraction/005a-closure.md`).
 
