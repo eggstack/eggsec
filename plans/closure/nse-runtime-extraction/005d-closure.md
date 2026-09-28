@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005D — Closure Status
 
-Status: conditionally closed — corrective pass required
+Status: closed
 
 Source implementation plan:
 
@@ -167,3 +167,20 @@ Subsequent repository-level review found that this implementation/qualification 
 The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
 
 This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
+
+## Corrective addendum — landing/CI evidence recorded
+
+The M005 landing/CI corrective pass is closed; see `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md` for the full corrective evidence. The operational conditions recorded above are now satisfied:
+
+- Original implementation SHA: `b3c43b8d2128f47d83ea66ceb94fcbfe5dc9c69c` (`m005d-filesystem-process-portability`).
+- Pre-corrective standalone main SHA: `854f153f56d1abc929d9abd255f0606759342f81`.
+- Corrected cumulative stack-tip SHA: `1134c289b71a07fda21a8554782fd8101df5396f`.
+- Merged standalone main SHA: `1134c289b71a07fda21a8554782fd8101df5396f` (fast-forward; no squash, no merge commit).
+- `git log --pretty=format:%h 854f153..1134c28` enumerates the five implementation SHAs in order; this slice's `b3c43b8` is an ancestor of `main` and the merged main tree carries the narrow filesystem/process providers, the per-run virtual CWD, the localized platform mechanics, and the M005D boundary guards.
+- Corrective CI/tooling change (one commit `1134c28`) repairs the boundary-check `rg` prerequisite (fail-fast diagnostic + focused regression test) and provisions ripgrep on Linux/macOS CI jobs; Windows compile-only qualification is preserved.
+- Branch CI evidence: prior red runs (`36337158009`, `36455834771`, `36461074205`, `36466449173`/`36466452158`, `36476950685`) are superseded by the corrected `main` workflow; the same matrix on `origin/main@1134c28` is green (script fail-fast proven by `tests/boundary_check_tooling_tests.rs`; full-suite `cargo test --features nse` 639 passed + 1 ignored across 28 suites; M005D fs/process suite `tests/fs_process_tests.rs` 19 passed; portability guard — no `os::unix`/`os::windows`/`nix::`/`libc::` outside `src/providers.rs` — still green).
+- Post-merge main CI evidence: identical to the branch evidence because the corrected stack-tip SHA equals the merged main SHA (`git rev-list --count main..1134c28` is `0`).
+- The M005D boundary guards (no `env::set_current_dir` anywhere in `src/`; no direct `std::fs::`/`std::process::Command`/`OpenOptions`/`PermissionsExt`/`os::unix`/`os::windows`/`env::current_dir` in `io.rs`; broker presence in `io.rs`/`lfs.rs`/`os.rs`/`nmap.rs`) continue to enforce the 005D contract on the landed tree.
+- Windows qualification (compile/check) is preserved unchanged by this corrective pass; the Windows CI matrix on `origin/main@1134c28` exercises the same set of compile-only checks as the 005E branch run that previously passed.
+- Eggsec dependency remains crates.io `eggsec-nse 0.1.0`; the staged Eggsec-side HTTP adapter branch is not advanced by this corrective pass.
+- The 0.2.0 release/adoption follow-up is now dependency-ready; the filesystem/process provider surface (including per-run virtual CWD) travels with the publication.

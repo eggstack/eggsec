@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005E — Closure Status
 
-Status: conditionally closed — corrective pass required
+Status: closed
 
 Source implementation plan:
 
@@ -170,3 +170,21 @@ Subsequent repository-level review found that this implementation/qualification 
 The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
 
 This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
+
+## Corrective addendum — landing/CI evidence recorded
+
+The M005 landing/CI corrective pass is closed; see `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md` for the full corrective evidence (this record is the source-of-truth summary for the chain). The operational conditions recorded above are now satisfied, including the disposition in §11 above:
+
+- Original implementation SHA: `c81d84c55a2368a76338e758ab3afdf3573135ad` (`m005e-provider-coverage-qualification`).
+- Pre-corrective standalone main SHA: `854f153f56d1abc929d9abd255f0606759342f81`.
+- Corrected cumulative stack-tip SHA: `1134c289b71a07fda21a8554782fd8101df5396f`.
+- Merged standalone main SHA: `1134c289b71a07fda21a8554782fd8101df5396f` (fast-forward; no squash, no merge commit).
+- `git log --pretty=format:%h 854f153..1134c28` enumerates the five implementation SHAs in order; this slice's `c81d84c` is an ancestor of `main` and the merged main tree carries the source-audited host-side-effect inventory, the cross-domain provider composition/broker/wrappers/fixture tests, the M005E pinned residual inventories, and the M005E send-accounting correction (direction-correct read/write buckets, HTTP split, live write-limit preflight).
+- Corrective CI/tooling change (one commit `1134c28`) repairs the boundary-check `rg` prerequisite (fail-fast diagnostic + focused regression test) and provisions ripgrep on Linux/macOS CI jobs; Windows compile-only qualification is preserved.
+- Branch CI evidence: prior red runs (`36337158009`, `36455834771`, `36461074205`, `36466449173`/`36466452158`, `36476950685`) are superseded by the corrected `main` workflow; the same matrix on `origin/main@1134c28` is green (script fail-fast proven by `tests/boundary_check_tooling_tests.rs`; full-suite `cargo test --features nse` 639 passed + 1 ignored across 28 suites, matching 637 baseline + 2 new tooling tests; M005 provider composition suite `tests/provider_composition_tests.rs` 8 passed).
+- Post-merge main CI evidence: identical to the branch evidence because the corrected stack-tip SHA equals the merged main SHA (`git rev-list --count main..1134c28` is `0`).
+- The M005E boundary guards (direct-socket inventory pins in `scripts/nse-specialized-advisory.txt` + `scripts/nse-specialized-ungated.txt`, advisory file capability-gate check, reqwest allow-list pinned in `scripts/nse-reqwest-inventory.txt`, portability platform-host-module ban) continue to enforce the 005E contract on the landed tree.
+- The 005E residual risk list (§10) is unchanged: the 72-file ungated specialized residual is still bounded by Eggsec manual-only NSE dispatch + standalone CiSafe documentation, the medium-severity follow-up (protocol-library capability gating) remains sequenced after release/adoption, and the breaking `register_vulns_library(lua, capability_ctx)` signature is preserved.
+- The §11 recommendation — `eggsec-nse 0.2.0` (breaking signature + new provider surface + accounting fix; no publication from this slice) — stands as input to the now dependency-ready 0.2.0 release/adoption milestone. Do not publish from the corrective pass.
+- Eggsec dependency remains crates.io `eggsec-nse 0.1.0`; the staged Eggsec-side HTTP adapter branch is not advanced by this corrective pass.
+- The protocol-library capability-gating follow-up is **not** absorbed into this corrective pass (handoff notes forbid the fifth rewrite); it remains sequenced after the 0.2.0 release/adoption milestone.

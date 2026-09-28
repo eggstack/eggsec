@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005B — Closure Status
 
-Status: conditionally closed — corrective pass required
+Status: closed
 
 Source implementation plan:
 
@@ -164,3 +164,20 @@ Subsequent repository-level review found that this implementation/qualification 
 The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
 
 This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
+
+## Corrective addendum — landing/CI evidence recorded
+
+The M005 landing/CI corrective pass is closed; see `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md` for the full corrective evidence. The operational conditions recorded above are now satisfied:
+
+- Original implementation SHA: `0ac9737486df8c76d16ad8437ea83396bcf544b0` (`m005b-authority-preserving-network-dns`).
+- Pre-corrective standalone main SHA: `854f153f56d1abc929d9abd255f0606759342f81`.
+- Corrected cumulative stack-tip SHA: `1134c289b71a07fda21a8554782fd8101df5396f`.
+- Merged standalone main SHA: `1134c289b71a07fda21a8554782fd8101df5396f` (fast-forward; no squash, no merge commit).
+- `git log --pretty=format:%h 854f153..1134c28` enumerates the five implementation SHAs in order; this slice's `0ac9737` is an ancestor of `main` and the merged main tree carries the runtime-neutral DNS/TCP/UDP provider surface, the resolve-authorize-connect identity contract, and the M005B boundary guards.
+- Corrective CI/tooling change (one commit `1134c28`) repairs the boundary-check `rg` prerequisite (fail-fast diagnostic + focused regression test) and provisions ripgrep on Linux/macOS CI jobs; Windows compile-only qualification is preserved.
+- Branch CI evidence: prior red runs (`36337158009`, `36455834771`, `36461074205`, `36466449173`/`36466452158`, `36476950685`) are superseded by the corrected `main` workflow; the same matrix on `origin/main@1134c28` is green (script fail-fast proven by `tests/boundary_check_tooling_tests.rs`; full-suite `cargo test --features nse` 639 passed + 1 ignored across 28 suites; M005B network provider suite `tests/network_provider_tests.rs` 19 passed; authority-preserving compose tests green).
+- Post-merge main CI evidence: identical to the branch evidence because the corrected stack-tip SHA equals the merged main SHA (`git rev-list --count main..1134c28` is `0`).
+- The M005B boundary guards (no direct `std::net::TcpStream`/`UdpSocket`/`hickory`/`lookup_host`/`connect_timeout` outside `src/providers.rs`; broker presence in `socket.rs`/`comm.rs`/`dns.rs`/`wrappers.rs`) continue to enforce the 005B contract on the landed tree.
+- The remaining direct-network specialized residual (file-level classification) is unchanged from the 005E closure and remains pinned by `scripts/nse-specialized-advisory.txt` + `scripts/nse-specialized-ungated.txt`; the 005E follow-up recommendation (protocol-library capability gating, sequenced after release/adoption) is not absorbed here.
+- Eggsec dependency remains crates.io `eggsec-nse 0.1.0`; the staged Eggsec HTTP adapter branch is not advanced by this corrective pass.
+- The 0.2.0 release/adoption follow-up is now dependency-ready; the resolve-authorize-connect identity contract and the authority-preserving network provider surface travel with the 0.2.0 publication.

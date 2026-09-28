@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-004 closed; M005 provider work implemented on a linear standalone branch stack but operational closure is under corrective review because the stack is not merged to `eggsec-nse/main` and hosted Linux/macOS CI is red on an undeclared `rg` prerequisite |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-005 closed (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`); merged standalone main SHA `1134c289b71a07fda21a8554782fd8101df5396f`; `0.2.0` release/adoption follow-up is now dependency-ready; protocol-library capability-gating follow-up sequenced after release/adoption |
 
 ## Grandfathered file index
 
@@ -147,11 +147,11 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` — **ready for handoff**. Repair the standalone CI ripgrep prerequisite, obtain fully green cumulative-stack CI, land the linear M005A-E stack to `eggsec-nse/main`, obtain green post-merge CI, and reconcile all five closures to the merged SHA. No provider feature expansion or release publication.
-- `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **implemented; closure conditional** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Source-audit provider coverage, cross-domain composition/cancel/accounting qualification, send-accounting correction, and 0.2.0 recommendation are branch-qualified; operational closure awaits the landing/CI corrective pass.
-- `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md` — **implemented; closure conditional** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Runtime-neutral HTTP provider and HTTP-family migration are in the standalone branch stack; the Eggsec scoped-transport adapter remains intentionally staged pending release/adoption.
-- `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` — **implemented; closure conditional** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Runtime-neutral DNS/TCP/UDP providers, opaque handles, resolve-authorize-connect identity, and shared/core network migration are branch-qualified pending landing/CI corrective evidence.
-- `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` — **implemented; closure conditional** (`plans/closure/nse-runtime-extraction/005d-closure.md`). Filesystem/process providers, per-run CWD, localized platform mechanics, and Windows qualification are branch-qualified pending landing/CI corrective evidence.
+- `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` — **closed** (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`). Repaired the standalone CI ripgrep prerequisite, obtained green cumulative-stack CI, landed the linear M005A-E stack to `eggsec-nse/main`, obtained green post-merge CI, and reconciled all five 005A-E closures to the merged SHA `1134c289b71a07fda21a8554782fd8101df5396f`. No provider feature expansion or release publication.
+- `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Source-audit provider coverage, cross-domain composition/cancel/accounting qualification, send-accounting correction, and 0.2.0 recommendation are merged on `eggsec-nse/main`.
+- `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md` — **closed (standalone portion; Eggsec adapter remains staged pending release/adoption)** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Runtime-neutral HTTP provider and HTTP-family migration are merged on `eggsec-nse/main`; the Eggsec-side scoped-transport adapter remains intentionally staged on `m005c-eggsec-http-adapter` and is not activated until the 0.2.0 adoption milestone + NSE enforcement-metadata prerequisite.
+- `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` — **closed** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Runtime-neutral DNS/TCP/UDP providers, opaque handles, resolve-authorize-connect identity, and shared/core network migration are merged on `eggsec-nse/main`.
+- `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` — **closed** (`plans/closure/nse-runtime-extraction/005d-closure.md`). Filesystem/process providers, per-run CWD, localized platform mechanics, and Windows qualification are merged on `eggsec-nse/main`.
 - `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` — **closed** (`plans/closure/nse-runtime-extraction/004-closure.md`). Published `eggsec-nse 0.1.0` (standalone `9982c7f`, tag `v0.1.0`) and moved Eggsec from the temporary Git revision to the crates.io package with full requalification.
 - `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` — **closed** (`plans/closure/nse-runtime-extraction/003-closure.md`). Standalone extraction and cross-repository qualification are complete at a pinned revision. Publication/provider inversion remain deferred.
 - `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` — **closed** (`plans/closure/nse-runtime-extraction/002-closure.md`). Runtime crate has zero `eggsec-*` dependencies; report bridge and scoped-transport HTTP adapter moved into the engine; only `eggsec` directly depends on `eggsec-nse`; TUI/Python consume through `eggsec::nse`; guards 144/145/146 enforce it.
@@ -159,10 +159,8 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Blocked work
 
-- `eggsec-nse 0.2.0` release/adoption follow-up — **blocked on M005 landing/CI corrective closure**. Do not publish from branch-only provider code.
-- Protocol-library capability-gating follow-up identified by 005E — **sequenced after provider-stack landing and release/adoption**; do not absorb it into the landing corrective.
-
-_No NSE-track items blocked: 005E is ready for handoff (see above)._
+- `eggsec-nse 0.2.0` release/adoption follow-up — **dependency-ready** (no longer blocked on M005 landing/CI corrective closure; the corrective pass is closed). The standalone provider surface (with breaking `register_vulns_library(lua, capability_ctx)` signature) is merged on `eggsec-nse/main@1134c28`. Plan publication/adoption in a follow-up release/adoption milestone; do not publish from this corrective pass.
+- Protocol-library capability-gating follow-up identified by 005E — **sequenced after the 0.2.0 release/adoption**; do not absorb it into the landing corrective.
 
 ## Dependency-ready implementation plans
 
@@ -179,4 +177,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`; M005 landing/CI corrective is the current handoff boundary; 0.2.0 release/adoption remains blocked until corrective closure |
+| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`; M005 landing/CI corrective closed (merged standalone main SHA `1134c289b71a07fda21a8554782fd8101df5396f`); 0.2.0 release/adoption is now dependency-ready |
