@@ -182,6 +182,9 @@ pub mod nse_bridge;
 #[cfg(feature = "nse")]
 pub mod nse_http_capability;
 
+#[cfg(feature = "nse")]
+pub mod nse_http_provider;
+
 #[cfg(all(feature = "nse", feature = "tool-api"))]
 pub mod nse_tool;
 
