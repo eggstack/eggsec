@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005C — Closure Status
 
-Status: closed
+Status: conditionally closed — corrective pass required
 
 Source implementation plan:
 
@@ -166,3 +166,12 @@ Milestone 005C closed; the parent track is unblocked:
 - **005E (provider coverage qualification): GO** — all slice contracts, guards, and inventories are closed (005A/005B/005C/005D). Status → ready for handoff.
 - **Release/adoption step: REQUIRED before adapter activation.** The Eggsec adapter (`m005c-eggsec-http-adapter`) implements the unreleased runtime provider contract and cannot compile against pinned `eggsec-nse 0.1.0`. It is staged on a feature branch (verified with a temporary path override: check + 14 adapter tests + 237 NSE suite tests + clippy + fmt, all green; override reverted). Activation requires, in order: (1) standalone review/merge of the `m005A–D` branch stack and a `0.2.0` (or current-convention) release; (2) an Eggsec adoption bump (004-style: dependency version + lockfile + requalification); (3) merge of the adapter branch; (4) production dispatch threading once the NSE enforcement prerequisite (`OperationMetadata`/scope path for NSE) exists — until then manual dispatch keeps the native provider by design, not by omission.
 - No corrective plan required for 005C. The prerequisite integration note above is input to 005E/release planning, not a new blocker: the adapter is complete and qualified, only its activation is sequenced.
+
+
+## Post-closure operational finding — M005 landing/CI corrective pass
+
+Subsequent repository-level review found that this implementation/qualification evidence was accepted while the standalone changes remained on the stacked feature branches rather than `eggstack/eggsec-nse/main`. The relevant branch evidence for this slice is `m005c-http-provider-eggsec-adapter (standalone stack commit 89290f95d493e557dd0f07e64818cb6ae10e39a3; Eggsec adapter remains separately staged)`. Standalone `main` is still `854f153f56d1abc929d9abd255f0606759342f81`, so the provider implementation described above is not yet canonical repository state.
+
+The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
+
+This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
