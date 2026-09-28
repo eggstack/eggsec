@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 005D — Filesystem, Process, and Cross-Platform Host Portability
 
-Status: ready for handoff
+Status: implemented
+
+Closure: `plans/closure/nse-runtime-extraction/005d-closure.md` (closed).
 
 Unblocked by accepted 005A closure (`plans/closure/nse-runtime-extraction/005a-closure.md`); may proceed in parallel with 005B.
 

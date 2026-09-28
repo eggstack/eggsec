@@ -299,9 +299,9 @@ Exit gate: Eggsec-injected HTTP execution carries existing approved authority wi
 
 #### M005D — Filesystem, process, and cross-platform host portability
 
-Status: **ready for handoff** (unblocked by accepted 005A closure). May proceed in parallel with M005B.
+Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005d-closure.md` (standalone `b3c43b8`, branch `m005d-filesystem-process-portability`).
 
-Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md`
+Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` (status: implemented)
 
 Boundary: narrow filesystem/process providers, runtime-owned metadata/process DTOs and opaque file handles, per-run virtual CWD, localized Unix/Windows mechanics, and Windows CI qualification.
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A), `plans/closure/nse-runtime-extraction/005b-closure.md` (005B) | 005C/D ready; 005E blocked on 005B/C/D |
+| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A), `plans/closure/nse-runtime-extraction/005b-closure.md` (005B), `plans/closure/nse-runtime-extraction/005d-closure.md` (005D) | 005C ready; 005E blocked on 005C |
