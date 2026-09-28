@@ -251,7 +251,7 @@ Class: infrastructure
 
 Objective: move selected runtime host side effects behind narrow, per-run provider interfaces so capability policy, cancellation/resource accounting, actual host execution, deterministic testing, authority preservation, and platform specialization share one auditable boundary.
 
-Status: closed. M005 implementation lives on `eggsec-nse/main` at merged SHA `1134c289b71a07fda21a8554782fd8101df5396f` as the linear ancestor chain of `675269e` → `0ac9737` → `b3c43b8` → `89290f9` → `c81d84c` → `1134c28`. The landing/CI corrective pass `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` is closed at `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`; the boundary-check `rg` prerequisite is repaired (fail-fast diagnostic + focused regression test + explicit CI provisioning), and the staged Eggsec HTTP adapter branch (`m005c-eggsec-http-adapter`) is intentionally not activated, awaiting the 0.2.0 adoption milestone and the NSE enforcement-metadata prerequisite.
+Status: corrective pass required. M005 implementation remains landed on `eggsec-nse/main@1134c289b71a07fda21a8554782fd8101df5396f`, but hosted post-merge CI run `36486527159` is red on Ubuntu because the negative boundary-tooling regression test assumes `/usr/bin:/bin` excludes `rg` even though CI installs ripgrep into `/usr/bin`. The provider stack itself remains canonical and the ripgrep provisioning/fail-fast fix remains valid. The controlling follow-up is `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`; 0.2.0 release/adoption is blocked until a fully green hosted run exists on the exact resulting standalone main SHA.
 
 Dependencies: Milestone 004 is closed. Child dependencies are explicit below.
 
@@ -309,7 +309,7 @@ Exit gate: shared/core filesystem/process paths are brokered, process-global CWD
 
 #### M005E — Provider coverage qualification and parent-milestone closure
 
-Status: **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Implementation `c81d84c` is an ancestor of `eggsec-nse/main@1134c28`; the source-audited host-side-effect inventory, M005 provider composition tests, M005E pinned residual inventories, and the send-accounting correction ship with the 0.2.0 release/adoption milestone. The 0.2.0 recommendation (§11) stands as input to the now dependency-ready 0.2.0 release/adoption plan.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Implementation `c81d84c` is an ancestor of `eggsec-nse/main@1134c28`; the source-audited host-side-effect inventory, M005 provider composition tests, M005E pinned residual inventories, and the send-accounting correction remain valid. The 0.2.0 recommendation (§11) stands as release-planning input, but release/adoption is operationally blocked on the post-merge CI fixture corrective.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md`
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` | `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`; merged standalone main SHA `1134c289b71a07fda21a8554782fd8101df5396f`; 0.2.0 release/adoption dependency-ready | — |
+| 005 provider inversion / portability hardening | corrective required | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | prior landing closure is conditionally closed; provider implementation remains landed on standalone main | hosted post-merge run `36486527159` red on Ubuntu tooling fixture; 0.2.0 release/adoption blocked pending fully green hosted main CI |
