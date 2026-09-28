@@ -1,8 +1,8 @@
 # NSE Runtime Extraction Milestone 005C — HTTP Provider and Eggsec Scoped-Transport Adapter
 
-Status: ready for handoff
+Status: implemented
 
-Unblocked by accepted 005B closure (`plans/closure/nse-runtime-extraction/005b-closure.md`).
+Closure: `plans/closure/nse-runtime-extraction/005c-closure.md` (closed; unblocks 005E; adapter staged on a feature branch pending the release/adoption step).
 
 Eggsec planning baseline: `b5d27348a829a4c1c2a49fbc267349c52e86a1f6`
 

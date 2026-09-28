@@ -19,13 +19,14 @@
 //! Status in this increment:
 //! - Pure DTO construction + TLS-policy mapping + method coverage are
 //!   implemented here with unit tests (no network, no Lua).
-//! - The existing Lua `http`/`httppipeline`/`brute`/`vulns`/`comm`/`upnp`
-//!   libraries still dispatch on the pre-migration `reqwest`
-//!   (`blocking` inside sync Lua closures per guard 52/67 + async via
-//!   `runtime_bridge::block_on_async`). Full backend cutover is deferred
-//!   pending the async-Lua story and engine-side `ScopeAuthority` binding;
-//!   those sites are documented `remain specialized (blocking)` in the
-//!   Phase D disposition, not silently widened.
+//! - `build_scoped_request_with_tls_policy` exposes the same mapping with
+//!   an explicit TLS decision for the engine-owned runtime HTTP provider
+//!   adapter (005C; staged until the runtime release carries the provider
+//!   contract). Policy stays shared, never duplicated.
+//! - The Lua `http`/`httppipeline`/`brute`/`vulns`/`comm`/`upnp`
+//!   libraries execute on the standalone runtime's provider broker
+//!   (native backend by default); full backend cutover to scoped transport
+//!   awaits the adapter activation with the runtime release.
 //! - Insecure TLS stays gated on
 //!   [`NseCapabilityContext::allows_insecure_tls`] (ManualPermissive /
 //!   CompatibilityLab only). AgentSafe/CiSafe/ManualStrict always build
@@ -124,6 +125,32 @@ pub fn build_scoped_request(
     body: Option<Vec<u8>>,
     timeout_secs: u64,
 ) -> Result<ScopedHttpRequest, String> {
+    build_scoped_request_with_tls_policy(
+        tls_policy_for_context(ctx),
+        method,
+        url,
+        headers,
+        body,
+        timeout_secs,
+    )
+}
+
+/// [`build_scoped_request`] with an explicit TLS policy.
+///
+/// Exists for the engine-owned runtime HTTP provider adapter
+/// (`crate::nse_http_provider`), which carries the profile decision from
+/// its construction point instead of a live capability context. All other
+/// policy (method matrix, URL validation, redirect/proxy posture) is
+/// shared, not duplicated.
+#[allow(clippy::too_many_arguments)]
+pub fn build_scoped_request_with_tls_policy(
+    tls: TlsPolicy,
+    method: &str,
+    url: &str,
+    headers: &FxHashMap<String, String>,
+    body: Option<Vec<u8>>,
+    timeout_secs: u64,
+) -> Result<ScopedHttpRequest, String> {
     let http_method = nse_method(method)?;
     let mut request = ScopedHttpRequest::new_with_url(http_method, url)
         .map_err(|e| format!("invalid NSE HTTP URL '{url}': {e}"))?;
@@ -145,7 +172,7 @@ pub fn build_scoped_request(
     request.redirect = RedirectPolicy::SameHostOnly {
         max_redirects: NSE_MAX_REDIRECTS,
     };
-    request.tls = tls_policy_for_context(ctx);
+    request.tls = tls;
     Ok(request)
 }
 

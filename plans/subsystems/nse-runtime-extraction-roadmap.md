@@ -289,7 +289,7 @@ Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint a
 
 #### M005C — HTTP provider and Eggsec scoped-transport adapter
 
-Status: **ready for handoff** (unblocked by accepted 005B closure).
+Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005c-closure.md` (standalone `89290f9`, branch `m005c-http-provider-eggsec-adapter`; Eggsec adapter staged on branch `m005c-eggsec-http-adapter` pending release/adoption).
 
 Plan: `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`
 
@@ -309,7 +309,7 @@ Exit gate: shared/core filesystem/process paths are brokered, process-global CWD
 
 #### M005E — Provider coverage qualification and parent-milestone closure
 
-Status: **blocked on accepted M005B, M005C, and M005D closures**.
+Status: **ready for handoff** (005B/005C/005D closures accepted).
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md`
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A), `plans/closure/nse-runtime-extraction/005b-closure.md` (005B), `plans/closure/nse-runtime-extraction/005d-closure.md` (005D) | 005C ready; 005E blocked on 005C |
+| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A), `plans/closure/nse-runtime-extraction/005b-closure.md` (005B), `plans/closure/nse-runtime-extraction/005c-closure.md` (005C), `plans/closure/nse-runtime-extraction/005d-closure.md` (005D) | 005A/005B/005C/005D closed; 005E ready |

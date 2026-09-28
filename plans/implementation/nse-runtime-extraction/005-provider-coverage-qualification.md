@@ -1,6 +1,8 @@
 # NSE Runtime Extraction Milestone 005E — Provider Coverage Qualification and Parent-Milestone Closure
 
-Status: blocked
+Status: ready for handoff
+
+Unblocked by accepted 005B/005C/005D closures (`plans/closure/nse-runtime-extraction/005b-closure.md`, `005c-closure.md`, `005d-closure.md`).
 
 Eggsec planning baseline: `b5d27348a829a4c1c2a49fbc267349c52e86a1f6`
 
