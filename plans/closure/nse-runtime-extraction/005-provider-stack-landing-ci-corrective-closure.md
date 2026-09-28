@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005 — Provider Stack Landing and CI Corrective Pass Closure
 
-Status: conditionally closed — post-merge CI fixture corrective required
+Status: closed
 
 Source implementation plan:
 
@@ -290,3 +290,20 @@ Root cause: the negative test assumes `PATH=/usr/bin:/bin` excludes `rg`. The co
 The M005 provider stack remains landed on standalone main and the original ripgrep provisioning/fail-fast correction remains valid. What is not valid is the claim that hosted post-merge CI is green. The controlling follow-up is `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`.
 
 This closure returns to unconditional `closed` only after a deterministic no-`rg` fixture is landed, a hosted run on the exact resulting standalone main SHA concludes success, all required jobs are green, and this record is amended with the observed run ID/job outcomes. Until then the `eggsec-nse 0.2.0` release/adoption follow-up remains blocked.
+
+## Second corrective addendum — post-merge CI fixture fix (observed green run)
+
+The condition above is now satisfied by observed hosted evidence, not expectation. Full corrective evidence lives in `plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`, which is the source of truth for this addendum's summary.
+
+- Pre-corrective standalone main SHA: `1134c289b71a07fda21a8554782fd8101df5396f`.
+- Failed run superseded: `36486527159` (Ubuntu `script_fails_fast_when_ripgrep_missing`, exit 0 vs expected 127; fixture contamination by apt-installed `/usr/bin/rg`).
+- Corrective commit: `9fe149fbb22480a63e254e91d60083b7a29a8ff4` (single commit; only `scripts/check-boundaries.sh` + `tests/boundary_check_tooling_tests.rs` changed; no provider behavior change).
+- Final standalone main SHA: `9fe149fbb22480a63e254e91d60083b7a29a8ff4` (fast-forward push; `ls-remote` confirmed).
+- Fixture design: empty temporary directory as child `PATH`; directory scan plus child-shell `command -v rg` probe asserted before invoking the script; Bash invoked by absolute path. Script prerequisite check moved above `dirname`/`cd` and emits via the `printf` builtin so the fail-fast path works with an empty tool PATH.
+- Successful hosted run: `36490773625` (https://github.com/eggstack/eggsec-nse/actions/runs/36490773625), conclusion `success`, `headSha` equals final main SHA.
+- Per-job outcomes: `rust (ubuntu-latest)` success, `rust (macos-latest)` success, `rust (windows-latest)` success, `msrv` success, `ssh-runtime` success.
+- Ubuntu log proves the hermetic negative test passes where the old fixture failed: `test script_fails_fast_when_ripgrep_missing ... ok`, `test script_passes_when_ripgrep_available ... ok`, `test result: ok. 2 passed`, zero `FAILED` lines.
+- The §7 "expected outcomes" statements above are explicitly superseded by these observed outcomes.
+- No crates.io publication occurred in either corrective pass; Eggsec remains on `eggsec-nse 0.1.0`; the staged Eggsec HTTP adapter branch was not advanced.
+
+This closure is therefore restored to unconditional `closed`. Parent M005 is restored to `closed`; the `eggsec-nse 0.2.0` release/adoption follow-up is dependency-ready.

@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Roadmap
 
-Status: active
+Status: closed
 
 Long-term references:
 
@@ -251,7 +251,7 @@ Class: infrastructure
 
 Objective: move selected runtime host side effects behind narrow, per-run provider interfaces so capability policy, cancellation/resource accounting, actual host execution, deterministic testing, authority preservation, and platform specialization share one auditable boundary.
 
-Status: corrective pass required. M005 implementation remains landed on `eggsec-nse/main@1134c289b71a07fda21a8554782fd8101df5396f`, but hosted post-merge CI run `36486527159` is red on Ubuntu because the negative boundary-tooling regression test assumes `/usr/bin:/bin` excludes `rg` even though CI installs ripgrep into `/usr/bin`. The provider stack itself remains canonical and the ripgrep provisioning/fail-fast fix remains valid. The controlling follow-up is `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`; 0.2.0 release/adoption is blocked until a fully green hosted run exists on the exact resulting standalone main SHA.
+Status: closed (`plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`). M005 implementation is landed on `eggsec-nse/main@9fe149fbb22480a63e254e91d60083b7a29a8ff4` with a fully green hosted post-merge run (`36490773625`: Ubuntu/macOS/Windows/MSRV/SSH all success); the `0.2.0` release/adoption follow-up is dependency-ready.
 
 Dependencies: Milestone 004 is closed. Child dependencies are explicit below.
 
@@ -269,7 +269,7 @@ Provider mechanics never authorize an Eggsec operation. Eggsec's canonical enfor
 
 #### M005A — Provider broker foundation and deterministic host services
 
-Status: **closed** (`plans/closure/nse-runtime-extraction/005a-closure.md`). Implementation `675269e` is an ancestor of `eggsec-nse/main@1134c28`; the 005A provider broker surface and tests ship with the 0.2.0 release/adoption milestone.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005a-closure.md`). Implementation `675269e` is an ancestor of `eggsec-nse/main@9fe149f`; the 005A provider broker surface and tests ship with the 0.2.0 release/adoption milestone.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (status: implemented)
 
@@ -279,7 +279,7 @@ Exit gate: provider injection is proven on real NSE execution without changing e
 
 #### M005B — Authority-preserving network and DNS providers
 
-Status: **closed** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Implementation `0ac9737` is an ancestor of `eggsec-nse/main@1134c28`; the runtime-neutral DNS/TCP/UDP providers and the resolve-authorize-connect identity contract ship with the 0.2.0 release/adoption milestone.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Implementation `0ac9737` is an ancestor of `eggsec-nse/main@9fe149f`; the runtime-neutral DNS/TCP/UDP providers and the resolve-authorize-connect identity contract ship with the 0.2.0 release/adoption milestone.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` (status: implemented)
 
@@ -289,7 +289,7 @@ Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint a
 
 #### M005C — HTTP provider and Eggsec scoped-transport adapter
 
-Status: **closed (standalone portion; Eggsec adapter remains staged pending release/adoption)** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Standalone implementation `89290f9` is an ancestor of `eggsec-nse/main@1134c28`; the runtime-neutral HTTP DTO/provider contract, native reqwest provider, and HTTP-family migration ship with the 0.2.0 release/adoption milestone. The Eggsec-side adapter remains staged on `m005c-eggsec-http-adapter` for activation in the 0.2.0 adoption milestone.
+Status: **closed (standalone portion; Eggsec adapter remains staged pending release/adoption)** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Standalone implementation `89290f9` is an ancestor of `eggsec-nse/main@9fe149f`; the runtime-neutral HTTP DTO/provider contract, native reqwest provider, and HTTP-family migration ship with the 0.2.0 release/adoption milestone. The Eggsec-side adapter remains staged on `m005c-eggsec-http-adapter` for activation in the 0.2.0 adoption milestone.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`
 
@@ -299,7 +299,7 @@ Exit gate: Eggsec-injected HTTP execution carries existing approved authority wi
 
 #### M005D — Filesystem, process, and cross-platform host portability
 
-Status: **closed** (`plans/closure/nse-runtime-extraction/005d-closure.md`). Implementation `b3c43b8` is an ancestor of `eggsec-nse/main@1134c28`; the filesystem/process providers, per-run virtual CWD, and Windows compile-only qualification ship with the 0.2.0 release/adoption milestone.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005d-closure.md`). Implementation `b3c43b8` is an ancestor of `eggsec-nse/main@9fe149f`; the filesystem/process providers, per-run virtual CWD, and Windows compile-only qualification ship with the 0.2.0 release/adoption milestone.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` (status: implemented)
 
@@ -309,7 +309,7 @@ Exit gate: shared/core filesystem/process paths are brokered, process-global CWD
 
 #### M005E — Provider coverage qualification and parent-milestone closure
 
-Status: **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Implementation `c81d84c` is an ancestor of `eggsec-nse/main@1134c28`; the source-audited host-side-effect inventory, M005 provider composition tests, M005E pinned residual inventories, and the send-accounting correction remain valid. The 0.2.0 recommendation (§11) stands as release-planning input, but release/adoption is operationally blocked on the post-merge CI fixture corrective.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Implementation `c81d84c` is an ancestor of `eggsec-nse/main@9fe149f`; the source-audited host-side-effect inventory, M005 provider composition tests, M005E pinned residual inventories, and the send-accounting correction remain valid. The 0.2.0 recommendation (§11) stands as release-planning input; release/adoption is now dependency-ready (hosted run `36490773625` green on main `9fe149f`; see `plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`).
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md`
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | corrective required | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | prior landing closure is conditionally closed; provider implementation remains landed on standalone main | hosted post-merge run `36486527159` red on Ubuntu tooling fixture; 0.2.0 release/adoption blocked pending fully green hosted main CI |
+| 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |

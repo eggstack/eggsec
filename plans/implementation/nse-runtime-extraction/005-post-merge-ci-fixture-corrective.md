@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005 — Post-Merge CI Fixture Corrective Pass
 
-Status: ready for handoff
+Status: implemented — closed by `plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md` (hosted run `36490773625` green on standalone main `9fe149fbb22480a63e254e91d60083b7a29a8ff4`)
 
 Eggsec planning baseline: `222bd171b480130f5184af40f390fbca0b8203ed`
 

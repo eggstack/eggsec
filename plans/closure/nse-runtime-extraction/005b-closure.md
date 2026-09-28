@@ -181,3 +181,7 @@ The M005 landing/CI corrective pass is closed; see `plans/closure/nse-runtime-ex
 - The remaining direct-network specialized residual (file-level classification) is unchanged from the 005E closure and remains pinned by `scripts/nse-specialized-advisory.txt` + `scripts/nse-specialized-ungated.txt`; the 005E follow-up recommendation (protocol-library capability gating, sequenced after release/adoption) is not absorbed here.
 - Eggsec dependency remains crates.io `eggsec-nse 0.1.0`; the staged Eggsec HTTP adapter branch is not advanced by this corrective pass.
 - The 0.2.0 release/adoption follow-up is now dependency-ready; the resolve-authorize-connect identity contract and the authority-preserving network provider surface travel with the 0.2.0 publication.
+
+## Second corrective addendum — post-merge CI fixture fix (observed green run)
+
+The landing addendum above states post-merge main CI evidence is "identical to the branch evidence" on `origin/main@1134c28`. Hosted run `36486527159` invalidated that inference: the Ubuntu job failed because the negative tooling test assumed `PATH=/usr/bin:/bin` excludes `rg` while CI installs ripgrep into `/usr/bin`. This slice's implementation evidence is unaffected. The hermetic fixture fix (`9fe149fbb22480a63e254e91d60083b7a29a8ff4`) and the fully green hosted run `36490773625` on that exact main SHA are recorded in `plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`, which supersedes the post-merge CI claim above. Slice status remains `closed`.

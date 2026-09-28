@@ -184,3 +184,7 @@ The M005 landing/CI corrective pass is closed; see `plans/closure/nse-runtime-ex
 - Windows qualification (compile/check) is preserved unchanged by this corrective pass; the Windows CI matrix on `origin/main@1134c28` exercises the same set of compile-only checks as the 005E branch run that previously passed.
 - Eggsec dependency remains crates.io `eggsec-nse 0.1.0`; the staged Eggsec-side HTTP adapter branch is not advanced by this corrective pass.
 - The 0.2.0 release/adoption follow-up is now dependency-ready; the filesystem/process provider surface (including per-run virtual CWD) travels with the publication.
+
+## Second corrective addendum — post-merge CI fixture fix (observed green run)
+
+The landing addendum above states post-merge main CI evidence is "identical to the branch evidence" on `origin/main@1134c28`. Hosted run `36486527159` invalidated that inference: the Ubuntu job failed because the negative tooling test assumed `PATH=/usr/bin:/bin` excludes `rg` while CI installs ripgrep into `/usr/bin`. This slice's implementation evidence is unaffected. The hermetic fixture fix (`9fe149fbb22480a63e254e91d60083b7a29a8ff4`) and the fully green hosted run `36490773625` on that exact main SHA are recorded in `plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`, which supersedes the post-merge CI claim above. Slice status remains `closed`.
