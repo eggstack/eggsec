@@ -251,7 +251,7 @@ Class: infrastructure
 
 Objective: move selected runtime host side effects behind narrow, per-run provider interfaces so capability policy, cancellation/resource accounting, actual host execution, deterministic testing, authority preservation, and platform specialization share one auditable boundary.
 
-Status: active/planned. The evidence gate is satisfied by direct source inspection of the standalone `0.1.0` runtime and the concrete Eggsec scoped-HTTP consumer. ADR-0003 defines the durable provider/broker contract. M005 is decomposed into five bounded handoff slices because one network + HTTP + filesystem + process + portability rewrite would violate milestone sizing guidance.
+Status: corrective pass required. M005 implementation exists as a linear standalone feature-branch stack, but post-closure review found that the stack is not merged to `eggsec-nse/main` and all hosted M005 Linux/macOS CI runs are red because `scripts/check-boundaries.sh` depends on unprovisioned `rg`. The controlling corrective handoff is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. Provider implementation scope remains frozen while landing/CI evidence is repaired.
 
 Dependencies: Milestone 004 is closed. Child dependencies are explicit below.
 
@@ -269,7 +269,7 @@ Provider mechanics never authorize an Eggsec operation. Eggsec's canonical enfor
 
 #### M005A — Provider broker foundation and deterministic host services
 
-Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005a-closure.md` (standalone `675269e`, branch `m005a-provider-broker-foundation`).
+Status: **conditionally closed — corrective landing required**. Closure: `plans/closure/nse-runtime-extraction/005a-closure.md`; implementation `675269e` remains branch-only pending the M005 landing/CI corrective pass.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (status: implemented)
 
@@ -279,7 +279,7 @@ Exit gate: provider injection is proven on real NSE execution without changing e
 
 #### M005B — Authority-preserving network and DNS providers
 
-Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005b-closure.md` (standalone `0ac9737`, branch `m005b-authority-preserving-network-dns`).
+Status: **conditionally closed — corrective landing required**. Closure: `plans/closure/nse-runtime-extraction/005b-closure.md`; implementation `0ac9737` remains branch-only in the cumulative stack.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` (status: implemented)
 
@@ -289,7 +289,7 @@ Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint a
 
 #### M005C — HTTP provider and Eggsec scoped-transport adapter
 
-Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005c-closure.md` (standalone `89290f9`, branch `m005c-http-provider-eggsec-adapter`; Eggsec adapter staged on branch `m005c-eggsec-http-adapter` pending release/adoption).
+Status: **conditionally closed — corrective landing required**. Closure: `plans/closure/nse-runtime-extraction/005c-closure.md`; standalone implementation `89290f9` remains branch-only. The Eggsec adapter remains intentionally staged on `m005c-eggsec-http-adapter` pending later release/adoption.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`
 
@@ -299,7 +299,7 @@ Exit gate: Eggsec-injected HTTP execution carries existing approved authority wi
 
 #### M005D — Filesystem, process, and cross-platform host portability
 
-Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005d-closure.md` (standalone `b3c43b8`, branch `m005d-filesystem-process-portability`).
+Status: **conditionally closed — corrective landing required**. Closure: `plans/closure/nse-runtime-extraction/005d-closure.md`; implementation `b3c43b8` remains branch-only in the cumulative stack.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` (status: implemented)
 
@@ -309,7 +309,7 @@ Exit gate: shared/core filesystem/process paths are brokered, process-global CWD
 
 #### M005E — Provider coverage qualification and parent-milestone closure
 
-Status: **closed**. Closure: `plans/closure/nse-runtime-extraction/005e-closure.md` (standalone branch `m005e-provider-coverage-qualification`; parent M005 closed with 0.2.0 release recommendation).
+Status: **conditionally closed — corrective landing required**. Closure: `plans/closure/nse-runtime-extraction/005e-closure.md`; cumulative tip `c81d84c` remains branch-only and hosted CI is red on Linux/macOS. Parent M005 cannot return to closed until the corrective pass lands and qualifies that stack on standalone `main`.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md`
 
@@ -419,4 +419,4 @@ This roadmap is complete when:
 | 002 runtime dependency decoupling + consumer consolidation | closed | `plans/implementation/nse-runtime-extraction/002-runtime-dependency-decoupling.md` | `plans/closure/nse-runtime-extraction/002-closure.md` | — |
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
-| 005 provider inversion / portability hardening | active | `plans/implementation/nse-runtime-extraction/005-provider-broker-foundation.md` (closed; 005B-E linked in §7) | `plans/closure/nse-runtime-extraction/005a-closure.md` (005A), `plans/closure/nse-runtime-extraction/005b-closure.md` (005B), `plans/closure/nse-runtime-extraction/005c-closure.md` (005C), `plans/closure/nse-runtime-extraction/005d-closure.md` (005D), `plans/closure/nse-runtime-extraction/005e-closure.md` (005E) | M005 closed (005A/005B/005C/005D/005E); 0.2.0 release + protocol-gating follow-ups sequenced |
+| 005 provider inversion / portability hardening | corrective required | `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` | 005A-E closure records are conditionally closed pending corrective evidence | cumulative stack not merged to standalone main; hosted Linux/macOS CI red on missing `rg`; 0.2.0 release/adoption blocked until corrective closure |
