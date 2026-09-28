@@ -94,7 +94,12 @@ NSE scripts are categorized into support tiers based on risk and resource requir
 | **Tier 3** | Intrusive/brute-force/exploit-adjacent | Scripts requiring explicit opt-in (e.g., `http-brute`, `smb-vuln-*`). |
 | **Unsupported** | Restricted | Scripts requiring unrestricted filesystem/process access, uncontrolled network reachability, or behavior incompatible with Eggsec guardrails. |
 
-Execution profiles (`NseExecutionProfileKind`) encode these tiers as enforceable presets. `CompatibilityLab` corresponds to Tier 1 (selective practical NSE compatibility), while `AgentSafe` and `CiSafe` correspond to Tier 3 (sandboxed, restricted).
+Execution profiles (`NseExecutionProfileKind`) are restriction presets
+orthogonal to these tiers, not tier encodings. `CompatibilityLab` permits
+Tier 1–3 behavior for lab compatibility testing, while `AgentSafe` and
+`CiSafe` deny Tier-3-relevant operations (network egress, process
+execution) regardless of tier — they are the most restricted presets,
+not Tier-3 opt-in surfaces. Tier 2 has no dedicated profile preset.
 
 ## NSE as a Knowledge Source
 

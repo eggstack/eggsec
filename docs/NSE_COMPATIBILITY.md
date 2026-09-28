@@ -1,11 +1,30 @@
-# NSE Compatibility Matrix — Expansion Phase 05
+# NSE Compatibility Matrix — Standalone Runtime Era (M005E qualified)
 
 The runtime source, package metadata, tests, and runtime-owned compatibility
 guidance now live in the [standalone `eggsec-nse` repository](https://github.com/eggstack/eggsec-nse).
 This Eggsec document records product integration and historical compatibility
-evidence; it is not the runtime source of truth.
+evidence; it is not the runtime source of truth. (Header renamed in M005E:
+prior revisions titled this "Expansion Phase 05"; content has since tracked
+the standalone extraction and provider-inversion milestones.)
 
-> **Scope**: This document describes the NSE compatibility status for Expansion Phase 05 — a sandboxed Lua execution environment with capability-gated side effects, comprehensive HTTP method enforcement, and selective deferred library migration. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
+> **Scope**: This document describes the NSE compatibility status for the standalone-runtime era — a sandboxed Lua execution environment with capability-gated side effects, comprehensive HTTP method enforcement, and selective deferred library migration. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
+>
+> **Profiles column vocabulary (M005E note):** rows mix two profile
+> vocabularies. `ManualPermissive`/`ManualGuarded` name engine
+> `ExecutionProfile` presets; `AgentSafe`/`CiSafe`/`CompatibilityLab`
+> name runtime `NseExecutionProfileKind` presets. `ManualGuarded` is a
+> live engine profile (see `eggsec-policy`), not a removed runtime
+> variant. Fixture rows are documentation-only unless an executable
+> harness maps them.
+>
+> **Provider-coverage qualifier (M005E):** "Wrapped" rows describe the
+> named library only. Protocol-specialized libraries outside the
+> broker-backed set are split into advisory-gated (entry denial, no
+> injection/accounting) and ungated residual (no capability
+> consultation — reachable even under deny-all policies); see the
+> standalone `docs/PROVIDERS.md` M005E section and
+> `scripts/nse-specialized-{advisory,ungated}.txt`. Engine
+> scoped-transport cutover for HTTP is staged, not active.
 
 ---
 
@@ -19,13 +38,13 @@ evidence; it is not the runtime source of truth.
 | io | Filesystem | Wrapped | File read/write | Deny | Read scoped to sandbox root; write denied in AgentSafe/CiSafe |
 | os | Process | Wrapped | Process exec, env access | Deny | `std::process::Command` gated; environment access checked |
 | lfs | Filesystem | Wrapped | File I/O | Deny | Lua filesystem ops routed through capability context |
-| openssl | Crypto | Wrapped | TLS operations | Warn | TLS handshake gated; profile-specific warnings |
+| openssl | Crypto | PartiallyWrapped | TLS operations | Warn | TLS intent (insecure flags) is profile-gated; some network entries gate, others are ungated residual — see the M005E advisory/ungated split (standalone `docs/PROVIDERS.md`). |
 | comm | Network | Wrapped | TCP/UDP I/O | Deny | Inherits socket capability gating via shared context |
 | datetime | Time | Wrapped | Wall-clock access | Warn | `nse_time_now()` emits nondeterminism warning in CiSafe |
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
-| http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via `check_network_tcp()` or `maybe_denied_response()`; denied requests never reach reqwest |
-| ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext`. Network functions (`get_certificate`, `get_chain_certs`, `version`) additionally gated by `check_network_tcp` — denied under AgentSafe/CiSafe |
+| http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via the runtime provider broker (`broker_http_request`); denied requests never reach the runtime native client. Engine scoped-transport cutover is staged, not active (adapter branch pending release/adoption). |
+| ssl | Network | PartiallyWrapped | TLS handshake | Deny | TLS ops consult `NseCapabilityContext`; entry-level network gating is mixed — see the M005E advisory/ungated split (standalone `docs/PROVIDERS.md`). |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |
 | smb2 | Network | Deferred | SMB2 I/O | — | No capability wrapper yet; SMB version 2 |

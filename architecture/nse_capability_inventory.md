@@ -6,6 +6,21 @@ This Eggsec inventory records the integration-era capability migration
 evidence; runtime file paths below refer to the standalone repository root.
 
 > **Milestone 3 Phase 05 Complete** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. All primary helper classes (filesystem, process, network TCP/UDP, DNS, time, randomness, environment, compression, crypto/TLS) are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
+>
+> **M005E qualification note (2026-09):** the "all primary helper classes
+> migrated" claim above covers the shared helper domains now brokered
+> through per-domain providers. Protocol-specialized libraries are
+> explicitly NOT all migrated: the standalone M005E source audit splits
+> them into advisory-gated (25 files: entry denial, no
+> injection/accounting) and ungated residual (72 files: no capability
+> consultation at all — proven reachable under CiSafe+DenyAll). Rows
+> below marked "NO sandbox check" remain accurate; rows marked
+> "Migrated (Phase 04/05)" use integration-era wrapper names — the
+> current broker sequence is documented in the standalone
+> `docs/PROVIDERS.md` M005E section, and the machine-readable coverage
+> pin is `scripts/nse-specialized-{advisory,ungated}.txt` (guard-enforced).
+> Engine scoped-transport cutover for the HTTP family is staged, not
+> active (adapter branch pending the release/adoption step).
 
 > **Milestone 4 complete.** Structured evidence reports are now extracted from capability events, compatibility diagnostics, rule evaluation, and script output. See `NseRunReport.evidence` and `docs/NSE_COMPATIBILITY.md`.
 

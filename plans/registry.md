@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-004 closed; M005 decomposed under ADR-0003: 005A/005B/005C/005D closed, 005E ready |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-005 closed (M005: 005A/005B/005C/005D/005E); release/adoption + protocol-gating follow-ups sequenced |
 
 ## Grandfathered file index
 
@@ -147,7 +147,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **ready for handoff** (005B/005C/005D closures accepted). Source-audit provider coverage, qualify authority/accounting/cancellation/portability across both repos, and determine parent-M005 closure/release disposition.
+- `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **implemented** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Source-audit provider coverage, cross-domain composition/cancel/accounting qualification, send-accounting correction, coverage-claim reconciliation, 0.2.0 release recommendation, parent-M005 closure.
 - `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md` — **implemented** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Runtime-neutral HTTP provider, HTTP-family migration, Eggsec scoped-transport adapter (staged on a feature branch pending release/adoption).
 - `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` — **implemented** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Runtime-neutral DNS/TCP/UDP providers, opaque handles, resolve-authorize-connect identity, shared/core `socket`/`comm`/`nmap`/`dns` migration.
 - `plans/implementation/nse-runtime-extraction/005-filesystem-process-portability.md` — **implemented** (`plans/closure/nse-runtime-extraction/005d-closure.md`). Filesystem/process providers, per-run CWD, localized platform mechanics, Windows qualification.
