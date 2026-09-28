@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005 — Provider Stack Landing and CI Corrective Pass
 
-Status: implemented (closure: `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`)
+Status: implemented; closure conditionally closed pending `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`
 
 Eggsec planning baseline: `8e5615f206581165dade2719ca850ecb21b2d25b`
 
