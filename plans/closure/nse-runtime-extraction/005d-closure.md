@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005D — Closure Status
 
-Status: closed
+Status: conditionally closed — corrective pass required
 
 Source implementation plan:
 
@@ -158,3 +158,12 @@ Milestone 005D closed; dependencies are otherwise unchanged:
 - Mark `005-filesystem-process-portability.md` implemented; link this closure.
 - Mark 005D closed in the subsystem roadmap.
 - Keep 005C ready for handoff; 005E blocked on 005C (005B/005D closed).
+
+
+## Post-closure operational finding — M005 landing/CI corrective pass
+
+Subsequent repository-level review found that this implementation/qualification evidence was accepted while the standalone changes remained on the stacked feature branches rather than `eggstack/eggsec-nse/main`. The relevant branch evidence for this slice is `m005d-filesystem-process-portability @ b3c43b8d2128f47d83ea66ceb94fcbfe5dc9c69c`. Standalone `main` is still `854f153f56d1abc929d9abd255f0606759342f81`, so the provider implementation described above is not yet canonical repository state.
+
+The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
+
+This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
