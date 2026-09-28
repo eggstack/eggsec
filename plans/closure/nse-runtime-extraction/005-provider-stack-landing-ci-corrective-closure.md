@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005 — Provider Stack Landing and CI Corrective Pass Closure
 
-Status: closed
+Status: conditionally closed — post-merge CI fixture corrective required
 
 Source implementation plan:
 
@@ -280,3 +280,13 @@ After Work-package F:
 **GO** for the standalone `eggsec-nse 0.2.0` release/adoption milestone. The 0.2.0 follow-up is now dependency-ready: the merged standalone main tree contains the provider surface (with breaking `register_vulns_library(lua, capability_ctx)` signature) and the send-accounting fix, the 005E release-recommendation text stands as input, and the staged Eggsec HTTP adapter is ready for activation once the NSE enforcement-metadata prerequisite exists. Publication is excluded from this corrective pass per plan §6.
 
 Protocol-library capability gating remains sequenced after release/adoption per the 005E closure §11 and is not absorbed here.
+
+## Post-closure finding — hosted Ubuntu fixture defect
+
+A subsequent repository-hosted run invalidated the unconditional closure claim above. GitHub Actions run `36486527159` executed on merged standalone `main@1134c289b71a07fda21a8554782fd8101df5396f` and concluded **failure**. macOS, Windows, MSRV, and SSH runtime jobs passed; the Ubuntu Rust job failed only in `tests/boundary_check_tooling_tests.rs::script_fails_fast_when_ripgrep_missing`.
+
+Root cause: the negative test assumes `PATH=/usr/bin:/bin` excludes `rg`. The corrected CI workflow installs ripgrep through apt, placing `rg` in `/usr/bin`; the test therefore does not create the missing-tool condition it claims to test. `scripts/check-boundaries.sh` itself passed in the hosted Ubuntu job after ripgrep installation.
+
+The M005 provider stack remains landed on standalone main and the original ripgrep provisioning/fail-fast correction remains valid. What is not valid is the claim that hosted post-merge CI is green. The controlling follow-up is `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`.
+
+This closure returns to unconditional `closed` only after a deterministic no-`rg` fixture is landed, a hosted run on the exact resulting standalone main SHA concludes success, all required jobs are green, and this record is amended with the observed run ID/job outcomes. Until then the `eggsec-nse 0.2.0` release/adoption follow-up remains blocked.
