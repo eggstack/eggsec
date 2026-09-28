@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 005B — Closure Status
 
-Status: closed
+Status: conditionally closed — corrective pass required
 
 Source implementation plan:
 
@@ -155,3 +155,12 @@ Milestone 005B closed; dependencies may proceed:
 - Mark 005B closed in the subsystem roadmap.
 - Move 005C from blocked to ready for handoff (hard dependency on 005B now closed).
 - Keep 005D ready for handoff; 005E blocked on 005B/005C/005D.
+
+
+## Post-closure operational finding — M005 landing/CI corrective pass
+
+Subsequent repository-level review found that this implementation/qualification evidence was accepted while the standalone changes remained on the stacked feature branches rather than `eggstack/eggsec-nse/main`. The relevant branch evidence for this slice is `m005b-authority-preserving-network-dns @ 0ac9737486df8c76d16ad8437ea83396bcf544b0`. Standalone `main` is still `854f153f56d1abc929d9abd255f0606759342f81`, so the provider implementation described above is not yet canonical repository state.
+
+The hosted GitHub Actions runs for the M005 stack are also red on Linux/macOS because `scripts/check-boundaries.sh` invokes `rg` but the workflow does not provision ripgrep. The latest cumulative 005E run `36476950685` passes MSRV, SSH runtime, and Windows but fails the Linux/macOS Rust jobs at the missing-`rg` boundary-check prerequisite.
+
+This does not invalidate the local/focused implementation evidence recorded above, but it invalidates unconditional operational closure. The controlling corrective plan is `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md`. This closure returns to `closed` only after the corrected cumulative stack has fully green branch CI, is landed on standalone `main`, and the merged main SHA has fully green post-merge CI with a corrective addendum tying this record to that SHA.
