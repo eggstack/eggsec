@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-005 closed (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`); merged standalone main SHA `1134c289b71a07fda21a8554782fd8101df5396f`; `0.2.0` release/adoption follow-up is now dependency-ready; protocol-library capability-gating follow-up sequenced after release/adoption |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | M005 provider implementation is landed on standalone main, but operational closure is under a second corrective pass because hosted run `36486527159` is red on Ubuntu due an environment-dependent missing-ripgrep test fixture; 0.2.0 release/adoption is blocked pending a fully green hosted main run |
 
 ## Grandfathered file index
 
@@ -147,7 +147,8 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
-- `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` — **closed** (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`). Repaired the standalone CI ripgrep prerequisite, obtained green cumulative-stack CI, landed the linear M005A-E stack to `eggsec-nse/main`, obtained green post-merge CI, and reconciled all five 005A-E closures to the merged SHA `1134c289b71a07fda21a8554782fd8101df5396f`. No provider feature expansion or release publication.
+- `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` — **ready for handoff**. Make the missing-ripgrep regression fixture hermetic, push the minimal test/tooling fix to `eggsec-nse/main`, require a fully green hosted Ubuntu/macOS/Windows/MSRV/SSH run on the exact new main SHA, then reconcile the prior corrective closure from observed evidence.
+- `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` — **implemented; closure conditional** (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`). It landed the linear M005A-E stack and repaired the real ripgrep prerequisite, but hosted post-merge run `36486527159` is red on Ubuntu because the new negative fixture assumes `/usr/bin:/bin` excludes apt-installed `rg`. The follow-up fixture corrective controls final operational closure.
 - `plans/implementation/nse-runtime-extraction/005-provider-coverage-qualification.md` — **closed** (`plans/closure/nse-runtime-extraction/005e-closure.md`). Source-audit provider coverage, cross-domain composition/cancel/accounting qualification, send-accounting correction, and 0.2.0 recommendation are merged on `eggsec-nse/main`.
 - `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md` — **closed (standalone portion; Eggsec adapter remains staged pending release/adoption)** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Runtime-neutral HTTP provider and HTTP-family migration are merged on `eggsec-nse/main`; the Eggsec-side scoped-transport adapter remains intentionally staged on `m005c-eggsec-http-adapter` and is not activated until the 0.2.0 adoption milestone + NSE enforcement-metadata prerequisite.
 - `plans/implementation/nse-runtime-extraction/005-authority-preserving-network-dns.md` — **closed** (`plans/closure/nse-runtime-extraction/005b-closure.md`). Runtime-neutral DNS/TCP/UDP providers, opaque handles, resolve-authorize-connect identity, and shared/core network migration are merged on `eggsec-nse/main`.
@@ -159,7 +160,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Blocked work
 
-- `eggsec-nse 0.2.0` release/adoption follow-up — **dependency-ready** (no longer blocked on M005 landing/CI corrective closure; the corrective pass is closed). The standalone provider surface (with breaking `register_vulns_library(lua, capability_ctx)` signature) is merged on `eggsec-nse/main@1134c28`. Plan publication/adoption in a follow-up release/adoption milestone; do not publish from this corrective pass.
+- `eggsec-nse 0.2.0` release/adoption follow-up — **blocked on `005-post-merge-ci-fixture-corrective.md` closure**. The provider surface is landed on `eggsec-nse/main@1134c28`, but publication/adoption must wait for a fully green hosted main run and factual closure reconciliation.
 - Protocol-library capability-gating follow-up identified by 005E — **sequenced after the 0.2.0 release/adoption**; do not absorb it into the landing corrective.
 
 ## Dependency-ready implementation plans
@@ -177,4 +178,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`; M005 landing/CI corrective closed (merged standalone main SHA `1134c289b71a07fda21a8554782fd8101df5396f`); 0.2.0 release/adoption is now dependency-ready |
+| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md`; M005 post-merge CI fixture corrective is the current handoff boundary; 0.2.0 release/adoption remains blocked until hosted main CI is fully green |
