@@ -462,7 +462,7 @@ Exit gate: unsafe/direct/advisory libraries are unreachable under automated prof
 
 #### M007B — Broker-compatible protocol migration and residual hardening
 
-Status: **ready for handoff** (M007A closed).
+Status: **corrective closure required**. Implementation landed on standalone `main@699d374ad16806a9e0c6f265f297a644b8b88c29`, but hosted run `36620331641` is red on stale residual pins, 17 `BrokerCompatible*` entries still retain direct socket effects, and effect-manifest promotions are not reconciled. Controlling handoff: `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md`.
 
 Plan: `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md`
 
@@ -474,7 +474,7 @@ Exit gate: every promoted module has all automated-relevant network effects prov
 
 #### M007C — Standalone security patch release
 
-Status: **blocked on accepted M007A + M007B closures**.
+Status: **blocked on accepted M007B corrective closure**.
 
 Plan: `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md`
 
@@ -617,4 +617,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md` (007A closed; 007B ready; 007C-E linked in §7) | `plans/closure/nse-runtime-extraction/007a-closure.md` | 007B ready for handoff; 007C-E dependency-gated by ADR-0004 |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); no accepted 007B closure yet | M007B corrective is current handoff; M007C-E remain dependency-gated by ADR-0004 |
