@@ -450,7 +450,7 @@ Why this milestone exists:
 
 #### M007A — Automated library effect gate and HTTP authority assurance
 
-Status: **ready for handoff**.
+Status: **closed** (`plans/closure/nse-runtime-extraction/007a-closure.md`; standalone `c9df4d1`).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md`
 
@@ -462,7 +462,7 @@ Exit gate: unsafe/direct/advisory libraries are unreachable under automated prof
 
 #### M007B — Broker-compatible protocol migration and residual hardening
 
-Status: **blocked on accepted M007A closure**.
+Status: **ready for handoff** (M007A closed).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md`
 
@@ -617,4 +617,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md` (007A; 007B-E linked in §7) | — | 007A ready; 007B-E dependency-gated by ADR-0004 |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md` (007A closed; 007B ready; 007C-E linked in §7) | `plans/closure/nse-runtime-extraction/007a-closure.md` | 007B ready for handoff; 007C-E dependency-gated by ADR-0004 |

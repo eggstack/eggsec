@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007A — Automated Library Effect Gate and HTTP Authority Assurance
 
-Status: ready for handoff
+Status: closed (`plans/closure/nse-runtime-extraction/007a-closure.md`; standalone `c9df4d1`; GO for M007B)
 
 Eggsec planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 
