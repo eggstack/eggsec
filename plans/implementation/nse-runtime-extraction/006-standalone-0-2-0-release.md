@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 006A — Standalone 0.2.0 Release Preparation and Publication
 
-Status: ready for handoff
+Status: implemented
 
 Eggsec planning baseline: `51f9747deef7bb5c2488e7dd392b0f2c96667653`
 

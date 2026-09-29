@@ -368,17 +368,19 @@ Why this milestone exists:
 
 #### M006A — Standalone 0.2.0 release preparation and publication
 
-Status: **ready for handoff**.
+Status: **closed** (`plans/closure/nse-runtime-extraction/006a-closure.md`).
 
-Plan: `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md`
+Plan: `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (status: implemented)
 
 Boundary: version/changelog/release-workflow preparation, exact release-candidate qualification, crates.io publication, registry/docs.rs verification, and immutable `v0.2.0` source identity.
 
 Exit gate: 0.2.0 is published from a fully qualified source commit and clean scratch consumers resolve the crates.io artifact.
 
+Closure: published `eggsec-nse 0.2.0` from `ff0d2c0` (hosted run `36521717829` green on Ubuntu/macOS/Windows/MSRV/SSH; archive VCS identity = tag `v0.2.0` commit; docs.rs built). Release-workflow ripgrep prerequisite fixed; `-D warnings` overclaim reconciled.
+
 #### M006B — Eggsec 0.2.0 adoption and safe adapter staging
 
-Status: **blocked on accepted M006A closure**.
+Status: **ready for handoff** (M006A closed).
 
 Plan: `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md`
 
@@ -388,7 +390,7 @@ Exit gate: Eggsec consumes crates.io 0.2.0, the adapter compiles/tests but has n
 
 #### M006C — Cross-repository qualification and closure
 
-Status: **blocked on accepted M006A + M006B closures**.
+Status: **blocked on accepted M006B closure** (M006A closed).
 
 Plan: `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md`
 
