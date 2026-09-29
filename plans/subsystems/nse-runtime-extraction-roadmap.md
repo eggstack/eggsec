@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Roadmap
 
-Status: active — Milestone 006 release/adoption program planned
+Status: active — Milestones 001-006 closed; M007 protocol-gating/scope-threading ready to author
 
 Long-term references:
 
@@ -170,7 +170,7 @@ Milestone 005 — provider inversion / deeper runtime portability
 Milestone 006 — 0.2.0 release + safe Eggsec adoption
 ```
 
-Milestones 001-005 are closed. Milestone 006 extends the roadmap because M005 intentionally introduced a versioned public provider surface and a 0.x breaking API change that must be released and adopted before the later protocol-gating/activation tranche.
+Milestones 001-006 are closed. Milestone 006 extended the roadmap because M005 intentionally introduced a versioned public provider surface and a 0.x breaking API change that had to be released and adopted before the later protocol-gating/activation tranche (M007, ready to author).
 
 ## 7. Milestones
 
@@ -352,7 +352,7 @@ Parent Milestone 005 exit conditions:
 
 ### Milestone 006 — 0.2.0 release and safe Eggsec adoption
 
-Status: active/planned.
+Status: closed (`plans/closure/nse-runtime-extraction/006c-closure.md`; 006A `006a-closure.md`, 006B `006b-closure.md`).
 
 Class: capability + infrastructure
 
@@ -392,9 +392,9 @@ Closure: registry 0.2.0 adopted (no override), adapter replayed logic-identical 
 
 #### M006C — Cross-repository qualification and closure
 
-Status: **ready for handoff** (M006A + M006B closed).
+Status: **closed** (`plans/closure/nse-runtime-extraction/006c-closure.md`).
 
-Plan: `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md`
+Plan: `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md` (status: implemented)
 
 Boundary: verify release/tag/archive identity, registry-only Eggsec consumption, dormant adapter source truth, automated-exposure quarantine, full consumer checks, and documentation/guard reconciliation.
 
@@ -422,7 +422,7 @@ Parent Milestone 006 exit conditions:
 - documentation explicitly states that provider availability is not complete protocol-wide scope enforcement;
 - closure sequences the next milestone: protocol-library capability gating + approved-scope/profile threading + controlled adapter activation.
 
-M007 is deliberately not planned here. It should be authored from M006 closure evidence because its security boundary depends on the exact adopted 0.2.0 surface and the residual inventory at that time.
+M007 is deliberately not planned here. It should be authored from M006 closure evidence because its security boundary depends on the exact adopted 0.2.0 surface and the residual inventory at that time. Status post-M006: **ready to author** — inputs are `plans/closure/nse-runtime-extraction/006c-closure.md` §11 (dormant adapter, quarantine markers, M005E residual pins, adopted 0.2.0 surface `ff0d2c0`).
 
 ## 8. Cross-cutting requirements
 
@@ -499,4 +499,4 @@ This roadmap is complete when:
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
-| 006 0.2.0 release + safe Eggsec adoption | active | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | — | 006A ready; 006B-C dependency-gated; automated activation deferred to M007 |
+| 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 ready to author; automated activation deferred to M007 |
