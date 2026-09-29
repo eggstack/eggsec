@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Roadmap
 
-Status: closed
+Status: active — Milestone 006 release/adoption program planned
 
 Long-term references:
 
@@ -164,9 +164,13 @@ Milestone 004 — release/publish + Eggsec versioned dependency adoption
     | soft
     v
 Milestone 005 — provider inversion / deeper runtime portability
+    |
+    | release
+    v
+Milestone 006 — 0.2.0 release + safe Eggsec adoption
 ```
 
-Milestones 003-005 are roadmap items only. They must receive their own implementation plans when preceding closure evidence exists.
+Milestones 001-005 are closed. Milestone 006 extends the roadmap because M005 intentionally introduced a versioned public provider surface and a 0.x breaking API change that must be released and adopted before the later protocol-gating/activation tranche.
 
 ## 7. Milestones
 
@@ -345,6 +349,77 @@ Parent Milestone 005 exit conditions:
 - residual specialized direct host operations are inventoried rather than hidden;
 - closure determines the semver/release follow-up for the newly public provider surface.
 
+
+### Milestone 006 — 0.2.0 release and safe Eggsec adoption
+
+Status: active/planned.
+
+Class: capability + infrastructure
+
+Objective: publish the M005 provider surface as `eggsec-nse 0.2.0`, move Eggsec to the registry artifact, replay the qualified engine-owned HTTP adapter against the released contract, and close the cross-repository release boundary without broadening automated NSE execution before protocol-wide capability gating exists.
+
+Why this milestone exists:
+
+- M005E recommends 0.2.0 because `register_vulns_library` has a public 0.x breaking signature change;
+- M005 adds substantial provider APIs and corrected send/write accounting;
+- the standalone release workflow still needs the ripgrep prerequisite that normal CI already enforces;
+- Eggsec's staged HTTP adapter is complete but based on an older branch and must be replayed against the real registry release;
+- M005E proved a 72-file ungated specialized direct-I/O residual, so production automated NSE activation must remain deferred.
+
+#### M006A — Standalone 0.2.0 release preparation and publication
+
+Status: **ready for handoff**.
+
+Plan: `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md`
+
+Boundary: version/changelog/release-workflow preparation, exact release-candidate qualification, crates.io publication, registry/docs.rs verification, and immutable `v0.2.0` source identity.
+
+Exit gate: 0.2.0 is published from a fully qualified source commit and clean scratch consumers resolve the crates.io artifact.
+
+#### M006B — Eggsec 0.2.0 adoption and safe adapter staging
+
+Status: **blocked on accepted M006A closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md`
+
+Boundary: registry dependency/lockfile adoption, replay of the staged `NseHttpTransportProvider` onto current Eggsec main, automated NSE exposure quarantine, manual/TUI/Python requalification, and guard/doc updates.
+
+Exit gate: Eggsec consumes crates.io 0.2.0, the adapter compiles/tests but has no production caller, and automated NSE remains fail-closed/manual-only pending M007.
+
+#### M006C — Cross-repository qualification and closure
+
+Status: **blocked on accepted M006A + M006B closures**.
+
+Plan: `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md`
+
+Boundary: verify release/tag/archive identity, registry-only Eggsec consumption, dormant adapter source truth, automated-exposure quarantine, full consumer checks, and documentation/guard reconciliation.
+
+Exit gate: M006 closes only if the published artifact and Eggsec consumer are fully qualified and no production path activates automated NSE before protocol gating.
+
+Child dependency graph:
+
+```text
+006A standalone 0.2.0 release
+  |
+  v
+006B Eggsec adoption + dormant adapter
+  |
+  v
+006C cross-repo qualification / closure
+```
+
+Parent Milestone 006 exit conditions:
+
+- `eggsec-nse 0.2.0` is published from an immutable, fully qualified source commit;
+- Eggsec resolves the crates.io 0.2.0 artifact with no Git/path override;
+- the staged HTTP adapter is replayed onto current main and tested against 0.2.0;
+- automated NSE is not exposed to MCP/REST/agent/gRPC while the M005E ungated residual remains;
+- manual/TUI NSE behavior remains compatible;
+- documentation explicitly states that provider availability is not complete protocol-wide scope enforcement;
+- closure sequences the next milestone: protocol-library capability gating + approved-scope/profile threading + controlled adapter activation.
+
+M007 is deliberately not planned here. It should be authored from M006 closure evidence because its security boundary depends on the exact adopted 0.2.0 surface and the residual inventory at that time.
+
 ## 8. Cross-cutting requirements
 
 ### Storage and migration
@@ -420,3 +495,4 @@ This roadmap is complete when:
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
+| 006 0.2.0 release + safe Eggsec adoption | active | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | — | 006A ready; 006B-C dependency-gated; automated activation deferred to M007 |
