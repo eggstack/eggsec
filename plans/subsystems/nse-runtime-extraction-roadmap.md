@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Roadmap
 
-Status: active — Milestones 001-006 closed; M007 protocol-gating/scope-threading ready to author
+Status: active — Milestones 001-006 closed; M007 protocol-library gating and controlled automated activation active/planned
 
 Long-term references:
 
@@ -13,6 +13,7 @@ Long-term references:
 Related ADRs:
 
 - `plans/adrs/ADR-0003-nse-host-provider-boundary.md` — accepted provider/broker boundary for Milestone 005.
+- `plans/adrs/ADR-0004-nse-automated-activation-boundary.md` — accepted effect-gating, scope-bearing strict execution, and selective automated activation boundary for Milestone 007.
 - `plans/adrs/ADR-0001-scoped-transport-eggfetch-backend.md` remains controlling for the Eggsec-owned HTTP transport adapter.
 - `plans/adrs/ADR-0002-eggress-selective-reuse-boundary.md` remains unaffected.
 
@@ -168,9 +169,13 @@ Milestone 005 — provider inversion / deeper runtime portability
     | release
     v
 Milestone 006 — 0.2.0 release + safe Eggsec adoption
+    |
+    | security activation boundary
+    v
+Milestone 007 — effect-gated protocols + scope-bearing automated activation
 ```
 
-Milestones 001-006 are closed. Milestone 006 extended the roadmap because M005 intentionally introduced a versioned public provider surface and a 0.x breaking API change that had to be released and adopted before the later protocol-gating/activation tranche (M007, ready to author).
+Milestones 001-006 are closed. Milestone 007 is active/planned under ADR-0004. It uses the adopted 0.2.0 provider surface, M005E residual inventories, M006 dormant adapter, and M006 quarantine markers as fixed inputs.
 
 ## 7. Milestones
 
@@ -422,7 +427,119 @@ Parent Milestone 006 exit conditions:
 - documentation explicitly states that provider availability is not complete protocol-wide scope enforcement;
 - closure sequences the next milestone: protocol-library capability gating + approved-scope/profile threading + controlled adapter activation.
 
-M007 is deliberately not planned here. It should be authored from M006 closure evidence because its security boundary depends on the exact adopted 0.2.0 surface and the residual inventory at that time. Status post-M006: **ready to author** — inputs are `plans/closure/nse-runtime-extraction/006c-closure.md` §11 (dormant adapter, quarantine markers, M005E residual pins, adopted 0.2.0 surface `ff0d2c0`).
+### Milestone 007 — Protocol-library gating and controlled automated activation
+
+Status: active/planned.
+
+Class: security + infrastructure
+
+Objective: make automated NSE structurally fail-closed at the library/effect boundary, migrate the protocol cohort that fits the existing provider contract, publish that standalone hardening, thread Eggsec's approval-time scope/target facts into scoped runtime providers, and only then selectively restore automated NSE discoverability.
+
+Controlling decision:
+
+- `plans/adrs/ADR-0004-nse-automated-activation-boundary.md`.
+
+Why this milestone exists:
+
+- M005E proved a 72-file ungated direct-I/O residual plus 25 advisory-gated/mixed files;
+- M006 correctly bounded that residual by making NSE manual-only on automated Eggsec surfaces;
+- the runtime pre-registers many Lua globals, so a require-only deny list is insufficient;
+- the existing connected DNS/TCP/UDP provider surface can migrate a meaningful blocking cohort without redesigning every protocol;
+- the standalone native HTTP provider is not sufficient for an automated hostname/redirect authority claim;
+- Eggsec already has an approval-bound `Scope` snapshot, canonical `ScopeAuthority`, scoped Eggfetch transport, and a tested dormant NSE HTTP adapter.
+
+#### M007A — Automated library effect gate and HTTP authority assurance
+
+Status: **ready for handoff**.
+
+Plan: `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md`
+
+Implementation repository: `eggstack/eggsec-nse`.
+
+Boundary: complete effect classification for every registered Lua library/global, AgentSafe/CiSafe registration + require gating, unknown-deny behavior, and additive HTTP provider authority assurance.
+
+Exit gate: unsafe/direct/advisory libraries are unreachable under automated profiles through both globals and `require()`; native HTTP is not implicitly authority-bound.
+
+#### M007B — Broker-compatible protocol migration and residual hardening
+
+Status: **blocked on accepted M007A closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md`
+
+Implementation repository: `eggstack/eggsec-nse`.
+
+Boundary: classify all 72+25 residual files by effect shape, add an internal brokered stream compatibility layer, migrate all blocking TCP/compatible connected-UDP files supported by the existing provider contract, and reconcile residual pins/eligibility.
+
+Exit gate: every promoted module has all automated-relevant network effects provider-backed; residual counts shrink and every remaining file has an explicit manual-only migration class.
+
+#### M007C — Standalone security patch release
+
+Status: **blocked on accepted M007A + M007B closures**.
+
+Plan: `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md`
+
+Implementation repository: `eggstack/eggsec-nse`.
+
+Boundary: public-API compatibility audit, expected 0.2.1 patch publication (or stop/replan as 0.3.0 on any breaking change), exact candidate CI/package qualification, registry/tag/docs.rs verification.
+
+Exit gate: Eggsec has a published immutable registry artifact containing the M007 runtime hardening.
+
+#### M007D — Eggsec approved-scope/profile threading and scoped provider activation
+
+Status: **blocked on accepted M007C closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md`
+
+Implementation repository: `eggstack/eggsec`.
+
+Boundary: adopt the M007 runtime release; bind approval-time `TargetScope` facts into `ApprovedExecution`; extract generic owned scope authority; implement scoped DNS/TCP/UDP providers; compose the authority-bound HTTP adapter with Eggfetch; map Eggsec strict profiles to NSE safe profiles; route only `execute_approved_execution()` through scoped services.
+
+Exit gate: scope-bearing strict NSE can execute a safe provider-backed fixture with no native fallback, while the scope-less strict entry still rejects NSE and automated metadata remains quarantined.
+
+#### M007E — Controlled automated re-exposure and cross-repository qualification
+
+Status: **blocked on accepted M007D closure**.
+
+Plan: `plans/implementation/nse-runtime-extraction/007-controlled-automated-reexposure-qualification.md`
+
+Implementation repositories: `eggstack/eggsec` + `eggstack/eggsec-nse`.
+
+Boundary: deliberately re-enable MCP/REST/agent/gRPC NSE metadata, replace dormancy guards with exact canonical-call-site guards, run safe positive and zero-contact negative scope/effect tests, reconcile residual counts/docs, and close M007.
+
+Exit gate: automated NSE is discoverable only through the approved scope-bearing path; unsafe/manual-only libraries remain unreachable; scope/port/DNS/redirect negatives make zero unapproved host contact; full local + hosted qualification is green.
+
+Child dependency graph:
+
+```text
+007A effect gate + HTTP authority assurance
+  |
+  v
+007B broker-compatible protocol migration
+  |
+  v
+007C standalone security patch release
+  |
+  v
+007D Eggsec approved-scope/provider activation
+  |
+  v
+007E controlled re-exposure + qualification
+```
+
+Parent Milestone 007 exit conditions:
+
+- every registered runtime library/global has an automated eligibility/effect classification;
+- unknown/direct/advisory libraries are structurally unavailable under AgentSafe/CiSafe;
+- the broker-compatible residual cohort is migrated and remaining direct-I/O classes are explicit/manual-only;
+- Eggsec consumes the qualified M007 standalone registry release;
+- `ApprovedExecution` retains the approval-time scope snapshot and target facts used for strict NSE construction;
+- strict NSE HTTP/TCP/UDP use scoped provider composition with no native fallback;
+- `execute_approved()` remains unable to execute NSE without the scope-bearing bundle;
+- automated metadata is re-enabled only after the path above is qualified;
+- safe automated fixtures succeed and unsafe residual/scope-negative fixtures fail before unapproved host contact;
+- manual CLI/TUI/Python compatibility remains green;
+- closure records before/after residual counts and any M008 long-tail migration recommendation.
+
 
 ## 8. Cross-cutting requirements
 
@@ -499,4 +616,5 @@ This roadmap is complete when:
 | 003 standalone repository extraction | closed | `plans/implementation/nse-runtime-extraction/003-standalone-repository-extraction.md` | `plans/closure/nse-runtime-extraction/003-closure.md` | — |
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
-| 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 ready to author; automated activation deferred to M007 |
+| 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md` (007A; 007B-E linked in §7) | — | 007A ready; 007B-E dependency-gated by ADR-0004 |
