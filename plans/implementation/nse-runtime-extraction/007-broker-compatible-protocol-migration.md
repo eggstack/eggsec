@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007B — Broker-Compatible Protocol Migration and Residual Hardening
 
-Status: blocked
+Status: implemented; corrective closure required
 
 Planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 
@@ -269,3 +269,8 @@ Record:
 - full suite/MSRV/package results;
 - deferred class list;
 - GO/NO-GO for M007C.
+
+
+## Corrective handoff note
+
+Implementation landed on standalone `eggsec-nse/main@699d374ad16806a9e0c6f265f297a644b8b88c29`, but M007B did not satisfy closure: hosted run `36620331641` is red because residual pins were not reconciled, 17 files still classified `BrokerCompatible*` retain direct socket effects, and the M007A effect manifest was not updated with evidenced promotions. The controlling handoff is `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md`. No `007b-closure.md` exists yet.
