@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-006 closed (`eggsec-nse 0.2.0` adopted, dormant adapter, quarantine verified); M007 protocol-gating/scope-threading ready to author; automated NSE activation deferred to M007 |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-006 closed; M007 active under ADR-0004: 007A ready, 007B-E dependency-gated; automated NSE remains quarantined until 007E |
 
 ## Grandfathered file index
 
@@ -147,6 +147,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
+- `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md` — **ready for handoff (M007A)**. Build a complete runtime effect/eligibility manifest, remove unsafe/direct/advisory libraries from AgentSafe/CiSafe globals and `require()`, and require explicit authority assurance before automated HTTP provider use. Unknown library status fails closed.
 - `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` — **closed** (`plans/closure/nse-runtime-extraction/006a-closure.md`). Published `eggsec-nse 0.2.0` from fully qualified source `ff0d2c0` (hosted run `36521717829` green; archive VCS identity = tag commit; docs.rs built), fixed the release-workflow ripgrep prerequisite, reconciled the `-D warnings` overclaim, and disclosed the breaking/provider/accounting changes plus residual risk.
 - `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` — **closed** (`plans/closure/nse-runtime-extraction/005-post-merge-ci-fixture-corrective-closure.md`). The missing-ripgrep fixture is hermetic (empty-temp-dir child PATH with proven `rg` absence; fail-fast check above `dirname` with `printf`-builtin diagnostic), standalone main is `9fe149fbb22480a63e254e91d60083b7a29a8ff4`, and hosted run `36490773625` on that exact SHA is fully green (Ubuntu/macOS/Windows/MSRV/SSH).
 - `plans/implementation/nse-runtime-extraction/005-provider-stack-landing-ci-corrective.md` — **closed** (`plans/closure/nse-runtime-extraction/005-provider-stack-landing-ci-corrective-closure.md`, restored from conditional via second corrective addendum with observed run `36490773625`). The linear M005A-E stack plus the hermetic tooling fix are landed on standalone main.
@@ -163,7 +164,10 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 - `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md` — **closed** (`plans/closure/nse-runtime-extraction/006b-closure.md`). Eggsec consumes registry `eggsec-nse 0.2.0` (no override); the staged adapter is replayed logic-identical with no production caller; automated NSE is quarantined at metadata/listing/execution layers with manual/TUI preserved; full checks green.
 - `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md` — **closed** (`plans/closure/nse-runtime-extraction/006c-closure.md`). Parent M006 closed: release/tag/archive identity, registry-only consumption, dormant adapter, quarantine, and full cross-repo checks verified with no stop conditions; GO for M007.
-- Protocol-library capability-gating + approved-scope/profile threading + controlled adapter activation — **M007, ready to author from the 006C closure evidence** (dormant adapter, quarantine markers, and M005E residual pins are the inputs). Do not enable automated NSE before this follow-up closes.
+- `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md` — **blocked on accepted M007A closure (M007B)**. Classify the 72 ungated + 25 advisory residual files by effect shape, migrate the blocking TCP/compatible connected-UDP cohort through existing brokers, and keep incompatible async/unconnected/native-handle/raw classes manual-only.
+- `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md` — **blocked on accepted M007A + M007B closures (M007C)**. Perform a public-API compatibility gate, then publish the qualified runtime hardening as expected `0.2.1` or stop/replan as `0.3.0` on any breaking change.
+- `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md` — **blocked on accepted M007C closure (M007D)**. Adopt the M007 registry release, retain approval-time target facts in `ApprovedExecution`, compose scoped DNS/TCP/UDP/HTTP providers from canonical Eggsec authority, and enable strict NSE only on the scope-bearing execution entry while metadata remains quarantined.
+- `plans/implementation/nse-runtime-extraction/007-controlled-automated-reexposure-qualification.md` — **blocked on accepted M007D closure (M007E)**. Re-enable automated NSE metadata only after safe-path qualification, replace dormancy guards with exact call-site guards, prove zero-contact negative cases, and close M007 across both repositories.
 
 ## Dependency-ready implementation plans
 
@@ -180,4 +184,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; M006 (006A/B/C) closed; M007 ready to author from `plans/closure/nse-runtime-extraction/006c-closure.md` §11; automated adapter activation is deferred to M007 |
+| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/adrs/ADR-0004-nse-automated-activation-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/007-automated-library-effect-gate.md`; M007A is the current handoff boundary, M007B-E are dependency-gated, and automated NSE stays quarantined until 007E qualification |
