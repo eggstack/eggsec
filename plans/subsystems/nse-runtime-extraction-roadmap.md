@@ -293,7 +293,7 @@ Exit gate: restricted hostname/CIDR policy selects a concrete allowed endpoint a
 
 #### M005C — HTTP provider and Eggsec scoped-transport adapter
 
-Status: **closed (standalone portion; Eggsec adapter remains staged pending release/adoption)** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Standalone implementation `89290f9` is an ancestor of `eggsec-nse/main@9fe149f`; the runtime-neutral HTTP DTO/provider contract, native reqwest provider, and HTTP-family migration ship with the 0.2.0 release/adoption milestone. The Eggsec-side adapter remains staged on `m005c-eggsec-http-adapter` for activation in the 0.2.0 adoption milestone.
+Status: **closed** (`plans/closure/nse-runtime-extraction/005c-closure.md`). Standalone implementation `89290f9` is an ancestor of the released `eggsec-nse 0.2.0` source; M006B replayed the Eggsec-side scoped-transport adapter onto current Eggsec `main` as a dormant, engine-owned module with no production caller. Controlled adapter activation remains deferred to M007.
 
 Plan: `plans/implementation/nse-runtime-extraction/005-http-provider-eggsec-adapter.md`
 
