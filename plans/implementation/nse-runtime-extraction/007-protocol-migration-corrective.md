@@ -1,6 +1,14 @@
 # NSE Runtime Extraction Milestone 007B — Protocol Migration Corrective and Closure Pass
 
-Status: ready for handoff
+Status: closed
+
+Closure record: `plans/closure/nse-runtime-extraction/007b-closure.md`
+
+**Premise falsified by the audit this plan ordered.** §2 and §6 assert that "17 entries currently described as broker-compatible still have direct socket effects". The audit found that 16 of the 17 had **no direct socket effect at all**: the M005E scan matched `TcpStream::connect` as a substring and therefore also matched `BrokeredTcpStream::connect`, the brokered abstraction M007B had introduced. The 17th, `radius.rs`, did have a direct effect, but a different one from the one described (§6 predicted a mis-broad label or an unfixable fit; the actual defect was that the migration was never applied to that call site while the classification file claimed it was).
+
+The plan's operative instruction was the correct one and is the reason this was recoverable: do not "fix CI by copying the current 39-file source scan into the old pin files before auditing the 17 entries still labeled broker-compatible." Auditing first produced a corrected scan that found four further real defects the plan did not anticipate, one of them high severity (`target.resolve` performed unbrokered DNS while the manifest classified `target` as `Pure`).
+
+Closure outcome, exact deltas, the per-file audit table, the six guard negative probes, and the GO/NO-GO for M007C are recorded in `plans/closure/nse-runtime-extraction/007b-closure.md`. All 15 acceptance criteria in §13 pass; the six work-package outcomes are in §4 of the closure record.
 
 Original implementation plan:
 
@@ -8,7 +16,7 @@ Original implementation plan:
 
 Original closure record:
 
-- none yet; M007B has implementation on standalone `main` but has not reached an accepted closure record.
+- none at handoff; M007B had implementation on standalone `main` but no accepted closure record. The accepted record is `plans/closure/nse-runtime-extraction/007b-closure.md`.
 
 Eggsec planning baseline: `8e282e916fa44edc2bb800ba1dc480e8f0ec2815`
 

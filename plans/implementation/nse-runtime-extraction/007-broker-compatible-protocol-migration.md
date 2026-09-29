@@ -1,6 +1,16 @@
 # NSE Runtime Extraction Milestone 007B — Broker-Compatible Protocol Migration and Residual Hardening
 
-Status: implemented; corrective closure required
+Status: closed (corrective)
+
+Closure record: `plans/closure/nse-runtime-extraction/007b-closure.md`
+
+Corrective handoff that closed this plan:
+
+- `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md`
+
+Implementation landed on standalone `main@699d374ad16806a9e0c6f265f297a644b8b88c29`; the corrective pass closed it at `eggstack/eggsec-nse@d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19` (hosted run `36640412317`, 5/5 jobs green). Closure outcome: specialized direct-I/O residual 97 -> 22; effect-manifest manual-only 106 -> 41; `ProviderBacked` 18 -> 84; M005E baseline frozen and guard-enforced; manifest<->registration consistency enforced in both directions.
+
+This plan is retained as the historical record of the milestone's boundary and acceptance criteria. Its §6 premise about the 17 still-direct `BrokerCompatible*` entries was falsified by the corrective audit (16 had no direct socket effect; the scan substring-matched `BrokeredTcpStream::connect`) and is superseded by the closure record's audit table. Per `plans/003-planning-process.md` §7, that deviation is recorded rather than hidden.
 
 Planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 

@@ -121,7 +121,7 @@ Authorization boundary (standalone side): automated profiles deny by default; 10
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| low | 13 manifest entries exceed the 146 `register_*` call sites (compat rationale, not reconciled one-to-one) | Guard enforces coverage in the register→manifest direction only; an orphaned manifest entry would not fail the guard | M007B or later hardening: add manifest→registration direction check or record explicit compat-entry allowlist |
+| low | 13 manifest entries exceed the 146 `register_*` call sites (compat rationale, not reconciled one-to-one) | Guard enforces coverage in the register→manifest direction only; an orphaned manifest entry would not fail the guard | **CLOSED in M007B** (`plans/closure/nse-runtime-extraction/007b-closure.md` §3.4): verified as 12 manifest-only entries plus 4 further unregistered modules with no manifest entry; both directions now enforced with `scripts/nse-registration-compat-entries.txt` |
 | low | `gate_then_register` (27 sites) + scrub overlap: per-site gating is now redundant for libraries the scrub also covers | Harmless defense-in-depth; slight maintenance surface | Optional M007B cleanup: keep both (preferred) or collapse to scrub-only with guard |
 | low | Clippy/pre-existing warnings (92–94 lib warnings: dead code, deprecated `as_utf8`, unreachable pattern) unchanged | No new warnings introduced; noise only | Out of scope; tracked by existing repo hygiene |
 

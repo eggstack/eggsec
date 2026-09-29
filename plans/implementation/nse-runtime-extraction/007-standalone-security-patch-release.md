@@ -1,10 +1,16 @@
 # NSE Runtime Extraction Milestone 007C — Standalone Security Patch Release
 
-Status: blocked
+Status: ready for handoff
+
+Unblocked: `plans/closure/nse-runtime-extraction/007b-closure.md` is accepted and hosted standalone CI is fully green on the closure SHA (`d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19`, run `36640412317`, 5/5 jobs). Precondition from the original handoff satisfied.
 
 Planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 
-Standalone baseline: `eggstack/eggsec-nse@ff0d2c09feba1bcd7ba5f7312579690d905be09c` (`0.2.0`)
+Standalone baseline for the compatibility gate: `eggstack/eggsec-nse@d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19` (`0.2.0` published; corrected tree not yet released)
+
+**Carry-forward from M007B closure.** The compatibility gate must be run against the *corrected* classification, not the inherited one. The public surface is larger than the red CI at `699d374` suggested: 65 registered libraries move from manual-only to `ProviderBacked` (automated-visible), plus `target` from `Pure`, and three new additive `*_with_services` registration entry points exist (`register_target_library_with_services`, `register_radius_library_with_services`, `register_dnsbl_library_with_services`). The pre-existing `register_*_library(lua)` signatures are retained, so this is expected to remain a `0.2.1` patch release; the gate, not this note, decides. Release notes must disclose the automated gating change and the corrected residual honestly (see `007b-closure.md` §5: 97 -> 22 residual, manifest manual-only 106 -> 41).
+
+One medium finding is explicitly **not** a M007C matter: `broker_dns_lookup` does not evaluate per-target membership for the resolved name (closure §12). That is M007D scope.
 
 Hard dependencies:
 

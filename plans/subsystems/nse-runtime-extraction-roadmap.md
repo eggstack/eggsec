@@ -462,19 +462,21 @@ Exit gate: unsafe/direct/advisory libraries are unreachable under automated prof
 
 #### M007B — Broker-compatible protocol migration and residual hardening
 
-Status: **corrective closure required**. Implementation landed on standalone `main@699d374ad16806a9e0c6f265f297a644b8b88c29`, but hosted run `36620331641` is red on stale residual pins, 17 `BrokerCompatible*` entries still retain direct socket effects, and effect-manifest promotions are not reconciled. Controlling handoff: `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md`.
+Status: **closed** (`plans/closure/nse-runtime-extraction/007b-closure.md`; standalone `d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19`, hosted run `36640412317` green on 5/5 jobs). Closed through the corrective plan `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md` after a corrective pass in which the plan's central premise was falsified: 16 of the 17 "still-direct `BrokerCompatible*`" entries had no direct socket effect (the M005E scan substring-matched `BrokeredTcpStream::connect`), and the 17th (`radius`) carried a defect different from the one described. The corrected scan then found four real defects the plan did not anticipate, including a high-severity one: `target.resolve` performed unbrokered DNS while the manifest classified `target` as `Pure`, so an automated-safe registered library could make `CiSafe` emit DNS.
 
-Plan: `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md`
+Plan: `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md` (implemented; corrective closure via `007-protocol-migration-corrective.md`)
 
 Implementation repository: `eggstack/eggsec-nse`.
 
 Boundary: classify all 72+25 residual files by effect shape, add an internal brokered stream compatibility layer, migrate all blocking TCP/compatible connected-UDP files supported by the existing provider contract, and reconcile residual pins/eligibility.
 
-Exit gate: every promoted module has all automated-relevant network effects provider-backed; residual counts shrink and every remaining file has an explicit manual-only migration class.
+Exit gate (met): every promoted module has all automated-relevant network effects provider-backed; residual counts shrink and every remaining file has an explicit manual-only migration class.
+
+Outcome: specialized direct-I/O residual **97 → 22** (15 ungated + 7 advisory), every remaining entry a shape the current provider contract cannot represent; effect-manifest manual-only **106 → 41**, `ProviderBacked` **18 → 84**; M005E baseline (97) frozen in `scripts/nse-m005e-direct-io-baseline.txt` and guard-enforced; manifest↔registration consistency enforced in both directions with an explicit compat allowlist; zero `BrokerCompatible*` entries retain an unexplained direct effect. Eggsec automated NSE unchanged and still quarantined.
 
 #### M007C — Standalone security patch release
 
-Status: **blocked on accepted M007B corrective closure**.
+Status: **ready for handoff** (unblocked: `007b-closure.md` accepted and hosted standalone CI fully green on the closure SHA).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md`
 
@@ -617,4 +619,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); no accepted 007B closure yet | M007B corrective is current handoff; M007C-E remain dependency-gated by ADR-0004 |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green) | M007C is current handoff; M007D-E remain dependency-gated by ADR-0004; automated NSE stays quarantined until 007E |
