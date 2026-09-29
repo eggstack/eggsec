@@ -9,6 +9,19 @@ and scoped-transport adapter remain owned here. Historical verification
 tables below describe the former in-workspace crate and are retained as dated
 evidence; current runtime commands run from the standalone checkout and its CI.
 
+> **M006B adoption note (2026-09-29).** Eggsec consumes crates.io
+> `eggsec-nse 0.2.0` (no Git/path override). The engine-owned
+> `NseHttpTransportProvider` (`crates/eggsec/src/nse_http_provider.rs`,
+> replayed from `m005c-eggsec-http-adapter@4ade61a`) compiles and tests
+> against 0.2.0 but is dormant: guard 145 pins zero production
+> constructors. Automated NSE (MCP/REST/agent/gRPC) is quarantined
+> (`OperationMetadata` automated flags false + fail-closed guard in
+> `execute_approved`/`execute_approved_execution`); manual CLI/TUI NSE
+> remains native/default-provider. Controlled adapter activation with
+> protocol-library capability gating and approved-scope threading is
+> sequenced as M007. Provider availability is not complete protocol-wide
+> scope enforcement (M005E 72-file ungated residual, pinned).
+
 Eggsec includes optional Nmap Scripting Engine (NSE) compatibility through the `eggsec-nse` crate. The goal is broad practical compatibility for useful script categories, not perfect Nmap runtime parity.
 
 ## NSE (Nmap Scripting Engine) Compatibility (`eggsec-nse`)

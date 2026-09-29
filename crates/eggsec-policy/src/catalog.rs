@@ -539,10 +539,14 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         target_policy: TargetPolicyKind::ExplicitScopeRequired,
         manual_exposable: true,
         tui_exposable: true,
-        mcp_exposable: true,
-        rest_exposable: true,
-        agent_exposable: true,
-        grpc_exposable: true,
+        // M006B quarantine: automated NSE stays disabled while the M005E
+        // 72-file ungated specialized direct-I/O residual is unresolved.
+        // Re-enablement (capability gating + approved-scope threading +
+        // controlled adapter activation) is owned by M007.
+        mcp_exposable: false,
+        rest_exposable: false,
+        agent_exposable: false,
+        grpc_exposable: false,
     },
     OperationMetadata {
         id: "db-pentest",
@@ -1009,6 +1013,34 @@ mod operation_metadata_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn nse_is_manual_only_pending_protocol_gating() {
+        // M006B quarantine: automated NSE stays disabled while the M005E
+        // ungated specialized direct-I/O residual is unresolved (M007 owns
+        // re-enablement). Manual/TUI behavior is preserved.
+        let m = metadata_for_tool_id("nse").expect("nse metadata");
+        assert!(m.manual_exposable, "manual NSE must remain available");
+        assert!(m.tui_exposable, "TUI NSE must remain available");
+        assert!(!m.mcp_exposable, "MCP NSE must be quarantined");
+        assert!(!m.rest_exposable, "REST NSE must be quarantined");
+        assert!(!m.agent_exposable, "agent NSE must be quarantined");
+        assert!(!m.grpc_exposable, "gRPC NSE must be quarantined");
+        assert!(
+            !m.is_exposed_automated(),
+            "NSE must report no automated exposure"
+        );
+        assert!(
+            !m.is_programmatic_visible(),
+            "NSE must not be programmatic-visible"
+        );
+        // The scope gate needed for future re-enablement must survive.
+        assert_eq!(
+            m.target_policy,
+            TargetPolicyKind::ExplicitScopeRequired,
+            "do not weaken the NSE target policy during quarantine"
+        );
     }
 
     #[test]

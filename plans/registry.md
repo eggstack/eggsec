@@ -38,7 +38,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
-| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-005 closed; M006A 0.2.0 release closed (`eggsec-nse 0.2.0` published from `ff0d2c0`, tag `v0.2.0`); M006B ready, M006C dependency-gated; automated NSE activation deferred to M007 |
+| nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-005 closed; M006A 0.2.0 release closed; M006B adoption closed (registry 0.2.0, dormant adapter, quarantine); M006C ready; automated NSE activation deferred to M007 |
 
 ## Grandfathered file index
 
@@ -161,8 +161,8 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Blocked work
 
-- `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md` — **ready for handoff (M006B)**. Move Eggsec to the registry 0.2.0 artifact, replay the stale staged HTTP adapter onto current main, quarantine automated NSE exposure, and requalify manual/TUI/Python behavior without production adapter activation.
-- `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md` — **blocked on accepted M006B closure** (M006A closed). Verify release/tag/archive identity, registry-only Eggsec consumption, dormant adapter state, automated-exposure quarantine, and full cross-repo checks before closing M006.
+- `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md` — **closed** (`plans/closure/nse-runtime-extraction/006b-closure.md`). Eggsec consumes registry `eggsec-nse 0.2.0` (no override); the staged adapter is replayed logic-identical with no production caller; automated NSE is quarantined at metadata/listing/execution layers with manual/TUI preserved; full checks green.
+- `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md` — **ready for handoff (M006C)**. Verify release/tag/archive identity, registry-only Eggsec consumption, dormant adapter state, automated-exposure quarantine, and full cross-repo checks before closing M006.
 - Protocol-library capability-gating + approved-scope/profile threading + controlled adapter activation — **sequenced as M007 after M006 closure**. Do not enable automated NSE before this follow-up closes.
 
 ## Dependency-ready implementation plans
@@ -180,4 +180,4 @@ All closure evidence for flat-era work lives inline in the files above (appended
 | Python API | Release 5 phase F; `architecture/python_api.md` |
 | CI/release | Phase K; `docs/VERIFICATION.md` |
 | Performance | Phase F + polish corrective; `architecture/performance.md` |
-| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md`; M006A closed, M006B is the current handoff boundary, M006C is dependency-gated, automated adapter activation is deferred to M007 |
+| NSE runtime extraction | `plans/adrs/ADR-0003-nse-host-provider-boundary.md`; `plans/subsystems/nse-runtime-extraction-roadmap.md`; `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md`; M006A-B closed, M006C is the current handoff boundary, automated adapter activation is deferred to M007 |

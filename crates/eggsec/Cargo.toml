@@ -115,7 +115,7 @@ eggsec-transport-eggfetch = { workspace = true }
 # The runtime is the published `eggsec-nse` crates.io release (standalone
 # repository). Upgrades require an explicit version/lockfile change plus
 # standalone + Eggsec qualification.
-eggsec-nse = { version = "0.1.0", optional = true }
+eggsec-nse = { version = "0.2.0", optional = true }
 # Engine-owned NSE report-envelope conversion (moved out of eggsec-nse in
 # the runtime-extraction Milestone 002; Eggsec composition concern, not NSE
 # runtime semantics).

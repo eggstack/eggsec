@@ -380,17 +380,19 @@ Closure: published `eggsec-nse 0.2.0` from `ff0d2c0` (hosted run `36521717829` g
 
 #### M006B — Eggsec 0.2.0 adoption and safe adapter staging
 
-Status: **ready for handoff** (M006A closed).
+Status: **closed** (`plans/closure/nse-runtime-extraction/006b-closure.md`).
 
-Plan: `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md`
+Plan: `plans/implementation/nse-runtime-extraction/006-eggsec-0-2-0-adoption-safe-staging.md` (status: implemented)
 
 Boundary: registry dependency/lockfile adoption, replay of the staged `NseHttpTransportProvider` onto current Eggsec main, automated NSE exposure quarantine, manual/TUI/Python requalification, and guard/doc updates.
 
 Exit gate: Eggsec consumes crates.io 0.2.0, the adapter compiles/tests but has no production caller, and automated NSE remains fail-closed/manual-only pending M007.
 
+Closure: registry 0.2.0 adopted (no override), adapter replayed logic-identical with guard-pinned dormancy, three-layer quarantine with manual/TUI preserved, full checks green.
+
 #### M006C — Cross-repository qualification and closure
 
-Status: **blocked on accepted M006B closure** (M006A closed).
+Status: **ready for handoff** (M006A + M006B closed).
 
 Plan: `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md`
 

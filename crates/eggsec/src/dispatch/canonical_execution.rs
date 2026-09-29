@@ -637,6 +637,10 @@ pub enum ExecutionError {
 /// - request/approval binding is checked immediately before executor entry
 ///   via exact [`ApprovedOperation::matches_descriptor`] semantics;
 /// - feature availability is checked in one predictable layer;
+/// - operations without automated-surface exposure (MCP/REST/gRPC/agent)
+///   fail closed here: strict approved execution cannot run manual-only
+///   operations even with a synthesized approval bundle (M006B NSE
+///   quarantine; re-enablement is owned by M007);
 /// - no Clap, Ratatui, terminal, daemon-protocol, or Python types cross this
 ///   boundary.
 pub async fn execute_approved(
@@ -690,6 +694,20 @@ pub async fn execute_approved(
                 });
             }
         }
+        // 4b. Automated-surface quarantine: manual-only operations (no
+        // MCP/REST/gRPC/agent exposure in `OperationMetadata`) fail closed
+        // on this strict entry point even with a valid approval bundle.
+        // Manual CLI/TUI paths do not enter through here.
+        if !metadata.is_exposed_automated() {
+            return Err(ExecutionError::InvalidRequest {
+                operation_id: operation_id.to_string(),
+                reason: format!(
+                    "operation '{operation_id}' is not exposed on automated surfaces \
+                     (manual/TUI only); strict approved execution is fail-closed \
+                     pending protocol-gating/scope-threading (M007 for NSE)"
+                ),
+            });
+        }
     } else {
         return Err(ExecutionError::InvalidRequest {
             operation_id: operation_id.to_string(),
@@ -730,6 +748,10 @@ pub async fn execute_approved(
 /// checks mirror [`execute_approved`]; the load-test branch receives the
 /// scope snapshot from the same enforcement context that approved the
 /// operation, never a reloaded config or wildcard.
+///
+/// Like [`execute_approved`], manual-only operations (no automated-surface
+/// exposure in `OperationMetadata`) fail closed here even with a valid
+/// bundle (M006B NSE quarantine; re-enablement owned by M007).
 pub async fn execute_approved_execution(
     execution: &crate::config::ApprovedExecution,
     request: CanonicalOperationRequest,
@@ -775,6 +797,18 @@ pub async fn execute_approved_execution(
                     feature: feature.to_string(),
                 });
             }
+        }
+        // Automated-surface quarantine (mirrors `execute_approved`): strict
+        // execution of manual-only operations fails closed (M006B/M007).
+        if !metadata.is_exposed_automated() {
+            return Err(ExecutionError::InvalidRequest {
+                operation_id: operation_id.to_string(),
+                reason: format!(
+                    "operation '{operation_id}' is not exposed on automated surfaces \
+                     (manual/TUI only); strict approved execution is fail-closed \
+                     pending protocol-gating/scope-threading (M007 for NSE)"
+                ),
+            });
         }
     } else {
         return Err(ExecutionError::InvalidRequest {
@@ -2119,5 +2153,113 @@ mod tests {
             result,
             Err(ExecutionError::BindingMismatch { .. })
         ));
+    }
+
+    /// M006B quarantine: NSE has no automated-surface exposure, so even a
+    /// valid approval bundle must fail closed on the strict entries.
+    /// Manual CLI/TUI paths do not enter through here.
+    #[cfg(feature = "nse")]
+    #[tokio::test]
+    async fn execute_approved_rejects_quarantined_nse() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope};
+
+        let metadata = crate::config::metadata_for_tool_id("nse").expect("nse metadata");
+        assert!(
+            !metadata.is_exposed_automated(),
+            "test precondition: NSE must be quarantined"
+        );
+        let descriptor = metadata
+            .try_descriptor_for_target(Some("127.0.0.1"))
+            .expect("loopback NSE descriptor");
+        let enforcement = EnforcementContext::for_surface(
+            ExecutionSurface::CliManual,
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        // NSE requires the NonBaselineCapability confirmation class; grant
+        // it so approval succeeds and the execution boundary is what rejects.
+        let manual_override = crate::config::ManualOverride {
+            assume_yes: false,
+            allow_out_of_scope: false,
+            allow_explicit_exclusion: false,
+            allow_high_risk: false,
+            allow_db_pentest: false,
+            allow_web_proxy: false,
+            allow_nonbaseline_capability: true,
+            allow_private_resolution: false,
+            allow_cross_host_redirect: false,
+            reason: Some("M006B quarantine regression test".to_string()),
+        };
+        let approved = enforcement
+            .approve_manual(
+                ExecutionSurface::CliManual,
+                descriptor,
+                Some(&manual_override),
+            )
+            .expect("loopback NSE manual approval must succeed");
+        let request = CanonicalOperationRequest::Nse(NseParams {
+            target: "127.0.0.1".into(),
+            script: "default".into(),
+            args: None,
+        });
+        let (sink, _rx) = test_sink();
+        let result = execute_approved(&approved, request, &sink).await;
+        match result {
+            Err(ExecutionError::InvalidRequest { reason, .. }) => assert!(
+                reason.contains("not exposed on automated surfaces"),
+                "quarantine reason must name automated-surface exposure, got: {reason}"
+            ),
+            other => panic!("quarantined NSE must fail closed, got: {other:?}"),
+        }
+    }
+
+    /// M006B quarantine on the scope-carrying strict entry.
+    #[cfg(feature = "nse")]
+    #[tokio::test]
+    async fn execute_approved_execution_rejects_quarantined_nse() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope};
+
+        let metadata = crate::config::metadata_for_tool_id("nse").expect("nse metadata");
+        let descriptor = metadata
+            .try_descriptor_for_target(Some("127.0.0.1"))
+            .expect("loopback NSE descriptor");
+        let enforcement = EnforcementContext::for_surface(
+            ExecutionSurface::CliManual,
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let manual_override = crate::config::ManualOverride {
+            assume_yes: false,
+            allow_out_of_scope: false,
+            allow_explicit_exclusion: false,
+            allow_high_risk: false,
+            allow_db_pentest: false,
+            allow_web_proxy: false,
+            allow_nonbaseline_capability: true,
+            allow_private_resolution: false,
+            allow_cross_host_redirect: false,
+            reason: Some("M006B quarantine regression test".to_string()),
+        };
+        let execution = enforcement
+            .approve_manual_execution(
+                ExecutionSurface::CliManual,
+                descriptor,
+                Some(&manual_override),
+            )
+            .expect("loopback NSE manual execution approval must succeed");
+        let request = CanonicalOperationRequest::Nse(NseParams {
+            target: "127.0.0.1".into(),
+            script: "default".into(),
+            args: None,
+        });
+        let (sink, _rx) = test_sink();
+        let result = execute_approved_execution(&execution, request, &sink).await;
+        match result {
+            Err(ExecutionError::InvalidRequest { reason, .. }) => assert!(
+                reason.contains("not exposed on automated surfaces"),
+                "quarantine reason must name automated-surface exposure, got: {reason}"
+            ),
+            other => panic!("quarantined NSE must fail closed, got: {other:?}"),
+        }
     }
 }

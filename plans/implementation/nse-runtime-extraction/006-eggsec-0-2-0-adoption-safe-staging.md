@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 006B — Eggsec 0.2.0 Adoption and Safe Adapter Staging
 
-Status: blocked
+Status: implemented
 
 Eggsec planning baseline: `51f9747deef7bb5c2488e7dd392b0f2c96667653`
 

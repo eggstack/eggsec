@@ -43,7 +43,7 @@ the standalone extraction and provider-inversion milestones.)
 | datetime | Time | Wrapped | Wall-clock access | Warn | `nse_time_now()` emits nondeterminism warning in CiSafe |
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
-| http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via the runtime provider broker (`broker_http_request`); denied requests never reach the runtime native client. Engine scoped-transport cutover is staged, not active (adapter branch pending release/adoption). |
+| http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via the runtime provider broker (`broker_http_request`); denied requests never reach the runtime native client. Engine scoped-transport adapter (`NseHttpTransportProvider`) replayed in M006B against registry 0.2.0 and staged dormant (no production caller); automated NSE quarantined pending M007. |
 | ssl | Network | PartiallyWrapped | TLS handshake | Deny | TLS ops consult `NseCapabilityContext`; entry-level network gating is mixed — see the M005E advisory/ungated split (standalone `docs/PROVIDERS.md`). |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |

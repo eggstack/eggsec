@@ -15,11 +15,13 @@ metadata:
 
 ## Overview
 
-The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. Eggsec consumes the published `eggsec-nse 0.1.0` crates.io release and re-exports the runtime as `eggsec::nse`.
+The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. Eggsec consumes the published `eggsec-nse 0.2.0` crates.io release and re-exports the runtime as `eggsec::nse`.
+
+> **M006B (2026-09-29):** Eggsec is on registry `0.2.0` (provider surface, breaking `register_vulns_library(lua, capability_ctx)`, corrected send/write accounting). The engine-owned `NseHttpTransportProvider` (`eggsec::nse_http_provider`) is staged but **dormant** — it compiles/tests against 0.2.0 with no production caller (guard-pinned). Automated NSE (MCP/REST/agent/gRPC) is **quarantined** (metadata all-false + fail-closed strict-execution guard); manual CLI/TUI NSE remains available. Re-enablement (protocol-library capability gating + approved-scope threading + controlled adapter activation) is owned by M007. Provider availability is not complete protocol-wide scope enforcement (72-file ungated specialized residual, pinned).
 
 **Ownership:** Runtime APIs, Lua libraries, resolver, profiles, runtime tests,
 clean-room fixtures, and runtime docs are changed in the standalone repository.
-Eggsec dispatch, `nse_bridge`, `nse_http_capability`, CLI/TUI/Python adapters,
+Eggsec dispatch, `nse_bridge`, `nse_http_capability`, `nse_http_provider` (dormant, M006B), CLI/TUI/Python adapters,
 workspace dependency pin, and product integration docs remain in this checkout.
 Run `cargo test --features nse` and other runtime-only commands from the
 standalone repository root. Run Eggsec adapter tests from the Eggsec workspace.
@@ -173,7 +175,7 @@ eggsec_nse::run_cli_with_profile(config, None).await?;
 
 ### Consumer ownership (runtime extraction)
 
-- The runtime crate (`eggsec-nse`) has zero `eggsec-*` dependencies. Report-envelope conversion is engine-owned (`eggsec::nse_bridge::to_report_envelope`); the scoped-transport HTTP adapter is engine-owned (`eggsec::nse_http_capability`).
+- The runtime crate (`eggsec-nse`) has zero `eggsec-*` dependencies. Report-envelope conversion is engine-owned (`eggsec::nse_bridge::to_report_envelope`); the scoped-transport HTTP adapter is engine-owned (`eggsec::nse_http_capability`). The runtime-neutral HTTP provider adapter (`eggsec::nse_http_provider::NseHttpTransportProvider`, replayed in M006B against 0.2.0) is staged but dormant with no production caller; it carries existing approved authority and never manufactures it.
 - Only the engine directly depends on `eggsec-nse`. TUI/Python/CLI consume NSE types through the `eggsec::nse` facade — never declare a direct `eggsec-nse` edge (enforced by architecture guards 144/145/146).
 
 ### CLI Handler Integration

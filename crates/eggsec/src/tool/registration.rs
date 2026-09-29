@@ -332,6 +332,48 @@ mod tests {
     }
 
     #[test]
+    fn automated_listings_omit_quarantined_nse() {
+        // M006B quarantine: even if a future change registers an NSE tool,
+        // the metadata flip keeps it out of every automated listing.
+        for reg in mcp_tool_registrations("ops-agent") {
+            assert_ne!(
+                reg.operation_id, "nse",
+                "ops-agent MCP listing must not offer NSE"
+            );
+        }
+        for reg in rest_tool_registrations() {
+            assert_ne!(reg.operation_id, "nse", "REST listing must not offer NSE");
+        }
+        for reg in grpc_tool_registrations() {
+            assert_ne!(reg.operation_id, "nse", "gRPC listing must not offer NSE");
+        }
+        for reg in agent_tool_registrations() {
+            assert_ne!(reg.operation_id, "nse", "agent listing must not offer NSE");
+        }
+        // The metadata-derived registration itself must carry the quarantine:
+        // even a future NSE tool registration inherits all-false automated
+        // flags from OperationMetadata (M007 re-enablement must revise this).
+        let nse = resolve_tool_registration("nse").expect("metadata-derived NSE registration");
+        assert_eq!(nse.operation_id, "nse");
+        assert!(
+            !nse.mcp_metadata_exposable,
+            "NSE registration must not be MCP-exposable"
+        );
+        assert!(
+            !nse.rest_exposable,
+            "NSE registration must not be REST-exposable"
+        );
+        assert!(
+            !nse.grpc_exposable,
+            "NSE registration must not be gRPC-exposable"
+        );
+        assert!(
+            !nse.agent_exposable,
+            "NSE registration must not be agent-exposable"
+        );
+    }
+
+    #[test]
     fn every_registration_has_operation_metadata() {
         use crate::config::metadata_for_tool_id;
         for reg in all_tool_registrations() {

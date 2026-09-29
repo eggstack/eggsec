@@ -3991,8 +3991,8 @@ else
 fi
 
 # 144. The in-tree runtime must not reappear and the engine must consume the
-# released crates.io runtime (Milestone 004). Runtime crate internals are
-# guarded by its own CI.
+# released crates.io runtime (Milestones 004, 006B: 0.2.0). Runtime crate
+# internals are guarded by its own CI.
 echo ""
 echo "--- Check 144: no local runtime and released registry source (FAIL) ---"
 if [[ -e crates/eggsec-nse ]]; then
@@ -4004,17 +4004,17 @@ fi
 if rg -q 'eggsec-nse\s*=\s*\{[^}]*(git|path|branch|tag|rev)\s*=' crates/eggsec/Cargo.toml; then
   echo "FAIL: engine declares a Git/path/branch/tag/rev eggsec-nse source; only the crates.io release is accepted."
   FAIL=$((FAIL + 1))
-elif ! rg -q 'eggsec-nse = \{ version = "0\.1\.0"' crates/eggsec/Cargo.toml; then
-  echo "FAIL: engine does not consume the released eggsec-nse 0.1.0 crates.io dependency."
+elif ! rg -q 'eggsec-nse = \{ version = "0\.2\.0"' crates/eggsec/Cargo.toml; then
+  echo "FAIL: engine does not consume the released eggsec-nse 0.2.0 crates.io dependency."
   FAIL=$((FAIL + 1))
 elif rg -q -F "git+https://github.com/eggstack/eggsec-nse" Cargo.lock; then
   echo "FAIL: Cargo.lock still resolves eggsec-nse from the temporary Git source."
   FAIL=$((FAIL + 1))
-elif ! rg -q -U 'name = "eggsec-nse"\nversion = "0\.1\.0"\nsource = "registry\+https://github\.com/rust-lang/crates\.io-index"' Cargo.lock; then
-  echo "FAIL: Cargo.lock does not resolve eggsec-nse 0.1.0 from the crates.io registry."
+elif ! rg -q -U 'name = "eggsec-nse"\nversion = "0\.2\.0"\nsource = "registry\+https://github\.com/rust-lang/crates\.io-index"' Cargo.lock; then
+  echo "FAIL: Cargo.lock does not resolve eggsec-nse 0.2.0 from the crates.io registry."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: engine consumes released eggsec-nse 0.1.0 from crates.io; lockfile agrees."
+  echo "PASS: engine consumes released eggsec-nse 0.2.0 from crates.io; lockfile agrees."
 fi
 
 # 145. Only the engine directly consumes the runtime; frontends forward NSE
@@ -4041,8 +4041,17 @@ if ! rg -q '^nse = \["eggsec/nse"\]' crates/eggsec-tui/Cargo.toml || ! rg -q '^n
   echo "FAIL: TUI and Python must forward NSE through eggsec."
   FAIL=$((FAIL + 1))
 fi
-if [[ ! -f crates/eggsec/src/nse_bridge.rs || ! -f crates/eggsec/src/nse_http_capability.rs ]]; then
+if [[ ! -f crates/eggsec/src/nse_bridge.rs || ! -f crates/eggsec/src/nse_http_capability.rs || ! -f crates/eggsec/src/nse_http_provider.rs ]]; then
   echo "FAIL: Eggsec-owned NSE report/transport adapters are missing from the engine."
+  FAIL=$((FAIL + 1))
+fi
+# M006B: the staged NSE HTTP provider adapter is dormant — no production
+# module may construct it until the M007 scope-threading milestone.
+# (Tests inside nse_http_provider.rs are the only allowed constructors.)
+DORMANT_ADAPTER_HITS=$(rg -l 'NseHttpTransportProvider::new|NseHttpTransportProvider::with_' crates/ --glob='*.rs' 2>/dev/null | grep -v '^crates/eggsec/src/nse_http_provider\.rs$' || true)
+if [[ -n "$DORMANT_ADAPTER_HITS" ]]; then
+  echo "$DORMANT_ADAPTER_HITS"
+  echo "FAIL: staged NseHttpTransportProvider has a production constructor outside nse_http_provider.rs (M006B dormancy; M007 owns activation)."
   FAIL=$((FAIL + 1))
 fi
 if [[ $FAIL -eq 0 ]]; then
