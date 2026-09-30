@@ -293,7 +293,7 @@ The `699d374` failure was `M005E violation: direct-socket file set changed` on t
 | Native socket handoff to `ssh2::Session` remains manual-only | `ssh`, `ssh2`, `libssh2` unchanged | holds |
 | Raw packet/interface operations remain manual-only | `packet` unchanged | holds |
 | `src/public_api/api.rs` remains manual/native | unchanged | holds |
-| No breaking public API | `register_target_library(lua)`, `register_radius_library(lua)`, `register_dnsbl_library(lua)` retained as wrappers; only additive `*_with_services` variants; `cargo package` verifies; MSRV 1.89 check passes | holds |
+| No breaking public API | `register_target_library(lua)`, `register_radius_library(lua)`, `register_dnsbl_library(lua)` retained as wrappers; only additive `*_with_services` variants; `cargo package` verifies; MSRV 1.89 check passes | **FAILS — see correction below** |
 | MSRV remains Rust 1.89 | `cargo +1.89.0 check --locked` × 2, `+1.89.0 test --lib` pass | holds |
 
 ## 9. Stop conditions (corrective plan §14)
@@ -307,6 +307,20 @@ None triggered.
 - *Making the guards green required weakening the source scan* — no; the scan was strengthened and the plan's prohibition was honoured.
 - *A breaking public API was required* — no.
 - *Any automated Eggsec exposure changed* — no.
+
+### 8.1 Factual correction (added after M007C gate)
+
+The "No breaking public API" row above originally read `holds`. **That was wrong, and the reasoning was unsound even where its premises were true.**
+
+`cargo semver-checks check-release --baseline-version 0.2.0 --features nse`, run later during M007C, reports one failed major lint (`function_missing`): **74 public functions present in published 0.2.0 are absent from this tree**, with no source-compatible replacement at the original path. 70 are `register_<mod>_library(&Lua)` — removed by the inherited `699d374`, not by the corrective pass — and 4 are `helpers::{tls_connect, tcp_connect_with_timeout, make_addr, parse_socket_addr}`.
+
+The original row cited three facts that are all individually correct: `register_target_library`, `register_radius_library`, and `register_dnsbl_library` were each retained as wrappers, and each of those three wrappers does exist. The inference failed because those three are the *only* modules where a plain entry point was deliberately re-added. The 70-module promoted cohort's plain entry points were removed by `699d374` without that decision being recorded anywhere, and no compatibility tool had been run against the published crate, so nothing in the M007B evidence set could have surfaced it. The retained wrappers and the 70 unretained entry points are the same fact seen from two ends; the row generalized from the three modules that were checked to all of them.
+
+Root cause of the miss, recorded so it is not repeated: the M007B verification instruments were all *source-internal* (residual pins, M005E baseline, manifest↔registration consistency, `cargo package`, MSRV). Every one of them reads the working tree. None of them reads the **published** 0.2.0 artifact. A tree-internal invariant cannot detect a break introduced by comparing the tree to something the tree does not contain. The first cross-boundary check is `cargo semver-checks` against the registry baseline, and that check belongs in M007 from the start, not in the release milestone.
+
+The removal itself is **substantively correct and should not be reverted** — see `007c-closure.md` §4.2, which shows the two `helpers` removals withdraw public capability-bypassing TCP, and confirms by negative probe that the boundary guard rejects their restoration. The defect is the unrecorded decision and the unverified compatibility claim, not the code.
+
+M007C stopped at the gate and was replanned as `007-breaking-0-3-0-release.md`. No §4.2/§5/§6/§7 conclusion in this record is affected by this correction; only the compatibility claim was wrong.
 
 ## 10. Migration and compatibility review
 
@@ -389,5 +403,6 @@ Automated Eggsec NSE remains quarantined. This milestone changed no Eggsec produ
 
 - `plans/registry.md`: M007B → closed with both plans cited; `007-protocol-migration-corrective.md` → closed; `007-standalone-security-patch-release.md` → ready for handoff (unblocked, precondition satisfied); handoff-boundary note moved from M007B to M007C; the NSE subsystem row advanced to "M007B closed".
 - `plans/subsystems/nse-runtime-extraction-roadmap.md`: milestone 007 status advanced; M007C is the current handoff; M007D/E remain gated.
+  - Superseded: M007C was subsequently **blocked** at its §3 public-API gate and replanned as M007C-R (`007-breaking-0-3-0-release.md`, `0.3.0`). See §8.1 and `plans/closure/nse-runtime-extraction/007c-closure.md`.
 - `plans/implementation/nse-runtime-extraction/007-broker-compatible-protocol-migration.md`: `Status: implemented; corrective closure required` → `Status: closed (corrective)`, with a pointer to this record.
 - `plans/implementation/nse-runtime-extraction/007-protocol-migration-corrective.md`: `Status: ready for handoff` → `Status: closed`, with a pointer to this record and a note that its §6 premise was falsified by the audit (recorded rather than silently dropped, per `003-planning-process.md` §7).

@@ -476,25 +476,43 @@ Outcome: specialized direct-I/O residual **97 → 22** (15 ungated + 7 advisory)
 
 #### M007C — Standalone security patch release
 
-Status: **ready for handoff** (unblocked: `007b-closure.md` accepted and hosted standalone CI fully green on the closure SHA).
+Status: **blocked** (the §3 public-API compatibility gate failed with a major break; §3's stop/replan remedy was applied).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md`
+
+Closure record: `plans/closure/nse-runtime-extraction/007c-closure.md` (blocked; archived gate output in `007c-semver-report.txt`)
 
 Implementation repository: `eggstack/eggsec-nse`.
 
 Boundary: public-API compatibility audit, expected 0.2.1 patch publication (or stop/replan as 0.3.0 on any breaking change), exact candidate CI/package qualification, registry/tag/docs.rs verification.
 
-Exit gate: Eggsec has a published immutable registry artifact containing the M007 runtime hardening.
+Outcome: stopped at the §3 gate. `cargo semver-checks` against published 0.2.0 reports one failed major lint, `function_missing` — **74 public functions removed, none source-compatible at the original path** (70 `register_<mod>_library(&Lua)`, 4 `helpers::*`). Two of those four (`tcp_connect_with_timeout`, `tls_connect`) were `pub` in 0.2.0 and returned a raw `std::net::TcpStream` from an unmediated `connect_timeout`, so restoring them would re-expose a capability bypass; patch compatibility is unachievable by construction. 0.2.1 was not published, no tag or release was created, and `0.2.0` remains the published artifact. The break was introduced by the inherited `699d374`; see `007b-closure.md` §8.1 for the corrected compatibility claim and the reason the M007B evidence set could not detect it.
+
+Exit gate: **not met.** Eggsec still has no published immutable registry artifact containing the M007 runtime hardening.
+
+#### M007C-R — Breaking 0.3.0 release (replan of M007C)
+
+Status: **ready for handoff** (current NSE boundary).
+
+Plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`
+
+Implementation repository: `eggstack/eggsec-nse`.
+
+Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` as a deliberate breaking release with explicit migration notes for all 74 removals, harden the boundary guard against the `nse_production_code` truncation caveat, and verify tag/registry/docs.rs/scratch-consumer identity.
+
+Rationale for the version bump rather than restoration: the two direct-connect `helpers` removals withdraw a published capability bypass, so 0.3.0 also discharges a security obligation — published 0.2.0 still exposes them. The release is not a semver formality.
+
+Exit gate: Eggsec has a published immutable `0.3.0` registry artifact whose migration notes account for all 74 removals, and M007D may adopt it.
 
 #### M007D — Eggsec approved-scope/profile threading and scoped provider activation
 
-Status: **blocked on accepted M007C closure**.
+Status: **blocked on accepted M007C-R closure** (M007C closed blocked, so the release dependency is unmet).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md`
 
 Implementation repository: `eggstack/eggsec`.
 
-Boundary: adopt the M007 runtime release; bind approval-time `TargetScope` facts into `ApprovedExecution`; extract generic owned scope authority; implement scoped DNS/TCP/UDP providers; compose the authority-bound HTTP adapter with Eggfetch; map Eggsec strict profiles to NSE safe profiles; route only `execute_approved_execution()` through scoped services.
+Boundary: adopt the M007 `0.3.0` runtime release; bind approval-time `TargetScope` facts into `ApprovedExecution`; extract generic owned scope authority; implement scoped DNS/TCP/UDP providers; compose the authority-bound HTTP adapter with Eggfetch; map Eggsec strict profiles to NSE safe profiles; route only `execute_approved_execution()` through scoped services.
 
 Exit gate: scope-bearing strict NSE can execute a safe provider-backed fixture with no native fallback, while the scope-less strict entry still rejects NSE and automated metadata remains quarantined.
 
@@ -619,4 +637,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green) | M007C is current handoff; M007D-E remain dependency-gated by ADR-0004; automated NSE stays quarantined until 007E |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green); `plans/closure/nse-runtime-extraction/007c-closure.md` (007C, **blocked** — 74-function major break, 0.2.1 not published) | M007C-R (0.3.0) is current handoff; M007D-E remain dependency-gated by ADR-0004; automated NSE stays quarantined until 007E |

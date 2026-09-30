@@ -1,6 +1,22 @@
 # NSE Runtime Extraction Milestone 007C — Standalone Security Patch Release
 
-Status: ready for handoff
+Status: blocked
+
+## Deviation record — M007C stopped at the §3 semver gate
+
+**Blocked.** The §3 gate was executed and failed with a major break. Closure record: `plans/closure/nse-runtime-extraction/007c-closure.md` (Status: blocked), with the archived gate output in `007c-semver-report.txt`.
+
+`cargo semver-checks check-release --baseline-version 0.2.0 --features nse` reports one failed major lint, `function_missing`: **74 public functions present in published 0.2.0 are absent from the candidate, none with a source-compatible replacement at its original path.** 70 are `register_<mod>_library(&Lua)` (now `register_<mod>_library_with_services(&Lua, &NseCapabilityContext, &NseHostServices)`); 4 are `helpers::tls_connect`, `helpers::tcp_connect_with_timeout`, `helpers::make_addr`, `helpers::parse_socket_addr`.
+
+§3's remedy was therefore applied verbatim: stop, mark blocked, replan. §9's "any breaking API change is found" stop condition triggered, so **0.2.1 was not published and no tag, release, or registry mutation was performed.** `0.2.0` remains the published artifact and the comparison baseline.
+
+The break cannot be shimmed away. `helpers::tls_connect` and `helpers::tcp_connect_with_timeout` were `pub` in 0.2.0 and returned a raw `std::net::TcpStream` from an unmediated `TcpStream::connect_timeout`. Restoring them would re-expose host TCP outside the capability context — the same defect shape as the M007B high finding, reachable through public API. Patch compatibility is therefore unachievable by construction, not merely unverified.
+
+Replan: **`plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` (M007C-R)**, which publishes `0.3.0` with explicit migration notes. M007D remains blocked; M007C's exit gate ("Eggsec has a published immutable registry artifact containing the M007 runtime hardening") is not met.
+
+**Correction to the note below.** The original carry-forward text asserted that "the pre-existing `register_*_library(lua)` signatures are retained, so this is expected to remain a `0.2.1` patch release." That was wrong. `register_target_library`, `register_radius_library`, and `register_dnsbl_library` were retained as wrappers, and those three do exist — but the 70-module promoted cohort was never checked, and its plain entry points were removed by `699d374` without the decision being recorded. A carry-forward note must not pre-judge a gate outcome; the corrected text is preserved below for history and is superseded by this record.
+
+## Original handoff text (superseded, retained for history)
 
 Unblocked: `plans/closure/nse-runtime-extraction/007b-closure.md` is accepted and hosted standalone CI is fully green on the closure SHA (`d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19`, run `36640412317`, 5/5 jobs). Precondition from the original handoff satisfied.
 

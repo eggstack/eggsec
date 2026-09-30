@@ -146,7 +146,7 @@ Do not duplicate standalone orchestration.
 
 ## 9. Dependency adoption
 
-Move Eggsec from `eggsec-nse 0.2.0` to the M007C published version (expected 0.2.1).
+Move Eggsec from `eggsec-nse 0.2.0` to the M007C-R published version (`0.3.0`). **The `expected 0.2.1` figure in this step was superseded:** M007C's public-API gate failed with a major break (74 removed public functions, `plans/closure/nse-runtime-extraction/007c-closure.md`), so no 0.2.1 exists and the adoption target is the breaking release planned in `007-breaking-0-3-0-release.md`. M007D must plan for the full 0.2.0 -> 0.3.0 migration: thread `NseCapabilityContext` + `NseHostServices` into every `register_*_library_with_services` call, and drop any use of the withdrawn `helpers::tls_connect` / `helpers::tcp_connect_with_timeout`.
 
 Update:
 
