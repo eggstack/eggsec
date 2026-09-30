@@ -498,7 +498,7 @@ Plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md
 
 Implementation repository: `eggstack/eggsec-nse`.
 
-Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` as a deliberate breaking release with explicit migration notes for all 74 removals, harden the boundary guard against the `nse_production_code` truncation caveat, and verify tag/registry/docs.rs/scratch-consumer identity.
+Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` as a deliberate breaking/security release with explicit migration notes for all 74 removals, harden the `nse_production_code` truncation caveat, use authentication-path-correct immutable tag/publication sequencing, verify tag/registry/docs.rs/scratch-consumer identity, and record the advisory/yank/disclosure disposition for bypass-bearing `0.2.0`.
 
 Rationale for the version bump rather than restoration: the two direct-connect `helpers` removals withdraw a published capability bypass, so 0.3.0 also discharges a security obligation — published 0.2.0 still exposes them. The release is not a semver formality.
 
