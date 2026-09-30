@@ -4,11 +4,11 @@ Status: blocked
 
 Planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 
-Eggsec runtime baseline: crates.io `eggsec-nse 0.2.0`
+Eggsec runtime baseline: crates.io `eggsec-nse 0.2.0` (adoption target: published `0.3.0` from M007C-R)
 
 Hard dependency:
 
-- accepted closure of `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md` and adoption target version resolved (expected `0.2.1`).
+- accepted closure `plans/closure/nse-runtime-extraction/007c-r-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`, with immutable crates.io `eggsec-nse 0.3.0` verified and ready for adoption.
 
 Source roadmap:
 
