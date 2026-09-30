@@ -70,7 +70,8 @@ At `d4a22f1`:
 - `README.md` / `docs/PROVIDERS.md` accuracy pass for the new registration signature.
 - Release-workflow verification.
 - Exact-candidate qualification (§10).
-- Publication, tag, GitHub Release, docs.rs confirmation, scratch-consumer verification.
+- Publication, immutable tag/GitHub Release, docs.rs confirmation, scratch-consumer verification, with authentication-path-specific sequencing (Trusted Publishing vs manual-token recovery).
+- Post-release disposition of published `0.2.0` as the known vulnerable/bypass-bearing predecessor: explicit security note, yank/advisory decision, and rationale.
 - One static-guard hardening item from `007c-closure.md` §10 (the `nse_production_code` truncation caveat), if it can be done without changing residual pins.
 - Closure record `007c-r-closure.md`.
 
@@ -142,11 +143,51 @@ Acceptance evidence: §10 block, all green, on the exact candidate; hosted CI gr
 
 ### Work package E — Publication and post-publication verification
 
-Intent: create the immutable artifact and prove it is consumable.
+Intent: create the immutable artifact and prove it is consumable without creating a tag/source ambiguity.
 
 Required changes: none to source.
 
-Acceptance evidence: `0.3.0` absent before publication; publish without `--allow-dirty`/`--no-verify`; tag resolves to the candidate; published archive VCS identity equals the candidate; docs.rs state recorded; scratch consumer resolves `eggsec-nse = { version = "=0.3.0", features = ["nse"] }` from the registry with no path/git fallback; `nse`, `nse-ssh2`, `nse,sandbox` all qualify in the scratch consumer.
+Choose exactly one publication path after the candidate SHA is frozen and fully qualified.
+
+#### Path E1 — Trusted Publishing is configured registry-side
+
+The existing release workflow is tag-triggered, so the order is necessarily:
+
+1. verify `0.3.0` is absent;
+2. create immutable tag `v0.3.0` at the exact qualified candidate;
+3. allow the tag-triggered workflow to run;
+4. verify the workflow publishes `0.3.0` from that tag/source identity;
+5. only after registry verification, create the GitHub Release.
+
+Because the tag is immutable, a workflow failure after tag creation is a stop condition. Do **not** move/recreate `v0.3.0` to a different commit. If the failure requires a source change, leave the failed tag as evidence and write a corrective version plan rather than pretending the tag never existed.
+
+#### Path E2 — Trusted Publishing is still unavailable; manual-token recovery
+
+The order is:
+
+1. verify `0.3.0` is absent;
+2. publish manually from the exact clean qualified candidate using the documented secure token mechanism;
+3. verify the registry artifact/source identity;
+4. create immutable `v0.3.0` at that same candidate;
+5. create the GitHub Release.
+
+Do not create the tag before manual publication merely to imitate the Trusted-Publishing path.
+
+Acceptance evidence: one and only one path is recorded; no `--allow-dirty`/`--no-verify`; registry artifact VCS identity equals the candidate; `v0.3.0` resolves to that candidate; GitHub Release is created only after registry verification; docs.rs state recorded; scratch consumer resolves `eggsec-nse = { version = "=0.3.0", features = ["nse"] }` from the registry with no path/git fallback; `nse`, `nse-ssh2`, and `nse,sandbox` all qualify.
+
+### Work package F — Security communication and predecessor-version disposition
+
+Intent: make the security meaning of the release explicit without overstating exploitability.
+
+Required changes/evidence:
+
+- release notes must state that `0.2.0` exposed `helpers::tcp_connect_with_timeout` and `helpers::tls_connect`, which returned raw `TcpStream` values outside the capability broker;
+- record whether `0.2.0` is left published, yanked, or referenced by a GitHub Security Advisory;
+- do not yank automatically merely because a fixed release exists: evaluate ecosystem breakage, whether Eggsec itself exposed the bypass through a supported automated path, and whether users need an installable migration baseline;
+- if a GHSA is created, affected/fixed version ranges and severity must be justified from the actual library threat model rather than inferred from the word "bypass";
+- if no advisory/yank is created, closure must record the rationale and point users to the 0.3.0 migration/security notes.
+
+Acceptance evidence: closure contains an explicit predecessor-version disposition and security-communication decision; there is no silent ambiguity about the known 0.2.0 bypass-bearing API.
 
 ## 8. Failure, cancellation, restart, and contention semantics
 
@@ -197,8 +238,10 @@ Hosted Linux/macOS/Windows/MSRV/SSH CI must be green on the same candidate.
 5. Scratch consumer resolves `=0.3.0` from the registry for `nse`, `nse-ssh2`, and `nse,sandbox`, with no path/git fallback.
 6. docs.rs state recorded.
 7. Guard hardening either lands with a passing negative probe, or is recorded as a low finding.
-8. No `eggstack/eggsec` change.
-9. Closure record `007c-r-closure.md` written, and M007D's hard dependency updated to point at it.
+8. No `eggstack/eggsec` production-code change.
+9. Publication sequencing matches the selected authentication path; no tag is moved/recreated.
+10. The security/advisory/yank disposition for `0.2.0` is recorded explicitly.
+11. Closure record `007c-r-closure.md` is written and M007D is unblocked against that closure.
 
 ## 12. Stop conditions
 
@@ -222,7 +265,9 @@ Stop and report rather than improvise when:
 - exact candidate SHA and hosted run;
 - full §10 command list with pass/fail per command;
 - package and `publish --dry-run` result;
-- publication method (Trusted Publishing if configured, else the manual-token path, stated without exposing credentials);
+- publication method and exact sequencing (Trusted Publishing tag-trigger path or manual-token recovery), stated without exposing credentials;
+- immutable tag creation point relative to publication and proof it was never moved/recreated;
+- `0.2.0` security communication / yank / advisory disposition with rationale;
 - registry artifact and source/tag identity;
 - docs.rs state;
 - scratch consumer results for all three feature combinations;
