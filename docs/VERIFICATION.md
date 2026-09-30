@@ -25,6 +25,9 @@ cargo test -p eggsec --no-default-features --test tool_registration --test loadt
 cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 cargo test -p eggsec-report-model --tests
+cargo test -p eggsec-policy --tests
+cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
+cargo test -p eggsec-tui --lib --no-fail-fast
 bash scripts/check-architecture-guards.sh
 ```
 
@@ -209,7 +212,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make check-msrv` | MSRV compile check | Deep checks only (requires `rustup toolchain install 1.89`) |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
-| `make test-feature-matrix` | Feature metadata validation | Every PR/push (part of `make check`) |
+| `make test-feature-matrix` | Feature metadata validation | Every PR/push (standalone target; `make check` covers the same ground via `--tests`) |
 | `make clippy-domain` | Lint domain/platform crates | Pre-release (part of `make check-full`) |
 | `make test-tui-pty` | TUI PTY regression smoke (stdlib `pty`, real binary) | Pre-release / weekly (deep checks; part of `make check-full`) |
 | `make check-features-individual` | Exhaustive per-feature compile sweep | Pre-release / weekly (deep checks) |

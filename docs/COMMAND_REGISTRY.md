@@ -97,6 +97,7 @@ with TUI tabs use `tui_visible`.
 | `ai-analyze` | (none) | PassiveAnalytical | `ai-integration` | Yes | No |
 | `serve` | (none) | FrontendServer | `rest-api` | No | No |
 | `mcp-serve` | (none) | FrontendServer | `rest-api` | No | No |
+| `codegg-mcp` (alias `mcp-codegg`) | (none — shares the `mcp-serve` registration; `command_id()` maps both variants to `"mcp-serve"`) | FrontendServer | `rest-api` | No | No |
 | `agent` | (none) | FrontendServer | `rest-api` | No | No |
 | `grpc` | (none) | FrontendServer | `grpc-api` | No | No |
 | `cluster` | (none) | FrontendServer | — | No | No |

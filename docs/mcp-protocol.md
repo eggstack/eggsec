@@ -17,7 +17,7 @@ eggsec mcp-serve --stdio
 # Coding agent profile (stdio + restricted tools)
 eggsec mcp-serve --stdio --profile coding-agent
 
-# Shorthand for coding agent via codegg-mcp alias
+# Shorthand for coding agent via codegg-mcp subcommand (alias: mcp-codegg)
 eggsec codegg-mcp
 ```
 
@@ -76,8 +76,8 @@ eggsec mcp-serve --stdio --profile coding-agent
 # Coding-agent shorthand
 eggsec codegg-mcp
 
-# Coding-agent with scope file
-eggsec mcp-serve --stdio --profile coding-agent --scope-file scope.toml
+# Coding-agent with scope file (global --scope flag; mcp-serve has no --scope-file)
+eggsec mcp-serve --stdio --profile coding-agent --scope scope.toml
 
 # Coding-agent with example config
 # See examples/codegg-mcp.local.toml

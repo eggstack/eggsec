@@ -119,7 +119,7 @@ Key differences in daemon mode:
 
 ### Theming
 
-50+ Halloy-format themes packaged via LZMA. `cyber-red` fallback always available. `Theme::default()` returns `cyber-red`.
+50 Halloy-format themes packaged via LZMA (`PACKAGED_THEMES_FILE_COUNT = 50`). `cyber-red` fallback always available. `Theme::default()` returns `cyber-red`.
 
 New code should prefer explicit `&Theme` parameters:
 ```rust

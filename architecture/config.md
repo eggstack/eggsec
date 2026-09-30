@@ -356,7 +356,7 @@ Key methods:
 
 ### EnforcedDispatcher
 
-REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control — strict programmatic surfaces cannot accidentally bypass policy.
+REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `ApprovedExecution` bundle (token + scope snapshot from the same context) before `dispatch_execution()`. This enforces type-level access control — strict programmatic surfaces cannot accidentally bypass policy. (`dispatch_checked()` with `ApprovedOperation` alone remains only for scope-insensitive tools.)
 
 ## Testing
 

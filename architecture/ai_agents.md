@@ -604,7 +604,7 @@ cargo test --lib -p eggsec tool::
 
 ### Gotchas
 
-- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`dispatcher.rs:227-228`) — strict surfaces must use `EnforcedDispatcher::dispatch_checked()`.
+- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`dispatcher.rs:227-228`) — strict surfaces must use `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (`dispatch_checked()` + `ApprovedOperation` only for scope-insensitive tools).
 - `ToolRegistry::register()` rejects duplicate IDs with `EggsecError::Config` (`registry.rs:59-66`).
 - `rest.rs` enforces `MAX_PAYLOAD_SIZE = 10MB` and `MAX_URL_LENGTH = 2048` (`rest.rs:28-29`).
 - MCP `tools/call` enforcement uses error codes: `-32020` (tool denied), `-32021` (argument denied), `-32022` (concurrency exceeded), `-32024` (target denied), `-32025` (enforcement denial).
@@ -615,7 +615,7 @@ cargo test --lib -p eggsec tool::
 
 1. **Single source of truth**: `OperationMetadata` defines all operation policy. Never build policy checks inline. Every `OperationDescriptor` derives from metadata via `metadata.descriptor_for_target()`.
 
-2. **ApprovedOperation is the only valid dispatch token**: Strict surfaces (REST, MCP, gRPC, agent) must dispatch through `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`. For scope-sensitive tools, strict surfaces dispatch via `EnforcedDispatcher::dispatch_execution()` (`dispatcher.rs:355`) with an `ApprovedExecution` bundle (approval token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`); raw `dispatch_checked()` with `ApprovedOperation` alone remains for scope-insensitive tools.
+2. **ApprovedExecution is the dispatch bundle for scope-bearing operations**: Strict surfaces (REST, MCP, gRPC, agent) must dispatch through `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (approval token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`). Raw `ToolDispatcher::dispatch()` is `pub(crate)` and `#[doc(hidden)]`. Raw `dispatch_checked()` with `ApprovedOperation` alone remains only for scope-insensitive tools.
 
 3. **EnforcementContext::evaluate() is the mandatory pre-dispatch gate**: All surfaces must call it before dispatch. Scope must come from `LoadedScope`, never raw `Scope`.
 

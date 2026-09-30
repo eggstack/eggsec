@@ -35,7 +35,7 @@ Examples:
 pub(crate) const WAF_ABOUT: &str = "Evaluate WAF detection and evasion resistance
 
 Detects WAF presence and evaluates evasion resistance using various techniques.
-Supports 30+ WAF products with header manipulation, HTTP smuggling, and evasion resistance analysis.
+Supports 34 WAF products with header manipulation, HTTP smuggling, and evasion resistance analysis.
 
 Examples:
   eggsec waf https://example.com

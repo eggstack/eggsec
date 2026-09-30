@@ -10,13 +10,13 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 3. **Fail-closed strict**: Strict surfaces (`McpStrict`, `AgentStrict`, `CiStrict`) must fail closed on `Warn`, `RequireConfirmation`, or `Deny`. Only `Allow` permits dispatch.
 
-4. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, gRPC, Agent) must use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. Internal helpers (e.g., the pipeline orchestrator) may use raw dispatch only after caller-level enforcement has been satisfied.
+4. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, gRPC, Agent) must dispatch only via `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`). Raw `dispatch_checked()` with `ApprovedOperation` alone remains only for scope-insensitive tools. Internal helpers (e.g., the pipeline orchestrator) may use raw dispatch only after caller-level enforcement has been satisfied.
 
 5. **Token uniqueness**: `ApprovedOperation` tokens must not be reusable for a different tool or target. `dispatch_checked()` verifies both tool name (alias-aware) and target match.
 
 6. **Scope provenance**: Automated networked operations requiring explicit scope must check `LoadedScope::is_explicit_manifest()`. `DefaultEmpty` scope must not satisfy this requirement.
 
-7. **Domain crates don't authorize**: Domain crates (`eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse`) must not decide authorization. They declare capabilities and execute; enforcement is the caller's responsibility.
+7. **Domain crates don't authorize**: Domain crates (`eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`) must not decide authorization. They declare capabilities and execute; enforcement is the caller's responsibility. (`eggsec-nse` is an external published dependency, not a workspace crate, and is held to the same boundary.)
 
 8. **Feature gates ≠ authorization**: Feature gates are compile-time guards, not authorization. Runtime policy evaluation via `EnforcementContext::evaluate()` must still apply even when features are enabled.
 

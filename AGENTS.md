@@ -20,13 +20,13 @@ make check-python           # only when Python bindings/stubs/docs/scripts chang
 
 ## Workspace
 
-20 crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`. CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
+19 workspace crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`. CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
 
 - `eggsec-core`, `eggsec-tool-core`: shared types, tool DTOs.
 - `eggsec-report-model`: stable report/evidence data contracts (data only). `eggsec-output` renders over it, never the reverse.
 - `eggsec-policy`: deterministic authorization semantics only (data + pure algorithms; no Tokio/network/filesystem/frontends; engine bridges DNS/features/transport).
 - `eggsec-transport`: scope-aware outbound HTTP contract (neutral DTOs, mandatory `NetworkAuthority`, recording fake). `eggsec-transport-eggfetch`: `HttpTransport` over published `eggfetch-core`.
-- `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse`: domain crates (never authorize — caller enforces).
+- `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`: domain crates (never authorize — caller enforces). `eggsec-nse` is an external published dependency (optional engine `nse` feature), not a workspace crate.
 - `eggsec-runtime`, `eggsec-daemon`, `eggsec-daemon-protocol`, `eggsec-ui-model`: task lifecycle, session host, IPC types, view DTOs.
 - `eggsec-agent`: coordination (registry, scheduler, lifecycle, cron). `eggsec-python`: PyO3/maturin bindings (`maturin develop` from `crates/eggsec-python/`).
 
@@ -76,7 +76,9 @@ System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-d
 
 ## Where to look
 
-- Contract/docs: `docs/VERIFICATION.md`, `docs/ARCHITECTURE.md`, `docs/ENFORCEMENT_MODES.md`, `docs/CI_ARCHITECTURE_GUARDS.md`, `docs/EXTENSIBILITY.md` (adding operations/domains/commands).
+- Contract/docs: `docs/VERIFICATION.md` (exact `make check` expansion), `docs/ARCHITECTURE.md`, `docs/ENFORCEMENT_MODES.md`, `docs/CI_ARCHITECTURE_GUARDS.md`, `docs/EXTENSIBILITY.md` (adding operations/domains/commands), `docs/COMMAND_REGISTRY.md` (command metadata; `codegg-mcp` shares the `mcp-serve` registration).
 - Module index: `architecture/overview.md`. Per-module guidance: `crates/eggsec/src/<module>/AGENTS.override.md` + `architecture/<topic>.md` + skill in `.opencode/skills/`. Load all three when working in a module.
+- Area index: enforcement → `architecture/config.md` + `docs/ENFORCEMENT_MODES.md`; dispatch → `architecture/dispatch.md`; transport → `architecture/transport.md` + `architecture/transport_eggfetch.md` (+ baseline/closure `architecture/network_dependency_{baseline,closure}.md`); NSE → `architecture/nse_integration.md` (engine side only — runtime internals live in the upstream `eggsec-nse` repo); TUI → `architecture/tui.md`; daemon/IPC → `architecture/daemon.md`; Python → `architecture/python_api.md` + `docs/python/domain-maturity.md`; supply chain → `architecture/supply_chain.md` + `docs/DEPENDENCY_EXCEPTIONS.md`.
+- CLI facts agents get wrong: `mcp-serve` has no `--scope-file` (use global `--scope`); `codegg-mcp` is a separate subcommand (alias `mcp-codegg`), not an alias.
 - Skills drift: when you rename a feature, change a public signature, or change a counted set (operations, aliases, tabs, payloads, techniques, endpoints, probes, descriptors), update the matching skill's claims alongside `architecture/<topic>.md` — skills are not covered by type checks, only by guard check 32 (Nmap-parity wording).
 - Skills: `.opencode/skills/` is canonical; `.skills/`, `.agents/skills/`, `.claude/skills/` are symlinks to it (edit once).

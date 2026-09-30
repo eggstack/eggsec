@@ -185,12 +185,12 @@ The CLI handler (`handle_nse` in `crates/eggsec/src/commands/handlers/scan.rs`) 
 ## Features
 
 ```
-nse = ["tool-api", "dep:eggsec-nse", "eggsec-nse/nse"]
+nse = ["tool-api", "dep:eggsec-nse", "eggsec-nse/nse", "dep:eggsec-report-model"]
 nse-ssh2 = ["nse", "eggsec-nse/nse-ssh2", "dep:ssh2"]
 nse-sandbox = ["nse", "eggsec-nse/sandbox"]  # Enables SandboxConfig enforcement
 ```
 
-## Libraries (167 implementations, 44 registry descriptors)
+## Libraries (167 implementations, 43 registry descriptors)
 
 Located in `src/libraries/`:
 - **socket.rs** (907 lines) - TCP/UDP/SCTP sockets with sandbox enforcement
@@ -451,6 +451,8 @@ let result = match executor.run_script(script) {
 ```
 
 ## Compatibility Corpus
+
+> Scope note: this section documents the **standalone `eggsec-nse` repository** (milestones 3–6 era). The fixtures, harnesses, and test commands below do **not** exist in this checkout — here the NSE surface is `crates/eggsec/tests/nse_tests.rs` (174 tests), `nse_bridge_tests.rs`, `nse_integration_tests.rs`, and `nse_real_scripts.rs`. Run local NSE checks with `make test-nse` (`-p eggsec --features nse,cli`).
 
 A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
 

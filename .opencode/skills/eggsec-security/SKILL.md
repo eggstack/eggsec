@@ -216,10 +216,13 @@ eggsec mcp-serve --port 8081
 
 # Available endpoints:
 # GET  /health
+# GET  /metrics
 # GET  /openapi.json
 # GET  /api/v1/tools
 # GET  /api/v1/tools/:tool_id
 # POST /api/v1/tools/:tool_id/execute
+# POST /api/v1/tools/:tool_id/preflight
+# GET  /ws  (requires `ws-api` feature)
 # GET  /v1/models
 # GET  /v1/models/:model_id
 # POST /v1/chat/completions

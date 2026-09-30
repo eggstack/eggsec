@@ -374,7 +374,7 @@ fn generate_response(
     } else if query_lower.contains("fuzz") || query_lower.contains("payload") {
         "I can generate security testing payloads for various vulnerability types including SQL injection, XSS, SSRF, path traversal, and more. Use the fuzz tool to test your target.".to_string()
     } else if query_lower.contains("waf") {
-        "I can detect and attempt to bypass Web Application Firewalls. I support detection of 30+ WAF products and various bypass techniques including header manipulation and HTTP smuggling.".to_string()
+        "I can detect and attempt to bypass Web Application Firewalls. I support detection of 34 WAF products and various bypass techniques including header manipulation and HTTP smuggling.".to_string()
     } else if query_lower.contains("recon") || query_lower.contains("discover") {
         "I can perform passive reconnaissance including DNS enumeration, WHOIS lookup, SSL/TLS analysis, subdomain discovery, technology detection, and CVE mapping.".to_string()
     } else {

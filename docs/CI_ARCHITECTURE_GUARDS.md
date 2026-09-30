@@ -14,7 +14,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 | No-default build | `cargo check --workspace --no-default-features` | Workspace compiles without optional features |
 | Dependency policy | `make check-deps` (`cargo deny --workspace --all-features check`) | Advisories, licenses, bans, sources over the full feature closure |
 | Clippy | `make clippy` (engine lib + leaf crates, `-D warnings`) | Code quality on engine and leaf crates |
-| Package tests | `cargo test -p eggsec --features rest-api --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
+| Package tests | `cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
 | Report envelope | `cargo test -p eggsec-output --tests` + `cargo test -p eggsec-report-model --tests` | Output rendering tests + model contract roundtrip |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
@@ -37,7 +37,7 @@ Alternatively, run the individual commands:
 cargo fmt --all --check
 cargo check --workspace --no-default-features
 make clippy
-cargo test -p eggsec --features rest-api --tests --no-fail-fast
+cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 cargo test -p eggsec-report-model --tests
 bash scripts/check-architecture-guards.sh

@@ -182,7 +182,7 @@ if !scope.is_target_allowed("example.com")? {
 cargo test --lib -p eggsec config::        # All config tests
 cargo test --lib -p eggsec config::loader  # Loader tests only
 cargo test --lib -p eggsec config::scope   # Scope tests only
-cargo test --lib -p eggsec config::policy_decision  # Enforcement policy tests
+cargo test -p eggsec-policy --tests  # Enforcement policy unit tests (pure policy crate)
 cargo test --test enforcement_matrix -p eggsec      # Cross-surface enforcement matrix
 ```
 
@@ -191,7 +191,7 @@ See inline tests in:
 - `config/loader.rs` - Config loading, file discovery, TOML/YAML parsing
 - `config/scope.rs` - Scope rule matching, CIDR, wildcard patterns
 - `config/settings.rs` - Validation, defaults
-- `config/policy_decision.rs` - 82 enforcement policy tests (Phase 4 regression coverage for manual discretion invariants)
+- `config/policy_decision.rs` - `EnforcementContext` facade (no inline tests; pure policy tests live in `eggsec-policy`: 81 total across scope/policy/features/decision/catalog/approval/address)
 - `tests/enforcement_matrix.rs` - 169 cross-surface enforcement matrix tests (Phase 8 dual-mode contract coverage)
 
 ## Security Notes
@@ -230,7 +230,7 @@ For full config management, use CLI commands or edit config files directly when 
 - `architecture/network_dependency_baseline.md` - Phase A dependency/parity/policy baseline
 - `architecture/transport.md` - Phase B scoped transport contract (DTOs, authority, binding, fake)
 - `crates/eggsec/tests/network_policy_invariants.rs` - 12 outbound authorization invariants
-- `crates/eggsec/tests/transport_contract.rs` - 12 contract closure tests through the fake
+- `crates/eggsec/tests/transport_contract.rs` - 13 contract closure tests through the fake
 
 ## Phase C Policy Extraction (2026-09-16)
 

@@ -22,7 +22,7 @@ Use this skill when:
 
 ### 2. Verify Against Code
 - Locate the implementation in `crates/eggsec/src/<module>/`
-- For NSE: `eggsec-nse/src/`
+- For NSE: the runtime is external (`eggsec-nse` crates.io release, re-exported as `eggsec::nse`) — review `crates/eggsec/src/nse_bridge.rs` and the engine adapter, not a local `src/` tree
 - Check if implementation matches documented claims
 
 ### 3. Check for Bugs
