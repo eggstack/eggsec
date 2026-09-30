@@ -11,10 +11,10 @@ This is an **advanced threat hunting** surface — all sub-modules make real HTT
 | Aspect | Detail |
 |--------|--------|
 | Root module | `crates/eggsec/src/hunt/mod.rs` |
-| Cargo feature | `advanced-hunting` (marker-only, no deps) — `Cargo.toml:320` |
+| Cargo feature | `advanced-hunting` (marker-only, no deps) — `Cargo.toml:327` |
 | Feature gate in lib.rs | `#[cfg(feature = "advanced-hunting")] pub mod hunt;` at `lib.rs:111`; `#[cfg(not(feature = "advanced-hunting"))] #[allow(dead_code)] mod hunt;` at `lib.rs:113-115` |
 | When disabled | Private stub module with `#[allow(dead_code)]` — compiles but is unused |
-| Included in | `full` feature set (`Cargo.toml:342`) |
+| Included in | `full` feature set (`Cargo.toml:349`) |
 
 ## Architecture
 

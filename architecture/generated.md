@@ -46,7 +46,7 @@ Only generates the `.bin` descriptor file — the Rust code is never regenerated
 
 ## Feature Gate
 
-**Required feature**: `grpc-api` (declared in `Cargo.toml:302`):
+**Required feature**: `grpc-api` (declared in `Cargo.toml:309`):
 ```toml
 grpc-api = ["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost",
             "tonic-reflection", "dep:prost-build", "async-stream", "tokio-stream"]

@@ -214,9 +214,9 @@ TUI Settings tab exposes notification configuration (`tabs/settings/main.rs`):
 `NotificationPayload` serializes to JSON for all webhook delivery. No direct integration with `eggsec-output` report formats.
 
 ## Testing
+- **Unit tests** (`notify/mod.rs:193-380`): 11 tests covering defaults, `is_enabled`, serialization, scan-complete suppression logic (incl. async suppression tests).
 
-- **Unit tests** (`notify/mod.rs:193-380`): 8 tests covering defaults, `is_enabled`, serialization, scan-complete suppression logic.
-- **Unit tests** (`notify/webhook.rs:376-793`): 13 tests covering event serialization, payload serialization, finding summary, scan stats, webhook config, notifier enablement, platform payload builders (Slack/Discord/Teams), HMAC signature generation, event filtering, platform event filtering.
+- **Unit tests** (`notify/webhook.rs:376-793`): 18 tests covering event serialization, payload serialization, finding summary, scan stats, webhook config, notifier enablement, platform payload builders (Slack/Discord/Teams), HMAC signature generation, event filtering, platform event filtering.
 - **Total**: 21 tests.
 
 ## Invariants & Gotchas

@@ -28,7 +28,7 @@ Every number in this document was verified against source on 2026-08-25; console
 
 ## Feature Gate: `logging-subscriber`
 
-Declared in `crates/eggsec/Cargo.toml:333`:
+Declared in `crates/eggsec/Cargo.toml:340`:
 ```toml
 logging-subscriber = ["dep:tracing-subscriber", "dep:tracing-appender"]
 ```

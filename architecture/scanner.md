@@ -40,6 +40,7 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 | `ports/spoofed.rs` | 665 | Raw-socket spoofed scanning, packet trace, response parsing |
 | `endpoints.rs` | 1202 | HTTP endpoint discovery, `scan_endpoints()`, wordlist integration |
 | `fingerprint.rs` | 841 | TCP service fingerprinting, `fingerprint_services()`, `fingerprint_port()` |
+| `service_data.rs` | 302 | Fingerprint service data (declared at `scanner/mod.rs:88`, re-exported) |
 | `fingerprint_types.rs` | 188 | `FingerprintConfidence`, `ServiceIdentity`, `EnhancedFingerprint` |
 | `udp_fingerprint.rs` | 601 | UDP service fingerprinting, `fingerprint_udp_services()` |
 | `icmp_probe.rs` | 293 | ICMP echo, `ping_host()` |

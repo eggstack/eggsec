@@ -10,7 +10,7 @@ Supply chain security analysis including SBOM generation (CycloneDX and SPDX for
 |-------|-------------|-------------|--------------|------------|
 | `eggsec` | `supply_chain/` | `sbom` | `lib.rs:146-148` | `pub mod` when enabled, `mod` (dead_code) when disabled |
 
-The `sbom` feature is enabled via `sbom = ["cyclonedx", "spdx", "walkdir"]`. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.) The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:82`.
+The `sbom` feature is enabled via `sbom = ["cyclonedx-bom", "spdx", "walkdir"]`. (Note: it is *not* part of the `rest-api` feature set, and there is no `full-no-system` feature — see `crates/eggsec/Cargo.toml`.) The `scanner::scan_repo()` function is further gated behind `#[cfg(feature = "sbom")]` at `scanner.rs:82`.
 
 ## Files
 

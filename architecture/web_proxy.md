@@ -75,7 +75,7 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 | `cert.rs` | 180 | `CertGenerator` (Arc<RwLock<HashMap>> cache, 24h default), `CertMaterial` |
 | `interceptor.rs` | 263 | `InterceptProxy`, `InterceptConfig`, `InterceptMode` (Monitor/Intercept/Allow), `InterceptRequest`, `InterceptResponse`, `InterceptEvent`, `InterceptDecision`, `RequestModification`, `ResponseModification`, `validate_header_value()` |
 | `rules.rs` | 1532 | `InterceptRule`, `RuleSet`, `EnhancedRule` (id, name, condition, action, priority, modifications), `EnhancedRuleSet` (prefix-indexed, async eval), `RuleCondition` (13 variants), `RuleAction` (8 variants: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag), `RuleContext`, `InjectResponseConfig` |
-| `types.rs` | 1055 | `WebProxySessionReport` (20+ fields), `ProxyFlow` (15 fields), `BudgetUsage` (12 fields), `RedactionPattern`, `ManipulationRecord`, `FlowAction` (4 variants), `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR 1.2 export types |
+| `types.rs` | 1055 | `WebProxySessionReport` (20+ fields), `ProxyFlow` (19 fields), `BudgetUsage` (14 fields), `RedactionPattern`, `ManipulationRecord`, `FlowAction` (4 variants), `InterceptSession`, `FlowBuffer` (VecDeque O(1) eviction), `ProxyMetrics`, HAR 1.2 export types |
 | `protocols.rs` | 1868 | `ProxyProtocol` (4 variants), `WebSocketSession`, `WebSocketMessage`, `WebSocketOpcode`, `Http2Session`, `Http2Stream`, `Http2StreamState`, `GrpcSession`, `GrpcCall`, `GrpcMethodType`, `GrpcStreamFrame`, `GrpcStreamingState`, `GrpcReflectionInfo`, `GrpcSecurityFinding`, `ProtocolDetection`, `detect_grpc_security_issues()` |
 | `bridge.rs` | 493 | `to_scan_report_data_proxy()` — finding categories: `proxy-intercept-flow`, `proxy-websocket-session`, `proxy-http2-session`, `proxy-grpc-session`, `proxy-correlation-summary`, `proxy-manipulation-*`, `web-traffic-summary` |
 | `correlation.rs` | 1254 | `CorrelationEngine`, `CorrelationContext`, `CorrelationReference`, `CorrelationSource` (6 variants), `ConfidenceScorer`, `BehavioralPattern`, `TemporalCorrelation`, `CorrelationSummary` |
@@ -100,8 +100,8 @@ TLS dependencies use ring-only per workspace convention: `tokio-rustls = { defau
 | `RuleCondition` | `intercept/rules.rs:53-67` | 13 variants: HostMatches, PathMatches, MethodMatches, HeaderContains, BodyContains, ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs, And, Or, Not, BodySizeGt, BodySizeLt |
 | `RuleAction` | `intercept/rules.rs:16-28` | 8 variants: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag |
 | `WebProxySessionReport` | `intercept/types.rs:101-153` | 20+ fields including flows, budget, protocol sessions, correlation |
-| `ProxyFlow` | `intercept/types.rs:18-57` | 15 fields including method, url, host, path, headers, body, status, timing, protocol |
-| `BudgetUsage` | `intercept/types.rs:64-98` | 12 fields: max_flows, flows_captured, max_bytes_per_flow, max_duration_secs, max_concurrent, peak_concurrent, protocol-specific counters |
+| `ProxyFlow` | `intercept/types.rs:19-63` | 19 fields including method, url, host, path, headers, body, status, timing, protocol |
+| `BudgetUsage` | `intercept/types.rs:65-98` | 14 fields: max_flows, flows_captured, max_bytes_per_flow, max_duration_secs, max_concurrent, peak_concurrent, protocol-specific counters (incl. `grpc_calls_captured`) |
 | `FlowBuffer` | `intercept/types.rs:600-650` | VecDeque-backed capacity-capped buffer with O(1) eviction |
 | `ProxyMetrics` | `intercept/types.rs:653-689` | flows_per_second, rule_eval_time_ms, memory_usage_bytes, active_connections |
 | `EvidenceBundle` | `intercept/bundle.rs:18-38` | Version "2", manifest, flows, protocol sessions, rules, manipulations, correlations |
@@ -241,7 +241,7 @@ Rules are sorted by priority (descending) on insertion (`rules.rs:237`). `evalua
 Key test areas:
 - **Cert generation**: 3 tests (`cert.rs`) — generation, caching, material validation.
 - **Intercept proxy**: 5 tests (`interceptor.rs`) — config defaults, intercept/monitor decisions, CRLF validation, null byte rejection.
-- **Rule engine**: 30+ tests (`rules.rs`) — all 14 condition types, And/Or/Not nesting, enhanced rules, indexed evaluation (1000 rules <1ms/eval), file persistence, YAML parsing.
+- **Rule engine**: 30+ tests (`rules.rs`) — all 13 condition types, And/Or/Not nesting, enhanced rules, indexed evaluation (1000 rules <1ms/eval), file persistence, YAML parsing.
 - **Protocols**: 40+ tests (`protocols.rs`) — WebSocket opcodes, session tracking, HTTP/2 streams/sessions, gRPC calls/streaming state, security detection (auth, large payloads, errors, sensitive paths), reflection parsing, flow control window management.
 - **Bundle**: 10 tests (`bundle.rs`) — roundtrip, export/import, signing/verification, diff comparison, empty reports, WS/HTTP2/gRPC counts.
 - **Bridge**: 9 tests (`bridge.rs`) — all finding categories, protocol session inclusion, correlation summary, roundtrip serialization, empty report structure.

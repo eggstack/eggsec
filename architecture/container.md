@@ -18,7 +18,7 @@ See also: [overview.md](overview.md), [findings.md](findings.md), [output.md](ou
 | Module declaration | `lib.rs:99-103` | `container` |
 | Public module | `lib.rs:99` (`pub mod container`) | `container` |
 | Stub module | `lib.rs:101` (`mod container`) | `not(container)` |
-| Feature flag | `Cargo.toml` `container` | No extra dependencies (uses reqwest, serde_json already in scope) |
+| Feature flag | `Cargo.toml` `container` | Pulls `kube` + `k8s-openapi` (`container = ["kube", "k8s-openapi"]`, `crates/eggsec/Cargo.toml:382`) |
 
 When `container` is disabled, the module compiles with stub types. No container operations are available.
 

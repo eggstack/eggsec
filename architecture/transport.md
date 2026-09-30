@@ -27,7 +27,7 @@ unrestricted dispatch by forgetting a scope helper.
 | Contract closure tests | `crates/eggsec/tests/transport_contract.rs` | Integration tests (run via `rest-api` suite) |
 | Canonical header helpers | `crates/eggsec-transport/src/headers.rs` + `auth_context` transport fns | None |
 
-Workspace membership: `eggsec-transport` is the 18th workspace crate in member order
+Workspace membership: `eggsec-transport` is the 17th workspace crate in member order
 (dependency-light leaf). The engine depends on it; it depends on nothing
 in the workspace.
 

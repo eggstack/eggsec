@@ -44,7 +44,7 @@ implements [`HttpTransport`](transport.md) over the **published**
 
 | Item | Path | Notes |
 |------|------|-------|
-| Adapter crate | `crates/eggsec-transport-eggfetch/` | 19th workspace crate in member order; lib only, no features |
+| Adapter crate | `crates/eggsec-transport-eggfetch/` | 18th workspace crate in member order; lib only, no features |
 | Parity/adversarial suite | `crates/eggsec-transport-eggfetch/tests/parity.rs` + `tests/common/` | Local loopback fixtures only (plain + TLS + CONNECT proxy + slow-body/trickle/keep-alive); 52 tests |
 | H2 qualification suite | `crates/eggsec-transport-eggfetch/tests/h2_mux.rs` | Loopback H2-over-TLS via `EggfetchTransport` (ALPN h2, concurrent multiplex + sequential reuse + logical-origin and selected-address isolation); 5 tests |
 | SOCKS5-local suite | `crates/eggsec-transport-eggfetch/tests/socks5_local.rs` | Loopback SOCKS5 local-resolution via production proxy path (success + peer/ultimate fallback-forbidden + fail-closed rerun); 4 tests |

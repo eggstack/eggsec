@@ -10,7 +10,7 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 
 | Component | Feature gate | `cfg` line |
 |-----------|-------------|------------|
-| Whole `packet` module | `packet-inspection` OR `stress-testing` | `lib.rs:183` (`#[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]`) |
+| Whole `packet` module | `packet-inspection` OR `stress-testing` | `lib.rs:191-192` (`#[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]`) |
 | `packet/cli` module | `packet-inspection` + `cli` (both) | `packet/mod.rs:21-23` |
 | `PacketCapture::start()` | `packet-inspection` + unix | `capture.rs:165` (real) / `capture.rs:391` (stub) |
 | `list_interfaces()` (real) | `packet-inspection` + unix | `capture.rs:439` |
@@ -20,7 +20,7 @@ Low-level network stack access for packet capture, custom packet crafting, proto
 
 ## Architecture
 
-### Submodules (8)
+### Submodules (8 runtime + 1 conditional CLI)
 
 | Submodule | File | Purpose |
 |-----------|------|---------|

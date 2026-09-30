@@ -21,9 +21,9 @@ Headless Chrome integration for browser-based security testing. Provides:
 | `capture_requests()` | `crates/eggsec/src/browser/mod.rs:114` | `#[cfg(feature = "headless-browser")]` |
 | Submodules (xss_dom, spa_discovery, client_checks, corpus) | `crates/eggsec/src/browser/mod.rs:12-15` | Gated by parent module |
 | CLI handler | `crates/eggsec/src/commands/handlers/browser.rs:5` | `#[cfg(feature = "cli")]` |
-| Feature flag | `crates/eggsec/Cargo.toml:351` | `headless-browser = ["headless_chrome"]` |
-| `headless_chrome` dep | `crates/eggsec/Cargo.toml:204-206` | `version = "1"`, optional |
+| Feature flag | `crates/eggsec/Cargo.toml:358` | `headless-browser = ["headless_chrome"]` |
 
+| `headless_chrome` dep | `crates/eggsec/Cargo.toml:211` | `version = "1"`, optional |
 Feature-off means no browser surface at all: `lib.rs` has no `#[cfg(not(feature = "headless-browser"))] mod browser`, so the `not(feature)` stub at `browser/mod.rs:214-219` never compiles (dead code) and `BrowserConfig`/`BrowserReport` are also unavailable. Callers are hard-gated (`commands/handlers/mod.rs`, `cli/mod.rs`).
 
 ## Architecture

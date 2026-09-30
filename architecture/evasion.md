@@ -10,10 +10,10 @@ Defense-lab-only module for validating that security controls detect common evas
 
 | Item | Location | Gate |
 |------|----------|------|
-| Module declaration | `crates/eggsec/src/lib.rs:191-192` | `#[cfg(feature = "evasion")]` |
+| Module declaration | `crates/eggsec/src/lib.rs:200-201` | `#[cfg(feature = "evasion")]` |
 | No stub module | — | When disabled, the module does not exist |
-| Feature flag | `crates/eggsec/Cargo.toml:396` | `evasion = []` (marker, no deps) |
-| C2 dependency | `crates/eggsec/Cargo.toml:404` | `c2 = ["postex", "evasion"]` |
+| Feature flag | `crates/eggsec/Cargo.toml:403` | `evasion = []` (marker, no deps) |
+| C2 dependency | `crates/eggsec/Cargo.toml:411` | `c2 = ["postex", "evasion"]` |
 | CLI handler | `crates/eggsec/src/commands/handlers/evasion.rs:5` | `#[cfg(feature = "cli")]` |
 | `run_cli()` | `evasion/mod.rs:825` | `#[cfg(feature = "cli")]` |
 
@@ -153,7 +153,7 @@ Handler forces `dry_run: true` (`:25`) for safety, regardless of user input.
 
 ### C2 Dependency
 
-`c2 = ["postex", "evasion"]` (`Cargo.toml:404`). The C2 module depends on evasion for integrated campaign orchestration. See [c2.md](c2.md) for details.
+`c2 = ["postex", "evasion"]` (`Cargo.toml:411`). The C2 module depends on evasion for integrated campaign orchestration. See [c2.md](c2.md) for details.
 
 ### Defense Lab Framing
 

@@ -232,7 +232,7 @@ Side-effecting handlers call `ctx.evaluate_and_enforce_operation(descriptor)` (`
 | `cluster.rs` | `cluster` | — |
 | `notify.rs` | `notify` | — |
 | `auth_test.rs` | `auth-test` | — |
-| `stress.rs` | `stress`, `proxy`, `icmp`, `traceroute` | `stress-testing` |
+| `stress.rs` | `stress`, `proxy` | `stress-testing` |
 | `sbom.rs` | `sbom` | `sbom` |
 | `serve.rs` | `serve` | `rest-api` |
 | `agent.rs` | `agent`, `mcp-serve`, `codegg-mcp` | `rest-api` |

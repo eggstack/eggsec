@@ -220,6 +220,10 @@ Defined by `baseline_allowed_capability()` at `policy.rs:557`. All other capabil
 |--------|---------|---------|----------|
 | `approve(surface, descriptor)` | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | REST, MCP, Agent, CI |
 | `approve_manual(surface, descriptor, override)` | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | CLI, TUI |
+| `approve_execution(surface, descriptor)` (`policy_decision.rs:238`) | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | Strict surfaces via the `ApprovedExecution` bundle (token + scope snapshot from the same context) |
+| `approve_manual_execution(surface, descriptor, override)` (`policy_decision.rs:251`) | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | Manual surfaces via the `ApprovedExecution` bundle |
+
+`approve()`/`approve_manual()` return an `ApprovedOperation` token for scope-insensitive dispatch via `dispatch_checked()`. `approve_execution()`/`approve_manual_execution()` return an `ApprovedExecution` bundle (token + scope snapshot coupled at approval time) for scope-bearing dispatch via `EnforcedDispatcher::dispatch_execution()` → `execute_approved_execution()` (`dispatch/canonical_execution.rs:755`). Strict surfaces dispatch only through the bundle path; never construct `ApprovedExecution` directly.
 
 Both methods verify that the caller-provided `surface` derives the same profile as the context was constructed with. Mismatches return `EnforcementError::SurfaceProfileMismatch`.
 
@@ -389,7 +393,7 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 
 1. **`EnforcementContext::evaluate()` is mandatory.** Every execution surface (CLI, TUI, REST, MCP, agent, gRPC) must pass through it. Never bypass it. (`eggsec-policy/src/decision.rs:542`)
 
-2. **`ApprovedOperation` is the only valid dispatch token.** Strict programmatic surfaces (REST, MCP, Agent, CI) require it before `dispatch_checked()`. (`policy_decision.rs:331`)
+2. **`ApprovedExecution` is the dispatch bundle for scope-bearing operations.** Strict surfaces dispatch via `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`). Raw `dispatch_checked()` with `ApprovedOperation` alone remains for scope-insensitive tools. (`policy_decision.rs:238-251,330`)
 
 3. **Scope provenance matters.** Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `LoadedScope::is_explicit_manifest() == true` for networked operations with `requires_explicit_scope`. `DefaultEmpty` blocks these. (`policy_decision.rs:569`)
 

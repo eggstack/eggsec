@@ -9,7 +9,8 @@ Parent overview: [overview.md](overview.md). Related: [runtime_bridge.md](runtim
 `crates/eggsec/src/dispatch/` is the engine's **frontend-neutral execution layer**.
 Phase 1 convergence: the single production owner for
 `(canonical operation ID + canonical typed request + ApprovedOperation) → engine
-executor` is `canonical_execution.rs` (`execute_approved` / `execute_canonical`).
+executor` is `canonical_execution.rs` (`execute_approved_execution` /
+`execute_approved` / `execute_canonical`).
 It performs **no authorization of its own beyond binding verification** — scope/policy
 decisions were made upstream by `EnforcementContext::evaluate()` (see [config.md](config.md));
 the boundary re-verifies request/approval binding at executor entry and checks
@@ -24,6 +25,7 @@ REST/MCP/gRPC/Agent (EnforcedDispatcher, canonical validation) ─┘
 
 The public entry points are:
 
+- `execute_approved_execution()` (`canonical_execution.rs:755`) — the scope-bearing canonical boundary. Takes an `ApprovedExecution` bundle (token + scope snapshot from `approve_execution()`/`approve_manual_execution()`); strict surfaces (daemon runtime bridge) dispatch only through this path.
 - `execute_approved()` (`canonical_execution.rs`) — the canonical boundary. Requires
   exact operation/target/descriptor binding (`matches_descriptor`), validates through
   canonical contracts, checks features, emits frontend-neutral `ExecutionEvent`s.
@@ -40,19 +42,19 @@ The public entry points are:
 
 | File | Lines | Contents |
 |------|-------|----------|
-| `canonical_execution.rs` | 2123 | `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
-| `mod.rs` | 309 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
+| `canonical_execution.rs` | 2265 | `execute_approved_execution()` — scope-bearing bundle entry; `execute_approved()` — binding/feature checks + single-owner routing; `execute_canonical()` — the executor match; `CanonicalOperationRequest` (29-variant typed enum), `ExecutionEvent`/`ExecutionSink` (bounded, coalescing progress, never-drop findings/terminal), `executor_route_for()`, `is_feature_available()`; unit tests |
+| `mod.rs` | 311 | `dispatch_task()` — channel creation + forwarding; `dispatch_inner()` — legacy manual shim delegating to `execute_canonical`; unit tests |
 | `types.rs` | 156 | `TaskResult` enum (34 typed variants + `Error`), `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions`, `send_progress()` helper |
 | `executor.rs` | 64 | `OperationExecutor` trait (object-safe: no generic self, no generic associated types), `ExecutionOutput` enum (`Success`/`FeatureUnavailable`/`Failed`) |
 | `executors/mod.rs` | 43 | `build_default_registry()` — registers 5 always-compiled + 2 feature-gated adapters |
 | `executors/registry.rs` | 140 | `ExecutorRegistry` — maps operation IDs to `Box<dyn OperationExecutor>`, panics on duplicate registration |
-| `executors/scanner.rs` | 83 | `ScannerExecutor` — `scan-ports`, `scan-endpoints`, `fingerprint` |
+| `executors/scanner.rs` | 84 | `ScannerExecutor` — `scan-ports`, `scan-endpoints`, `fingerprint` |
 | `executors/recon.rs` | 61 | `ReconExecutor` — `recon`, `pipeline` |
 | `executors/waf.rs` | 57 | `WafExecutor` — `waf-detect`, `waf-bypass`, `waf-stress` |
 | `executors/fuzz.rs` | 97 | `FuzzExecutor` — `fuzz`, `graphql`, `oauth` |
-| `executors/network.rs` | 90 | `NetworkExecutor` — `load-test`, `stress-test`, `packet`, `auth-test` |
+| `executors/network.rs` | 91 | `NetworkExecutor` — `load-test`, `stress-test`, `packet`, `auth-test` |
 | `executors/nse.rs` | 50 | `NseExecutor` — `nse` (`#[cfg(feature = "nse")]`) |
-| `executors/db_pentest.rs` | 54 | `DbPentestExecutor` — `db-pentest` (`#[cfg(feature = "db-pentest")]`) |
+| `executors/db_pentest.rs` | 55 | `DbPentestExecutor` — `db-pentest` (`#[cfg(feature = "db-pentest")]`) |
 
 ### Domain Worker Files
 
@@ -77,8 +79,15 @@ These are the actual task implementations invoked by `dispatch_inner()`:
 (converted exhaustively from `TaskKind` via `from_task_kind`, or from CLI adapters).
 Each arm normalizes through canonical contracts, then delegates to the corresponding
 domain worker. `dispatch_inner()` no longer owns a `TaskKind` match; it converts and
-delegates. The `TaskKind` variants (defined at `eggsec-runtime/src/request.rs:64`)
+delegates. The `TaskKind` variants (29 total, defined at `eggsec-runtime/src/request.rs:64`)
 route as follows:
+
+> **34 metadata vs 29 TaskKind gap.** The operation catalog holds 34 canonical
+> operations but `TaskKind` has 29 variants: several catalog operations have no
+> `TaskKind`/`CanonicalOperationRequest` arm and are reachable only via CLI/manual
+> adapters (e.g. `mobile-static`, `mobile-dynamic`, `remote`, `search`, `evasion`,
+> `postex`, `wireless-deauth`). Growth in either registry without the other is drift —
+> check both when adding operations.
 
 | # | TaskKind | Worker Call | Feature Gate |
 |---|----------|-------------|-------------|

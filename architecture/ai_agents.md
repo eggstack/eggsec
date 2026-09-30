@@ -179,7 +179,7 @@ use crate::ai::AiClient;
 
 | File | Purpose |
 |------|---------|
-| `mod.rs:1-3575` | Agent runtime, config, polling loop, `Agent::new()` requires `AgentStrict` enforcement |
+| `mod.rs:1-3740` | Agent runtime, config, polling loop, `Agent::new()` requires `AgentStrict` enforcement |
 | `services.rs` | `AgentExecutionService`: checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injection point (adapter boundary) |
 | `alerts/` | Alert routing, aggregation, channel delivery (Slack, PagerDuty, email, webhook) |
 | `channels.rs` | Channel implementations (`WebhookConfig`, `SlackTemplate`, `PagerDutyTemplate`, etc.) |
@@ -448,13 +448,14 @@ Protocol sub-modules carry per-feature gating (`protocol/mod.rs:1-16`):
 
 ### Architecture
 
-**Top-level modules (17 entries):**
+**Top-level modules (18 entries):**
 
 | Module | Purpose |
 |--------|---------|
 | `registry.rs:23-25` | `ToolRegistry` — `FxHashMap<String, Arc<dyn SecurityTool>>` behind `parking_lot::RwLock` |
 | `traits.rs:1-359` | `SecurityTool` trait, `ToolCategory` (7 variants), `ToolCapability`, `ToolInfo` |
 | `dispatcher.rs:1-442` | `ToolDispatcher` (raw) + `EnforcedDispatcher` (requires `ApprovedOperation`) |
+| `service.rs` | `EngineServices` injected adapter boundary (`OperationCatalog`, `CheckedExecutor`, `PreflightService`) |
 | `registration.rs:1-367` | `ToolRegistration` derivation from `OperationMetadata` + `DomainDescriptor`; filter functions for each surface |
 | `mod.rs:105-170` | `create_default_registry()` — registers 11 base tools + 3 gated tools |
 | `metadata.rs` | Operation metadata lookup helpers |

@@ -37,7 +37,7 @@ The reconnaissance module performs **passive and active information gathering** 
 | `takeover.rs` | 560 | Subdomain takeover detection via dangling CNAME/NS fingerprinting | Yes | 10+ service fingerprints; runs after subdomain enum |
 | `js.rs` | 375 | JavaScript file analysis: endpoint extraction, API key/secret detection in JS sources | Yes | Uses `scraper` crate for HTML parsing |
 | `api_schema.rs` | 299 | API schema discovery: probes 19 common OpenAPI/Swagger/GraphQL paths | No | Standalone; not in pipeline |
-| `containers.rs` | 300 | Container security: Kubernetes pod scanning, Docker config analysis | No | Feature-gated: `container` |
+| `containers.rs` | 300 | Container security: Kubernetes pod scanning, Docker config analysis | No | Always compiled (`pub mod containers` at `recon/mod.rs:81` carries no `cfg`; only `cloud` and `git_secrets` are feature-gated) |
 | `cloud/mod.rs` | 453 | Cloud asset discovery: S3, Azure Blob, GCP Storage, Firebase, Heroku, GitHub repos | Yes* | Feature-gated: `cloud`; runs separately from main parallel block |
 | `cloud/iam.rs` | 219 | IAM privilege escalation pattern analysis (12 known patterns) | — | Sub-module of cloud |
 | `cloud/metadata.rs` | 157 | IMDSv1/v2 metadata endpoint testing for AWS/GCP/Azure | — | Sub-module of cloud; 3s per-endpoint timeout |
@@ -113,7 +113,7 @@ email, takeover, cve, secrets
 
 ### secrets — Secret Detection (`secrets.rs`)
 
-- **Pattern count**: 26 regex patterns in `build_patterns()` (`secrets.rs:103`) covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the 30-variant enum but have no dedicated pattern in `build_patterns()`.
+- **Pattern count**: 25 regex patterns in `build_patterns()` (`secrets.rs:103`, literals at `:108-300`) covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the 30-variant enum but have no dedicated pattern in `build_patterns()`.
 - **High-confidence types**: AWS keys (3 variants), GitHub tokens (PAT + OAuth), GitLab PAT, Slack tokens, OpenAI keys, Stripe keys, GCP API keys, private keys, JWT tokens, Discord tokens, Twilio/SendGrid/Mailchimp keys, database connection strings (MongoDB/PostgreSQL/MySQL URIs), password-in-URL, GitHub credentials in URL
 - **Entropy filter**: AWS secret key candidates with Shannon entropy < 3.5 are discarded (`secrets.rs:334`)
 - **Output**: `Vec<SecretFinding>` with type, value preview (truncated to 20 chars), confidence, severity
