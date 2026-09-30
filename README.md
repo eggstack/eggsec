@@ -1,101 +1,10 @@
 # Eggsec - Rust Security Assessment Engine
 
-Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing, local lab validation, WAF regression, CI security checks, and agent-readable security workflows.
+Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing: reconnaissance, port scanning, web fuzzing, WAF evaluation, load testing, and repeatable pipeline assessments with structured JSON/SARIF/JUnit/HTML/CSV output.
 
-## What Eggsec Is
+For authorized testing of systems you own or have explicit written permission to test. See [Safety](#safety) below.
 
-A command-line security assessment tool designed for security professionals, developers, and defensive teams:
-
-- **Discover attack surfaces** — Reconnaissance, subdomain enumeration, technology detection
-- **Assess web application security** — Find vulnerabilities like SQL injection, XSS, SSRF, and more
-- **Test infrastructure** — Scan ports, fingerprint services, discover endpoints
-- **Evaluate defenses** — Test WAF detection and evasion-resistance
-- **Load test** — Measure application performance under controlled load
-- **Repeat assessments** — Pipeline scans with customizable profiles for regression workflows
-
-| Capability | Description |
-|------------|-------------|
-| **Scoped Repeatable Testing** | Run the same assessment profiles repeatedly for regression validation |
-| **Rust-Native Primitives** | High-performance async I/O, no external runtime dependencies |
-| **Structured Outputs** | JSON, SARIF, JUnit, HTML, CSV for humans, CI, and agents |
-| **WAF and Defense Validation** | Detection of 34 WAF products with evasion-resistance testing |
-| **Local Lab/Regression Workflows** | Repeatable profiles against local test environments |
-| **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional build layer |
-
-For the full capability matrix with risk tiers, feature gates, surface exposure, and scope requirements, see [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
-
-## Architecture
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for workspace crate ownership, enforcement model, and execution flows. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 39 normative invariants. See [`architecture/network_dependency_baseline.md`](architecture/network_dependency_baseline.md) for the retained per-artifact dependency baseline, concrete-client inventory, migration parity matrix, and security-policy state (Phase A measurement + Phase D increment-1 addendum with remaining-owner dispositions + Phase E egress/capability closure). See [`architecture/transport.md`](architecture/transport.md) for the scope-aware outbound HTTP contract (Phase B DTOs/authority/binding/fake + proxy-peer checkpoints + Phase D increment 1). See [`architecture/transport_eggfetch.md`](architecture/transport_eggfetch.md) for the pinned `HttpTransport` adapter over published `eggfetch-core 0.2.0` (logical-URL + singular resolved-address direct, H1/H2 route reuse, qualified proxy routes; production load-test backend). See [`architecture/loadtest.md`](architecture/loadtest.md) for execution-scope ownership and the backend route matrix (no wildcard default, no route fallback). See [`architecture/egress_reuse_decision.md`](architecture/egress_reuse_decision.md) for the egress record (Phase E 1.0.6 rejection with measured graphs, superseded 2026-09-22 by the narrow Eggress `eggsec-web-proxy` proxy-engine adoption, moved 2026-09-25 to exact 1.0.10 with first-hop socket-metadata closure) and [`architecture/capability_segregation.md`](architecture/capability_segregation.md) for the Phase E capability closure (empty library default, per-crate Tokio, no new crates). See [`architecture/network_dependency_closure.md`](architecture/network_dependency_closure.md) for the Phase G measurement closure (final graphs, fixture results, remaining-owner dispositions, debt, acceptance mapping; supply-chain policy in [`docs/DEPENDENCY_EXCEPTIONS.md`](docs/DEPENDENCY_EXCEPTIONS.md)). See [`architecture/performance.md`](architecture/performance.md) for the retained performance/resource-efficiency evidence (reproducible loopback harness, before/after medians and structural counters per optimization phase; informational, never a merge gate).
-
-Protocol adapters (REST/MCP/gRPC/OpenAI/OpenResponses) and the autonomous agent depend on narrow engine service traits (`OperationCatalog`, `CheckedExecutor`, `PreflightService`/`AgentExecutionService`), not on concrete registry/dispatcher construction. Authorization stays in `EnforcementContext`; adapters perform only checked dispatch under an `ApprovedOperation` token.
-
-Release validation is manual and non-publishing: see
-[`docs/RELEASING.md`](docs/RELEASING.md) for Cargo-native Rust archive
-generation/inspection, staged registry preflight, and version-bump
-requirements.
-
-## Safety Model
-
-Eggsec enforces defense-in-depth safety: scope files restrict targets, configuration defaults keep aggressive capabilities disabled until opted in, and feature gating prevents accidental invocation of intrusive modules.
-
-**Scope files** restrict every scan to explicitly authorized targets. When `require_explicit_scope = true`, any target not in the allowed list is rejected before a single packet is sent.
-
-```toml
-require_explicit_scope = true
-
-[[allowed_targets]]
-pattern = "*.lab.internal"
-description = "Lab environment"
-
-[[allowed_targets]]
-cidr = "10.0.0.0/8"
-description = "Internal network"
-```
-
-**Execution profiles** separate manual operator-directed discretion from hard enforcement in automated modes. `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate for all surfaces (CLI, TUI, REST, MCP, agent, CI).
-
-```bash
-# Manual permissive (default: operator-directed)
-eggsec scan example.com --profile quick
-
-# Manual strict (hard enforcement)
-eggsec scan example.com --profile quick --scope scope.toml --strict-scope
-
-# MCP/Agent strict (hard enforcement; override flags ignored)
-eggsec codegg-mcp --stdio --scope scope.toml
-```
-
-See [docs/SAFETY.md](docs/SAFETY.md) for authorization, risk tiers, and scope rules. See [docs/ENFORCEMENT_MODES.md](docs/ENFORCEMENT_MODES.md) for the dual-mode enforcement contract.
-
-## Quick Start
-
-### Workspace Layout
-
-| Crate | Purpose |
-|-------|---------|
-| `eggsec-core` | Dependency-light types, constants, shared primitives |
-| `eggsec-tool-core` | Core data types for the tool abstraction layer |
-| `eggsec` | Assessment engine library (no binary) |
-| [`eggsec-nse`](https://github.com/eggstack/eggsec-nse) | Optional standalone Nmap NSE compatibility runtime, consumed by Eggsec as a versioned crates.io release |
-| `eggsec-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
-| `eggsec-cli` | CLI binary entry point |
-| `eggsec-output` | Report rendering/conversion/analysis over `eggsec-report-model` (JSON, CSV, HTML, SARIF, JUnit, Markdown; no scheduling/session) |
-| `eggsec-report-model` | Stable serializable report/evidence data contracts (no rendering, I/O, or runtime); domain DTO owner |
-| `eggsec-agent` | Agent coordination primitives (registry, scheduler, lifecycle, cron; callback health via injected `HttpTransport`, no direct HTTP stack) |
-| `eggsec-db-lab` | Database pentesting domain crate |
-| `eggsec-web-proxy` | Web proxy and MITM interception domain crate (intercept/server TLS split from outbound probes; reqwest minimal) |
-| `eggsec-mobile-lab` | Mobile app security analysis domain crate |
-| `eggsec-daemon` | Long-running daemon host for persistent sessions |
-| `eggsec-daemon-protocol` | Daemon IPC protocol types and client registry |
-| `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management |
-| `eggsec-ui-model` | Frontend-neutral view DTOs |
-| `eggsec-python` | Python bindings (PyO3/maturin) |
-| `eggsec-transport` | Scope-aware outbound HTTP contract (neutral DTOs, mandatory authority incl. proxy-peer checkpoints, recording fake) |
-| `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core 0.2.0` (logical-URL + singular resolved-address direct + qualified proxy routes, H1/H2 route reuse; production load-test backend; local qualification covers 5 H2 and 4 SOCKS5 tests) |
-| `eggsec-policy` | Deterministic authorization/enforcement semantics (no I/O, runtime, or transport); engine bridges DNS/features/authority |
-
-### Build and Run
+## Quickstart
 
 ```bash
 git clone https://github.com/eggstack/eggsec.git
@@ -106,29 +15,65 @@ cargo build --release -p eggsec-cli
 ./target/release/eggsec --generate-config > eggsec.toml
 ./target/release/eggsec config validate --config eggsec.toml
 
-# Plan a scan (dry-run, no traffic sent)
+# Preview what a scan would do (dry-run, no traffic sent)
 ./target/release/eggsec plan --scope examples/scope-localhost.toml --target http://127.0.0.1:8080
 
-# Run a scoped scan against localhost
-./target/release/eggsec scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
+# Run a scoped scan against localhost (loopback targets need explicit opt-in)
+EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 ./target/release/eggsec scan 127.0.0.1 \
+  --profile quick --scope examples/scope-localhost.toml --allow-private-resolution --json
 ```
 
-See [docs/BUILD.md](docs/BUILD.md) for system dependencies, feature flags, and build examples. For platform-sensitive domains (mobile-dynamic, packet, wireless), see [docs/PLATFORM.md](docs/PLATFORM.md) and `eggsec doctor`.
+Example output (your open ports will differ):
 
-## Pipeline Profiles
+```json
+{"target": "127.0.0.1",
+ "stage_results": [{"stage": "PortScan", "success": true}, {"stage": "Fingerprint", "success": true}],
+ "open_ports": [{"port": 22, "service": "SSH"}, {"port": 80, "service": "HTTP"}]}
+```
 
-Eggsec includes 18 built-in profiles that chain multiple security tests together. Common profiles: `quick` (port scan + fingerprinting), `web` (endpoint discovery + fuzzing), `full` (all stages), `api` (GraphQL/JWT/OAuth), `defense-lab` (local regression). See [docs/PIPELINE.md](docs/PIPELINE.md) for the full profile reference and command examples.
+## Common commands
 
 ```bash
-eggsec scan example.com --profile quick    # port scan + fingerprinting
-eggsec scan example.com --profile web      # endpoint discovery + fuzzing
-eggsec scan example.com --profile full     # all stages including load testing
-eggsec scan localhost:8080 --profile defense-lab --json
+eggsec scan example.com --profile quick        # port scan + fingerprinting
+eggsec scan example.com --profile web          # endpoint discovery + fuzzing
+eggsec scan example.com --profile full         # all stages including load testing
+eggsec fuzz https://example.com/search?q=test -t xss   # fuzz with security payloads
+eggsec recon example.com                       # DNS, WHOIS, subdomains, tech detection
+eggsec waf https://example.com                 # WAF detection (34 products) + evasion resistance
+eggsec doctor                                  # hermetic dependency/platform check
 ```
 
-## Python Bindings
+Full command reference: [`docs/USAGE.md`](docs/USAGE.md). Pipeline profiles: [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
-Eggsec provides Python bindings via [PyO3](https://pyo3.rs) and [maturin](https://github.com/PyO3/maturin). **Status: pre-1.0 release candidate — 22 stable operations, not yet published to PyPI.** Windows is outside the primary support scope.
+## Safety
+
+Every scan runs through `EnforcementContext::evaluate()` before dispatch. Scope files restrict targets; execution profiles separate manual operator discretion from hard enforcement in automated modes:
+
+```bash
+# Manual strict (hard enforcement)
+eggsec scan example.com --profile quick --scope scope.toml --strict-scope
+
+# MCP/Agent strict (override flags ignored)
+eggsec codegg-mcp --stdio --scope scope.toml
+```
+
+Details: [`docs/SAFETY.md`](docs/SAFETY.md) (authorization, risk tiers, scope rules) and [`docs/ENFORCEMENT_MODES.md`](docs/ENFORCEMENT_MODES.md).
+
+## Feature-gated builds
+
+The default build covers scanning, fuzzing, recon, WAF, pipelines, and reporting. These need explicit features (see [`docs/BUILD.md`](docs/BUILD.md) and [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md)):
+
+```bash
+cargo build --release -p eggsec-cli --features daemon-client  # eggsec daemon/session/task
+cargo build --release -p eggsec-cli --features rest-api       # serve, mcp-serve, codegg-mcp, agent
+cargo build --release -p eggsec-cli --features nse            # Nmap NSE script support
+```
+
+NSE compatibility notes: [`docs/NSE_COMPATIBILITY.md`](docs/NSE_COMPATIBILITY.md). Docker lab targets: [`DOCKER.md`](DOCKER.md).
+
+## Python bindings
+
+Pre-1.0 release candidate (22 stable operations, not yet on PyPI):
 
 ```python
 import eggsec
@@ -139,81 +84,24 @@ for port in result.open_ports:
     print(f"  {port.port}: {port.service}")
 ```
 
-See [`docs/python/`](docs/python/) for the full documentation: [Quick Start](docs/python/quickstart.md), [API Reference](docs/python/api-reference.md), [Scope & Safety](docs/python/scope-and-safety.md), [Domain Maturity](docs/python/domain-maturity.md).
-
-## Daemon
-
-The `eggsec-daemon` crate provides optional durable session state backed by SQLite. Session snapshots persist across restarts. See [docs/DAEMON.md](docs/DAEMON.md) for transport configuration, schema, and CLI commands.
-
-```bash
-eggsec daemon start
-eggsec daemon history
-eggsec daemon show <session-id>
-eggsec task result <session-id> <task-id>   # durable result retrieval (survives reconnect/restart)
-```
-
-## Agent and Orchestration
-
-Eggsec includes a security agent for continuous monitoring and scheduled assessments. The agent always requires an explicit scope manifest and uses `AgentStrict` execution profile.
-
-```bash
-cargo build --release --features rest-api
-./eggsec agent run --scope scope.toml --portfolio /path/to/portfolio.json
-```
-
-See [docs/AGENT.md](docs/AGENT.md) for full documentation.
-
-## Nmap/NSE Compatibility
-
-Eggsec includes optional Nmap NSE script support as a build layer (`--features nse`). It is not a full Nmap replacement — the goal is selective practical NSE compatibility for useful script categories. Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety. See [docs/NSE_COMPATIBILITY.md](docs/NSE_COMPATIBILITY.md).
-
-## Docker
-
-```bash
-docker-compose --profile testing up -d dvwa
-docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/login -t xss
-```
-
-See [docker-compose.yml](docker-compose.yml) for configuration.
+Full docs: [`docs/python/quickstart.md`](docs/python/quickstart.md) and [`docs/python/api-reference.md`](docs/python/api-reference.md).
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Safety and Scope Enforcement](docs/SAFETY.md) | Authorization, risk tiers, scope rules |
-| [Enforcement Modes](docs/ENFORCEMENT_MODES.md) | Dual-mode enforcement contract |
-| [Capability Matrix](docs/CAPABILITY_MATRIX.md) | Operation/risk/feature/exposure matrix |
-| [Feature Matrix](docs/FEATURE_MATRIX.md) | Feature inventory and classification |
-| [Build Features](docs/BUILD.md) | System dependencies, feature flags, build examples |
-| [Platform Integration](docs/PLATFORM.md) | Prerequisite matrix, fixtures vs live tests, privilege containment |
-| [Pipeline Profiles](docs/PIPELINE.md) | Profile reference, command examples, defense-lab mode |
-| [Daemon Persistence](docs/DAEMON.md) | Session persistence, transport, CLI commands |
-| [Command Registry](docs/COMMAND_REGISTRY.md) | Command registry and dispatch |
-| [Architecture](docs/ARCHITECTURE.md) | Workspace overview, enforcement model |
-| [Verification Contract](docs/VERIFICATION.md) | Mandatory vs optional CI checks, merge vs release readiness |
-| [Releasing](docs/RELEASING.md) | Manual maintainer-controlled release procedure |
-| [Extending Eggsec](docs/EXTENSIBILITY.md) | Adding operations, domains, commands, tools |
-
-Additional docs: [Web Proxy](docs/WEB_PROXY.md), [Proxy Plugin API](docs/PLUGIN_API.md), [Database Pentesting](docs/DATABASE_PENTEST.md), [Wireless Testing](docs/WIRELESS.md), [Mobile Analysis](docs/MOBILE.md), [Auth Testing](docs/AUTH_LAB.md), [Auth Contexts](docs/AUTH_CONTEXT.md), [Agent](docs/AGENT.md), [Usage Guide](docs/USAGE.md), [Findings Schema](docs/FINDINGS_SCHEMA.md).
-
-## Responsible Use
-
-Eggsec is designed for authorized security testing of systems you own, operate, or have explicit written authorization to test. Always define scope files, use rate limits, and prefer local lab environments for development and regression testing.
-
-## License
-
-Licensed under the MIT License. See [LICENSE](LICENSE) for details.
+| Document | Contents |
+|----------|----------|
+| [Usage Guide](docs/USAGE.md) | Command examples and flags |
+| [Safety](docs/SAFETY.md) | Authorization, risk tiers, scope rules |
+| [Capability Matrix](docs/CAPABILITY_MATRIX.md) | Operations, risk tiers, feature gates |
+| [Architecture](docs/ARCHITECTURE.md) | Crate ownership, enforcement model |
+| [Verification](docs/VERIFICATION.md) | Mandatory vs optional CI checks |
+| [Extending Eggsec](docs/EXTENSIBILITY.md) | Adding operations, domains, commands |
+| [Releasing](docs/RELEASING.md) | Manual release procedure |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For the full verification contract (mandatory vs optional CI checks, merge vs release readiness), see [docs/VERIFICATION.md](docs/VERIFICATION.md). For adding new operations, domains, commands, tools, TUI actions, report outputs, or features, start with the [Extensibility Guide](docs/EXTENSIBILITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `make check` before submitting Rust changes (fmt, no-default checks, dependency policy, clippy, tests, architecture guards); Python-facing changes also require `make check-python`. Contract: [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
-## Verification
+## License
 
-Run `make check` before submitting Rust changes (includes `make check-deps`:
-Cargo Deny advisory/license/ban/source policy over the full feature closure).
-Python-facing changes also require `make check-python`; release preparation
-uses `make check-full` and `make release-check`. Dependency exceptions live in
-[`docs/DEPENDENCY_EXCEPTIONS.md`](docs/DEPENDENCY_EXCEPTIONS.md) (Cargo Deny is
-canonical; `cargo audit` is diagnostic only). See
-[`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the complete contract.
+MIT. See [LICENSE](LICENSE).

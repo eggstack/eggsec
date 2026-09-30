@@ -8,6 +8,8 @@ Some features require specific Cargo build flags:
 
 | Feature Flag | Required For |
 |--------------|--------------|
+| `--features daemon-client` | `daemon`, `session`, `task` |
+| `--features rest-api` | `serve`, `mcp-serve`, `codegg-mcp`, `agent` |
 | `--features stress-testing` | `stress`, `proxy`, `icmp`, `traceroute` |
 | `--features packet-inspection` | `packet capture`, `packet send` (live) |
 | `--features nse` | NSE script execution |
@@ -17,6 +19,19 @@ Some features require specific Cargo build flags:
 # Full build (recommended for pentesting)
 cargo build --release --features full
 ```
+
+## Local Lab Targets
+
+Loopback and private targets are blocked by default at two layers. For lab scans against `127.0.0.1`/localhost, opt in explicitly:
+
+```bash
+EGGSEC_ALLOW_LOOPBACK_FIXTURE=1 eggsec scan 127.0.0.1 --profile quick \
+  --scope examples/scope-localhost.toml --allow-private-resolution
+```
+
+- `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` opts in to loopback resolution in the probe path.
+- `--allow-private-resolution` is the manual-only CLI override for private/loopback targets (audited; see [SAFETY.md](SAFETY.md)).
+- Prefer `eggsec plan --scope <file> --target <url>` first: it previews the execution plan without sending traffic.
 
 ## Table of Contents
 
