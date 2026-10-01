@@ -492,21 +492,25 @@ Exit gate: **not met.** Eggsec still has no published immutable registry artifac
 
 #### M007C-R — Breaking 0.3.0 release (replan of M007C)
 
+Primary plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`
+
+Security companion: `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (M007C-S).
+
 Status: **ready for handoff** (current NSE boundary).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`
 
 Implementation repository: `eggstack/eggsec-nse`.
 
-Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` as a deliberate breaking/security release with explicit migration notes for all 74 removals, harden the `nse_production_code` truncation caveat, use authentication-path-correct immutable tag/publication sequencing, verify tag/registry/docs.rs/scratch-consumer identity, and record the advisory/yank/disclosure disposition for bypass-bearing `0.2.0`.
+Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` as a deliberate breaking/security release with explicit migration notes for all 74 removals, harden the `nse_production_code` truncation caveat, use authentication-path-correct immutable tag/publication sequencing, and verify tag/registry/docs.rs/scratch-consumer identity. Companion M007C-S owns the GitHub Security Advisory plus predecessor-version disposition for the verified affected range `>= 0.1.0, < 0.3.0`.
 
 Rationale for the version bump rather than restoration: the two direct-connect `helpers` removals withdraw a published capability bypass, so 0.3.0 also discharges a security obligation — published 0.2.0 still exposes them. The release is not a semver formality.
 
-Exit gate: Eggsec has a published immutable `0.3.0` registry artifact whose migration notes account for all 74 removals, and M007D may adopt it.
+Exit gate: Eggsec has a published immutable `0.3.0` registry artifact whose migration notes account for all 74 removals, `007c-r-closure.md` is accepted, companion `007c-s-closure.md` records the security advisory/yank disposition for both `0.1.0` and `0.2.0`, and only then may M007D adopt it.
 
 #### M007D — Eggsec approved-scope/profile threading and scoped provider activation
 
-Status: **blocked on accepted M007C-R closure** (M007C closed blocked, so the release dependency is unmet).
+Status: **blocked on accepted M007C-R + M007C-S closures** (release artifact and security-disposition evidence are both required).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md`
 
@@ -637,4 +641,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green); `plans/closure/nse-runtime-extraction/007c-closure.md` (007C, **blocked** — 74-function major break, 0.2.1 not published) | M007C-R (0.3.0) is current handoff; M007D-E remain dependency-gated by ADR-0004; automated NSE stays quarantined until 007E |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` (primary) + `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (security companion) | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green); `plans/closure/nse-runtime-extraction/007c-closure.md` (007C, **blocked** — 74-function major break, 0.2.1 not published) | M007C-R is primary current handoff; M007C-S may prepare disclosure in parallel but publish/yank only after verified 0.3.0; M007D-E remain gated |
