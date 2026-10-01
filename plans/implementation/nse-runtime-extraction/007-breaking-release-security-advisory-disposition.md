@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007C-S — Security Advisory and Predecessor-Version Disposition
 
-Status: ready for handoff (draft preparation); public disclosure and yank actions blocked on verified `0.3.0` publication
+Status: blocked (draft preparation complete — see `plans/closure/nse-runtime-extraction/007c-s-closure.md`; advisory publication and 0.1.0/0.2.0 yank execution pending verified `0.3.0` from M007C-R)
 
 Eggsec planning baseline: `39603233d8b549d4b525203ba0869b40e5696569`
 
