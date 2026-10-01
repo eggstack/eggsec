@@ -16,6 +16,10 @@ Closure evidence that forced this replan:
 
 - `plans/closure/nse-runtime-extraction/007c-closure.md` (Status: blocked)
 
+Security communication companion:
+
+- `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (M007C-S; affected-range/advisory/yank disposition)
+
 Applicable ADRs:
 
 - `plans/adrs/ADR-0004-nse-automated-activation-boundary.md`
@@ -71,7 +75,7 @@ At `d4a22f1`:
 - Release-workflow verification.
 - Exact-candidate qualification (§10).
 - Publication, immutable tag/GitHub Release, docs.rs confirmation, scratch-consumer verification, with authentication-path-specific sequencing (Trusted Publishing vs manual-token recovery).
-- Post-release disposition of published `0.2.0` as the known vulnerable/bypass-bearing predecessor: explicit security note, yank/advisory decision, and rationale.
+- Post-release security communication is governed by companion plan `007-breaking-release-security-advisory-disposition.md`. Source inspection shows the raw-connect helper API exists in both `v0.1.0` and `v0.2.0`, so the advisory/yank decision must evaluate the full candidate affected range `>= 0.1.0, < 0.3.0`, not only `0.2.0`.
 - One static-guard hardening item from `007c-closure.md` §10 (the `nse_production_code` truncation caveat), if it can be done without changing residual pins.
 - Closure record `007c-r-closure.md`.
 
@@ -175,19 +179,19 @@ Do not create the tag before manual publication merely to imitate the Trusted-Pu
 
 Acceptance evidence: one and only one path is recorded; no `--allow-dirty`/`--no-verify`; registry artifact VCS identity equals the candidate; `v0.3.0` resolves to that candidate; GitHub Release is created only after registry verification; docs.rs state recorded; scratch consumer resolves `eggsec-nse = { version = "=0.3.0", features = ["nse"] }` from the registry with no path/git fallback; `nse`, `nse-ssh2`, and `nse,sandbox` all qualify.
 
-### Work package F — Security communication and predecessor-version disposition
+### Work package F — Security communication handoff
 
-Intent: make the security meaning of the release explicit without overstating exploitability.
+Intent: bind the release to a complete security-disclosure record without duplicating advisory/yank execution in this plan.
 
-Required changes/evidence:
+Required evidence:
 
-- release notes must state that `0.2.0` exposed `helpers::tcp_connect_with_timeout` and `helpers::tls_connect`, which returned raw `TcpStream` values outside the capability broker;
-- record whether `0.2.0` is left published, yanked, or referenced by a GitHub Security Advisory;
-- do not yank automatically merely because a fixed release exists: evaluate ecosystem breakage, whether Eggsec itself exposed the bypass through a supported automated path, and whether users need an installable migration baseline;
-- if a GHSA is created, affected/fixed version ranges and severity must be justified from the actual library threat model rather than inferred from the word "bypass";
-- if no advisory/yank is created, closure must record the rationale and point users to the 0.3.0 migration/security notes.
+- companion plan `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` exists and is registered;
+- affected-range source evidence includes both immutable releases `v0.1.0` and `v0.2.0`;
+- after verified `0.3.0` publication, companion closure `plans/closure/nse-runtime-extraction/007c-s-closure.md` records advisory publication/no-advisory rationale and explicit yank/no-yank decisions for both predecessors.
 
-Acceptance evidence: closure contains an explicit predecessor-version disposition and security-communication decision; there is no silent ambiguity about the known 0.2.0 bypass-bearing API.
+Release notes must still state the direct-connect helper security issue, but the advisory/CVE/yank mechanics are owned by M007C-S.
+
+Acceptance evidence: `007c-s-closure.md` exists before M007D is unblocked, and its fixed version is the exact `0.3.0` artifact produced here.
 
 ## 8. Failure, cancellation, restart, and contention semantics
 
@@ -240,8 +244,8 @@ Hosted Linux/macOS/Windows/MSRV/SSH CI must be green on the same candidate.
 7. Guard hardening either lands with a passing negative probe, or is recorded as a low finding.
 8. No `eggstack/eggsec` production-code change.
 9. Publication sequencing matches the selected authentication path; no tag is moved/recreated.
-10. The security/advisory/yank disposition for `0.2.0` is recorded explicitly.
-11. Closure record `007c-r-closure.md` is written and M007D is unblocked against that closure.
+10. Companion M007C-S records the affected range across both `0.1.0` and `0.2.0`, plus advisory/CVE and yank/no-yank disposition for each predecessor.
+11. Closure records `007c-r-closure.md` and `007c-s-closure.md` are written before M007D is unblocked.
 
 ## 12. Stop conditions
 
@@ -267,7 +271,7 @@ Stop and report rather than improvise when:
 - package and `publish --dry-run` result;
 - publication method and exact sequencing (Trusted Publishing tag-trigger path or manual-token recovery), stated without exposing credentials;
 - immutable tag creation point relative to publication and proof it was never moved/recreated;
-- `0.2.0` security communication / yank / advisory disposition with rationale;
+- reference to companion `007c-s-closure.md`, which owns the `>= 0.1.0, < 0.3.0` advisory range and predecessor yank/no-yank decisions;
 - registry artifact and source/tag identity;
 - docs.rs state;
 - scratch consumer results for all three feature combinations;
