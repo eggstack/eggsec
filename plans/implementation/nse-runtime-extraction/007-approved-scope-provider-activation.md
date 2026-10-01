@@ -8,7 +8,8 @@ Eggsec runtime baseline: crates.io `eggsec-nse 0.2.0` (adoption target: publishe
 
 Hard dependency:
 
-- accepted closure `plans/closure/nse-runtime-extraction/007c-r-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`, with immutable crates.io `eggsec-nse 0.3.0` verified and ready for adoption.
+- accepted closure `plans/closure/nse-runtime-extraction/007c-r-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`, with immutable crates.io `eggsec-nse 0.3.0` verified and ready for adoption;
+- accepted companion security-disposition closure `plans/closure/nse-runtime-extraction/007c-s-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md`, with the affected-version/advisory/yank disposition recorded.
 
 Source roadmap:
 
