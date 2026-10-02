@@ -68,6 +68,10 @@ impl CapacityTracker {
     /// A shortfall means the coordinator over-delivered (or a concurrent
     /// tick reserved first); the caller must not execute beyond the
     /// admitted count.
+    // `fetch_update` is deprecated in favour of `try_update`, which is stable
+    // only since Rust 1.95; the workspace MSRV is 1.89, so the rename is not
+    // available here. Do not "fix" this deprecation by renaming.
+    #[allow(deprecated)]
     pub(crate) fn try_reserve(&self, want: usize) -> usize {
         match self
             .reserved

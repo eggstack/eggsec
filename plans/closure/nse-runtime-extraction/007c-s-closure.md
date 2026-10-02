@@ -403,3 +403,29 @@ The `docs/RELEASING.md` update landed as a **post-release commit on `main` (`870
 - `0.2.0` yank: **deferred to M007D** by design, reason recorded, version stated as still affected (§13.5).
 - **M007D is unblocked.** Both of plan §9 criterion 12's conditions are now met: the fixed `0.3.0` artifact exists and is verified, and the disposition record is complete. M007D additionally inherits (a) the `broker_dns_lookup` per-target membership gap and (b) the `0.2.0` yank.
 - **M007E remains blocked** on accepted M007D closure. Automated NSE remains quarantined.
+
+### 13.10 Eggsec-side verification, and a pre-existing failure this slice surfaced
+
+§4 of this record stated that `make check` was not run because the slice was plans-only. That is no longer the whole truth, and the correction is recorded here rather than left implicit.
+
+`make check` was run for the eggsec-side planning changes (commit `af85386c`). It **failed on a pre-existing clippy error that this slice did not introduce**:
+
+```text
+error: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`:
+       renamed to `try_update` for consistency
+  --> crates/eggsec/src/distributed/worker.rs:74:14
+make[1]: *** [Makefile:37: clippy] Error 101
+```
+
+It is pre-existing, and that was established rather than assumed: the slice's commit touches zero `.rs` files, and `git diff HEAD~1 HEAD -- crates/eggsec/src/distributed/worker.rs` is empty. A clippy/stdlib update in the toolchain made the deprecation observable; it is not a regression from this work. Leaving the repository's mandatory contract red was not an acceptable outcome for a pass that touched the planning control surface, so the error was fixed in a follow-up commit.
+
+The obvious fix was also **wrong**, and the second attempt proves the point worth recording:
+
+1. `fetch_update` → `try_update` cleared the deprecation lint but immediately failed with `current MSRV is 1.89.0 but this item is stable since 1.95.0` (`clippy::incompatible_msrv`). `try_update` does not exist at this workspace's MSRV, so the rename would have silently traded a lint for a broken MSRV contract.
+2. The correct fix is a scoped `#[allow(deprecated)]` on `WorkerBudget::try_reserve`, carrying a comment naming the MSRV constraint so the deprecation is not "helpfully" renamed later.
+
+`crates/eggsec/src/distributed/worker.rs` is the guarded capacity path — architecture guard "Worker max_concurrency capacity holds" covers it, and the reservation logic is unchanged by either attempt.
+
+After the fix, `make check` is green end to end: `cargo check` (workspace no-default-features, engine, CLI, CLI no-default-features), `make check-deps` (`cargo deny`: advisories, bans, licenses, sources all ok), `make clippy` (all four `-D warnings` targets), the doc tests, the engine/CLI/feature test suites, the `eggsec-output` / `eggsec-report-model` / `eggsec-policy` / `eggsec-transport-eggfetch` / `eggsec-tui` test suites, and `bash scripts/check-architecture-guards.sh` (`ALL PASSED: No architecture drift detected`).
+
+`crates/eggsec/Cargo.toml` still requires `eggsec-nse = { version = "0.2.0" }` and the lockfile still pins `0.2.0`. That is correct and deliberate: adopting `0.3.0` is M007D's work, and the `^0.2.0` requirement is precisely why the `0.2.0` yank was deferred rather than executed.
