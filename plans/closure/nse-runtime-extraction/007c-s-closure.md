@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007C-S — Closure Status
 
-Status: blocked
+Status: closed (draft preparation and execution both complete — see §13 addendum; the `0.2.0` yank is deliberately deferred to M007D with the reason recorded)
 
 Source implementation plan:
 
@@ -269,3 +269,137 @@ Rationale: identical to `0.1.0`. `0.2.0` is additionally the version Eggsec itse
 - `plans/subsystems/nse-runtime-extraction-roadmap.md`: no structural change required (M007C-R section already names this companion and its gating; the milestone table already reflects M007C-S publish/yank gating on verified `0.3.0`).
 - `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md`: `Status:` header → `blocked (draft preparation complete — see 007c-s-closure.md; publication/yank pending verified 0.3.0)`.
 - Follow-up: after M007C-R publishes verified `0.3.0`, open a short execution pass against this plan (publish advisory → yank → verify) and append its evidence as a dated addendum to this record or a `007c-s-exec-closure.md`, per the closure rule keeping records immutable except for factual corrections.
+
+---
+
+## 13. Execution addendum — 2026-10-02
+
+The gate that produced §1's "blocked" verdict has cleared. `eggsec-nse 0.3.0` was published, verified, and bound to the fixed version required by §6, and the §7 disposition has been executed. This addendum is the dated execution record §12 asked for; §§1–12 are left as written, with only the `Status:` line above updated to point here.
+
+Source of the fixed artifact: `plans/closure/nse-runtime-extraction/007c-r-closure.md` (M007C-R, closed) — candidate `eggstack/eggsec-nse@16cb38ee78f680bd07739dc3fc1ef776c9f19c9c`, published archive VCS identity equal to that SHA, immutable tag `v0.3.0`.
+
+### 13.1 Fixed-artifact verification (plan §7 execution step 1)
+
+| Check | Evidence | Result |
+|---|---|---|
+| `0.3.0` absent before publication | crates.io `max_version` 0.2.0; `git ls-remote --tags` v0.1.0/v0.2.0 only | pass |
+| Registry availability + consumption | three registry-only scratch consumers resolve `=0.3.0` for `nse`, `nse-ssh2`, `nse,sandbox` (`source = registry+…`, no path/git fallback) and build; one runs end to end | pass |
+| archive VCS identity == candidate | published `.cargo_vcs_info.json` `sha1 = 16cb38ee…`; archive sha256 `4497c2d1…` | pass |
+| fixed artifact really lacks the defect | 0 occurrences of the four withdrawn helper definitions in the published source; 6 `compile_fail` markers present; residual pins byte-identical | pass |
+
+### 13.2 Pre-publication verification (plan §8 first block) — re-run against the real candidate
+
+| Check | Result |
+|---|---|
+| `v0.1.0` vs `v0.2.0` helper source compared | **byte-for-byte identical** (`diff` empty), and both reach `TcpStream::connect_timeout` twice |
+| both direct-connect functions absent from the 0.3.0 candidate | absent in the working tree and in the published archive |
+| boundary guards fail if either helper is restored | two independent layers, both probed: the untruncated sweep fails closed (`exit 1`, `M007C-R violation`) for a primitive placed *after* `mod tests`, and the `compile_fail` doctests fail `cargo test --features nse --doc` for a restored `tcp_connect_with_timeout` |
+| semver report still contains the helper removals | 4/4 present in the 74-item set; full item set diffed identical to the archived M007C gate |
+
+The third row is materially stronger than the §1 record's probe. §1 proved the *text* guard fires for a primitive placed in production scope; M007C-R found that `nse_production_code()` truncates at the first `mod tests` and that `helpers.rs` itself carries 45 production lines below its test module, so a text-only probe would have been a weak proof. The shipped enforcement is now compiler-based, and the probe was deliberately positioned after the marker.
+
+### 13.3 Advisory publication (plan §7 execution step 2, §4 work package C)
+
+```text
+GHSA-w2g3-v83j-frp2
+repository:      eggstack/eggsec-nse
+ecosystem:       rust (crates.io)
+package:         eggsec-nse
+affected range:  >= 0.1.0, < 0.3.0
+patched:         0.3.0
+severity:        medium
+state:           published
+published_at:    2026-10-02T16:00:48Z
+url:             https://github.com/eggstack/eggsec-nse/security/advisories/GHSA-w2g3-v83j-frp2
+```
+
+Post-publication verification (plan §8 second block): the published range is exactly `>= 0.1.0, < 0.3.0` and therefore covers both released vulnerable versions; the fixed version is exactly `0.3.0`; the advisory references the `v0.3.0` release, the `v0.3.0` CHANGELOG, and `docs/PROVIDERS.md`. This satisfies plan §9 criteria 1, 2, 3, 4, 5, 10, and 11.
+
+Severity was assigned from §3's threat model rather than from the word "bypass", as §6 required: the defect requires the consumer to call the public helper, so it is scored as local attack vector, low complexity, no privileges, no user interaction, unchanged scope, low confidentiality and low integrity impact, no availability impact — CVSS 3.1 base ≈ 5.1, i.e. medium. The advisory body carries the four explicit non-claims verbatim from plan §3 and the four-way scope note from §6.
+
+**CVE decision: request via the GitHub advisory flow at publication time; M007D is explicitly not gated on assignment** (plan §4). The advisory was published through that flow, which is the request. Assignment is asynchronous: at closure `cve_id` was still `null` and the advisory had not yet been ingested into the global GitHub Advisory Database (`github.com/advisories/GHSA-w2g3-v83j-frp2` → 404). Neither fact gates M007D, and neither is claimed as done.
+
+### 13.4 Dependents re-check (plan §5, immediately before the yank)
+
+| Source | Result |
+|---|---|
+| GitHub code search, `eggsec-nse` in `filename:Cargo.toml` | 4 hits, all in `dbowm91/slapper` — the author's own monorepo, which consumes the crate as a **workspace path member** (`"crates/eggsec-nse"`), so a crates.io yank cannot affect it |
+| crates.io dependents endpoint | not available for this crate (404) — recorded as absent evidence, not as "no dependents" |
+| known consumers | one registry consumer: `eggstack/eggsec`, `crates/eggsec/Cargo.toml` requires `^0.2.0` |
+
+This confirms §1's "weak evidence" note: there is still no external downstream, and the only registry consumer is the principal consumer. Evidence is no weaker than it was at draft time; it is now positively identified rather than merely unobserved.
+
+### 13.5 Yank disposition — the outcome differs from the draft's preferred outcome
+
+The draft deferred both versions pending `0.3.0`, and recorded "yank both" as the preferred post-`0.3.0` outcome. On execution, **that preference does not hold for `0.2.0`**, and the divergence is recorded rather than papered over.
+
+**`0.1.0` — YANKED.** All three plan §5 conditions hold: the advisory concludes the raw-connect API violates a security guarantee a consumer could reasonably rely on; `0.3.0` is available and builds for all three feature combinations; and no identified downstream requires a fresh `0.1` resolution as its only migration path. Executed with `cargo yank --version 0.1.0 eggsec-nse`; crates.io now reports `0.1.0 yanked = true`.
+
+Yank behavior verified rather than assumed (plan §7 steps 3–5):
+
+| Property | Result |
+|---|---|
+| registry metadata reflects the yank | `0.1.0 yanked = True`, `0.2.0` and `0.3.0` unaffected |
+| an existing lockfile still resolves **and builds** the yanked version | lockfile pinned to `0.1.0` → `cargo build` OK |
+| a fresh unconstrained/`^0.1` resolution does not select the yanked version | `failed to select a version for the requirement ^0.1 … version 0.1.0 is yanked` |
+| consumers are not stranded with no upgrade target | unconstrained `>=0.1.0` now resolves to `0.3.0` |
+
+**`0.2.0` — NOT YANKED, deliberately, with the reason recorded.** Plan §5's third condition fails, and plan §10's stop condition fires:
+
+> a yank would strand the principal consumer before M007D can adopt 0.3.0
+
+`eggstack/eggsec` requires `eggsec-nse = { version = "0.2.0" }`, i.e. `^0.2.0`, and `0.2.0` is the only `0.2.x` that has ever been published. A fresh resolution of `^0.2.0` therefore has exactly one candidate, and the `0.1.0` experiment above establishes the mechanism directly: a yanked sole in-range candidate is a hard resolution failure, not a soft warning. Yanking `0.2.0` today would break fresh resolution for the principal consumer, whose adoption of `0.3.0` is M007D's work and is explicitly out of scope here.
+
+Consistent with plan §5's instruction for a deliberately unyanked version:
+
+- the compatibility reason is recorded above and in the `007c-r-closure.md` §10 findings;
+- **the advisory affected range is unchanged** at `>= 0.1.0, < 0.3.0`;
+- **`0.2.0` remains affected.** Not being yanked is not being safe. Anyone resolving `^0.2.0` today still gets the capability-bypassing helpers;
+- the revisit trigger is explicit: execute the `0.2.0` yank once M007D has adopted `0.3.0`, and re-run the §7 steps 3–5 at that time.
+
+### 13.6 Communication-surface reconciliation (plan §6, §9 criterion 10)
+
+All five surfaces carry the same message and all five keep the four facts distinct:
+
+| Surface | State |
+|---|---|
+| GitHub Security Advisory | `GHSA-w2g3-v83j-frp2` published 2026-10-02, four non-claims and the four-way scope note inline |
+| `v0.3.0` GitHub Release notes | created after registry verification; explicit "What 0.3.0 does not do" section enumerating all four facts |
+| `CHANGELOG.md` `[0.3.0]` | "Honest residual" and "Known limitations" sections; states 0.3.0 is not complete protocol-wide scope enforcement |
+| `docs/PROVIDERS.md` | `M007C` section; closes with the four-fact non-collapse statement |
+| `docs/RELEASING.md` | security-disclosure note, advisory identity, and the recorded per-version disposition |
+
+The `docs/RELEASING.md` update landed as a **post-release commit on `main` (`870fca7`)**, not on the tag, so `v0.3.0` keeps pointing at the published source. This was necessary for consistency rather than optional: while the advisory was unpublished, `RELEASING.md` correctly said the disposition was owned by the consuming repository, and that sentence became false the moment the advisory was published.
+
+### 13.7 Requirement-to-evidence delta
+
+| Requirement | §1–§12 result | Now | Change |
+|---|---|---|---|
+| §9.4 fixed version not published before `0.3.0` available | pass | pass | still true: `0.3.0` verified before the advisory was created |
+| §9.5 advisory published after the fixed artifact is verified, unless a reason is recorded | blocked with reason | **pass** | `GHSA-w2g3-v83j-frp2` published 2026-10-02T16:00:48Z, after registry and scratch-consumer verification |
+| §9.6 CVE explicitly decided, not required for M007D | pass | pass | requested via the advisory flow; assignment async and not claimed |
+| §9.7 `0.1.0` explicit decision + rationale | deferred | **executed: yanked** | |
+| §9.8 `0.2.0` explicit decision + rationale | deferred | **executed: not yanked, reason recorded** | |
+| §9.9 if yanked, registry + fresh-resolution verified | not run | **pass** | §13.5, all four properties |
+| §9.11 GHSA identifier or explicit no-advisory rationale | rationale | **pass** | identifier recorded |
+| §9.12 M007D unblocked only after fixed artifact + disposition | fail (blocked) | **pass** | both conditions met |
+| §8 post-pub: advisory range / fixed version / refs | not run | **pass** | §13.3 |
+| §6 surface reconciliation | template + baseline | **pass** | §13.6 |
+| §1 high finding (no verified `0.3.0`) | high | **closed** | |
+
+### 13.8 What this addendum does not change
+
+- §5's known limitations are inherited unchanged: the 22-file specialized residual is still not provider-backed; `broker_dns_lookup` still does not evaluate per-target membership for the resolved name (M007D's first task); `DnsResolution` is still not charged to `network_operations`; `upnp.discover` still does not perform real SSDP multicast discovery.
+- `0.2.0` is still resolvable and still affected. This addendum does not claim the exposure is closed for existing `0.2.0` consumers; it claims the range is *correctly disclosed* and that a safe upgrade target exists.
+- CVE assignment and GitHub Advisory Database ingestion remain outstanding operational items. Neither gates M007D.
+
+### 13.9 Roadmap disposition (supersedes §11)
+
+**M007C-S closed**, with one obligation deliberately carried into M007D rather than completed here.
+
+- Draft preparation: complete (§§3–9).
+- Advisory published with fixed `0.3.0`: complete (§13.3).
+- `0.1.0` yank executed and verified: complete (§13.5).
+- `0.2.0` yank: **deferred to M007D** by design, reason recorded, version stated as still affected (§13.5).
+- **M007D is unblocked.** Both of plan §9 criterion 12's conditions are now met: the fixed `0.3.0` artifact exists and is verified, and the disposition record is complete. M007D additionally inherits (a) the `broker_dns_lookup` per-target membership gap and (b) the `0.2.0` yank.
+- **M007E remains blocked** on accepted M007D closure. Automated NSE remains quarantined.

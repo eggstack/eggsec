@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007C-R — Breaking 0.3.0 Release
 
-Status: ready for handoff
+Status: closed (see `plans/closure/nse-runtime-extraction/007c-r-closure.md`; `0.3.0` published from candidate `16cb38e`, advisory `GHSA-w2g3-v83j-frp2` published by companion M007C-S)
 
 Repository baseline: `eggstack/eggsec-nse@d4a22f1dbe56f4ccfb17b2a8135aae8395f44f19`
 

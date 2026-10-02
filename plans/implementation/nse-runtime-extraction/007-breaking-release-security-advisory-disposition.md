@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Milestone 007C-S — Security Advisory and Predecessor-Version Disposition
 
-Status: blocked (draft preparation complete — see `plans/closure/nse-runtime-extraction/007c-s-closure.md`; advisory publication and 0.1.0/0.2.0 yank execution pending verified `0.3.0` from M007C-R)
+Status: closed (advisory `GHSA-w2g3-v83j-frp2` published 2026-10-02 with fixed `0.3.0`; `0.1.0` yanked and verified; `0.2.0` deliberately not yanked because yanking it would strand the principal consumer on `^0.2.0` — see the dated execution addendum in `plans/closure/nse-runtime-extraction/007c-s-closure.md` §13, where the `0.2.0` yank is carried into M007D)
 
 Eggsec planning baseline: `39603233d8b549d4b525203ba0869b40e5696569`
 

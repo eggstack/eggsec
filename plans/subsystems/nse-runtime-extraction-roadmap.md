@@ -1,6 +1,6 @@
 # NSE Runtime Extraction Roadmap
 
-Status: active — Milestones 001-006 closed; M007 protocol-library gating and controlled automated activation active/planned
+Status: active — Milestones 001-006 closed; M007A/M007B closed; M007C blocked and superseded by M007C-R; M007C-R and its M007C-S security companion closed (`0.3.0` published, advisory `GHSA-w2g3-v83j-frp2`); M007D ready for handoff; M007E gated; automated NSE remains quarantined
 
 Long-term references:
 
@@ -496,9 +496,13 @@ Primary plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-re
 
 Security companion: `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (M007C-S).
 
-Status: **ready for handoff** (current NSE boundary).
+Status: **closed** (published `0.3.0` from candidate `16cb38ee78f680bd07739dc3fc1ef776c9f19c9c`; companion security disposition closed).
 
 Plan: `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`
+
+Closure record: `plans/closure/nse-runtime-extraction/007c-r-closure.md` (archived gate output in `007c-r-semver-report.txt`)
+
+Security companion closure: `plans/closure/nse-runtime-extraction/007c-s-closure.md` (advisory `GHSA-w2g3-v83j-frp2`, `0.1.0` yanked, `0.2.0` yank deferred to M007D)
 
 Implementation repository: `eggstack/eggsec-nse`.
 
@@ -506,17 +510,24 @@ Boundary: re-confirm the known 74-item break on the candidate, publish `0.3.0` a
 
 Rationale for the version bump rather than restoration: the two direct-connect `helpers` removals withdraw a published capability bypass, so 0.3.0 also discharges a security obligation — published 0.2.0 still exposes them. The release is not a semver formality.
 
-Exit gate: Eggsec has a published immutable `0.3.0` registry artifact whose migration notes account for all 74 removals, `007c-r-closure.md` is accepted, companion `007c-s-closure.md` records the security advisory/yank disposition for both `0.1.0` and `0.2.0`, and only then may M007D adopt it.
+Outcome: the §3 gate was re-run **on the release candidate** and reports 196 checks / 195 pass / **1 fail** with exactly the known 74 `function_missing` items, byte-identical to the archived M007C gate — no additional breaking lint, no item-count drift. The full §10 block is 15/15 green and hosted CI is 5/5 on `16cb38e`. `0.3.0` published via the manual-token recovery path (registry-side Trusted Publishing is still pending, a low operational residual); the published archive's VCS identity equals the candidate and the immutable `v0.3.0` tag points at that same commit, created *after* registry verification and never moved. docs.rs built; three registry-only scratch consumers build for `nse`, `nse-ssh2`, and `nse,sandbox`. The `nse_production_code` truncation caveat was **closed rather than deferred**: the two withdrawn helpers are now enforced absent by `compile_fail` doctests checked by the compiler, and an untruncated sweep fails closed on a primitive hidden after a test module — a live hole, since `helpers.rs` itself carries 45 production lines below its `mod tests`.
+
+Exit gate: **met.** Eggsec has a published immutable `0.3.0` registry artifact whose migration notes account for all 74 removals, `007c-r-closure.md` is closed, companion `007c-s-closure.md` records the security advisory/yank disposition for both `0.1.0` and `0.2.0`, and M007D may adopt it.
 
 #### M007D — Eggsec approved-scope/profile threading and scoped provider activation
 
-Status: **blocked on accepted M007C-R + M007C-S closures** (release artifact and security-disposition evidence are both required).
+Status: **ready for handoff** (current NSE boundary). Both hard dependencies are closed: `007c-r-closure.md` and the `007c-s-closure.md` §13 execution addendum.
 
 Plan: `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md`
 
 Implementation repository: `eggstack/eggsec`.
 
 Boundary: adopt the M007 `0.3.0` runtime release; bind approval-time `TargetScope` facts into `ApprovedExecution`; extract generic owned scope authority; implement scoped DNS/TCP/UDP providers; compose the authority-bound HTTP adapter with Eggfetch; map Eggsec strict profiles to NSE safe profiles; route only `execute_approved_execution()` through scoped services.
+
+Inherited obligations, both required rather than optional:
+
+1. `broker_dns_lookup` gates `DnsResolution` on `DenyAll` only and does not evaluate per-target membership for the resolved name, so runtime DNS policy is not yet bound to approved scope. M007D must close this before re-exposure.
+2. The `0.2.0` yank, deliberately deferred out of M007C-S because yanking it while the principal consumer requires `^0.2.0` would strand fresh resolution. Once M007D has adopted `0.3.0`, execute the yank and re-verify the four yank properties. `0.2.0` remains affected until then.
 
 Exit gate: scope-bearing strict NSE can execute a safe provider-backed fixture with no native fallback, while the scope-less strict entry still rejects NSE and automated metadata remains quarantined.
 
@@ -641,4 +652,4 @@ This roadmap is complete when:
 | 004 versioned release + Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/004-versioned-release-and-eggsec-adoption.md` | `plans/closure/nse-runtime-extraction/004-closure.md` | — |
 | 005 provider inversion / portability hardening | closed | `plans/implementation/nse-runtime-extraction/005-post-merge-ci-fixture-corrective.md` | fixture corrective closure + amended landing closure; provider implementation landed on standalone main | hosted run `36490773625` green on exact main SHA; 0.2.0 release/adoption dependency-ready |
 | 006 0.2.0 release + safe Eggsec adoption | closed | `plans/implementation/nse-runtime-extraction/006-standalone-0-2-0-release.md` (006A; 006B-C linked in §7) | `plans/closure/nse-runtime-extraction/006a-closure.md`, `006b-closure.md`, `006c-closure.md` | M007 active/planned; automated activation remains gated |
-| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` (primary) + `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (security companion) | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green); `plans/closure/nse-runtime-extraction/007c-closure.md` (007C, **blocked** — 74-function major break, 0.2.1 not published) | M007C-R is primary current handoff; M007C-S may prepare disclosure in parallel but publish/yank only after verified 0.3.0; M007D-E remain gated |
+| 007 protocol-library gating + controlled automated activation | active | `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` (M007C-R, **closed**) + `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` (M007C-S, security companion, **closed**) | `plans/closure/nse-runtime-extraction/007a-closure.md` (007A); `plans/closure/nse-runtime-extraction/007b-closure.md` (007B, closed via corrective pass; standalone `d4a22f1`, hosted run `36640412317` green); `plans/closure/nse-runtime-extraction/007c-closure.md` (007C, **blocked** — 74-function major break, 0.2.1 not published); `plans/closure/nse-runtime-extraction/007c-r-closure.md` (007C-R, **closed** — `0.3.0` published from candidate `16cb38e`, hosted run `37023503110` green, archive VCS identity = candidate, tag `v0.3.0` never moved); `plans/closure/nse-runtime-extraction/007c-s-closure.md` (007C-S, **closed** — advisory `GHSA-w2g3-v83j-frp2` published, `0.1.0` yanked and verified, `0.2.0` yank deferred to M007D) | **M007D is the current handoff** (both hard dependencies closed), carrying two inherited obligations: the `broker_dns_lookup` per-target membership gap and the deferred `0.2.0` yank; M007E remains gated on accepted M007D closure; automated NSE stays quarantined |

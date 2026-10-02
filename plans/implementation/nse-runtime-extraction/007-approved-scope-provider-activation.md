@@ -1,15 +1,20 @@
 # NSE Runtime Extraction Milestone 007D — Eggsec Approved-Scope/Profile Threading and Scoped Provider Activation
 
-Status: blocked
+Status: ready for handoff (current NSE boundary)
 
 Planning baseline: `386fe63a522aac66340386ac83e9f5ed54500d8b`
 
-Eggsec runtime baseline: crates.io `eggsec-nse 0.2.0` (adoption target: published `0.3.0` from M007C-R)
+Eggsec runtime baseline: crates.io `eggsec-nse 0.2.0` (adoption target: published `0.3.0` from M007C-R, verified and available)
 
-Hard dependency:
+Hard dependency — **both satisfied**:
 
 - accepted closure `plans/closure/nse-runtime-extraction/007c-r-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md`, with immutable crates.io `eggsec-nse 0.3.0` verified and ready for adoption;
 - accepted companion security-disposition closure `plans/closure/nse-runtime-extraction/007c-s-closure.md`, produced by `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md`, with the affected-version/advisory/yank disposition recorded.
+
+Inherited obligations carried into this milestone (required, not optional):
+
+1. `broker_dns_lookup` gates `DnsResolution` on `DenyAll` only and does not evaluate per-target membership for the resolved name, so runtime DNS policy is not yet bound to approved scope. This milestone must close it before any re-exposure.
+2. The `0.2.0` yank, deferred out of M007C-S because yanking it while this repository requires `^0.2.0` would strand fresh resolution. Once `0.3.0` is adopted here, execute the yank and re-verify the four yank properties recorded in `007c-s-closure.md` §13.5. `0.2.0` remains affected until then.
 
 Source roadmap:
 

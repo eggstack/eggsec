@@ -1,0 +1,96 @@
+    Building eggsec-nse v0.2.0 (current)
+       Built [ 125.914s] (current)
+     Parsing eggsec-nse v0.2.0 (current)
+      Parsed [   0.112s] (current)
+    Building eggsec-nse v0.2.0 (baseline)
+       Built [  97.975s] (baseline)
+     Parsing eggsec-nse v0.2.0 (baseline)
+      Parsed [   0.106s] (baseline)
+    Checking eggsec-nse v0.2.0 -> v0.2.0 (no change; assume minor)
+     Checked [   0.086s] 196 checks: 195 pass, 1 fail, 0 warn, 58 skip
+
+--- failure function_missing: pub fn removed or renamed ---
+
+Description:
+A publicly-visible function cannot be imported by its prior path. A `pub use` may have been removed, or the function itself may have been renamed or removed entirely.
+        ref: https://doc.rust-lang.org/cargo/reference/semver.html#item-remove
+       impl: https://github.com/obi1kenobi/cargo-semver-checks/tree/v0.50.0/src/lints/function_missing.ron
+
+Failed in:
+  function eggsec_nse::libraries::finger::register_finger_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/finger.rs:14
+  function eggsec_nse::libraries::jdwp::register_jdwp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/jdwp.rs:11
+  function eggsec_nse::libraries::oops::register_oops_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/oops.rs:11
+  function eggsec_nse::libraries::bitcoin::register_bitcoin_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/bitcoin.rs:27
+  function eggsec_nse::libraries::msrpc::register_msrpc_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/msrpc.rs:11
+  function eggsec_nse::libraries::vnc::register_vnc_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/vnc.rs:175
+  function eggsec_nse::libraries::ssh1::register_ssh1_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ssh1.rs:11
+  function eggsec_nse::libraries::mssql::register_mssql_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/mssql.rs:38
+  function eggsec_nse::libraries::kafka::register_kafka_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/kafka.rs:205
+  function eggsec_nse::libraries::tls::register_tls_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/tls.rs:146
+  function eggsec_nse::libraries::whois::register_whois_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/whois.rs:14
+  function eggsec_nse::libraries::imap::register_imap_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/imap.rs:82
+  function eggsec_nse::libraries::informix::register_informix_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/informix.rs:13
+  function eggsec_nse::libraries::helpers::make_addr, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/helpers.rs:75
+  function eggsec_nse::libraries::sslv2::register_sslv2_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/sslv2.rs:11
+  function eggsec_nse::libraries::netbios::register_netbios_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/netbios.rs:10
+  function eggsec_nse::libraries::ajp::register_ajp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ajp.rs:52
+  function eggsec_nse::libraries::pgsql::register_pgsql_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/pgsql.rs:13
+  function eggsec_nse::libraries::amqp::register_amqp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/amqp.rs:13
+  function eggsec_nse::libraries::anyconnect::register_anyconnect_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/anyconnect.rs:12
+  function eggsec_nse::libraries::rsync::register_rsync_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/rsync.rs:11
+  function eggsec_nse::libraries::xmpp::register_xmpp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/xmpp.rs:11
+  function eggsec_nse::libraries::sftp::register_sftp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/sftp.rs:10
+  function eggsec_nse::libraries::postgres::register_postgres_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/postgres.rs:256
+  function eggsec_nse::libraries::http2::register_http2_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/http2.rs:10
+  function eggsec_nse::libraries::versant::register_versant_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/versant.rs:13
+  function eggsec_nse::libraries::socks::register_socks_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/socks.rs:11
+  function eggsec_nse::libraries::irc::register_irc_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/irc.rs:11
+  function eggsec_nse::libraries::isns::register_isns_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/isns.rs:13
+  function eggsec_nse::libraries::mqtt::register_mqtt_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/mqtt.rs:314
+  function eggsec_nse::libraries::oracle::register_oracle_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/oracle.rs:10
+  function eggsec_nse::libraries::bittorrent::register_bittorrent_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/bittorrent.rs:11
+  function eggsec_nse::libraries::libssh2_utility::register_libssh2_utility_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/libssh2_utility.rs:13
+  function eggsec_nse::libraries::ftp::register_ftp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ftp.rs:361
+  function eggsec_nse::libraries::rdp::register_rdp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/rdp.rs:92
+  function eggsec_nse::libraries::iec61850mms::register_iec61850mms_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/iec61850mms.rs:13
+  function eggsec_nse::libraries::tn3270::register_tn3270_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/tn3270.rs:11
+  function eggsec_nse::libraries::winrm::register_winrm_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/winrm.rs:10
+  function eggsec_nse::libraries::tns::register_tns_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/tns.rs:46
+  function eggsec_nse::libraries::redis::register_redis_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/redis.rs:81
+  function eggsec_nse::libraries::helpers::tls_connect, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/helpers.rs:61
+  function eggsec_nse::libraries::sslcert::register_sslcert_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/sslcert.rs:100
+  function eggsec_nse::libraries::rmi::register_rmi_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/rmi.rs:13
+  function eggsec_nse::libraries::helpers::parse_socket_addr, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/helpers.rs:96
+  function eggsec_nse::libraries::ncp::register_ncp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ncp.rs:13
+  function eggsec_nse::libraries::afp::register_afp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/afp.rs:13
+  function eggsec_nse::libraries::memcached::register_memcached_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/memcached.rs:39
+  function eggsec_nse::libraries::ndmp::register_ndmp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ndmp.rs:13
+  function eggsec_nse::libraries::citrixxml::register_citrixxml_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/citrixxml.rs:11
+  function eggsec_nse::libraries::dicom::register_dicom_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/dicom.rs:11
+  function eggsec_nse::libraries::pop3::register_pop3_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/pop3.rs:100
+  function eggsec_nse::libraries::rpcap::register_rpcap_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/rpcap.rs:18
+  function eggsec_nse::libraries::rtsp::register_rtsp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/rtsp.rs:11
+  function eggsec_nse::libraries::smb2::register_smb2_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/smb2.rs:48
+  function eggsec_nse::libraries::nrpc::register_nrpc_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/nrpc.rs:13
+  function eggsec_nse::libraries::ldap::register_ldap_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ldap.rs:580
+  function eggsec_nse::libraries::ipp::register_ipp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/ipp.rs:122
+  function eggsec_nse::libraries::cvs::register_cvs_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/cvs.rs:11
+  function eggsec_nse::libraries::iscsi::register_iscsi_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/iscsi.rs:11
+  function eggsec_nse::libraries::proxy::register_proxy_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/proxy.rs:11
+  function eggsec_nse::libraries::omp2::register_omp2_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/omp2.rs:10
+  function eggsec_nse::libraries::sip::register_sip_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/sip.rs:31
+  function eggsec_nse::libraries::openssl::register_openssl_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/openssl.rs:52
+  function eggsec_nse::libraries::msrpcperformance::register_msrpcperformance_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/msrpcperformance.rs:12
+  function eggsec_nse::libraries::websocket::register_websocket_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/websocket.rs:10
+  function eggsec_nse::libraries::mysql::register_mysql_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/mysql.rs:225
+  function eggsec_nse::libraries::nbd::register_nbd_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/nbd.rs:11
+  function eggsec_nse::libraries::membase::register_membase_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/membase.rs:11
+  function eggsec_nse::libraries::helpers::tcp_connect_with_timeout, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/helpers.rs:79
+  function eggsec_nse::libraries::cassandra::register_cassandra_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/cassandra.rs:11
+  function eggsec_nse::libraries::mongodb::register_mongodb_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/mongodb.rs:41
+  function eggsec_nse::libraries::smb::register_smb_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/smb.rs:509
+  function eggsec_nse::libraries::drda::register_drda_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/drda.rs:11
+  function eggsec_nse::libraries::smtp::register_smtp_library, previously in file /home/sugarwookie/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eggsec-nse-0.2.0/src/libraries/smtp.rs:199
+
+     Summary semver requires new major version: 1 major and 0 minor checks failed
+    Finished [ 230.768s] eggsec-nse
