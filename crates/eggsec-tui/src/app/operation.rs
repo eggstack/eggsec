@@ -195,6 +195,9 @@ impl App {
                     argv.push("--ports".to_string());
                     argv.push(ports.to_string());
                 }
+                if self.tabs.scan_ports.udp() {
+                    argv.push("--udp".to_string());
+                }
             }
             Tab::Fuzz => {
                 // Phase 2.7: `Max Payloads` is TUI-only (no CLI flag); omit it

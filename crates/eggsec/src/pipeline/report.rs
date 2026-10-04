@@ -6,7 +6,14 @@ use crate::output::escape::{escape_csv, escape_html, escape_xml};
 use crate::output::RunManifest;
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
-use crate::scanner::ports::PortResult;
+use crate::scanner::ports::{PortProtocol, PortResult};
+
+/// A UDP scan fills `open_ports` with a verdict for every probed port, so
+/// calling that list "Open Ports" would misreport most of its rows. Renderers
+/// branch on this to pick honest wording.
+fn has_udp_ports(ports: &[PortResult]) -> bool {
+    ports.iter().any(|p| p.protocol == PortProtocol::Udp)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineReport {
@@ -44,9 +51,17 @@ impl std::fmt::Display for PipelineReport {
         }
 
         if !self.open_ports.is_empty() {
-            writeln!(f, "open ports")?;
+            if has_udp_ports(&self.open_ports) {
+                writeln!(f, "port results")?;
+            } else {
+                writeln!(f, "open ports")?;
+            }
             for port in self.open_ports.iter().take(10) {
-                writeln!(f, "\t{}/{}\t{}", port.port, port.status, port.service)?;
+                writeln!(
+                    f,
+                    "\t{}/{}\t{}\t{}",
+                    port.port, port.protocol, port.status, port.service
+                )?;
             }
             if self.open_ports.len() > 10 {
                 writeln!(f, "\t... and {} more", self.open_ports.len() - 10)?;
@@ -223,13 +238,22 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
     html.push_str("</table>\n</div>\n");
 
     if !report.open_ports.is_empty() {
-        html.push_str("<div class='section'>\n<h2>Open Ports</h2>\n<table>\n");
+        let heading = if has_udp_ports(&report.open_ports) {
+            "Port Results"
+        } else {
+            "Open Ports"
+        };
+        html.push_str(&format!(
+            "<div class='section'>\n<h2>{}</h2>\n<table>\n",
+            heading
+        ));
         html.push_str("<tr><th>Port</th><th>Status</th><th>Service</th></tr>\n");
         for port in &report.open_ports {
             html.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                "<tr><td>{}/{}</td><td>{}</td><td>{}</td></tr>\n",
                 port.port,
-                escape_xml(&port.status),
+                port.protocol,
+                escape_xml(port.status.as_str()),
                 escape_html(&port.service)
             ));
         }
@@ -316,12 +340,17 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
     csv.push_str(&format!("Duration (ms),{}\n\n", report.total_duration_ms));
 
     if !report.open_ports.is_empty() {
-        csv.push_str("Open Ports\n");
+        csv.push_str(if has_udp_ports(&report.open_ports) {
+            "Port Results\n"
+        } else {
+            "Open Ports\n"
+        });
         csv.push_str("Port,Status,Service\n");
         for port in &report.open_ports {
             csv.push_str(&format!(
-                "{},{},{}\n",
+                "{}/{},{},{}\n",
                 port.port,
+                port.protocol,
                 port.status,
                 escape_csv(&port.service)
             ));
@@ -396,13 +425,17 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
     md.push('\n');
 
     if !report.open_ports.is_empty() {
-        md.push_str("## Open Ports\n\n");
+        md.push_str(if has_udp_ports(&report.open_ports) {
+            "## Port Results\n\n"
+        } else {
+            "## Open Ports\n\n"
+        });
         md.push_str("| Port | Status | Service |\n");
         md.push_str("|------|--------|--------|\n");
         for port in &report.open_ports {
             md.push_str(&format!(
-                "| {} | {} | {} |\n",
-                port.port, port.status, port.service
+                "| {}/{} | {} | {} |\n",
+                port.port, port.protocol, port.status, port.service
             ));
         }
         md.push('\n');

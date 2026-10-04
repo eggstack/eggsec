@@ -735,6 +735,125 @@ mod tests {
         );
     }
 
+    /// `eggsec storage` used to hardcode `StorageConfig::default()` in all
+    /// four handlers, so it could only ever reach localhost:5432. Every
+    /// subcommand must accept and actually apply a connection.
+    #[test]
+    fn storage_subcommands_accept_a_connection() {
+        for sub in ["query", "export", "stats", "init"] {
+            let parsed = Cli::try_parse_from([
+                "eggsec",
+                "storage",
+                sub,
+                "--host",
+                "db.internal",
+                "--port",
+                "6543",
+                "--database",
+                "eggsec_test",
+                "--username",
+                "scanner",
+            ])
+            .unwrap_or_else(|e| panic!("storage {sub} must accept connection flags: {e}"));
+
+            let args = match parsed.command {
+                Some(Commands::Storage(a)) => a,
+                Some(other) => {
+                    panic!("expected Storage, got {}", other.command_id())
+                }
+                None => panic!("expected Storage, got none"),
+            };
+            let conn = match args.command {
+                crate::cli::storage::StorageCommand::Query(a) => a.conn,
+                crate::cli::storage::StorageCommand::Export(a) => a.conn,
+                crate::cli::storage::StorageCommand::Stats(a) => a.conn,
+                crate::cli::storage::StorageCommand::Init(a) => a.conn,
+            };
+            assert_eq!(conn.host, "db.internal", "subcommand {sub}");
+            assert_eq!(conn.port, 6543, "subcommand {sub}");
+            assert_eq!(conn.database, "eggsec_test", "subcommand {sub}");
+            assert_eq!(conn.username, "scanner", "subcommand {sub}");
+
+            let config = conn.resolve();
+            assert_eq!(config.host, "db.internal", "subcommand {sub}");
+            assert_eq!(config.port, 6543, "subcommand {sub}");
+            assert_eq!(config.database, "eggsec_test", "subcommand {sub}");
+            assert_eq!(config.username, "scanner", "subcommand {sub}");
+        }
+    }
+
+    /// The password is supplied by environment-variable *name*, never a flag
+    /// value, and the resolved config must not print it.
+    #[test]
+    fn storage_password_comes_from_env_and_is_redacted() {
+        let var = "EGGSEC_TEST_STORAGE_PASSWORD_ROUNDTRIP";
+        // A variable name, not a secret, is what travels.
+        let parsed = Cli::try_parse_from(["eggsec", "storage", "stats", "--password-env", var])
+            .expect("--password-env must parse");
+        let Some(Commands::Storage(args)) = parsed.command else {
+            panic!("expected Storage");
+        };
+        let crate::cli::storage::StorageCommand::Stats(mut a) = args.command else {
+            panic!("expected Stats");
+        };
+        assert_eq!(a.conn.password_env, var);
+
+        // Unique per test so a concurrent run cannot race this variable.
+        let unique = format!("{var}_{}", std::process::id());
+        a.conn.password_env = unique.clone();
+        std::env::set_var(&unique, "hunter2");
+        let config = a.conn.resolve();
+        std::env::remove_var(&unique);
+
+        assert_eq!(config.password.expose_secret(), "hunter2");
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains("hunter2"),
+            "Debug must not leak the password: {debug}"
+        );
+        assert!(debug.contains("[REDACTED]"), "got: {debug}");
+    }
+
+    /// `scan-ports --udp` must exist in the real Clap tree and be a sibling of
+    /// `--scan-type`, not one of its values.
+    #[test]
+    fn scan_ports_udp_flag_parses_independently_of_scan_type() {
+        let tcp = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1"])
+            .expect("bare scan-ports must parse");
+        let Some(Commands::ScanPorts(tcp_args)) = tcp.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(!tcp_args.udp, "--udp must default to off");
+        assert!(tcp_args.scan_type.is_none());
+
+        let udp = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1", "--udp"])
+            .expect("--udp must parse");
+        let Some(Commands::ScanPorts(udp_args)) = udp.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(udp_args.udp);
+        assert!(
+            udp_args.scan_type.is_none(),
+            "--udp must not imply a TCP scan type"
+        );
+
+        // Both together parse; the engine decides precedence, not Clap.
+        let both = Cli::try_parse_from([
+            "eggsec",
+            "scan-ports",
+            "127.0.0.1",
+            "--udp",
+            "--scan-type",
+            "syn",
+        ])
+        .expect("--udp with --scan-type must parse");
+        let Some(Commands::ScanPorts(both_args)) = both.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(both_args.udp);
+        assert_eq!(both_args.scan_type.as_deref(), Some("syn"));
+    }
+
     #[test]
     fn quick_profile_allows_safe_active() {
         assert_eq!(ScanProfile::Quick.max_risk_budget(), ProbeRisk::SafeActive);

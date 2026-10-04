@@ -35,10 +35,10 @@ pub mod cli_adapters {
             scan_type: args.scan_type.clone(),
             timeout_ms: Some(args.timeout.saturating_mul(1000)),
             concurrency: Some(args.concurrency),
-            // The Clap tree has no `--udp` yet, so the CLI is TCP-only. Sending
-            // an invented `false` here would make the adapter disagree with the
-            // flag surface if one is added without updating it.
-            udp: None,
+            // `--udp` is an opt-in bool flag, so absent means false. Sent as
+            // `Some` rather than `None` so the engine's default (false) is
+            // stated explicitly instead of being inherited silently.
+            udp: Some(args.udp),
         }
     }
 

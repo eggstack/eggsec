@@ -323,10 +323,12 @@ impl super::App {
                         .map(|p| PortCsv {
                             host: results.host.clone(),
                             port: p.port,
-                            protocol: "tcp".to_string(),
+                            // From the record, not a literal: a UDP run would
+                            // otherwise export every row as tcp/open.
+                            protocol: p.protocol.as_str().to_string(),
                             service: Some(p.service.clone()),
                             version: None,
-                            state: "open".to_string(),
+                            state: p.status.as_str().to_string(),
                         })
                         .collect();
                     match CsvExporter::export_ports(&ports) {

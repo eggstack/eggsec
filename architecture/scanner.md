@@ -5,6 +5,13 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 ## Role & Responsibilities
 
 - **TCP port scanning** with concurrent connections, spoofed raw-socket scans (SYN/Null/FIN/Xmas), and Nmap-style timing templates (T0–T5)
+- **UDP port scanning** behind the `udp-scan` feature. The transport lives in the
+  separate `eggsec-udp-scan` crate (see
+  [capability_segregation.md](capability_segregation.md)); this module owns only
+  the engine-side projection into `PortStatus`/`PortProtocol`. UDP cannot prove a
+  port is open, so a silent port is `open|filtered`, never `open` — read
+  `PortScanResults::udp_host_state` before trusting any per-port verdict, and
+  `proved_open_ports()` rather than `open_ports.len()` when counting.
 - **Endpoint discovery** via wordlist-based brute forcing (347 built-in paths) with custom wordlist support
 - **Service fingerprinting** through banner grabbing and protocol-specific probes (45 probes, CPE/CVE output)
 - **UDP fingerprinting** for DNS, SNMP, NTP, game servers, ICS/SCADA, and 40+ other services
@@ -17,6 +24,7 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 | Component | Path | Feature Gate |
 |-----------|------|-------------|
 | Port scanning | `scanner/ports/mod.rs` | Always |
+| UDP port scanning | `crates/eggsec-udp-scan/` (engine adapter: `dispatch/scanner.rs`) | `udp-scan` |
 | Spoofed port scanning | `scanner/ports/spoofed.rs` | `stress-testing` + Unix |
 | Endpoint discovery | `scanner/endpoints.rs` | Always |
 | TCP fingerprinting | `scanner/fingerprint.rs` | Always |
@@ -66,8 +74,10 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 |------|----------|-----------------|-------|
 | `PortScanConfig` | `ports/mod.rs:41` | `ports`, `concurrency`, `timeout_duration`, `tui_mode`, `spoof_config`, `progress_tx`, `max_results` | Default: concurrency=100, timeout=3s |
 | `PortScanRequest` | `ports/mod.rs:79` | `host`, `ports`, `concurrency`, `timeout`, `spoof_config`, `dry_run` | Engine-facing contract (no Clap) |
-| `PortResult` | `ports/mod.rs:136` | `port`, `status`, `service` | Per-port result |
-| `PortScanResults` | `ports/mod.rs:143` | `host`, `ports_scanned`, `open_ports`, `total_open_ports`, `duration_ms`, `spoof_stats` | Aggregate results |
+| `PortResult` | `ports/mod.rs:211` | `port`, `status` (`PortStatus`), `protocol` (`PortProtocol`), `service` | Per-port verdict. `protocol` is `#[serde(default)]` = TCP. |
+| `PortStatus` | `ports/mod.rs:173` | `open`, `closed`, `filtered`, `open\|filtered` | `open`/`closed` are *proofs*; the other two are an absence of one. Unknown wire values are rejected, not coerced. |
+| `PortProtocol` | `ports/mod.rs:138` | `tcp`, `udp` | Defaults to `tcp`. |
+| `PortScanResults` | `ports/mod.rs:272` | `host`, `ports_scanned`, `open_ports`, `total_open_ports`, `results_truncated`, `duration_ms`, `spoof_stats`, `udp_host_state`, `udp_evidence` | Aggregate results. `is_udp()` / `proved_open_ports()` are the honest accessors — `open_ports.len()` is *not* an open count for a UDP run. |
 | `MAX_SCAN_RESULTS` | `ports/mod.rs:34` | `10000` | Hard cap to bound memory |
 | `ScanType` | `spoof.rs:21` | `Syn`, `Null`, `Fin`, `Xmas` | Default: `Syn` |
 

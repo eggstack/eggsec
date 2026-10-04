@@ -193,6 +193,74 @@ mod tests {
     }
 
     #[test]
+    fn copy_cli_scan_ports_udp_round_trips_through_clap_and_canonical() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        app.export_format = eggsec::types::OutputFormat::Pretty;
+        if let Some(f) = app.tabs.scan_ports.core.inputs.fields.first_mut() {
+            f.value = "10.0.0.1".to_string();
+        }
+        if let Some(f) = app.tabs.scan_ports.core.inputs.fields.get_mut(1) {
+            f.value = "53,161".to_string();
+        }
+        app.tabs.scan_ports.udp_checkbox.checked = true;
+
+        let cli_string = app.copy_cli_equivalent().unwrap();
+        assert!(
+            cli_string.contains("--udp"),
+            "the UDP checkbox must reach the copied command, got: {cli_string}"
+        );
+        assert!(
+            !cli_string.contains("--scan-type"),
+            "UDP is a sibling of scan_type, not a value of it, so it must not be emitted"
+        );
+
+        let parts = split_cli_string(&cli_string);
+        let cli = Cli::try_parse_from(parts).expect("scan-ports --udp must parse");
+        match cli.command {
+            Some(Commands::ScanPorts(args)) => {
+                assert!(args.udp, "--udp must survive the real Clap tree");
+                let req = eggsec::operation_request::cli_adapters::port_scan_from_cli(&args);
+                assert_eq!(req.target, "10.0.0.1");
+                assert_eq!(req.ports.as_deref(), Some("53,161"));
+                assert_eq!(
+                    req.udp,
+                    Some(true),
+                    "the CLI adapter must forward --udp, not drop it"
+                );
+            }
+            Some(other) => panic!("expected ScanPorts, got {}", other.command_id()),
+            None => panic!("expected ScanPorts, got none"),
+        }
+    }
+
+    /// Without the checkbox the flag must be absent, so a TCP run's copied
+    /// command does not claim to be a UDP scan.
+    #[test]
+    fn copy_cli_scan_ports_without_udp_omits_the_flag() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        app.export_format = eggsec::types::OutputFormat::Pretty;
+        if let Some(f) = app.tabs.scan_ports.core.inputs.fields.first_mut() {
+            f.value = "10.0.0.1".to_string();
+        }
+        app.tabs.scan_ports.udp_checkbox.checked = false;
+        let cli_string = app.copy_cli_equivalent().unwrap();
+        assert!(!cli_string.contains("--udp"), "got: {cli_string}");
+        let parts = split_cli_string(&cli_string);
+        let cli = Cli::try_parse_from(parts).expect("scan-ports TCP must parse");
+        match cli.command {
+            Some(Commands::ScanPorts(args)) => {
+                assert!(!args.udp);
+                let req = eggsec::operation_request::cli_adapters::port_scan_from_cli(&args);
+                assert_eq!(req.udp, Some(false));
+            }
+            Some(other) => panic!("expected ScanPorts, got {}", other.command_id()),
+            None => panic!("expected ScanPorts, got none"),
+        }
+    }
+
+    #[test]
     fn copy_cli_fuzz_round_trips_through_clap_and_canonical() {
         let mut app = create_test_app();
         app.current_tab = Tab::Fuzz;

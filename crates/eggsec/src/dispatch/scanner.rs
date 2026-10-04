@@ -150,11 +150,10 @@ pub async fn run_fingerprint(
 ///
 /// The mapping is deliberately lossy in the *safe* direction: the crate's typed
 /// evidence stays in `eggsec-udp-scan`, and this boundary projects it into the
-/// string `status` the existing writers already understand. `PortResult` gains
-/// no protocol field in this slice -- that refactor reaches the report model,
-/// `eggsec-output` and the Python bindings under guards 118-120, and coupling
-/// it to the scanner would make the risky wide change depend on the small
-/// safe one.
+/// engine-owned `PortStatus`/`PortProtocol` the existing writers already
+/// understand. No `eggsec_udp_scan` type crosses the boundary, which keeps the
+/// wire contract (`PortScanResults`, the report model, the Python bindings)
+/// independent of that crate's internals.
 #[cfg(feature = "udp-scan")]
 async fn scan_ports_udp(
     target: String,
@@ -163,7 +162,9 @@ async fn scan_ports_udp(
     timeout: std::time::Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
-    use crate::scanner::ports::{PortResult, PortScanResults, UdpEvidenceSummary, UdpHostState};
+    use crate::scanner::ports::{
+        PortProtocol, PortResult, PortScanResults, PortStatus, UdpEvidenceSummary, UdpHostState,
+    };
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let request = eggsec_udp_scan::UdpScanRequest {
@@ -214,11 +215,12 @@ async fn scan_ports_udp(
         .map(|v| PortResult {
             port: v.port,
             status: match v.state {
-                eggsec_udp_scan::UdpPortState::Closed => "closed".to_string(),
-                eggsec_udp_scan::UdpPortState::Filtered => "filtered".to_string(),
-                eggsec_udp_scan::UdpPortState::OpenFiltered => "open|filtered".to_string(),
-                eggsec_udp_scan::UdpPortState::Open => "open".to_string(),
+                eggsec_udp_scan::UdpPortState::Closed => PortStatus::Closed,
+                eggsec_udp_scan::UdpPortState::Filtered => PortStatus::Filtered,
+                eggsec_udp_scan::UdpPortState::OpenFiltered => PortStatus::OpenFiltered,
+                eggsec_udp_scan::UdpPortState::Open => PortStatus::Open,
             },
+            protocol: PortProtocol::Udp,
             service: String::new(),
         })
         .collect::<Vec<_>>();

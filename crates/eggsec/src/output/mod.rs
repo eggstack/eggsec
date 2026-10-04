@@ -60,7 +60,7 @@ pub mod extensions {
     impl SarifBuilderExt for super::SarifBuilder {
         fn with_report(mut self, report: &PipelineReport) -> Self {
             for port in &report.open_ports {
-                if port.status == "open" {
+                if port.status == crate::scanner::ports::PortStatus::Open {
                     let rule_id = format!("PORT-{}", port.port);
                     self = self.add_rule(
                         &rule_id,
@@ -125,7 +125,7 @@ pub mod extensions {
             let mut builder = self;
 
             for port in &report.open_ports {
-                if port.status == "open" {
+                if port.status == crate::scanner::ports::PortStatus::Open {
                     builder = builder.add_test_case(
                         &suite_name,
                         &format!("port_{}_open", port.port),

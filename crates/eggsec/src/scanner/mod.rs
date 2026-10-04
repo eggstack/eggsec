@@ -100,7 +100,12 @@ pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerpri
 pub use fingerprint_types::{
     EnhancedFingerprint, EvidenceType, FingerprintConfidence, FingerprintEvidence, ServiceIdentity,
 };
-pub use ports::{scan_ports, PortResult, PortScanConfig, PortScanResults, MAX_SCAN_RESULTS};
+pub use ports::{
+    scan_ports, PortProtocol, PortResult, PortScanConfig, PortScanResults, PortStatus,
+    MAX_SCAN_RESULTS,
+};
+#[cfg(feature = "udp-scan")]
+pub use ports::{UdpEvidenceSummary, UdpHostState};
 pub use service_data::{
     get_service_by_port, get_service_name, guess_service, guess_service_from_banner, is_database,
     is_mail_service, is_web_service, COMMON_PORTS, PORT_SERVICE_MAP,

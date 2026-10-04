@@ -49,6 +49,10 @@ pub use canonical_execution::{
     executor_route_for, is_feature_available, outcome_kind, task_result_envelope,
     CanonicalOperationRequest, ExecutionError, ExecutionEvent, ExecutionSink,
 };
+/// The single port-scan entry point. Re-exported so in-crate callers outside
+/// `dispatch` (e.g. the `scan-ports` CLI handler) route through the same code
+/// as the TUI, daemon, REST and MCP surfaces instead of a parallel path.
+pub use scanner::run_port_scan;
 pub use types::{
     GraphQlResults, NseResults, OAuthResults, ReconOptions, TaskResult, TracerouteHopResult,
 };

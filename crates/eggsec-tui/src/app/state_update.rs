@@ -216,10 +216,17 @@ impl super::App {
             }
             TaskResult::PortScan(r) => {
                 self.with_history(|h| {
+                    // Only proven-open ports. A UDP run puts every probed port
+                    // in `open_ports`, and recording those as "N open" would
+                    // report the whole range as listening.
                     h.add_port_scan_result(
                         &r.host,
                         r.ports_scanned as usize,
-                        r.open_ports.iter().map(|p| p.port).collect(),
+                        r.open_ports
+                            .iter()
+                            .filter(|p| p.status == eggsec::scanner::PortStatus::Open)
+                            .map(|p| p.port)
+                            .collect(),
                     );
                 });
                 self.tabs.scan_ports.set_results(r);

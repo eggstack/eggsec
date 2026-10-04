@@ -6,7 +6,7 @@ use crate::tabs::core::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_escape, tab_input_boilerplate, tab_state_boilerplate, tc};
-use eggsec::scanner::ports::PortScanResults;
+use eggsec::scanner::ports::{PortScanResults, PortStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -79,44 +79,124 @@ impl ScanPortsTab {
     }
 
     fn update_results_view(&mut self, results: &PortScanResults) {
+        use ratatui::style::Modifier;
         use ratatui::text::{Line, Span};
 
         self.core.results_view.clear();
 
         let host = results.host.clone();
         let ports_scanned = results.ports_scanned;
-        let open_ports: Vec<_> = results
-            .open_ports
-            .iter()
-            .map(|p| (p.port, p.service.clone()))
-            .collect();
 
         self.core.results_view.add_line(Line::from(vec![
             Span::styled("Host: ", Style::default().fg(tc!(warning))),
             Span::raw(host),
         ]));
 
-        self.core.results_view.add_line(Line::from(vec![
+        // A UDP run fills `open_ports` with a verdict for every probed port,
+        // so counting that list as "Open" would over-claim by orders of
+        // magnitude. Count only the ports that are actually proven open.
+        let open_count = results.proved_open_ports();
+        let mut summary = vec![
             Span::styled("Ports scanned: ", Style::default().fg(tc!(info))),
             Span::raw(ports_scanned.to_string()),
-            Span::raw(" | "),
-            Span::styled("Open: ", Style::default().fg(tc!(success))),
-            Span::raw(open_ports.len().to_string()),
-        ]));
+        ];
+        if results.is_udp() {
+            summary.push(Span::raw(" | "));
+            summary.push(Span::styled("Open: ", Style::default().fg(tc!(success))));
+            summary.push(Span::raw(open_count.to_string()));
+            summary.push(Span::raw(" | "));
+            summary.push(Span::styled(
+                "With verdicts: ",
+                Style::default().fg(tc!(info)),
+            ));
+            summary.push(Span::raw(results.open_ports.len().to_string()));
+        } else {
+            summary.push(Span::raw(" | "));
+            summary.push(Span::styled("Open: ", Style::default().fg(tc!(success))));
+            summary.push(Span::raw(open_count.to_string()));
+        }
+        self.core.results_view.add_line(Line::from(summary));
+
+        // A UDP host that answered nothing makes every per-port verdict
+        // meaningless; say so instead of letting the table imply otherwise.
+        #[cfg(feature = "udp-scan")]
+        if let Some(state) = results.udp_host_state {
+            let (label, color) = match state {
+                eggsec::scanner::UdpHostState::Up => ("up", tc!(success)),
+                eggsec::scanner::UdpHostState::Unresponsive => (
+                    "unresponsive -- no port verdict below is meaningful",
+                    tc!(error),
+                ),
+                eggsec::scanner::UdpHostState::Indeterminate => (
+                    "indeterminate -- ICMP arrived but could not be attributed",
+                    tc!(warning),
+                ),
+            };
+            self.core.results_view.add_line(Line::from(vec![
+                Span::styled("UDP host: ", Style::default().fg(tc!(info))),
+                Span::styled(label, Style::default().fg(color)),
+            ]));
+
+            if let Some(ev) = results.udp_evidence {
+                self.core.results_view.add_line(Line::from(vec![
+                    Span::styled("ICMP evidence: ", Style::default().fg(tc!(info))),
+                    Span::raw(format!(
+                        "{} correlated, {} unattributed, {} expired, {} unparseable over {} sweep(s)",
+                        ev.correlated, ev.orphans, ev.expired, ev.unparseable, ev.sweeps
+                    )),
+                ]));
+            }
+        }
 
         self.core.results_view.add_line(Line::from(""));
         self.core.results_view.add_line(Line::from(vec![
-            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(tc!(accent))),
+            Span::styled(format!("{:<11}", "PORT"), Style::default().fg(tc!(accent))),
+            Span::styled(
+                format!("{:<15}", "STATUS"),
+                Style::default().fg(tc!(accent)),
+            ),
             Span::styled(
                 format!("{:<15}", "SERVICE"),
                 Style::default().fg(tc!(accent)),
             ),
         ]));
 
-        for (port, service) in open_ports {
+        for p in &results.open_ports {
+            // Color by what was actually proven, not by mere presence in the
+            // list: a `closed` port rendered green reads as a find.
+            let (status_color, modifier) = match p.status {
+                PortStatus::Open => (tc!(success), Modifier::empty()),
+                PortStatus::Closed => (tc!(muted), Modifier::empty()),
+                PortStatus::Filtered | PortStatus::OpenFiltered => {
+                    (tc!(warning), Modifier::empty())
+                }
+            };
+            let label = format!("{}/{}", p.port, p.protocol);
+            let service = if p.service.is_empty() {
+                "-"
+            } else {
+                p.service.as_str()
+            };
             self.core.results_view.add_line(Line::from(vec![
-                Span::styled(format!("{:<8}", port), Style::default().fg(tc!(success))),
+                Span::styled(
+                    format!("{:<11}", label),
+                    Style::default().fg(status_color).add_modifier(modifier),
+                ),
+                Span::styled(
+                    format!("{:<15}", p.status),
+                    Style::default().fg(status_color).add_modifier(modifier),
+                ),
                 Span::raw(format!("{:<15}", service)),
+            ]));
+        }
+
+        if results.is_udp() {
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(vec![
+                Span::styled(
+                    "UDP silence is ambiguous: open|filtered means the port may be open behind a filter.",
+                    Style::default().fg(tc!(muted)),
+                ),
             ]));
         }
     }
@@ -429,6 +509,52 @@ impl TabInput for ScanPortsTab {
 mod tests {
     use super::*;
 
+    /// Flatten the rendered results view to plain text so a test can assert
+    /// on what the operator actually reads.
+    fn rendered(tab: &ScanPortsTab) -> String {
+        tab.core
+            .results_view
+            .lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn tcp_result() -> PortScanResults {
+        PortScanResults {
+            host: "10.0.0.1".to_string(),
+            ports_scanned: 3,
+            open_ports: vec![
+                eggsec::scanner::PortResult {
+                    port: 22,
+                    status: PortStatus::Open,
+                    protocol: eggsec::scanner::PortProtocol::Tcp,
+                    service: "SSH".to_string(),
+                },
+                eggsec::scanner::PortResult {
+                    port: 23,
+                    status: PortStatus::Closed,
+                    protocol: eggsec::scanner::PortProtocol::Tcp,
+                    service: "telnet".to_string(),
+                },
+            ],
+            total_open_ports: 2,
+            results_truncated: false,
+            duration_ms: 10,
+            spoof_stats: None,
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
+        }
+    }
+
     fn create_test_tab() -> ScanPortsTab {
         ScanPortsTab::new()
     }
@@ -460,5 +586,96 @@ mod tests {
         tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn tcp_results_show_protocol_and_status_per_port() {
+        let mut tab = create_test_tab();
+        tab.set_results(tcp_result());
+        let text = rendered(&tab);
+        assert!(text.contains("22/tcp"), "got:\n{text}");
+        assert!(text.contains("open"), "got:\n{text}");
+        assert!(text.contains("23/tcp"), "got:\n{text}");
+        assert!(text.contains("closed"), "got:\n{text}");
+    }
+
+    #[test]
+    fn tcp_open_count_counts_proofs_not_list_length() {
+        let mut tab = create_test_tab();
+        tab.set_results(tcp_result());
+        let text = rendered(&tab);
+        // Two entries in the list, but only one proven open.
+        assert!(text.contains("Open: 1"), "got:\n{text}");
+    }
+
+    #[test]
+    fn udp_results_do_not_report_every_port_as_open() {
+        let mut tab = create_test_tab();
+        let mut results = tcp_result();
+        results.host = "10.0.0.1".to_string();
+        results.ports_scanned = 1024;
+        results.open_ports = (1..=8)
+            .map(|p| eggsec::scanner::PortResult {
+                port: p,
+                status: PortStatus::OpenFiltered,
+                protocol: eggsec::scanner::PortProtocol::Udp,
+                service: String::new(),
+            })
+            .collect();
+        results.total_open_ports = 8;
+        tab.set_results(results);
+
+        let text = rendered(&tab);
+        assert!(
+            text.contains("Open: 0"),
+            "8 ambiguous ports must not be counted as open, got:\n{text}"
+        );
+        assert!(text.contains("With verdicts: 8"), "got:\n{text}");
+        assert!(text.contains("open|filtered"), "got:\n{text}");
+        // Protocol must be visible so a UDP row is not read as a TCP row.
+        assert!(text.contains("/udp"), "got:\n{text}");
+        // The ambiguity disclaimer is part of the contract.
+        assert!(text.contains("UDP silence is ambiguous"), "got:\n{text}");
+    }
+
+    #[cfg(feature = "udp-scan")]
+    #[test]
+    fn udp_unresponsive_host_says_verdicts_are_meaningless() {
+        let mut tab = create_test_tab();
+        let mut results = tcp_result();
+        results.udp_host_state = Some(eggsec::scanner::UdpHostState::Unresponsive);
+        results.udp_evidence = Some(eggsec::scanner::UdpEvidenceSummary {
+            correlated: 0,
+            orphans: 0,
+            expired: 1024,
+            unparseable: 0,
+            sweeps: 4,
+        });
+        tab.set_results(results);
+        let text = rendered(&tab);
+        assert!(
+            text.contains("no port verdict below is meaningful"),
+            "got:\n{text}"
+        );
+        assert!(text.contains("0 correlated"), "got:\n{text}");
+    }
+
+    #[cfg(feature = "udp-scan")]
+    #[test]
+    fn udp_up_host_reports_evidence_density() {
+        let mut tab = create_test_tab();
+        let mut results = tcp_result();
+        results.udp_host_state = Some(eggsec::scanner::UdpHostState::Up);
+        results.udp_evidence = Some(eggsec::scanner::UdpEvidenceSummary {
+            correlated: 7,
+            orphans: 1,
+            expired: 0,
+            unparseable: 0,
+            sweeps: 2,
+        });
+        tab.set_results(results);
+        let text = rendered(&tab);
+        assert!(text.contains("UDP host: up"), "got:\n{text}");
+        assert!(text.contains("7 correlated"), "got:\n{text}");
     }
 }
