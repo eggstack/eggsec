@@ -2475,6 +2475,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eggsec-udp-scan"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
 name = "eggsec-ui-model"
 version = "0.1.0"
 dependencies = [

@@ -19,6 +19,7 @@ members = [
     "crates/eggsec-transport",
     "crates/eggsec-transport-eggfetch",
     "crates/eggsec-policy",
+    "crates/eggsec-udp-scan",
 ]
 resolver = "2"
 

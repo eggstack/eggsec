@@ -211,6 +211,74 @@ evaluated against the roadmap's decision rule and rejected:
 - Incidental cleanup: `utils::cache::ApiCache` (zero production consumers,
   flagged in Phase A) removed.
 
+## Phase F — `eggsec-udp-scan` (UDP port scanning): ACCEPT as a separate crate
+
+**Decision:** accept a new domain crate `crates/eggsec-udp-scan`, dependent on
+`libc` only. It authorizes nothing, resolves no DNS, renders no output, and
+never acquires privilege — it *reports* that privilege is required.
+
+**Why a crate and not engine code.** Three reasons, in order of weight:
+
+1. **The primitives are incompatible, not merely different.** TCP scanning
+   works by handshake: a failed `connect` is a definitive `closed`, so the
+   result is a 2-state boolean list. UDP has no handshake. A send always
+   "succeeds" and the answer lives in a negative, rate-limited, out-of-band
+   signal. The existing per-port `Option<PortResult>` shape cannot express
+   "a correlated negative that may never arrive".
+2. **The authorization facts differ.** A TCP port scan needs
+   `Capability::ActiveProbe`. Receiving unsolicited ICMP errors needs
+   `Capability::RawPacketProbe` and, on Linux, a platform privilege gate.
+   Those belong in different metadata records, not one union type.
+3. **The result type differs in kind.** TCP is a boolean list. UDP is a
+   four-state lattice with per-state evidence *plus a host-level verdict that
+   can invalidate the per-port claims*. Forcing that into
+   `PortResult { port, status: String, service: String }` makes the state
+   stringly-typed and pushes the state machine onto every consumer.
+
+**What it shares with the TCP scanner: shape, not code.** It mirrors the
+bounded-concurrency admission discipline so operators see consistent progress
+semantics, and reuses the engine's result-mapping boundary. It does not
+generalise, reuse, or subclass the TCP scan loop.
+
+### Platform findings (measured, not assumed)
+
+The usual "unprivileged tier" designs start from `IP_RECVERR` on Linux
+connected sockets. Both halves of that premise were checked against this
+repository's development platform (darwin/arm64, `euid != 0`) and **neither
+holds**:
+
+| Claim | Measured result |
+| --- | --- |
+| `socket2` 0.5 exposes `IP_RECVERR` | No such accessor. `Socket::as_raw()` is `pub(crate)`, so even a `libc::setsockopt` shim is impossible against a `socket2` socket. |
+| `IP_RECVERR` exists on macOS/BSD | Undeclared. The constant does not compile. |
+| macOS unprivileged ICMP | `socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMPV4)` **succeeds unprivileged** and delivers port-unreachable for UDP probes, with the originating IPv4 header attached. `SOCK_RAW` for the same protocol returns `EPERM`. |
+
+So the crate uses `libc` directly rather than `socket2`, and the unprivileged
+tier is available on macOS/BSD and *not* on Linux — the inverse of the usual
+assumption. The ICMP parser accepts both delivery shapes (raw socket strips
+the IPv4 header, datagram socket keeps it) and the tests assert the two parse
+identically.
+
+### Honesty contract
+
+The crate's load-bearing invariant is that **closed is provable and open is
+not**. Silence is ambiguous across four cases, so it is reported as
+`open|filtered` and never as `open`, and a port list from a host that produced
+no attributable ICMP is explicitly marked not meaningful via `HostState`.
+Reporting `open` requires a protocol-specific probe, which is a different
+operation with different authorization requirements (arbitrary protocol
+payloads on the wire is materially closer to packet injection than to
+`ActiveProbe`) and is out of scope for this crate.
+
+### Supply chain
+
+`libc` is already a direct workspace dependency (`crates/eggsec/Cargo.toml:131`)
+and already in `Cargo.lock`; `socket2` and `pnet` are likewise already present.
+`deny.toml` needs no new entry and no new exception: the crate introduces no
+new graph node. `pnet`/`pnet_packet` are deliberately **not** used — a raw or
+datagram ICMP socket is a plain BSD socket, so pulling in `pnet` would drag the
+`libpcap-dev` system dependency in for no benefit.
+
 ## Guards
 
 - Check 107 fails if `crates/eggsec-net`, `crates/eggsec-web-client`,
@@ -225,6 +293,11 @@ evaluated against the roadmap's decision rule and rejected:
   feature queries, no resolver/authority behavior); engine → policy one-way
   with transport independent; engine policy modules stay facades (no
   redefined core types).
+- Check 107 forbids `eggsec-net`, `eggsec-web-client`, `eggsec-evidence`, and
+  `eggsec-signing`. `eggsec-udp-scan` is deliberately **not** on that list, but
+  nothing mechanically forces the justification above to stay accurate. The
+  crate earns its exception on the argument recorded here; if that argument is
+  withdrawn, the crate should be folded back into the engine.
 - Checks 124–126 (Phase D): loadtest core owns no Reqwest/indicatif/Clap/
   config (core files import none; `indicatif` only in `cli`-gated `run_cli`);
   no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
