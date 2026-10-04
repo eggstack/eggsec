@@ -158,6 +158,7 @@ pub struct Cli {
     // These are ignored or rejected under --strict-scope, CI, MCP, and agent paths.
     #[arg(
         long,
+        short = 'y',
         global = true,
         help = "Assume yes to low-risk manual confirmation prompts (out-of-scope, target-expansion only). Does not authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects. Use specific --allow-* flags for those classes. Manual-only."
     )]
@@ -390,11 +391,12 @@ pub enum Commands {
     #[cfg(feature = "rest-api")]
     #[command(about = "Start REST API server for external tool integration")]
     Serve(ServeArgs),
+    // No explicit alias: clap derives the name `mcp-serve` from the
+    // `McpServe` variant, so declaring an alias equal to the name trips
+    // clap's duplicate-name assert and panics on every parse in debug
+    // builds. Pin by `no_subcommand_declares_alias_equal_to_own_name`.
     #[cfg(feature = "rest-api")]
-    #[command(
-        about = "Start MCP server for AI assistant integration",
-        alias = "mcp-serve"
-    )]
+    #[command(about = "Start MCP server for AI assistant integration")]
     McpServe(McpServeArgs),
     #[cfg(feature = "rest-api")]
     #[command(
@@ -404,11 +406,11 @@ pub enum Commands {
     CodeggMcp(CodeggMcpArgs),
 
     // --- Agent orchestration ---
+    // No explicit `agent` alias — see the `McpServe` note above.
     #[cfg(feature = "rest-api")]
     #[command(
         about = "Run security agent for scheduled assessments",
-        long_about = AGENT_ABOUT,
-        alias = "agent"
+        long_about = AGENT_ABOUT
     )]
     Agent(AgentArgs),
 
@@ -509,8 +511,12 @@ impl Commands {
             Self::Serve(_) => "serve",
             #[cfg(feature = "rest-api")]
             Self::McpServe(_) => "mcp-serve",
+            // `codegg-mcp` is a distinct subcommand (alias `mcp-codegg`), not
+            // an alias of `mcp-serve`; it only shares the registry entry.
+            // Reporting the invoked spelling keeps trace/denial diagnostics
+            // truthful about which surface actually ran.
             #[cfg(feature = "rest-api")]
-            Self::CodeggMcp(_) => "mcp-serve",
+            Self::CodeggMcp(_) => "codegg-mcp",
             #[cfg(feature = "rest-api")]
             Self::Agent(_) => "agent",
             #[cfg(feature = "ai-integration")]
@@ -674,6 +680,60 @@ pub struct GrpcServerArgs {
 mod tests {
     use super::*;
     use crate::probe::ProbeRisk;
+    use clap::CommandFactory;
+
+    /// Regression: `McpServe` and `Agent` each declared an `alias` equal to
+    /// the name clap already derives from the variant name. clap's
+    /// duplicate-name assert is `#[cfg(debug_assertions)]` and runs inside
+    /// `_build_self`, i.e. only once a command is actually *parsed* — so
+    /// tree-reflection tests (`Cli::command()`) cannot see it, and the whole
+    /// binary panicked on every invocation in debug builds.
+    ///
+    /// This structural check is profile-independent: it still holds in
+    /// release builds, where the assert is compiled out.
+    #[test]
+    fn no_subcommand_declares_alias_equal_to_own_name() {
+        for sub in Cli::command().get_subcommands() {
+            let name = sub.get_name();
+            for alias in sub.get_all_aliases() {
+                assert_ne!(
+                    name, alias,
+                    "subcommand `{name}` declares an alias identical to its own name; \
+                     clap derives that name from the variant, so the duplicate panics \
+                     every parse in debug builds"
+                );
+            }
+        }
+    }
+
+    /// Parses real argv. This is the only kind of test that exercises
+    /// clap's `_build_self` asserts, so keep at least one: without it the
+    /// class of bug above is invisible to `make test` (`--lib`).
+    #[test]
+    fn cli_tree_builds_and_parses_without_panicking() {
+        // `Cli` is not `Debug`, so use `err()` rather than `expect_err()`,
+        // which would require a `Debug` bound on the success type.
+        let outcome = Cli::try_parse_from(["eggsec", "--help"]).err();
+        let err = outcome.expect("--help must produce a DisplayHelp error");
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::DisplayHelp,
+            "expected a clean --help parse, got: {err}"
+        );
+    }
+
+    /// Global `--yes`/`-y` must reach every subcommand, including the ones
+    /// that previously declared a dead local `--yes` (auth-test, stress,
+    /// remote, exec) whose help text promised "Skip confirmation prompt".
+    #[test]
+    fn global_yes_flag_is_reachable_on_a_subcommand() {
+        let parsed = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1", "-y"])
+            .expect("-y must reach the scan-ports subcommand via the global arg");
+        assert!(
+            parsed.yes,
+            "global --yes must be set from a subcommand position"
+        );
+    }
 
     #[test]
     fn quick_profile_allows_safe_active() {

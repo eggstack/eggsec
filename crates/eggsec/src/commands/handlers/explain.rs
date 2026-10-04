@@ -7,12 +7,26 @@ use crate::config::{
     OperationRisk,
 };
 
+/// Load an operator-supplied scope file, failing closed.
+///
+/// A scope file that cannot be read must never degrade to "no scope": these
+/// commands exist to answer whether a target is authorized, so a typo in
+/// `--scope` previously flipped `policy-explain` from DENIED to ALLOWED with
+/// no diagnostic. Mirrors the global scope load in `main`, which propagates
+/// its error.
+fn load_explain_scope(path: Option<&str>) -> Result<Option<crate::config::Scope>> {
+    match path {
+        Some(p) => {
+            let scope = load_scope(Some(p))
+                .map_err(|e| anyhow::anyhow!("Failed to load scope file '{}': {}", p, e))?;
+            Ok(Some(scope))
+        }
+        None => Ok(None),
+    }
+}
+
 pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs) -> Result<()> {
-    let scope = args.scope.as_deref().and_then(|s| {
-        load_scope(Some(s))
-            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
-            .ok()
-    });
+    let scope = load_explain_scope(args.scope.as_deref())?;
     let decision = crate::cli::explain::evaluate_policy_decision(
         args.target.as_deref(),
         args.profile.as_deref(),
@@ -30,11 +44,7 @@ pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs
 }
 
 pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) -> Result<()> {
-    let scope = args.scope.as_deref().and_then(|s| {
-        load_scope(Some(s))
-            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
-            .ok()
-    });
+    let scope = load_explain_scope(args.scope.as_deref())?;
 
     // HelperOnly: scope-explain is a read-only diagnostic, no OperationMetadata (Phase C non-goal)
     let descriptor = OperationDescriptor::new(

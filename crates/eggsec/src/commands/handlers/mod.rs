@@ -306,78 +306,57 @@ impl CommandContext {
                     emit_audit_event(&event);
                     Ok(out)
                 } else {
-                    // Explain exactly which flags are needed (dedicated flags for private/redirect)
-                    let needed: Vec<&str> = required
+                    // Explain exactly which flags are still needed.
+                    //
+                    // `unpermitted` is the single source of truth: it is
+                    // filtered by `ManualOverride::permits()`, the same
+                    // predicate that gated `permitted` above. Previously each
+                    // arm re-implemented "do I hold this flag?" by hand,
+                    // which drifted from `permits()` — `permits()` accepts
+                    // `allow_db_pentest` for `HighRisk` but the hint only
+                    // checked `allow_high_risk`, so a user who had already
+                    // passed the narrower `--allow-db-pentest` was told to
+                    // add the broader `--allow-high-risk`. Deriving both the
+                    // remaining classes and their flags from `permits()`
+                    // makes that class of drift unrepresentable.
+                    let unpermitted: Vec<crate::config::ConfirmationClass> = required
                         .iter()
-                        .filter_map(|c| match c {
-                            crate::config::ConfirmationClass::OutOfScope => {
-                                if !self.manual_override.allow_out_of_scope {
-                                    Some("--allow-out-of-scope")
-                                } else {
-                                    None
-                                }
+                        .copied()
+                        .filter(|c| !self.manual_override.permits(*c))
+                        .collect();
+                    let needed: Vec<&str> = unpermitted
+                        .iter()
+                        .map(|c| match c {
+                            crate::config::ConfirmationClass::OutOfScope
+                            | crate::config::ConfirmationClass::TargetExpansion => {
+                                "--allow-out-of-scope"
                             }
                             crate::config::ConfirmationClass::ExplicitExclusion => {
-                                if !self.manual_override.allow_explicit_exclusion {
-                                    Some("--allow-excluded-target")
-                                } else {
-                                    None
-                                }
+                                "--allow-excluded-target"
                             }
-                            crate::config::ConfirmationClass::HighRisk => {
-                                if !self.manual_override.allow_high_risk {
-                                    Some("--allow-high-risk")
-                                } else {
-                                    None
-                                }
-                            }
+                            crate::config::ConfirmationClass::HighRisk => "--allow-high-risk",
                             crate::config::ConfirmationClass::NonBaselineCapability => {
-                                if !self.manual_override.allow_nonbaseline_capability {
-                                    Some("--allow-nonbaseline-capability")
-                                } else {
-                                    None
-                                }
+                                "--allow-nonbaseline-capability"
                             }
                             crate::config::ConfirmationClass::PrivateResolution => {
-                                if !self.manual_override.allow_private_resolution {
-                                    Some("--allow-private-resolution")
-                                } else {
-                                    None
-                                }
+                                "--allow-private-resolution"
                             }
                             crate::config::ConfirmationClass::CrossHostRedirect => {
-                                if !self.manual_override.allow_cross_host_redirect {
-                                    Some("--allow-cross-host-redirect")
-                                } else {
-                                    None
-                                }
-                            }
-                            crate::config::ConfirmationClass::TargetExpansion => {
-                                if !self.manual_override.allow_out_of_scope {
-                                    Some("--allow-out-of-scope")
-                                } else {
-                                    None
-                                }
+                                "--allow-cross-host-redirect"
                             }
                             crate::config::ConfirmationClass::TrafficInterception => {
-                                if !self.manual_override.allow_web_proxy {
-                                    Some("--allow-web-proxy")
-                                } else {
-                                    None
-                                }
+                                "--allow-web-proxy"
                             }
                         })
                         .collect();
-                    let classes_list = classes_str(&required);
+                    let classes_list = classes_str(&unpermitted);
                     let msg = if needed.is_empty() {
-                        if self.manual_override.assume_yes {
-                            format!(
-                                "manual confirmation required for: {}. --yes alone does not permit these classes. Re-run with the appropriate --allow-* flag(s) and optionally --manual-override-reason",
-                                classes_list
-                            )
-                        } else {
-                            "manual confirmation required; re-run with --yes or the appropriate --allow-* flag(s) and optionally --manual-override-reason".to_string()
-                        }
+                        // Defensive: `unpermitted` is non-empty whenever this
+                        // arm is reached, so this should not be reachable.
+                        format!(
+                            "manual confirmation required for: {}. Re-run with the appropriate --allow-* flag(s) and optionally --manual-override-reason",
+                            classes_list
+                        )
                     } else {
                         let base = format!(
                             "manual confirmation required for: {}. Re-run with {} (and optionally --manual-override-reason)",
@@ -385,7 +364,7 @@ impl CommandContext {
                             needed.join(" ")
                         );
                         if self.manual_override.assume_yes
-                            && required.iter().any(|c| {
+                            && unpermitted.iter().any(|c| {
                                 !matches!(
                                     *c,
                                     crate::config::ConfirmationClass::OutOfScope
@@ -615,12 +594,20 @@ mod tests {
     }
 
     fn descriptor(operation: &str, risk: OperationRisk) -> OperationDescriptor {
+        descriptor_for_target(operation, risk, "127.0.0.1")
+    }
+
+    fn descriptor_for_target(
+        operation: &str,
+        risk: OperationRisk,
+        target: &str,
+    ) -> OperationDescriptor {
         OperationDescriptor::new(
             operation.to_string(),
             OperationMode::StandardAssessment,
             risk,
             vec![IntendedUse::WebAssessment],
-            Some("127.0.0.1".to_string()),
+            Some(target.to_string()),
             Vec::new(),
             Vec::new(),
             false,
@@ -999,6 +986,47 @@ mod tests {
         assert!(!mo.permits(crate::config::ConfirmationClass::NonBaselineCapability));
         assert!(!mo.permits(crate::config::ConfirmationClass::PrivateResolution));
         assert!(!mo.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+    }
+
+    /// Regression: the "which flag do I need" hint must agree with
+    /// `ManualOverride::permits()`. `permits()` treats `allow_db_pentest` as
+    /// satisfying `HighRisk`, so once the operator has passed the narrower
+    /// `--allow-db-pentest` the hint must not also demand the broader
+    /// `--allow-high-risk`. It previously did, because the hint re-implemented
+    /// the predicate by hand instead of calling `permits()`.
+    ///
+    /// Constructed with an out-of-scope target so the denial is driven by a
+    /// class the override genuinely does not permit, isolating `HighRisk` as
+    /// already-satisfied.
+    #[test]
+    fn denial_hint_does_not_demand_high_risk_when_db_pentest_override_permits_it() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_db_pentest: true,
+                ..Default::default()
+            },
+        );
+        let err = ctx
+            .evaluate_and_enforce_operation(descriptor_for_target(
+                "db",
+                OperationRisk::Intrusive,
+                "example.com",
+            ))
+            .expect_err("out-of-scope is unpermitted, so this must deny");
+        let msg = err.to_string();
+        assert!(
+            !msg.contains("--allow-high-risk"),
+            "hint must not demand --allow-high-risk when --allow-db-pentest already \
+             permits HighRisk; got: {msg}"
+        );
+        assert!(
+            msg.contains("--allow-out-of-scope"),
+            "hint must still name the genuinely missing flag; got: {msg}"
+        );
     }
 
     #[test]

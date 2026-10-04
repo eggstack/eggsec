@@ -57,14 +57,30 @@ pub fn load_config(config_path: Option<&str>) -> Result<EggsecConfig> {
 }
 
 pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
-    let path = scope_path
-        .map(PathBuf::from)
-        .or_else(|| find_scope_file(None))
-        .unwrap_or_else(default_scope_path);
+    let (path, explicit) = match scope_path {
+        Some(p) => (PathBuf::from(p), true),
+        None => (
+            find_scope_file(None).unwrap_or_else(default_scope_path),
+            false,
+        ),
+    };
 
     let canonical_path = match path.canonicalize() {
         Ok(p) => p,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Fail closed when the operator named a scope file. Returning an
+            // empty (allow-all) scope here used to mean a typo in `--scope`
+            // silently disabled scope enforcement, so
+            // `--scope /typo.toml scan-ports 8.8.8.8` scanned a public host
+            // with `scope_source: DefaultEmpty, outcome: allow`. Only the
+            // no-path case may fall back to an empty scope.
+            if explicit {
+                return Err(anyhow::anyhow!(
+                    "Scope file not found: {}. Provide an existing --scope file, \
+                     or omit --scope to run without a scope manifest.",
+                    path.display()
+                ));
+            }
             tracing::debug!("No scope file found at {:?}, allowing all targets", path);
             return Ok(Scope::default());
         }
@@ -101,19 +117,27 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
 /// execution paths (MCP, agent, CI) use this to enforce the requirement
 /// that networked operations have an explicit scope manifest.
 pub fn load_scope_with_source(scope_path: Option<&str>) -> Result<LoadedScope> {
-    let (path, source) = match scope_path {
-        Some(p) => (Some(PathBuf::from(p)), ScopeSource::CliScopeFile),
+    let (path, source, explicit) = match scope_path {
+        Some(p) => (PathBuf::from(p), ScopeSource::CliScopeFile, true),
         None => match find_scope_file(None) {
-            Some(p) => (Some(p), ScopeSource::ConfigFile),
+            Some(p) => (p, ScopeSource::ConfigFile, false),
             None => return Ok(LoadedScope::default_empty()),
         },
     };
 
-    let path = path.unwrap_or_else(default_scope_path);
-
     let canonical_path = match path.canonicalize() {
         Ok(p) => p,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Fail closed on an operator-supplied path; see `load_scope`.
+            // A discovered-but-missing default path may still fall back to an
+            // empty scope, and an absent `--scope` is handled above.
+            if explicit {
+                return Err(anyhow::anyhow!(
+                    "Scope file not found: {}. Provide an existing --scope file, \
+                     or omit --scope to run without a scope manifest.",
+                    path.display()
+                ));
+            }
             tracing::debug!(
                 "No scope file found at {:?}, returning default empty scope",
                 path
@@ -225,6 +249,53 @@ mod tests {
     #[test]
     fn test_scope_file_name() {
         assert_eq!(SCOPE_FILE_NAME, "scope.toml");
+    }
+
+    /// An operator-supplied scope path that does not exist must fail closed.
+    ///
+    /// This used to assert the opposite: a missing file returned
+    /// `Ok(Scope::default())`, i.e. an empty allow-all scope. A typo in
+    /// `--scope` therefore disabled scope enforcement entirely, and
+    /// `--scope /typo.toml scan-ports 8.8.8.8` audited as
+    /// `scope_source: DefaultEmpty, outcome: allow` while scanning a public
+    /// host. `EnforcementContext::evaluate()` is the mandatory pre-dispatch
+    /// gate, so the loader must not hand it a permissive scope the operator
+    /// never asked for.
+    #[test]
+    fn test_load_scope_nonexistent_fails_closed() {
+        let err = load_scope(Some("/nonexistent/scope.toml"))
+            .expect_err("an explicitly named scope file that is missing must be an error");
+        assert!(
+            err.to_string().contains("Scope file not found"),
+            "error must name the failure clearly, got: {err}"
+        );
+    }
+
+    /// Same guarantee for the provenance-tracking loader used by `main`,
+    /// which feeds `EnforcementContext`. It must not degrade an explicit path
+    /// to `LoadedScope::default_empty()`.
+    #[test]
+    fn test_load_scope_with_source_missing_path_fails_closed() {
+        let err = load_scope_with_source(Some("/nonexistent/scope.toml"))
+            .expect_err("an explicitly named scope file that is missing must be an error");
+        assert!(
+            err.to_string().contains("Scope file not found"),
+            "got: {err}"
+        );
+    }
+
+    /// A real, readable scope file must still load normally — the fail-closed
+    /// change must not break the ordinary explicit-scope workflow.
+    #[test]
+    fn explicit_existing_scope_path_still_loads() {
+        let dir = std::env::temp_dir().join(format!("eggsec-scope-ok-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("scope.toml");
+        std::fs::write(&path, "[[allowed_targets]]\npattern = \"127.0.0.1\"\n")
+            .expect("write scope");
+        let loaded = load_scope(Some(path.to_str().expect("utf8 path")));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(loaded.is_ok(), "an existing scope file must still load");
     }
 
     #[test]
@@ -375,22 +446,6 @@ scan:
     }
 
     #[test]
-    fn test_load_scope_nonexistent() {
-        let scope = load_scope(Some("/nonexistent/scope.toml"));
-        assert!(scope.is_ok());
-        let scope = scope.unwrap();
-        assert!(scope.allowed_targets.is_empty());
-        assert!(!scope.require_explicit_scope);
-    }
-
-    #[test]
-    fn test_load_scope_with_source_none_returns_default_empty() {
-        let loaded = load_scope_with_source(Some("/nonexistent/scope.toml")).unwrap();
-        assert_eq!(loaded.source, ScopeSource::DefaultEmpty);
-        assert!(!loaded.is_explicit_manifest());
-        assert!(loaded.scope.allowed_targets.is_empty());
-    }
-
     #[test]
     fn test_load_scope_with_source_cli_path_returns_cli_scope_file() {
         let dir = std::env::temp_dir().join("eggsec_test_scope_source");
