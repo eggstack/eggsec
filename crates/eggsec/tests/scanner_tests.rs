@@ -257,6 +257,10 @@ async fn test_port_scan_results_display() {
         results_truncated: false,
         duration_ms: 1000,
         spoof_stats: None,
+        #[cfg(feature = "udp-scan")]
+        udp_host_state: None,
+        #[cfg(feature = "udp-scan")]
+        udp_evidence: None,
     };
     let output = format!("{}", results);
     assert!(output.contains("example.com"));

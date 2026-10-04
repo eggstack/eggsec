@@ -22,10 +22,13 @@ fn scanner_port_scan_surfaces_converge() {
         scan_type: Some("syn".into()),
         timeout_ms: None,
         concurrency: None,
+        udp: None,
     };
     let normalized = canonical.normalize().unwrap();
     assert_eq!(normalized.ports, "22,80,443");
     assert_eq!(normalized.port_count, 3);
+    // Absent means TCP, so every existing caller keeps its behaviour.
+    assert!(!normalized.udp);
 
     // Runtime adapter produces identical normalization.
     let runtime =
@@ -35,6 +38,7 @@ fn scanner_port_scan_surfaces_converge() {
             scan_type: Some("syn".into()),
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         });
     assert_eq!(runtime.normalize().unwrap(), normalized);
 
@@ -614,4 +618,43 @@ fn runtime_task_kinds_map_exhaustively_to_canonical_operations() {
         ..Default::default()
     });
     assert_eq!(packet_send.operation_id(), "packet");
+}
+
+/// The UDP transport flag must survive the wire DTO.
+///
+/// `udp` is a sibling of `scan_type`, not a value of it: `scan_type` is a TCP
+/// *technique*, and folding UDP in there would let a scan type bypass technique
+/// validation and be swallowed by the engine's `_ => Syn` fallback.
+#[test]
+fn scanner_udp_transport_converges_across_wire_dto() {
+    let canonical = PortScanRequest {
+        target: "127.0.0.1".into(),
+        ports: Some("53".into()),
+        scan_type: Some("syn".into()),
+        timeout_ms: None,
+        concurrency: None,
+        udp: Some(true),
+    };
+    let normalized = canonical.normalize().unwrap();
+    assert!(normalized.udp);
+    // A TCP technique is still required and still validated: `udp` does not
+    // make an invalid technique acceptable.
+    assert_eq!(normalized.scan_type.as_str(), "syn");
+
+    let runtime =
+        runtime_adapters::port_scan_from_runtime(&eggsec_runtime::request::PortScanParams {
+            target: "127.0.0.1".into(),
+            ports: Some("53".into()),
+            scan_type: Some("syn".into()),
+            timeout_ms: None,
+            concurrency: None,
+            udp: Some(true),
+        });
+    assert_eq!(runtime.normalize().unwrap(), normalized);
+
+    // `udp` is `#[serde(default)]`, so a payload written before it existed
+    // still deserializes and means TCP.
+    let legacy = serde_json::json!({"target": "127.0.0.1"});
+    let req: PortScanRequest = serde_json::from_value(legacy).expect("legacy payload parses");
+    assert!(!req.normalize().unwrap().udp);
 }

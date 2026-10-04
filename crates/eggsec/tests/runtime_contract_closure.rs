@@ -445,6 +445,10 @@ fn envelope_kinds_are_stable_wire_discriminators() {
                 results_truncated: false,
                 duration_ms: 500,
                 spoof_stats: None,
+                #[cfg(feature = "udp-scan")]
+                udp_host_state: None,
+                #[cfg(feature = "udp-scan")]
+                udp_evidence: None,
             }),
             "port-scan",
         ),

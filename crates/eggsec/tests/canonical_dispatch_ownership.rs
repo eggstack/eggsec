@@ -74,6 +74,7 @@ fn scan_ports_cli_and_runtime_normalize_identically() {
         scan_type: Some("syn".into()),
         timeout_ms: None,
         concurrency: None,
+        udp: None,
     };
     let runtime = operation_request::runtime_adapters::port_scan_from_runtime(&PortScanParams {
         target: "  127.0.0.1  ".into(),
@@ -81,6 +82,7 @@ fn scan_ports_cli_and_runtime_normalize_identically() {
         scan_type: Some("syn".into()),
         timeout_ms: None,
         concurrency: None,
+        udp: None,
     });
     assert_eq!(cli.normalize().unwrap(), runtime.normalize().unwrap());
 }
@@ -492,6 +494,7 @@ async fn boundary_rejects_target_mismatch() {
         scan_type: None,
         timeout_ms: None,
         concurrency: None,
+        udp: None,
     });
     let (sink, _rx) = test_sink();
     let result = execute_approved(&approved, request, &sink).await;
@@ -535,6 +538,7 @@ fn invalid_requests_share_error_classification_across_surfaces() {
         scan_type: None,
         timeout_ms: None,
         concurrency: None,
+        udp: None,
     };
     assert!(cli.normalize().is_err());
     let runtime = operation_request::runtime_adapters::port_scan_from_runtime(&PortScanParams {

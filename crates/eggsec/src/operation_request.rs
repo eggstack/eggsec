@@ -35,6 +35,10 @@ pub mod cli_adapters {
             scan_type: args.scan_type.clone(),
             timeout_ms: Some(args.timeout.saturating_mul(1000)),
             concurrency: Some(args.concurrency),
+            // The Clap tree has no `--udp` yet, so the CLI is TCP-only. Sending
+            // an invented `false` here would make the adapter disagree with the
+            // flag surface if one is added without updating it.
+            udp: None,
         }
     }
 
@@ -192,6 +196,7 @@ pub mod runtime_adapters {
             scan_type: p.scan_type.clone(),
             timeout_ms: p.timeout_ms,
             concurrency: p.concurrency,
+            udp: p.udp,
         }
     }
 
@@ -540,6 +545,7 @@ mod tests {
             scan_type: Some("syn".into()),
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         };
         let normalized = canonical.normalize().unwrap();
 
@@ -549,6 +555,7 @@ mod tests {
             scan_type: Some("syn".into()),
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         });
         assert_eq!(runtime.normalize().unwrap(), normalized);
     }

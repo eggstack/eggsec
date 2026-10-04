@@ -141,6 +141,7 @@ fn port_scan_request() -> RunRequest {
             scan_type: Some("syn".into()),
             timeout_ms: Some(5000),
             concurrency: None,
+            udp: None,
         }),
         requested_by: None,
         surface: RuntimeSurface::CliManual,

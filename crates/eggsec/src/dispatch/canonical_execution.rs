@@ -1213,6 +1213,7 @@ async fn execute_canonical_inner(
                 n.ports,
                 n.concurrency,
                 timeout,
+                n.udp,
                 fanout_tx.clone(),
             )
             .await
@@ -1977,6 +1978,7 @@ mod tests {
             target: "10.0.0.1".into(),
             ports: None,
             scan_type: None,
+            udp: None,
             timeout_ms: None,
             concurrency: None,
         });
@@ -2236,6 +2238,7 @@ mod tests {
                 target: "127.0.0.2".into(),
                 ports: Some("80".into()),
                 scan_type: None,
+                udp: None,
                 timeout_ms: None,
                 concurrency: None,
             });

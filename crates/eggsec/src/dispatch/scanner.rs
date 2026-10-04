@@ -6,11 +6,27 @@ pub async fn run_port_scan(
     ports: String,
     concurrency: usize,
     timeout: std::time::Duration,
+    udp: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::scanner::ports::scan_ports;
 
     send_progress(&progress_tx, 0, 100).await;
+
+    if udp {
+        #[cfg(feature = "udp-scan")]
+        {
+            return scan_ports_udp(target, ports, concurrency, timeout, progress_tx).await;
+        }
+        // Fail closed rather than silently scanning TCP: a caller that asked
+        // for UDP and got TCP results would have no way to tell.
+        #[cfg(not(feature = "udp-scan"))]
+        {
+            return Err(anyhow::anyhow!(
+                "UDP scanning requested but the 'udp-scan' feature is not enabled"
+            ));
+        }
+    }
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
@@ -128,4 +144,107 @@ pub async fn run_fingerprint(
     let total = results.ports_scanned as u64;
     send_progress(&progress_tx, total.max(1), total_ports.max(1)).await;
     Ok(TaskResult::Fingerprint(results))
+}
+
+/// UDP range scan, mapped onto the existing [`PortScanResults`] envelope.
+///
+/// The mapping is deliberately lossy in the *safe* direction: the crate's typed
+/// evidence stays in `eggsec-udp-scan`, and this boundary projects it into the
+/// string `status` the existing writers already understand. `PortResult` gains
+/// no protocol field in this slice -- that refactor reaches the report model,
+/// `eggsec-output` and the Python bindings under guards 118-120, and coupling
+/// it to the scanner would make the risky wide change depend on the small
+/// safe one.
+#[cfg(feature = "udp-scan")]
+async fn scan_ports_udp(
+    target: String,
+    ports: String,
+    concurrency: usize,
+    timeout: std::time::Duration,
+    progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+) -> anyhow::Result<TaskResult> {
+    use crate::scanner::ports::{PortResult, PortScanResults, UdpEvidenceSummary, UdpHostState};
+
+    let port_list = crate::utils::parsing::parse_ports(&ports)?;
+    let request = eggsec_udp_scan::UdpScanRequest {
+        target: target
+            .parse()
+            .map_err(|_| anyhow::anyhow!("UDP scan requires an IPv4 target, got {target:?}"))?,
+        start_port: port_list.first().copied().unwrap_or(1),
+        end_port: port_list.last().copied().unwrap_or(1),
+        timeout,
+        concurrency,
+        sweeps: 1,
+    };
+    request
+        .validate()
+        .map_err(|e| anyhow::anyhow!("invalid UDP scan request: {e}"))?;
+
+    // A missing ICMP receiver is a *reported* condition, not a silent empty
+    // result: the crate never acquires privilege, so an operator without it
+    // gets an explanation rather than a scan that found nothing.
+    let receiver = eggsec_udp_scan::IcmpReceiver::open_unprivileged()
+        .or_else(|_| eggsec_udp_scan::IcmpReceiver::open())
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "UDP scanning needs an ICMP error receiver, which is unavailable here: {e}"
+            )
+        })?;
+
+    // This is a blocking call: the crate enforces its own internal deadline, and
+    // the outer timeout bounds the join as well. A cancelled join would not
+    // stop the thread inside it, so the bound is not advisory.
+    let results = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        tokio::task::spawn_blocking(move || {
+            eggsec_udp_scan::scan_with_receiver(&request, &receiver)
+        }),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("UDP scan timed out after 120s"))?
+    .map_err(|e| anyhow::anyhow!("UDP scan worker failed: {e}"))?
+    .map_err(|e| anyhow::anyhow!("UDP scan failed: {e}"))?;
+
+    // `open_ports` holds every port with a verdict, not just open ones: a UDP
+    // result is mostly `open|filtered`, and dropping those would leave the
+    // caller with an empty list that looks like "nothing was listening".
+    let open_ports = results
+        .ports
+        .iter()
+        .map(|v| PortResult {
+            port: v.port,
+            status: match v.state {
+                eggsec_udp_scan::UdpPortState::Closed => "closed".to_string(),
+                eggsec_udp_scan::UdpPortState::Filtered => "filtered".to_string(),
+                eggsec_udp_scan::UdpPortState::OpenFiltered => "open|filtered".to_string(),
+                eggsec_udp_scan::UdpPortState::Open => "open".to_string(),
+            },
+            service: String::new(),
+        })
+        .collect::<Vec<_>>();
+
+    let total_open = open_ports.len();
+    send_progress(&progress_tx, 100, 100).await;
+
+    Ok(TaskResult::PortScan(PortScanResults {
+        host: target,
+        ports_scanned: results.ports_scanned,
+        open_ports,
+        total_open_ports: total_open,
+        results_truncated: results.truncated,
+        duration_ms: results.duration.as_millis() as u64,
+        spoof_stats: None,
+        udp_host_state: Some(match results.host_state {
+            eggsec_udp_scan::HostState::Up => UdpHostState::Up,
+            eggsec_udp_scan::HostState::Unresponsive => UdpHostState::Unresponsive,
+            eggsec_udp_scan::HostState::Indeterminate => UdpHostState::Indeterminate,
+        }),
+        udp_evidence: Some(UdpEvidenceSummary {
+            correlated: results.evidence.correlated,
+            orphans: results.evidence.orphans,
+            expired: results.evidence.expired,
+            unparseable: results.evidence.unparseable,
+            sweeps: results.evidence.sweeps,
+        }),
+    }))
 }

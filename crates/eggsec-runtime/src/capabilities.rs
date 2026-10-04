@@ -317,6 +317,7 @@ mod tests {
             scan_type: None,
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         })));
         assert!(caps.supports_task_kind(&TaskKind::Recon(ReconParams {
             target: "example.com".into(),

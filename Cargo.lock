@@ -2050,6 +2050,7 @@ dependencies = [
  "eggsec-tool-core",
  "eggsec-transport",
  "eggsec-transport-eggfetch",
+ "eggsec-udp-scan",
  "eggsec-web-proxy",
  "eventsource-stream",
  "flate2",

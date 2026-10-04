@@ -31,7 +31,11 @@ impl ScanPortsTab {
         Self {
             core: TabCore::new("Scanning ports...", "Results").with_inputs(inputs),
             results: None,
-            udp_checkbox: Checkbox::new("Enable UDP (requires root/sudo)").checked(false),
+            // No root claim: root is needed only on Linux, where
+            // unsolicited ICMP errors require a raw socket. On macOS/BSD the
+            // datagram ICMP socket receives them unprivileged, so the previous
+            // "requires root/sudo" label was wrong on those platforms.
+            udp_checkbox: Checkbox::new("Enable UDP").checked(false),
             focus_area: StandardFocusArea::Inputs,
         }
     }

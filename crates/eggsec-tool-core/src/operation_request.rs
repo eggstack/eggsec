@@ -526,12 +526,19 @@ pub struct PortScanRequest {
     pub target: String,
     #[serde(default)]
     pub ports: Option<String>,
+    /// TCP technique. A sibling of `udp`, not a value of it: `syn`/`null`/
+    /// `fin`/`xmas` describe how a TCP handshake is attempted, so folding
+    /// `udp` in here would let a scan type bypass technique validation and be
+    /// silently swallowed by the engine's `_ => Syn` fallback.
     #[serde(default)]
     pub scan_type: Option<String>,
     #[serde(default)]
     pub timeout_ms: Option<u64>,
     #[serde(default)]
     pub concurrency: Option<usize>,
+    /// Scan with UDP instead of TCP.
+    #[serde(default)]
+    pub udp: Option<bool>,
 }
 
 /// Normalized port-scan request (validated, defaults applied).
@@ -543,6 +550,13 @@ pub struct NormalizedPortScan {
     pub scan_type: ScanType,
     pub timeout_ms: u64,
     pub concurrency: usize,
+    /// Whether to scan UDP instead of TCP.
+    ///
+    /// UDP cannot prove a port is open: silence is ambiguous between open,
+    /// filtered, rate-limited-closed and host-down. A UDP result is therefore
+    /// `closed`/`filtered`/`open|filtered` with a host-liveness verdict, and
+    /// never a bare "open".
+    pub udp: bool,
 }
 
 impl PortScanRequest {
@@ -560,6 +574,7 @@ impl PortScanRequest {
             scan_type,
             timeout_ms,
             concurrency,
+            udp: self.udp.unwrap_or(false),
         })
     }
 

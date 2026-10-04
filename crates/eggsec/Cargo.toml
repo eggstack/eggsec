@@ -110,6 +110,7 @@ eggsec-transport = { workspace = true }
 # Proxied load testing uses it where the pinned-route matrix allows; otherwise
 # it fails closed (no Reqwest fallback).
 eggsec-transport-eggfetch = { workspace = true }
+eggsec-udp-scan = { workspace = true, optional = true }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 # The runtime is the published `eggsec-nse` crates.io release (standalone
@@ -363,6 +364,7 @@ database = ["sqlx"]
 # Database pentesting (Postgres/MySQL/MSSQL/MongoDB/Redis security checks for authorized lab/defense use).
 # Standalone defense-lab surface; MCP exposure requires db-pentest-mcp marker. Dry-run always safe.
 db-pentest = ["sqlx", "dep:eggsec-db-lab", "eggsec-db-lab/db-drivers"]
+udp-scan = ["dep:eggsec-udp-scan"]
 # Marker: pulls tiberius, activates real MSSQL client path (use with db-pentest).
 db-pentest-mssql-tiberius = ["dep:tiberius", "eggsec-db-lab/mssql"]
 # Marker: pulls mongodb crate, activates real MongoDB client path (use with db-pentest).

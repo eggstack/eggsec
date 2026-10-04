@@ -138,6 +138,10 @@ pub struct PortScanParams {
     pub target: String,
     pub ports: Option<String>,
     pub scan_type: Option<String>,
+    /// Scan UDP instead of TCP. `#[serde(default)]` so payloads written
+    /// before this field existed still deserialize.
+    #[serde(default)]
+    pub udp: Option<bool>,
     pub timeout_ms: Option<u64>,
     pub concurrency: Option<usize>,
 }
@@ -569,6 +573,7 @@ mod tests {
                 scan_type: Some("syn".into()),
                 timeout_ms: Some(3000),
                 concurrency: None,
+                udp: None,
             }),
             requested_by: Some(ClientId::new()),
             surface: RuntimeSurface::CliManual,

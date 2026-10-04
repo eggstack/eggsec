@@ -109,6 +109,10 @@ impl TaskBuilder for super::tabs::ScanPortsTab {
                 scan_type: None,
                 timeout_ms: Some(self.timeout() * 1000),
                 concurrency: Some(self.concurrency()),
+                // Sent explicitly rather than omitted: the checkbox is a
+                // visible operator control, so an unticked box must be
+                // distinguishable from a field that does not exist.
+                udp: Some(self.udp()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1714,5 +1718,35 @@ mod tests {
             output_file: Some("../../../etc/cron.d/pwn".into()),
         };
         assert!(canonical.normalize().is_err());
+    }
+
+    /// The UDP checkbox must reach the request in both states.
+    ///
+    /// The tab has shipped this checkbox for its whole life with no wire
+    /// field behind it, so ticking it changed nothing. Both states are
+    /// asserted because an unticked box has to be distinguishable from a
+    /// field that does not exist.
+    #[test]
+    fn port_scan_builder_carries_udp_checkbox() {
+        use crate::tabs::ScanPortsTab;
+
+        let mut tab = ScanPortsTab::new();
+        if let Some(f) = tab.core.inputs.fields.get_mut(0) {
+            f.value = "127.0.0.1".to_string();
+        }
+        assert!(!tab.udp(), "the box ships unticked");
+
+        let req = tab.build_run_request().expect("port scan run request");
+        match req.task_kind {
+            TaskKind::PortScan(p) => assert_eq!(p.udp, Some(false)),
+            other => panic!("expected PortScan, got {other:?}"),
+        }
+
+        tab.udp_checkbox.checked = true;
+        let req = tab.build_run_request().expect("port scan run request");
+        match req.task_kind {
+            TaskKind::PortScan(p) => assert_eq!(p.udp, Some(true)),
+            other => panic!("expected PortScan, got {other:?}"),
+        }
     }
 }

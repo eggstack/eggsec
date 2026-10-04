@@ -139,6 +139,41 @@ pub struct PortResult {
     pub service: String,
 }
 
+/// UDP host-liveness verdict, mirrored into the report envelope.
+///
+/// An engine-owned type rather than `eggsec_udp_scan::HostState` on purpose:
+/// `PortScanResults` crosses the daemon protocol, the Python bindings and the
+/// report model, so embedding a scanner-crate type would couple the wire
+/// contract to that crate's internals -- and would drag `serde` into a crate
+/// that deliberately has none.
+#[cfg(feature = "udp-scan")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UdpHostState {
+    /// At least one ICMP error was attributed to one of our probes.
+    Up,
+    /// The window elapsed with no attributable ICMP. Per-port results from
+    /// such a run describe nothing: a dead host and a fully-filtered host are
+    /// indistinguishable on the wire.
+    Unresponsive,
+    /// Errors arrived but none could be attributed.
+    Indeterminate,
+}
+
+/// How much signal backed a UDP run's verdicts.
+///
+/// Reported so a caller can see evidence density rather than over-claiming: a
+/// run with zero correlated errors and a full port list is not a port list.
+#[cfg(feature = "udp-scan")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct UdpEvidenceSummary {
+    pub correlated: u64,
+    pub orphans: u64,
+    pub expired: u64,
+    pub unparseable: u64,
+    pub sweeps: u32,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PortScanResults {
     pub host: String,
@@ -149,6 +184,24 @@ pub struct PortScanResults {
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spoof_stats: Option<SpoofStats>,
+    /// UDP host-liveness verdict. `None` for TCP scans.
+    ///
+    /// `#[serde(default)]` so a payload written before this field existed still
+    /// deserializes -- `PortScanResults` crosses the daemon protocol, the
+    /// Python bindings and the report model.
+    #[cfg_attr(
+        feature = "udp-scan",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    #[cfg(feature = "udp-scan")]
+    pub udp_host_state: Option<UdpHostState>,
+    /// UDP ICMP evidence density. `None` for TCP scans.
+    #[cfg_attr(
+        feature = "udp-scan",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    #[cfg(feature = "udp-scan")]
+    pub udp_evidence: Option<UdpEvidenceSummary>,
 }
 
 impl std::fmt::Display for PortScanResults {
@@ -370,6 +423,10 @@ where
             results_truncated: false,
             duration_ms: 0,
             spoof_stats: None,
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         });
     }
 
@@ -678,6 +735,10 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,
+        #[cfg(feature = "udp-scan")]
+        udp_host_state: None,
+        #[cfg(feature = "udp-scan")]
+        udp_evidence: None,
     })
 }
 
@@ -743,6 +804,11 @@ mod tests {
             results_truncated: false,
             duration_ms: 5000,
             spoof_stats: None,
+
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         };
         let output = format!("{}", results);
         assert!(output.contains("Port Scan Results"));
@@ -776,6 +842,11 @@ mod tests {
             results_truncated: false,
             duration_ms: 3000,
             spoof_stats: None,
+
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         };
         let output = format!("{}", results);
         assert!(output.contains("scanned: 1000 ports"));

@@ -690,6 +690,7 @@ mod tests {
             scan_type: None,
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         });
         assert_eq!(tab_for_task_kind(&kind), Tab::ScanPorts);
     }
