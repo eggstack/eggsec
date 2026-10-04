@@ -14,11 +14,10 @@ pub async fn handle_storage(_ctx: &CommandContext, args: StorageArgs) -> Result<
 async fn handle_storage_query(_args: crate::cli::storage::StorageQueryArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
-        use crate::storage::{init_storage, StorageConfig};
+        use crate::storage::init_storage;
         use sqlx::Row;
 
-        let config = StorageConfig::default();
-        let db = init_storage(&config).await?;
+        let db = init_storage(&_args.conn.resolve()).await?;
 
         if let Some(ref sql) = _args.sql {
             let rows = sqlx::query(sql)
@@ -75,10 +74,9 @@ async fn handle_storage_query(_args: crate::cli::storage::StorageQueryArgs) -> R
 async fn handle_storage_export(_args: crate::cli::storage::StorageExportArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
-        use crate::storage::{init_storage, StorageConfig};
+        use crate::storage::init_storage;
 
-        let config = StorageConfig::default();
-        let db = init_storage(&config).await?;
+        let db = init_storage(&_args.conn.resolve()).await?;
 
         let output_path = _args.output.as_deref().unwrap_or("storage_export.json");
 
@@ -125,10 +123,9 @@ async fn handle_storage_export(_args: crate::cli::storage::StorageExportArgs) ->
 async fn handle_storage_stats(_args: crate::cli::storage::StorageStatsArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
-        use crate::storage::{init_storage, StorageConfig};
+        use crate::storage::init_storage;
 
-        let config = StorageConfig::default();
-        let db = init_storage(&config).await?;
+        let db = init_storage(&_args.conn.resolve()).await?;
 
         if let Some(ref scan_id) = _args.scan_id {
             match db.get_scan(scan_id).await? {
@@ -186,10 +183,9 @@ async fn handle_storage_stats(_args: crate::cli::storage::StorageStatsArgs) -> R
 async fn handle_storage_init(_args: crate::cli::storage::StorageInitArgs) -> Result<()> {
     #[cfg(feature = "database")]
     {
-        use crate::storage::{init_storage, StorageConfig};
+        use crate::storage::init_storage;
 
-        let config = StorageConfig::default();
-        let db = init_storage(&config).await?;
+        let db = init_storage(&_args.conn.resolve()).await?;
 
         if _args.force {
             println!("Dropping existing tables...");

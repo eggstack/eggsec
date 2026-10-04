@@ -1652,25 +1652,14 @@ async fn execute_canonical_inner(
             {
                 // The password is resolved here, from the environment, and
                 // never travels on the wire or into a `TaskSnapshot`.
-                let password = match n.password_env.as_deref() {
-                    Some(var) => std::env::var(var).unwrap_or_else(|e| {
-                        tracing::warn!(
-                            env_var = var,
-                            error = %e,
-                            "storage password_env is unset; connecting without a password"
-                        );
-                        String::new()
-                    }),
-                    None => String::new(),
-                };
-                let config = crate::storage::StorageConfig {
-                    host: n.host,
-                    port: n.port,
-                    database: n.database,
-                    username: n.username,
-                    password: crate::types::SensitiveString::new(password),
-                    max_connections: n.max_connections,
-                };
+                let config = crate::storage::resolve_config(
+                    n.host,
+                    n.port,
+                    n.database,
+                    n.username,
+                    n.password_env.as_deref(),
+                    n.max_connections,
+                );
                 super::security::run_storage_task(
                     config,
                     n.mode,
