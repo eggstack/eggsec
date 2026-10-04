@@ -337,7 +337,7 @@ impl WirelessTab {
         {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(vec![Span::styled(
-                "Tip: Active attacks (deauth, disassoc) are also available from this tab.",
+                "Tip: An active deauth attack is also available from this tab.",
                 Style::default().fg(tc!(info)),
             )]));
             self.results_view.add_line(Line::from(vec![Span::styled(

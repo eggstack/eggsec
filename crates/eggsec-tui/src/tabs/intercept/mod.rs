@@ -23,6 +23,7 @@ use ratatui::{
     widgets::{Block, Borders, TableState},
     Frame,
 };
+use std::cell::Cell;
 
 mod render;
 #[cfg(test)]
@@ -44,6 +45,10 @@ macro_rules! inner {
         )
     };
 }
+
+/// Flow-list viewport assumed before the first rendered frame. Replaced by
+/// the real pane height on every render.
+const DEFAULT_FLOW_VIEWPORT: usize = 20;
 
 pub struct InterceptTab {
     pub flows: Vec<ProxyFlow>,
@@ -106,6 +111,10 @@ pub struct InterceptTab {
     pub selected_grpc_session: usize,
     /// Scroll offset for stream multiplexing view.
     pub stream_mux_scroll: usize,
+    /// Rows of the flow list that were visible in the last rendered frame.
+    /// The flow pane is laid out by `render_flow_list`, so this is the only way
+    /// the key handlers can learn the real viewport height they must scroll by.
+    flow_viewport_height: Cell<usize>,
 }
 
 impl InterceptTab {
@@ -159,6 +168,7 @@ impl InterceptTab {
             selected_http2_session: 0,
             selected_grpc_session: 0,
             stream_mux_scroll: 0,
+            flow_viewport_height: Cell::new(DEFAULT_FLOW_VIEWPORT),
         }
     }
 
@@ -181,10 +191,10 @@ impl InterceptTab {
         &self.flows[start..end]
     }
 
-    /// Number of flows visible in the current viewport.
-    fn visible_flows_len(&self) -> usize {
-        let start = self.scroll_offset.min(self.flows.len());
-        self.flows.len() - start
+    /// Rows the flow list can show right now. Recorded by `render_flow_list`
+    /// on every frame; the default only applies before the first render.
+    fn flow_viewport(&self) -> usize {
+        self.flow_viewport_height.get().max(1)
     }
 
     /// Adjust scroll offset so that `selected_flow` remains visible.
@@ -1014,9 +1024,11 @@ impl TabRender for InterceptTab {
         let tab_bar = ratatui::widgets::Paragraph::new(Line::from(tab_line));
         f.render_widget(tab_bar, detail_layout[0]);
 
-        // Render the detail content
-        let detail_self = self.clone_for_render();
-        detail_self.render_detail_pane(f, detail_layout[1]);
+        // Render the detail content. `render_detail_pane` borrows `&self`, so
+        // deep-cloning the whole tab here (flows, session, every ws/http2/grpc
+        // vector, correlation state) was pure per-frame overhead that grew
+        // with the capture size.
+        self.render_detail_pane(f, detail_layout[1]);
 
         // Action bar
         self.render_action_bar(f, action_area);
@@ -1129,9 +1141,7 @@ impl TabInput for InterceptTab {
                 if i > 0 {
                     self.selected_flow = Some(i - 1);
                     self.table_state.select(Some(i - 1));
-                    if i - 1 < self.scroll_offset {
-                        self.scroll_offset = i - 1;
-                    }
+                    self.ensure_selected_visible(self.flow_viewport());
                 }
             }
             InterceptFocusArea::DetailView => {
@@ -1162,10 +1172,7 @@ impl TabInput for InterceptTab {
                 if i + 1 < self.flows.len() {
                     self.selected_flow = Some(i + 1);
                     self.table_state.select(Some(i + 1));
-                    let viewport = self.visible_flows_len().max(1);
-                    if i + 1 >= self.scroll_offset + viewport {
-                        self.scroll_offset = i + 2 - viewport;
-                    }
+                    self.ensure_selected_visible(self.flow_viewport());
                 }
             }
             InterceptFocusArea::DetailView => {
@@ -1240,9 +1247,7 @@ impl TabInput for InterceptTab {
             let new_i = i.saturating_sub(page_size);
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
-            if new_i < self.scroll_offset {
-                self.scroll_offset = new_i;
-            }
+            self.ensure_selected_visible(self.flow_viewport());
         }
     }
 
@@ -1252,10 +1257,7 @@ impl TabInput for InterceptTab {
             let new_i = (i + page_size).min(self.flows.len().saturating_sub(1));
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
-            let viewport = self.visible_flows_len().max(1);
-            if new_i >= self.scroll_offset + viewport {
-                self.scroll_offset = new_i + 1 - viewport;
-            }
+            self.ensure_selected_visible(self.flow_viewport());
         }
     }
 
@@ -1264,6 +1266,7 @@ impl TabInput for InterceptTab {
             self.focus_area = InterceptFocusArea::FlowList;
             self.selected_flow = Some(0);
             self.table_state.select(Some(0));
+            self.ensure_selected_visible(self.flow_viewport());
         }
     }
 
@@ -1273,6 +1276,7 @@ impl TabInput for InterceptTab {
             let last = self.flows.len().saturating_sub(1);
             self.selected_flow = Some(last);
             self.table_state.select(Some(last));
+            self.ensure_selected_visible(self.flow_viewport());
         }
     }
 }
@@ -1292,5 +1296,112 @@ impl DetailPane {
             9 => DetailPane::Correlation,
             _ => DetailPane::Headers,
         }
+    }
+}
+
+#[cfg(test)]
+mod viewport_tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    /// `ProxyFlow::index` is `u64` under `web-proxy` and `usize` otherwise,
+    /// so the literal is left to inference.
+    fn flow() -> ProxyFlow {
+        ProxyFlow {
+            index: 0,
+            method: "GET".to_string(),
+            url: "https://example.com/".to_string(),
+            host: "example.com".to_string(),
+            path: "/".to_string(),
+            request_headers: Default::default(),
+            request_body: None,
+            response_status: 200,
+            response_headers: Default::default(),
+            response_body: None,
+            is_https: true,
+            duration_ms: 100,
+            request_body_size: 0,
+            response_body_size: 512,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: chrono::Utc::now().to_rfc3339(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        }
+    }
+
+    fn tab_with_flows(n: usize) -> InterceptTab {
+        let mut tab = InterceptTab::new();
+        tab.flows = (0..n).map(|_| flow()).collect();
+        tab.selected_flow = Some(0);
+        tab.table_state.select(Some(0));
+        tab
+    }
+
+    #[test]
+    fn test_flow_viewport_defaults_to_constant() {
+        let tab = InterceptTab::new();
+        assert_eq!(tab.flow_viewport(), DEFAULT_FLOW_VIEWPORT);
+    }
+
+    #[test]
+    fn test_render_records_real_flow_viewport() {
+        let mut tab = tab_with_flows(10);
+        // 24 rows minus the block borders and the header row.
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("terminal");
+        terminal
+            .draw(|f| tab.render_flow_list(f, f.area()))
+            .expect("draw");
+        assert_eq!(tab.flow_viewport(), 21);
+    }
+
+    #[test]
+    fn test_handle_down_scrolls_selection_into_view() {
+        let mut tab = tab_with_flows(30);
+        tab.flow_viewport_height.set(5);
+        for _ in 0..10 {
+            tab.handle_down();
+        }
+        assert_eq!(tab.selected_flow, Some(10));
+        // The selection must stay inside the window the offset describes.
+        assert_eq!(tab.scroll_offset, 6);
+        assert!(tab.selected_flow.unwrap() < tab.scroll_offset + tab.flow_viewport());
+    }
+
+    #[test]
+    fn test_handle_up_scrolls_selection_back_into_view() {
+        let mut tab = tab_with_flows(30);
+        tab.flow_viewport_height.set(5);
+        for _ in 0..12 {
+            tab.handle_down();
+        }
+        for _ in 0..12 {
+            tab.handle_up();
+        }
+        assert_eq!(tab.selected_flow, Some(0));
+        assert_eq!(tab.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_page_down_and_page_up_track_selection() {
+        let mut tab = tab_with_flows(30);
+        tab.flow_viewport_height.set(5);
+        tab.page_down(10);
+        assert_eq!(tab.selected_flow, Some(10));
+        assert!(tab.selected_flow.unwrap() < tab.scroll_offset + tab.flow_viewport());
+        tab.page_up(10);
+        assert_eq!(tab.selected_flow, Some(0));
+        assert_eq!(tab.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_handle_top_and_bottom_keep_selection_visible() {
+        let mut tab = tab_with_flows(30);
+        tab.flow_viewport_height.set(5);
+        tab.handle_bottom();
+        assert_eq!(tab.selected_flow, Some(29));
+        assert!(tab.selected_flow.unwrap() < tab.scroll_offset + tab.flow_viewport());
+        tab.handle_top();
+        assert_eq!(tab.selected_flow, Some(0));
+        assert_eq!(tab.scroll_offset, 0);
     }
 }

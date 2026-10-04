@@ -301,6 +301,16 @@ impl FuzzTab {
         }
     }
 
+    /// Close the focused selector's dropdown before leaving the focus area.
+    /// Left/Right are global shortcuts that bypass the
+    /// `has_any_tab_selector_open()` guard, so an open dropdown would
+    /// otherwise stay open on the next area and be drawn on top of it.
+    fn collapse_focused_selector(&mut self) {
+        if let Some(sel) = self.focused_selector_mut() {
+            sel.collapse();
+        }
+    }
+
     /// Common selector enter logic: if open, confirm; if closed, open.
     fn selector_enter(&mut self) {
         if let Some(sel) = self.focused_selector_mut() {
@@ -718,6 +728,7 @@ impl TabInput for FuzzTab {
         if self.focus_area == FuzzFocusArea::Inputs {
             self.core.inputs.move_left()
         } else {
+            self.collapse_focused_selector();
             // Navigate to previous focus area
             self.focus_area = core::focus_prev_n(&mut self.core, self.focus_area, &FUZZ_AREAS);
             true
@@ -731,6 +742,7 @@ impl TabInput for FuzzTab {
         if self.focus_area == FuzzFocusArea::Inputs {
             self.core.inputs.move_right()
         } else {
+            self.collapse_focused_selector();
             // Navigate to next focus area
             self.focus_area = core::focus_next_n(&mut self.core, self.focus_area, &FUZZ_AREAS);
             true
@@ -858,6 +870,36 @@ mod tests {
         let result = tab.handle_left();
         assert!(result);
         assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+    }
+
+    #[test]
+    fn test_right_closes_open_dropdown_before_moving_focus() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FuzzFocusArea::PayloadSelector;
+        tab.payload_selector.open();
+        assert!(tab.payload_selector.is_open());
+
+        assert!(tab.handle_right());
+
+        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+        // Left/Right bypass the open-selector guard, so the dropdown must be
+        // collapsed here or it would stay open over the next area.
+        assert!(!tab.payload_selector.is_open());
+        assert!(!tab.mode_selector.is_open());
+    }
+
+    #[test]
+    fn test_left_closes_open_dropdown_before_moving_focus() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FuzzFocusArea::ModeSelector;
+        tab.mode_selector.open();
+        assert!(tab.mode_selector.is_open());
+
+        assert!(tab.handle_left());
+
+        assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
+        assert!(!tab.mode_selector.is_open());
+        assert!(!tab.payload_selector.is_open());
     }
 
     #[test]

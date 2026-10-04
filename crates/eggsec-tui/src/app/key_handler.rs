@@ -4,6 +4,7 @@ use super::App;
 use super::InputMode;
 use super::OverlayController;
 use super::UiAction;
+use crate::app::overlay::is_ctrl_c;
 use crate::tabs::SettingsSection;
 use crate::tabs::Tab;
 
@@ -341,6 +342,13 @@ impl KeyHandler {
         let ctrl = OverlayController::new();
         let actions = ctrl.decode(app, key);
         if actions.is_empty() {
+            // `OverlayController::decode` returns empty in exactly two cases:
+            // Ctrl-C, which must bubble out to the global quit/stop binding,
+            // and no overlay. Synthesising a Noop for the first swallowed
+            // Ctrl-C, so it never reached the global layer.
+            if is_ctrl_c(key) {
+                return vec![];
+            }
             vec![UiAction::Noop]
         } else {
             actions
@@ -1079,6 +1087,46 @@ mod tests {
 
         let all = Tab::all();
         assert_eq!(app.current_tab, all[0]);
+    }
+
+    /// Regression: the overlay layer returned an empty vec for Ctrl-C so it
+    /// could bubble to the global quit/stop binding, but the caller rewrote
+    /// that empty result into a `Noop`, which is non-empty, so the early
+    /// return fired and Ctrl-C did nothing while any overlay was open.
+    #[test]
+    fn ctrl_c_reaches_the_global_layer_while_an_overlay_is_open() {
+        for label in ["help", "palette"] {
+            let mut app = create_test_app();
+            let handler = KeyHandler::new();
+
+            if label == "help" {
+                app.overlay.show_help = true;
+            } else {
+                app.apply_action(UiAction::ToggleCommandPalette);
+            }
+            assert!(app.topmost_overlay().is_some(), "{label} should be topmost");
+
+            // Decoding the overlay layer alone must not produce a blocking Noop.
+            let key = crossterm::event::KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+            let actions = handler.decode_topmost_overlay(&app, &key);
+            assert!(
+                actions.is_empty(),
+                "{label} overlay must let Ctrl-C bubble, got {actions:?}"
+            );
+            assert!(!actions.iter().any(|a| matches!(a, UiAction::Noop)));
+        }
+    }
+
+    #[test]
+    fn ctrl_c_still_quits_when_help_overlay_is_open() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.overlay.show_help = true;
+
+        let key = crossterm::event::KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        handler.handle_key_event(&mut app, &key);
+
+        assert!(app.should_quit, "Ctrl-C must still quit with help open");
     }
 
     #[test]

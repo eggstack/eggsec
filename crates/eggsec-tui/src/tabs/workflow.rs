@@ -1,5 +1,5 @@
 use crate::components::{empty_state_paragraph, Selector, SelectorItem};
-use crate::tabs::core::{render_error_block, TabCore};
+use crate::tabs::core::TabCore;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::workflow::finding::Finding;
@@ -349,6 +349,75 @@ impl TabRender for WorkflowTab {
             f.render_widget(placeholder, *results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let input_height = match self.current_mode {
+            WorkflowMode::ListFindings => 6,
+            WorkflowMode::CreateFinding => 9,
+            WorkflowMode::AssignFinding => 9,
+            WorkflowMode::AddComment => 9,
+            WorkflowMode::ChangeStatus => 12,
+        };
+
+        // Mirrors the configuration block layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(input_height), Constraint::Min(0)])
+            .split(area);
+
+        let Some(input_area) = chunks.first().copied() else {
+            return;
+        };
+        let inner_area = Block::default().borders(Borders::ALL).inner(input_area);
+
+        if let Some(dropdown) = self
+            .mode_selector
+            .dropdown_info(inner_area, f.area().height)
+        {
+            dropdown.render(f);
+        }
+
+        let fields_area = Rect {
+            y: inner_area.y.saturating_add(3),
+            height: inner_area.height.saturating_sub(3),
+            ..inner_area
+        };
+
+        let (fields, extra_slots) = match self.current_mode {
+            WorkflowMode::ListFindings => (vec![], 0),
+            WorkflowMode::CreateFinding => (vec![0], 1),
+            WorkflowMode::AssignFinding => (vec![3, 1], 0),
+            WorkflowMode::AddComment => (vec![3, 2], 0),
+            WorkflowMode::ChangeStatus => (vec![3], 2),
+        };
+
+        let field_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Length(3); fields.len() + extra_slots])
+            .split(fields_area);
+
+        if matches!(
+            self.current_mode,
+            WorkflowMode::CreateFinding | WorkflowMode::ChangeStatus
+        ) {
+            if let Some(chunk) = field_chunks.get(fields.len()) {
+                if let Some(dropdown) = self
+                    .severity_selector
+                    .dropdown_info(*chunk, f.area().height)
+                {
+                    dropdown.render(f);
+                }
+            }
+        }
+        if self.current_mode == WorkflowMode::ChangeStatus {
+            if let Some(chunk) = field_chunks.get(fields.len() + 1) {
+                if let Some(dropdown) = self.status_selector.dropdown_info(*chunk, f.area().height)
+                {
+                    dropdown.render(f);
+                }
+            }
+        }
+    }
 }
 
 impl TabInput for WorkflowTab {
@@ -582,5 +651,89 @@ impl TabInput for WorkflowTab {
         if !self.is_running() {
             self.core.results_view.page_down(page_size);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draw(tab: &WorkflowTab) -> String {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+        crate::test_utils::buffer_to_text(terminal.backend().buffer())
+    }
+
+    #[test]
+    fn mode_dropdown_is_drawn_when_expanded() {
+        let mut tab = WorkflowTab::new();
+        // Default focus is Mode; Enter opens the mode dropdown.
+        tab.handle_enter();
+        assert!(tab.mode_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the whole configuration inner area.
+        let inner_area = Rect::new(1, 1, 78, 4);
+        let info = tab
+            .mode_selector
+            .dropdown_info(inner_area, 24)
+            .expect("expanded mode selector must yield a dropdown");
+        assert_eq!(info.area.y, inner_area.y + inner_area.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 3 && label == "Add Comment"));
+
+        // Only the expanded list shows the non-selected modes.
+        let text = draw(&tab);
+        assert!(
+            text.contains("Add Comment") && text.contains("Change Status"),
+            "expanded mode dropdown should be drawn"
+        );
+    }
+
+    #[test]
+    fn severity_and_status_dropdowns_are_drawn_when_expanded() {
+        let mut tab = WorkflowTab::new();
+        tab.current_mode = WorkflowMode::ChangeStatus;
+        tab.severity_selector.open();
+        tab.status_selector.open();
+
+        // Anchors mirror `render_overlays`: field rows below the mode selector.
+        let severity_anchor = Rect::new(1, 4, 78, 3);
+        let info = tab
+            .severity_selector
+            .dropdown_info(severity_anchor, 24)
+            .expect("expanded severity selector must yield a dropdown");
+        assert_eq!(info.area.y, severity_anchor.y + severity_anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 4 && label == "Info"));
+
+        let status_anchor = Rect::new(1, 7, 78, 3);
+        let info = tab
+            .status_selector
+            .dropdown_info(status_anchor, 24)
+            .expect("expanded status selector must yield a dropdown");
+        assert_eq!(info.area.y, status_anchor.y + status_anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 4 && label == "False Positive"));
+
+        // Only the expanded lists show the non-selected severities/statuses.
+        let text = draw(&tab);
+        assert!(
+            text.contains("Critical") && text.contains("False Positive"),
+            "expanded severity/status dropdowns should be drawn"
+        );
     }
 }

@@ -41,6 +41,11 @@ impl LoadTab {
         #[cfg(not(feature = "stress-testing"))]
         let test_type_selector = Selector::new("Test Type").simple_items(vec!["HTTP Load"]);
 
+        let mut test_type_selector = test_type_selector;
+        // `Selector::new` starts unfocused, so the default focus area must
+        // focus it explicitly or Enter/Up/Down fall through to `start()`.
+        test_type_selector.focus();
+
         Self {
             core: TabCore::new("Load testing...", "Results").with_inputs(inputs),
             test_type_selector,
@@ -360,6 +365,8 @@ impl TabState for LoadTab {
         self.test_type_selector.blur();
         self.core.inputs.blur();
         self.focus_area = StandardFocusAreaSelector::Selector;
+        // `reset` lands on the Selector area, which owns the focus marker.
+        self.test_type_selector.focus();
     }
 }
 
@@ -585,6 +592,13 @@ impl TabInput for LoadTab {
             self.stop();
             return;
         }
+        // `focus_area` decides: the selector only owns the Selector area, and
+        // the inputs only own the Inputs area, so this ordering also keeps a
+        // stale focus flag from stealing Enter.
+        if self.focus_area == StandardFocusAreaSelector::Inputs && self.core.inputs.is_focused() {
+            self.core.inputs.blur();
+            return;
+        }
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
                 if self.test_type_selector.confirm().is_none() {
@@ -611,11 +625,12 @@ impl TabInput for LoadTab {
             self.test_type_selector.cancel();
             return;
         }
-        if self.test_type_selector.is_focused() {
-            self.test_type_selector.blur();
-        }
         self.core.inputs.blur();
         self.focus_area = StandardFocusAreaSelector::Selector;
+        // Escape returns to the Selector area: hand the focus marker back to
+        // the selector, otherwise Enter would launch a run instead of opening
+        // the Test Type dropdown.
+        self.test_type_selector.focus();
     }
 
     fn handle_up(&mut self) {
@@ -791,5 +806,53 @@ mod tests {
         tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_default_state_focuses_selector() {
+        let mut tab = create_test_tab();
+        assert_eq!(tab.focus_area, StandardFocusAreaSelector::Selector);
+        assert!(tab.test_type_selector.is_focused());
+        // Enter on the default area opens the dropdown instead of running.
+        tab.handle_enter();
+        assert!(tab.test_type_selector.is_open());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_reset_restores_selector_focus() {
+        let mut tab = create_test_tab();
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, StandardFocusAreaSelector::Inputs);
+        tab.reset();
+        assert_eq!(tab.focus_area, StandardFocusAreaSelector::Selector);
+        assert!(tab.test_type_selector.is_focused());
+    }
+
+    #[test]
+    fn test_escape_restores_selector_focus() {
+        let mut tab = create_test_tab();
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, StandardFocusAreaSelector::Inputs);
+        tab.handle_escape();
+        assert_eq!(tab.focus_area, StandardFocusAreaSelector::Selector);
+        assert!(tab.test_type_selector.is_focused());
+        tab.handle_enter();
+        assert!(tab.test_type_selector.is_open());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_up_down_moves_selection_only_while_open() {
+        let mut tab = create_test_tab();
+        assert!(tab.test_type_selector.is_focused());
+        tab.handle_down();
+        assert!(!tab.test_type_selector.is_open());
+        tab.handle_enter();
+        assert!(tab.test_type_selector.is_open());
+        tab.handle_down();
+        if tab.test_type_selector.items.len() > 1 {
+            assert_eq!(tab.test_type_selector.selected, 1);
+        }
     }
 }

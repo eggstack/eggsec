@@ -540,12 +540,35 @@ impl App {
         }
 
         if is_running {
-            if let Some(task_config) = self.build_current_task() {
-                if let Some(desc) = self.build_current_operation_descriptor() {
-                    self.evaluate_policy_and_dispatch(desc, Some(task_config));
-                } else {
-                    // No operation descriptor available; spawn without approval token
-                    self.spawn_task(Some(task_config), None);
+            match self.build_current_task() {
+                Some(task_config) => {
+                    if let Some(desc) = self.build_current_operation_descriptor() {
+                        self.evaluate_policy_and_dispatch(desc, Some(task_config));
+                    } else {
+                        // Fail closed. Spawning without a descriptor would skip
+                        // `EnforcementContext::evaluate()` entirely, so a tab
+                        // that builds a request but declares no operation would
+                        // run with no scope or policy check at all. Today every
+                        // operation-less tab returns `None` above and never
+                        // reaches here, so this is a guard on the invariant
+                        // rather than a live path.
+                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                            "cannot start: no operation descriptor for this tab".to_string(),
+                        ));
+                        tracing::warn!(
+                            tab = ?self.current_tab,
+                            "refusing to spawn without an operation descriptor"
+                        );
+                    }
+                }
+                None => {
+                    // The tab entered its running state but produced no
+                    // dispatchable request (empty/unusable target, or a tab
+                    // with no wired run surface). Clear the running state so
+                    // the spinner does not stick and input is not left dead.
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        "nothing to run: check the target and required fields".to_string(),
+                    ));
                 }
             }
         }

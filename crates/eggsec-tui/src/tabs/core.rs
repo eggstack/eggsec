@@ -133,6 +133,9 @@ impl TabCore {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        // `InputField::clear` drops each field's own focus marker; blur the
+        // group too so `is_input_focused()` agrees with what is rendered.
+        self.inputs.blur();
     }
 
     /// Sets the tab to Idle state.

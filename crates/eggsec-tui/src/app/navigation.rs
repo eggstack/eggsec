@@ -384,7 +384,10 @@ mod tests {
     fn test_tab_window_calculation_80_cols() {
         use crate::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(80, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 11);
+        // 7 tabs: ratatui renders each as title + left pad + right pad + a
+        // 1-column divider, so 7 of these titles occupy 70 of the 76 available
+        // columns while an 8th (WafStress) would need 82 and get clipped.
+        assert_eq!(window.max_visible, 7);
         assert_eq!(window.start, 0);
         assert!(window.end <= window.total_tabs);
         assert!(window.selected_visible < window.max_visible);
@@ -394,7 +397,7 @@ mod tests {
     fn test_tab_window_calculation_40_cols() {
         use crate::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(40, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 4);
+        assert_eq!(window.max_visible, 3);
         assert!(window.start <= window.total_tabs);
     }
 
@@ -415,7 +418,72 @@ mod tests {
     fn test_tab_window_calculation_120_cols() {
         use crate::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(120, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 17);
+        assert_eq!(window.max_visible, 11);
+    }
+
+    /// Renders the real tab bar and asserts every tab the window claims to show
+    /// is actually visible on screen. This is the end-to-end guard: the window
+    /// arithmetic can be internally consistent and still overflow the buffer.
+    #[test]
+    fn rendered_tab_bar_shows_every_tab_the_window_claims() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        for (w, tab) in [
+            (80u16, Tab::Recon),
+            (80, Tab::Waf),
+            (100, Tab::Scan),
+            (120, Tab::Dashboard),
+        ] {
+            let mut app = create_test_app();
+            app.current_tab = tab;
+            let backend = TestBackend::new(w, 24);
+            let mut terminal = Terminal::new(backend).expect("terminal");
+            terminal
+                .draw(|f| crate::ui::draw(f, &mut app))
+                .expect("draw");
+
+            let window = crate::tabs::TabWindow::for_width(w - 2, tab, app.tab_scroll_offset);
+            let buf = terminal.backend().buffer().clone();
+            // tab_area is 3 rows tall at y=1: top border, titles, bottom border.
+            let row: String = (0..w)
+                .map(|x| buf[(x, 2)].symbol().chars().next().unwrap_or(' '))
+                .collect();
+
+            for t in &crate::tabs::Tab::all()[window.start..window.end] {
+                assert!(
+                    row.contains(t.title()),
+                    "at {w} cols the window claims {} tabs but {t:?} ({:?}) is not on screen: |{row}|",
+                    window.end - window.start,
+                    t.title()
+                );
+            }
+        }
+    }
+
+    /// Regression: the tab bar must never render more columns than the
+    /// widgets area can hold. Counting titles alone let the bar overflow, so
+    /// ratatui clipped the right-hand tabs and the selected tab could vanish.
+    #[test]
+    fn test_tab_bar_never_overflows_its_area() {
+        use crate::tabs::{Tab, TabWindow};
+        for term_width in [60u16, 70, 80, 100, 120, 160, 200] {
+            let window = TabWindow::for_width(term_width, Tab::Scan, 0);
+            // The Tabs widget area is the tab area minus the block borders.
+            let widgets_area_width = (term_width as usize).saturating_sub(4);
+            let rendered: usize = Tab::all()[window.start..window.end]
+                .iter()
+                .map(|t| t.title().len() + 3)
+                .sum::<usize>()
+                .saturating_sub(1);
+            assert!(
+                rendered <= widgets_area_width,
+                "tab bar overflows at {term_width} cols: needs {rendered}, has {widgets_area_width}"
+            );
+            // And the selection must land inside the rendered window.
+            let idx = Tab::Scan.visible_index().unwrap_or(0);
+            assert!(window.start <= idx && idx < window.end);
+        }
     }
 
     #[test]

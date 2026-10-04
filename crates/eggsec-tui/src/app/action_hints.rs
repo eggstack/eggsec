@@ -13,17 +13,15 @@ pub struct ActionHint {
 /// Get context-aware action hints based on current app state.
 ///
 /// Priority order:
-/// 1. Running task hints
-/// 2. Overlay-specific hints
+/// 1. Overlay-specific hints
+/// 2. Running task hints
 /// 3. Insert-mode (input focused) hints
 /// 4. Tab-specific normal-mode hints
 pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
-    // Use has_active_task() which checks tab and channel liveness
-    // (canonical task identity lives in the runtime session).
-    if app.has_active_task() {
-        return task_hints(app);
-    }
-
+    // Overlay hints come first: the overlay is what the user is looking at, and
+    // it needs its own confirm/dismiss keys surfaced. Task hints used to win,
+    // which hid "Esc: close" behind "C: stop" and, because Ctrl-C was also
+    // swallowed by the overlay, advertised a key that did nothing.
     match app.topmost_overlay() {
         Some(OverlayType::PolicyConfirm) => return policy_confirm_hints(),
         Some(OverlayType::ConfirmPopup) => return confirm_popup_hints(),
@@ -33,6 +31,12 @@ pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
         Some(OverlayType::Help) => return help_hints(),
         Some(OverlayType::HttpOptions) => return http_options_hints(),
         None => {}
+    }
+
+    // Use has_active_task() which checks tab and channel liveness
+    // (canonical task identity lives in the runtime session).
+    if app.has_active_task() {
+        return task_hints(app);
     }
 
     if app.mode == InputMode::Insert {
@@ -593,10 +597,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn task_overrides_overlay_hints() {
+    async fn overlay_hints_win_over_task_hints() {
+        // An open overlay is what the user is looking at, so its dismiss keys
+        // must be surfaced even while a task runs. This used to assert the
+        // opposite, which hid "Esc: close" behind "C: stop" — and since Ctrl-C
+        // was also swallowed by the overlay, that advertised key did nothing.
+        // Ctrl+C still reaches the global stop/quit binding from an overlay.
         let mut app = create_test_app();
         app.task_state.tab = Some(Tab::Recon);
         app.overlay.show_help = true;
+        let hints = get_action_hints(&app);
+        assert_eq!(hints[0].key, "Esc");
+        assert_eq!(hints[0].label, "close");
+    }
+
+    #[tokio::test]
+    async fn running_task_hints_shown_when_no_overlay() {
+        let mut app = create_test_app();
+        app.task_state.tab = Some(Tab::Recon);
         let hints = get_action_hints(&app);
         assert_eq!(hints[0].key, "C");
         assert_eq!(hints[0].label, "stop");

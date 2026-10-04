@@ -265,6 +265,31 @@ impl TabRender for NseTab {
             }
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        if self.core.error.is_some() {
+            return;
+        }
+
+        // Mirrors the selector row layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(12),
+                Constraint::Length(4),
+                Constraint::Min(5),
+            ])
+            .split(area);
+
+        if let Some(selector_area) = chunks.get(1) {
+            if let Some(dropdown) = self
+                .script_selector
+                .dropdown_info(*selector_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+    }
 }
 
 impl TabInput for NseTab {
@@ -595,5 +620,49 @@ impl NseTab {
     #[cfg(feature = "nse")]
     pub fn has_report(&self) -> bool {
         self.structured_report.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn script_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = NseTab::new();
+        tab.script_selector.focus();
+        tab.focus_area = NseFocusArea::ScriptSelector;
+        tab.handle_enter();
+        assert!(tab.script_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the second layout row.
+        let anchor = Rect::new(0, 12, 80, 4);
+        let info = tab
+            .script_selector
+            .dropdown_info(anchor, 24)
+            .expect("expanded script selector must yield a dropdown");
+        assert_eq!(info.area.y, anchor.y + anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 2 && label == "Banner Grab"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected scripts.
+        assert!(
+            text.contains("Banner Grab") && text.contains("Custom Script"),
+            "expanded script dropdown should be drawn"
+        );
     }
 }

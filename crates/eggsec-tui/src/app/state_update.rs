@@ -71,10 +71,14 @@ impl super::App {
         }
 
         // Auto-expire stale notifications so they don't linger until the
-        // next notification replaces them.
+        // next notification replaces them. Clearing the state is not enough:
+        // the frame is only repainted when `needs_redraw` is set, so without
+        // this the toast stayed on screen until the user pressed a key and
+        // the timeout was invisible.
         if let Some(ref notif) = self.overlay.notification {
             if notif.is_expired() {
                 self.overlay.notification = None;
+                dirty = true;
             }
         }
 

@@ -152,13 +152,22 @@ impl Drop for TerminalSession {
             return;
         }
         self.restored = true;
+        // A `Drop` cannot report a failure, but it must not swallow one
+        // either: a failed restore leaves the user's shell in raw mode with no
+        // echo, which is unrecoverable from inside the TUI.
         if self.mouse_capture_active {
             self.mouse_capture_active = false;
-            let _ = execute!(io::stdout(), DisableMouseCapture);
+            if let Err(e) = execute!(io::stdout(), DisableMouseCapture) {
+                tracing::warn!(error = %e, "failed to disable mouse capture during teardown");
+            }
         }
-        let _ = ratatui::try_restore();
+        if let Err(e) = ratatui::try_restore() {
+            tracing::warn!(error = %e, "failed to restore terminal state during teardown");
+        }
         if let Some(ref mut terminal) = self.terminal {
-            let _ = terminal.show_cursor();
+            if let Err(e) = terminal.show_cursor() {
+                tracing::warn!(error = %e, "failed to show cursor during teardown");
+            }
         }
     }
 }

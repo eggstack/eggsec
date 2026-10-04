@@ -8,6 +8,21 @@ pub trait TaskBuilder {
     fn build_run_request(&self) -> Option<RunRequest>;
 }
 
+/// Normalise an editable text input into a request value.
+///
+/// A blank or whitespace-only field is *absent* rather than an empty string:
+/// the canonical normalizers read `None` as "use the documented default", so
+/// `Some("")` would ship a literal empty value for a field the operator simply
+/// never filled in. Surrounding whitespace is dropped.
+fn non_blank(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 impl TaskBuilder for super::tabs::ReconTab {
     fn build_run_request(&self) -> Option<RunRequest> {
         let target = self.target();
@@ -38,8 +53,10 @@ impl TaskBuilder for super::tabs::LoadTab {
                 task_kind: TaskKind::StressTest(eggsec_runtime::request::StressTestParams {
                     target: target.to_string(),
                     flood_type: self.stress_type().to_string(),
+                    // The load tab exposes no rate control; absent lets the
+                    // canonical executor apply its documented default.
                     rate_pps: None,
-                    duration_secs: Some(60),
+                    duration_secs: Some(self.timeout() as u32),
                     threads: Some(self.concurrency() as u32),
                 }),
                 requested_by: None,
@@ -50,10 +67,11 @@ impl TaskBuilder for super::tabs::LoadTab {
             Some(RunRequest {
                 task_kind: TaskKind::LoadTest(LoadTestParams {
                     target: target.to_string(),
-                    method: "GET".to_string(),
-                    requests: None,
+                    method: non_blank(self.method()).unwrap_or_else(|| "GET".to_string()),
+                    requests: Some(self.requests()),
                     connections: Some(self.concurrency() as u32),
                     duration_secs: Some(self.timeout() as u32),
+                    // The load tab exposes no rate-limit control.
                     rate_limit: None,
                 }),
                 requested_by: None,
@@ -74,10 +92,12 @@ impl TaskBuilder for super::tabs::ScanPortsTab {
         Some(RunRequest {
             task_kind: TaskKind::PortScan(PortScanParams {
                 target: target.to_string(),
-                ports: Some(self.ports().to_string()),
+                ports: non_blank(self.ports()),
+                // The tab exposes no scan-type control; the canonical default
+                // (SYN) applies.
                 scan_type: None,
                 timeout_ms: Some(self.timeout() * 1000),
-                concurrency: None,
+                concurrency: Some(self.concurrency()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -96,10 +116,12 @@ impl TaskBuilder for super::tabs::ScanEndpointsTab {
         Some(RunRequest {
             task_kind: TaskKind::EndpointScan(eggsec_runtime::request::EndpointScanParams {
                 target: target.to_string(),
+                // The tab exposes no method list control; the canonical default
+                // method set applies.
                 methods: None,
-                wordlist: self.wordlist().map(|s| s.to_string()),
-                concurrency: None,
-                timeout_secs: None,
+                wordlist: self.wordlist().and_then(non_blank),
+                concurrency: Some(self.concurrency()),
+                timeout_secs: Some(self.timeout()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -118,8 +140,10 @@ impl TaskBuilder for super::tabs::FingerprintTab {
         Some(RunRequest {
             task_kind: TaskKind::Fingerprint(eggsec_runtime::request::FingerprintParams {
                 target: target.to_string(),
-                ports: None,
-                timeout_secs: None,
+                ports: non_blank(self.ports()),
+                timeout_secs: Some(self.timeout()),
+                // The tab exposes no concurrency control; the canonical default
+                // applies.
                 concurrency: None,
             }),
             requested_by: None,
@@ -141,19 +165,19 @@ impl TaskBuilder for super::tabs::FuzzTab {
                 target: target.to_string(),
                 payload_type: Some(self.payload_type_string()),
                 threads: Some(self.concurrency() as u32),
-                mode: None,
-                mutations: None,
-                mutation_count: None,
-                method: None,
-                param: None,
-                timeout: None,
-                graphql_introspection: None,
-                graphql_depth_bypass: None,
-                graphql_alias_overload: None,
-                oauth_redirect_test: None,
-                oauth_scope_test: None,
-                oauth_state_test: None,
-                oauth_grant_test: None,
+                mode: non_blank(self.mode()),
+                mutations: Some(self.mutations_enabled()),
+                mutation_count: Some(self.mutation_count()),
+                method: non_blank(self.method()),
+                param: self.param().and_then(non_blank),
+                timeout: Some(self.timeout()),
+                graphql_introspection: Some(self.graphql_introspection_enabled()),
+                graphql_depth_bypass: Some(self.graphql_depth_bypass_enabled()),
+                graphql_alias_overload: Some(self.graphql_alias_overload_enabled()),
+                oauth_redirect_test: Some(self.oauth_redirect_enabled()),
+                oauth_scope_test: Some(self.oauth_scope_enabled()),
+                oauth_state_test: Some(self.oauth_state_enabled()),
+                oauth_grant_test: Some(self.oauth_grant_enabled()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -172,8 +196,8 @@ impl TaskBuilder for super::tabs::WafTab {
         Some(RunRequest {
             task_kind: TaskKind::Waf(eggsec_runtime::request::WafParams {
                 target: target.to_string(),
-                bypass_mode: None,
-                techniques: None,
+                bypass_mode: Some(self.is_bypass_mode()),
+                techniques: Some(self.enabled_techniques()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -192,8 +216,44 @@ impl TaskBuilder for super::tabs::WafStressTab {
         Some(RunRequest {
             task_kind: TaskKind::WafStress(eggsec_runtime::request::WafStressParams {
                 target: target.to_string(),
-                requests: Some(self.concurrency() as u32),
-                concurrency: None,
+                // The tab exposes no request-count control; the canonical
+                // default (100 requests) applies.
+                requests: None,
+                concurrency: Some(self.concurrency()),
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        })
+    }
+}
+
+impl TaskBuilder for super::tabs::StressTab {
+    /// `Tab::Stress` is a direct-launch tab whose `handle_enter` sets
+    /// `AppState::Running`, but it had no `TaskBuilder` at all, so confirming
+    /// the flood type could never dispatch anything. `StressTestParams`
+    /// already carries every field the tab collects.
+    fn build_run_request(&self) -> Option<RunRequest> {
+        let target = self.target();
+        if target.is_empty() {
+            return None;
+        }
+
+        let flood_type = match self.stress_type() {
+            super::tabs::StressType::Http => "http",
+            super::tabs::StressType::Syn => "syn",
+            super::tabs::StressType::Udp => "udp",
+            super::tabs::StressType::Tcp => "tcp",
+            super::tabs::StressType::Icmp => "icmp",
+        };
+
+        Some(RunRequest {
+            task_kind: TaskKind::StressTest(eggsec_runtime::request::StressTestParams {
+                target: target.to_string(),
+                flood_type: flood_type.to_string(),
+                rate_pps: Some(self.rate()).filter(|n| *n > 0),
+                duration_secs: u32::try_from(self.duration()).ok().filter(|n| *n > 0),
+                threads: u32::try_from(self.concurrency()).ok().filter(|n| *n > 0),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -214,6 +274,8 @@ impl TaskBuilder for super::tabs::ScanTab {
             task_kind: TaskKind::Pipeline(eggsec_runtime::request::PipelineParams {
                 target: target.to_string(),
                 profile: Some(profile.to_string()),
+                // `PipelineParams` carries no output-format/output-file field,
+                // so the pipeline tab's selectors have no wire destination.
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -300,11 +362,11 @@ impl TaskBuilder for super::tabs::GraphQlTab {
             task_kind: TaskKind::GraphQl(eggsec_runtime::request::GraphQlParams {
                 target: target.to_string(),
                 introspection: Some(self.introspection_checkbox.checked),
-                inject: None,
-                depth_bypass: None,
-                alias_overload: None,
-                concurrency: None,
-                timeout_secs: None,
+                inject: Some(self.inject_checkbox.checked),
+                depth_bypass: Some(self.depth_bypass_checkbox.checked),
+                alias_overload: Some(self.alias_overload_checkbox.checked),
+                concurrency: Some(self.concurrency()),
+                timeout_secs: Some(self.timeout()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -323,15 +385,17 @@ impl TaskBuilder for super::tabs::OAuthTab {
         Some(RunRequest {
             task_kind: TaskKind::OAuth(eggsec_runtime::request::OAuthParams {
                 target: target.to_string(),
+                // The tab exposes no flow selector; the canonical default flow
+                // applies.
                 flow: None,
-                client_id: None,
-                redirect_uri: None,
-                redirect_test: None,
-                scope_test: None,
-                state_test: None,
-                grant_test: None,
-                concurrency: None,
-                timeout_secs: None,
+                client_id: self.client_id().and_then(non_blank),
+                redirect_uri: self.redirect_uri().and_then(non_blank),
+                redirect_test: Some(self.redirect_test_checkbox.checked),
+                scope_test: Some(self.scope_test_checkbox.checked),
+                state_test: Some(self.state_test_checkbox.checked),
+                grant_test: Some(self.grant_test_checkbox.checked),
+                concurrency: Some(self.concurrency()),
+                timeout_secs: Some(self.timeout()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -523,10 +587,14 @@ impl TaskBuilder for super::tabs::AuthTab {
                 target: target.to_string(),
                 username: self.username().map(|s| s.to_string()),
                 credential_list: self.password_list().map(|s| s.to_string()),
-                credential_file: None,
-                max_attempts: None,
-                concurrency: None,
-                timeout_secs: None,
+                credential_file: self.credential_file().and_then(non_blank),
+                // The tab's accessors already fall back to their shipped
+                // defaults (50/5/30) when a field is blank or unparseable, so
+                // the value on screen is the value dispatched. Zero would mean
+                // "do nothing", so treat it as unset.
+                max_attempts: Some(self.max_attempts()).filter(|n| *n > 0),
+                concurrency: Some(self.concurrency()).filter(|n| *n > 0),
+                timeout_secs: Some(self.timeout()).filter(|n| *n > 0),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -711,6 +779,385 @@ mod tests {
             parse_listen_addr("host:not-a-port"),
             (Some("host".to_string()), None)
         );
+    }
+
+    #[test]
+    fn non_blank_treats_untouched_text_input_as_absent() {
+        assert_eq!(non_blank(""), None);
+        assert_eq!(non_blank("   "), None);
+        assert_eq!(non_blank("\t\n"), None);
+        assert_eq!(non_blank(" 80,443 "), Some("80,443".to_string()));
+    }
+
+    #[test]
+    fn scan_ports_builder_maps_concurrency_and_ports_to_runtime_dto() {
+        use crate::tabs::ScanPortsTab;
+        let mut tab = ScanPortsTab::new();
+        tab.core.inputs.fields[0].value = "10.0.0.7".to_string();
+        tab.core.inputs.fields[1].value = "80,443".to_string();
+        tab.core.inputs.fields[2].value = "250".to_string();
+        tab.core.inputs.fields[3].value = "4".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        assert_eq!(req.surface, eggsec_runtime::RuntimeSurface::TuiManual);
+        match req.task_kind {
+            TaskKind::PortScan(p) => {
+                assert_eq!(p.target, "10.0.0.7");
+                assert_eq!(p.ports.as_deref(), Some("80,443"));
+                assert_eq!(p.timeout_ms, Some(4000));
+                assert_eq!(p.concurrency, Some(250));
+                // The tab exposes no scan-type control.
+                assert_eq!(p.scan_type, None);
+            }
+            other => panic!("expected PortScan, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scan_ports_builder_omits_blank_ports() {
+        use crate::tabs::ScanPortsTab;
+        let mut tab = ScanPortsTab::new();
+        tab.core.inputs.fields[0].value = "10.0.0.7".to_string();
+        tab.core.inputs.fields[1].value = "   ".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::PortScan(p) => assert!(p.ports.is_none(), "blank ports must not be set"),
+            other => panic!("expected PortScan, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scan_endpoints_builder_maps_concurrency_and_timeout_to_runtime_dto() {
+        use crate::tabs::ScanEndpointsTab;
+        let mut tab = ScanEndpointsTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "37".to_string();
+        tab.core.inputs.fields[2].value = "9".to_string();
+        tab.core.inputs.fields[3].value = "  endpoints/big.txt  ".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::EndpointScan(p) => {
+                assert_eq!(p.concurrency, Some(37));
+                assert_eq!(p.timeout_secs, Some(9));
+                assert_eq!(p.wordlist.as_deref(), Some("endpoints/big.txt"));
+                // The tab exposes no method list control.
+                assert_eq!(p.methods, None);
+            }
+            other => panic!("expected EndpointScan, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fingerprint_builder_maps_ports_and_timeout_to_runtime_dto() {
+        use crate::tabs::FingerprintTab;
+        let mut tab = FingerprintTab::new();
+        tab.core.inputs.fields[0].value = "10.0.0.9".to_string();
+        tab.core.inputs.fields[1].value = "22,8080".to_string();
+        tab.core.inputs.fields[2].value = "11".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::Fingerprint(p) => {
+                assert_eq!(p.ports.as_deref(), Some("22,8080"));
+                assert_eq!(p.timeout_secs, Some(11));
+                // The tab exposes no concurrency control.
+                assert_eq!(p.concurrency, None);
+            }
+            other => panic!("expected Fingerprint, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fuzz_builder_maps_ui_controls_to_runtime_dto() {
+        use crate::tabs::FuzzTab;
+        let mut tab = FuzzTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "POST".to_string();
+        tab.core.inputs.fields[2].value = "q".to_string();
+        tab.core.inputs.fields[4].value = "7".to_string();
+        tab.core.inputs.fields[5].value = "42".to_string();
+        tab.core.inputs.fields[6].value = "33".to_string();
+        tab.payload_selector.select_by_value("xss");
+        tab.mode_selector.select_by_value("Burst");
+        tab.mutation_checkbox.checked = true;
+        tab.graphql_introspection.checked = false;
+        tab.oauth_grant_test.checked = false;
+
+        let req = tab.build_run_request().expect("run request present");
+        assert_eq!(req.surface, eggsec_runtime::RuntimeSurface::TuiManual);
+        match req.task_kind {
+            TaskKind::Fuzz(p) => {
+                assert_eq!(p.method.as_deref(), Some("POST"));
+                assert_eq!(p.param.as_deref(), Some("q"));
+                assert_eq!(p.payload_type.as_deref(), Some("xss"));
+                assert_eq!(p.mode.as_deref(), Some("Burst"));
+                assert_eq!(p.mutations, Some(true));
+                assert_eq!(p.mutation_count, Some(7));
+                assert_eq!(p.threads, Some(42));
+                assert_eq!(p.timeout, Some(33));
+                assert_eq!(p.graphql_introspection, Some(false));
+                assert_eq!(p.graphql_depth_bypass, Some(true));
+                assert_eq!(p.graphql_alias_overload, Some(true));
+                assert_eq!(p.oauth_redirect_test, Some(true));
+                assert_eq!(p.oauth_scope_test, Some(true));
+                assert_eq!(p.oauth_state_test, Some(true));
+                assert_eq!(p.oauth_grant_test, Some(false));
+            }
+            other => panic!("expected Fuzz, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fuzz_builder_omits_blank_text_inputs() {
+        use crate::tabs::FuzzTab;
+        let mut tab = FuzzTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "  ".to_string();
+        tab.core.inputs.fields[2].value = "   ".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::Fuzz(p) => {
+                assert!(p.method.is_none(), "blank method must not be set");
+                assert!(p.param.is_none(), "blank param must not be set");
+                // Numeric controls keep their tab defaults.
+                assert_eq!(p.threads, Some(10));
+                assert_eq!(p.timeout, Some(10));
+                assert_eq!(p.mutations, Some(false));
+                assert_eq!(p.mutation_count, Some(3));
+            }
+            other => panic!("expected Fuzz, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waf_builder_maps_bypass_mode_and_enabled_techniques_to_runtime_dto() {
+        use crate::tabs::WafTab;
+        let mut tab = WafTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.mode_radio.select(1);
+        for cb in &mut tab.technique_checkboxes {
+            cb.checked = false;
+        }
+        if let Some(cb) = tab.technique_checkboxes.get_mut(5) {
+            cb.checked = true;
+        }
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::Waf(p) => {
+                assert_eq!(p.bypass_mode, Some(true));
+                // Engine tokens, not the operator-facing checkbox labels:
+                // `run_waf` only matches header/evasion/smuggling/all, so
+                // sending labels left every bypass flag false.
+                assert_eq!(
+                    p.techniques,
+                    Some(vec!["smuggling".to_string()]),
+                    "only the checked technique must reach the request, as an engine token"
+                );
+            }
+            other => panic!("expected Waf, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waf_builder_reports_detect_only_mode() {
+        use crate::tabs::WafTab;
+        let mut tab = WafTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::Waf(p) => {
+                assert_eq!(p.bypass_mode, Some(false));
+                // The two techniques checked by default; both are evasion.
+                assert_eq!(p.techniques, Some(vec!["evasion".to_string()]));
+            }
+            other => panic!("expected Waf, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waf_stress_builder_sends_concurrency_field_as_concurrency() {
+        use crate::tabs::WafStressTab;
+        let mut tab = WafStressTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "64".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::WafStress(p) => {
+                assert_eq!(p.concurrency, Some(64));
+                // The tab has no request-count control.
+                assert_eq!(p.requests, None);
+            }
+            other => panic!("expected WafStress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_builder_maps_requests_connections_duration_and_method_to_runtime_dto() {
+        use crate::tabs::LoadTab;
+        let mut tab = LoadTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "POST".to_string();
+        tab.core.inputs.fields[2].value = "5000".to_string();
+        tab.core.inputs.fields[3].value = "32".to_string();
+        tab.core.inputs.fields[4].value = "45".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        assert_eq!(req.surface, eggsec_runtime::RuntimeSurface::TuiManual);
+        match req.task_kind {
+            TaskKind::LoadTest(p) => {
+                assert_eq!(p.method, "POST");
+                assert_eq!(p.requests, Some(5000));
+                assert_eq!(p.connections, Some(32));
+                assert_eq!(p.duration_secs, Some(45));
+                // The tab exposes no rate-limit control.
+                assert_eq!(p.rate_limit, None);
+            }
+            other => panic!("expected LoadTest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_builder_request_count_field_drives_canonical_request_total() {
+        use crate::tabs::LoadTab;
+        use eggsec::dispatch::CanonicalOperationRequest;
+
+        let mut tab = LoadTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[2].value = "5000".to_string();
+        tab.core.inputs.fields[3].value = "32".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        let CanonicalOperationRequest::LoadTest(load) =
+            CanonicalOperationRequest::from_task_kind(&req.task_kind)
+        else {
+            panic!("expected canonical LoadTest");
+        };
+        // The engine's canonical rule: explicit `requests` wins, `connections`
+        // is concurrency only. Before wiring, the tab's "Total Requests" was
+        // discarded and `connections` doubled as the total.
+        let normalized = load.normalize().expect("load test normalizes");
+        assert_eq!(normalized.requests, 5000);
+        assert_eq!(normalized.concurrency, 32);
+    }
+
+    #[test]
+    fn load_builder_falls_back_to_get_when_method_is_blank() {
+        use crate::tabs::LoadTab;
+        let mut tab = LoadTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "   ".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::LoadTest(p) => assert_eq!(p.method, "GET"),
+            other => panic!("expected LoadTest, got {other:?}"),
+        }
+    }
+
+    // The stress types only exist when the stress-testing feature builds the
+    // multi-entry Test Type selector.
+    #[cfg(feature = "stress-testing")]
+    #[test]
+    fn load_builder_stress_branch_maps_duration_and_concurrency_fields() {
+        use crate::tabs::LoadTab;
+        let mut tab = LoadTab::new();
+        tab.core.inputs.fields[0].value = "10.0.0.5".to_string();
+        tab.core.inputs.fields[3].value = "24".to_string();
+        tab.core.inputs.fields[4].value = "90".to_string();
+        tab.test_type_selector.select(1);
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::StressTest(p) => {
+                assert_eq!(p.flood_type, "syn");
+                assert_eq!(p.duration_secs, Some(90));
+                assert_eq!(p.threads, Some(24));
+                // The tab exposes no rate control.
+                assert_eq!(p.rate_pps, None);
+            }
+            other => panic!("expected StressTest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn graphql_builder_maps_checkboxes_and_fields_to_runtime_dto() {
+        use crate::tabs::GraphQlTab;
+        let mut tab = GraphQlTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab/graphql".to_string();
+        tab.core.inputs.fields[1].value = "24".to_string();
+        tab.core.inputs.fields[2].value = "8".to_string();
+        tab.inject_checkbox.checked = false;
+
+        let req = tab.build_run_request().expect("run request present");
+        assert_eq!(req.surface, eggsec_runtime::RuntimeSurface::TuiManual);
+        match req.task_kind {
+            TaskKind::GraphQl(p) => {
+                assert_eq!(p.introspection, Some(true));
+                assert_eq!(p.inject, Some(false));
+                assert_eq!(p.depth_bypass, Some(true));
+                assert_eq!(p.alias_overload, Some(true));
+                assert_eq!(p.concurrency, Some(24));
+                assert_eq!(p.timeout_secs, Some(8));
+            }
+            other => panic!("expected GraphQl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn oauth_builder_maps_fields_and_checkboxes_to_runtime_dto() {
+        use crate::tabs::OAuthTab;
+        let mut tab = OAuthTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab/oauth".to_string();
+        tab.core.inputs.fields[1].value = "  client-abc  ".to_string();
+        tab.core.inputs.fields[2].value = "https://app.lab/cb".to_string();
+        tab.core.inputs.fields[3].value = "17".to_string();
+        tab.core.inputs.fields[4].value = "6".to_string();
+        tab.state_test_checkbox.checked = false;
+
+        let req = tab.build_run_request().expect("run request present");
+        assert_eq!(req.surface, eggsec_runtime::RuntimeSurface::TuiManual);
+        match req.task_kind {
+            TaskKind::OAuth(p) => {
+                assert_eq!(p.client_id.as_deref(), Some("client-abc"));
+                assert_eq!(p.redirect_uri.as_deref(), Some("https://app.lab/cb"));
+                assert_eq!(p.redirect_test, Some(true));
+                assert_eq!(p.scope_test, Some(true));
+                assert_eq!(p.state_test, Some(false));
+                assert_eq!(p.grant_test, Some(true));
+                assert_eq!(p.concurrency, Some(17));
+                assert_eq!(p.timeout_secs, Some(6));
+                // The tab exposes no flow selector.
+                assert_eq!(p.flow, None);
+            }
+            other => panic!("expected OAuth, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn oauth_builder_omits_blank_optional_text_inputs() {
+        use crate::tabs::OAuthTab;
+        let mut tab = OAuthTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab/oauth".to_string();
+        tab.core.inputs.fields[1].value = "   ".to_string();
+        tab.core.inputs.fields[2].value = "".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::OAuth(p) => {
+                assert!(p.client_id.is_none(), "blank client_id must not be set");
+                assert!(
+                    p.redirect_uri.is_none(),
+                    "blank redirect_uri must not be set"
+                );
+            }
+            other => panic!("expected OAuth, got {other:?}"),
+        }
     }
 
     #[cfg(feature = "db-pentest")]
@@ -991,5 +1438,40 @@ mod tests {
         assert_eq!(detect_db_type_from_target("127.0.0.1"), None);
         assert_eq!(detect_db_type_from_target("https://h"), None);
         assert_eq!(detect_db_type_from_target(""), None);
+    }
+
+    /// Regression: `Tab::Stress` sets `AppState::Running` on Enter but had no
+    /// `TaskBuilder`, so confirming the flood type could never dispatch and
+    /// the tab hung on a spinner.
+    #[test]
+    fn stress_builder_dispatches_the_confirmed_flood_type() {
+        use crate::tabs::StressTab;
+        let mut tab = StressTab::new();
+        if let Some(field) = tab.core.inputs.fields.get_mut(0) {
+            field.value = "10.0.0.1".to_string();
+        }
+        tab.type_selector.select(1); // "syn"
+
+        let req = tab.build_run_request().expect("stress run request");
+        match req.task_kind {
+            TaskKind::StressTest(p) => {
+                assert_eq!(p.target, "10.0.0.1");
+                assert_eq!(p.flood_type, "syn");
+                assert_eq!(p.rate_pps, Some(100));
+                assert_eq!(p.duration_secs, Some(30));
+                assert_eq!(p.threads, Some(10));
+            }
+            other => panic!("expected StressTest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stress_builder_requires_a_target() {
+        use crate::tabs::StressTab;
+        let mut tab = StressTab::new();
+        if let Some(field) = tab.core.inputs.fields.get_mut(0) {
+            field.value = String::new();
+        }
+        assert!(tab.build_run_request().is_none());
     }
 }

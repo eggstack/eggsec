@@ -80,19 +80,49 @@ impl WafTab {
         self.mode_radio.selected == Some(1)
     }
 
+    /// Engine technique token for a checkbox label.
+    ///
+    /// `run_waf` (crates/eggsec/src/dispatch/fuzzer.rs) only recognises
+    /// `header`, `evasion`, `smuggling` and `all`. The checkbox labels are
+    /// operator-facing prose, so sending them verbatim matched nothing and left
+    /// every bypass flag false. Each label maps to the token for the technique
+    /// it actually describes.
+    fn technique_token(label: &str) -> Option<&'static str> {
+        match label {
+            "Header Manipulation" => Some("header"),
+            "User-Agent Rotation" | "X-Forwarded-For Spoof" | "Encoding Bypass" => Some("evasion"),
+            "Chunked Encoding" | "HTTP Smuggling" => Some("smuggling"),
+            _ => None,
+        }
+    }
+
+    /// Bypass techniques as engine tokens, de-duplicated and ordered.
     pub fn enabled_techniques(&self) -> Vec<String> {
-        self.technique_checkboxes
-            .iter()
-            .filter(|cb| cb.checked)
-            .map(|cb| cb.label.clone())
-            .collect()
+        let mut tokens: Vec<String> = Vec::new();
+        for cb in self.technique_checkboxes.iter().filter(|cb| cb.checked) {
+            if let Some(token) = Self::technique_token(&cb.label) {
+                let token = token.to_string();
+                if !tokens.contains(&token) {
+                    tokens.push(token);
+                }
+            } else {
+                // A label with no token would be silently ignored by the
+                // engine, so surface it rather than dropping it.
+                tracing::warn!(
+                    label = %cb.label,
+                    "WAF technique checkbox has no engine token; it will be ignored"
+                );
+            }
+        }
+        tokens
     }
 
     pub fn set_results(&mut self, result: WafDetectionResult) {
         self.detection_result = Some(result.clone());
-        if !self.is_bypass_mode() {
-            let _view = self.core.prepare_results();
-        }
+        // Always leave `Running`. The Mode radio can be flipped to
+        // "Detect + Bypass" while a detect-only run is in flight, and gating
+        // this on `!is_bypass_mode()` left the tab spinning forever.
+        let _view = self.core.prepare_results();
         self.update_detection_view(&result);
     }
 
@@ -636,5 +666,108 @@ impl TabInput for WafTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detection() -> WafDetectionResult {
+        WafDetectionResult {
+            waf_name: Some("Cloudflare".to_string()),
+            confidence: 80,
+            request_error: None,
+            matched_headers: vec!["server: cloudflare".to_string()],
+            matched_cookies: Vec::new(),
+            matched_patterns: Vec::new(),
+            server_header: Some("cloudflare".to_string()),
+            status_code: 403,
+        }
+    }
+
+    /// `start()` requires a target; the value has to be set through the
+    /// public field because `InputGroup` has no setter for it.
+    fn with_target() -> WafTab {
+        let mut tab = WafTab::new();
+        if let Some(field) = tab.core.inputs.fields.first_mut() {
+            field.value = "https://example.com".to_string();
+        }
+        tab.start();
+        assert!(tab.is_running());
+        tab
+    }
+
+    #[test]
+    fn test_set_results_completes_in_bypass_mode() {
+        // Mode flipped to "Detect + Bypass" while a detect-only run is in
+        // flight: the tab must still leave `Running` when the result lands.
+        let mut tab = with_target();
+        tab.mode_radio.select(1);
+        assert!(tab.is_bypass_mode());
+
+        tab.set_results(detection());
+
+        assert!(matches!(tab.core.state, AppState::Completed));
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_set_results_completes_in_detect_mode() {
+        let mut tab = with_target();
+        assert!(!tab.is_bypass_mode());
+
+        tab.set_results(detection());
+
+        assert!(matches!(tab.core.state, AppState::Completed));
+        assert!(!tab.is_running());
+    }
+
+    /// Regression: the checkbox labels were sent verbatim, but `run_waf`
+    /// only matches `header`/`evasion`/`smuggling`/`all`, so every bypass
+    /// flag stayed false and the checkboxes did nothing.
+    #[test]
+    fn enabled_techniques_emit_engine_tokens() {
+        let mut tab = WafTab::new();
+        for cb in &mut tab.technique_checkboxes {
+            cb.checked = false;
+        }
+        assert!(tab.enabled_techniques().is_empty());
+
+        for (index, expected) in [
+            (0usize, "header"),
+            (1, "evasion"),
+            (2, "evasion"),
+            (3, "evasion"),
+            (4, "smuggling"),
+            (5, "smuggling"),
+        ] {
+            for cb in &mut tab.technique_checkboxes {
+                cb.checked = false;
+            }
+            if let Some(cb) = tab.technique_checkboxes.get_mut(index) {
+                cb.checked = true;
+            }
+            assert_eq!(
+                tab.enabled_techniques(),
+                vec![expected.to_string()],
+                "checkbox {index} must map to the {expected} token"
+            );
+        }
+
+        // Every shipped label must have a token, or it would be a dead control.
+        for cb in &WafTab::new().technique_checkboxes {
+            assert!(
+                WafTab::technique_token(&cb.label).is_some(),
+                "label {:?} has no engine token",
+                cb.label
+            );
+        }
+
+        // Defaults: the two pre-checked boxes are both evasion, de-duplicated.
+        assert_eq!(
+            WafTab::new().enabled_techniques(),
+            vec!["evasion".to_string()]
+        );
     }
 }

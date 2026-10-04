@@ -28,6 +28,13 @@ use super::{CommandPaletteInput, QuickSwitchInput, UiAction};
 use crate::OverlayType;
 use crossterm::event::{KeyCode, KeyModifiers};
 
+/// True for the one key that must never be swallowed by an overlay: Ctrl-C,
+/// which bubbles out to the global quit / stop-task binding. Both the overlay
+/// decoder and its caller test this so the two layers cannot drift apart.
+pub(crate) fn is_ctrl_c(key: &crossterm::event::KeyEvent) -> bool {
+    key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c')
+}
+
 pub(crate) struct OverlayController;
 
 impl OverlayController {
@@ -41,8 +48,13 @@ impl OverlayController {
     ///
     /// If an overlay is active but the key has no binding, returns a single
     /// Noop (signals "handled at overlay layer" to prevent leak).
+    ///
+    /// Ctrl-C is the one exception: it returns an empty vec so it bubbles out
+    /// to the global shortcuts (quit / stop task). Callers must not translate
+    /// that empty result into a Noop, or Ctrl-C becomes a no-op whenever any
+    /// overlay is open.
     pub(crate) fn decode(&self, app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
+        if is_ctrl_c(key) {
             // Ctrl-C is always allowed to bubble out of overlays (historical).
             return vec![];
         }

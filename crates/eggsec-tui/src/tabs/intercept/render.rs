@@ -3,14 +3,12 @@ use super::utils::{format_bytes, truncate_str};
 use super::InterceptTab;
 use crate::components::empty_state_paragraph;
 use crate::tc;
-use eggsec::proxy::intercept::correlation::{
-    ConfidenceScorer, CorrelationEngine, CorrelationSource,
-};
+use eggsec::proxy::intercept::correlation::CorrelationSource;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Row, Table},
     Frame,
 };
 
@@ -36,7 +34,10 @@ impl InterceptTab {
             });
         let header = Row::new(header_cells).height(1);
 
-        let viewport_height = area.height.saturating_sub(3) as usize;
+        let viewport_height = (area.height.saturating_sub(3) as usize).max(1);
+        // Record the real pane height so `j`/`k`/`PageUp`/`PageDown`/`G` can
+        // scroll the list by the number of rows that are actually visible.
+        self.flow_viewport_height.set(viewport_height);
         let visible = self.visible_flows(viewport_height);
 
         let rows = visible.iter().enumerate().map(|(offset, flow)| {
@@ -647,7 +648,7 @@ impl InterceptTab {
             lines.push(Line::from(vec![
                 Span::styled("  Session: ", Style::default().fg(tc!(info))),
                 Span::raw(format!(
-                    "{} ({} of {}, [<]/[>] to cycle)",
+                    "{} ({} of {})",
                     session.host,
                     session_idx + 1,
                     self.http2_sessions.len()
@@ -866,11 +867,6 @@ impl InterceptTab {
         }
 
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![
-            Span::styled("  Keys: ", Style::default().fg(tc!(info))),
-            Span::styled("[</>]", Style::default().fg(tc!(accent))),
-            Span::raw(" cycle session"),
-        ]));
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -1381,7 +1377,7 @@ impl InterceptTab {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(tc!(border)))
             .title(
-                " Actions (←/→ navigate · Enter execute · D-Drop R-Replay F-Forward · Esc-back ",
+                " Actions (←/→ navigate · Enter execute · Esc-back · r-rules · p-perf · /-filter )",
             );
         let paragraph = ratatui::widgets::Paragraph::new(Line::from(spans)).block(block);
         f.render_widget(paragraph, area);
@@ -1477,50 +1473,5 @@ impl InterceptTab {
         let help_text = "Enter-apply  Esc-cancel  Tab-switch focus";
         let help_para = Paragraph::new(help_text).style(Style::default().fg(tc!(muted)));
         f.render_widget(help_para, modal_layout[6]);
-    }
-
-    pub(super) fn clone_for_render(&self) -> Self {
-        InterceptTab {
-            flows: self.flows.clone(),
-            selected_flow: self.selected_flow,
-            detail_pane: self.detail_pane,
-            focus_area: self.focus_area,
-            current_view: self.current_view,
-            state: self.state.clone(),
-            results_view: crate::components::ScrollableText::new("Details"),
-            error: self.error.clone(),
-            session: self.session.clone(),
-            dry_run: self.dry_run,
-            listen_addr: self.listen_addr.clone(),
-            manipulation_history: self.manipulation_history.clone(),
-            table_state: TableState::default(),
-            action_bar_index: self.action_bar_index,
-            max_flows: self.max_flows,
-            edit_modal: self.edit_modal.clone(),
-            pending_action: None,
-            actions_log: self.actions_log.clone(),
-            selected_protocol_view: self.selected_protocol_view.clone(),
-            selected_rule_view: self.selected_rule_view.clone(),
-            scroll_offset: self.scroll_offset,
-            performance_mode: self.performance_mode,
-            cached_detail: None,
-            debounce: DebounceState::new(),
-            ws_sessions: self.ws_sessions.clone(),
-            http2_sessions: self.http2_sessions.clone(),
-            grpc_sessions: self.grpc_sessions.clone(),
-            grpc_streaming_states: self.grpc_streaming_states.clone(),
-            grpc_security_findings: self.grpc_security_findings.clone(),
-            correlation_context: self.correlation_context.clone(),
-            correlation_engine: CorrelationEngine::new(),
-            confidence_scorer: ConfidenceScorer::default(),
-            temporal_correlations: self.temporal_correlations.clone(),
-            behavioral_matches: self.behavioral_matches.clone(),
-            filter_query: self.filter_query.clone(),
-            filter_field: self.filter_field,
-            filter_active: self.filter_active,
-            selected_http2_session: self.selected_http2_session,
-            selected_grpc_session: self.selected_grpc_session,
-            stream_mux_scroll: self.stream_mux_scroll,
-        }
     }
 }
