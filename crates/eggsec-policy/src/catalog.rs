@@ -693,7 +693,15 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         required_features: &["database"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::DatabaseAssessment],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        // Not a network-probing operation: the destination is an
+        // operator-supplied connection parameter or a local handle, not a scan
+        // target. `ExplicitScopeRequired` was self-contradictory here, because
+        // `canonical_target()` is `None` for this kind and the policy could
+        // never be satisfied -- so the operation was unrunnable on every
+        // strict surface. `OptionalTarget` relaxes only the no-target branch:
+        // a caller that *does* supply a target still has it checked against the
+        // loaded scope rules.
+        target_policy: TargetPolicyKind::OptionalTarget,
         manual_exposable: true,
         tui_exposable: true,
         mcp_exposable: true,
@@ -710,7 +718,15 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         required_features: &["external-integrations"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::ActiveProbe],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        // Not a network-probing operation: the destination is an
+        // operator-supplied connection parameter or a local handle, not a scan
+        // target. `ExplicitScopeRequired` was self-contradictory here, because
+        // `canonical_target()` is `None` for this kind and the policy could
+        // never be satisfied -- so the operation was unrunnable on every
+        // strict surface. `OptionalTarget` relaxes only the no-target branch:
+        // a caller that *does* supply a target still has it checked against the
+        // loaded scope rules.
+        target_policy: TargetPolicyKind::OptionalTarget,
         manual_exposable: true,
         tui_exposable: true,
         mcp_exposable: true,
@@ -727,7 +743,15 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         required_features: &["finding-workflow"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::ActiveProbe],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        // Not a network-probing operation: the destination is an
+        // operator-supplied connection parameter or a local handle, not a scan
+        // target. `ExplicitScopeRequired` was self-contradictory here, because
+        // `canonical_target()` is `None` for this kind and the policy could
+        // never be satisfied -- so the operation was unrunnable on every
+        // strict surface. `OptionalTarget` relaxes only the no-target branch:
+        // a caller that *does* supply a target still has it checked against the
+        // loaded scope rules.
+        target_policy: TargetPolicyKind::OptionalTarget,
         manual_exposable: true,
         tui_exposable: true,
         mcp_exposable: true,
@@ -995,11 +1019,28 @@ mod operation_metadata_tests {
         }
     }
 
+    /// An agent/MCP-exposed operation that can take a target must require an
+    /// explicit scope, so no target reaches the network unscope-checked.
+    ///
+    /// The original form of this test keyed on `target_policy != NoTarget`,
+    /// which was a proxy for "has a target". `TARGET_LESS_OPERATIONS` is the
+    /// explicit exception: those operations have no target of their own --
+    /// `storage`, `integrations` and `workflow` connect to an
+    /// operator-supplied database, a server-side integration config, or a local
+    /// handle -- so demanding an explicit scope made them unrunnable on every
+    /// strict surface, since `canonical_target()` is `None` and the policy
+    /// could never be satisfied.
+    ///
+    /// What is deliberately *not* relaxed: if such a caller does supply a
+    /// target, `OptionalTarget` still carries it into the descriptor, so the
+    /// enforcement context keeps checking it against the loaded scope. See
+    /// `relaxed_operations_still_carry_a_supplied_target`.
     #[test]
     fn agent_exposable_ops_require_explicit_scope() {
         for m in all_operation_metadata() {
             if (m.agent_exposable || m.mcp_exposable)
                 && m.target_policy != TargetPolicyKind::NoTarget
+                && !TARGET_LESS_OPERATIONS.contains(&m.id)
             {
                 assert!(
                     matches!(
@@ -1271,4 +1312,108 @@ mod operation_metadata_tests {
             }
         }
     }
+
+    /// Operations with no network target must be able to build a descriptor.
+    ///
+    /// `storage`, `integrations` and `workflow` are relaxed to
+    /// `OptionalTarget`: their destinations are operator-supplied connection
+    /// parameters or local handles, not scan targets, so
+    /// `ExplicitScopeRequired` was unsatisfiable -- `canonical_target()` is
+    /// `None` for these kinds, so descriptor creation failed with
+    /// `MissingTarget` and the operations were unrunnable on every strict
+    /// surface. This asserts they now build.
+    #[test]
+    fn target_less_operations_build_a_descriptor_without_a_target() {
+        for op in ["storage", "integrations", "workflow"] {
+            let metadata = metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} missing"));
+            let desc = metadata
+                .try_descriptor_for_target(None)
+                .unwrap_or_else(|e| panic!("{op} should build with no target, got {e}"));
+            assert_eq!(desc.operation, op);
+            assert!(
+                !desc.requires_explicit_scope,
+                "{op} must not demand a scope it can never be given a target for"
+            );
+        }
+    }
+
+    /// Relaxing the no-target branch must not relax a *supplied* target.
+    ///
+    /// `OptionalTarget` still carries a caller-supplied target into the
+    /// descriptor, so the enforcement context keeps scope-checking it. If this
+    /// ever starts returning a descriptor with a dropped target, the relaxation
+    /// has silently become a scope bypass.
+    #[test]
+    fn relaxed_operations_still_carry_a_supplied_target() {
+        for op in ["storage", "integrations", "workflow"] {
+            let metadata = metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} missing"));
+            let desc = metadata
+                .try_descriptor_for_target(Some("10.0.0.5"))
+                .unwrap_or_else(|e| panic!("{op} should accept a target, got {e}"));
+            assert_eq!(
+                desc.target.as_deref(),
+                Some("10.0.0.5"),
+                "{op} dropped a supplied target instead of carrying it"
+            );
+        }
+    }
+
+    /// Interface-bound sniffing keeps its fail-closed posture.
+    ///
+    /// `packet` and `wireless` stay `ExplicitScopeRequired`: they have no target
+    /// to scope against, and unlike the relaxed set they *are* sensitive
+    /// sniffing operations, so requiring a loaded scope is the only lever an
+    /// operator has over them.
+    #[test]
+    fn interface_bound_operations_still_fail_closed() {
+        for op in ["packet", "wireless", "wireless-deauth"] {
+            let metadata = metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} missing"));
+            let err = metadata
+                .try_descriptor_for_target(None)
+                .err()
+                .unwrap_or_else(|| panic!("{op} should still refuse a target-less run"));
+            assert!(
+                matches!(err, DescriptorError::MissingTarget { .. }),
+                "{op} failed for the wrong reason: {err}"
+            );
+            // And a supplied target is still accepted and scope-checkable.
+            let desc = metadata
+                .try_descriptor_for_target(Some("10.0.0.5"))
+                .unwrap_or_else(|e| panic!("{op} should accept a target, got {e}"));
+            assert!(
+                desc.requires_explicit_scope,
+                "{op} lost its scope requirement"
+            );
+        }
+    }
+
+    /// Every operation whose target policy demands a scope must actually be
+    /// able to receive one.
+    ///
+    /// This is the invariant that made the original bug possible: a policy
+    /// demanding an explicit scope on an operation with no target can never be
+    /// satisfied. The `OPTIONAL_TARGET_OPERATIONS` set below is the deliberate
+    /// exception -- it is asserted rather than inferred, so adding a new
+    /// target-less operation to it is a conscious act.
+    #[test]
+    fn scope_requiring_policies_are_internally_consistent() {
+        for metadata in ALL_OPERATION_METADATA {
+            if metadata.target_policy != TargetPolicyKind::ExplicitScopeRequired {
+                continue;
+            }
+            assert!(
+                !TARGET_LESS_OPERATIONS.contains(&metadata.id),
+                "{} declares ExplicitScopeRequired but is target-less: the \
+                 policy can never be satisfied, so the operation is unrunnable \
+                 on strict surfaces. Either give it a target or relax the policy.",
+                metadata.id
+            );
+        }
+    }
+
+    /// The set of operations that are target-less by nature.
+    ///
+    /// Deliberately explicit rather than derived: an operation joining this list
+    /// loses a fail-closed guard, so it should be a visible edit.
+    const TARGET_LESS_OPERATIONS: &[&str] = &["storage", "integrations", "workflow"];
 }

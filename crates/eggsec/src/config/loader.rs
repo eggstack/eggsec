@@ -288,9 +288,11 @@ mod tests {
     /// change must not break the ordinary explicit-scope workflow.
     #[test]
     fn explicit_existing_scope_path_still_loads() {
-        let dir = std::env::temp_dir().join(format!("eggsec-scope-ok-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("create temp dir");
-        let path = dir.join("scope.toml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("scope.toml");
         std::fs::write(&path, "[[allowed_targets]]\npattern = \"127.0.0.1\"\n")
             .expect("write scope");
         let loaded = load_scope(Some(path.to_str().expect("utf8 path")));
@@ -345,9 +347,11 @@ mod tests {
 
     #[test]
     fn test_load_config_valid_toml() {
-        let dir = std::env::temp_dir().join("eggsec_test_valid");
-        let _ = std::fs::create_dir_all(&dir);
-        let config_path = dir.join("valid.toml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let config_path = dir.path().join("valid.toml");
 
         let toml_content = r#"
 [http]
@@ -375,9 +379,11 @@ stealth_mode = true
 
     #[test]
     fn test_load_config_invalid_toml() {
-        let dir = std::env::temp_dir().join("eggsec_test_invalid");
-        let _ = std::fs::create_dir_all(&dir);
-        let config_path = dir.join("invalid.toml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let config_path = dir.path().join("invalid.toml");
 
         std::fs::write(&config_path, "[http\ninvalid toml").unwrap();
 
@@ -389,9 +395,11 @@ stealth_mode = true
 
     #[test]
     fn test_load_config_partial() {
-        let dir = std::env::temp_dir().join("eggsec_test_partial");
-        let _ = std::fs::create_dir_all(&dir);
-        let config_path = dir.join("partial.toml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let config_path = dir.path().join("partial.toml");
 
         let toml_content = r#"
 [http]
@@ -409,9 +417,11 @@ timeout_secs = 60
 
     #[test]
     fn test_load_config_yaml_format() {
-        let dir = std::env::temp_dir().join("eggsec_test_yaml");
-        let _ = std::fs::create_dir_all(&dir);
-        let config_path = dir.join("config.yaml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let config_path = dir.path().join("config.yaml");
 
         let yaml_content = r#"
 http:
@@ -432,9 +442,11 @@ scan:
 
     #[test]
     fn test_load_config_empty_toml() {
-        let dir = std::env::temp_dir().join("eggsec_test_empty");
-        let _ = std::fs::create_dir_all(&dir);
-        let config_path = dir.join("empty.toml");
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let config_path = dir.path().join("empty.toml");
 
         std::fs::write(&config_path, "").unwrap();
 
@@ -446,11 +458,14 @@ scan:
     }
 
     #[test]
-    #[test]
     fn test_load_scope_with_source_cli_path_returns_cli_scope_file() {
-        let dir = std::env::temp_dir().join("eggsec_test_scope_source");
-        let _ = std::fs::create_dir_all(&dir);
-        let scope_path = dir.join("scope.toml");
+        // A `TempDir` rather than a fixed path under the shared system temp
+        // directory. A fixed name races with any *other* concurrently running
+        // `cargo test` for this crate: one run's cleanup deletes the file the
+        // other is still reading, which shows up as a spurious
+        // "Scope file not found" failure.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let scope_path = dir.path().join("scope.toml");
         std::fs::write(
             &scope_path,
             r#"
@@ -467,8 +482,7 @@ pattern = "example.com"
         assert!(loaded.path.is_some());
         assert!(loaded.scope.require_explicit_scope);
         assert_eq!(loaded.scope.allowed_targets.len(), 1);
-
-        let _ = std::fs::remove_dir_all(&dir);
+        // `dir` cleans itself up.
     }
 
     #[test]
@@ -489,9 +503,11 @@ pattern = "example.com"
     #[test]
     fn test_find_config_file_returns_none_when_no_files() {
         let original_dir = std::env::current_dir().unwrap();
-        let temp_dir = std::env::temp_dir().join("eggsec_test_no_config");
-        let _ = std::fs::create_dir_all(&temp_dir);
-        let _ = std::env::set_current_dir(&temp_dir);
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let _ = std::env::set_current_dir(temp_dir.path());
 
         let result = find_config_file(None);
         let _ = std::env::set_current_dir(original_dir);
@@ -503,9 +519,11 @@ pattern = "example.com"
     #[test]
     fn test_find_scope_file_returns_none_when_no_files() {
         let original_dir = std::env::current_dir().unwrap();
-        let temp_dir = std::env::temp_dir().join("eggsec_test_no_scope");
-        let _ = std::fs::create_dir_all(&temp_dir);
-        let _ = std::env::set_current_dir(&temp_dir);
+        // Unique per test run: a fixed name under the shared system temp
+        // directory races with any other concurrently running `cargo test`
+        // for this crate, and the loser sees a spurious "file not found".
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let _ = std::env::set_current_dir(temp_dir.path());
 
         let result = find_scope_file(None);
         let _ = std::env::set_current_dir(original_dir);
