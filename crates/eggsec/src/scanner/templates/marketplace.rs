@@ -353,24 +353,26 @@ mod tests {
         assert!(validate_template_id("simple_id").is_ok());
     }
 
+    /// A `TempDir` rather than a fixed path under the shared system temp: two
+    /// concurrent runs (or a second checkout) would otherwise share one
+    /// directory and race on create/remove. The cache path is never actually
+    /// written here -- both cases are rejected during validation.
     #[test]
     fn test_get_cached_template_rejects_traversal_id() {
-        let dir = std::env::temp_dir().join("eggsec_test_marketplace_get");
-        let _ = std::fs::create_dir_all(&dir);
+        let dir = tempfile::tempdir().expect("create temp dir");
         let mp = TemplateMarketplace::new("https://templates.example.com")
             .unwrap()
-            .with_cache_dir(dir);
+            .with_cache_dir(dir.path().to_path_buf());
         assert!(mp.get_cached_template("../escape").is_err());
         assert!(mp.get_cached_template("ok/../escape").is_err());
     }
 
     #[test]
     fn test_validate_template_id_rejects_save_traversal() {
-        let dir = std::env::temp_dir().join("eggsec_test_marketplace_save");
-        let _ = std::fs::create_dir_all(&dir);
+        let dir = tempfile::tempdir().expect("create temp dir");
         let _mp = TemplateMarketplace::new("https://templates.example.com")
             .unwrap()
-            .with_cache_dir(dir);
+            .with_cache_dir(dir.path().to_path_buf());
         assert!(validate_template_id("../escape").is_err());
     }
 }

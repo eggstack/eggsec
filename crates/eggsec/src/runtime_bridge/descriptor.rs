@@ -279,6 +279,11 @@ mod tests {
         assert_eq!(desc.operation, "compliance");
     }
 
+    /// `storage` / `integrations` / `workflow` are `OptionalTarget`: they carry
+    /// no network target of their own, so building a descriptor with no target
+    /// must succeed. `EnforcementContext` still authorizes them, and a target
+    /// the caller *does* supply is still scope-checked -- see
+    /// `optional_target_ops_carry_a_supplied_target_for_scope_checking`.
     #[test]
     fn storage_descriptor() {
         let req = make_request(TaskKind::Storage(StorageParams {
@@ -286,12 +291,9 @@ mod tests {
             path: None,
             ..Default::default()
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).expect("target-less op must build");
+        assert_eq!(desc.operation, "storage");
+        assert_eq!(desc.target, None);
     }
 
     #[test]
@@ -300,12 +302,9 @@ mod tests {
             integration_type: "jira".into(),
             config: None,
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).expect("target-less op must build");
+        assert_eq!(desc.operation, "integrations");
+        assert_eq!(desc.target, None);
     }
 
     #[test]
@@ -314,12 +313,9 @@ mod tests {
             workflow_id: None,
             steps: None,
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).expect("target-less op must build");
+        assert_eq!(desc.operation, "workflow");
+        assert_eq!(desc.target, None);
     }
 
     #[test]
@@ -432,16 +428,58 @@ mod tests {
     #[test]
     fn descriptor_requires_explicit_scope_for_agent_exposable_ops() {
         for meta in ALL_OPERATION_METADATA {
+            // Only `ExplicitScopeRequired` demands an explicit scope from the
+            // descriptor. Asserting it for every op carrying a target would
+            // also catch `OptionalTarget` ops, which legitimately run with or
+            // without one -- a supplied target there is still scope-checked,
+            // just not via this flag. Keep this list in step with
+            // `TARGET_LESS_OPERATIONS` in the catalog and with the
+            // `agent_exposable_ops_require_explicit_scope` guard.
             if meta.agent_exposable
-                && meta.target_policy != crate::config::TargetPolicyKind::NoTarget
+                && meta.target_policy == crate::config::TargetPolicyKind::ExplicitScopeRequired
             {
                 let desc = meta.descriptor_for_target(Some("https://example.com".into()));
                 assert!(
                     desc.requires_explicit_scope,
-                    "agent-exposable op '{}' with target should require explicit scope",
+                    "ExplicitScopeRequired op '{}' with a target must require explicit scope",
                     meta.id
                 );
             }
+        }
+    }
+
+    /// The complement of the target-less relaxation: an `OptionalTarget` op
+    /// that *is* given a target must carry it into the descriptor, otherwise
+    /// there is nothing left for the scope check to inspect.
+    #[test]
+    fn optional_target_ops_carry_a_supplied_target_for_scope_checking() {
+        for meta in ALL_OPERATION_METADATA {
+            if meta.target_policy == crate::config::TargetPolicyKind::OptionalTarget {
+                let desc = meta.descriptor_for_target(Some("10.0.0.5".into()));
+                assert_eq!(
+                    desc.target.as_deref(),
+                    Some("10.0.0.5"),
+                    "op '{}' must carry a supplied target so it can be scope-checked",
+                    meta.id
+                );
+            }
+        }
+    }
+
+    /// `requires_explicit_scope` must not become a blanket bypass: an op that
+    /// the catalog marks strict still demands one, whatever else it is.
+    #[test]
+    fn strict_ops_still_demand_explicit_scope() {
+        for id in ["packet", "wireless", "wireless-deauth"] {
+            let meta = ALL_OPERATION_METADATA
+                .iter()
+                .find(|m| m.id == id)
+                .unwrap_or_else(|| panic!("{id} must exist in the catalog"));
+            assert_eq!(
+                meta.target_policy,
+                crate::config::TargetPolicyKind::ExplicitScopeRequired,
+                "{id} must stay strict after the target-less relaxation"
+            );
         }
     }
 }
