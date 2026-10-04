@@ -177,6 +177,8 @@ async fn canonical_approved_execution_uses_approval_scope() {
         connections: Some(1),
         duration_secs: Some(5),
         rate_limit: None,
+        body: None,
+        headers: vec![],
     };
     let canonical = CanonicalOperationRequest::LoadTest(raw);
     let (tx, _rx) = tokio::sync::mpsc::channel(16);

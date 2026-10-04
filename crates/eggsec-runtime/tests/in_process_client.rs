@@ -156,6 +156,7 @@ fn endpoint_scan_request() -> RunRequest {
             wordlist: None,
             concurrency: None,
             timeout_secs: None,
+            include_404: None,
         }),
         requested_by: None,
         surface: RuntimeSurface::McpServer,

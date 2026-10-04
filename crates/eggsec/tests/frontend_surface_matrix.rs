@@ -657,6 +657,8 @@ fn runtime_task_operation_ids_agree_between_owners() {
         TaskKind::Pipeline(PipelineParams {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),
@@ -704,6 +706,7 @@ fn runtime_task_operation_ids_agree_between_owners() {
         TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }),
         TaskKind::Integrations(IntegrationsParams {
             integration_type: "jira".into(),
@@ -778,6 +781,7 @@ fn runtime_target_extraction_agrees_between_owners() {
         TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }),
         TaskKind::Wireless(WirelessParams {
             interface: None,

@@ -132,6 +132,8 @@ mod tests {
         let req = make_request(TaskKind::Pipeline(PipelineParams {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "pipeline");
@@ -282,6 +284,7 @@ mod tests {
         let req = make_request(TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());

@@ -10,9 +10,21 @@ async fn stop_stage_monitor(handle: tokio::task::JoinHandle<()>) {
     }
 }
 
+/// Where a pipeline report should be written, already resolved and contained.
+///
+/// The path is validated by the caller *before* the scan starts, so an
+/// out-of-bounds destination fails the operation in seconds rather than after
+/// a multi-minute assessment.
+#[derive(Debug, Clone)]
+pub struct PipelineOutput {
+    pub path: std::path::PathBuf,
+    pub format: crate::types::OutputFormat,
+}
+
 pub async fn run_pipeline(
     target: String,
     profile: ScanProfile,
+    output: Option<PipelineOutput>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::pipeline::Pipeline;
@@ -28,6 +40,21 @@ pub async fn run_pipeline(
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => return Err(anyhow::anyhow!("Pipeline timed out after 300s")),
         };
+
+    if let Some(output) = &output {
+        // An explicitly requested artifact that cannot be written is a failed
+        // operation, not a silent one: the caller asked for a durable file and
+        // must learn that it does not exist.
+        crate::pipeline::write_output(&report, &output.path.to_string_lossy(), Some(output.format))
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "pipeline report write to {} failed: {e}",
+                    output.path.display()
+                )
+            })?;
+        tracing::info!(path = %output.path.display(), "pipeline report written");
+    }
 
     send_progress(&progress_tx, stages_count, stages_count.max(1)).await;
     Ok(TaskResult::Pipeline(report))

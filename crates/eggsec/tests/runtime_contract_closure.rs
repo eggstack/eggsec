@@ -78,6 +78,8 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::Pipeline(PipelineParams {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),
@@ -125,6 +127,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }),
         TaskKind::Integrations(IntegrationsParams {
             integration_type: "jira".into(),
@@ -387,6 +390,7 @@ fn no_target_and_interface_families_fail_descriptor_explicitly() {
         TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }),
         TaskKind::Integrations(IntegrationsParams {
             integration_type: "jira".into(),

@@ -196,6 +196,8 @@ mod tests {
                     duration_secs: Some(30),
                     rate_limit: None,
                     requests: None,
+                    body: None,
+                    headers: None,
                 }),
                 requested_by: None,
                 surface: RuntimeSurface::TuiManual,

@@ -712,6 +712,8 @@ mod tests {
             connections: None,
             duration_secs: None,
             rate_limit: None,
+            body: None,
+            headers: None,
         });
         assert_eq!(tab_for_task_kind(&kind), Tab::Load);
     }

@@ -49,6 +49,7 @@ pub async fn run_endpoint_scan(
     concurrency: usize,
     timeout: std::time::Duration,
     wordlist: Option<String>,
+    include_404: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
@@ -71,7 +72,7 @@ pub async fn run_endpoint_scan(
             endpoints,
             concurrency,
             timeout_duration: timeout,
-            include_404: false,
+            include_404,
             tui_mode: true,
             spoof_config: std::sync::Arc::new(SpoofConfig::default()),
             verify_tls: true,

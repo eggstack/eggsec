@@ -515,10 +515,7 @@ impl CanonicalOperationRequest {
             K::Hunt(p) => Self::Hunt(p.clone()),
             K::Browser(p) => Self::Browser(p.clone()),
             K::Compliance(p) => Self::Compliance(p.clone()),
-            K::Storage(p) => Self::Storage(crate::operation_request::StorageRequest {
-                storage_type: p.storage_type.clone(),
-                path: p.path.clone(),
-            }),
+            K::Storage(p) => Self::Storage(adapters::storage_from_runtime(p)),
             K::Integrations(p) => Self::Integrations(p.clone()),
             K::Workflow(p) => Self::Workflow(p.clone()),
             K::Vuln(p) => Self::Vuln(p.clone()),
@@ -1175,6 +1172,9 @@ async fn execute_canonical_inner(
             };
             super::network::run_load_test_with_scope(
                 n.target,
+                n.method,
+                n.body,
+                n.headers,
                 n.requests,
                 n.concurrency,
                 timeout,
@@ -1234,6 +1234,7 @@ async fn execute_canonical_inner(
                 n.concurrency,
                 timeout,
                 n.wordlist,
+                n.include_404,
                 fanout_tx.clone(),
             )
             .await
@@ -1354,7 +1355,72 @@ async fn execute_canonical_inner(
                     });
                 }
             };
-            super::recon::run_pipeline(n.target, profile, fanout_tx.clone())
+            // Output destination is resolved and containment-checked *before*
+            // the scan runs, so a bad path costs seconds rather than a full
+            // assessment. A wire-supplied path is relative to the configured
+            // export directory and may not escape it.
+            let output = match (n.output_file.as_deref(), n.output_format) {
+                (Some(raw_path), format) => {
+                    let format = match format {
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Pretty => {
+                            crate::types::OutputFormat::Pretty
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Json => {
+                            crate::types::OutputFormat::Json
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Compact => {
+                            crate::types::OutputFormat::Compact
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Html => {
+                            crate::types::OutputFormat::Html
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Csv => {
+                            crate::types::OutputFormat::Csv
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Sarif => {
+                            crate::types::OutputFormat::Sarif
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Junit => {
+                            crate::types::OutputFormat::Junit
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Markdown => {
+                            crate::types::OutputFormat::Markdown
+                        }
+                    };
+                    let config = crate::config::load_config(None::<&str>)
+                        .inspect_err(|e| {
+                            tracing::warn!(
+                                error = %e,
+                                "Failed to load config for pipeline output base, using default"
+                            );
+                        })
+                        .unwrap_or_default();
+                    let base = config
+                        .paths
+                        .export_dir
+                        .as_deref()
+                        .unwrap_or(eggsec_core::constants::DEFAULT_EXPORT_DIR);
+                    match crate::utils::validation::validate_path_string(
+                        std::path::Path::new(base),
+                        raw_path,
+                    ) {
+                        Ok(path) => Some(super::recon::PipelineOutput { path, format }),
+                        Err(e) => {
+                            // Early return must still release the progress
+                            // bridge so the forwarder cannot outlive this call.
+                            drop(fanout_tx);
+                            forwarder.abort();
+                            return Err(ExecutionError::InvalidRequest {
+                                operation_id: operation_id.clone(),
+                                reason: format!("invalid pipeline output_file '{raw_path}': {e}"),
+                            });
+                        }
+                    }
+                }
+                // Format without a destination has nothing to render into.
+                (None, _) => None,
+            };
+            super::recon::run_pipeline(n.target, profile, output, fanout_tx.clone())
                 .await
                 .map_err(|e| ExecutionError::ExecutionFailed {
                     operation_id: operation_id.clone(),
@@ -1575,19 +1641,41 @@ async fn execute_canonical_inner(
             }
         }
         CanonicalOperationRequest::Storage(raw) => {
-            raw.normalize()
+            let n = raw
+                .normalize()
                 .map_err(|e| ExecutionError::InvalidRequest {
                     operation_id: operation_id.clone(),
                     reason: e.to_string(),
                 })?;
             #[cfg(feature = "database")]
             {
+                // The password is resolved here, from the environment, and
+                // never travels on the wire or into a `TaskSnapshot`.
+                let password = match n.password_env.as_deref() {
+                    Some(var) => std::env::var(var).unwrap_or_else(|e| {
+                        tracing::warn!(
+                            env_var = var,
+                            error = %e,
+                            "storage password_env is unset; connecting without a password"
+                        );
+                        String::new()
+                    }),
+                    None => String::new(),
+                };
+                let config = crate::storage::StorageConfig {
+                    host: n.host,
+                    port: n.port,
+                    database: n.database,
+                    username: n.username,
+                    password: crate::types::SensitiveString::new(password),
+                    max_connections: n.max_connections,
+                };
                 super::security::run_storage_task(
-                    crate::storage::StorageConfig::default(),
-                    "read".to_string(),
-                    None,
-                    None,
-                    None,
+                    config,
+                    n.mode,
+                    n.scan_id,
+                    n.cve_id,
+                    n.severity_filter,
                     fanout_tx.clone(),
                 )
                 .await
@@ -1598,7 +1686,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "database"))]
             {
-                let _ = &fanout_tx;
+                drop(n);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "database".to_string(),
@@ -1907,6 +1995,8 @@ mod tests {
         let pipe = CanonicalOperationRequest::Pipeline(crate::operation_request::PipelineRequest {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
         });
         assert_eq!(pipe.operation_id(), "pipeline");
     }
@@ -1976,6 +2066,8 @@ mod tests {
                 TaskKind::Pipeline(PipelineParams {
                     target: "https://example.com".into(),
                     profile: None,
+                    output_format: None,
+                    output_file: None,
                 }),
                 "pipeline",
             ),

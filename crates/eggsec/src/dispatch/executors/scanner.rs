@@ -52,6 +52,12 @@ impl OperationExecutor for ScannerExecutor {
                         10,
                         timeout,
                         None,
+                        // This adapter receives only an `OperationDescriptor`,
+                        // with no params map, so it has nothing to read
+                        // `include_404` from. Keep the previous behaviour
+                        // rather than guessing; the canonical and TUI paths
+                        // carry the real value.
+                        false,
                         progress_tx,
                     )
                     .await

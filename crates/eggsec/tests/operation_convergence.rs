@@ -10,8 +10,8 @@
 use eggsec::operation_request::{runtime_adapters, validate_tool_params};
 use eggsec::operation_request::{
     AuthTestRequest, DbPentestRequest, EndpointScanRequest, FingerprintRequest, FuzzRequest,
-    GraphQlRequest, LoadTestRequest, OAuthRequest, PipelineRequest, PortScanRequest, ReconRequest,
-    StorageRequest, WafDetectRequest, WafStressRequest,
+    GraphQlRequest, LoadTestRequest, OAuthRequest, PipelineOutputFormat, PipelineRequest,
+    PortScanRequest, ReconRequest, StorageRequest, WafDetectRequest, WafStressRequest,
 };
 
 #[test]
@@ -57,12 +57,16 @@ fn scanner_endpoint_and_fingerprint_converge() {
         concurrency: None,
         timeout_secs: None,
         wordlist: None,
+        include_404: Some(true),
     }
     .normalize()
     .unwrap();
     // Canonical default is 20 (CLI), not the legacy runtime 10.
     assert_eq!(endpoint.concurrency, 20);
     assert_eq!(endpoint.timeout_secs, 10);
+    // The flag used to be hardcoded false by the canonical dispatch path, so
+    // both the CLI's `--include-404` and the TUI's checkbox were ignored.
+    assert!(endpoint.include_404);
 
     let runtime = runtime_adapters::endpoint_scan_from_runtime(
         &eggsec_runtime::request::EndpointScanParams {
@@ -71,11 +75,25 @@ fn scanner_endpoint_and_fingerprint_converge() {
             wordlist: None,
             concurrency: None,
             timeout_secs: None,
+            include_404: Some(true),
         },
     )
     .normalize()
     .unwrap();
     assert_eq!(runtime, endpoint);
+
+    // Absent must normalize to the conservative default (exclude 404s), which
+    // is what an omitted CLI `--include-404` implies.
+    let without_flag = EndpointScanRequest {
+        target: "https://example.com".into(),
+        concurrency: None,
+        timeout_secs: None,
+        wordlist: None,
+        include_404: None,
+    }
+    .normalize()
+    .unwrap();
+    assert!(!without_flag.include_404);
 
     let fp = FingerprintRequest {
         target: "example.com".into(),
@@ -162,6 +180,8 @@ fn loadtest_requests_vs_connections_converge() {
         connections: Some(10),
         duration_secs: None,
         rate_limit: None,
+        body: None,
+        headers: vec![],
     }
     .normalize()
     .unwrap();
@@ -175,6 +195,8 @@ fn loadtest_requests_vs_connections_converge() {
         connections: Some(25),
         duration_secs: None,
         rate_limit: None,
+        body: None,
+        headers: vec![],
     }
     .normalize()
     .unwrap();
@@ -188,10 +210,49 @@ fn loadtest_requests_vs_connections_converge() {
             connections: Some(25),
             duration_secs: None,
             rate_limit: None,
+            body: None,
+            headers: None,
         })
         .normalize()
         .unwrap();
     assert_eq!(runtime.requests, 25);
+}
+
+/// `method`/`body`/`headers` must survive the runtime wire DTO unchanged.
+///
+/// Regression guard: all three were accepted by the wire DTO and silently
+/// dropped before reaching the runner, so a load test issued over the daemon,
+/// agent, REST or MCP surface ran as a bodyless GET regardless of the request.
+#[test]
+fn loadtest_request_shape_converges_across_wire_dto() {
+    let canonical = LoadTestRequest {
+        target: "https://example.com".into(),
+        method: Some("post".into()),
+        requests: Some(10),
+        connections: Some(2),
+        duration_secs: None,
+        rate_limit: None,
+        body: Some("{\"probe\":1}".into()),
+        headers: vec!["X-Probe: eggsec".into()],
+    };
+    let normalized = canonical.normalize().unwrap();
+    // Method is canonicalized to uppercase; headers to `Name:Value`.
+    assert_eq!(normalized.method, "POST");
+    assert_eq!(normalized.body.as_deref(), Some("{\"probe\":1}"));
+    assert_eq!(normalized.headers, vec!["X-Probe:eggsec".to_string()]);
+
+    let runtime =
+        runtime_adapters::load_test_from_runtime(&eggsec_runtime::request::LoadTestParams {
+            target: "https://example.com".into(),
+            method: "post".into(),
+            requests: Some(10),
+            connections: Some(2),
+            duration_secs: None,
+            rate_limit: None,
+            body: Some("{\"probe\":1}".into()),
+            headers: Some(vec!["X-Probe: eggsec".into()]),
+        });
+    assert_eq!(runtime.normalize().unwrap(), normalized);
 }
 
 #[test]
@@ -199,6 +260,8 @@ fn pipeline_profile_rejects_unknown() {
     let ok = PipelineRequest {
         target: "https://example.com".into(),
         profile: Some("web".into()),
+        output_format: None,
+        output_file: None,
     }
     .normalize()
     .unwrap();
@@ -207,6 +270,8 @@ fn pipeline_profile_rejects_unknown() {
     let default = PipelineRequest {
         target: "https://example.com".into(),
         profile: None,
+        output_format: None,
+        output_file: None,
     }
     .normalize()
     .unwrap();
@@ -215,8 +280,98 @@ fn pipeline_profile_rejects_unknown() {
     let bad = PipelineRequest {
         target: "https://example.com".into(),
         profile: Some("bogus-profile".into()),
+        output_format: None,
+        output_file: None,
     };
     assert!(bad.normalize().is_err());
+}
+
+/// `output_format`/`output_file` must survive the wire DTO and normalize to a
+/// concrete format.
+///
+/// Regression guard: the scan tab has shown an output-file field and an output
+/// format selector for the whole life of the tab, and neither ever reached the
+/// engine — the fields did not exist on the wire DTO.
+#[test]
+fn pipeline_output_converges_across_wire_dto() {
+    let canonical = PipelineRequest {
+        target: "https://example.com".into(),
+        profile: Some("web".into()),
+        output_format: Some("SARIF".into()),
+        output_file: Some("  reports/scan.sarif  ".into()),
+    };
+    let normalized = canonical.normalize().unwrap();
+    assert_eq!(normalized.output_format, PipelineOutputFormat::Sarif);
+    // Surrounding whitespace is dropped, not shipped.
+    assert_eq!(
+        normalized.output_file.as_deref(),
+        Some("reports/scan.sarif")
+    );
+
+    let runtime =
+        runtime_adapters::pipeline_from_runtime(&eggsec_runtime::request::PipelineParams {
+            target: "https://example.com".into(),
+            profile: Some("web".into()),
+            output_format: Some("SARIF".into()),
+            output_file: Some("  reports/scan.sarif  ".into()),
+        });
+    assert_eq!(runtime.normalize().unwrap(), normalized);
+}
+
+#[test]
+fn pipeline_output_format_rejects_unknown_and_defaults_to_html() {
+    let base = |format: Option<&str>| PipelineRequest {
+        target: "https://example.com".into(),
+        profile: None,
+        output_format: format.map(str::to_string),
+        output_file: Some("report.out".into()),
+    };
+    assert_eq!(
+        base(None).normalize().unwrap().output_format,
+        PipelineOutputFormat::Html
+    );
+    assert_eq!(
+        base(Some("markdown")).normalize().unwrap().output_format,
+        PipelineOutputFormat::Markdown
+    );
+    // Alias for markdown.
+    assert_eq!(
+        base(Some("MD")).normalize().unwrap().output_format,
+        PipelineOutputFormat::Markdown
+    );
+    assert!(base(Some("pdf")).normalize().is_err());
+}
+
+#[test]
+fn pipeline_output_path_rejects_traversal_and_unsafe_characters() {
+    let base = |path: &str| PipelineRequest {
+        target: "https://example.com".into(),
+        profile: None,
+        output_format: Some("json".into()),
+        output_file: Some(path.to_string()),
+    };
+    // Plain relative paths and nested directories are fine.
+    assert!(base("report.json").normalize().is_ok());
+    assert!(base("nested/dir/report.json").normalize().is_ok());
+
+    // Traversal is the arbitrary-write primitive and must never survive to
+    // the filesystem, at any position in the path.
+    for path in [
+        "../escape.json",
+        "..",
+        "a/../../escape.json",
+        "nested/../../../escape.json",
+    ] {
+        let err = base(path).normalize().unwrap_err();
+        assert!(
+            err.to_string().contains(".."),
+            "traversal {path:?} was not rejected: {err}"
+        );
+    }
+    // NUL truncation and empty destinations.
+    assert!(base("report\0.json").normalize().is_err());
+    assert!(base("   ").normalize().is_err());
+    assert!(base(&"x".repeat(5000)).normalize().is_err());
 }
 
 #[test]
@@ -334,6 +489,16 @@ fn local_file_storage_converges() {
     let canonical = StorageRequest {
         storage_type: "findings".into(),
         path: None,
+        host: None,
+        port: None,
+        database: None,
+        username: None,
+        max_connections: None,
+        mode: None,
+        scan_id: None,
+        cve_id: None,
+        severity_filter: None,
+        password_env: None,
     }
     .normalize()
     .unwrap();
@@ -342,6 +507,61 @@ fn local_file_storage_converges() {
     let params = serde_json::json!({"storage_type": "findings"});
     assert_eq!(validate_tool_params("storage", &params).unwrap(), "storage");
     assert!(validate_tool_params("storage", &serde_json::json!({"storage_type": "   "})).is_err());
+}
+
+/// Storage connection settings and mode must survive the wire DTO.
+///
+/// Regression guard: every one of these was accepted by the wire DTO and
+/// dropped before reaching the executor, which ran with
+/// `StorageConfig::default()` and the mode string `"read"` — a mode the
+/// executor does not implement, so the call always ended in
+/// "Unknown storage mode: read" after dialling the default host.
+#[test]
+fn storage_config_and_mode_converge_across_wire_dto() {
+    let canonical = StorageRequest {
+        storage_type: "postgres".into(),
+        path: None,
+        host: Some("db.internal".into()),
+        port: Some(6543),
+        database: Some("findings_db".into()),
+        username: Some("analyst".into()),
+        max_connections: Some(20),
+        mode: Some("LIST_FINDINGS".into()),
+        scan_id: Some("scan-7".into()),
+        cve_id: None,
+        severity_filter: Some("High".into()),
+        password_env: Some("EGSEC_PG_PASSWORD".into()),
+    };
+    let normalized = canonical.normalize().unwrap();
+    assert_eq!(normalized.host, "db.internal");
+    assert_eq!(normalized.port, 6543);
+    assert_eq!(normalized.database, "findings_db");
+    assert_eq!(normalized.username, "analyst");
+    assert_eq!(normalized.max_connections, 20);
+    assert_eq!(normalized.mode, "list_findings");
+    assert_eq!(normalized.scan_id.as_deref(), Some("scan-7"));
+    assert_eq!(normalized.severity_filter.as_deref(), Some("high"));
+    // Only the variable *name* is carried; the secret never is.
+    assert_eq!(
+        normalized.password_env.as_deref(),
+        Some("EGSEC_PG_PASSWORD")
+    );
+
+    let runtime = runtime_adapters::storage_from_runtime(&eggsec_runtime::request::StorageParams {
+        storage_type: "postgres".into(),
+        path: None,
+        host: Some("db.internal".into()),
+        port: Some(6543),
+        database: Some("findings_db".into()),
+        username: Some("analyst".into()),
+        max_connections: Some(20),
+        mode: Some("LIST_FINDINGS".into()),
+        scan_id: Some("scan-7".into()),
+        cve_id: None,
+        severity_filter: Some("High".into()),
+        password_env: Some("EGSEC_PG_PASSWORD".into()),
+    });
+    assert_eq!(runtime.normalize().unwrap(), normalized);
 }
 
 #[test]

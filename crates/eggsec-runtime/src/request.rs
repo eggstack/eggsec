@@ -114,6 +114,12 @@ pub struct LoadTestParams {
     pub connections: Option<u32>,
     pub duration_secs: Option<u32>,
     pub rate_limit: Option<u32>,
+    /// Optional request body. Rejected for bodyless methods by normalization.
+    #[serde(default)]
+    pub body: Option<String>,
+    /// Request headers as `Name: Value` entries, validated by normalization.
+    #[serde(default)]
+    pub headers: Option<Vec<String>>,
 }
 
 /// Stress test parameters.
@@ -144,6 +150,16 @@ pub struct EndpointScanParams {
     pub wordlist: Option<String>,
     pub concurrency: Option<usize>,
     pub timeout_secs: Option<u64>,
+    /// Keep 404 responses in the result set. `None` means "use the engine
+    /// default" (exclude 404s), which is what the CLI's opt-in
+    /// `--include-404` flag implies when absent. The TUI's checkbox defaults
+    /// to on, so it sends `Some(true)` explicitly.
+    ///
+    /// `#[serde(default)]` is required: serde does not treat a missing
+    /// `Option` field as `None`, so without it this struct would fail to
+    /// deserialize any payload written before the field existed.
+    #[serde(default)]
+    pub include_404: Option<bool>,
 }
 
 /// Fingerprint parameters.
@@ -197,6 +213,12 @@ pub struct WafStressParams {
 pub struct PipelineParams {
     pub target: String,
     pub profile: Option<String>,
+    /// Report format for `output_file` (pretty|json|compact|html|csv|sarif|junit|markdown).
+    #[serde(default)]
+    pub output_format: Option<String>,
+    /// Destination for the rendered report, relative to the export directory.
+    #[serde(default)]
+    pub output_file: Option<String>,
 }
 
 /// Recon parameters.
@@ -303,10 +325,33 @@ pub struct ComplianceParams {
 }
 
 /// Storage parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageParams {
     pub storage_type: String,
     pub path: Option<String>,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub database: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub max_connections: Option<u32>,
+    /// connect|list_scans|list_findings|search_cve
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub scan_id: Option<String>,
+    #[serde(default)]
+    pub cve_id: Option<String>,
+    #[serde(default)]
+    pub severity_filter: Option<String>,
+    /// Name of the environment variable holding the password. The password
+    /// itself is never carried on the wire.
+    #[serde(default)]
+    pub password_env: Option<String>,
 }
 
 /// Integration parameters.

@@ -8,6 +8,15 @@ pub trait TaskBuilder {
     fn build_run_request(&self) -> Option<RunRequest>;
 }
 
+/// Environment variable the engine resolves the storage password from.
+///
+/// The password is deliberately not a wire field: `RunRequest` is persisted
+/// verbatim into the daemon's SQLite snapshot store, so anything on the wire
+/// ends up at rest in plaintext. The TUI publishes its password field into this
+/// variable in the current process and sends only the name.
+#[cfg(feature = "database")]
+pub(crate) const EGGSEC_STORAGE_PASSWORD_ENV: &str = "EGSEC_STORAGE_PASSWORD";
+
 /// Normalise an editable text input into a request value.
 ///
 /// A blank or whitespace-only field is *absent* rather than an empty string:
@@ -73,6 +82,8 @@ impl TaskBuilder for super::tabs::LoadTab {
                     duration_secs: Some(self.timeout() as u32),
                     // The load tab exposes no rate-limit control.
                     rate_limit: None,
+                    body: self.body().map(str::to_string),
+                    headers: Some(self.headers()),
                 }),
                 requested_by: None,
                 surface: RuntimeSurface::TuiManual,
@@ -122,6 +133,10 @@ impl TaskBuilder for super::tabs::ScanEndpointsTab {
                 wordlist: self.wordlist().and_then(non_blank),
                 concurrency: Some(self.concurrency()),
                 timeout_secs: Some(self.timeout()),
+                // The tab's checkbox defaults to on, so an untouched tab keeps
+                // 404 responses in the result set. Previously this hardcoded
+                // false, so unchecking the box changed nothing.
+                include_404: Some(self.include_404()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -274,8 +289,11 @@ impl TaskBuilder for super::tabs::ScanTab {
             task_kind: TaskKind::Pipeline(eggsec_runtime::request::PipelineParams {
                 target: target.to_string(),
                 profile: Some(profile.to_string()),
-                // `PipelineParams` carries no output-format/output-file field,
-                // so the pipeline tab's selectors have no wire destination.
+                // Both are validated by `PipelineRequest::normalize()`; the
+                // output path is resolved against the configured export
+                // directory by the engine, never by the tab.
+                output_format: non_blank(self.output_format()),
+                output_file: non_blank(self.output_file()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -470,10 +488,32 @@ impl TaskBuilder for super::tabs::ComplianceTab {
 #[cfg(feature = "database")]
 impl TaskBuilder for super::tabs::StorageTab {
     fn build_run_request(&self) -> Option<RunRequest> {
+        let config = self.get_config();
+        let mode = self.get_mode();
+        // `query_id` is a scan id for `list_findings` and a CVE id for
+        // `search_cve`; the engine validates the pairing.
+        let query_id = non_blank(self.query_id());
+        let (scan_id, cve_id) = if mode == "search_cve" {
+            (None, query_id)
+        } else {
+            (query_id, None)
+        };
         Some(RunRequest {
             task_kind: TaskKind::Storage(eggsec_runtime::request::StorageParams {
-                storage_type: "sqlite".to_string(),
+                storage_type: "postgres".to_string(),
                 path: None,
+                host: non_blank(&config.host),
+                port: Some(config.port),
+                database: non_blank(&config.database),
+                username: non_blank(&config.username),
+                max_connections: Some(config.max_connections),
+                mode: Some(mode.to_string()),
+                scan_id,
+                cve_id,
+                severity_filter: self.severity_filter().and_then(non_blank),
+                // Never the password itself — only the name of the variable
+                // the engine resolves it from. See `password_env`.
+                password_env: non_blank(EGGSEC_STORAGE_PASSWORD_ENV),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1017,6 +1057,56 @@ mod tests {
                 assert_eq!(p.duration_secs, Some(45));
                 // The tab exposes no rate-limit control.
                 assert_eq!(p.rate_limit, None);
+                // Body/header inputs are empty on a fresh tab.
+                assert_eq!(p.body, None);
+                assert_eq!(p.headers, Some(vec![]));
+            }
+            other => panic!("expected LoadTest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_builder_carries_body_and_headers() {
+        use crate::tabs::LoadTab;
+        let mut tab = LoadTab::new();
+        tab.core.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.core.inputs.fields[1].value = "POST".to_string();
+        tab.core.inputs.fields[5].value = "{\"probe\":1}".to_string();
+        tab.core.inputs.fields[6].value = "X-Probe: eggsec, Accept: application/json".to_string();
+
+        let req = tab.build_run_request().expect("run request present");
+        match req.task_kind {
+            TaskKind::LoadTest(p) => {
+                assert_eq!(p.body.as_deref(), Some("{\"probe\":1}"));
+                assert_eq!(
+                    p.headers,
+                    Some(vec![
+                        "X-Probe: eggsec".to_string(),
+                        "Accept: application/json".to_string(),
+                    ])
+                );
+                // The request must survive canonical normalization intact.
+                let normalized = eggsec::operation_request::LoadTestRequest {
+                    target: p.target.clone(),
+                    method: Some(p.method.clone()),
+                    requests: p.requests,
+                    connections: p.connections,
+                    duration_secs: p.duration_secs,
+                    rate_limit: p.rate_limit,
+                    body: p.body.clone(),
+                    headers: p.headers.clone().unwrap_or_default(),
+                }
+                .normalize()
+                .expect("load-test request normalizes");
+                assert_eq!(normalized.method, "POST");
+                assert_eq!(normalized.body.as_deref(), Some("{\"probe\":1}"));
+                assert_eq!(
+                    normalized.headers,
+                    vec![
+                        "X-Probe:eggsec".to_string(),
+                        "Accept:application/json".to_string()
+                    ]
+                );
             }
             other => panic!("expected LoadTest, got {other:?}"),
         }
@@ -1473,5 +1563,156 @@ mod tests {
             field.value = String::new();
         }
         assert!(tab.build_run_request().is_none());
+    }
+
+    /// Regression: the "Check for 404s" checkbox had an accessor with no
+    /// caller, so unticking it changed nothing. Both the checked and unchecked
+    /// states must reach the request.
+    #[test]
+    fn endpoint_builder_carries_include_404() {
+        use crate::tabs::ScanEndpointsTab;
+
+        let mut tab = ScanEndpointsTab::new();
+        if let Some(field) = tab.core.inputs.fields.get_mut(0) {
+            field.value = "https://example.com".to_string();
+        }
+        // The tab ships with the box ticked, so the default is to include.
+        assert!(tab.include_404());
+        let req = tab.build_run_request().expect("endpoint run request");
+        match req.task_kind {
+            TaskKind::EndpointScan(p) => {
+                assert_eq!(p.include_404, Some(true));
+            }
+            other => panic!("expected EndpointScan, got {other:?}"),
+        }
+
+        tab.include_404_checkbox.checked = false;
+        let req = tab.build_run_request().expect("endpoint run request");
+        match req.task_kind {
+            TaskKind::EndpointScan(p) => {
+                assert_eq!(p.include_404, Some(false));
+            }
+            other => panic!("expected EndpointScan, got {other:?}"),
+        }
+    }
+
+    /// The scan tab's output-file field and output-format selector must reach
+    /// the request.
+    ///
+    /// Regression guard: both controls have been on the tab for the whole life
+    /// of the tab, and neither was ever sent — `PipelineParams` had no fields
+    /// for them, so every TUI pipeline run discarded the operator's chosen
+    /// destination.
+    #[test]
+    fn scan_builder_carries_output_format_and_file() {
+        use crate::tabs::ScanTab;
+
+        let mut tab = ScanTab::new();
+        if let Some(field) = tab.inputs.fields.get_mut(0) {
+            field.value = "https://example.com".to_string();
+        }
+        if let Some(field) = tab.inputs.fields.get_mut(1) {
+            field.value = "  reports/scan.sarif  ".to_string();
+        }
+        // The selector starts on its documented default.
+        assert_eq!(tab.output_format(), "json");
+
+        let req = tab.build_run_request().expect("pipeline run request");
+        match req.task_kind {
+            TaskKind::Pipeline(p) => {
+                assert_eq!(p.output_format.as_deref(), Some("json"));
+                // Whitespace is stripped by `non_blank` so a padded value does
+                // not become a path with trailing spaces.
+                assert_eq!(p.output_file.as_deref(), Some("reports/scan.sarif"));
+            }
+            other => panic!("expected Pipeline, got {other:?}"),
+        }
+
+        // The pair must survive canonical normalization.
+        let canonical = eggsec::operation_request::PipelineRequest {
+            target: "https://example.com".into(),
+            profile: Some("quick".into()),
+            output_format: Some("json".into()),
+            output_file: Some("reports/scan.sarif".into()),
+        }
+        .normalize()
+        .expect("pipeline request normalizes");
+        assert_eq!(
+            canonical.output_format,
+            eggsec::operation_request::PipelineOutputFormat::Json
+        );
+        assert_eq!(canonical.output_file.as_deref(), Some("reports/scan.sarif"));
+    }
+
+    /// The storage tab's connection fields must reach the request, and its
+    /// password field must not.
+    ///
+    /// Regression guard: the tab hardcoded `storage_type: "sqlite"` with no
+    /// host, mode or query, so every storage run dialled the engine default
+    /// host. And because `RunRequest` is persisted verbatim into the daemon's
+    /// SQLite snapshot store, a password field on the wire would sit at rest
+    /// in plaintext — only the variable name may cross.
+    #[cfg(feature = "database")]
+    #[test]
+    fn storage_builder_carries_config_but_never_the_password() {
+        use crate::tabs::StorageTab;
+
+        let mut tab = StorageTab::new();
+        if let Some(f) = tab.config_inputs.fields.first_mut() {
+            f.value = "db.internal".to_string();
+        }
+        if let Some(f) = tab.config_inputs.fields.get_mut(1) {
+            f.value = "6543".to_string();
+        }
+        if let Some(f) = tab.config_inputs.fields.get_mut(2) {
+            f.value = "findings_db".to_string();
+        }
+        if let Some(f) = tab.config_inputs.fields.get_mut(3) {
+            f.value = "analyst".to_string();
+        }
+        if let Some(f) = tab.config_inputs.fields.get_mut(4) {
+            f.value = "hunter2-plaintext".to_string();
+        }
+        if let Some(f) = tab.query_inputs.fields.first_mut() {
+            f.value = "scan-7".to_string();
+        }
+
+        let req = tab.build_run_request().expect("storage run request");
+        // The serialized wire form is the real assertion: this is exactly what
+        // the daemon persists to disk.
+        let wire = serde_json::to_string(&req).expect("serialize request");
+        assert!(
+            !wire.contains("hunter2-plaintext"),
+            "password leaked onto the wire: {wire}"
+        );
+        assert!(wire.contains("password_env"), "no password_env in {wire}");
+
+        match req.task_kind {
+            TaskKind::Storage(p) => {
+                assert_eq!(p.host.as_deref(), Some("db.internal"));
+                assert_eq!(p.port, Some(6543));
+                assert_eq!(p.database.as_deref(), Some("findings_db"));
+                assert_eq!(p.username.as_deref(), Some("analyst"));
+                assert_eq!(p.mode.as_deref(), Some(tab.get_mode()));
+                assert_eq!(
+                    p.password_env.as_deref(),
+                    Some(crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV)
+                );
+            }
+            other => panic!("expected Storage, got {other:?}"),
+        }
+    }
+
+    /// A traversal destination typed into the scan tab is rejected by
+    /// normalization rather than written.
+    #[test]
+    fn scan_builder_rejects_traversal_output_path() {
+        let canonical = eggsec::operation_request::PipelineRequest {
+            target: "https://example.com".into(),
+            profile: Some("quick".into()),
+            output_format: Some("json".into()),
+            output_file: Some("../../../etc/cron.d/pwn".into()),
+        };
+        assert!(canonical.normalize().is_err());
     }
 }

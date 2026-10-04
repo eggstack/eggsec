@@ -224,6 +224,8 @@ fn load_test_legacy_connections_normalize_identically() {
         connections: Some(25),
         duration_secs: None,
         rate_limit: None,
+        body: None,
+        headers: vec![],
     };
     let runtime = operation_request::runtime_adapters::load_test_from_runtime(&LoadTestParams {
         target: "http://127.0.0.1:8080".into(),
@@ -232,6 +234,8 @@ fn load_test_legacy_connections_normalize_identically() {
         connections: Some(25),
         duration_secs: None,
         rate_limit: None,
+        body: None,
+        headers: None,
     });
     let a = cli.normalize().unwrap();
     let b = runtime.normalize().unwrap();
@@ -267,6 +271,8 @@ fn pipeline_multiplexer_resolves_before_boundary() {
     let kind = TaskKind::Pipeline(PipelineParams {
         target: "127.0.0.1".into(),
         profile: None,
+        output_format: None,
+        output_file: None,
     });
     let canonical = CanonicalOperationRequest::from_task_kind(&kind);
     assert_eq!(canonical.operation_id(), "pipeline");
@@ -275,8 +281,18 @@ fn pipeline_multiplexer_resolves_before_boundary() {
     let bad = operation_request::PipelineRequest {
         target: "127.0.0.1".into(),
         profile: Some("bogus-profile".into()),
+        output_format: None,
+        output_file: None,
     };
     assert!(bad.normalize().is_err());
+    // A traversal destination fails closed too, before any scan runs.
+    let escaping = operation_request::PipelineRequest {
+        target: "127.0.0.1".into(),
+        profile: None,
+        output_format: Some("json".into()),
+        output_file: Some("../../etc/cron.d/eggsec".into()),
+    };
+    assert!(escaping.normalize().is_err());
 }
 
 // ── 7. packet family ──
@@ -427,6 +443,16 @@ fn storage_identity_and_route_agree() {
     let kind = TaskKind::Storage(StorageParams {
         storage_type: "findings".into(),
         path: None,
+        host: None,
+        port: None,
+        database: None,
+        username: None,
+        max_connections: None,
+        mode: None,
+        scan_id: None,
+        cve_id: None,
+        severity_filter: None,
+        password_env: None,
     });
     let canonical = CanonicalOperationRequest::from_task_kind(&kind);
     assert_eq!(canonical.operation_id(), "storage");
