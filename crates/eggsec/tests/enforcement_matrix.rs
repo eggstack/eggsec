@@ -3490,12 +3490,25 @@ fn strict_surface_still_denies_out_of_scope_target_on_relaxed_operation() {
         ..Default::default()
     };
 
+    // Grant the operation's own required features as well as its capability.
+    // Without this, `storage` denies on `required feature 'database' is not
+    // enabled` before the scope dimension is ever reached, and the
+    // "in-scope target is allowed" assertion below would fail for a reason that
+    // has nothing to do with target policy. Mirrors the setup in
+    // `strict_surface_allows_target_less_operation`.
+    let enabled: Vec<String> = metadata
+        .required_features
+        .iter()
+        .map(|f| f.to_string())
+        .collect();
+
     // A scope that does not cover the target must still deny it.
-    let ctx = ctx_for_surface(
+    let mut ctx = ctx_for_surface(
         ExecutionSurface::McpServer,
         policy.clone(),
         loaded_explicit(scope_allow("192.168.0.0/16")),
     );
+    ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled.clone());
     let outcome = ctx.evaluate(&desc);
     assert!(
         !outcome.is_allowed(),
@@ -3504,11 +3517,12 @@ fn strict_surface_still_denies_out_of_scope_target_on_relaxed_operation() {
 
     // And a scope that does cover it must allow it, proving the descriptor is
     // genuinely being scope-checked rather than waved through.
-    let allow_ctx = ctx_for_surface(
+    let mut allow_ctx = ctx_for_surface(
         ExecutionSurface::McpServer,
         policy,
         loaded_explicit(scope_allow("10.0.0.0/8")),
     );
+    allow_ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled);
     let allowed = allow_ctx.evaluate(&desc);
     assert!(
         allowed.is_allowed(),

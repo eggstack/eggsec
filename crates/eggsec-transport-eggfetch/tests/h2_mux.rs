@@ -434,6 +434,16 @@ async fn h2_selected_socket_change_does_not_reuse_old_connection() {
 
 #[tokio::test]
 async fn h2_selected_address_change_with_same_origin_does_not_reuse_old_connection() {
+    // This fixture needs a second loopback address so it can prove that a
+    // changed selected address on an unchanged logical origin does not reuse
+    // the old connection. Linux routes all of 127.0.0.0/8 to lo so 127.0.0.2
+    // binds by default; macOS only assigns 127.0.0.1 to lo0. Skip loudly rather
+    // than report a false failure where the address does not exist; the
+    // assertion is unchanged where it does.
+    if !common::loopback_alias_available() {
+        eprintln!("SKIP: 127.0.0.2 is not bindable on this host (no loopback /8 route)");
+        return;
+    }
     // Selected-address-only isolation: the logical origin (scheme, hostname,
     // port) is identical for every request while the authorized resolved
     // address rotates across authorization cycles. The route key must

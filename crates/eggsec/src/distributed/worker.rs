@@ -68,6 +68,11 @@ impl CapacityTracker {
     /// A shortfall means the coordinator over-delivered (or a concurrent
     /// tick reserved first); the caller must not execute beyond the
     /// admitted count.
+    // `Atomic::fetch_update` is deprecated in favour of `try_update`, but
+    // `try_update` is still an unstable library feature (`atomic_try_update`,
+    // rust-lang/rust#135894) at this workspace's MSRV of 1.89, so the rename is
+    // not available yet. Revisit when MSRV reaches the stabilisation release.
+    #[allow(deprecated)]
     pub(crate) fn try_reserve(&self, want: usize) -> usize {
         match self
             .reserved

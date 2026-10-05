@@ -1469,17 +1469,41 @@ fi
 echo ""
 echo "--- Check 64: Python operation registry has exactly 22 operations ---"
 if [[ -f "crates/eggsec-python/src/operation_registry.rs" ]]; then
-  # Count enum variants in StableOperation
-  VARIANT_COUNT=$(rg -c '^\s+\w+,$' crates/eggsec-python/src/operation_registry.rs 2>/dev/null || echo 0)
-  # Count entries in ALL array
-  ALL_COUNT=$(rg -c 'Self::' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | head -1 || echo 0)
-  # More precise: count Self:: entries inside the ALL const array
-  ALL_ENTRIES=$(awk '/pub const ALL/,/^\s*\];/' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | rg -c 'Self::' || echo 0)
+  # Count entries strictly inside the `ALL` array.
+  #
+  # The previous range form (`/pub const ALL/,/^\s*\];/`) never terminated on
+  # awk implementations without GNU `\s` support (including macOS /usr/bin/awk),
+  # so the range ran to end-of-file and counted every `Self::` in the file —
+  # reporting 130 instead of the real 22. Use a POSIX bracket expression and an
+  # explicit in-array flag so the count is correct everywhere.
+  ALL_ENTRIES=$(awk '
+    /pub const ALL/       { inside = 1; next }
+    inside && /Self::/    { n++ }
+    inside && /^[[:space:]]*\];/ { inside = 0 }
+    END                   { print n + 0 }
+  ' crates/eggsec-python/src/operation_registry.rs 2>/dev/null)
+  ALL_ENTRIES=${ALL_ENTRIES:-0}
+
+  # Count enum variants in StableOperation. Checking both keeps the guard
+  # meaningful: it now also fails when a variant is added without being
+  # registered in ALL, which the ALL-only count could not detect.
+  VARIANT_ENTRIES=$(awk '
+    /pub enum StableOperation/ { inside = 1; next }
+    inside && /^[[:space:]]*\}/ { inside = 0 }
+    inside && /^[[:space:]]*(#|\/\/|\/\/\/)/ { next }
+    inside && /^[[:space:]]*[A-Z][A-Za-z0-9_]*[[:space:]]*,[[:space:]]*$/ { n++ }
+    END { print n + 0 }
+  ' crates/eggsec-python/src/operation_registry.rs 2>/dev/null)
+  VARIANT_ENTRIES=${VARIANT_ENTRIES:-0}
+
   if [[ "$ALL_ENTRIES" -ne 22 ]]; then
     echo "FAIL: operation_registry.rs has $ALL_ENTRIES entries in ALL (expected 22)"
     FAIL=$((FAIL + 1))
+  elif [[ "$VARIANT_ENTRIES" -ne "$ALL_ENTRIES" ]]; then
+    echo "FAIL: operation_registry.rs has $VARIANT_ENTRIES StableOperation variants but $ALL_ENTRIES entries in ALL"
+    FAIL=$((FAIL + 1))
   else
-    echo "PASS: operation_registry.rs has exactly 22 entries in ALL."
+    echo "PASS: operation_registry.rs has exactly 22 entries in ALL, matching 22 variants."
   fi
 else
   echo "SKIP: operation_registry.rs not found."
@@ -2455,7 +2479,11 @@ else
   # Only the [dependencies] section is scanned (comments stripped):
   # dev-dependencies may carry fixture-only TLS/test tooling (rcgen,
   # tokio-rustls, ipnetwork).
-  DEPS_SECTION=$(sed -n '/^\[dependencies\]/,/^\[/p' crates/eggsec-transport-eggfetch/Cargo.toml | head -n -1 | rg -v '^\s*#')
+  # `head -n -1` is a GNU coreutils extension. BSD/macOS `head` rejects a
+  # negative line count, and under `set -euo pipefail` that aborted the entire
+  # script here, so no check after this point ever ran locally.
+  # `sed '$d'` is the portable "all but the last line" equivalent.
+  DEPS_SECTION=$(sed -n '/^\[dependencies\]/,/^\[/p' crates/eggsec-transport-eggfetch/Cargo.toml | sed '$d' | rg -v '^[[:space:]]*#')
   if echo "$DEPS_SECTION" | rg -q 'reqwest|hyper|rustls|tokio-rustls|hickory|eggress'; then
     # `tls-rustls` is the eggfetch feature name, not a direct dependency;
     # anything else matching here is a concrete-client leak.
@@ -2573,7 +2601,7 @@ if [[ ! -f "$NSE_CAP" ]]; then
   echo "FAIL: missing NSE script capability: $NSE_CAP"
   SECTION_FAIL=$((SECTION_FAIL + 1))
 else
-  NSE_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' "$NSE_CAP" | head -n -1)
+  NSE_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' "$NSE_CAP" | sed '$d')
   for pat in 'reqwest::' 'eggfetch_core' 'eggfetch::' 'rustls::' 'tokio_rustls::' 'hickory_resolver::' 'RequestBuilder' 'Client::builder'; do
     if echo "$NSE_CODE" | grep -qF "$pat"; then
       echo "FAIL: $NSE_CAP code mentions concrete client pattern '$pat'."

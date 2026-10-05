@@ -25,6 +25,14 @@ pub async fn run_load_test(
     )
 }
 
+/// Run a scoped load test.
+///
+/// The parameter list mirrors the load-test request shape (target, request
+/// options, pacing, progress sink, authorization scope) one-for-one on purpose:
+/// these are distinct, independently-typed concerns and bundling them behind a
+/// params struct here would obscure which values the scope-sensitive path
+/// actually consumes. Kept as a scoped allow rather than a global one.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_load_test_with_scope(
     target: String,
     method: String,
