@@ -244,6 +244,7 @@ mod tests {
             target: "10.0.0.1".into(),
             script: "http-enum".into(),
             args: None,
+            custom_script: None,
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "nse");

@@ -173,6 +173,33 @@ Profile Constructor → ResolvedNseExecutionProfile
 | `AllowCidrs` | Only CIDRs from scope rules |
 | `AllowResolvedTargetSet` | Only IPs resolved from the explicit target |
 
+### Custom Script Path Through the TUI
+
+`NseParams` carries an optional `custom_script` path alongside the built-in
+`script` identity. When set it takes precedence and resolves through
+`NseScriptSource::File` → `ScriptResolver::resolve_script_file`, never as a
+direct filesystem read. The resolver still applies its full gate in order:
+`allow_script_files` policy → existence → extension allowlist → canonical root
+containment.
+
+The two fields stay separate on purpose. `script` is a *built-in script
+identity* that the engine resolves against shipped scripts; overloading it with
+a path would make "run the script the operator selected" and "run this file"
+the same field, so a mismatch between the selector and the path would silently
+run a different check than the one on screen.
+
+**Manual-only, and fail-closed.** A custom path is honoured only when the
+resolved profile is `ManualPermissive` or `ManualStrict`; any other profile
+paired with a custom script is refused in `dispatch::api::run_nse` rather than
+executed. This is enforced at the point the path is honoured, not only by the
+automated-surface quarantine, so lifting that quarantine (M007) cannot quietly
+turn `custom_script` into a remote-script-execution primitive.
+
+Today the only caller constructs `manual_permissive` and NSE is quarantined for
+automated surfaces (`mcp_exposable`/`rest_exposable`/`agent_exposable`/
+`grpc_exposable: false`), so the guard cannot fire — it exists to keep the
+privilege boundary explicit if the surface set grows.
+
 ### Scope Derivation
 
 For `AgentSafe` and `ManualStrict`, the network policy is derived from scope input:

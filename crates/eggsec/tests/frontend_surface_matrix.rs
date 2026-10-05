@@ -690,6 +690,7 @@ fn runtime_task_operation_ids_agree_between_owners() {
             target: "10.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         }),
         TaskKind::Hunt(HuntParams {
             target: "https://example.com".into(),

@@ -453,17 +453,16 @@ impl TaskBuilder for super::tabs::HuntTab {
 
 #[cfg(feature = "nse")]
 impl TaskBuilder for super::tabs::NseTab {
-    /// `Tab::Nse` collects a target, a script selector and script arguments,
-    /// but it had no `TaskBuilder`, so Enter could never dispatch and the tab
-    /// only ever reported "nothing to run".
+    /// `Tab::Nse` collects a target, a script selector, script arguments and an
+    /// optional custom script path.
     ///
-    /// `NseParams` carries `target` / `script` / `args`, which is everything
-    /// this request can express. A custom script *path* is deliberately NOT
-    /// smuggled into `script`: the engine resolves `script` as a built-in
-    /// script identity and resolves a custom path through a separate
-    /// `custom_script` argument that `NseParams` does not carry. `start()`
-    /// rejects a custom script with a clear error instead of silently running
-    /// a different script than the operator picked.
+    /// A custom script path is carried in its own `custom_script` field rather
+    /// than smuggled into `script`: the engine resolves `script` as a built-in
+    /// script identity and a custom path through `NseScriptSource::File`, so
+    /// the two must stay distinguishable or the operator would silently get a
+    /// different script than the one they picked. The engine resolves the path
+    /// through `ScriptResolver` (policy gate, extension allowlist and root
+    /// containment), never as a direct filesystem read.
     fn build_run_request(&self) -> Option<RunRequest> {
         let target = self.target();
         if target.is_empty() {
@@ -474,6 +473,7 @@ impl TaskBuilder for super::tabs::NseTab {
                 target: target.to_string(),
                 script: self.script().to_string(),
                 args: self.script_args().and_then(non_blank),
+                custom_script: self.custom_script().and_then(non_blank),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,

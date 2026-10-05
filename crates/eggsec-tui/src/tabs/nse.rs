@@ -526,17 +526,22 @@ impl NseTab {
             ));
             return;
         }
-        if self.uses_custom_script() {
-            // `NseParams` has no custom-script-path field, so the canonical
-            // executor can only run a named built-in script here. Refuse
-            // rather than silently running a different script.
-            self.core.error = Some(TabError::Config(
-                "A custom NSE script path cannot be dispatched from this tab: \
-                 the runtime request carries only a built-in script name. \
-                 Select a built-in script, or run the custom script from the CLI."
-                    .to_string(),
-            ));
-            return;
+        // A custom script path used to be refused here because `NseParams` had
+        // nowhere to carry it, so the only canonical executor could run a named
+        // built-in script. `NseParams::custom_script` now carries the path and
+        // the engine resolves it through `NseScriptSource::File` /
+        // `ScriptResolver`, so the operator gets the script they actually
+        // picked. Keep a blank-path check rather than trusting the builder:
+        // a whitespace-only path would otherwise resolve as a literal filename.
+        if let Some(path) = self.custom_script() {
+            if path.trim().is_empty() {
+                self.core.error = Some(TabError::Config(
+                    "The custom NSE script path is blank. Clear the field to use \
+                     the selected built-in script."
+                        .to_string(),
+                ));
+                return;
+            }
         }
         self.core.error = None;
         if self.core.state != AppState::Running {
@@ -713,18 +718,48 @@ mod tests {
         assert_eq!(tab.core.state, AppState::Idle);
     }
 
-    /// A custom script path cannot cross `NseParams`, so Enter must refuse
-    /// instead of silently running a different (built-in) script.
+    /// A custom script path now crosses `NseParams::custom_script`, so Enter
+    /// starts the run instead of refusing. The path must reach the request
+    /// unchanged: it is the operator's chosen script, and substituting the
+    /// built-in one would run a different check than the one on screen.
     #[test]
-    fn start_with_custom_script_path_reports_an_error() {
+    fn start_with_custom_script_path_dispatches_the_path() {
+        use crate::app::task_management::TaskBuilder;
+        use eggsec_runtime::request::TaskKind;
+
         let mut tab = NseTab::new();
         tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
         tab.core.inputs.fields.get_mut(2).unwrap().value = "/tmp/custom.nse".into();
         assert!(tab.uses_custom_script());
+
+        tab.start();
+        assert!(tab.core.error.is_none(), "{:?}", tab.core.error);
+        assert_eq!(tab.core.state, AppState::Running);
+
+        let req = tab
+            .build_run_request()
+            .expect("a runnable NSE tab must produce a request");
+        let TaskKind::Nse(params) = req.task_kind else {
+            panic!("expected an Nse task kind, got {:?}", req.task_kind);
+        };
+        assert_eq!(
+            params.custom_script.as_deref(),
+            Some("/tmp/custom.nse"),
+            "the operator's script path must reach the engine verbatim"
+        );
+    }
+
+    /// A whitespace-only path would otherwise resolve as a literal filename.
+    #[test]
+    fn start_with_blank_custom_script_path_reports_an_error() {
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        tab.core.inputs.fields.get_mut(2).unwrap().value = "   ".into();
+
         tab.start();
         assert!(
             tab.core.error.is_some(),
-            "custom script path must be refused, not silently substituted"
+            "a blank custom script path must be reported, not dispatched"
         );
         assert_eq!(tab.core.state, AppState::Idle);
     }

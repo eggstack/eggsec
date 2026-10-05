@@ -305,6 +305,21 @@ pub struct NseParams {
     pub target: String,
     pub script: String,
     pub args: Option<String>,
+    /// Path to a user-provided `.nse` script, resolved by the engine's
+    /// `NseScriptSource::File` / `ScriptResolver` rather than by a direct
+    /// filesystem read.
+    ///
+    /// When set it takes precedence over `script`, which still carries the
+    /// built-in identity for reporting and validation. Honours the resolver's
+    /// policy gate, extension allowlist and root containment — never a
+    /// permissive "load whatever path was typed".
+    ///
+    /// Honoured only for manual profiles. An automated profile paired with a
+    /// custom script is refused by the engine rather than executed, so this
+    /// field cannot become a remote-script-execution primitive if the NSE
+    /// automated-surface quarantine (M007) is later lifted.
+    #[serde(default)]
+    pub custom_script: Option<String>,
 }
 
 /// Vulnerability hunt parameters.

@@ -1556,12 +1556,18 @@ async fn execute_canonical_inner(
         CanonicalOperationRequest::Nse(p) => {
             #[cfg(feature = "nse")]
             {
-                super::api::run_nse(p.target, p.script, p.args, None, fanout_tx.clone())
-                    .await
-                    .map_err(|e| ExecutionError::ExecutionFailed {
-                        operation_id: operation_id.clone(),
-                        message: e.to_string(),
-                    })
+                super::api::run_nse(
+                    p.target,
+                    p.script,
+                    p.args,
+                    p.custom_script,
+                    fanout_tx.clone(),
+                )
+                .await
+                .map_err(|e| ExecutionError::ExecutionFailed {
+                    operation_id: operation_id.clone(),
+                    message: e.to_string(),
+                })
             }
             #[cfg(not(feature = "nse"))]
             {
@@ -2285,6 +2291,7 @@ mod tests {
             target: "127.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         });
         let (sink, _rx) = test_sink();
         let result = execute_approved(&approved, request, &sink).await;
@@ -2335,6 +2342,7 @@ mod tests {
             target: "127.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         });
         let (sink, _rx) = test_sink();
         let result = execute_approved_execution(&execution, request, &sink).await;
