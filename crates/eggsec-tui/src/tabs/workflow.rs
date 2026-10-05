@@ -421,7 +421,16 @@ impl TabRender for WorkflowTab {
 }
 
 impl TabInput for WorkflowTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -444,6 +453,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -583,6 +595,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             WorkflowFocusArea::Mode => self.mode_selector.handle_up(),
             WorkflowFocusArea::Inputs => self.core.inputs.focus_prev(),
@@ -591,6 +606,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             WorkflowFocusArea::Mode => self.mode_selector.handle_down(),
             WorkflowFocusArea::Inputs => self.core.inputs.focus_next(),

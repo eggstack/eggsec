@@ -384,7 +384,16 @@ impl TabRender for WafTab {
 }
 
 impl TabInput for WafTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == WafFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
                 if self.core.inputs.is_focused() {
@@ -405,6 +414,9 @@ impl TabInput for WafTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
                 self.core.inputs.blur();

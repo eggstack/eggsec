@@ -55,8 +55,12 @@ pub mod workflow;
 mod handle_enter_regression;
 #[cfg(test)]
 mod input_accessibility;
+#[cfg(test)]
+mod mid_run_navigation;
 mod spec;
 pub mod surface;
+#[cfg(test)]
+mod tab_entry_focus;
 pub use spec::{
     palette_command_for, resolve_palette_command, PaletteResolution, TabAvailability, TabSpec,
     TuiSurfaceRoute,
@@ -595,6 +599,15 @@ pub trait TabState {
     fn reset(&mut self) {}
     fn set_error(&mut self, _error: TabError) {}
     fn set_completed_message(&mut self, _message: String) {}
+    /// Test-only: drive a tab into a given lifecycle state.
+    ///
+    /// Production code reaches `Running` through a dispatch, never by
+    /// assignment. Tests that assert "what does navigation do *while* a task
+    /// runs" need that precondition without a full dispatch (which is gated on
+    /// enforcement and target validation), so the boilerplate macro generates
+    /// this from the tab's own `TabCore`.
+    #[cfg(test)]
+    fn set_state(&mut self, _state: AppState) {}
 }
 
 pub trait TabRender {

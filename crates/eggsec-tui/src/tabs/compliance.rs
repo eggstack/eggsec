@@ -273,6 +273,12 @@ impl TabRender for ComplianceTab {
 }
 
 impl TabInput for ComplianceTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

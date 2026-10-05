@@ -535,7 +535,16 @@ impl TabRender for LoadTab {
 }
 
 impl TabInput for LoadTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == StandardFocusAreaSelector::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             StandardFocusAreaSelector::Selector => {
                 self.test_type_selector.blur();
@@ -554,6 +563,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             StandardFocusAreaSelector::Selector => {
                 self.test_type_selector.blur();
@@ -705,6 +717,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == StandardFocusAreaSelector::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_prev();
@@ -721,6 +736,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == StandardFocusAreaSelector::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_next();

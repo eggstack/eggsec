@@ -358,6 +358,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => NseFocusArea::ScriptSelector,
             NseFocusArea::ScriptSelector => NseFocusArea::Results,
@@ -370,6 +373,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => NseFocusArea::Results,
             NseFocusArea::ScriptSelector => NseFocusArea::Inputs,
@@ -454,6 +460,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             NseFocusArea::Inputs => {
                 self.core.inputs.focus_prev();
@@ -468,6 +477,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             NseFocusArea::Inputs => {
                 self.core.inputs.focus_next();

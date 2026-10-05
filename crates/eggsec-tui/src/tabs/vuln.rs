@@ -474,6 +474,12 @@ impl TabRender for VulnTab {
 }
 
 impl TabInput for VulnTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     tab_input_custom!(
         VulnTab,
         core: core,
@@ -483,6 +489,9 @@ impl TabInput for VulnTab {
     );
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -501,6 +510,9 @@ impl TabInput for VulnTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();

@@ -64,7 +64,14 @@ pub fn draw_breadcrumb(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         .breadcrumb()
         .unwrap_or_else(|| app.current_tab.default_breadcrumb());
 
-    let mut spans = Vec::new();
+    let mut spans = vec![Span::styled(
+        // A left rule anchors the breadcrumb. It is the only chrome on this row
+        // (the breadcrumb area is one line tall, so it cannot take a border box
+        // the way the tab bar above it does), and without it the trail reads as
+        // loose text floating between two unrelated regions.
+        "▌ ",
+        Style::default().fg(theme.colors.accent),
+    )];
     let total_parts = parts.len();
 
     for (i, part) in parts.iter().enumerate() {
@@ -91,13 +98,7 @@ pub fn draw_breadcrumb(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         spans.push(Span::styled(*part, style));
     }
 
-    let block = Block::default()
-        .borders(Borders::NONE)
-        .border_style(Style::default().fg(theme.colors.border));
-
-    let paragraph = Paragraph::new(Line::from(spans))
-        .block(block)
-        .style(Style::default().fg(theme.colors.text));
+    let paragraph = Paragraph::new(Line::from(spans)).style(Style::default().fg(theme.colors.text));
 
     f.render_widget(paragraph, area);
 }
@@ -625,7 +626,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::draw_status_bar;
-    use super::{clip_status, without_task_hints};
+    use super::{clip_status, draw_breadcrumb, without_task_hints};
     use crate::App;
 
     #[test]
@@ -835,6 +836,34 @@ mod tests {
                 "Buffer should not contain control characters"
             );
         }
+    }
+
+    #[test]
+    fn breadcrumb_is_anchored_and_shows_the_tab_trail() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        let theme = app.theme_manager.current().clone();
+        let backend = TestBackend::new(100, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 100, 1);
+                draw_breadcrumb(f, &app, &theme, area);
+            })
+            .unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // The left rule anchors the trail: the breadcrumb row is one line tall
+        // and cannot take a border box, so without it the trail reads as loose
+        // text floating between the tab bar and the content area.
+        assert!(
+            text.contains('▌'),
+            "breadcrumb should render a left rule, got {text:?}"
+        );
+        assert!(
+            text.contains("Fuzz"),
+            "breadcrumb should name the current tab, got {text:?}"
+        );
     }
 
     /// Status-bar text for `app` rendered at `width` x 24.

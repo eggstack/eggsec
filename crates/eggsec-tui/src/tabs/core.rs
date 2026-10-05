@@ -511,8 +511,14 @@ pub fn is_input_focused<A: Copy + PartialEq>(current: A, inputs: A, core: &TabCo
 /// Idempotent: a group that already has a focused field is left alone so a
 /// user-selected field is never stolen back on tab re-entry.
 pub fn ensure_first_field_focused(core: &mut TabCore) {
-    if !core.inputs.is_focused() {
-        core.inputs.focus(0);
+    ensure_group_field_focused(&mut core.inputs);
+}
+
+/// `InputGroup` counterpart of [`ensure_first_field_focused`], for tabs that
+/// own their input group directly instead of through a `TabCore`.
+pub fn ensure_group_field_focused(group: &mut InputGroup) {
+    if !group.is_focused() {
+        group.focus(0);
     }
 }
 

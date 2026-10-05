@@ -248,6 +248,11 @@ impl Default for ScanTab {
 }
 
 impl TabState for ScanTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -486,6 +491,12 @@ pub enum ScanFocusArea {
 }
 
 impl TabInput for ScanTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.inputs);
+        }
+    }
+
     fn stop(&mut self) {
         ScanTab::stop(self);
     }

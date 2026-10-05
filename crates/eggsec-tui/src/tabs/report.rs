@@ -224,6 +224,11 @@ impl ReportTab {
 }
 
 impl TabState for ReportTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -419,7 +424,26 @@ impl TabRender for ReportTab {
 }
 
 impl TabInput for ReportTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            crate::tabs::core::ensure_group_field_focused(inputs);
+        } else if !self.view_selector.is_focused() {
+            // This tab opens on its view selector, not on the inputs. Without
+            // this the tab entry left *nothing* focused, so no key could reach
+            // any control.
+            self.view_selector.focus();
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -447,6 +471,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -659,6 +686,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -680,6 +710,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -735,7 +768,11 @@ impl TabInput for ReportTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == ReportFocusArea::Inputs && self.current_inputs().is_focused()
+        // The view selector is a focusable input control on this tab, so it
+        // must report as focused: it is what tab entry focuses, and reporting
+        // `false` there told the app that no control was focused at all.
+        self.view_selector.is_focused()
+            || (self.focus_area == ReportFocusArea::Inputs && self.current_inputs().is_focused())
     }
 
     fn is_at_left_edge(&self) -> bool {

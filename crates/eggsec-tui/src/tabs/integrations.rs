@@ -270,6 +270,11 @@ impl Default for IntegrationsTab {
 }
 
 impl TabState for IntegrationsTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -489,7 +494,16 @@ impl TabRender for IntegrationsTab {
 }
 
 impl TabInput for IntegrationsTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == IntegrationsFocusArea::Config {
+            crate::tabs::core::ensure_group_field_focused(&mut self.config_inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -522,6 +536,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -729,6 +746,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
             IntegrationsFocusArea::Mode => self.mode_selector.handle_up(),
@@ -739,6 +759,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
             IntegrationsFocusArea::Mode => self.mode_selector.handle_down(),

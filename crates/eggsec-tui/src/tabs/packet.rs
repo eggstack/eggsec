@@ -462,6 +462,11 @@ impl Default for PacketTab {
 }
 
 impl TabState for PacketTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -601,6 +606,15 @@ impl TabRender for PacketTab {
 }
 
 impl TabInput for PacketTab {
+    fn ensure_input_focus(&mut self) {
+        // This tab opens on its tool selector, not on the inputs. Without this
+        // the tab entry left *nothing* focused (neither the selector nor an
+        // input field), so no key could reach any control.
+        if !self.view_selector.is_focused() && !self.inputs.is_focused() {
+            self.view_selector.focus();
+        }
+    }
+
     fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;
@@ -608,6 +622,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             self.inputs.focus_next();
@@ -623,6 +640,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             self.inputs.focus_prev();
@@ -771,6 +791,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_prev();
@@ -783,6 +806,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_next();

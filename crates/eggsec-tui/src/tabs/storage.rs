@@ -227,6 +227,11 @@ impl Default for StorageTab {
 }
 
 impl TabState for StorageTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -432,6 +437,12 @@ impl TabRender for StorageTab {
 }
 
 impl TabInput for StorageTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == StorageFocusArea::Config {
+            crate::tabs::core::ensure_group_field_focused(&mut self.config_inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

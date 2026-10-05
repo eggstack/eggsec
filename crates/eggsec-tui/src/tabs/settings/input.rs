@@ -3,6 +3,9 @@ use crate::tabs::{TabInput, TabState};
 
 impl TabInput for SettingsTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.theme_selector.is_open() {
             self.theme_selector.cancel();
             self.restore_theme_preview_selection();
@@ -23,6 +26,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.theme_selector.is_open() {
             self.theme_selector.cancel();
             self.restore_theme_preview_selection();
@@ -258,6 +264,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             let sections = [
                 SettingsSection::Http,
@@ -304,6 +313,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             let sections = [
                 SettingsSection::Http,
