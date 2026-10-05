@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 005 — Publication qualification
 
-Status: blocked (operational, and on a maintainer decision)
+Status: closed (deferral — `plans/adrs/ADR-0006-knowledge-corpus-publication.md`; publication deferred, no code changed)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 

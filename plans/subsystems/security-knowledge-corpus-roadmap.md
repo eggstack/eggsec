@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Roadmap
 
-Status: in progress (milestones 1–4 closed; milestone 5 deferred to a maintainer decision)
+Status: closed (milestones 1–5 all closed; publication **deferred** by `plans/adrs/ADR-0006-knowledge-corpus-publication.md`)
 
 Long-term references:
 
@@ -11,6 +11,7 @@ Long-term references:
 Related ADRs:
 
 - `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md`
+- `plans/adrs/ADR-0006-knowledge-corpus-publication.md` (publication deferred)
 
 Decision record:
 
@@ -347,6 +348,16 @@ User or operator value: third-party reuse of Eggsec's corpus knowledge.
 Exit conditions: decision recorded in an ADR. Publication, if approved, gets its own
 roadmap — it is explicitly not in scope here.
 
+**Outcome: closed 2026-10-05 with a deferral.** `plans/adrs/ADR-0006-knowledge-corpus-publication.md`
+(accepted) records the decision: all three corpus crates remain internal `publish = false`.
+Grounds: the corpora are actively evolving (14 commits since 2026-06-01, including
+`+550 payloads across 10 new modules`); release qualification is demonstrably expensive
+(`nse-runtime-extraction` M007C found a 74-function major break and withheld 0.2.1) and
+would require publishing `eggsec-core` on a shared version line; **no external consumer
+has been identified**, which is the plan's own stop condition; and `eggsec-payloads`
+would ship a public `get_payloads` that panics for 6 of its own 40 variants. Reopening
+requires all four conditions in the ADR. No code changed.
+
 ## 8. Cross-cutting requirements
 
 ### Storage and migration
@@ -436,7 +447,7 @@ Open decision points requiring an ADR:
 
 ## 11. Completion definition
 
-The subsystem is closed when:
+The subsystem is closed when (all conditions met as of 2026-10-05):
 
 - all four extraction/disposition milestones have accepted closure records;
 - all three corpus crates satisfy the leaf invariant under `cargo tree` and a guard;
@@ -454,4 +465,4 @@ The subsystem is closed when:
 | 2 | **closed** | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
 | 3 | **closed** | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | `plans/closure/security-knowledge-corpus/003-closure.md` | — (M001 discharged) |
 | 4 | **closed** | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | `plans/closure/security-knowledge-corpus/004-closure.md` | — |
-| 5 | not started | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | — | M002–M004 (operational) + maintainer decision |
+| 5 | **closed (deferral)** | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | `plans/closure/security-knowledge-corpus/005-closure.md` | — (M002–M004 closed; decision = defer) |

@@ -426,15 +426,35 @@ Deleted test count: **26**. Disclosed as a real loss of tested behavior, not cle
 or if an engine-local `fn redact_sensitive`/`fn redact_json` reappears under
 `crates/eggsec/src/`.
 
-### Publication is explicitly deferred
+### Publication: DEFERRED (ADR-0006, accepted 2026-10-05)
 
-ADR-0005 decision 3 separates extraction from publication. The corpora are still
-evolving — `PayloadType` gained six advanced variants within the current roadmap era, and
-`SecretType` variant changes are breaking changes across `eggsec-python` today, which is
-exactly the obligation that publishing would convert into a semver contract. The
-`nse-runtime-extraction` subsystem is the worked precedent for the cost: its M007C
-public-API gate found a 74-function major break and the release was not published.
-Publication gets its own milestone and, if approved, its own roadmap.
+All three corpus crates remain internal `publish = false` leaves. ADR-0005 decision 3
+separated extraction from publication, and **ADR-0006 records the decision**: defer.
+
+The evidence, in one place:
+
+1. **The corpora are still moving.** 14 commits touched the corpus paths since
+   2026-06-01, including `e05711ab Expand payload repository: +550 payloads across 10 new
+   modules`. Published payload text is consumer-visible *behavior*, so every later corpus
+   improvement would become a semver question.
+2. **Release qualification is expensive and already proven so.** `nse-runtime-extraction`
+   M007C ran `cargo semver-checks` and found a 74-function major break; `0.2.1` was not
+   published. Separately, `scripts/release-package-graph.py` requires that a published
+   package's deps not be private and share the release version — so publishing
+   `eggsec-secrets`/`eggsec-payloads` means publishing `eggsec-core` too.
+3. **No external consumer has been identified.** This is the gate that is unmet, and the
+   plan's own stop condition when it is.
+4. **`eggsec-payloads` would ship a panicking public API.** Its `get_payloads` routes the
+   6 engine-owned advanced types to a documented `unreachable!` — correct behind an engine
+   facade, wrong for a general-purpose library whose own enum offers those variants.
+
+Reopening requires all four: a named external consumer; one release cycle without
+variant or content changes; a corpus update policy with an owner; and a library-appropriate
+payload API. `eggsec-service-db` is closest to ready (no workspace dep, no panic paths);
+`eggsec-payloads` is least (needs API design, not just qualification).
+
+Publication is **not** rejected — it is blocked on evidence. If approved later it gets its
+own roadmap, and the engine re-export facades stay permanent (ADR-0005 decision 2).
 
 ### What would invalidate this decision
 
