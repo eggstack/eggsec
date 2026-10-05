@@ -73,6 +73,7 @@ nor hosted CI publishes a package.
 | `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints (incl. proxy-peer `authorize_proxy_resolved`/`authorize_proxy_socket`), TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` + log-only `tracing`). |
 | `eggsec-transport-eggfetch` | Pinned HTTP backend | Yes | `HttpTransport` over published `eggfetch-core 0.2.0` (logical-URL + singular resolved-address direct, manual authorized redirects, H1/H2 route reuse via ALPN, pinned proxy peers/targets where enforceable, total deadline through body EOF). Production direct load-test backend. |
 | `eggsec-policy` | Authorization semantics | Yes | `ExecutionPolicy`, descriptors, catalog, scope data + pure matching, decisions, approval tokens, evaluation over explicit `EnabledFeatures` + `TargetScope` facts. No I/O/runtime/transport/frontend/engine deps. Engine bridges DNS/features/authority via `policy_bridge/` (Phase C). |
+| `eggsec-service-db` | Service fingerprint knowledge | Yes | Port→service tables, banner heuristics, service classifiers. Pure lookup data behind `LazyLock`; no I/O, no resolver, no authority state. Only dep is `rustc-hash`; no `eggsec-*` dependency (Check 148). Engine re-exports it at `eggsec::scanner::service_data` (Phase G). |
 
 **Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); `eggsec-policy` owns authorization semantics (engine `config` stays a facade; `policy_bridge/` owns the feature/resolver/`NetworkAuthority` adapters; never `policy` → `transport`); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`) depend on the model, not the renderer. The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) has zero `eggsec-*` dependencies; Eggsec consumes its published crates.io release only through the engine, while TUI/Python use the `eggsec::nse` facade. Report-envelope conversion and scoped-transport adaptation remain engine-owned (`eggsec::nse_bridge`, `eggsec::nse_http_capability`). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
@@ -479,6 +480,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror + log-only tracing)
     ├── eggsec-transport-eggfetch (pinned HttpTransport over eggfetch-core 0.2.0; logical-URL + singular resolved direct, production direct load-test backend)
     ├── eggsec-policy         (authorization semantics — pure data + algorithms; engine bridges DNS/features/authority)
+    ├── eggsec-service-db     (service fingerprint knowledge — port→service tables + banner heuristics; rustc-hash only)
     │
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
@@ -509,6 +511,7 @@ Enforced by `scripts/check-architecture-guards.sh`:
 - `eggsec-daemon` has no non-optional TUI/engine dependencies; transport deps only behind `http-api`
 - Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend on `eggsec-report-model` for DTOs, never on `eggsec-output` (Check 120)
 - `eggsec-policy` has no Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!` feature queries, no resolver/authority behavior (Check 121); engine → policy one-way with transport independent of policy (Check 122); engine policy modules stay facades with no redefined core types (Check 123)
+- `eggsec-service-db` has no workspace dependency at all, no runtime/network/TLS/frontend/persistence dep, and no `Scope`/`ApprovedOperation`/`Capability` reference (Check 148); the engine reaches it only through the `pub use eggsec_service_db as service_data` facade, and Check 114 pins it as the single canonical service-table owner
 - Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine
 
 ### Intra-Engine Dependencies

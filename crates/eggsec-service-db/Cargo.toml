@@ -1,0 +1,22 @@
+[package]
+name = "eggsec-service-db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Service fingerprint knowledge for Eggsec: port-to-service tables and banner heuristics"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "fingerprint", "service-detection", "banner", "port-scan"]
+categories = ["development-tools"]
+publish = false
+
+# Deliberately leaf. This crate is pure lookup knowledge: a port-to-service
+# table and banner heuristics. It opens no socket, resolves no name, spawns no
+# process, and holds no authority state. Do not add an `eggsec-*` dependency
+# (guard 148 forbids one) or any I/O, frontend, transport, or Tokio crate.
+[dependencies]
+rustc-hash.workspace = true

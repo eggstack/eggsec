@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 002 — Service fingerprint database extraction
 
-Status: ready for handoff
+Status: closed (`plans/closure/security-knowledge-corpus/002-closure.md`; `eggsec-service-db` extracted, guard 114 re-pinned, guard 148 added)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 

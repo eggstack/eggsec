@@ -324,11 +324,22 @@ the same rationale that justified `eggsec-policy` in Phase C.
 |---|---|---|
 | `eggsec-service-db` | port→service tables, banner heuristics | zero workspace deps, zero consumers, 21 tests; `nmap-services`-style corpus |
 | `eggsec-secrets` | 26 credential patterns, entropy scoring | pure regex+entropy over strings; gitleaks/trufflehog-adjacent |
-| `eggsec-payloads` | 35 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
+| `eggsec-payloads` | 34 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
 
 Each lands as `publish = false` with an engine re-export facade, so **no consumer import
 changes** — the `eggsec-python` exhaustive matches over 30 `SecretType` and 40
 `PayloadType` variants compile untouched.
+
+**Status: `eggsec-service-db` implemented (milestone 002).** 302 lines moved verbatim,
+21 tests green in isolation, single dependency edge (`rustc-hash`) confirmed by
+`cargo tree`. The engine reaches it only through
+`pub use eggsec_service_db as service_data;`, and `git diff` shows **zero** changes in
+`scanner/ports/`, `eggsec-python`, `eggsec-tui`, `eggsec-mobile-lab`, or
+`crates/eggsec/tests/`. Check 114's canonical-owner pin moved to
+`crates/eggsec-service-db/src/lib.rs` (and now also fails if the old engine-side file
+reappears, or if the engine facade is dropped). **Check 148** enforces the leaf invariant
+for every corpus crate and is demonstrated to fail on a forbidden dependency.
+`cargo test -p eggsec-service-db --tests` is registered in `make check`.
 
 ### Explicit rejections carried forward from this evaluation
 
@@ -422,14 +433,15 @@ recorded here.
   config (core files import none; `indicatif` only in `cli`-gated `run_cli`);
   no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
   `utils::cache` stays removed.
-- **Phase G (in progress):** check 114's pin on
-  `crates/eggsec/src/scanner/service_data.rs` must move to the new crate's canonical
-  owner when `eggsec-service-db` lands, keeping its `utils/service_detection.rs`
-  reappearance half intact. Milestones 002–004 each add a leaf-invariant guard in the
-  shape of checks 121–123 (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport
-  dependency; `eggsec-core` the only permitted `eggsec-*` edge; no `Scope` /
-  `ApprovedOperation` / `Capability` reference). Milestone 001's guard is **check 147**,
-  present and demonstrated to fail. The 002–004 guards do not exist yet.
+- **Phase G (in progress):** check 114 pins
+  `crates/eggsec-service-db/src/lib.rs` as the single canonical service-table owner, and
+  fails if the old `crates/eggsec/src/scanner/service_data.rs` reappears or the engine's
+  `pub use eggsec_service_db as service_data` facade is dropped. **Check 148** enforces the
+  leaf invariant across every extracted corpus crate: no workspace dependency at all (even
+  though `eggsec-core` would be acceptable), no
+  runtime/network/TLS/frontend/persistence dependency, and no `Scope` /
+  `ApprovedOperation` / `Capability` reference. Milestones 003 and 004 will land into
+  check 148's existing loop with no edit to the guard itself.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
 

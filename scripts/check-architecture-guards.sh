@@ -3110,7 +3110,7 @@ echo ""
 echo "--- Check 114: service-detection stays scanner-owned ---"
 SECTION_FAIL=0
 if [[ -f "crates/eggsec/src/utils/service_detection.rs" ]]; then
-  echo "FAIL: crates/eggsec/src/utils/service_detection.rs reappeared (owner is scanner::service_data)."
+  echo "FAIL: crates/eggsec/src/utils/service_detection.rs reappeared (owner is the eggsec-service-db crate)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if rg -q '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null; then
@@ -3118,12 +3118,20 @@ if rg -q '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null; then
   rg -n '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null || true
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if [[ ! -f "crates/eggsec/src/scanner/service_data.rs" ]]; then
-  echo "FAIL: crates/eggsec/src/scanner/service_data.rs missing (canonical owner)."
+if [[ ! -f "crates/eggsec-service-db/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-service-db/src/lib.rs missing (canonical owner; moved from scanner::service_data in Phase G)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ -f "crates/eggsec/src/scanner/service_data.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/scanner/service_data.rs reappeared (owner is the eggsec-service-db crate)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub use eggsec_service_db as service_data' crates/eggsec/src/scanner/mod.rs 2>/dev/null; then
+  echo "FAIL: scanner/mod.rs no longer re-exports eggsec-service-db as service_data (engine facade path broken)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: service-detection stays scanner-owned."
+  echo "PASS: service-detection stays scanner-owned (eggsec-service-db)."
 else
   FAIL=$((FAIL + 1))
 fi
@@ -4132,6 +4140,55 @@ if rg -q 'fn redact_sensitive|fn redact_json' crates/eggsec/src/ 2>/dev/null; th
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: removed utils::redaction stays removed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 148. Phase G: knowledge-corpus crates stay leaf (no engine/IO/authority reach).
+echo ""
+echo "--- Check 148: knowledge-corpus crates stay leaf ---"
+SECTION_FAIL=0
+for corpus in eggsec-service-db eggsec-secrets eggsec-payloads; do
+  MANIFEST="crates/${corpus}/Cargo.toml"
+  SRC_DIR="crates/${corpus}/src"
+  if [[ ! -d "$SRC_DIR" ]]; then
+    continue  # crate not extracted yet; nothing to police
+  fi
+  # `eggsec-core` is the ONLY permitted workspace dependency (it is a
+  # zero-internal-dependency leaf that owns `Severity`). Everything else
+  # reaches back into engine/domain territory and would break the corpus
+  # boundary. eggsec-service-db is held to the stricter bar of zero.
+  for dep in 'eggsec-policy' 'eggsec-runtime' 'eggsec-transport' 'eggsec-output' 'eggsec-report-model' 'eggsec-tool-core' 'eggsec-agent' 'eggsec-udp-scan' 'eggsec-daemon' 'eggsec ='; do
+    if rg -q "^${dep}([ =]|$)" "$MANIFEST" 2>/dev/null; then
+      echo "FAIL: ${MANIFEST} references forbidden workspace dep '$dep' (only eggsec-core is permitted)."
+      rg -n "$dep" "$MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # No runtime / network / TLS / frontend / persistence reach.
+  for dep in 'tokio' 'reqwest' 'hyper' 'rustls' 'axum' 'tonic' 'clap' 'ratatui' 'crossterm' 'rusqlite' 'sqlx' 'hickory-resolver' 'indicatif'; do
+    if rg -q "^${dep}([ =]|$)" "$MANIFEST" 2>/dev/null; then
+      echo "FAIL: ${MANIFEST} references forbidden dep '$dep'."
+      rg -n "$dep" "$MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # No authorization vocabulary in a corpus: it reports facts, never grants.
+  if rg -n 'Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability' "$SRC_DIR" 2>/dev/null | grep -v '^\s*[^:]*:[0-9]*:\s*//' | grep -v ':\s*[0-9]*:\s*//!' | grep -q .; then
+    echo "FAIL: ${SRC_DIR} references authorization vocabulary (corpus crates authorize nothing)."
+    rg -n 'Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability' "$SRC_DIR" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# eggsec-service-db needs nothing at all from the workspace: it does not even
+# use Severity. Stricter bar than the other corpora, asserted separately.
+if [[ -f "crates/eggsec-service-db/Cargo.toml" ]] && rg -q '^eggsec-core([ =]|$)' crates/eggsec-service-db/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-service-db/Cargo.toml declares eggsec-core (this corpus needs no workspace edge)."
+  rg -n 'eggsec-core' crates/eggsec-service-db/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: knowledge-corpus crates stay leaf (eggsec-core only; no IO/frontend; no authority)."
 else
   FAIL=$((FAIL + 1))
 fi

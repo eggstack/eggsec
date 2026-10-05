@@ -85,12 +85,19 @@ pub mod endpoints;
 pub mod fingerprint;
 pub mod fingerprint_types;
 pub mod ports;
-pub mod service_data;
 pub mod spoof;
 pub mod templates;
 pub mod timing;
 pub mod udp_fingerprint;
 pub mod wordlist;
+
+/// Service fingerprint knowledge.
+///
+/// Phase G moved this out of the engine into the leaf crate
+/// `eggsec-service-db`. This re-export is a **permanent** facade, not
+/// transitional scaffolding: `eggsec::scanner::service_data::*` is the stable
+/// path and stays valid regardless of which crate owns the tables.
+pub use eggsec_service_db as service_data;
 
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;

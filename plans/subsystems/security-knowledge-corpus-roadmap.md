@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Roadmap
 
-Status: in progress (milestone 1 closed; milestones 2–5 pending)
+Status: in progress (milestones 1–2 closed; milestones 3–5 pending)
 
 Long-term references:
 
@@ -146,7 +146,7 @@ libraries only:
 ```text
 eggsec-payloads   -> eggsec-core, serde, strum, flate2, rustc-hash, tracing
 eggsec-secrets    -> eggsec-core, regex, serde, tracing
-eggsec-service-db -> rustc-hash
+eggsec-service-db -> rustc-hash                  [LANDED 2026-10-05, M002]
 
                  +-------------------+
    engine  ---> | eggsec-payloads   |  (re-export at eggsec::fuzzer::payloads)
@@ -155,11 +155,14 @@ eggsec-service-db -> rustc-hash
               -> | eggsec-secrets    |  (re-export at eggsec::recon::secrets)
                  +-------------------+
                  +-------------------+
-              -> | eggsec-service-db |  (re-export at eggsec::scanner::service_data)
+              -> | eggsec-service-db |  (re-export at eggsec::scanner::service_data) [LANDED]
                  +-------------------+
 
 eggsec-core (unchanged leaf): Severity, SensitiveString, constants
 ```
+
+`eggsec-service-db` is the one corpus needing **no** `eggsec-core` edge at all — it uses
+no engine type, which is why guard 148 holds it to a stricter bar than the other two.
 
 Direction is one-way: engine → corpus. No corpus crate imports the engine, and the
 workspace path graph stays acyclic (guard 108).
@@ -238,7 +241,20 @@ reusable; the engine's closure shrinks.
 Exit conditions: `cargo test -p eggsec-service-db` green with 21 tests; guard 114
 updated to the new canonical owner; new guard enforces the leaf invariant.
 
-Deferred work: `DEFAULT_ENDPOINTS` table extraction (measured, deferred).
+**Outcome: closed 2026-10-05.** 302 lines moved byte-identically (263-line body verified
+by diff) into `crates/eggsec-service-db`; 21 tests green in isolation; `cargo tree` shows
+a single `rustc-hash` edge and no workspace edge at all. The engine facade
+`pub use eggsec_service_db as service_data;` preserved every path with an **empty consumer
+diff**. Guard 114 re-pinned (and extended to catch the old file and a dropped facade);
+guard 148 added and demonstrated to fail.
+
+One deliberate deviation: the plan asked for a leaf guard that also forbids
+`eggsec-core`, which would have deadlocked M003/M004. The implemented guard permits
+`eggsec-core` corpus-wide (it is the zero-internal-dependency leaf owning `Severity`) and
+holds `eggsec-service-db` to the stricter zero-edge bar separately.
+
+Deferred work: `DEFAULT_ENDPOINTS` table extraction (measured, deferred — its file also
+owns HTTP fetching and CLI/tool-api coupling).
 
 ### Milestone 3 — Secret detection extraction
 
@@ -405,7 +421,7 @@ The subsystem is closed when:
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
 | 1 | **closed** | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
-| 2 | not started | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | — | — |
+| 2 | **closed** | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
 | 3 | not started | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | — | M001 **discharged** (redaction deleted; `serde_json` not needed) |
 | 4 | not started | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | — | — |
 | 5 | not started | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | — | M002–M004 (operational) + maintainer decision |

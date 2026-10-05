@@ -1,8 +1,22 @@
-//! Scanner-owned service fingerprint knowledge (Phase A ownership cleanup).
+//! Service fingerprint knowledge (extracted from `eggsec` in Phase G).
 //!
-//! Port/service tables, banner heuristics, and service classifiers live with
-//! the scanner/fingerprinting domain that owns their semantics — not in a
-//! global utility bucket. Moved from `utils::service_detection`.
+//! Port/service tables, banner heuristics, and service classifiers. This is the
+//! canonical single owner of service fingerprinting knowledge; it used to live
+//! in `utils::service_detection`, then in `eggsec::scanner::service_data`.
+//!
+//! # What this crate is
+//!
+//! Pure lookup knowledge. A port-to-service table plus pure string heuristics.
+//! It performs no I/O, opens no socket, resolves no name, spawns no process,
+//! and holds no authority state — the scanner supplies the banner string, and
+//! this crate returns what it means.
+//!
+//! Its only dependency is `rustc-hash`. Guard 148 enforces that it stays a
+//! leaf: no `eggsec-*` dependency, no Tokio/HTTP/TLS/filesystem/frontend/transport
+//! dependency, and no `Scope` / `ApprovedOperation` / `Capability` reference.
+//!
+//! Tables stay behind `LazyLock` so a process that never fingerprints a service
+//! never pays to build them.
 
 use rustc_hash::FxHashMap;
 use std::sync::LazyLock;

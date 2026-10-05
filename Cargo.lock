@@ -2047,6 +2047,7 @@ dependencies = [
  "eggsec-policy",
  "eggsec-report-model",
  "eggsec-runtime",
+ "eggsec-service-db",
  "eggsec-tool-core",
  "eggsec-transport",
  "eggsec-transport-eggfetch",
@@ -2394,6 +2395,13 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "eggsec-service-db"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash",
 ]
 
 [[package]]
