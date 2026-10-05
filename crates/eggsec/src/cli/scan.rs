@@ -362,6 +362,12 @@ pub struct ScanArgs {
     pub json: bool,
     #[arg(long, short = 'o', help = "Output file path")]
     pub output: Option<String>,
+    #[arg(
+        long = "save-session",
+        help = "Write a resumable scan checkpoint into the session store so it \
+                can be continued later with `eggsec resume` or from the TUI Resume tab"
+    )]
+    pub save_session: bool,
     #[arg(long, help = "Output format: json, html, csv, sarif, junit")]
     pub format: Option<super::OutputFormat>,
     #[arg(long, help = "Web payload types for web scan (comma-separated)")]

@@ -89,6 +89,38 @@ impl ResumeTab {
             ));
             return;
         }
+        // A checkpoint exists so an interrupted scan can continue. Once every
+        // stage has completed there is nothing left to resume, and dispatching
+        // it would start a no-op run whose result reads like a real one. Check
+        // only for a listed row: a manual path may point at a checkpoint the
+        // store never indexed, and refusing that would hide a resumable file.
+        if self.manual_path().is_empty() {
+            if let Some(entry) = self.entries.get(self.selected) {
+                if !entry.is_resumable() {
+                    // Distinguish the two reasons. A clean finish has nothing
+                    // left to do; a run that ended with failed stages cannot
+                    // retry them by resuming, so it needs a fresh scan. Calling
+                    // the second "complete" would hide a broken assessment.
+                    let message = if entry.finalized && entry.failed_stages > 0 {
+                        format!(
+                            "This scan ended with {} failed stage(s) and no stages \
+                             left, so resuming would do nothing. Re-run the scan to \
+                             retry them.",
+                            entry.failed_stages
+                        )
+                    } else {
+                        format!(
+                            "This scan already completed all {} stage(s), so there is \
+                             nothing to resume. Pick an interrupted scan, or type a \
+                             session file path.",
+                            entry.completed_stages
+                        )
+                    };
+                    self.core.error = Some(TabError::Config(message));
+                    return;
+                }
+            }
+        }
         self.core.error = None;
         if self.core.state != AppState::Running {
             self.core.progress.current = 0;
@@ -410,6 +442,8 @@ mod tests {
             completed_stages: 1,
             remaining_stages: 2,
             modified_epoch_secs: 0,
+            finalized: true,
+            failed_stages: 0,
         }];
         tab.core.inputs.fields.get_mut(0).unwrap().value = "/tmp/manual.json".into();
 
@@ -428,6 +462,8 @@ mod tests {
             completed_stages: 0,
             remaining_stages: 3,
             modified_epoch_secs: 0,
+            finalized: true,
+            failed_stages: 0,
         }];
         assert_eq!(tab.selected_path().as_deref(), Some(path.to_str().unwrap()));
         assert_eq!(tab.selected_target().as_deref(), Some("example.test"));
@@ -445,6 +481,8 @@ mod tests {
                 completed_stages: 0,
                 remaining_stages: 1,
                 modified_epoch_secs: 0,
+                finalized: true,
+                failed_stages: 0,
             })
             .collect();
         tab.render_list();
@@ -456,6 +494,77 @@ mod tests {
         assert_eq!(tab.selected, 1, "must not wrap past the last row");
         tab.select_next();
         assert_eq!(tab.selected, 1);
+    }
+
+    /// A completed checkpoint has nothing to resume, so it must be refused
+    /// rather than dispatched: a no-op run whose result reads like a real one
+    /// is worse than an explanation.
+    #[test]
+    fn completed_checkpoint_is_refused_instead_of_dispatched() {
+        let mut tab = ResumeTab::new();
+        tab.entries = vec![SessionEntry {
+            path: std::path::PathBuf::from("/tmp/done.session.json"),
+            target: "example.test".into(),
+            completed_stages: 5,
+            remaining_stages: 0,
+            modified_epoch_secs: 0,
+            finalized: true,
+            failed_stages: 0,
+        }];
+        tab.start();
+        assert!(
+            tab.core.error.is_some(),
+            "a finished scan must not be dispatched as a no-op resume"
+        );
+        assert_eq!(tab.core.state, AppState::Idle, "must not fake a run");
+    }
+
+    /// A run that ended with failed stages must not be reported as "complete" —
+    /// that would hide a broken assessment behind a reassuring label.
+    #[test]
+    fn failed_final_run_is_labelled_as_failed_not_complete() {
+        let entry = SessionEntry {
+            path: std::path::PathBuf::from("/tmp/partial.session.json"),
+            target: "example.test".into(),
+            completed_stages: 3,
+            remaining_stages: 0,
+            modified_epoch_secs: 0,
+            finalized: true,
+            failed_stages: 2,
+        };
+        let label = entry.label();
+        assert!(!label.contains("complete"), "got {label:?}");
+        assert!(label.contains("2 failed"), "got {label:?}");
+
+        let mut tab = ResumeTab::new();
+        tab.entries = vec![entry];
+        tab.start();
+        let msg = format!("{:?}", tab.core.error);
+        assert!(msg.contains("Re-run the scan"), "got {msg}");
+    }
+
+    /// A manual path may point at a checkpoint the store never indexed, so it
+    /// is not second-guessed from the row list — refusing it would hide a
+    /// genuinely resumable file.
+    #[test]
+    fn manual_path_is_not_gated_on_the_row_list() {
+        let mut tab = ResumeTab::new();
+        tab.entries = vec![SessionEntry {
+            path: std::path::PathBuf::from("/tmp/done.session.json"),
+            target: "example.test".into(),
+            completed_stages: 5,
+            remaining_stages: 0,
+            modified_epoch_secs: 0,
+            finalized: true,
+            failed_stages: 0,
+        }];
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "/tmp/manual.json".into();
+        tab.start();
+        assert!(
+            tab.core.error.is_none(),
+            "a manual path must dispatch unchallenged: {:?}",
+            tab.core.error
+        );
     }
 
     /// The rendered list must mark the selected row, or Enter resumes a
@@ -472,6 +581,8 @@ mod tests {
                 completed_stages: 1,
                 remaining_stages: 2,
                 modified_epoch_secs: 0,
+                finalized: true,
+                failed_stages: 0,
             })
             .collect();
         tab.selected = 1;

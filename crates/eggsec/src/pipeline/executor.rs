@@ -175,10 +175,46 @@ impl Pipeline {
             SpoofConfig::default()
         });
 
-        let session_path = args
+        // Checkpoint destination, in precedence order:
+        //
+        // 1. An `--output` ending in `.session.json`/`.session`. Long-standing
+        //    behaviour, kept exactly: those files are often hand-authored and
+        //    may live anywhere on disk.
+        // 2. `--save-session`, which writes into the session store so the TUI
+        //    resume picker can find it. This is the only way a plain CLI scan
+        //    becomes resumable, because an ordinary scan writes no checkpoint:
+        //    checkpointing stays opt-in rather than accumulating a file per run.
+        let derived_from_output = args
             .output
             .clone()
             .filter(|p| p.ends_with(".session.json") || p.ends_with(".session"));
+        let session_path = match derived_from_output {
+            Some(path) => Some(path),
+            None if args.save_session => {
+                let epoch_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                match super::session::ensure_store_dir() {
+                    Ok(_) => Some(
+                        super::session::store_path_for(&args.target, epoch_secs)
+                            .to_string_lossy()
+                            .to_string(),
+                    ),
+                    Err(e) => {
+                        // A scan the operator asked to be resumable must not
+                        // quietly run without a checkpoint.
+                        tracing::error!(
+                            error = %e,
+                            "--save-session was requested but the session store could not be created; \\
+                             the scan will run but will not be resumable"
+                        );
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
 
         Self {
             target: args.target.clone(),
@@ -478,6 +514,10 @@ impl Pipeline {
                     concurrency: Some(self.concurrency),
                     concurrent_stages: Some(self.concurrent_stages),
                     config: self.config.clone(),
+                    // A mid-run checkpoint: the outcome is not known yet, so the
+                    // run stays resumable rather than being declared finished.
+                    finalized: false,
+                    failed_stages: Vec::new(),
                 };
                 if let Err(e) = save(path, &session).await {
                     tracing::warn!(
@@ -629,6 +669,10 @@ impl Pipeline {
                     concurrency: Some(self.concurrency),
                     concurrent_stages: Some(self.concurrent_stages),
                     config: self.config.clone(),
+                    // A mid-run checkpoint: the outcome is not known yet, so the
+                    // run stays resumable rather than being declared finished.
+                    finalized: false,
+                    failed_stages: Vec::new(),
                 };
                 if let Err(e) = save(path, &session).await {
                     tracing::warn!(
@@ -659,6 +703,15 @@ impl Pipeline {
                 concurrency: Some(self.concurrency),
                 concurrent_stages: Some(self.concurrent_stages),
                 config: self.config.clone(),
+                // Record how the run actually ended. Without this a failure on
+                // the last stage is indistinguishable from a clean finish, and
+                // the picker would call a broken scan "complete".
+                finalized: true,
+                failed_stages: stage_results
+                    .iter()
+                    .filter(|r| !r.success)
+                    .map(|r| r.stage)
+                    .collect(),
             };
             if let Err(e) = save(path, &session).await {
                 tracing::warn!(

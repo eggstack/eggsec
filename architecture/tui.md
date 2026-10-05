@@ -330,11 +330,43 @@ make every checkpoint fail to deserialize as UI state and vice versa.
 stage counts, mtime) for the picker, skipping unreadable files with a
 `tracing::warn!` so one corrupt file cannot hide every other session.
 
-Checkpoints are opt-in: `PipelineParams.session_path` is `None` by default, so an
-ordinary scan writes nothing. The CLI's existing derivation from a
-`.session.json` `--output` is unchanged, which is why the picker keeps a manual
-path field — checkpoints written outside the store directory are still reachable,
-and the manual path deliberately takes precedence over the highlighted row.
+Checkpoints are opt-in, from both directions. `PipelineParams.session_path` is
+`None` by default, so a TUI scan writes nothing unless it asks. On the CLI,
+`--save-session` opts a scan in; without it the only checkpoint that exists is
+the long-standing derivation from a `.session.json` `--output`, which is
+preserved exactly. A failure to create the store under `--save-session` is
+logged at `error` rather than swallowed, so a scan the operator asked to be
+resumable never silently runs without a checkpoint.
+
+`store_path_for()` sanitizes the target into a single filename component
+(no separators, never dot-prefixed, so a checkpoint stays visible in a plain
+directory listing) and appends a UTC timestamp so repeat scans of one host do not
+overwrite each other.
+
+The picker keeps a manual path field because checkpoints written outside the
+store are still reachable; the manual path deliberately takes precedence over the
+highlighted row.
+
+### Checkpoint Outcomes
+
+A checkpoint is only meaningful for an *interrupted* scan, so the picker must
+distinguish three end states rather than guessing from `remaining_stages`,
+which is empty both for a clean finish and for a run that died on its last
+attempted stage:
+
+| State | `remaining_stages` | `finalized` | `failed_stages` | Picker |
+|---|---|---|---|---|
+| In progress | non-empty | `false` | — | resumable, "N left" |
+| Clean finish | empty | `true` | empty | "complete", not resumable |
+| Ended with failures | empty | `true` | non-empty | "N failed — re-run to retry", not resumable |
+| Aborted before final save | empty | `false` | — | "stopped early", not resumable |
+
+`finalized` and `failed_stages` are `#[serde(default)]`, so checkpoints written
+before these fields existed still load and are read as *not* finalized — the
+safe direction, since such a file is offered as resumable rather than declared
+complete. `Pipeline::run()` only reaches its final save on the success path, so
+a hard error leaves a mid-run checkpoint behind, which is why the aborted case
+exists.
 
 `App::sync_input_focus_for_current_tab()` refreshes the list on every tab-entry
 path. That is a pull, not a poll: nothing refreshes while the tab sits open.
