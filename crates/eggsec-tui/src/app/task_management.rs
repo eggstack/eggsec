@@ -298,6 +298,7 @@ impl TaskBuilder for super::tabs::ScanTab {
                 // directory by the engine, never by the tab.
                 output_format: non_blank(self.output_format()),
                 output_file: non_blank(self.output_file()),
+                session_path: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -444,6 +445,21 @@ impl TaskBuilder for super::tabs::HuntTab {
                 target: target.to_string(),
                 hunt_type: None,
             }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        })
+    }
+}
+
+impl TaskBuilder for super::tabs::ResumeTab {
+    /// Resume dispatches the highlighted checkpoint (or the manually typed
+    /// path, which takes precedence so a checkpoint outside the session store
+    /// is still reachable).
+    fn build_run_request(&self) -> Option<RunRequest> {
+        let session_path = self.selected_path()?;
+        Some(RunRequest {
+            task_kind: TaskKind::Resume(eggsec_runtime::request::ResumeParams { session_path }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
             labels: vec![],
@@ -1674,6 +1690,7 @@ mod tests {
             profile: Some("quick".into()),
             output_format: Some("json".into()),
             output_file: Some("reports/scan.sarif".into()),
+            session_path: None,
         }
         .normalize()
         .expect("pipeline request normalizes");
@@ -1752,6 +1769,7 @@ mod tests {
             profile: Some("quick".into()),
             output_format: Some("json".into()),
             output_file: Some("../../../etc/cron.d/pwn".into()),
+            session_path: None,
         };
         assert!(canonical.normalize().is_err());
     }

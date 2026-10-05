@@ -266,6 +266,7 @@ fn pipeline_profile_rejects_unknown() {
         profile: Some("web".into()),
         output_format: None,
         output_file: None,
+        session_path: None,
     }
     .normalize()
     .unwrap();
@@ -276,6 +277,7 @@ fn pipeline_profile_rejects_unknown() {
         profile: None,
         output_format: None,
         output_file: None,
+        session_path: None,
     }
     .normalize()
     .unwrap();
@@ -286,6 +288,7 @@ fn pipeline_profile_rejects_unknown() {
         profile: Some("bogus-profile".into()),
         output_format: None,
         output_file: None,
+        session_path: None,
     };
     assert!(bad.normalize().is_err());
 }
@@ -303,6 +306,7 @@ fn pipeline_output_converges_across_wire_dto() {
         profile: Some("web".into()),
         output_format: Some("SARIF".into()),
         output_file: Some("  reports/scan.sarif  ".into()),
+        session_path: None,
     };
     let normalized = canonical.normalize().unwrap();
     assert_eq!(normalized.output_format, PipelineOutputFormat::Sarif);
@@ -318,6 +322,7 @@ fn pipeline_output_converges_across_wire_dto() {
             profile: Some("web".into()),
             output_format: Some("SARIF".into()),
             output_file: Some("  reports/scan.sarif  ".into()),
+            session_path: None,
         });
     assert_eq!(runtime.normalize().unwrap(), normalized);
 }
@@ -329,6 +334,7 @@ fn pipeline_output_format_rejects_unknown_and_defaults_to_html() {
         profile: None,
         output_format: format.map(str::to_string),
         output_file: Some("report.out".into()),
+        session_path: None,
     };
     assert_eq!(
         base(None).normalize().unwrap().output_format,
@@ -353,6 +359,7 @@ fn pipeline_output_path_rejects_traversal_and_unsafe_characters() {
         profile: None,
         output_format: Some("json".into()),
         output_file: Some(path.to_string()),
+        session_path: None,
     };
     // Plain relative paths and nested directories are fine.
     assert!(base("report.json").normalize().is_ok());

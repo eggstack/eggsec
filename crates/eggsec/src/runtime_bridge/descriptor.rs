@@ -134,6 +134,7 @@ mod tests {
             profile: None,
             output_format: None,
             output_file: None,
+            session_path: None,
         }));
         let desc = descriptor_for_run_request(&req).unwrap();
         assert_eq!(desc.operation, "pipeline");

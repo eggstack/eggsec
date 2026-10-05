@@ -30,7 +30,7 @@ The `Tab` enum at `tabs/mod.rs:147-182` declares 33 variants. `Tab::all()` at `t
 | 6 | Waf | `waf` | — | Assessment | SafeActive | `waf-detect` | no | `waf.rs` |
 | 7 | WafStress | `waf_stress` | — | Assessment | Intrusive | `waf-stress` | no | `waf_stress.rs` |
 | 8 | Scan | `scan` | — | Assessment | SafeActive | `pipeline` | no | `scan.rs` |
-| 9 | Resume | `resume` | — | History | SafeActive | — | no | `resume.rs` |
+| 9 | Resume | `resume` | — | History | SafeActive | `pipeline` | no | `resume.rs` |
 | 10 | Proxy | `proxy` | — | Traffic | Administrative | — | no | `proxy.rs` |
 | 11 | Packet | `packet` | `packet-inspection` (availability shell; always visible) | Traffic | Administrative | `packet` | **yes** | `packet.rs` |
 | 12 | GraphQl | `graphql` | — | Assessment | Intrusive | `graphql` | no | `graphql.rs` |
@@ -55,7 +55,9 @@ The `Tab` enum at `tabs/mod.rs:147-182` declares 33 variants. `Tab::all()` at `t
 | 31 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept.rs` |
 | 32 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
 
-**Summary**: 21 base + 12 gated = 33 total. 26 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard).
+**Summary**: 21 base + 12 gated = 33 total. 27 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 6 have no operation/task/descriptor (Proxy, Cluster, Report, Settings, History, Dashboard).
+
+Resume shares the canonical `pipeline` operation: it runs the same stage set from a saved checkpoint, and `route_for_command_id` already maps the `resume` CLI command to `["pipeline"]` while the CLI handler resolves enforcement through that same registry. So Resume needs no `OperationMetadata` entry of its own, and two tabs may legitimately declare one operation.
 
 Phase 0 parity resolutions (see `crates/eggsec-tui/src/parity.rs` and `crates/eggsec/tests/frontend_surface_matrix.rs`):
 - Waf tab uses canonical `waf-detect` (`waf` remains a tested compatibility alias).
@@ -309,6 +311,39 @@ All three shared input macros (`tab_input_2area!`, `tab_input_3area!`, `tab_inpu
 ### The `reset()` Completeness Convention
 
 `reset()` must restore ALL mutable state to defaults: `focus_area`, `selectors` (`.cancel()`), `inputs` (`.blur()`, `.clear()`), `checkboxes` (`.reset()`), `progress` counters, `results_view`, error strings, and mode flags. Missing resets cause stale state to leak across sessions.
+
+### Scan Session Store and the Resume Picker
+
+Three unrelated "session" concepts exist and must not be conflated:
+
+| Concept | Type | Location | Role |
+|---|---|---|---|
+| Runtime session | `eggsec_runtime::session::SessionSnapshot` | `crates/eggsec-runtime/src/session.rs` | in-memory runtime/daemon state; not a file |
+| TUI UI state | `eggsec_tui::session::SessionState` | `crates/eggsec-tui/src/session.rs` | bookmarks/theme/last-tab; listed by the History tab |
+| Scan checkpoint | `eggsec::pipeline::session::PipelineSession` | `crates/eggsec/src/pipeline/session.rs` | the only thing resume consumes |
+
+`pipeline::session::default_session_dir()` resolves `EGGSEC_SESSION_DIR`, then
+the platform data dir + `scan-sessions`. It is deliberately *not* the TUI's
+`sessions/` directory: the schemas are unrelated, so sharing one directory would
+make every checkpoint fail to deserialize as UI state and vice versa.
+`list_sessions()` projects each readable checkpoint to a `SessionEntry` (target,
+stage counts, mtime) for the picker, skipping unreadable files with a
+`tracing::warn!` so one corrupt file cannot hide every other session.
+
+Checkpoints are opt-in: `PipelineParams.session_path` is `None` by default, so an
+ordinary scan writes nothing. The CLI's existing derivation from a
+`.session.json` `--output` is unchanged, which is why the picker keeps a manual
+path field — checkpoints written outside the store directory are still reachable,
+and the manual path deliberately takes precedence over the highlighted row.
+
+`App::sync_input_focus_for_current_tab()` refreshes the list on every tab-entry
+path. That is a pull, not a poll: nothing refreshes while the tab sits open.
+
+Resume dispatch reuses the existing `"pipeline"` result renderer, so a resumed
+run renders through the same path as a scan. `TaskKind::Resume::canonical_target()`
+is `None` by design (the target lives in the checkpoint), and the tab supplies it
+from the selected entry for the enforcement descriptor — the same thing the CLI
+handler does before dispatch.
 
 ## Daemon/Runtime Integration
 

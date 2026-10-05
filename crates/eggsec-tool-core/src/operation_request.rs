@@ -948,6 +948,14 @@ pub struct PipelineRequest {
     /// configured export directory.
     #[serde(default)]
     pub output_file: Option<String>,
+    /// Absolute path to write a resumable scan checkpoint to. `None` (the
+    /// default) writes no checkpoint, so an ordinary scan leaves nothing
+    /// behind on disk. Unlike `output_file` this is NOT relative to the export
+    /// directory: a checkpoint is engine state, not a rendered artifact, and
+    /// resolving it against an operator-chosen report directory would make the
+    /// resume list undiscoverable.
+    #[serde(default)]
+    pub session_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -959,6 +967,8 @@ pub struct NormalizedPipeline {
     /// not an error, just a no-op.
     pub output_format: PipelineOutputFormat,
     pub output_file: Option<String>,
+    /// Carried through verbatim; `None` means "write no checkpoint".
+    pub session_path: Option<String>,
 }
 
 /// Canonical pipeline report format.
@@ -1064,9 +1074,28 @@ impl PipelineRequest {
             profile: parse_scan_profile(self.profile.as_deref())?,
             output_format: parse_pipeline_output_format(self.output_format.as_deref())?,
             output_file,
+            session_path: self.session_path.clone(),
         })
     }
 
+    pub fn operation_id(&self) -> &'static str {
+        "pipeline"
+    }
+}
+
+/// Canonical resume request.
+///
+/// Resumes a saved scan checkpoint. It declares the `pipeline` operation id
+/// because it runs the same stage set, which is also how the `resume` CLI
+/// command is routed and how its enforcement is resolved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeRequest {
+    /// Path to the checkpoint to resume. The target is read from the
+    /// checkpoint itself, not carried here.
+    pub session_path: String,
+}
+
+impl ResumeRequest {
     pub fn operation_id(&self) -> &'static str {
         "pipeline"
     }

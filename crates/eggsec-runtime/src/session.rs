@@ -395,6 +395,7 @@ pub fn summarize_request(kind: &TaskKind) -> String {
         TaskKind::Waf(p) => format!("waf: {}", p.target),
         TaskKind::WafStress(p) => format!("waf-stress: {}", p.target),
         TaskKind::Pipeline(p) => format!("pipeline: {}", p.target),
+        TaskKind::Resume(p) => format!("resume: {}", p.session_path),
         TaskKind::Recon(p) => format!("recon: {}", p.target),
         TaskKind::PacketCapture(_) => "packet-capture".into(),
         TaskKind::PacketTraceroute(p) => format!("traceroute: {}", p.target),

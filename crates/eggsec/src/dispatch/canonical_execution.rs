@@ -260,6 +260,7 @@ pub enum CanonicalOperationRequest {
     LoadTest(crate::operation_request::LoadTestRequest),
     Recon(crate::operation_request::ReconRequest),
     Pipeline(crate::operation_request::PipelineRequest),
+    Resume(crate::operation_request::ResumeRequest),
     GraphQl(crate::operation_request::GraphQlRequest),
     OAuth(crate::operation_request::OAuthRequest),
     AuthTest(crate::operation_request::AuthTestRequest),
@@ -303,6 +304,12 @@ impl CanonicalOperationRequest {
             Self::StressTest(_) => "stress-test",
             Self::PacketCapture(_) | Self::PacketTraceroute(_) | Self::PacketSend(_) => "packet",
             Self::Nse(_) => "nse",
+            // Resume runs the pipeline stage set from a saved checkpoint, so it
+            // shares the `pipeline` operation identity rather than declaring a
+            // new one. `route_for_command_id` already maps the `resume` command
+            // to ["pipeline"], and the CLI handler resolves enforcement the same
+            // way, so this keeps the TUI on the existing canonical operation.
+            Self::Resume(_) => "pipeline",
             Self::Hunt(_) => "hunt",
             Self::Browser(_) => "browser",
             Self::Compliance(_) => "compliance",
@@ -327,6 +334,12 @@ impl CanonicalOperationRequest {
             Self::LoadTest(r) => Some(r.target.clone()),
             Self::Recon(r) => Some(r.target.clone()),
             Self::Pipeline(r) => Some(r.target.clone()),
+            // The resumed target lives in the checkpoint, not in the request, so
+            // this is target-less by construction: validation against
+            // `OperationMetadata` target policy then fails explicitly rather
+            // than resuming an unbound operation. Manual surfaces supply the
+            // target from the selected session in their descriptor path.
+            Self::Resume(_) => None,
             Self::GraphQl(r) => Some(r.target.clone()),
             Self::OAuth(r) => Some(r.target.clone()),
             Self::AuthTest(r) => Some(r.target.clone()),
@@ -447,6 +460,12 @@ impl CanonicalOperationRequest {
                 }
                 Ok(())
             }
+            Self::Resume(p) => {
+                if p.session_path.trim().is_empty() {
+                    return Err(err("resume session path must not be empty"));
+                }
+                Ok(())
+            }
             Self::Hunt(p) => {
                 if p.target.trim().is_empty() {
                     return Err(err("hunt target must not be empty"));
@@ -504,6 +523,7 @@ impl CanonicalOperationRequest {
             K::Waf(p) => Self::WafDetect(adapters::waf_from_runtime(p)),
             K::WafStress(p) => Self::WafStress(adapters::waf_stress_from_runtime(p)),
             K::Pipeline(p) => Self::Pipeline(adapters::pipeline_from_runtime(p)),
+            K::Resume(p) => Self::Resume(adapters::resume_from_runtime(p)),
             K::Recon(p) => Self::Recon(adapters::recon_from_runtime(p)),
             K::PacketCapture(p) => Self::PacketCapture(p.clone()),
             K::PacketTraceroute(p) => Self::PacketTraceroute(p.clone()),
@@ -1421,7 +1441,15 @@ async fn execute_canonical_inner(
                 // Format without a destination has nothing to render into.
                 (None, _) => None,
             };
-            super::recon::run_pipeline(n.target, profile, output, fanout_tx.clone())
+            super::recon::run_pipeline(n.target, profile, output, n.session_path, fanout_tx.clone())
+                .await
+                .map_err(|e| ExecutionError::ExecutionFailed {
+                    operation_id: operation_id.clone(),
+                    message: e.to_string(),
+                })
+        }
+        CanonicalOperationRequest::Resume(p) => {
+            super::recon::run_pipeline_resume(p.session_path, fanout_tx.clone())
                 .await
                 .map_err(|e| ExecutionError::ExecutionFailed {
                     operation_id: operation_id.clone(),
@@ -1994,6 +2022,7 @@ mod tests {
             profile: None,
             output_format: None,
             output_file: None,
+            session_path: None,
         });
         assert_eq!(pipe.operation_id(), "pipeline");
     }
@@ -2065,6 +2094,7 @@ mod tests {
                     profile: None,
                     output_format: None,
                     output_file: None,
+                    session_path: None,
                 }),
                 "pipeline",
             ),

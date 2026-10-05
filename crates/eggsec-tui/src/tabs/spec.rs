@@ -289,7 +289,12 @@ pub static TAB_SPECS: &[TabSpec] = &[
         risk_group: TabRiskGroup::SafeActive,
         feature: None,
         breadcrumb_label: "Resume",
-        operation: None,
+        // Resume runs the pipeline stage set from a saved checkpoint, so it
+        // shares the canonical `pipeline` operation. `route_for_command_id`
+        // already maps the `resume` command to ["pipeline"] and the CLI
+        // handler resolves enforcement the same way, so this introduces no new
+        // catalog entry.
+        operation: Some("pipeline"),
         direct_launch: false,
         supports_run: true,
         supports_export: false,

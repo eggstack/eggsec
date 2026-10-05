@@ -33,7 +33,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | dependency-architecture-simplification | closed | `plans/dependency-architecture-simplification-roadmap.md` | Phase J + dispatch-profile parity corrective pass; closure report |
 | crate-boundary-ownership | closed | `plans/crate-boundary-consolidation-roadmap-2026-09-16.md` | Phase D closes the roadmap |
 | network-transport-egress | closed | `plans/network-dependency-hardening-roadmap-2026-09-11.md`; `plans/eggress-1.0.8-adoption-roadmap-2026-09-22.md` | Eggress 1.0.10 adoption + metadata closure (2026-09-25, implementation `fe5ec2d2`); ADR-0001, ADR-0002 controlling |
-| frontend-runtime-tui | closed | `plans/frontend-runtime-convergence-roadmap-2026-09-10.md`; `plans/tui-terminal-ownership-corrective-roadmap-2026-09-19.md` | Phase B lifecycle closure + confirmation-intent corrective pass |
+| frontend-runtime-tui | active | `plans/frontend-runtime-convergence-roadmap-2026-09-10.md`; `plans/tui-terminal-ownership-corrective-roadmap-2026-09-19.md` | Reopened for `plans/implementation/frontend-runtime-tui/001-pipeline-session-registry-and-resume-picker.md` (scan session store + TUI resume picker) |
 | python-programmability | closed | `plans/python-library-roadmap.md`; `plans/python-api-completion-roadmap.md`; `plans/python-api-high-value-roadmap.md`; `plans/python-api-release-5-roadmap.md` | Release 5 phase F compatibility/performance/release closure |
 | ci-verification-release | closed | `plans/ci-verification-release-simplification-roadmap.md`; `plans/ci-release-simplification-corrective-closure-index.md` | Phase K evidence-toolchain polish |
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
@@ -88,7 +88,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 - `plans/loadtest-authorization-transport-corrective-pass-2026-09-16.md`
 - `plans/loadtest-multi-address-socket-binding-corrective-pass-2026-09-17.md`
 
-### frontend-runtime-tui (closed)
+### frontend-runtime-tui (active)
 
 - `plans/frontend-runtime-convergence-roadmap-2026-09-10.md`
 - `plans/frontend-runtime-phase-0-binding-and-parity-guards.md` through `plans/frontend-runtime-phase-3-runtime-contract-hotspot-closure.md`

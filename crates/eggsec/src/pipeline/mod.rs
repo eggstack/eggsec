@@ -48,8 +48,6 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-#[cfg(any(feature = "tool-api", feature = "cli"))]
-use crate::error::EggsecError;
 // Unconditional: `write_output` is no longer feature-gated, so the module's
 // `Result` alias is needed on every build.
 use crate::error::Result;
@@ -183,7 +181,7 @@ where
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -245,7 +243,7 @@ where
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -290,7 +288,7 @@ pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -302,16 +300,19 @@ pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "cli")]
-pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
-    let session = session::load(&args.session).await?;
+/// Resume a saved scan and return its report.
+///
+/// This is the non-printing half of `resume_cli`. Surfaces that render a
+/// session to the user themselves (notably the TUI, which owns the alternate
+/// screen and must never write terminal bytes) call this directly; only the CLI
+/// wrapper renders the returned report.
+pub async fn resume(path: &str, config: &crate::config::EggsecConfig) -> Result<PipelineReport> {
+    let session = session::load(path).await?;
     let pipeline = Pipeline::from_session(session).with_config(config.clone());
     let report = pipeline.run().await?;
 
-    println!("{}", report);
-
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -320,6 +321,21 @@ pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
         });
     }
 
+    Ok(report)
+}
+
+/// Read the target stored in a checkpoint without running it.
+///
+/// The TUI needs the target before dispatch so it can build the enforcement
+/// descriptor for the resumed run, exactly as the CLI handler does.
+pub async fn session_target(path: &str) -> Result<String> {
+    Ok(session::load(path).await?.target)
+}
+
+#[cfg(feature = "cli")]
+pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
+    let report = resume(&args.session, config).await?;
+    println!("{}", report);
     Ok(())
 }
 

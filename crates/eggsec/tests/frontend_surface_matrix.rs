@@ -659,6 +659,7 @@ fn runtime_task_operation_ids_agree_between_owners() {
             profile: None,
             output_format: None,
             output_file: None,
+            session_path: None,
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),

@@ -71,6 +71,7 @@ pub enum TaskKind {
     Waf(WafParams),
     WafStress(WafStressParams),
     Pipeline(PipelineParams),
+    Resume(ResumeParams),
     Recon(ReconParams),
     PacketCapture(PacketCaptureParams),
     PacketTraceroute(PacketTracerouteParams),
@@ -223,6 +224,24 @@ pub struct PipelineParams {
     /// Destination for the rendered report, relative to the export directory.
     #[serde(default)]
     pub output_file: Option<String>,
+    /// Absolute path to write a resumable scan checkpoint to.
+    ///
+    /// `None` (the default) writes no checkpoint, so an ordinary scan does not
+    /// accumulate files on disk. When set, the pipeline checkpoints after each
+    /// completed stage, which is what makes the run selectable in the TUI
+    /// resume picker. The caller owns the path; the engine does not invent a
+    /// session directory for it.
+    #[serde(default)]
+    pub session_path: Option<String>,
+}
+
+/// Resume a saved scan checkpoint.
+///
+/// The target is not carried here: it lives inside the checkpoint, and the
+/// engine reads it to build the enforcement descriptor for the resumed run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeParams {
+    pub session_path: String,
 }
 
 /// Recon parameters.
@@ -513,6 +532,10 @@ impl TaskKind {
             TaskKind::Waf(_) => "waf",
             TaskKind::WafStress(_) => "waf-stress",
             TaskKind::Pipeline(_) => "pipeline",
+            // Resume is a distinct wire kind with its own capability name, so a
+            // runtime can advertise pipeline support without also advertising
+            // resume — the daemon conservative set deliberately omits it.
+            TaskKind::Resume(_) => "resume",
             TaskKind::Recon(_) => "recon",
             TaskKind::PacketCapture(_) => "packet-capture",
             TaskKind::PacketTraceroute(_) => "traceroute",
@@ -567,6 +590,12 @@ impl TaskKind {
             TaskKind::Waf(_) => "waf-detect",
             TaskKind::WafStress(_) => "waf-stress",
             TaskKind::Pipeline(_) => "pipeline",
+            // Resume executes the pipeline stage set from a saved checkpoint,
+            // so it shares the `pipeline` operation identity rather than
+            // declaring a new one. `route_for_command_id` already maps the
+            // `resume` command to ["pipeline"] and the CLI handler resolves
+            // enforcement the same way.
+            TaskKind::Resume(_) => "pipeline",
             TaskKind::Recon(_) => "recon",
             TaskKind::PacketCapture(_) => "packet",
             TaskKind::PacketTraceroute(_) => "packet",
@@ -607,6 +636,12 @@ impl TaskKind {
             TaskKind::Waf(p) => Some(p.target.clone()),
             TaskKind::WafStress(p) => Some(p.target.clone()),
             TaskKind::Pipeline(p) => Some(p.target.clone()),
+            // The resumed target lives inside the checkpoint, not in these
+            // params, so this is the documented target-less case: the bridge
+            // fails explicitly against `OperationMetadata` target policy rather
+            // than resuming something unbound. Manual surfaces supply the
+            // target from the selected session in their own descriptor path.
+            TaskKind::Resume(_) => None,
             TaskKind::Recon(p) => Some(p.target.clone()),
             TaskKind::PacketCapture(_) => None,
             TaskKind::PacketTraceroute(p) => Some(p.target.clone()),

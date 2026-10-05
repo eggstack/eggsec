@@ -82,6 +82,9 @@ fn task_kind_label(kind: &TaskKind) -> &'static str {
         TaskKind::Waf(_) => "WAF Detection",
         TaskKind::WafStress(_) => "WAF Stress",
         TaskKind::Pipeline(_) => "Pipeline",
+        // Shares the pipeline result renderer; the view title is what
+        // distinguishes a resumed run in the TUI results pane.
+        TaskKind::Resume(_) => "Resumed Scan",
         TaskKind::Recon(_) => "Recon",
         TaskKind::PacketCapture(_) => "Packet Capture",
         TaskKind::PacketTraceroute(_) => "Traceroute",

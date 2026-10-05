@@ -275,6 +275,7 @@ fn pipeline_multiplexer_resolves_before_boundary() {
         profile: None,
         output_format: None,
         output_file: None,
+        session_path: None,
     });
     let canonical = CanonicalOperationRequest::from_task_kind(&kind);
     assert_eq!(canonical.operation_id(), "pipeline");
@@ -285,6 +286,7 @@ fn pipeline_multiplexer_resolves_before_boundary() {
         profile: Some("bogus-profile".into()),
         output_format: None,
         output_file: None,
+        session_path: None,
     };
     assert!(bad.normalize().is_err());
     // A traversal destination fails closed too, before any scan runs.
@@ -293,6 +295,7 @@ fn pipeline_multiplexer_resolves_before_boundary() {
         profile: None,
         output_format: Some("json".into()),
         output_file: Some("../../etc/cron.d/eggsec".into()),
+        session_path: None,
     };
     assert!(escaping.normalize().is_err());
 }

@@ -35,6 +35,9 @@ fn tab_for_task_kind(kind: &TaskKind) -> Tab {
         TaskKind::Waf(_) => Tab::Waf,
         TaskKind::WafStress(_) => Tab::WafStress,
         TaskKind::Pipeline(_) => Tab::Scan,
+        // Resume reports into the Scan pipeline renderer but originates from the
+        // Resume tab, so hydration must route the event to Resume.
+        TaskKind::Resume(_) => Tab::Resume,
         TaskKind::Recon(_) => Tab::Recon,
         TaskKind::LoadTest(_) => Tab::Load,
         TaskKind::StressTest(_) => Tab::Stress,

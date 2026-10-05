@@ -46,7 +46,8 @@ impl OperationExecutor for ReconExecutor {
                     // `OperationDescriptor` with no request params, so there
                     // is no caller-supplied destination to honour. See the
                     // canonical `pipeline` arm for the parameterized path.
-                    crate::dispatch::recon::run_pipeline(target, profile, None, progress_tx).await
+                    crate::dispatch::recon::run_pipeline(target, profile, None, None, progress_tx)
+                        .await
                 }
                 _ => {
                     return ExecutionOutput::Failed(format!(

@@ -908,6 +908,14 @@ impl App {
     /// discarded. Idempotent, and it never steals a field the user already
     /// focused or one the user deliberately blurred.
     pub fn sync_input_focus_for_current_tab(&mut self) {
+        // Resume is the one tab whose content is read from outside its own
+        // state: the list of saved checkpoints must reflect the session store
+        // as it is *now*, not as it was when the tab was last built. Every
+        // tab-entry path funnels through here, so this is the single place
+        // that needs to know.
+        if self.current_tab == Tab::Resume {
+            self.tabs.resume.refresh();
+        }
         self.dispatcher_mut().ensure_input_focus();
     }
 

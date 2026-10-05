@@ -248,6 +248,17 @@ impl Pipeline {
         self
     }
 
+    /// Write a resumable checkpoint to `path` after each completed stage.
+    ///
+    /// Without this, `session_path` stays `None` and the run writes no
+    /// checkpoint at all — checkpointing is opt-in so an ordinary scan does not
+    /// accumulate files on disk. `from_args` keeps deriving a path from a
+    /// `.session.json` output, so CLI behaviour is unchanged.
+    pub fn with_session_path(mut self, path: Option<String>) -> Self {
+        self.session_path = path;
+        self
+    }
+
     pub fn with_concurrent_stages(mut self, enabled: bool) -> Self {
         self.concurrent_stages = enabled;
         self

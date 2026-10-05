@@ -288,6 +288,13 @@ pub mod runtime_adapters {
             profile: p.profile.clone(),
             output_format: p.output_format.clone(),
             output_file: p.output_file.clone(),
+            session_path: p.session_path.clone(),
+        }
+    }
+
+    pub fn resume_from_runtime(p: &eggsec_runtime::request::ResumeParams) -> ResumeRequest {
+        ResumeRequest {
+            session_path: p.session_path.clone(),
         }
     }
 
@@ -443,6 +450,7 @@ mod tests {
                 profile: None,
                 output_format: None,
                 output_file: None,
+                session_path: None,
             }),
             TaskKind::Recon(ReconParams {
                 target: "example.com".into(),

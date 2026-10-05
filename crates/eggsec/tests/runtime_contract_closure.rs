@@ -80,6 +80,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
             profile: None,
             output_format: None,
             output_file: None,
+            session_path: None,
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),
