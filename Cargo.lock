@@ -2044,6 +2044,7 @@ dependencies = [
  "eggsec-mobile-lab",
  "eggsec-nse",
  "eggsec-output",
+ "eggsec-payloads",
  "eggsec-policy",
  "eggsec-report-model",
  "eggsec-runtime",
@@ -2328,6 +2329,18 @@ dependencies = [
  "tokio",
  "unicode-normalization",
  "uuid",
+]
+
+[[package]]
+name = "eggsec-payloads"
+version = "0.1.0"
+dependencies = [
+ "eggsec-core",
+ "flate2",
+ "rustc-hash",
+ "serde",
+ "strum 0.27.2",
+ "tracing",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 004 — Payload corpus extraction
 
-Status: ready for handoff
+Status: closed (`plans/closure/security-knowledge-corpus/004-closure.md`; `eggsec-payloads` extracted, caches engine-side, guards 148/150 + seam suite)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 

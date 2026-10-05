@@ -30,7 +30,7 @@ Key capabilities:
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `payloads/` | 42 | Per-type payload libraries + `PayloadType` enum + `payload_vec!` macro |
+| `payloads/` | 6 | **Live-probe payload modules only** (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`) + the engine dispatch and cross-variant caches. The 34 pure-data modules and the `PayloadType` enum moved to the `eggsec-payloads` crate in Phase G. |
 | `engine/` | 7 | Core `FuzzEngine`, execution modes, session building, advanced dispatch |
 | `detection/` | 4 | Aho-Corasick leak matcher, IQR timing analyzer, raw patterns |
 | `targets/` | 6 | Per-target profiles: api, apache, php, nginx, generic |
@@ -43,7 +43,36 @@ Key capabilities:
 
 ### PayloadType Enum (40 variants)
 
-**File:** `fuzzer/payloads/mod.rs:49-90`
+**Owner:** the `eggsec-payloads` crate (`crates/eggsec-payloads/src/lib.rs`), since
+Phase G. Re-exported at `eggsec::fuzzer::payloads::PayloadType` and
+`eggsec::fuzzer::PayloadType`, so every existing import is unchanged.
+
+### Corpus/probe seam
+
+The payload tree splits on a seam that already existed in the source, not one invented
+for the extraction:
+
+| Side | Contents | Owner |
+|---|---|---|
+| **Corpus** (34 modules, 7,084 lines) | injection, traversal, deserialization, protocol-abuse payload data | `eggsec-payloads` crate |
+| **Probe** (6 modules, 4,354 lines) | `graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti` — each takes a `&reqwest::Client` and probes live | engine `fuzzer/payloads/` |
+| **Union** | dispatch across all 40 variants, `PAYLOAD_CACHE`, `ALL_PAYLOADS_CACHE`, `get_payloads_cached`, `get_all_payloads_cached` | engine `fuzzer/payloads/mod.rs` |
+
+Three consequences worth knowing:
+
+1. **The caches cannot live in the corpus crate.** Building them requires all 40
+   variants, including the 6 the engine owns. They stay engine-side.
+2. **`get_payloads` panics for advanced types when called on the corpus crate.** It
+   fails loudly rather than returning an empty `Vec`, because an empty vector reads as
+   "this type has no payloads" — which is false, and would be a silent capability
+   regression. Call the engine's `get_payloads`, or filter with
+   `PayloadType::is_advanced()`.
+3. **The seam is guarded three ways:** check 150 (structure), and the integration suite
+   `tests/fuzzer_payload_corpus_seam.rs` (behavior: all 6 advanced types return real
+   payloads, all 40 resolve, cached union equals per-type sum, `is_advanced` matches the
+   split).
+
+**Original variant list in declaration order:**
 
 Exact variant list in declaration order:
 
@@ -90,14 +119,14 @@ Exact variant list in declaration order:
 | 39 | `XsLeak` | XS-Leak | Client-Side |
 | 40 | `Latex` | LaTeX Injection | Injection |
 
-**Count verified:** 40 variants at `payloads/mod.rs:49-90`. Each variant maps to a `get_payloads()` dispatch arm at `payloads/mod.rs:182-224` (40 arms).
+**Count verified:** 40 variants in `crates/eggsec-payloads/src/lib.rs`. Each variant has a `get_payloads()` dispatch arm in the corpus crate's `get_payloads`; the engine's `fuzzer/payloads/mod.rs` dispatches the 6 advanced types locally and delegates the other 34, so all 40 resolve.
 
-**Advanced check** (`payloads/mod.rs:140-150`): `is_advanced()` returns `true` for exactly **6** variants: `GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc`. Note: `Websocket` has a dedicated fuzzer implementation (`advanced.rs:416-612`) but is **excluded** from `is_advanced()`.
+**Advanced check** (in `crates/eggsec-payloads/src/lib.rs`): `is_advanced()` returns `true` for exactly **6** variants: `GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc`. Note: `Websocket` has a dedicated fuzzer implementation (`advanced.rs:416-612`) but is **excluded** from `is_advanced()`.
 
 ### Payload Structure
 
 ```rust
-// payloads/mod.rs:160-166
+// crates/eggsec-payloads/src/lib.rs
 pub struct Payload {
     pub payload_type: PayloadType,
     pub payload: String,
@@ -107,7 +136,13 @@ pub struct Payload {
 }
 ```
 
-Payloads are cached via `LazyLock` maps (`payloads/mod.rs:170-180`): `PAYLOAD_CACHE` (per-type) and `ALL_PAYLOADS_CACHE` (flattened). The `get_payloads_cached()` function returns `&'static Vec<Payload>`.
+Payloads are cached via `LazyLock` maps in `fuzzer/payloads/mod.rs`: `PAYLOAD_CACHE`
+(per-type) and `ALL_PAYLOADS_CACHE` (flattened). `get_payloads_cached()` returns
+`&'static Vec<Payload>`.
+
+**Laziness is load-bearing.** Both caches are `LazyLock` and must stay that way:
+materializing all 40 variants at startup would regress every binary, including the TUI.
+Check 150 fails if `PAYLOAD_CACHE` stops being a `LazyLock`.
 
 ### Engine Components
 

@@ -1,6 +1,6 @@
 #![allow(clippy::vec_init_then_push)]
 
-use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use crate::{Payload, PayloadType, Severity};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

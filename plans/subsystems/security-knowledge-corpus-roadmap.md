@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Roadmap
 
-Status: in progress (milestones 1–3 closed; milestone 4 pending, 5 deferred)
+Status: in progress (milestones 1–4 closed; milestone 5 deferred to a maintainer decision)
 
 Long-term references:
 
@@ -144,7 +144,7 @@ Three new leaf crates, each depending on `eggsec-core` and its own third-party
 libraries only:
 
 ```text
-eggsec-payloads   -> eggsec-core, serde, strum, flate2, rustc-hash, tracing
+eggsec-payloads   -> eggsec-core, serde, strum, flate2, rustc-hash, tracing  [LANDED 2026-10-05, M004]
 eggsec-secrets    -> eggsec-core, regex, serde, tracing
 eggsec-service-db -> rustc-hash                  [LANDED 2026-10-05, M002]
 
@@ -311,7 +311,23 @@ subsystem, and the strongest standalone-library story of the three.
 Exit conditions: `cargo test -p eggsec-payloads` green with 233 tests; engine and
 `eggsec-python`/`eggsec-tui` compile with no consumer edits; laziness preserved.
 
-Deferred work: publication.
+**Outcome: closed 2026-10-05.** 34 pure-data modules (7,084 lines) moved; **233 tests
+green**, matching baseline exactly. Zero diffs in `eggsec-python`/`eggsec-tui`, so
+`waf_validation.rs`'s 40-arm `parse_payload_type` compiles untouched.
+
+One design decision the plan's spike could not have produced, because the spike stubbed
+the 6 relocated types with `Vec::new()`: **the cross-variant caches cannot live in the
+corpus crate.** `PAYLOAD_CACHE` iterates all 40 variants, 6 of which the engine owns, so a
+cache in the corpus crate would be wrong by construction. The caches and the 40-arm
+dispatch therefore moved to a new engine-side `fuzzer/payloads/mod.rs` that owns the
+union. The corpus crate routes the 6 to a documented `unreachable!` instead of a silent
+empty vector.
+
+Verified: GraphQL 15, OAuth 22, Jwt 25, Idor 21, Ssti 27, Grpc 14 payloads; all 40
+distinct types present in the cached view; cached union equals per-type sum. Guarded by
+check 150 plus the new engine suite `tests/fuzzer_payload_corpus_seam.rs` (3 tests).
+
+Deferred work: publication (M005).
 
 ### Milestone 5 — Publication qualification
 
@@ -437,5 +453,5 @@ The subsystem is closed when:
 | 1 | **closed** | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
 | 2 | **closed** | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
 | 3 | **closed** | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | `plans/closure/security-knowledge-corpus/003-closure.md` | — (M001 discharged) |
-| 4 | not started | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | — | — |
+| 4 | **closed** | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | `plans/closure/security-knowledge-corpus/004-closure.md` | — |
 | 5 | not started | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | — | M002–M004 (operational) + maintainer decision |

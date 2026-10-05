@@ -21,6 +21,7 @@ members = [
     "crates/eggsec-policy",
     "crates/eggsec-service-db",
     "crates/eggsec-secrets",
+    "crates/eggsec-payloads",
     "crates/eggsec-udp-scan",
 ]
 resolver = "2"

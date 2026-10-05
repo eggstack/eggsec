@@ -353,6 +353,29 @@ since the bindings match all 30 variants exhaustively. `git_secrets.rs` (subproc
 orchestration) stays engine-side. **Check 149** pins the owner, the facade, and the
 entropy constant. `cargo test -p eggsec-secrets --tests` is registered in `make check`.
 
+**Status: `eggsec-payloads` implemented (milestone 004).** The 34 pure-data payload
+modules (7,084 lines) moved to `crates/eggsec-payloads`; **233 tests pass**, matching the
+baseline count exactly. The 6 live-probe modules stay engine-side. The four mechanical
+edits were applied (two `Severity` imports, one module-path rewrite across 11 files, the
+`$crate` macro path) — plus one design change that the plan anticipated: the
+cross-variant caches **cannot** live in the corpus crate, because building them requires
+all 40 variants including the engine's. They moved to a new engine-side
+`fuzzer/payloads/mod.rs` that owns the union, dispatching the 6 advanced types locally
+and delegating the other 34. `git diff` shows **zero** changes in `eggsec-python` or
+`eggsec-tui`, so `waf_validation.rs`'s exhaustive 40-arm `parse_payload_type` compiles
+untouched.
+
+The specific trap this milestone called out — a `Vec::new()` stub for the 6 relocated
+types — was designed out rather than shipped: `eggsec-payloads::get_payloads` routes those
+types to a documented `unreachable!`, because a silent empty vector reads as "this type has
+no payloads", which is false. Three layers guard the seam: **check 150** (structure —
+probe modules in place, no `Vec::new` stub, caches engine-side and still `LazyLock`) and
+the new engine integration suite `tests/fuzzer_payload_corpus_seam.rs` (behavior — all 6
+advanced types return non-empty payloads, all 40 variants resolve, the cached union
+equals the per-type sum, and `is_advanced()` matches the split). Verified directly:
+GraphQL 15, OAuth 22, Jwt 25, Idor 21, Ssti 27, Grpc 14 payloads, with all 40 distinct
+types present in the cached view.
+
 ### Explicit rejections carried forward from this evaluation
 
 | Candidate | Lines | Why not |
@@ -457,8 +480,9 @@ recorded here.
   additionally pins secret
   detection's canonical owner and engine facade, and freezes the entropy gate at `3.5`
   scoped only to `SecretType::AwsSecretKey`, because retuning or widening it would
-  silently change what the scanner detects. Milestone 004 will land into check 148's
-  existing loop with no edit to the guard itself.
+  silently change what the scanner detects. **Check 150** polices the payload corpus/probe
+  seam: the 6 live-probe modules stay engine-side, the corpus crate fails loudly instead
+  of stubbing them, and the cross-variant caches stay engine-side and `LazyLock`.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
 

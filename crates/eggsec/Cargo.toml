@@ -107,6 +107,9 @@ eggsec-service-db = { path = "../eggsec-service-db", version = "0.1.0" }
 # Credential detection: secret patterns, typed findings, entropy gate (Phase G).
 # Subprocess orchestration (`git_secrets`) stays engine-side.
 eggsec-secrets = { path = "../eggsec-secrets", version = "0.1.0" }
+# Payload corpora: 34 pure-data modules (Phase G). The 6 live-probe modules and
+# the cross-variant caches stay engine-side in `fuzzer::payloads`.
+eggsec-payloads = { path = "../eggsec-payloads", version = "0.1.0" }
 eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
 eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }

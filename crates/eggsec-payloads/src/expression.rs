@@ -1,4 +1,4 @@
-use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use crate::{Payload, PayloadType, Severity};
 
 #[allow(clippy::vec_init_then_push)]
 pub fn get_payloads() -> Vec<Payload> {

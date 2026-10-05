@@ -4174,9 +4174,12 @@ for corpus in eggsec-service-db eggsec-secrets eggsec-payloads; do
     fi
   done
   # No authorization vocabulary in a corpus: it reports facts, never grants.
-  if rg -n 'Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability' "$SRC_DIR" 2>/dev/null | grep -v '^\s*[^:]*:[0-9]*:\s*//' | grep -v ':\s*[0-9]*:\s*//!' | grep -q .; then
+  # Matched as whole identifiers so payload *text* does not trip this: the
+  # dependency-confusion corpus contains the words "scope"/"Scoped" in attack
+  # strings, and "Capability" could appear in any payload description.
+  if rg -n '\b(Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability)\b' "$SRC_DIR" 2>/dev/null | grep -v '^\s*[^:]*:[0-9]*:\s*//' | grep -q .; then
     echo "FAIL: ${SRC_DIR} references authorization vocabulary (corpus crates authorize nothing)."
-    rg -n 'Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability' "$SRC_DIR" 2>/dev/null || true
+    rg -n '\b(Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability)\b' "$SRC_DIR" 2>/dev/null || true
     SECTION_FAIL=$((SECTION_FAIL + 1))
   fi
 done
@@ -4233,6 +4236,57 @@ if [[ -f "crates/eggsec-secrets/src/lib.rs" ]]; then
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: secret detection has one owner, a permanent facade, and an unchanged entropy gate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 150. Phase G: the payload corpus/probe seam stays intact.
+echo ""
+echo "--- Check 150: payload corpus/probe seam ---"
+SECTION_FAIL=0
+# The 6 live-probe modules must stay engine-side; moving them would drag
+# reqwest into the corpus crate.
+for m in graphql grpc idor jwt oauth ssti; do
+  if [[ ! -f "crates/eggsec/src/fuzzer/payloads/${m}.rs" ]]; then
+    echo "FAIL: engine-owned live-probe module payloads/${m}.rs is missing (it needs reqwest and cannot live in eggsec-payloads)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if [[ -f "crates/eggsec-payloads/src/${m}.rs" ]]; then
+    echo "FAIL: crates/eggsec-payloads/src/${m}.rs exists (live-probe module must stay engine-side)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ -f "crates/eggsec-payloads/src/lib.rs" ]]; then
+  # The corpus crate must fail loudly for engine-owned types, never stub them
+  # with an empty Vec -- a silent empty reads as "this type has no payloads",
+  # which is false and would be a capability regression.
+  if ! rg -q 'fn engine_owned_probe_payloads' crates/eggsec-payloads/src/lib.rs 2>/dev/null; then
+    echo "FAIL: eggsec-payloads no longer routes engine-owned types to a loud failure."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -n 'PayloadType::(GraphQL|OAuth|Jwt|Idor|Ssti|Grpc) => .*Vec::new' crates/eggsec-payloads/src/ 2>/dev/null; then
+    echo "FAIL: eggsec-payloads stubs an engine-owned payload type with Vec::new() (silent capability regression)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # Cross-variant caches must stay engine-side: building them needs all 40 types.
+  if rg -q 'pub fn get_all_payloads_cached|pub fn get_payloads_cached' crates/eggsec-payloads/src/ 2>/dev/null; then
+    echo "FAIL: eggsec-payloads defines a cross-variant cache (cannot cover the engine-owned types)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+# The engine must keep dispatching all 40 variants, with caches still lazy.
+if [[ -f "crates/eggsec/src/fuzzer/payloads/mod.rs" ]]; then
+  if ! rg -q 'eggsec_payloads::get_payloads' crates/eggsec/src/fuzzer/payloads/mod.rs 2>/dev/null; then
+    echo "FAIL: engine payloads/mod.rs no longer delegates non-probe types to eggsec-payloads."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'static PAYLOAD_CACHE: LazyLock' crates/eggsec/src/fuzzer/payloads/mod.rs 2>/dev/null; then
+    echo "FAIL: PAYLOAD_CACHE is no longer a LazyLock (eager payload materialization is prohibited)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: payload corpus/probe seam intact; caches stay engine-side and lazy."
 else
   FAIL=$((FAIL + 1))
 fi
