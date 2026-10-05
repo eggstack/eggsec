@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 003 — Secret detection extraction
 
-Status: blocked on M001
+Status: ready for handoff (M001 interface dependency discharged 2026-10-05: redaction deleted, so `serde_json` is not required)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 
@@ -51,7 +51,7 @@ tests passing unmodified**.
 `crates/eggsec/src/recon/secrets.rs` is credential-detection knowledge:
 
 - `SecretFinding` — a detected credential result.
-- `SecretType` — an enum with **29 variants**.
+- `SecretType` — an enum with **30 variants**.
 - `Confidence` — a confidence tier.
 - `SecretPattern` / `build_patterns()` — **26 patterns**, compiled behind a
   `LazyLock<Vec<SecretPattern>>`.
@@ -240,7 +240,7 @@ side-effect free.
 
 No storage, protocol, configuration, or wire migration.
 
-Source compatibility is the load-bearing requirement here: the Python bindings match 29
+Source compatibility is the load-bearing requirement here: the Python bindings match 30
 `SecretType` variants exhaustively, and `eggsec-mobile-lab` references the module. Both
 must compile with **zero** diffs. This is what distinguishes a correct extraction from a
 consumer-breaking one.

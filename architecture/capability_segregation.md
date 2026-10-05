@@ -345,15 +345,40 @@ changes** — the `eggsec-python` exhaustive matches over 30 `SecretType` and 40
 | `eggsec-resilience` | — | Phase D rejection re-affirmed: `RateLimiter` is keyed on `&str` REST client identity, not a pacing primitive; `governor`/`failsafe` cover the generic shape better |
 | `eggsec-utils` | — | Phase A rejection re-affirmed: 13 unrelated files, no coherent boundary |
 
-### Defect found and dispositioned separately
+### Defect found and dispositioned: `utils/redaction.rs` removed (Phase G)
 
 `utils/redaction.rs` — 366 lines, 26 tests, **zero production consumers**. Every
 repo-wide `redact_sensitive`/`redact_json` match is a different local function or a
 string literal. `eggsec-transport` maintains a narrower debug-redaction surface
 (`redacted_headers_debug`, `redact_url_for_debug`) that is related but not equivalent,
 and that crate must stay exactly `bytes`/`http`/`url`/`thiserror` per check 108, so
-unification is not free. Dispositioned in milestone 001, with the `utils::cache::ApiCache`
-precedent as the model.
+unification is not free.
+
+**Disposition: deleted (milestone 001, Option 3).** The three adoption candidates were
+evaluated and rejected on evidence, not assumed:
+
+- `findings::Evidence` — `Evidence::new` always sets `redacted: false`, but the only
+  production `Finding` construction (`dispatch/security.rs`, the `search_cve` storage
+  mode) sets `evidence: vec![]`. There is no populated evidence path to mask.
+- Secret detection — already carries a deliberate, tested masking policy that differs
+  from `redaction.rs`: `SecretFinding::value_preview` truncates to 20 chars + `"..."`,
+  asserted by `recon/secrets.rs::test_value_preview_truncation`. Adopting regex masking
+  there would be a different policy, which is the milestone's own stop condition.
+- `nse_bridge.rs` — maps external NSE evidence and already declares redaction
+  declaratively via `.with_redaction(RedactionState::None)`.
+
+The decisive observation: **the repo's redaction contract is already declarative**, not a
+regex masker. `eggsec-report-model`'s `RedactionState` (`None`/`FullyRedacted`/
+`PartiallyRedacted`/`Summarized`) is carried per evidence item and consumed by
+`eggsec-output`, `eggsec-db-lab`, and `eggsec-mobile-lab`. `utils/redaction.rs` was a
+second, orphaned implementation of a concept the report model already tracks. Deleting
+it removes a duplicate rather than a capability.
+
+Deleted test count: **26**. Disclosed as a real loss of tested behavior, not cleanup.
+
+**Check 147** now fails if the file reappears, if `utils/mod.rs` re-exposes the module,
+or if an engine-local `fn redact_sensitive`/`fn redact_json` reappears under
+`crates/eggsec/src/`.
 
 ### Publication is explicitly deferred
 
@@ -397,15 +422,17 @@ recorded here.
   config (core files import none; `indicatif` only in `cli`-gated `run_cli`);
   no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
   `utils::cache` stays removed.
-- **Phase G (proposed, not yet implemented):** check 114's pin on
+- **Phase G (in progress):** check 114's pin on
   `crates/eggsec/src/scanner/service_data.rs` must move to the new crate's canonical
   owner when `eggsec-service-db` lands, keeping its `utils/service_detection.rs`
   reappearance half intact. Milestones 002–004 each add a leaf-invariant guard in the
   shape of checks 121–123 (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport
   dependency; `eggsec-core` the only permitted `eggsec-*` edge; no `Scope` /
-  `ApprovedOperation` / `Capability` reference). Milestone 001 adds a zero-consumer guard
-  in the shape of check 126. **None of these guards exist yet.**
+  `ApprovedOperation` / `Capability` reference). Milestone 001's guard is **check 147**,
+  present and demonstrated to fail. The 002–004 guards do not exist yet.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
 
 *Phase G section added 2026-10-05 (analysis only; no code, manifest, or guard changed). Verified at that date: `fuzzer/payloads/` 34 of the 40 payload-type modules free of `reqwest` (7,084 pure-data lines, 233 tests); `recon/secrets.rs` 492 lines / 11 tests / 1 `crate::` reference; `scanner/service_data.rs` 302 lines / 21 tests / 0 `crate::` references / 0 external consumers; `utils/redaction.rs` 366 lines / 26 tests / 0 consumers; check 114 pin at line 3121 and check 126 at line 3457 of `scripts/check-architecture-guards.sh` (baseline `979dca67`); `Severity` re-exported from `eggsec-core` at `crates/eggsec/src/types.rs:16`.*
+
+*Phase G milestone 001 executed 2026-10-05: `utils/redaction.rs` deleted (366 lines, 26 tests), `pub mod redaction;` removed from `crates/eggsec/src/utils/mod.rs`, and check 147 added in the shape of check 126 — verified to fail on all three of its conditions when the file, the module declaration, and engine-local `redact_sensitive`/`redact_json` are artificially reintroduced. No manifest change: `regex` remains a direct engine dependency for 12 other modules. Milestones 002–004 remain unimplemented.*

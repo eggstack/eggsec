@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Roadmap
 
-Status: proposed
+Status: in progress (milestone 1 closed; milestones 2–5 pending)
 
 Long-term references:
 
@@ -104,8 +104,9 @@ The measured candidate set:
 | `utils/redaction.rs` | 366 | 1 | 0 | `regex` | 26 | M001 (defect) |
 
 All four were validated by extraction spike: copied to scratch crates, compiled, and
-tested unmodified. The payload corpus needed three mechanical import rewrites; no
-other edits.
+tested unmodified. The payload corpus needed four mechanical edits (two `Severity`
+imports, one module-path rewrite, the `$crate` macro path, and six `get_payloads` arms
+redirected for the relocated live-probe types); no behavioral edits.
 
 `fuzzer/payloads/` splits on an existing seam. 34 of the 40 payload-type modules (36 of 42 files, counting `mod.rs` and `macros.rs`) never reference
 `reqwest` (7,084 lines, pure data); 6 mix payload generation with live probing
@@ -182,8 +183,9 @@ M004 payload extraction (independent)
 
 Dependency classification:
 
-- M001 → M003: **interface**. M003's scope depends on whether redaction joins
-  `eggsec-secrets` or is deleted.
+- M001 → M003: **interface — discharged 2026-10-05.** M001 closed with Option 3
+  (redaction deleted), so `eggsec-secrets` is scoped to `recon/secrets.rs` alone and
+  does not require `serde_json`.
 - M002, M004: no dependencies. Dependency-ready now.
 - M005: **operational** on all three extractions, and additionally blocked on a
   publication decision that is not a code question.
@@ -207,7 +209,17 @@ independent redaction implementation in `eggsec-transport`.
 Exit conditions: disposition decided and executed; zero-consumer state cannot recur
 silently; `architecture/capability_segregation.md` carries the Phase G record.
 
-Deferred work: if the disposition is "join `eggsec-secrets`", the move happens in M003.
+**Outcome: closed 2026-10-05.** Option 3 (delete) executed. `utils/redaction.rs`
+removed (366 lines, 26 tests — disclosed loss); the three Option 1 adoption candidates
+were inspected and rejected on evidence, because `findings::Evidence` has no populated
+production path, `SecretFinding::value_preview` already applies a *different* tested
+truncation policy, and `nse_bridge` already declares redaction declaratively. The
+decisive finding: `eggsec-report-model`'s `RedactionState` is the repository's real
+redaction contract, so the deleted module was a duplicate of an already-solved problem.
+Guard check 147 added and demonstrated to fail on all three of its conditions.
+
+Deferred work: n/a — the "join `eggsec-secrets`" option was not selected, so M003 is
+scoped to `recon/secrets.rs` alone and needs no `serde_json`.
 
 ### Milestone 2 — Service fingerprint database extraction
 
@@ -392,8 +404,8 @@ The subsystem is closed when:
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| 1 | not started | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | — | — |
+| 1 | **closed** | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
 | 2 | not started | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | — | — |
-| 3 | not started | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | — | M001 (interface) |
+| 3 | not started | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | — | M001 **discharged** (redaction deleted; `serde_json` not needed) |
 | 4 | not started | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | — | — |
 | 5 | not started | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | — | M002–M004 (operational) + maintainer decision |

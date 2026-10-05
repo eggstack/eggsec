@@ -4113,6 +4113,29 @@ else
   echo "PASS: engine NSE dispatch/Python integration stays canonical and strict."
 fi
 
+# 147. Phase G: removed utils::redaction stays removed (zero-consumer dead code).
+echo ""
+echo "--- Check 147: removed utils::redaction stays removed ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec/src/utils/redaction.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/utils/redaction.rs reappeared (Phase G removed it: zero production consumers)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'pub mod redaction' crates/eggsec/src/utils/mod.rs 2>/dev/null; then
+  echo "FAIL: utils/mod.rs re-exposes the redaction module."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'fn redact_sensitive|fn redact_json' crates/eggsec/src/ 2>/dev/null; then
+  echo "FAIL: engine-local redact_sensitive/redact_json reappeared under eggsec/src."
+  rg -n 'fn redact_sensitive|fn redact_json' crates/eggsec/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: removed utils::redaction stays removed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

@@ -50,7 +50,7 @@ rejection recorded. The evidence supporting that rejection is concrete:
 
 **The corpora are still evolving.** The `PayloadType` enum gained `GraphQL`, `OAuth`,
 `Jwt`, `Idor`, `Ssti`, and `Grpc` within the current roadmap era, and `is_advanced()`
-treats exactly those six as a distinct class. `recon/secrets.rs` carries 29
+treats exactly those six as a distinct class. `recon/secrets.rs` carries 30
 `SecretType` variants, and `eggsec-python/src/git_secrets.rs` matches all of them
 exhaustively — so adding or removing a variant is a cross-crate breaking change today,
 which is precisely the coupling that would become a semver obligation the moment the type

@@ -5,6 +5,11 @@
 //! their owners: service tables to `scanner::service_data`, privilege gates to
 //! `platform`, cron to `eggsec-agent::cron`. Dead presentation/pool/evasion
 //! helpers (`output`, `progress`, `client_pool`, `stealth`) were removed in Phase A; the unused `cache` (`ApiCache`, zero production consumers) was removed in Phase D.
+//! The unused `redaction` (`redact_sensitive`/`redact_json`, zero production consumers) was removed in Phase G: the repo's
+//! redaction contract is the declarative `RedactionState` on report-model evidence, not an
+//! orphan regex masker. Debug-only masking lives in `eggsec-transport` as
+//! `redacted_headers_debug`/`redact_url_for_debug`, which stay bound to that crate's
+//! four-dependency closure.
 //!
 //! ## Key Components
 //!
@@ -37,7 +42,6 @@ pub mod logging;
 pub mod network;
 pub mod parsing;
 pub mod rate_limiter;
-pub mod redaction;
 pub mod target;
 pub mod urlencoding;
 pub mod validation;

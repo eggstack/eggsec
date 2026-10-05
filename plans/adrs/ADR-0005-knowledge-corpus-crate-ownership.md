@@ -51,10 +51,11 @@ have a different extraction story from every prior candidate:
 All three were verified by extraction spike, not by static reasoning alone: each was
 copied into a scratch crate depending only on `eggsec-core` (a zero-internal-dependency
 leaf that already owns `Severity`) plus its own third-party deps, and compiled with its
-full test suite passing unmodified. The payload corpus required exactly three mechanical
+full test suite passing unmodified. The payload corpus required exactly four mechanical
 edits — two `crate::types::Severity` → `eggsec_core::Severity` import rewrites, one
-`crate::fuzzer::payloads` path rewrite, and the `$crate::fuzzer::payloads::Payload`
-macro path. No behavioral change.
+`crate::fuzzer::payloads` → `crate::payloads` path rewrite, the
+`$crate::fuzzer::payloads::Payload` macro path, and six `get_payloads` match arms
+redirected because those live-probe modules stay behind. No behavioral change.
 
 The same analysis surfaced a defect. `utils/redaction.rs` — 366 lines, 26 tests —
 has **zero production consumers**. Repo-wide, every `redact_sensitive` / `redact_json`

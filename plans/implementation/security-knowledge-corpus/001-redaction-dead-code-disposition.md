@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 001 — Redaction dead-code disposition
 
-Status: ready for handoff
+Status: closed (`plans/closure/security-knowledge-corpus/001-closure.md`; Option 3 executed — `utils/redaction.rs` deleted, guard check 147 added)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 
