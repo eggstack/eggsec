@@ -31,7 +31,8 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 |---|---|---|---|
 | architecture-convergence | closed | `plans/architecture-convergence-roadmap-2026-09-08.md` | Phase G closure/measurement; completion records in each phase file |
 | dependency-architecture-simplification | closed | `plans/dependency-architecture-simplification-roadmap.md` | Phase J + dispatch-profile parity corrective pass; closure report |
-| crate-boundary-ownership | closed | `plans/crate-boundary-consolidation-roadmap-2026-09-16.md` | Phase D closes the roadmap |
+| crate-boundary-ownership | closed | `plans/crate-boundary-consolidation-roadmap-2026-09-16.md` | Phase D closes the roadmap. **Reopened as a bounded new workstream:** Phase G of `architecture/capability_segregation.md` proposes three knowledge-corpus leaf crates under `plans/subsystems/security-knowledge-corpus-roadmap.md` (ADR-0005); no prior rejection is reopened |
+| security-knowledge-corpus | proposed | `plans/subsystems/security-knowledge-corpus-roadmap.md`; `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md` | Five milestone plans written 2026-10-05; 001/002/004 dependency-ready, 003 blocked on 001, 005 deferred to a maintainer decision |
 | network-transport-egress | closed | `plans/network-dependency-hardening-roadmap-2026-09-11.md`; `plans/eggress-1.0.8-adoption-roadmap-2026-09-22.md` | Eggress 1.0.10 adoption + metadata closure (2026-09-25, implementation `fe5ec2d2`); ADR-0001, ADR-0002 controlling |
 | frontend-runtime-tui | active | `plans/frontend-runtime-convergence-roadmap-2026-09-10.md`; `plans/tui-terminal-ownership-corrective-roadmap-2026-09-19.md` | Reopened for `plans/implementation/frontend-runtime-tui/001-pipeline-session-registry-and-resume-picker.md` (scan session store + TUI resume picker) |
 | python-programmability | closed | `plans/python-library-roadmap.md`; `plans/python-api-completion-roadmap.md`; `plans/python-api-high-value-roadmap.md`; `plans/python-api-release-5-roadmap.md` | Release 5 phase F compatibility/performance/release closure |
@@ -147,6 +148,24 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 
 ## Dependency-ready implementation plans
 
+### security-knowledge-corpus (proposed 2026-10-05)
+
+Governed by `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md` and
+`plans/subsystems/security-knowledge-corpus-roadmap.md`. All five plans were validated
+by extraction spike before writing: each target was copied into a scratch crate and
+compiled with its full original test suite passing (payload corpus 233, secret detection
+11, service tables 21). Targets are measured at ~0–1 `crate::` coupling because
+`Severity` is already owned by the `eggsec-core` leaf — the same rationale that justified
+`eggsec-policy`.
+
+- `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` — **ready for handoff (primary)**. Corrective: `utils/redaction.rs` is 366 lines / 26 tests with **zero production consumers**, the same condition that removed `utils::cache::ApiCache` in Phase D. Execute one of three dispositions, add a check-126-shaped guard, and record Phase G in `architecture/capability_segregation.md`.
+- `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` — **ready for handoff**. Extracts `scanner/service_data.rs` (302 lines, 21 tests, zero workspace deps, zero consumers) into `eggsec-service-db`. Moves guard 114's canonical-owner pin in the same commit.
+- `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` — **ready for handoff**. Extracts the 34 pure-data payload modules (7,084 lines, 233 tests) into `eggsec-payloads`; the 6 live-probe modules stay engine-side. Largest closure reduction in the workstream.
+- `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` — **blocked on accepted M001 closure (interface)**. Extracts `recon/secrets.rs` (492 lines, 11 tests, one `crate::` reference) into `eggsec-secrets`; M001's disposition decides whether redaction joins it. Zero consumer diffs are the acceptance bar, because `eggsec-python` matches all 30 `SecretType` variants exhaustively.
+- `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` — **blocked (operational + maintainer decision)**. ADR-0005 decision 3 defers publication out of the extraction milestones. Deliverable is a decision with evidence, not a release; `nse-runtime-extraction` 007c is the worked precedent for the cost.
+
+### nse-runtime-extraction
+
 - `plans/implementation/nse-runtime-extraction/007-standalone-security-patch-release.md` — **blocked (M007C)**. The §3 public-API gate was run and failed: `cargo semver-checks check-release --baseline-version 0.2.0` reports one failed major lint, `function_missing` — **74 public functions removed** (70 `register_<mod>_library(&Lua)`, 4 `helpers::*`), none source-compatible at the original path. §3's stop/replan remedy was applied: 0.2.1 was not published, no tag or release was created, and `0.2.0` remains the published artifact. Closure record: `plans/closure/nse-runtime-extraction/007c-closure.md` (archived gate output in `007c-semver-report.txt`).
 - `plans/implementation/nse-runtime-extraction/007-breaking-0-3-0-release.md` — **ready for handoff (M007C-R, primary)**. Publish `0.3.0` as the deliberate breaking/security release, account for all 74 removals, re-confirm the exact semver break set, harden the residual guard, and qualify immutable registry/tag/docs.rs/scratch-consumer identity.
 - `plans/implementation/nse-runtime-extraction/007-breaking-release-security-advisory-disposition.md` — **blocked (M007C-S draft complete)**. Closure `plans/closure/nse-runtime-extraction/007c-s-closure.md` records the source-verified advisory range `>= 0.1.0, < 0.3.0`, a publication-ready draft, explicit deferred yank decisions for both predecessors, and the CVE decision. Advisory publication + yank execution remain gated on verified `0.3.0` from M007C-R; M007D stays blocked until then.
@@ -171,8 +190,6 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 - `plans/implementation/nse-runtime-extraction/006-cross-repo-qualification-closure.md` — **closed** (`plans/closure/nse-runtime-extraction/006c-closure.md`). Parent M006 closed: release/tag/archive identity, registry-only consumption, dormant adapter, quarantine, and full cross-repo checks verified with no stop conditions; GO for M007.
 - `plans/implementation/nse-runtime-extraction/007-approved-scope-provider-activation.md` — **blocked on accepted `007c-r-closure.md` + `007c-s-closure.md` (M007D)**. Adopt the verified crates.io `0.3.0` artifact, retain approval-time target facts in `ApprovedExecution`, compose scoped DNS/TCP/UDP/HTTP providers from canonical Eggsec authority, and enable strict NSE only on the scope-bearing execution entry while metadata remains quarantined. **Inherited medium finding from `007b-closure.md` §12:** `broker_dns_lookup` gates `DnsResolution` on `DenyAll` only and does not evaluate per-target membership for the resolved name, so runtime DNS policy is not yet bound to approved scope; M007D must close that before re-exposure.
 - `plans/implementation/nse-runtime-extraction/007-controlled-automated-reexposure-qualification.md` — **blocked on accepted M007D closure (M007E)**. Re-enable automated NSE metadata only after safe-path qualification, replace dormancy guards with exact call-site guards, prove zero-contact negative cases, and close M007 across both repositories.
-
-## Dependency-ready implementation plans
 
 ## Closure work and current control points
 
