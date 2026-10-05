@@ -4193,6 +4193,50 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 149. Phase G: secret detection has one owner, a permanent facade, and a frozen entropy gate.
+echo ""
+echo "--- Check 149: secret-detection owner, facade, and entropy gate ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec-secrets/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-secrets/src/lib.rs missing (canonical secret-detection owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ -f "crates/eggsec/src/recon/secrets.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/recon/secrets.rs reappeared (owner is the eggsec-secrets crate)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub use eggsec_secrets as secrets' crates/eggsec/src/recon/mod.rs 2>/dev/null; then
+  echo "FAIL: recon/mod.rs no longer re-exports eggsec-secrets as secrets (facade path broken)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The entropy gate is detection semantics, not a tuning knob. It must stay
+# scoped to AWS secret keys and stay at 3.5; widening or retuning it silently
+# changes what the scanner finds.
+if [[ -f "crates/eggsec-secrets/src/lib.rs" ]]; then
+  ENTROPY_HITS=$(rg -n 'secret_entropy\(value\) < [0-9.]+' crates/eggsec-secrets/src/ --glob '*.rs' 2>/dev/null | grep -v '^\s*[^:]*:[0-9]*:\s*//' || true)
+  if [[ -z "$ENTROPY_HITS" ]]; then
+    echo "FAIL: entropy gate 'secret_entropy(value) < N' not found in eggsec-secrets (detection semantics changed?)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  else
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      if ! printf '%s' "$line" | rg -q 'secret_entropy\(value\) < 3\.5 \{'; then
+        echo "FAIL: entropy gate threshold is not 3.5: $line"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done <<< "$ENTROPY_HITS"
+  fi
+  if ! rg -q 'secret_type == SecretType::AwsSecretKey &&' crates/eggsec-secrets/src/ --glob '*.rs' 2>/dev/null; then
+    echo "FAIL: entropy gate is no longer scoped to SecretType::AwsSecretKey (must not be widened)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: secret detection has one owner, a permanent facade, and an unchanged entropy gate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

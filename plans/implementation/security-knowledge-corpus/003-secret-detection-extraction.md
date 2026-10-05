@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Milestone 003 — Secret detection extraction
 
-Status: ready for handoff (M001 interface dependency discharged 2026-10-05: redaction deleted, so `serde_json` is not required)
+Status: closed (`plans/closure/security-knowledge-corpus/003-closure.md`; `eggsec-secrets` extracted with a one-line body diff, zero consumer diffs, guard 149 added)
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 
@@ -53,7 +53,7 @@ tests passing unmodified**.
 - `SecretFinding` — a detected credential result.
 - `SecretType` — an enum with **30 variants**.
 - `Confidence` — a confidence tier.
-- `SecretPattern` / `build_patterns()` — **26 patterns**, compiled behind a
+- `SecretPattern` / `build_patterns()` — **25 patterns** covering 20 of the 30 variants, compiled behind a
   `LazyLock<Vec<SecretPattern>>`.
 - `SecretScanner` — the scanning facade.
 - `secret_entropy(value) -> f64` — Shannon-entropy gate.
@@ -97,7 +97,7 @@ sibling; this milestone does not.
   remain byte-identical, including its narrow scoping to AWS secret keys. Widening it to
   every pattern type, or changing the threshold, changes detection results and is a
   capability change, not infrastructure.
-- The 26-pattern corpus is content, not refactor target. No pattern is added, removed,
+- The 25-pattern corpus is content, not refactor target. No pattern is added, removed,
   or re-ranked.
 - Workspace path graph stays acyclic (guard 108).
 - Engine path `eggsec::recon::secrets::*` remains valid.
@@ -120,7 +120,7 @@ sibling; this milestone does not.
 ### Explicitly out of scope
 
 - `recon/git_secrets.rs` extraction — subprocess orchestration, deferred to a future ADR.
-- Any change to the 26 patterns, the 30 `SecretType` variants, the `Confidence` tiers, or
+- Any change to the 25 patterns, the 30 `SecretType` variants, the `Confidence` tiers, or
   the entropy threshold.
 - Adding new secret patterns "while we're here". Content changes are a capability change
   and would invalidate the 11-test count as a contract.
@@ -343,7 +343,7 @@ in one place: the Python bindings' exhaustive `SecretType` match. Verify that di
 empty early, not at the end — if a re-export cannot preserve it, the shape of the
 extraction needs rethinking rather than patching.
 
-Do not "improve" the pattern corpus. The 26 patterns and the 3.5 entropy gate are the
+Do not "improve" the pattern corpus. The 25 patterns and the 3.5 entropy gate are the
 contract; a richer corpus is a capability change belonging in its own plan.
 
 Preserve unrelated user changes. The two untracked plan files

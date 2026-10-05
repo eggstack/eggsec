@@ -91,7 +91,14 @@ pub mod git_secrets;
 pub mod js;
 pub mod reverse_dns;
 pub mod runner;
-pub mod secrets;
+/// Credential detection.
+///
+/// Phase G moved this out of the engine into the leaf crate `eggsec-secrets`.
+/// This re-export is a **permanent** facade, not transitional scaffolding:
+/// `eggsec::recon::secrets::*` is the stable path, which is what lets the
+/// Python bindings keep matching all 30 `SecretType` variants exhaustively
+/// with no edits.
+pub use eggsec_secrets as secrets;
 pub mod spinner;
 pub mod ssl;
 pub mod subdomain;

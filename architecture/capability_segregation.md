@@ -323,7 +323,7 @@ the same rationale that justified `eggsec-policy` in Phase C.
 | Crate | Contents | Rationale |
 |---|---|---|
 | `eggsec-service-db` | port→service tables, banner heuristics | zero workspace deps, zero consumers, 21 tests; `nmap-services`-style corpus |
-| `eggsec-secrets` | 26 credential patterns, entropy scoring | pure regex+entropy over strings; gitleaks/trufflehog-adjacent |
+| `eggsec-secrets` | 25 credential patterns, entropy scoring | pure regex+entropy over strings; gitleaks/trufflehog-adjacent |
 | `eggsec-payloads` | 34 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
 
 Each lands as `publish = false` with an engine re-export facade, so **no consumer import
@@ -340,6 +340,18 @@ changes** — the `eggsec-python` exhaustive matches over 30 `SecretType` and 40
 reappears, or if the engine facade is dropped). **Check 148** enforces the leaf invariant
 for every corpus crate and is demonstrated to fail on a forbidden dependency.
 `cargo test -p eggsec-service-db --tests` is registered in `make check`.
+
+**Status: `eggsec-secrets` implemented (milestone 003).** 492 lines moved with **exactly
+one** source change — `pub use crate::types::Severity` → `pub use
+eggsec_core::types::Severity`. The 25-pattern corpus, 30 `SecretType` variants, 3
+`Confidence` tiers, and the entropy gate are byte-identical; the 11-test count is
+unchanged. `cargo tree` shows `eggsec-core` as the only workspace edge. The engine facade
+`pub use eggsec_secrets as secrets;` preserved `eggsec::recon::secrets::*` with an
+**empty** diff across `crates/eggsec-python/`, `crates/eggsec-mobile-lab/`,
+`crates/eggsec-tui/`, and `crates/eggsec/tests/` — the milestone's defining constraint,
+since the bindings match all 30 variants exhaustively. `git_secrets.rs` (subprocess
+orchestration) stays engine-side. **Check 149** pins the owner, the facade, and the
+entropy constant. `cargo test -p eggsec-secrets --tests` is registered in `make check`.
 
 ### Explicit rejections carried forward from this evaluation
 
@@ -437,14 +449,21 @@ recorded here.
   `crates/eggsec-service-db/src/lib.rs` as the single canonical service-table owner, and
   fails if the old `crates/eggsec/src/scanner/service_data.rs` reappears or the engine's
   `pub use eggsec_service_db as service_data` facade is dropped. **Check 148** enforces the
-  leaf invariant across every extracted corpus crate: no workspace dependency at all (even
-  though `eggsec-core` would be acceptable), no
+  leaf invariant across every extracted corpus crate: `eggsec-core` is the only permitted
+  workspace dependency (it is a zero-internal-dependency leaf owning `Severity`), no
   runtime/network/TLS/frontend/persistence dependency, and no `Scope` /
-  `ApprovedOperation` / `Capability` reference. Milestones 003 and 004 will land into
-  check 148's existing loop with no edit to the guard itself.
+  `ApprovedOperation` / `Capability` reference. `eggsec-service-db` is held to a
+  stricter bar separately, since it needs no workspace edge at all. **Check 149**
+  additionally pins secret
+  detection's canonical owner and engine facade, and freezes the entropy gate at `3.5`
+  scoped only to `SecretType::AwsSecretKey`, because retuning or widening it would
+  silently change what the scanner detects. Milestone 004 will land into check 148's
+  existing loop with no edit to the guard itself.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
 
 *Phase G section added 2026-10-05 (analysis only; no code, manifest, or guard changed). Verified at that date: `fuzzer/payloads/` 34 of the 40 payload-type modules free of `reqwest` (7,084 pure-data lines, 233 tests); `recon/secrets.rs` 492 lines / 11 tests / 1 `crate::` reference; `scanner/service_data.rs` 302 lines / 21 tests / 0 `crate::` references / 0 external consumers; `utils/redaction.rs` 366 lines / 26 tests / 0 consumers; check 114 pin at line 3121 and check 126 at line 3457 of `scripts/check-architecture-guards.sh` (baseline `979dca67`); `Severity` re-exported from `eggsec-core` at `crates/eggsec/src/types.rs:16`.*
 
-*Phase G milestone 001 executed 2026-10-05: `utils/redaction.rs` deleted (366 lines, 26 tests), `pub mod redaction;` removed from `crates/eggsec/src/utils/mod.rs`, and check 147 added in the shape of check 126 — verified to fail on all three of its conditions when the file, the module declaration, and engine-local `redact_sensitive`/`redact_json` are artificially reintroduced. No manifest change: `regex` remains a direct engine dependency for 12 other modules. Milestones 002–004 remain unimplemented.*
+*Phase G milestone 001 executed 2026-10-05: `utils/redaction.rs` deleted (366 lines, 26 tests), `pub mod redaction;` removed from `crates/eggsec/src/utils/mod.rs`, and check 147 added in the shape of check 126 — verified to fail on all three of its conditions when the file, the module declaration, and engine-local `redact_sensitive`/`redact_json` are artificially reintroduced. No manifest change: `regex` remains a direct engine dependency for 12 other modules.*
+
+*Phase G milestones 002 and 003 executed 2026-10-05: `eggsec-service-db` and `eggsec-secrets` created as internal `publish = false` leaves, both re-exported through permanent engine facades with zero consumer diffs. Checks 114, 148, and 149 present and demonstrated to fail. Milestone 004 remains unimplemented. Correction applied during 003: `build_patterns()` holds **25** patterns covering 20 of 30 `SecretType` variants (the repo's `architecture/recon.md` was right; an earlier draft of this Phase G record and the plans said 26).*

@@ -2047,6 +2047,7 @@ dependencies = [
  "eggsec-policy",
  "eggsec-report-model",
  "eggsec-runtime",
+ "eggsec-secrets",
  "eggsec-service-db",
  "eggsec-tool-core",
  "eggsec-transport",
@@ -2395,6 +2396,16 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "eggsec-secrets"
+version = "0.1.0"
+dependencies = [
+ "eggsec-core",
+ "regex",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

@@ -104,6 +104,9 @@ eggsec-policy = { path = "../eggsec-policy", version = "0.1.0" }
 # Service fingerprint knowledge: port-to-service tables and banner heuristics
 # (Phase G). Pure lookup data; the engine owns all scanning I/O.
 eggsec-service-db = { path = "../eggsec-service-db", version = "0.1.0" }
+# Credential detection: secret patterns, typed findings, entropy gate (Phase G).
+# Subprocess orchestration (`git_secrets`) stays engine-side.
+eggsec-secrets = { path = "../eggsec-secrets", version = "0.1.0" }
 eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
 eggsec-output = { path = "../eggsec-output", version = "0.1.0" }
 eggsec-tool-core = { path = "../eggsec-tool-core", version = "0.1.0" }

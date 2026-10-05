@@ -506,6 +506,18 @@ Low-level network primitives (`Target`, `TcpSession`, `UdpSocket`,
     pipeline-definition hash, and artifact-store identity. Resume rejects
     any mismatch.
 
+11. **Corpus types are re-exported, never re-typed.** `SecretType` (30 variants),
+    `PayloadType` (40 variants), and `Severity` are *re-exported* from the engine
+    facade at their defining crate, so this crate's exhaustive matches
+    (`git_secrets.rs` over all 30 `SecretType` arms; `waf_validation.rs`'s
+    `parse_payload_type` over all 40 `PayloadType` aliases) compile with **zero
+    edits** across the Phase G extractions into `eggsec-secrets`,
+    `eggsec-service-db`, and `eggsec-payloads`. Re-defining one of these types in
+    the engine or in this crate would break all of them at once — that is precisely
+    why the re-export facades are permanent rather than transitional.
+    `SecretType`'s variant set and the AWS-secret-key entropy gate are pinned by
+    guard 149.
+
 ## Cross-References
 
 - [overview.md](overview.md) — workspace crate index, system architecture

@@ -1,6 +1,6 @@
 # Security Knowledge Corpus Roadmap
 
-Status: in progress (milestones 1–2 closed; milestones 3–5 pending)
+Status: in progress (milestones 1–3 closed; milestone 4 pending, 5 deferred)
 
 Long-term references:
 
@@ -112,7 +112,7 @@ redirected for the relocated live-probe types); no behavioral edits.
 `reqwest` (7,084 lines, pure data); 6 mix payload generation with live probing
 (4,354 lines). The corpus/probe split is already in the source.
 
-`recon/secrets.rs` holds 26 compiled patterns behind a `LazyLock`, a `SecretType`
+`recon/secrets.rs` holds 25 compiled patterns behind a `LazyLock`, a `SecretType`
 enum with 30 variants, a `Confidence` tier, and an entropy gate scoped to AWS
 secret-key candidates. Its only engine reference is `Severity`.
 
@@ -276,6 +276,20 @@ Exit conditions: `cargo test -p eggsec-secrets` green with 11 tests (plus redact
 tests if adopted); entropy heuristic byte-identical; `cargo check -p eggsec-python`
 passes with no binding edits.
 
+**Outcome: closed 2026-10-05.** 492 lines moved with **exactly one** changed line
+(`pub use crate::types::Severity` → `pub use eggsec_core::types::Severity`); 11 tests
+green; `cargo tree` shows `eggsec-core` as the only workspace edge. M001's Option 3
+(delete) meant `serde_json` was not needed and the test count stayed at 11. The
+`pub use eggsec_secrets as secrets;` facade kept `eggsec::recon::secrets::*` resolving
+with an **empty** diff across `eggsec-python`, `eggsec-mobile-lab`, `eggsec-tui`, and
+`crates/eggsec/tests/` — so the bindings' exhaustive 30-arm `SecretType` match compiles
+untouched. Even `recon/git_secrets.rs` needed no import edit. The entropy gate is frozen
+at `3.5`, scoped only to `SecretType::AwsSecretKey`, by check 149 (demonstrated on 3
+injected mutations).
+
+Correction: `build_patterns()` holds **25** patterns covering 20 of 30 `SecretType`
+variants. The plans previously said 26; `architecture/recon.md` was already right.
+
 Deferred work: `recon/git_secrets.rs` (473 lines) — subprocess orchestration, not
 pattern matching; it is a candidate for a future ADR, not this one.
 
@@ -422,6 +436,6 @@ The subsystem is closed when:
 |---|---|---|---|---|
 | 1 | **closed** | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
 | 2 | **closed** | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
-| 3 | not started | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | — | M001 **discharged** (redaction deleted; `serde_json` not needed) |
+| 3 | **closed** | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | `plans/closure/security-knowledge-corpus/003-closure.md` | — (M001 discharged) |
 | 4 | not started | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | — | — |
 | 5 | not started | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | — | M002–M004 (operational) + maintainer decision |
