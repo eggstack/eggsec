@@ -175,7 +175,17 @@ impl KeyHandler {
                     vec![UiAction::ToggleSearch { global: true }]
                 }
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('z')) => vec![UiAction::TogglePause],
+            (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
+                // Only meaningful while a task is running. Pausing at idle would
+                // leave `paused` set, and `update()` returns before draining the
+                // progress/result channels whenever it is set — so the *next* task
+                // would never render output and the tab would look wedged.
+                if app.has_active_task() {
+                    vec![UiAction::TogglePause]
+                } else {
+                    vec![]
+                }
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('t')) => vec![UiAction::ToggleTheme],
             (KeyModifiers::CONTROL, KeyCode::Char('g')) => {
                 vec![UiAction::ToggleEnforcementPosture]
@@ -377,6 +387,38 @@ mod tests {
 
     fn press_ctrl(handler: &mut KeyHandler, app: &mut App, c: char) {
         handler.handle_key_event(app, &KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+    }
+
+    #[test]
+    fn ctrl_z_is_a_noop_when_no_task_is_running() {
+        // Regression: pausing at idle left `paused` set, and `update()` returns
+        // before draining the progress/result channels while it is set, so the
+        // *next* task produced no output and the tab looked permanently wedged.
+        let mut app = create_test_app();
+        assert!(!app.has_active_task());
+        let mut handler = KeyHandler::new();
+
+        let key = KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL);
+        let actions = handler.decode_global_shortcuts(&app, &key);
+
+        assert!(
+            actions.is_empty(),
+            "Ctrl+Z must not toggle pause with no active task"
+        );
+    }
+
+    #[test]
+    fn ctrl_z_toggles_pause_while_a_task_is_running() {
+        use crate::tabs::Tab;
+
+        let mut app = create_test_app();
+        app.task_state.tab = Some(Tab::ScanPorts);
+        let mut handler = KeyHandler::new();
+
+        let key = KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL);
+        let actions = handler.decode_global_shortcuts(&app, &key);
+
+        assert!(matches!(actions.first(), Some(UiAction::TogglePause)));
     }
 
     #[test]

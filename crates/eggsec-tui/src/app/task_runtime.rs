@@ -83,6 +83,23 @@ impl super::App {
         self.task_state.tab
     }
 
+    /// Release active-task state when an authoritative terminal lifecycle
+    /// event (`TaskCompleted` / `TaskFailed` / `TaskCancelled`) arrives for the
+    /// tab that was running.
+    ///
+    /// The receivers are retired later, by `update()`, once they are empty —
+    /// see [`super::state::TaskState::finished`]. The typed `TaskResult` travels
+    /// on a separate channel and may still be in flight when the completion
+    /// event is observed, so dropping it here would swallow the result.
+    pub(crate) fn clear_active_task_state_for(&mut self, tab: super::tabs::Tab) {
+        if self.task_state.tab == Some(tab) {
+            self.task_state.tab = None;
+            self.task_state.started_at = None;
+            self.task_state.paused = false;
+            self.task_state.finished = true;
+        }
+    }
+
     pub fn active_task_elapsed_secs(&self) -> Option<u64> {
         self.task_state.started_at.map(|start| {
             let elapsed = std::time::Instant::now().saturating_duration_since(start);
@@ -122,27 +139,51 @@ impl super::App {
     /// Cancel the active task via the runtime and clear TUI state.
     fn clear_task_runtime(&mut self) {
         // Cancel via runtime client (daemon mode) or embedded runtime.
+        //
+        // Both awaits are wrapped in a timeout: an unresponsive engine or
+        // daemon socket would otherwise leak the spawned task and, because the
+        // cancel is best-effort, leave the engine work running with no TUI
+        // handle on it.
+        const CANCEL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
         if let Some(session_id) = self.runtime_binding.session_id {
             if let Some(ref client) = self.runtime_client {
                 let client = client.clone();
                 let sid = session_id;
                 tokio::spawn(async move {
-                    if let Err(e) = client.cancel_active(sid).await {
-                        tracing::debug!(
-                            "Daemon cancel_active failed (may already be completed): {}",
-                            e
-                        );
+                    match tokio::time::timeout(CANCEL_TIMEOUT, client.cancel_active(sid)).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => {
+                            tracing::debug!(
+                                "Daemon cancel_active failed (may already be completed): {}",
+                                e
+                            );
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "Daemon cancel_active timed out after {}s; task may still be running",
+                                CANCEL_TIMEOUT.as_secs()
+                            );
+                        }
                     }
                 });
             } else {
                 let runtime = self.runtime_binding.runtime.clone();
                 let sid = session_id;
                 tokio::spawn(async move {
-                    if let Err(e) = runtime.cancel_active(sid).await {
-                        tracing::debug!(
-                            "Runtime cancel_active failed (may already be completed): {}",
-                            e
-                        );
+                    match tokio::time::timeout(CANCEL_TIMEOUT, runtime.cancel_active(sid)).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => {
+                            tracing::debug!(
+                                "Runtime cancel_active failed (may already be completed): {}",
+                                e
+                            );
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "Runtime cancel_active timed out after {}s; task may still be running",
+                                CANCEL_TIMEOUT.as_secs()
+                            );
+                        }
                     }
                 });
             }
@@ -156,6 +197,8 @@ impl super::App {
             drop(rx);
         }
         self.task_state.started_at = None;
+        self.task_state.paused = false;
+        self.task_state.finished = false;
     }
 
     pub fn stop(&mut self) {
@@ -204,6 +247,11 @@ impl super::App {
 
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
+            // A task always starts unpaused. `update()` returns before draining the
+            // progress/result channels while `paused` is set, so inheriting a stale
+            // pause would silently suppress this task's entire output.
+            self.task_state.paused = false;
+            self.task_state.finished = false;
 
             // Task-tab mapping lives in the runtime adapter: lifecycle events
             // (progress, completion, failure) route to the originating tab
@@ -232,44 +280,118 @@ impl super::App {
             let pending_event_rx_clone = pending_event_rx.clone();
             self.runtime_pending_event_rx = Some(pending_event_rx);
 
+            // Daemon mode must submit through the client that owns the attached
+            // session. `runtime_binding.runtime` is always the local embedded
+            // runtime, so submitting there with a daemon session id addressed a
+            // session the local runtime never created and every task failed.
+            // `runtime_client` is `Some` exactly when a daemon client is connected.
+            let daemon_client = self.runtime_client.clone();
+            let pending_error = Arc::new(std::sync::Mutex::new(None::<String>));
+            self.runtime_pending_error = Some(pending_error.clone());
+            let pending_error_clone = pending_error.clone();
+            let surface = eggsec_runtime::request::RuntimeSurface::TuiManual;
+
+            // Submission is a single RPC; a hang here would wedge the TUI
+            // indefinitely, so it is bounded.
+            const SUBMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
             tokio::spawn(async move {
-                let session_id = match session_id {
-                    Some(sid) => sid,
-                    None => match runtime
-                        .create_session_with_scope(
-                            eggsec_runtime::SessionOptions::default(),
-                            eggsec_runtime::RuntimeSurface::TuiManual,
-                            Some(session_scope),
-                        )
-                        .await
-                    {
-                        Ok(sid) => {
-                            *pending_session_id_clone.lock().unwrap_or_else(|poisoned| {
-                                tracing::warn!(
-                                    "TUI pending-session-id mutex was poisoned; recovering state"
-                                );
-                                poisoned.into_inner()
-                            }) = Some(sid);
-                            sid
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to create runtime session: {}", e);
-                            return;
-                        }
-                    },
+                let set_error = move |msg: String| {
+                    tracing::error!("{msg}");
+                    *pending_error_clone.lock().unwrap_or_else(|poisoned| {
+                        tracing::warn!("TUI pending-error mutex was poisoned; recovering state");
+                        poisoned.into_inner()
+                    }) = Some(msg);
                 };
 
-                // Subscribe to runtime events before task submission.
-                let event_rx = runtime.subscribe().await;
-                *pending_event_rx_clone.lock().await = Some(event_rx);
+                let submitted = tokio::time::timeout(SUBMIT_TIMEOUT, async {
+                    match daemon_client {
+                        // Daemon mode: the session is created/subscribed during
+                        // attach, and results arrive on the daemon event handle.
+                        Some(client) => {
+                            let sid = match session_id {
+                                Some(sid) => sid,
+                                None => match client
+                                    .create_session(surface, Some(session_scope), Vec::new())
+                                    .await
+                                {
+                                    Ok(sid) => {
+                                        *pending_session_id_clone
+                                            .lock()
+                                            .unwrap_or_else(|poisoned| {
+                                                tracing::warn!(
+                                                    "TUI pending-session-id mutex was poisoned; recovering state"
+                                                );
+                                                poisoned.into_inner()
+                                            }) = Some(sid);
+                                        sid
+                                    }
+                                    Err(e) => {
+                                        return Err(format!("Failed to create daemon session: {e}"))
+                                    }
+                                },
+                            };
+                            client
+                                .submit(sid, request)
+                                .await
+                                .map(|task_id| {
+                                    tracing::debug!("Task submitted to daemon: {task_id}");
+                                })
+                                .map_err(|e| format!("Failed to submit task to daemon: {e}"))
+                        }
+                        None => {
+                            let session_id = match session_id {
+                                Some(sid) => sid,
+                                None => match runtime
+                                    .create_session_with_scope(
+                                        eggsec_runtime::SessionOptions::default(),
+                                        surface,
+                                        Some(session_scope),
+                                    )
+                                    .await
+                                {
+                                    Ok(sid) => {
+                                        *pending_session_id_clone
+                                            .lock()
+                                            .unwrap_or_else(|poisoned| {
+                                                tracing::warn!(
+                                                    "TUI pending-session-id mutex was poisoned; recovering state"
+                                                );
+                                                poisoned.into_inner()
+                                            }) = Some(sid);
+                                        sid
+                                    }
+                                    Err(e) => {
+                                        return Err(format!(
+                                            "Failed to create runtime session: {e}"
+                                        ))
+                                    }
+                                },
+                            };
 
-                match runtime.submit(session_id, request).await {
-                    Ok(task_id) => {
-                        tracing::debug!("Task submitted to runtime: {}", task_id);
+                            // Subscribe to runtime events before task submission.
+                            let event_rx = runtime.subscribe().await;
+                            *pending_event_rx_clone.lock().await = Some(event_rx);
+
+                            runtime
+                                .submit(session_id, request)
+                                .await
+                                .map(|task_id| {
+                                    tracing::debug!("Task submitted to runtime: {task_id}");
+                                })
+                                .map_err(|e| format!("Failed to submit task: {e}"))
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to submit task to runtime: {}", e);
-                    }
+                })
+                .await;
+
+                match submitted {
+                    Ok(Ok(())) => {}
+                    Ok(Err(msg)) => set_error(msg),
+                    Err(_) => set_error(format!(
+                        "Task submission timed out after {}s; the runtime did not respond",
+                        SUBMIT_TIMEOUT.as_secs()
+                    )),
                 }
             });
 
@@ -283,6 +405,122 @@ impl super::App {
 mod tests {
     use crate::app::create_test_app;
     use crate::tabs::{AppState, Tab};
+
+    #[test]
+    fn terminal_lifecycle_event_releases_active_task_state() {
+        // Regression: `result_rx` is never closed (its sender is held by the
+        // App-owned `executor_context` ArcSwap), so channel closure could not
+        // signal completion. Without the authoritative lifecycle event the tab
+        // stayed "running" forever and `q` never quit.
+        let mut app = create_test_app();
+        app.task_state.tab = Some(Tab::ScanPorts);
+        app.task_state.started_at = Some(std::time::Instant::now());
+        app.task_state.paused = true;
+        assert!(app.has_active_task());
+
+        let actions = vec![super::super::runtime_adapter::TuiAction::TabCompleted(
+            Tab::ScanPorts,
+            eggsec_runtime::TaskOutcome::Empty,
+        )];
+        super::super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, &mut app);
+
+        assert!(
+            app.task_state.tab.is_none(),
+            "active task tab must be released"
+        );
+        assert!(app.task_state.started_at.is_none());
+        assert!(
+            !app.task_state.paused,
+            "terminal event must clear a stuck pause"
+        );
+    }
+
+    #[test]
+    fn terminal_lifecycle_event_for_other_tab_leaves_active_task_alone() {
+        let mut app = create_test_app();
+        app.task_state.tab = Some(Tab::ScanPorts);
+
+        let actions = vec![super::super::runtime_adapter::TuiAction::TabCompleted(
+            Tab::Fuzz,
+            eggsec_runtime::TaskOutcome::Empty,
+        )];
+        super::super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, &mut app);
+
+        assert_eq!(app.task_state.tab, Some(Tab::ScanPorts));
+    }
+
+    #[test]
+    fn terminal_event_then_update_retires_channels_so_quit_is_unblocked() {
+        // Regression: the receivers are never closed (their sender is held by the
+        // App-owned `executor_context` ArcSwap), so `has_active_task()` stayed
+        // true forever — the task strip stayed on screen and `q` never quit.
+        let mut app = create_test_app();
+        let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
+        let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(4);
+        app.task_state.tab = Some(Tab::ScanPorts);
+        app.task_state.started_at = Some(std::time::Instant::now());
+        app.task_state.result_rx = Some(result_rx);
+        app.task_state.progress_rx = Some(progress_rx);
+        // Sender kept alive for the whole "session", as in production.
+        let _keep = (result_tx, progress_tx);
+
+        let actions = vec![super::super::runtime_adapter::TuiAction::TabCompleted(
+            Tab::ScanPorts,
+            eggsec_runtime::TaskOutcome::Empty,
+        )];
+        super::super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, &mut app);
+        assert!(app.task_state.finished);
+
+        // One update retires the drained channels and releases the task.
+        app.update();
+        assert!(
+            !app.has_active_task(),
+            "task must be fully released after the terminal event"
+        );
+        assert!(app.task_state.result_rx.is_none());
+        assert!(app.task_state.progress_rx.is_none());
+    }
+
+    #[test]
+    fn a_queued_progress_update_is_applied_not_dropped_by_retirement() {
+        // Regression guard for the retirement path: it must be gated on the
+        // receivers being *empty*, probed without consuming. A consuming probe
+        // (`try_recv().is_err()`) would silently discard a queued update.
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
+        let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(4);
+        app.task_state.tab = Some(Tab::ScanPorts);
+        app.task_state.result_rx = Some(result_rx);
+        app.task_state.progress_rx = Some(progress_rx);
+        // Senders stay alive for the whole "session", as in production.
+        let _keep_tx = result_tx;
+
+        // Queued before the terminal event is observed.
+        progress_tx
+            .try_send((7, 9))
+            .expect("progress channel accepts");
+
+        let actions = vec![super::super::runtime_adapter::TuiAction::TabCompleted(
+            Tab::ScanPorts,
+            eggsec_runtime::TaskOutcome::Empty,
+        )];
+        super::super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, &mut app);
+
+        app.update();
+
+        // The queued update reached the tab (7 of 9 -> ~78%), and only then were
+        // the drained receivers retired.
+        let progress = app.current_tab.as_tab_state(&app).progress();
+        let expected = 7.0 / 9.0 * 100.0;
+        assert!(
+            (progress - expected).abs() < 1.0,
+            "queued progress update was dropped by retirement (progress={progress}, expected~{expected})"
+        );
+        assert!(app.task_state.progress_rx.is_none());
+        assert!(app.task_state.result_rx.is_none());
+        assert!(!app.has_active_task());
+    }
 
     #[test]
     fn stop_with_message_targets_task_tab_when_current_tab_differs() {

@@ -6,7 +6,7 @@ use crate::tabs::AppState;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
 use std::fmt;
@@ -504,6 +504,16 @@ pub fn handle_right_simple(core: &mut TabCore, is_running: bool) -> bool {
 /// Common `is_input_focused` check.
 pub fn is_input_focused<A: Copy + PartialEq>(current: A, inputs: A, core: &TabCore) -> bool {
     current == inputs && core.inputs.is_focused()
+}
+
+/// Focus the first input field when the group has no focused field.
+///
+/// Idempotent: a group that already has a focused field is left alone so a
+/// user-selected field is never stolen back on tab re-entry.
+pub fn ensure_first_field_focused(core: &mut TabCore) {
+    if !core.inputs.is_focused() {
+        core.inputs.focus(0);
+    }
 }
 
 /// Common `is_at_left_edge` for Inputs/Results tabs.
@@ -1095,8 +1105,12 @@ pub fn render_results_area(
         }
         AppState::Error(_) => {
             if let Some(ref err) = error {
-                let error_text =
-                    Paragraph::new(format!("Error: {}", err.message())).style(theme.error());
+                // Wrap: engine error strings are long, and an unwrapped
+                // paragraph is clipped at the right edge, hiding the part of
+                // the message that says what actually failed.
+                let error_text = Paragraph::new(format!("Error: {}", err.message()))
+                    .style(theme.error())
+                    .wrap(Wrap { trim: false });
                 f.render_widget(error_text, area);
             }
         }
@@ -1139,7 +1153,8 @@ pub fn render_error_block(f: &mut Frame, area: Rect, title: &str, error: &TabErr
                 .borders(Borders::ALL)
                 .title(format!(" {} ", title)),
         )
-        .style(theme.error());
+        .style(theme.error())
+        .wrap(Wrap { trim: false });
     f.render_widget(error_text, area);
 }
 
@@ -1316,6 +1331,7 @@ impl fmt::Debug for TabCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::InputField;
 
     #[test]
     fn tab_core_target_empty() {
@@ -2885,5 +2901,34 @@ mod tests {
             handle_options_up_wrapping(&mut idx, count);
         }
         assert_eq!(idx, 0, "wrapping up should return to start");
+    }
+
+    #[test]
+    fn ensure_first_field_focused_is_idempotent_and_steals_nothing() {
+        // Regression: `InputGroup::new()` leaves every field unfocused while
+        // tabs default their focus area to inputs, so `i` + typing was silently
+        // discarded on a freshly entered tab.
+        let mut core = TabCore::new("test", "Results");
+        core.inputs = InputGroup::new()
+            .add(InputField::new("Target"))
+            .add(InputField::new("Ports"));
+
+        assert!(!core.inputs.is_focused());
+        ensure_first_field_focused(&mut core);
+        assert!(core.inputs.is_focused());
+        assert_eq!(core.inputs.focused, Some(0));
+
+        // User moved to the second field: re-entry must not steal it back.
+        core.inputs.focus(1);
+        ensure_first_field_focused(&mut core);
+        assert_eq!(core.inputs.focused, Some(1));
+    }
+
+    #[test]
+    fn ensure_first_field_focused_on_empty_group_is_safe() {
+        let mut core = TabCore::new("test", "Results");
+        core.inputs = InputGroup::new();
+        ensure_first_field_focused(&mut core);
+        assert!(!core.inputs.is_focused());
     }
 }

@@ -1,6 +1,7 @@
 use super::nse_report_view::{
     render_filtered_report, render_report_sections, NseReportSection, NseSectionContent,
 };
+use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, Selector, SelectorItem};
 use crate::tabs::core::{render_config_block, render_error_block, render_input_fields, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
@@ -506,13 +507,37 @@ impl TabInput for NseTab {
 impl NseTab {
     pub fn start(&mut self) {
         if self.target().is_empty() {
+            // Previously a silent `return`: the tab stayed Idle with no
+            // explanation, which read as "nothing happens". Say why.
+            self.core.error = Some(TabError::Target(
+                "Target host / URL is required to run an NSE scan".to_string(),
+            ));
             return;
         }
+        if self.uses_custom_script() {
+            // `NseParams` has no custom-script-path field, so the canonical
+            // executor can only run a named built-in script here. Refuse
+            // rather than silently running a different script.
+            self.core.error = Some(TabError::Config(
+                "A custom NSE script path cannot be dispatched from this tab: \
+                 the runtime request carries only a built-in script name. \
+                 Select a built-in script, or run the custom script from the CLI."
+                    .to_string(),
+            ));
+            return;
+        }
+        self.core.error = None;
         if self.core.state != AppState::Running {
             self.core.progress.current = 0;
             self.core.progress.total = 0;
             self.core.state = AppState::Running;
         }
+    }
+
+    /// True when the operator asked for a custom script rather than a
+    /// built-in one, either via the selector or a typed path.
+    pub fn uses_custom_script(&self) -> bool {
+        self.custom_script().is_some() || self.script() == "custom"
     }
 
     /// Cycle through report filters: None → Summary → Compatibility → ... → Diagnostics → None.
@@ -664,5 +689,41 @@ mod tests {
             text.contains("Banner Grab") && text.contains("Custom Script"),
             "expanded script dropdown should be drawn"
         );
+    }
+
+    /// A missing target used to leave the tab silently Idle.
+    #[test]
+    fn start_without_target_reports_an_error() {
+        let mut tab = NseTab::new();
+        tab.focus_area = NseFocusArea::Inputs;
+        tab.handle_enter();
+        assert!(tab.core.error.is_some(), "empty target must explain itself");
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    /// A custom script path cannot cross `NseParams`, so Enter must refuse
+    /// instead of silently running a different (built-in) script.
+    #[test]
+    fn start_with_custom_script_path_reports_an_error() {
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        tab.core.inputs.fields.get_mut(2).unwrap().value = "/tmp/custom.nse".into();
+        assert!(tab.uses_custom_script());
+        tab.start();
+        assert!(
+            tab.core.error.is_some(),
+            "custom script path must be refused, not silently substituted"
+        );
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn start_with_built_in_script_enters_running() {
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        assert!(!tab.uses_custom_script());
+        tab.start();
+        assert!(tab.core.error.is_none());
+        assert_eq!(tab.core.state, AppState::Running);
     }
 }

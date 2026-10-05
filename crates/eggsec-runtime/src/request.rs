@@ -386,11 +386,67 @@ pub struct WirelessParams {
     pub duration_secs: Option<u32>,
 }
 
+/// Default attack mode for an unconfigured active wireless request.
+fn default_wireless_attack_type() -> String {
+    "deauth".to_string()
+}
+
+/// Default frame budget for an unconfigured active wireless request.
+fn default_wireless_frame_count() -> u64 {
+    100
+}
+
+/// Default frame rate for an unconfigured active wireless request.
+fn default_wireless_rate_limit() -> u64 {
+    10
+}
+
+/// Fail-safe default: an active wireless request that does not say otherwise
+/// is simulated, never transmitted.
+fn default_wireless_dry_run() -> bool {
+    true
+}
+
 /// Wireless active (deauth/disassoc) parameters.
+///
+/// SAFETY: `dry_run` is `true` in *both* the `Default` impl and the
+/// `#[serde(default = ...)]` path, so a payload written before these fields
+/// existed — or any payload that omits them — simulates the attack instead of
+/// transmitting live frames. Never invert this default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WirelessActiveParams {
     pub interface: Option<String>,
     pub target_bssid: Option<String>,
+    /// Active attack mode: `deauth` or `disassoc`. Defaults to `deauth`.
+    #[serde(default = "default_wireless_attack_type")]
+    pub attack_type: String,
+    /// Target client MAC for a directed (per-client) attack. `None` broadcasts.
+    #[serde(default)]
+    pub client: Option<String>,
+    /// Frames to emit. The engine clamps this to 1000.
+    #[serde(default = "default_wireless_frame_count")]
+    pub frame_count: u64,
+    /// Frames per second. The engine clamps this to 100.
+    #[serde(default = "default_wireless_rate_limit")]
+    pub rate_limit: u64,
+    /// `true` simulates without transmitting. Defaults to `true` (fail-safe).
+    #[serde(default = "default_wireless_dry_run")]
+    pub dry_run: bool,
+}
+
+impl Default for WirelessActiveParams {
+    /// Fail-safe defaults: an unconfigured active attack is a dry run.
+    fn default() -> Self {
+        Self {
+            interface: None,
+            target_bssid: None,
+            attack_type: default_wireless_attack_type(),
+            client: None,
+            frame_count: default_wireless_frame_count(),
+            rate_limit: default_wireless_rate_limit(),
+            dry_run: default_wireless_dry_run(),
+        }
+    }
 }
 
 /// Database pentest parameters.
@@ -590,5 +646,57 @@ mod tests {
         assert_eq!(RuntimeSurface::CliManual.label(), "cli-manual");
         assert_eq!(RuntimeSurface::RestApi.label(), "rest-api");
         assert_eq!(RuntimeSurface::Unknown.label(), "unknown");
+    }
+
+    /// SAFETY regression guard: an unconfigured active attack must never arm a
+    /// live deauth, on either the `Default` or the deserialization path.
+    #[test]
+    fn wireless_active_params_default_is_dry_run() {
+        let params = WirelessActiveParams::default();
+        assert!(params.dry_run, "Default must fail safe to a dry run");
+        assert_eq!(params.attack_type, "deauth");
+        assert_eq!(params.frame_count, 100);
+        assert_eq!(params.rate_limit, 10);
+        assert!(params.client.is_none());
+    }
+
+    #[test]
+    fn wireless_active_params_legacy_payload_dry_runs() {
+        let legacy = r#"{"interface":"wlan0","target_bssid":"aa:bb:cc:dd:ee:ff"}"#;
+        let params: WirelessActiveParams = serde_json::from_str(legacy).unwrap();
+        assert!(params.dry_run, "payload without dry_run must dry run");
+        assert_eq!(params.attack_type, "deauth");
+        assert_eq!(params.frame_count, 100);
+        assert_eq!(params.rate_limit, 10);
+    }
+
+    #[test]
+    fn wireless_active_params_roundtrip_preserves_live_fields() {
+        let req = RunRequest {
+            task_kind: TaskKind::WirelessActive(WirelessActiveParams {
+                interface: Some("wlan0".into()),
+                target_bssid: Some("aa:bb:cc:dd:ee:ff".into()),
+                attack_type: "disassoc".into(),
+                client: Some("11:22:33:44:55:66".into()),
+                frame_count: 25,
+                rate_limit: 5,
+                dry_run: false,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let back: RunRequest = serde_json::from_str(&json).unwrap();
+        match back.task_kind {
+            TaskKind::WirelessActive(p) => {
+                assert_eq!(p.attack_type, "disassoc");
+                assert_eq!(p.client.as_deref(), Some("11:22:33:44:55:66"));
+                assert_eq!(p.frame_count, 25);
+                assert_eq!(p.rate_limit, 5);
+                assert!(!p.dry_run);
+            }
+            other => panic!("expected wireless-active, got {other:?}"),
+        }
     }
 }

@@ -118,53 +118,82 @@ pub fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     tab_render.render_overlays(f, area);
 }
 
+/// The task strip's trailing key hints are duplicated by the help pane, so they
+/// are dropped when the status field has to share its width with an outcome.
+fn without_task_hints(summary: &str) -> &str {
+    summary.split_once(" [").map_or(summary, |(head, _)| head)
+}
+
+/// Clips `text` to `max_chars`, marking the cut with an ellipsis.
+fn clip_status(text: &str, max_chars: usize) -> String {
+    let len = text.chars().count();
+    if len <= max_chars {
+        return text.to_string();
+    }
+    match max_chars {
+        0 => String::new(),
+        1 => "…".to_string(),
+        _ => format!("{}…", text.chars().take(max_chars - 1).collect::<String>()),
+    }
+}
+
 pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     use crate::app::action_hints::{format_hints, get_action_hints};
 
     let is_narrow = area.width < 100;
     let is_very_narrow = area.width < 60;
-    // Phase 6: when task globally active, ensure status shows task strip (name/state/elapsed/hints)
-    // even after navigating away. Prefer task summary unless an *error* notification is active
-    // (keep error notif priority for visibility of failures). Non-error notifs yield to task.
-    let (mut status_text, mut status_color) = if let Some(notif) = &app.overlay.notification {
-        if !notif.is_expired() && notif.severity == NotificationSeverity::Error {
-            let color = theme.colors.error;
-            (notif.message.clone(), color)
-        } else if app.has_active_task() {
-            if let Some(summary) = app.task_status_summary() {
-                let state = if app.is_paused() { "paused" } else { "running" };
-                let col = theme
-                    .style_for_task_state(state)
-                    .fg
-                    .unwrap_or(theme.colors.status_running);
-                (summary, col)
-            } else {
-                get_normal_status(app, theme)
-            }
-        } else if !notif.is_expired() {
-            let color = match notif.severity {
-                NotificationSeverity::Info => theme.colors.status_idle,
-                NotificationSeverity::Success => theme.colors.success,
-                NotificationSeverity::Warning => theme.colors.warning,
-                NotificationSeverity::Error => theme.colors.error,
-            };
-            (notif.message.clone(), color)
-        } else {
-            get_normal_status(app, theme)
-        }
-    } else if app.has_active_task() {
-        if let Some(summary) = app.task_status_summary() {
+
+    // Notification precedence: an unexpired Error always wins; any other
+    // unexpired notification is delivered next. A task strip never *replaces* a
+    // pending outcome (that silently dropped every success/info/warning raised
+    // while a scan ran), it is kept as the prefix and the notification is
+    // appended, so live progress and the outcome are both readable.
+    let notification = app
+        .overlay
+        .notification
+        .as_ref()
+        .filter(|notif| !notif.is_expired());
+    let task_strip = if app.has_active_task() {
+        app.task_status_summary().map(|summary| {
             let state = if app.is_paused() { "paused" } else { "running" };
-            let col = theme
+            let color = theme
                 .style_for_task_state(state)
                 .fg
                 .unwrap_or(theme.colors.status_running);
-            (summary, col)
-        } else {
-            get_normal_status(app, theme)
-        }
+            (summary, color)
+        })
     } else {
-        get_normal_status(app, theme)
+        None
+    };
+    let notification_color = |severity: NotificationSeverity| match severity {
+        NotificationSeverity::Info => theme.colors.status_idle,
+        NotificationSeverity::Success => theme.colors.success,
+        NotificationSeverity::Warning => theme.colors.warning,
+        NotificationSeverity::Error => theme.colors.error,
+    };
+    // The status field is the middle 50% of the bar (see the layout below); one
+    // column goes to the leading space the paragraph is rendered with.
+    let status_budget = usize::from(area.width / 2).saturating_sub(1);
+
+    let (mut status_text, mut status_color) = match (notification, task_strip) {
+        (Some(notif), _) if notif.severity == NotificationSeverity::Error => {
+            (notif.message.clone(), notification_color(notif.severity))
+        }
+        (Some(notif), Some((summary, color))) => {
+            // Progress first, outcome second: the task strip keeps the width it
+            // needs for live progress and the message is clipped to what is
+            // left, so neither the running task nor its outcome is pushed out
+            // of the bar.
+            let strip = without_task_hints(&summary);
+            let room = status_budget.saturating_sub(strip.chars().count() + 3);
+            (
+                format!("{} | {}", strip, clip_status(&notif.message, room)),
+                color,
+            )
+        }
+        (Some(notif), None) => (notif.message.clone(), notification_color(notif.severity)),
+        (None, Some((summary, color))) => (summary, color),
+        (None, None) => get_normal_status(app, theme),
     };
 
     // Phase 5/6/9: compact handling on narrow (<100w). For active task, use shortened strip.
@@ -194,6 +223,14 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
                     .style_for_task_state(tstate)
                     .fg
                     .unwrap_or(theme.colors.status_running);
+                // The compact strip stays authoritative for live progress; a
+                // pending non-critical notification is appended within the
+                // status field's budget so the outcome is still delivered.
+                if let Some(notif) = notification {
+                    let strip = without_task_hints(&status_text);
+                    let room = status_budget.saturating_sub(strip.chars().count() + 3);
+                    status_text = format!("{} | {}", strip, clip_status(&notif.message, room));
+                }
             }
         } else if let Some(spec) = spec_for(app.current_tab) {
             if spec.operation.is_some() {
@@ -583,8 +620,13 @@ mod tests {
     use eggsec::config::{
         IntendedUse, OperationDescriptor, OperationMode, OperationRisk, PolicyDecision,
     };
+    use ratatui::layout::Rect;
     use ratatui::{backend::TestBackend, Terminal};
     use std::sync::Arc;
+
+    use super::draw_status_bar;
+    use super::{clip_status, without_task_hints};
+    use crate::App;
 
     #[test]
     fn test_render_80x24_layout_has_tab_bar_status_bar_content() {
@@ -676,6 +718,7 @@ mod tests {
             reason_input: String::new(),
             captured_request: None,
             cli_flags: vec![],
+            scroll_offset: 0,
         });
 
         let backend = TestBackend::new(80, 24);
@@ -792,5 +835,175 @@ mod tests {
                 "Buffer should not contain control characters"
             );
         }
+    }
+
+    /// Status-bar text for `app` rendered at `width` x 24.
+    fn status_bar_text(app: &App, width: u16) -> String {
+        let theme = app.theme_manager.current().clone();
+        let backend = TestBackend::new(width, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 23, width, 1);
+                draw_status_bar(f, app, &theme, area);
+            })
+            .unwrap();
+        buffer_to_text(terminal.backend().buffer())
+    }
+
+    fn app_with_running_task() -> crate::App {
+        let mut app = create_test_app();
+        app.task_state.tab = Some(Tab::ScanPorts);
+        app.task_state.progress_rx = Some(tokio::sync::mpsc::channel::<(u64, u64)>(1).1);
+        app
+    }
+
+    #[test]
+    fn test_status_bar_shows_success_notification_while_task_runs() {
+        let mut app = app_with_running_task();
+        app.overlay.notification = Some(crate::app::Notification::new(
+            "Export done".to_string(),
+            crate::app::NotificationSeverity::Success,
+        ));
+
+        let text = status_bar_text(&app, 120);
+        assert!(
+            text.contains("Task:") && text.contains("running"),
+            "the task strip must stay visible, got:\n{}",
+            text
+        );
+        assert!(
+            text.contains("Export done"),
+            "a success notification must not be dropped while a task runs, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_status_bar_clips_notification_to_the_status_field() {
+        let mut app = app_with_running_task();
+        // Longer than the status field: the strip keeps its width, the message is
+        // marked as clipped instead of pushing the progress out of the bar.
+        app.overlay.notification = Some(crate::app::Notification::new(
+            "Exported to: ./exports/port_scan_results.json".to_string(),
+            crate::app::NotificationSeverity::Success,
+        ));
+
+        let text = status_bar_text(&app, 120);
+        assert!(
+            text.contains("Task:"),
+            "progress must survive, got:\n{}",
+            text
+        );
+        assert!(
+            text.contains('…'),
+            "a clipped outcome must be marked, got:\n{}",
+            text
+        );
+        assert!(
+            !text.contains("[Ctrl-C stop]"),
+            "the duplicated key hints must yield their width to the outcome, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_status_bar_shows_warning_notification_while_task_runs_narrow() {
+        let mut app = app_with_running_task();
+        app.overlay.notification = Some(crate::app::Notification::new(
+            "Export done".to_string(),
+            crate::app::NotificationSeverity::Warning,
+        ));
+
+        // 80 columns is below the compact threshold, where the task strip is
+        // rebuilt from scratch; the outcome must still be delivered with it.
+        let text = status_bar_text(&app, 80);
+        assert!(
+            text.contains("Task:"),
+            "progress must stay visible on a narrow bar, got:\n{}",
+            text
+        );
+        assert!(
+            text.contains("Export done"),
+            "a warning must not be dropped on a narrow bar, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_status_bar_error_notification_still_overrides_task_strip() {
+        let mut app = app_with_running_task();
+        app.overlay.notification = Some(crate::app::Notification::new(
+            "Export failed: disk full".to_string(),
+            crate::app::NotificationSeverity::Error,
+        ));
+
+        let text = status_bar_text(&app, 200);
+        assert!(
+            text.contains("Export failed: disk full"),
+            "an error notification keeps precedence over the task strip, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_status_bar_expired_notification_falls_back_to_task_strip() {
+        let mut app = app_with_running_task();
+        let mut notif = crate::app::Notification::new(
+            "Exported to: stale".to_string(),
+            crate::app::NotificationSeverity::Success,
+        );
+        // Age the notification past its timeout instead of sleeping.
+        notif.created_at = std::time::Instant::now() - std::time::Duration::from_secs(600);
+        app.overlay.notification = Some(notif);
+
+        let text = status_bar_text(&app, 200);
+        assert!(
+            text.contains("Task:"),
+            "an expired notification must not displace the task strip, got:\n{}",
+            text
+        );
+        assert!(
+            !text.contains("stale"),
+            "an expired notification must not be shown, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_status_bar_shows_notification_when_no_task_runs() {
+        let mut app = create_test_app();
+        app.overlay.notification = Some(crate::app::Notification::new(
+            "Exported to: ./exports/recon_results.json".to_string(),
+            crate::app::NotificationSeverity::Success,
+        ));
+
+        let text = status_bar_text(&app, 200);
+        assert!(
+            text.contains("Exported to: ./exports/recon_results.json"),
+            "an idle task strip is replaced by the notification, got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_without_task_hints_drops_only_the_trailing_hints() {
+        assert_eq!(
+            without_task_hints("Task: Scan Ports (running) [Ctrl-C stop] [Ctrl-Z pause]"),
+            "Task: Scan Ports (running)"
+        );
+        assert_eq!(
+            without_task_hints("Task: Scan Ports (running)"),
+            "Task: Scan Ports (running)"
+        );
+    }
+
+    #[test]
+    fn test_clip_status_marks_the_cut() {
+        assert_eq!(clip_status("abcdef", 10), "abcdef");
+        assert_eq!(clip_status("abcdef", 6), "abcdef");
+        assert_eq!(clip_status("abcdef", 4), "abc…");
+        assert_eq!(clip_status("abcdef", 1), "…");
+        assert_eq!(clip_status("abcdef", 0), "");
     }
 }

@@ -635,6 +635,19 @@ pub trait TabInput: TabState {
     }
     fn handle_search(&mut self, _query: &str) {}
     fn is_input_focused(&self) -> bool;
+    /// Make the tab's first input field focusable when the tab's focus area is
+    /// its input area.
+    ///
+    /// Tabs default their focus area to the input area, but `InputGroup::new()`
+    /// leaves every field unfocused, so on a freshly entered tab the visible
+    /// focus ring points at a field that cannot receive input: `i` enters insert
+    /// mode and every keystroke is silently discarded. `focus_next_*` only
+    /// focuses a field when it moves *toward* inputs, and it blurs when the
+    /// focus area is already the input area, so tab entry has to establish this
+    /// invariant itself.
+    ///
+    /// Idempotent, and a no-op for tabs whose focus area is not their inputs.
+    fn ensure_input_focus(&mut self) {}
     fn is_at_left_edge(&self) -> bool {
         true
     }

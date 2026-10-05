@@ -148,6 +148,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }),
         TaskKind::DbPentest(DbPentestParams {
             db_type: "postgres".into(),
@@ -327,6 +328,7 @@ fn multiplexer_families_share_operations_explicitly() {
     let active = TaskKind::WirelessActive(WirelessActiveParams {
         interface: None,
         target_bssid: None,
+        ..Default::default()
     });
     assert_eq!(wifi.operation_id(), "wireless");
     assert_eq!(active.operation_id(), "wireless");
@@ -407,6 +409,7 @@ fn no_target_and_interface_families_fail_descriptor_explicitly() {
         TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }),
     ];
     for kind in &kinds {

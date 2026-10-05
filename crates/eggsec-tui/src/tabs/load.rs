@@ -1,7 +1,5 @@
 use crate::components::{InputField, InputGroup, Selector};
-use crate::tabs::core::{
-    render_input_fields, render_results_area, start_scan, StandardFocusAreaSelector, TabCore,
-};
+use crate::tabs::core::{render_results_area, start_scan, StandardFocusAreaSelector, TabCore};
 use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::loadtest::metrics::LoadTestResults;
@@ -370,89 +368,162 @@ impl TabState for LoadTab {
     }
 }
 
+/// Rows one bordered input field occupies.
+const FIELD_ROWS: u16 = 3;
+/// Rows the configuration block spends on its own border and title.
+const BLOCK_CHROME_ROWS: u16 = 2;
+/// Rows the test-type selector occupies.
+const SELECTOR_ROWS: u16 = 6;
+/// Minimum readable results height (its own border included) so error text
+/// stays legible when the terminal is short.
+const MIN_RESULTS_ROWS: u16 = 4;
+
+/// Vertical split of the load tab: selector, configuration fields, results.
+///
+/// The three heights always sum to `area.height` so no region is silently
+/// squeezed. The configuration region is sized to the fields it can show at
+/// full height, never below the space the results region needs.
+fn load_layout(area: Rect, field_count: usize) -> [Rect; 3] {
+    let selector_rows = SELECTOR_ROWS.min(area.height);
+    let remaining = area.height.saturating_sub(selector_rows);
+    // The configuration region never grows past what the results region can
+    // spare, so results keeps at least `MIN_RESULTS_ROWS`; whatever is left over
+    // after the fields go to results, so a tall terminal shows a tall results
+    // pane rather than dead space.
+    let max_input_rows = remaining.saturating_sub(MIN_RESULTS_ROWS);
+    let wanted_input_rows = (field_count as u16)
+        .saturating_mul(FIELD_ROWS)
+        .saturating_add(BLOCK_CHROME_ROWS);
+    let input_rows = wanted_input_rows.min(max_input_rows);
+    let results_rows = remaining.saturating_sub(input_rows);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(selector_rows),
+            Constraint::Length(input_rows),
+            Constraint::Length(results_rows),
+        ])
+        .split(area);
+    [
+        chunks.first().copied().unwrap_or(area),
+        chunks.get(1).copied().unwrap_or_default(),
+        chunks.get(2).copied().unwrap_or_default(),
+    ]
+}
+
+/// Which slice of the configuration fields fits in `input_area`, chosen so the
+/// focused field is always visible.
+///
+/// The old layout squeezed every field into `area.height - 8` rows: at 30 rows
+/// the seven 3-row fields were handed 2-row chunks, so their borders were
+/// clipped into the neighbouring field. A field is now never given fewer than
+/// [`FIELD_ROWS`] rows; the form pages instead, and follows focus. Returns an
+/// empty range when not even one field fits, so the caller renders nothing
+/// rather than a fragment.
+fn visible_field_window(
+    field_count: usize,
+    focused: Option<usize>,
+    input_area: Rect,
+) -> std::ops::Range<usize> {
+    if field_count == 0 {
+        return 0..0;
+    }
+    let inner_rows = input_area.height.saturating_sub(BLOCK_CHROME_ROWS);
+    let capacity = usize::from(inner_rows / FIELD_ROWS);
+    if capacity == 0 {
+        return 0..0;
+    }
+    if capacity >= field_count {
+        return 0..field_count;
+    }
+    let focus = focused.unwrap_or(0).min(field_count - 1);
+    // Keep the focused field visible with as much surrounding context as fits.
+    let start = focus
+        .saturating_sub(capacity / 2)
+        .min(field_count - capacity);
+    start..start + capacity
+}
+
 impl TabRender for LoadTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        let num_fields = self.core.inputs.fields.len().max(1) as u16;
-        let input_height = (num_fields * 3 + 2).min(area.height.saturating_sub(8));
-        let results_height = area
-            .height
-            .saturating_sub(6)
-            .saturating_sub(input_height)
-            .max(3);
+        let field_count = self.core.inputs.fields.len();
+        let [selector_area, input_area, results_area] = load_layout(area, field_count);
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(6),            // Selector
-                Constraint::Length(input_height), // Inputs
-                Constraint::Min(results_height),  // Results
-            ])
-            .split(area);
-
-        if let Some(selector_area) = chunks.first() {
-            self.test_type_selector.render(f, *selector_area);
-
-            if let Some(dropdown) = self
-                .test_type_selector
-                .dropdown_info(*selector_area, f.area().height)
-            {
-                dropdown.render(f);
-            }
+        self.test_type_selector.render(f, selector_area);
+        if let Some(dropdown) = self
+            .test_type_selector
+            .dropdown_info(selector_area, f.area().height)
+        {
+            dropdown.render(f);
         }
 
-        if let Some(input_area) = chunks.get(1) {
-            let input_block = Block::default()
-                .borders(Borders::ALL)
-                .title(" Load Test Configuration ")
-                .border_style(crate::tabs::core::focus_border_style(
-                    self.focus_area == StandardFocusAreaSelector::Inputs,
-                ));
-            let input_inner = input_block.inner(*input_area);
-            f.render_widget(input_block, *input_area);
+        let window = visible_field_window(field_count, self.core.inputs.focused, input_area);
+        let title = if window.is_empty() {
+            " Load Test Configuration (terminal too small) ".to_string()
+        } else if window.len() < field_count {
+            format!(
+                " Load Test Configuration ({}-{} of {}) ",
+                window.start + 1,
+                window.end,
+                field_count
+            )
+        } else {
+            " Load Test Configuration ".to_string()
+        };
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .border_style(crate::tabs::core::focus_border_style(
+                self.focus_area == StandardFocusAreaSelector::Inputs,
+            ));
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
 
-            let num_fields = self.core.inputs.fields.len().max(1);
-            let constraints: Vec<Constraint> =
-                (0..num_fields).map(|_| Constraint::Length(3)).collect();
-
+        if !window.is_empty() {
+            let constraints: Vec<Constraint> = window
+                .clone()
+                .map(|_| Constraint::Length(FIELD_ROWS))
+                .collect();
             let input_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(constraints)
                 .split(input_inner);
 
-            render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
+            // Windowed draw: pair each visible chunk with its own field index so
+            // a paged form shows the right field, not the first N fields.
+            for (offset, field) in self
+                .core
+                .inputs
+                .fields
+                .iter()
+                .enumerate()
+                .skip(window.start)
+                .take(window.len())
+            {
+                if let Some(chunk) = input_chunks.get(offset) {
+                    field.render(f, *chunk, insert_mode);
+                }
+            }
         }
 
-        if let Some(results_area) = chunks.get(2) {
-            render_results_area(
-                f,
-                *results_area,
-                &self.core.state,
-                &self.core.error,
-                &self.core.results_view,
-                &self.core.progress,
-                "Results",
-                "Results will appear here after running",
-            );
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Results",
+            "Results will appear here after running",
+        );
     }
 
     fn render_overlays(&self, f: &mut Frame, area: Rect) {
-        let input_height = if area.height <= 24 {
-            ((area.height as f32 * 0.6) as u16).clamp(6, 15)
-        } else {
-            15
-        };
-
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(6),
-                Constraint::Length(input_height),
-                Constraint::Min(0),
-            ])
-            .split(area);
-
-        let selector_area = *chunks.first().unwrap_or(&area);
+        let field_count = self.core.inputs.fields.len();
+        // Mirrors `render`: the selector anchor must not drift from the row the
+        // selector was actually drawn in.
+        let [selector_area, _, _] = load_layout(area, field_count);
 
         if let Some(dropdown) = self
             .test_type_selector
@@ -772,6 +843,7 @@ impl TabInput for LoadTab {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
 
     fn create_test_tab() -> LoadTab {
         LoadTab::new()
@@ -854,5 +926,124 @@ mod tests {
         if tab.test_type_selector.items.len() > 1 {
             assert_eq!(tab.test_type_selector.selected, 1);
         }
+    }
+
+    /// Every field must be drawn at its full 3-row height, never as a clipped
+    /// fragment. The old clamp handed 2-row chunks to 3-row bordered fields at
+    /// 30 rows, which overprinted their borders.
+    fn assert_fields_render_whole(height: u16) {
+        let tab = create_test_tab();
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+
+        let [_, input_area, results_area] = load_layout(Rect::new(0, 0, 80, height), 7);
+        assert!(
+            results_area.height >= MIN_RESULTS_ROWS,
+            "results must keep a readable minimum at {height} rows"
+        );
+
+        let window = visible_field_window(7, None, input_area);
+        assert!(!window.is_empty(), "no field fits at {height} rows");
+        assert_eq!(
+            window.len() as u16 * FIELD_ROWS + BLOCK_CHROME_ROWS,
+            input_area
+                .height
+                .min(window.len() as u16 * FIELD_ROWS + BLOCK_CHROME_ROWS),
+            "visible fields must exactly fill the input area at {height} rows"
+        );
+
+        // Every visible field's top and bottom border row must be on screen, and
+        // its value row must not be shared with another field's border.
+        for (offset, (_, label)) in window.clone().zip(FIELD_LABELS).enumerate() {
+            let start_row = input_area.y + 1 + offset as u16 * FIELD_ROWS;
+            assert!(
+                start_row + FIELD_ROWS <= input_area.y + input_area.height,
+                "field {label} would be clipped at {height} rows"
+            );
+            assert!(
+                text.lines()
+                    .nth(start_row as usize)
+                    .is_some_and(|l| !l.is_empty()),
+                "field {label} top border missing at {height} rows:\n{text}"
+            );
+        }
+    }
+
+    const FIELD_LABELS: [&str; 7] = [
+        "Target URL/Host",
+        "Method",
+        "Total Requests",
+        "Concurrency",
+        "Timeout",
+        "Request Body",
+        "Headers",
+    ];
+
+    #[test]
+    fn test_fields_render_whole_at_30_rows() {
+        assert_fields_render_whole(30);
+    }
+
+    #[test]
+    fn test_fields_render_whole_at_24_rows() {
+        assert_fields_render_whole(24);
+    }
+
+    /// Paging must keep every field reachable and follow focus.
+    #[test]
+    fn test_all_seven_fields_remain_reachable_when_paging() {
+        let input_area = Rect::new(0, 6, 80, 14); // 4 fields fit
+        for focused in 0..7 {
+            let window = visible_field_window(7, Some(focused), input_area);
+            assert!(
+                window.contains(&focused),
+                "focused field {focused} not visible in {window:?}"
+            );
+            assert!(window.len() <= 4, "window overflows: {window:?}");
+        }
+        // The union of the pages covers every field.
+        let mut seen = [false; 7];
+        for focused in 0..7 {
+            for i in visible_field_window(7, Some(focused), input_area) {
+                seen[i] = true;
+            }
+        }
+        assert!(seen.iter().all(|s| *s), "some field is unreachable");
+    }
+
+    /// When not even one full field fits, nothing is drawn rather than a stub.
+    #[test]
+    fn test_tiny_area_draws_no_partial_field() {
+        let tiny = Rect::new(0, 6, 80, 3);
+        assert!(visible_field_window(7, Some(6), tiny).is_empty());
+    }
+
+    /// The three regions must tile the tab area without gaps or overlap, and
+    /// results must never be starved.
+    #[test]
+    fn test_layout_tiles_the_area_exactly() {
+        for height in [8u16, 14, 18, 24, 30, 50] {
+            let [a, b, c] = load_layout(Rect::new(0, 0, 80, height), 7);
+            assert_eq!(a.y, 0);
+            assert_eq!(b.y, a.height);
+            assert_eq!(c.y, a.height + b.height);
+            assert_eq!(a.height + b.height + c.height, height, "at {height} rows");
+        }
+    }
+
+    /// A tall terminal must spend the leftover rows on results, not leave dead
+    /// space at the bottom.
+    #[test]
+    fn test_tall_terminal_grows_the_results_pane() {
+        let [_, input, results] = load_layout(Rect::new(0, 0, 80, 50), 7);
+        assert_eq!(input.height, 7 * FIELD_ROWS + BLOCK_CHROME_ROWS);
+        assert_eq!(results.height, 50 - SELECTOR_ROWS - input.height);
+        assert!(results.height > MIN_RESULTS_ROWS);
     }
 }

@@ -451,6 +451,37 @@ impl TaskBuilder for super::tabs::HuntTab {
     }
 }
 
+#[cfg(feature = "nse")]
+impl TaskBuilder for super::tabs::NseTab {
+    /// `Tab::Nse` collects a target, a script selector and script arguments,
+    /// but it had no `TaskBuilder`, so Enter could never dispatch and the tab
+    /// only ever reported "nothing to run".
+    ///
+    /// `NseParams` carries `target` / `script` / `args`, which is everything
+    /// this request can express. A custom script *path* is deliberately NOT
+    /// smuggled into `script`: the engine resolves `script` as a built-in
+    /// script identity and resolves a custom path through a separate
+    /// `custom_script` argument that `NseParams` does not carry. `start()`
+    /// rejects a custom script with a clear error instead of silently running
+    /// a different script than the operator picked.
+    fn build_run_request(&self) -> Option<RunRequest> {
+        let target = self.target();
+        if target.is_empty() {
+            return None;
+        }
+        Some(RunRequest {
+            task_kind: TaskKind::Nse(eggsec_runtime::request::NseParams {
+                target: target.to_string(),
+                script: self.script().to_string(),
+                args: self.script_args().and_then(non_blank),
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        })
+    }
+}
+
 #[cfg(feature = "headless-browser")]
 impl TaskBuilder for super::tabs::BrowserTab {
     fn build_run_request(&self) -> Option<RunRequest> {
@@ -580,12 +611,12 @@ impl TaskBuilder for super::tabs::WirelessTab {
             if self.active_mode {
                 if let Some((
                     interface,
-                    _attack_type,
+                    attack_type,
                     bssid,
-                    _client,
-                    _frame_count,
-                    _rate_limit,
-                    _dry_run,
+                    client,
+                    frame_count,
+                    rate_limit,
+                    dry_run,
                 )) = self.active_attack_config()
                 {
                     return Some(RunRequest {
@@ -593,6 +624,11 @@ impl TaskBuilder for super::tabs::WirelessTab {
                             eggsec_runtime::request::WirelessActiveParams {
                                 interface: Some(interface),
                                 target_bssid: bssid,
+                                attack_type,
+                                client,
+                                frame_count,
+                                rate_limit,
+                                dry_run,
                             },
                         ),
                         requested_by: None,

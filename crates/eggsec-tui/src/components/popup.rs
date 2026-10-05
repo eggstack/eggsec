@@ -260,8 +260,8 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
         "  j/Down           - Move down".to_string(),
         "  k/Up             - Move up".to_string(),
         "  l/Right          - Move right".to_string(),
-        "  w                - Word forward (5 chars)".to_string(),
-        "  b                - Word backward (5 chars)".to_string(),
+        "  w                - Word forward".to_string(),
+        "  b                - Word backward".to_string(),
         "  H                - Home (line start)".to_string(),
         "  L                - End (line end)".to_string(),
         "  gg               - Go to top".to_string(),
@@ -317,10 +317,22 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
 }
 
 pub fn confirm_popup(title: &str, message: &[String]) -> Popup {
+    // Height must follow the content. A fixed height here hid the risk level,
+    // target, denial reasons and warnings of a policy confirmation behind a
+    // single visible line, leaving the operator to confirm an intrusive
+    // operation on incomplete information.
+    //
+    // Chrome costs 5 rows (borders + margin 1 + button row), and the cap keeps
+    // the popup inside a normal terminal; content beyond the cap stays
+    // reachable with the popup's scroll keys.
+    let content_rows = u16::try_from(message.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(5)
+        .clamp(9, 24);
     Popup::new(title, PopupKind::Confirm)
         .content(message.to_vec())
-        .with_width(50)
-        .with_height(8)
+        .with_width(72)
+        .with_height(content_rows)
         .buttons(vec!["Yes", "No"])
 }
 

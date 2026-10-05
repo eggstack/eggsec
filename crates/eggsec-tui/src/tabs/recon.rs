@@ -396,7 +396,13 @@ impl TabRender for ReconTab {
             &self.core.results_view,
             &self.core.progress,
             "Reconnaissance",
-            "Enter target and press Enter to start recon\n\nCLI equivalent: eggsec recon example.com --no-tech --no-whois",
+            // Static and truthful only. The previous text fabricated a
+            // concrete command — `eggsec recon example.com --no-tech
+            // --no-whois` — inventing the target and asserting the opposite of
+            // the visible (unchecked) Skip Tech Detection / Skip WHOIS boxes.
+            // A real command is available via copy-cli, which derives it from
+            // the live form state.
+            "Enter target and press Enter to start recon",
         );
     }
 }

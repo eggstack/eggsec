@@ -4,7 +4,7 @@ use crate::tc;
 use crate::theme::palette::{ThemeColors, ThemeMode};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -33,6 +33,12 @@ impl TabRender for super::SettingsTab {
         let nav_area = chunks.first().copied().unwrap_or(area);
         let content_area = chunks.get(1).copied().unwrap_or(area);
 
+        // `Selector::dropdown_info` compares its absolute anchor `y` against
+        // this bound, so it needs the pane's *bottom row*, not its height.
+        // Passing a height truncated every dropdown by the pane's `y` offset
+        // (~4 rows instead of ~10) and could flip it above the anchor.
+        let viewport_rows = area.y.saturating_add(area.height);
+
         let nav_items = vec![
             ("HTTP Settings", SettingsSection::Http),
             ("Scan Settings", SettingsSection::Scan),
@@ -45,27 +51,50 @@ impl TabRender for super::SettingsTab {
             ("Theme", SettingsSection::Theme),
         ];
 
+        // Focus indicator: the settings screen has two focusable regions (the
+        // section list and the detail pane) and nothing on screen distinguished
+        // them. The focused pane now takes the shared focus border style, and
+        // the focused list row carries an explicit `▶` marker.
+        let list_focused = self.focus_area == super::SettingsFocusArea::SectionList;
+        let detail_focused = self.focus_area == super::SettingsFocusArea::SectionDetail;
+
         let mut nav_lines = Vec::new();
         for (label, section) in &nav_items {
-            let style = if *section == self.current_section {
-                Style::default().fg(tc!(selected_text)).bg(tc!(selected))
+            let selected = *section == self.current_section;
+            let marker = if list_focused && selected {
+                "\u{25b6} "
+            } else {
+                "  "
+            };
+            let style = if selected {
+                let base = Style::default().fg(tc!(selected_text)).bg(tc!(selected));
+                if list_focused {
+                    base.add_modifier(Modifier::BOLD)
+                } else {
+                    base
+                }
+            } else if list_focused {
+                Style::default().fg(tc!(text_dim))
             } else {
                 Style::default().fg(tc!(border))
             };
-            nav_lines.push(Line::from(Span::styled(format!("  {}", label), style)));
+            nav_lines.push(Line::from(Span::styled(
+                format!("{}{}", marker, label),
+                style,
+            )));
         }
 
         let nav = Paragraph::new(nav_lines).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("Settings")
-                .border_style(Style::default().fg(tc!(border))),
+                .border_style(crate::tabs::core::focus_border_style(list_focused)),
         );
         f.render_widget(nav, nav_area);
 
         let content_block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(tc!(border)))
+            .border_style(crate::tabs::core::focus_border_style(detail_focused))
             .title(match self.current_section {
                 SettingsSection::Http => "HTTP Settings",
                 SettingsSection::Scan => "Scan Settings",
@@ -143,7 +172,7 @@ impl TabRender for super::SettingsTab {
                 }
                 builder = builder.add_selector(self.proxy_rotation_selector.clone());
                 builder.render(f, body, insert_mode);
-                for dropdown in builder.collect_dropdowns(body, area.height) {
+                for dropdown in builder.collect_dropdowns(body, viewport_rows) {
                     dropdown.render(f);
                 }
             }
@@ -177,7 +206,7 @@ impl TabRender for super::SettingsTab {
                 builder = builder.add_checkbox(self.notify_on_findings.clone());
                 builder = builder.add_selector(self.severity_selector.clone());
                 builder.render(f, body, insert_mode);
-                for dropdown in builder.collect_dropdowns(body, area.height) {
+                for dropdown in builder.collect_dropdowns(body, viewport_rows) {
                     dropdown.render(f);
                 }
             }
@@ -428,7 +457,7 @@ impl TabRender for super::SettingsTab {
                 // Render theme selector dropdown overlay last so it overlays other content.
                 if let Some(dropdown) = self
                     .theme_selector
-                    .dropdown_info(selector_area, area.height)
+                    .dropdown_info(selector_area, viewport_rows)
                 {
                     dropdown.render(f);
                 }
@@ -460,6 +489,111 @@ impl TabRender for super::SettingsTab {
             )
             .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(hint, footer_area);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tabs::settings::SettingsFocusArea;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    /// The real settings pane sits at y=5 (margin 1 + tab bar 3 + breadcrumb 1).
+    const PANE_Y: u16 = 5;
+    const PANE_W: u16 = 98;
+    const PANE_H: u16 = 18;
+
+    fn render_into(tab: &super::super::SettingsTab, area: Rect) -> String {
+        let mut terminal =
+            Terminal::new(TestBackend::new(area.width, area.height + area.y)).unwrap();
+        terminal.draw(|f| tab.render(f, area, false)).unwrap();
+        crate::test_utils::buffer_to_text(terminal.backend().buffer())
+    }
+
+    /// The screen has two focusable regions and used to show no sign of which
+    /// one had focus.
+    #[test]
+    fn test_focus_indicator_marks_the_focused_pane() {
+        let mut tab = super::super::SettingsTab::new();
+        tab.current_section = SettingsSection::Http;
+
+        tab.focus_area = SettingsFocusArea::SectionList;
+        let list = render_into(&tab, Rect::new(0, 0, 100, 30));
+        assert!(
+            list.contains('\u{25b6}'),
+            "focused section list must mark its row:\n{list}"
+        );
+
+        tab.focus_area = SettingsFocusArea::SectionDetail;
+        let detail = render_into(&tab, Rect::new(0, 0, 100, 30));
+        assert!(
+            !detail.contains('\u{25b6}'),
+            "the marker must follow focus away from the list:\n{detail}"
+        );
+    }
+
+    /// The pane holding focus takes the shared focus border colour and the
+    /// other does not.
+    #[test]
+    fn test_focus_border_follows_focus_area() {
+        let theme = crate::theme::legacy::current_theme();
+        let focus_color = theme
+            .border_style(true)
+            .fg
+            .unwrap_or(ratatui::style::Color::Reset);
+        let idle_color = theme
+            .border_style(false)
+            .fg
+            .unwrap_or(ratatui::style::Color::Reset);
+        // Keep the assertion below from passing vacuously.
+        assert_ne!(
+            focus_color, idle_color,
+            "test theme must distinguish the focused border"
+        );
+
+        let mut tab = super::super::SettingsTab::new();
+        for (area, list_focused) in [
+            (SettingsFocusArea::SectionList, true),
+            (SettingsFocusArea::SectionDetail, false),
+        ] {
+            tab.focus_area = area;
+            let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+            terminal.draw(|f| tab.render(f, f.area(), false)).unwrap();
+            let buf = terminal.backend().buffer();
+            let list_border = buf.cell((0, 0)).map(|c| c.fg).unwrap_or_default();
+            let detail_border = buf.cell((21, 0)).map(|c| c.fg).unwrap_or_default();
+            if list_focused {
+                assert_eq!(list_border, focus_color, "{area:?}: list border");
+                assert_eq!(detail_border, idle_color, "{area:?}: detail border");
+            } else {
+                assert_eq!(list_border, idle_color, "{area:?}: list border");
+                assert_eq!(detail_border, focus_color, "{area:?}: detail border");
+            }
+        }
+    }
+
+    /// `Selector::dropdown_info` compares its absolute anchor `y` against this
+    /// bound, so it needs the pane's *bottom row*. Passing the pane height
+    /// instead truncated the list by the pane's y offset: the 4-item proxy
+    /// dropdown lost 3 of its 6 rows and sat half-drawn.
+    #[test]
+    fn test_dropdown_keeps_its_rows_inside_an_offset_pane() {
+        let mut tab = super::super::SettingsTab::new();
+        tab.current_section = SettingsSection::Proxy;
+        tab.proxy_rotation_selector.focus();
+        tab.proxy_rotation_selector.handle_enter();
+        assert!(tab.proxy_rotation_selector.is_open());
+
+        let text = render_into(&tab, Rect::new(1, PANE_Y, PANE_W, PANE_H));
+
+        // 4 items + 2 chrome rows. With the height-as-viewport bug only the
+        // first item was drawn.
+        for label in ["None", "Round Robin", "Random", "Least Connections"] {
+            assert!(
+                text.contains(label),
+                "dropdown item {label:?} was clipped:\n{text}"
+            );
         }
     }
 }

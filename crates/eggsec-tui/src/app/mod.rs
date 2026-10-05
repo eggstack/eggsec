@@ -120,6 +120,12 @@ pub struct App {
     /// Pending event receiver from async runtime subscription.
     pub(crate) runtime_pending_event_rx:
         Option<std::sync::Arc<tokio::sync::Mutex<Option<eggsec_runtime::RuntimeEventReceiver>>>>,
+    /// Pending submission failure message from the async submit bridge.
+    ///
+    /// Drained by `update()` into the per-tab error surface so a failed submit
+    /// (or a submit that timed out) is visible in-frame instead of only in
+    /// `tracing` output the rich TUI never shows.
+    pub(crate) runtime_pending_error: Option<std::sync::Arc<std::sync::Mutex<Option<String>>>>,
 
     // -- Phase 3: executor context for dispatcher --
     /// Shared executor context holding per-task channel senders.
@@ -216,6 +222,7 @@ impl App {
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
+            runtime_pending_error: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
             runtime_mode: RuntimeMode::default(),
@@ -332,6 +339,7 @@ impl App {
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
+            runtime_pending_error: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
             runtime_mode: RuntimeMode::default(),
@@ -349,6 +357,10 @@ impl App {
                 app.theme_load.deferred_theme_name = Some(state.theme_name.clone());
             }
         }
+
+        // The restored tab becomes the first tab the user interacts with, so give
+        // its input area a focusable field before the first draw.
+        app.sync_input_focus_for_current_tab();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
 
         // Sync settings with current theme and built-in list before the background loader runs.
@@ -879,10 +891,24 @@ impl App {
     pub fn set_current_tab_if_available(&mut self, tab: Tab) -> bool {
         if Tab::all().contains(&tab) {
             self.current_tab = tab;
+            self.sync_input_focus_for_current_tab();
             true
         } else {
             false
         }
+    }
+
+    /// Make the active tab's first input field focusable when that tab's focus
+    /// area is its input area.
+    ///
+    /// Called on every tab-entry path. Tabs default their focus area to inputs
+    /// while `InputGroup::new()` leaves every field unfocused, so without this
+    /// the app opens a tab showing a focus ring on a field that cannot be typed
+    /// into: `i` flips the mode indicator to insert and every keystroke is
+    /// discarded. Idempotent, and it never steals a field the user already
+    /// focused or one the user deliberately blurred.
+    pub fn sync_input_focus_for_current_tab(&mut self) {
+        self.dispatcher_mut().ensure_input_focus();
     }
 
     pub fn is_confirm_popup_visible(&self) -> bool {
@@ -921,6 +947,7 @@ impl App {
             reason_input: String::new(),
             captured_request,
             cli_flags,
+            scroll_offset: 0,
         });
         self.needs_redraw = true;
     }

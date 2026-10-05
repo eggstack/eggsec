@@ -102,8 +102,16 @@ impl super::App {
         // themes with no idea why their favorite Halloy theme didn't appear.
         if !report.errors.is_empty() {
             let message = if report.installed == 0 && report.loaded == 0 {
+                // Do not point at logs: the rich TUI launches with console
+                // logging disabled, so "check logs" sends the user after a file
+                // that was never written. Report the actual cause instead.
+                let first = report
+                    .errors
+                    .first()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown error".to_string());
                 format!(
-                    "Theme installation failed: {} error(s). Check logs.",
+                    "Theme installation failed: {} error(s). First: {first}",
                     report.errors.len()
                 )
             } else {

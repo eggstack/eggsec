@@ -55,14 +55,18 @@ pub enum UiAction {
 
     // Session / task lifecycle
     Quit,
-    StopActiveTask { message: String },
+    StopActiveTask {
+        message: String,
+    },
 
     // Overlay / mode toggles (global)
     ToggleHelp,
     ToggleCommandPalette,
     ToggleQuickSwitch,
     CloseQuickSwitch,
-    ToggleSearch { global: bool },
+    ToggleSearch {
+        global: bool,
+    },
     ToggleTheme,
     TogglePause,
     Resume,
@@ -133,6 +137,8 @@ pub enum UiAction {
     CancelPolicyAction,
     PolicyReasonChar(char),
     PolicyReasonBackspace,
+    /// Scroll the policy-confirmation body by N rows (negative scrolls up).
+    PolicyConfirmScroll(i32),
 
     // Overlay-specific incremental input (command palette / quick switch)
     CommandPaletteInput(CommandPaletteInput),

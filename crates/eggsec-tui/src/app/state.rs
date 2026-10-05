@@ -71,6 +71,18 @@ pub struct TaskState {
     pub result_rx: Option<tokio::sync::mpsc::Receiver<eggsec::dispatch::TaskResult>>,
     pub paused: bool,
     pub started_at: Option<std::time::Instant>,
+    /// A terminal lifecycle event (`TaskCompleted`/`TaskFailed`/`TaskCancelled`)
+    /// has been observed for this task, but the typed result channels have not
+    /// been retired yet.
+    ///
+    /// The receivers cannot be released on channel closure: their sender is held
+    /// by the App-owned `executor_context` `ArcSwap` for the whole session, so
+    /// `is_closed()` never becomes true. Without this flag the task strip and
+    /// the `q` binding stayed blocked forever after the first task.
+    ///
+    /// `update()` retires the receivers on the first tick where they are empty,
+    /// so a result that is still in flight is never dropped.
+    pub finished: bool,
 }
 
 /// Why a theme load was triggered.

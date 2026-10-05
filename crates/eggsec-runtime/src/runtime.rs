@@ -1643,6 +1643,7 @@ mod tests {
             TaskKind::WirelessActive(crate::request::WirelessActiveParams {
                 interface: None,
                 target_bssid: None,
+                ..Default::default()
             }),
             TaskKind::DbPentest(crate::request::DbPentestParams {
                 db_type: "postgres".into(),

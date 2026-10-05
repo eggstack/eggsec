@@ -104,8 +104,13 @@ pub fn get_static_help_data() -> StaticHelpData {
                     category: "Navigation".to_string(),
                 },
                 HelpCommand {
+                    key: "Ctrl+Z".to_string(),
+                    description: "Pause/Resume task".to_string(),
+                    category: "Control".to_string(),
+                },
+                HelpCommand {
                     key: "Space".to_string(),
-                    description: "Pause/Resume".to_string(),
+                    description: "Toggle help (global shortcut, not tab-specific)".to_string(),
                     category: "Control".to_string(),
                 },
             ],
@@ -116,10 +121,9 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::ScanPorts,
         HelpSection {
             title: "Port Scanning".to_string(),
-            content: "TCP/UDP port scanning with various scan techniques. Use --spoof for decoy scanning.".to_string(),
+            content: "TCP/UDP port scanning. The tab exposes no scan-type control; the canonical SYN scan applies. Use --spoof for decoy scanning.".to_string(),
             commands: vec![
                 HelpCommand { key: "Enter".to_string(), description: "Start scan".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "1-5".to_string(), description: "Select scan type".to_string(), category: "Selection".to_string() },
             ],
         },
     );
@@ -813,7 +817,7 @@ pub fn get_static_help_data() -> StaticHelpData {
             command: "global-search".to_string(),
             description: "Toggle global search".to_string(),
             category: "Navigation".to_string(),
-            shortcut: Some("Ctrl+Shift+/".to_string()),
+            shortcut: Some("Ctrl+F".to_string()),
         },
         CommandPaletteResult {
             command: "open-search".to_string(),

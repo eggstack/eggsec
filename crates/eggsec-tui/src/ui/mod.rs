@@ -8,13 +8,13 @@ pub use popups::*;
 pub use shell::*;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     widgets::Paragraph,
     Frame,
 };
 
-use crate::components::{confirm_popup, help_popup_for_tab};
+use crate::components::{centered_rect, confirm_popup, help_popup_for_tab};
 use crate::App;
 
 pub const LAYOUT_MARGIN: u16 = 1;
@@ -72,21 +72,30 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         help.scroll_offset = app.overlay.help_scroll_offset;
         help.render(f, f.area());
 
-        let context_help = app.get_current_help();
-        let context_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(help.height + 2), Constraint::Min(0)])
-            .split(f.area());
+        // The context paragraph must start below the popup's *actual* bottom
+        // edge. The popup is vertically centred, so anchoring at `help.height`
+        // from the top of the screen places the context text inside the popup on
+        // any terminal taller than the popup, painting over its borders and body.
+        // On a short terminal the anchored offset fell off the end of the screen
+        // and the context help silently never rendered at all.
+        let popup_rect = centered_rect(help.width, help.height, f.area());
+        let context_top = popup_rect.y.saturating_add(popup_rect.height);
+        let context_area = Rect {
+            x: popup_rect.x,
+            y: context_top,
+            width: popup_rect.width,
+            height: f.area().height.saturating_sub(context_top),
+        };
 
-        let context_paragraph = Paragraph::new(context_help).style(
-            Style::default()
-                .fg(theme.colors.text_dim)
-                .add_modifier(Modifier::ITALIC),
-        );
-        f.render_widget(
-            context_paragraph,
-            context_chunks.get(1).copied().unwrap_or(area),
-        );
+        if context_area.height > 0 {
+            let context_help = app.get_current_help();
+            let context_paragraph = Paragraph::new(context_help).style(
+                Style::default()
+                    .fg(theme.colors.text_dim)
+                    .add_modifier(Modifier::ITALIC),
+            );
+            f.render_widget(context_paragraph, context_area);
+        }
     }
 
     if let Some(ref mut palette) = app.command_palette {
@@ -123,7 +132,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // reasons/warnings, reason input line, and [Enter] Proceed / [Esc] Cancel hints (narrow semantics).
     if let Some(ref pending) = app.overlay.pending_policy {
         let (title, message) = pending.message();
-        let popup = confirm_popup(&title, &message);
+        let mut popup = confirm_popup(&title, &message);
+        popup.scroll_offset = pending.scroll_offset;
         popup.render(f, f.area());
     }
 }

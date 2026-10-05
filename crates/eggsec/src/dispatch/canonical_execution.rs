@@ -1791,12 +1791,12 @@ async fn execute_canonical_inner(
             {
                 super::security::run_wireless_active_task(
                     p.interface.unwrap_or_else(|| "wlan0".to_string()),
-                    "deauth".to_string(),
+                    p.attack_type,
                     p.target_bssid,
-                    None,
-                    100,
-                    10,
-                    true,
+                    p.client,
+                    p.frame_count,
+                    p.rate_limit,
+                    p.dry_run,
                     fanout_tx.clone(),
                 )
                 .await

@@ -333,6 +333,7 @@ impl App {
         match self.current_tab {
             Tab::Recon => self.tabs.recon.build_run_request(),
             Tab::Load => self.tabs.load.build_run_request(),
+            Tab::Stress => self.tabs.stress.build_run_request(),
             Tab::ScanPorts => self.tabs.scan_ports.build_run_request(),
             Tab::ScanEndpoints => self.tabs.scan_endpoints.build_run_request(),
             Tab::Fingerprint => self.tabs.fingerprint.build_run_request(),
@@ -367,6 +368,8 @@ impl App {
             Tab::DbPentest => self.tabs.db_pentest.build_run_request(),
             #[cfg(feature = "web-proxy")]
             Tab::Intercept => self.tabs.intercept.build_run_request(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.tabs.nse.build_run_request(),
             _ => None,
         }
     }

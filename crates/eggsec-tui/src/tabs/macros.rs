@@ -114,6 +114,12 @@ macro_rules! tab_input_boilerplate {
         Inputs: $inputs_variant:expr,
         Results: $results_variant:expr
     ) => {
+        fn ensure_input_focus(&mut self) {
+            if self.$focus == $inputs_variant {
+                $crate::tabs::core::ensure_first_field_focused(&mut self.$core);
+            }
+        }
+
         fn handle_copy(&mut self) -> Option<String> {
             let running = self.is_running();
             let inputs = self.$focus == $inputs_variant;

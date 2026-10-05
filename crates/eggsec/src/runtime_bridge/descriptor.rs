@@ -347,6 +347,7 @@ mod tests {
         let req = make_request(TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }));
         let result = descriptor_for_run_request(&req);
         assert!(result.is_err());

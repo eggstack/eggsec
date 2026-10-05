@@ -174,10 +174,10 @@ impl super::App {
                 self.toggle_help();
             }
             "search" | "open-search" => {
-                self.toggle_search(true);
+                self.toggle_search(false);
             }
             "global-search" => {
-                self.toggle_search(false);
+                self.toggle_search(true);
             }
             "palette" => {
                 self.toggle_command_palette();
@@ -237,9 +237,15 @@ impl super::App {
                         ));
                     } else {
                         tracing::warn!("Clipboard write failed for copy-cli");
+                        // Report the actual cause, not just "write failed": with
+                        // no display or over SSH this is the only place the user
+                        // learns the command never reached the clipboard.
+                        let message = self
+                            .clipboard_failure_message("copy")
+                            .unwrap_or_else(|| "Clipboard write failed".to_string());
                         self.overlay.notification = Some(super::notifications::Notification::new(
-                            "Clipboard write failed".to_string(),
-                            super::notifications::NotificationSeverity::Warning,
+                            message,
+                            super::notifications::NotificationSeverity::Error,
                         ));
                     }
                 } else {
@@ -466,7 +472,19 @@ mod tests {
         assert!(!app.overlay.show_search);
         app.execute_command("search");
         assert!(app.overlay.show_search);
-        assert!(app.search.is_global); // Command palette does global search
+        // `search` mirrors the `/` key, which opens local search. It used to
+        // open global search, inverting the palette commands against both
+        // their own names and the keys they document.
+        assert!(!app.search.is_global);
+    }
+
+    #[test]
+    fn test_execute_command_global_search_is_global() {
+        let mut app = create_test_app();
+        app.execute_command("global-search");
+        assert!(app.overlay.show_search);
+        // `global-search` mirrors Ctrl+F.
+        assert!(app.search.is_global);
     }
 
     #[test]

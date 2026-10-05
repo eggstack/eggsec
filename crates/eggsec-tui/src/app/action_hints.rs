@@ -47,25 +47,27 @@ pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
 }
 
 fn task_hints(app: &App) -> Vec<ActionHint> {
+    // These are Ctrl-modified bindings. Showing them bare ("C", "Z", "Y")
+    // suggested a bare key that does nothing — bare `y` copies to clipboard.
     if app.is_paused() {
         vec![
             ActionHint {
-                key: "C",
+                key: "Ctrl+C",
                 label: "stop",
             },
             ActionHint {
-                key: "Y",
+                key: "Ctrl+Y",
                 label: "resume",
             },
         ]
     } else {
         vec![
             ActionHint {
-                key: "C",
+                key: "Ctrl+C",
                 label: "stop",
             },
             ActionHint {
-                key: "Z",
+                key: "Ctrl+Z",
                 label: "pause",
             },
         ]
@@ -368,9 +370,9 @@ mod tests {
         app.task_state.tab = Some(Tab::Recon);
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 2);
-        assert_eq!(hints[0].key, "C");
+        assert_eq!(hints[0].key, "Ctrl+C");
         assert_eq!(hints[0].label, "stop");
-        assert_eq!(hints[1].key, "Z");
+        assert_eq!(hints[1].key, "Ctrl+Z");
         assert_eq!(hints[1].label, "pause");
     }
 
@@ -381,9 +383,9 @@ mod tests {
         app.task_state.paused = true;
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 2);
-        assert_eq!(hints[0].key, "C");
+        assert_eq!(hints[0].key, "Ctrl+C");
         assert_eq!(hints[0].label, "stop");
-        assert_eq!(hints[1].key, "Y");
+        assert_eq!(hints[1].key, "Ctrl+Y");
         assert_eq!(hints[1].label, "resume");
     }
 
@@ -569,15 +571,15 @@ mod tests {
     fn format_hints_compact() {
         let hints = vec![
             ActionHint {
-                key: "C",
+                key: "Ctrl+C",
                 label: "stop",
             },
             ActionHint {
-                key: "Z",
+                key: "Ctrl+Z",
                 label: "pause",
             },
         ];
-        assert_eq!(format_hints(&hints), "C:stop Z:pause");
+        assert_eq!(format_hints(&hints), "Ctrl+C:stop Ctrl+Z:pause");
     }
 
     #[test]
@@ -616,7 +618,7 @@ mod tests {
         let mut app = create_test_app();
         app.task_state.tab = Some(Tab::Recon);
         let hints = get_action_hints(&app);
-        assert_eq!(hints[0].key, "C");
+        assert_eq!(hints[0].key, "Ctrl+C");
         assert_eq!(hints[0].label, "stop");
     }
 

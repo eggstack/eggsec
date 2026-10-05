@@ -1,9 +1,10 @@
+use crate::app::tab_error::TabError;
 use crate::components::InputField;
 use crate::tabs::core::{
     render_config_block, render_error_block, render_input_fields, render_results_area,
     StandardFocusArea2, TabCore,
 };
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
+use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_input_2area, tab_state_boilerplate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -30,10 +31,26 @@ impl ResumeTab {
     }
 
     pub fn start(&mut self) {
-        if !self.session_file().is_empty() {
-            self.core.state = AppState::Running;
-            self.core.results_view.clear();
+        if self.session_file().is_empty() {
+            self.core.error = Some(TabError::Target(
+                "Session file path is required to resume a scan".to_string(),
+            ));
+            return;
         }
+        // Honest failure, not a fake run.
+        //
+        // `Tab::Resume` has no `operation` in its `TabSpec`, no `TaskKind`
+        // variant, and no canonical executor arm — there is no runtime request
+        // that can carry a session file. Entering `AppState::Running` here
+        // produced a spinner that resolved to "nothing to run" while the tab
+        // advertised a resumable scan. Report the real limitation instead, and
+        // point at the surface that does support it.
+        self.core.error = Some(TabError::Config(
+            "Resuming a saved session is not available from the TUI: there is no \
+             dispatchable runtime request for a session file. Use the CLI \
+             (`eggsec resume <session-file>`) instead."
+                .to_string(),
+        ));
     }
 }
 
@@ -89,7 +106,9 @@ impl TabRender for ResumeTab {
             &self.core.results_view,
             &self.core.progress,
             "Session Info",
-            "Session information will appear here",
+            // Short lines on purpose: `empty_state_paragraph` does not wrap, so
+            // anything wider than the pane would be clipped mid-sentence.
+            "No session loaded.\nResume runs from the CLI only: eggsec resume <session-file>",
         );
     }
 }
@@ -126,5 +145,53 @@ impl TabInput for ResumeTab {
         }
         self.core.inputs.blur();
         self.focus_area = StandardFocusArea2::Inputs;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tabs::AppState;
+
+    /// `start()` used to enter `Running` with a session path, which could
+    /// only resolve to "nothing to run". It must stay Idle and explain why.
+    #[test]
+    fn start_with_session_path_reports_a_clear_error() {
+        let mut tab = ResumeTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "session.json".into();
+        tab.start();
+        let err = tab.core.error.as_ref().expect("resume must explain itself");
+        assert!(matches!(err, TabError::Config(_)), "got {err:?}");
+        assert_eq!(tab.core.state, AppState::Idle, "must not fake a run");
+    }
+
+    #[test]
+    fn handle_enter_without_path_reports_a_clear_error() {
+        let mut tab = ResumeTab::new();
+        tab.focus_area = StandardFocusArea2::Inputs;
+        tab.handle_enter();
+        assert!(matches!(tab.core.error, Some(TabError::Target(_))));
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    /// The empty state must not promise a run the tab cannot perform.
+    #[test]
+    fn empty_state_does_not_promise_a_run() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let tab = ResumeTab::new();
+        let mut terminal = Terminal::new(TestBackend::new(80, 30)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        assert!(text.contains("eggsec resume"), "got:\n{text}");
+        assert!(
+            !text.contains("Session information will appear here"),
+            "empty state must not promise a run:\n{text}"
+        );
     }
 }

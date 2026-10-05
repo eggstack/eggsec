@@ -1,8 +1,133 @@
 use super::{Notification, NotificationSeverity};
 use eggsec::types::OutputFormat;
+use std::path::{Path, PathBuf};
+
+/// Extensions that a converted-format request (HTML/Markdown/SARIF/JUnit) is
+/// named with, plus `json` for symmetry. `xml` is the JUnit extension
+/// (`get_export_extension` maps `OutputFormat::Junit` to "xml"), so it must be
+/// listed here: without it a `report.xml` request looked for `report.xml.json`,
+/// never loaded, and still reported a successful export.
+const CONVERTED_SOURCE_EXTENSIONS: [&str; 6] = ["html", "md", "sarif", "junit", "xml", "json"];
+
+/// Outcome of one export attempt.
+///
+/// The converted formats consume the JSON dump written immediately before them,
+/// so the caller must be able to tell "written" from "skipped" / "failed";
+/// otherwise a skipped or failed dump is silently replaced by a stale file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ExportOutcome {
+    /// The requested file was written (a previous one may have been backed up).
+    Written,
+    /// Nothing to export; a user-visible warning is already set.
+    Skipped,
+    /// The export failed; a user-visible error is already set.
+    Failed,
+}
+
+/// A failure in any part of a multi-file export wins, so a caller never treats a
+/// partial export as a complete one.
+fn merge_export_outcomes(first: ExportOutcome, second: ExportOutcome) -> ExportOutcome {
+    match (first, second) {
+        (ExportOutcome::Failed, _) | (_, ExportOutcome::Failed) => ExportOutcome::Failed,
+        (ExportOutcome::Written, _) | (_, ExportOutcome::Written) => ExportOutcome::Written,
+        (ExportOutcome::Skipped, ExportOutcome::Skipped) => ExportOutcome::Skipped,
+    }
+}
+
+/// Strips a known export extension so a converted-format request can find the
+/// intermediate JSON dump it converts from.
+fn strip_export_extension(filename: &str) -> &str {
+    CONVERTED_SOURCE_EXTENSIONS
+        .iter()
+        .find_map(|ext| filename.strip_suffix(&format!(".{}", ext)))
+        .unwrap_or(filename)
+}
+
+/// Intermediate JSON dump a converted-format request reads.
+fn intermediate_json_filename(filename: &str) -> String {
+    format!("{}.json", strip_export_extension(filename))
+}
+
+/// Renders a loaded report in the requested format.
+///
+/// Every failure mode is an `Err` so a broken conversion can never be written out
+/// and then reported to the user as a successful export.
+fn convert_report(
+    format: OutputFormat,
+    report: &eggsec::output::convert::ScanReportData,
+) -> Result<String, String> {
+    use eggsec::output::convert::{
+        convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
+    };
+
+    match format {
+        OutputFormat::Html => Ok(convert_to_html(report)),
+        OutputFormat::Markdown => convert_to_markdown(report).map_err(|e| e.to_string()),
+        OutputFormat::Sarif => convert_to_sarif(report),
+        OutputFormat::Junit => convert_to_junit(report),
+        other => Err(format!("unsupported export format: {:?}", other)),
+    }
+}
+
+/// Moves an existing export aside to `<name>.bak` before an overwrite.
+///
+/// Exports are the deliverable of a scan, so a re-export must not destroy the
+/// previous report with no trace. Anything that is not a plain file (directory,
+/// symlink, unreadable entry) is refused so the write cannot silently destroy
+/// it. `Ok(None)` means the destination was free.
+fn backup_existing_export(path: &Path) -> Result<Option<PathBuf>, String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) => {
+            if !meta.is_file() {
+                return Err(format!(
+                    "Refusing to overwrite {}: destination is not a regular file",
+                    path.display()
+                ));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "Could not inspect existing export {}: {}",
+                path.display(),
+                e
+            ));
+        }
+    }
+
+    let mut backup = path.as_os_str().to_os_string();
+    backup.push(".bak");
+    let backup = PathBuf::from(backup);
+    std::fs::rename(path, &backup).map_err(|e| {
+        format!(
+            "Could not back up existing export {} to {}: {}",
+            path.display(),
+            backup.display(),
+            e
+        )
+    })?;
+    Ok(Some(backup))
+}
+
+/// Backs up any existing report, then writes `data`.
+///
+/// Returns the backup path when a previous report was preserved, or a
+/// user-facing message on failure (including a failed backup, which aborts the
+/// write rather than losing the earlier report).
+fn write_export_file(path: &Path, data: &str) -> Result<Option<PathBuf>, String> {
+    use std::io::Write;
+
+    let backup = backup_existing_export(path)?;
+
+    let mut file =
+        std::fs::File::create(path).map_err(|e| format!("Could not create export file: {}", e))?;
+    file.write_all(data.as_bytes())
+        .map_err(|e| format!("Could not write to export file: {}", e))?;
+    Ok(backup)
+}
 
 impl super::App {
-    fn export_tab_json<T, F>(&mut self, get: F, filename: &str, tab_name: &str)
+    fn export_tab_json<T, F>(&mut self, get: F, filename: &str, tab_name: &str) -> ExportOutcome
     where
         T: serde::Serialize,
         F: for<'a> FnOnce(&'a Self) -> Option<&'a T>,
@@ -16,17 +141,19 @@ impl super::App {
                     tracing::error!("{}", msg);
                     self.overlay.notification =
                         Some(Notification::new(msg, NotificationSeverity::Error));
+                    ExportOutcome::Failed
                 }
             },
             None => {
                 let msg = format!("No exportable data for {} tab.", tab_name);
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
         }
     }
 
-    pub(super) fn export_results(&mut self) {
+    pub(super) fn export_results(&mut self) -> ExportOutcome {
         let ext = self.get_export_extension();
         let base_name = match self.current_tab {
             super::tabs::Tab::Recon => "recon_results",
@@ -73,14 +200,28 @@ impl super::App {
             | OutputFormat::Markdown
             | OutputFormat::Sarif
             | OutputFormat::Junit => {
-                self.export_json();
-                self.export_converted(&filename);
+                // The JSON dump is an intermediate step of the conversion, not the
+                // artifact the user asked for. Convert it only when it was really
+                // written, so a skipped or failed dump is never replaced by a stale
+                // file, and let `export_converted` own the single user-visible
+                // outcome for the request.
+                match self.export_json() {
+                    ExportOutcome::Written => self.export_converted(&filename),
+                    outcome => {
+                        tracing::debug!(
+                            "Skipping {} conversion: JSON export outcome {:?}",
+                            filename,
+                            outcome
+                        );
+                        outcome
+                    }
+                }
             }
             _ => self.export_json(),
         }
     }
 
-    pub(super) fn export_json(&mut self) {
+    pub(super) fn export_json(&mut self) -> ExportOutcome {
         match self.current_tab {
             super::tabs::Tab::Recon => {
                 self.export_tab_json(|s| s.tabs.recon.get_results(), "recon_results", "Recon")
@@ -109,11 +250,12 @@ impl super::App {
             super::tabs::Tab::Waf => self.export_waf_json(),
             super::tabs::Tab::WafStress => {
                 if let Some(results) = self.tabs.waf_stress.get_results() {
-                    self.save_export("waf_stress_results.json", results);
+                    self.save_export("waf_stress_results.json", results)
                 } else {
                     let msg = "No exportable data for WAF Stress tab.".to_string();
                     self.overlay.notification =
                         Some(Notification::new(msg, NotificationSeverity::Warning));
+                    ExportOutcome::Skipped
                 }
             }
             super::tabs::Tab::Scan => {
@@ -123,74 +265,87 @@ impl super::App {
                 let msg = "Resume tab: no exportable data (use original scan results)".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::GraphQl => {
                 let msg = "GraphQL tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::OAuth => {
                 let msg = "OAuth tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Auth => {
                 let msg = "Auth tab: no exportable data available (defense-lab only)".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::C2 => {
                 let msg = "C2 tab: use CLI export (eggsec c2 --json -o report.json)".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Cluster => {
                 let msg = "Cluster tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Stress => {
                 let msg = "Stress tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Report => {
                 let msg = "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead"
                     .to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Nse => {
                 let msg = "NSE tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Settings => {
                 let msg = "Settings tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::History => {
                 let history_data = {
                     let h = self.history.lock();
                     h.export()
                 };
-                self.save_export("history.json", history_data);
+                self.save_export("history.json", history_data)
             }
             super::tabs::Tab::Dashboard => {
                 let msg = "Dashboard tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Proxy => {
                 let msg = "Proxy tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Packet => {
                 let msg = "Packet tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             #[cfg(feature = "advanced-hunting")]
             super::tabs::Tab::Hunt => {
@@ -201,46 +356,55 @@ impl super::App {
                 let msg = "Hunt tab requires advanced-hunting feature".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Browser => {
                 let msg = "Browser tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Compliance => {
                 let msg = "Compliance tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Storage => {
                 let msg = "Storage tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Integrations => {
                 let msg = "Integrations tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Workflow => {
                 let msg = "Workflow tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Vuln => {
                 let msg = "Vuln tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Wireless => {
                 let msg = "Wireless tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             super::tabs::Tab::Intercept => {
                 let msg = "Intercept tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
+                ExportOutcome::Skipped
             }
             #[cfg(feature = "db-pentest")]
             super::tabs::Tab::DbPentest => {
@@ -253,21 +417,22 @@ impl super::App {
                                 format!("Export failed: {}", e),
                                 NotificationSeverity::Error,
                             ));
-                            return;
+                            ExportOutcome::Failed
                         }
                     }
                 } else {
                     let msg = "Db Pentest tab: no exportable data available".to_string();
                     self.overlay.notification =
                         Some(Notification::new(msg, NotificationSeverity::Warning));
+                    ExportOutcome::Skipped
                 }
             }
             #[cfg(not(feature = "db-pentest"))]
-            super::tabs::Tab::DbPentest => {}
+            super::tabs::Tab::DbPentest => ExportOutcome::Skipped,
         }
     }
 
-    fn export_waf_json(&mut self) {
+    fn export_waf_json(&mut self) -> ExportOutcome {
         let detection_json = match self.tabs.waf.get_detection_result() {
             Some(r) => match serde_json::to_string_pretty(&r) {
                 Ok(j) => Some(j),
@@ -277,7 +442,7 @@ impl super::App {
                         format!("Export failed: {}", e),
                         NotificationSeverity::Error,
                     ));
-                    return;
+                    return ExportOutcome::Failed;
                 }
             },
             None => None,
@@ -291,7 +456,7 @@ impl super::App {
                         format!("Export failed: {}", e),
                         NotificationSeverity::Error,
                     ));
-                    return;
+                    return ExportOutcome::Failed;
                 }
             },
             None => None,
@@ -300,18 +465,23 @@ impl super::App {
         if detection_json.is_none() && bypass_json.is_none() {
             let msg = "No exportable data for WAF tab.".to_string();
             self.overlay.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-            return;
+            return ExportOutcome::Skipped;
         }
 
+        // Two files: a failure on either side is a failed export, so a partial
+        // write is never reported as a complete one.
+        let mut outcome = ExportOutcome::Skipped;
         if let Some(json) = detection_json {
-            self.save_export("waf_detection_results.json", json);
+            outcome = self.save_export("waf_detection_results.json", json);
         }
         if let Some(json) = bypass_json {
-            self.save_export("waf_bypass_results.json", json);
+            outcome =
+                merge_export_outcomes(outcome, self.save_export("waf_bypass_results.json", json));
         }
+        outcome
     }
 
-    fn export_csv(&mut self, filename: &str) {
+    fn export_csv(&mut self, filename: &str) -> ExportOutcome {
         use eggsec::output::csv::{CsvExporter, EndpointCsv, PortCsv};
 
         match self.current_tab {
@@ -338,8 +508,11 @@ impl super::App {
                             tracing::error!("{}", msg);
                             self.overlay.notification =
                                 Some(Notification::new(msg, NotificationSeverity::Error));
+                            ExportOutcome::Failed
                         }
                     }
+                } else {
+                    ExportOutcome::Skipped
                 }
             }
             super::tabs::Tab::ScanEndpoints => {
@@ -362,73 +535,21 @@ impl super::App {
                             tracing::error!("{}", msg);
                             self.overlay.notification =
                                 Some(Notification::new(msg, NotificationSeverity::Error));
+                            ExportOutcome::Failed
                         }
                     }
+                } else {
+                    ExportOutcome::Skipped
                 }
             }
-            _ => {
-                self.export_json();
-            }
+            _ => self.export_json(),
         }
     }
 
-    fn export_converted(&mut self, filename: &str) {
+    fn export_converted(&mut self, filename: &str) -> ExportOutcome {
         use eggsec::output::convert::load_scan_report;
 
-        let base_name = filename
-            .trim_end_matches(".html")
-            .trim_end_matches(".md")
-            .trim_end_matches(".sarif")
-            .trim_end_matches(".junit")
-            .trim_end_matches(".json");
-
-        let json_filename = format!("{}.json", base_name);
-        let export_dir = self
-            .tabs
-            .settings
-            .config
-            .as_ref()
-            .and_then(|c| c.paths.export_dir.as_deref())
-            .unwrap_or(eggsec_core::constants::DEFAULT_EXPORT_DIR);
-
-        let base_dir = std::path::Path::new(eggsec_core::constants::DEFAULT_EXPORT_DIR);
-        if let Err(e) = eggsec::utils::validation::validate_path_string(base_dir, export_dir) {
-            tracing::error!("Invalid export directory: {}", e);
-            return;
-        }
-
-        let json_path = format!("{}/{}", export_dir, json_filename);
-
-        match load_scan_report(&json_path) {
-            Ok(report) => {
-                let converted = match self.export_format {
-                    OutputFormat::Html => eggsec::output::convert::convert_to_html(&report),
-                    OutputFormat::Markdown => eggsec::output::convert::convert_to_markdown(&report)
-                        .unwrap_or_else(|e| format!("Error: {}", e)),
-                    OutputFormat::Sarif => eggsec::output::convert::convert_to_sarif(&report)
-                        .unwrap_or_else(|e| format!("Error: {}", e)),
-                    OutputFormat::Junit => eggsec::output::convert::convert_to_junit(&report)
-                        .unwrap_or_else(|e| format!("Error: {}", e)),
-                    _ => {
-                        tracing::warn!("Unsupported export format: {:?}", self.export_format);
-                        return;
-                    }
-                };
-                self.save_export(filename, converted);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Could not load JSON report for conversion ({}): {}",
-                    json_path,
-                    e
-                );
-            }
-        }
-    }
-
-    fn save_export(&mut self, filename: &str, data: String) {
-        use std::io::Write;
-
+        let json_filename = intermediate_json_filename(filename);
         let export_dir = self
             .tabs
             .settings
@@ -442,7 +563,56 @@ impl super::App {
             let msg = format!("Invalid export directory: {}", e);
             tracing::error!("{}", msg);
             self.overlay.notification = Some(Notification::new(msg, NotificationSeverity::Error));
-            return;
+            return ExportOutcome::Failed;
+        }
+
+        let json_path = format!("{}/{}", export_dir, json_filename);
+        let report = match load_scan_report(&json_path) {
+            Ok(report) => report,
+            Err(e) => {
+                // The converted file is the artifact the user asked for: report the
+                // failure instead of leaving the intermediate "Exported to" success
+                // as the last thing on screen.
+                let msg = format!(
+                    "Export to {} failed: {} (source: {})",
+                    filename, e, json_path
+                );
+                tracing::error!("{}", msg);
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Error));
+                return ExportOutcome::Failed;
+            }
+        };
+
+        let converted = match convert_report(self.export_format, &report) {
+            Ok(converted) => converted,
+            Err(e) => {
+                let msg = format!("Export to {} failed: {}", filename, e);
+                tracing::error!("{}", msg);
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Error));
+                return ExportOutcome::Failed;
+            }
+        };
+
+        self.save_export(filename, converted)
+    }
+
+    fn save_export(&mut self, filename: &str, data: String) -> ExportOutcome {
+        let export_dir = self
+            .tabs
+            .settings
+            .config
+            .as_ref()
+            .and_then(|c| c.paths.export_dir.as_deref())
+            .unwrap_or(eggsec_core::constants::DEFAULT_EXPORT_DIR);
+
+        let base_dir = std::path::Path::new(eggsec_core::constants::DEFAULT_EXPORT_DIR);
+        if let Err(e) = eggsec::utils::validation::validate_path_string(base_dir, export_dir) {
+            let msg = format!("Invalid export directory: {}", e);
+            tracing::error!("{}", msg);
+            self.overlay.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+            return ExportOutcome::Failed;
         }
 
         let path = format!("{}/{}", export_dir, filename);
@@ -453,29 +623,33 @@ impl super::App {
                 tracing::error!("{}", msg);
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Error));
-                return;
+                return ExportOutcome::Failed;
             }
         }
 
-        let mut file = match std::fs::File::create(&path) {
-            Ok(file) => file,
-            Err(e) => {
-                let msg = format!("Could not create export file: {}", e);
+        // Never destroy a previous report silently: `write_export_file` moves it
+        // to `<name>.bak` first and refuses the write when that cannot be done.
+        match write_export_file(std::path::Path::new(&path), &data) {
+            Ok(backup) => {
+                let msg = match backup {
+                    Some(backup) => format!(
+                        "Exported to: {} (previous report kept at {})",
+                        path,
+                        backup.display()
+                    ),
+                    None => format!("Exported to: {}", path),
+                };
+                tracing::info!("{}", msg);
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Success));
+                ExportOutcome::Written
+            }
+            Err(msg) => {
                 tracing::error!("{}", msg);
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Error));
-                return;
+                ExportOutcome::Failed
             }
-        };
-
-        if let Err(e) = file.write_all(data.as_bytes()) {
-            let msg = format!("Could not write to export file: {}", e);
-            tracing::error!("{}", msg);
-            self.overlay.notification = Some(Notification::new(msg, NotificationSeverity::Error));
-        } else {
-            let msg = format!("Exported to: {}", path);
-            tracing::info!("{}", msg);
-            self.overlay.notification = Some(Notification::new(msg, NotificationSeverity::Success));
         }
     }
 }
@@ -483,8 +657,15 @@ impl super::App {
 #[cfg(test)]
 mod tests {
     use super::super::create_test_app;
+    use super::{
+        convert_report, intermediate_json_filename, merge_export_outcomes, strip_export_extension,
+        write_export_file, ExportOutcome,
+    };
     use crate::tabs::Tab;
     use eggsec::types::OutputFormat;
+    use std::path::PathBuf;
+
+    use super::super::NotificationSeverity;
 
     #[test]
     fn test_get_export_extension_json() {
@@ -587,5 +768,210 @@ mod tests {
             app.current_tab = tab;
             app.export_results();
         }
+    }
+
+    /// Fresh per-test scratch directory under the OS temp dir (mirrors
+    /// `theme::install::tests`), so the export core can be exercised without
+    /// touching the configured export directory.
+    fn temp_export_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "eggsec_export_test_{}_{}",
+            std::process::id(),
+            name
+        ));
+        if let Err(e) = std::fs::remove_dir_all(&dir) {
+            tracing::debug!("test export dir already absent: {}", e);
+        }
+        std::fs::create_dir_all(&dir).expect("create test export dir");
+        dir
+    }
+
+    fn sample_report() -> eggsec::output::convert::ScanReportData {
+        serde_json::from_str(
+            r#"{
+                "target": "example.com",
+                "scan_type": "port-scan",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "findings": [
+                    {
+                        "title": "Weak TLS configuration",
+                        "severity": "high",
+                        "category": "transport",
+                        "description": "TLS 1.0 accepted",
+                        "location": "example.com:443",
+                        "evidence": null,
+                        "remediation": null,
+                        "cwe_ids": []
+                    }
+                ],
+                "open_ports": [],
+                "services": [],
+                "duration_ms": 1
+            }"#,
+        )
+        .expect("sample scan report")
+    }
+
+    #[test]
+    fn test_intermediate_json_filename_strips_junit_xml_extension() {
+        // Regression: a JUnit request is named `*.xml`; the conversion source must
+        // be `*.json`, never `*.xml.json`.
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.xml"),
+            "port_scan_results.json"
+        );
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.html"),
+            "port_scan_results.json"
+        );
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.md"),
+            "port_scan_results.json"
+        );
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.sarif"),
+            "port_scan_results.json"
+        );
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.junit"),
+            "port_scan_results.json"
+        );
+        assert_eq!(
+            intermediate_json_filename("port_scan_results.json"),
+            "port_scan_results.json"
+        );
+    }
+
+    #[test]
+    fn test_strip_export_extension_leaves_unknown_extension_alone() {
+        assert_eq!(strip_export_extension("report.txt"), "report.txt");
+        assert_eq!(strip_export_extension("report"), "report");
+    }
+
+    #[test]
+    fn test_convert_report_junit_emits_junit_xml() {
+        let report = sample_report();
+        let xml = convert_report(OutputFormat::Junit, &report).expect("junit conversion");
+        assert!(
+            xml.contains("<testsuites"),
+            "JUnit export must emit a JUnit XML body, got: {}",
+            xml
+        );
+        assert!(
+            !xml.starts_with("Error:"),
+            "a failed conversion must never be written as the artifact"
+        );
+    }
+
+    #[test]
+    fn test_convert_report_html_and_sarif_emit_their_own_format() {
+        let report = sample_report();
+        let html = convert_report(OutputFormat::Html, &report).expect("html conversion");
+        assert!(html.contains("<html"), "HTML export should be HTML");
+        let sarif = convert_report(OutputFormat::Sarif, &report).expect("sarif conversion");
+        assert!(
+            sarif.contains("\"runs\""),
+            "SARIF export should be SARIF JSON, got: {}",
+            sarif
+        );
+    }
+
+    #[test]
+    fn test_convert_report_rejects_unsupported_format() {
+        let report = sample_report();
+        let err = convert_report(OutputFormat::Pretty, &report)
+            .expect_err("unsupported formats must be an error, not a silent return");
+        assert!(err.contains("unsupported export format"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_write_export_file_reports_no_backup_for_new_file() {
+        let dir = temp_export_dir("new_file");
+        let path = dir.join("report.json");
+        let backup = write_export_file(&path, "first").expect("first write");
+        assert!(backup.is_none(), "a free destination needs no backup");
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), "first");
+    }
+
+    #[test]
+    fn test_write_export_file_keeps_previous_report_as_backup() {
+        let dir = temp_export_dir("backup");
+        let path = dir.join("report.json");
+        write_export_file(&path, "first").expect("first write");
+
+        let backup = write_export_file(&path, "second")
+            .expect("second write")
+            .expect("previous report must be preserved");
+        assert_eq!(backup, dir.join("report.json.bak"));
+        assert_eq!(
+            std::fs::read_to_string(&backup).expect("read backup"),
+            "first",
+            "the previous report must survive the overwrite"
+        );
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), "second");
+    }
+
+    #[test]
+    fn test_write_export_file_refuses_non_regular_destination() {
+        let dir = temp_export_dir("non_regular");
+        let path = dir.join("report.json");
+        std::fs::create_dir_all(&path).expect("create colliding directory");
+
+        let err = write_export_file(&path, "data")
+            .expect_err("a directory destination must not be overwritten");
+        assert!(
+            err.contains("not a regular file"),
+            "unexpected error message: {}",
+            err
+        );
+        assert!(path.is_dir(), "the destination must be left untouched");
+    }
+
+    #[test]
+    fn test_merge_export_outcomes_prefers_failure() {
+        assert_eq!(
+            merge_export_outcomes(ExportOutcome::Written, ExportOutcome::Failed),
+            ExportOutcome::Failed
+        );
+        assert_eq!(
+            merge_export_outcomes(ExportOutcome::Skipped, ExportOutcome::Written),
+            ExportOutcome::Written
+        );
+        assert_eq!(
+            merge_export_outcomes(ExportOutcome::Skipped, ExportOutcome::Skipped),
+            ExportOutcome::Skipped
+        );
+    }
+
+    #[test]
+    fn test_export_json_without_data_is_skipped_with_warning() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        assert_eq!(app.export_json(), ExportOutcome::Skipped);
+        let notif = app
+            .overlay
+            .notification
+            .as_ref()
+            .expect("a skipped export must tell the user");
+        assert_eq!(notif.severity, NotificationSeverity::Warning);
+    }
+
+    #[test]
+    fn test_export_results_junit_without_data_reports_no_success() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.export_format = OutputFormat::Junit;
+
+        assert_eq!(app.export_results(), ExportOutcome::Skipped);
+        let notif = app
+            .overlay
+            .notification
+            .as_ref()
+            .expect("a skipped export must tell the user");
+        assert_ne!(
+            notif.severity,
+            NotificationSeverity::Success,
+            "a JUnit request with no data must not report success"
+        );
     }
 }

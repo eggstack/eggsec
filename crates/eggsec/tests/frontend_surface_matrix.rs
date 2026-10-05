@@ -727,6 +727,7 @@ fn runtime_task_operation_ids_agree_between_owners() {
         TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }),
         TaskKind::DbPentest(DbPentestParams {
             db_type: "postgres".into(),

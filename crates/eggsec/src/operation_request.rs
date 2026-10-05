@@ -511,6 +511,7 @@ mod tests {
             TaskKind::WirelessActive(WirelessActiveParams {
                 interface: None,
                 target_bssid: None,
+                ..Default::default()
             }),
             TaskKind::DbPentest(DbPentestParams {
                 db_type: "postgres".into(),

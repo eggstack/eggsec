@@ -555,6 +555,12 @@ impl TabInput for WafTab {
     }
 
     fn handle_up(&mut self) {
+        // Scan mode and the technique selection are part of what is actually
+        // scanning: changing them mid-run makes the display disagree with the
+        // in-flight request. Results scrolling stays available while running.
+        if self.is_running() && self.focus_area != WafFocusArea::Results {
+            return;
+        }
         if self.focus_area == WafFocusArea::ModeRadio {
             let len = self.mode_radio.options.len();
             if len > 0 {
@@ -574,6 +580,10 @@ impl TabInput for WafTab {
     }
 
     fn handle_down(&mut self) {
+        // See `handle_up`: config is frozen while a scan is in flight.
+        if self.is_running() && self.focus_area != WafFocusArea::Results {
+            return;
+        }
         if self.focus_area == WafFocusArea::ModeRadio {
             let len = self.mode_radio.options.len();
             if len > 0 {
@@ -769,5 +779,57 @@ mod tests {
             WafTab::new().enabled_techniques(),
             vec!["evasion".to_string()]
         );
+    }
+
+    /// Scan mode and the technique list are what is actually scanning; they
+    /// must not move while a run is in flight, or the display contradicts the
+    /// in-flight request.
+    #[test]
+    fn test_scan_mode_is_frozen_while_running() {
+        let mut tab = with_target();
+        tab.focus_area = WafFocusArea::ModeRadio;
+        let before = tab.mode_radio.selected;
+        tab.handle_down();
+        tab.handle_up();
+        assert_eq!(
+            tab.mode_radio.selected, before,
+            "scan mode changed while running"
+        );
+    }
+
+    #[test]
+    fn test_technique_selection_is_frozen_while_running() {
+        let mut tab = with_target();
+        tab.focus_area = WafFocusArea::Techniques;
+        tab.focused_checkbox_index = 0;
+        let before: Vec<bool> = tab.technique_checkboxes.iter().map(|c| c.checked).collect();
+        tab.handle_down();
+        assert_eq!(tab.focused_checkbox_index, 0);
+        let after: Vec<bool> = tab.technique_checkboxes.iter().map(|c| c.checked).collect();
+        assert_eq!(after, before);
+    }
+
+    /// The guard must not freeze the results pane: scrolling stays useful
+    /// during a long scan.
+    #[test]
+    fn test_results_still_scroll_while_running() {
+        let mut tab = with_target();
+        // `scroll_down` is a no-op on an empty view, so seed some content.
+        tab.detection_view.add_line(Line::from("finding 1"));
+        tab.detection_view.add_line(Line::from("finding 2"));
+        tab.focus_area = WafFocusArea::Results;
+        let before = tab.detection_view.scroll_offset;
+        tab.handle_down();
+        assert!(tab.detection_view.scroll_offset > before);
+    }
+
+    /// Outside a run the same keys must still work.
+    #[test]
+    fn test_scan_mode_changes_when_idle() {
+        let mut tab = WafTab::new();
+        tab.focus_area = WafFocusArea::ModeRadio;
+        let before = tab.mode_radio.selected;
+        tab.handle_down();
+        assert_ne!(tab.mode_radio.selected, before);
     }
 }

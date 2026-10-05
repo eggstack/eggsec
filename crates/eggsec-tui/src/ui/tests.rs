@@ -200,6 +200,7 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
         reason_input: String::new(),
         captured_request: None,
         cli_flags: vec![],
+        scroll_offset: 0,
     });
 
     // Very small viewport
