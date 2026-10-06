@@ -94,20 +94,17 @@ Every retained advisory ignore must include:
 | Review-by | 2026-12-12 |
 | Blocker | indicatif v0.18+ must drop number_prefix; no alternative available |
 
-### RUSTSEC-2024-0436 — paste unmaintained
+### RUSTSEC-2024-0436 — paste unmaintained — **RESOLVED 2026-10-06**
 
 | Field | Value |
 |-------|-------|
 | Advisory | RUSTSEC-2024-0436 |
-| Path | `paste` 1.0.15 -> `sqlx-macros-core` -> `sqlx` 0.8.0 |
+| Path | *(was)* `paste` 1.0.15 -> `sqlx-macros-core` -> `sqlx` 0.8.0 |
 | Feature | `db-pentest` (optional; `eggsec-db-lab` Postgres/MySQL probes) |
-| API used | No at runtime — paste is a build-time proc-macro used by sqlx macros only; no runtime code from paste ships |
-| Exploitability | Low — unmaintained, not a vulnerability; build-time only |
-| Compensating control | None needed; alternative is `pastey` fork, requires sqlx upstream to migrate |
+| Resolution | Upgrading `sqlx` 0.8.0 → 0.8.6 for RUSTSEC-2024-0363 also dropped `paste` from the dependency graph entirely, so this advisory is no longer reachable. The `deny.toml` ignore was removed rather than left as a dead entry |
 | Owner | eggsec-db-lab |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
-| Blocker | sqlx upstream must migrate paste -> pastey; no Eggsec-side fix available |
+| Review-by | — (closed) |
 
 ### RUSTSEC-2025-0134 — rustls-pemfile unmaintained
 
@@ -182,22 +179,7 @@ Every retained advisory ignore must include:
 | Owner | eggsec-db-lab |
 | Created | 2026-09-13 |
 | Review-by | 2026-12-12 |
-| Blocker | Fixed in rustls-webpki >= 0.103.12, but tiberius 0.12.3 (latest) pins rustls 0.21 / webpki 0.101.7; requires tiberius upstream to upgrade its rustls stack |
-
-### RUSTSEC-2024-0363 — sqlx Binary Protocol misinterpretation
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2024-0363 |
-| Path | `sqlx` 0.8.0 (direct optional dependency of `eggsec` and `eggsec-db-lab`) |
-| Feature | `db-pentest` (optional; Postgres/MySQL probes) |
-| API used | Yes — `sqlx::postgres::PgPool` / `sqlx::mysql::MySqlPool` queries against lab databases |
-| Exploitability | Low for Eggsec — truncating/overflowing casts misinterpret a malicious *server's* binary protocol responses. Servers are operator-authorized lab targets under scope enforcement; the operator already trusts the lab DB to execute test queries. No untrusted server can inject itself into this path |
-| Compensating control | Scope-enforced, operator-directed lab connections; no production data flows through this path |
-| Owner | eggsec-db-lab |
-| Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
-| Blocker | Fixed in sqlx >= 0.8.1, but upgrading sqlx pulls `libsqlite3-sys` 0.30.1 which conflicts (`links = "sqlite3"`) with `rusqlite` 0.31.0 (`libsqlite3-sys` 0.28.0) required by `eggsec-daemon` session persistence. Resolving requires a coordinated rusqlite/sqlx sqlite-stack upgrade; tracked separately |
+| Blocker | **Corrected 2026-10-06.** The previous note — "tiberius 0.12.3 is latest; requires tiberius upstream to upgrade its rustls stack" — is no longer accurate: upstream has since released **tiberius 0.13.0**, which does move to `tokio-rustls` 0.26 / rustls 0.23 / rustls-webpki 0.103. It was trialled and **reverted**: 0.13.0 depends on `tokio-rustls ^0.26.4` with default features, which enables rustls' `aws-lc-rs` crypto provider, and `[bans] deny = ["aws-lc-rs"]` forbids it under the repo's ring-only TLS policy. Feature unification would apply that provider to the whole build, not just MSSQL. So this is now blocked by **policy**, not by upstream. Clearing it requires either tiberius exposing a ring-only path or a maintainer decision to relax the ring-only rule |
 
 ## License exception
 
@@ -235,9 +217,23 @@ exceptions above with lab-only/generation-only assessments, not as resolved:
 
 - RUSTSEC-2026-0187 (lopdf) — present via `printpdf` (`pdf` feature)
 - RUSTSEC-2026-0104 / -0099 / -0098 (rustls-webpki) — present via `tiberius` (`db-pentest-mssql-tiberius` marker)
-- RUSTSEC-2024-0363 (sqlx) — present via optional `sqlx` 0.8.0 (`db-pentest`)
-- RUSTSEC-2024-0436 (paste) — present via `sqlx-macros` (`db-pentest`)
 - RUSTSEC-2026-0192 (ttf-parser) — present via `printpdf` (`pdf` feature)
+
+Two entries from the list above were re-surfaced by Phase F and have since been
+**resolved (2026-10-06)** by upgrading `sqlx` 0.8.0 → 0.8.6:
+
+- RUSTSEC-2024-0363 (sqlx) — fixed in sqlx >= 0.8.1
+- RUSTSEC-2024-0436 (paste) — left the graph with the `sqlx` upgrade
+
+The documented blocker for the sqlx upgrade was a `links = "sqlite3"` conflict:
+sqlx >= 0.8.1 needs `libsqlite3-sys` ^0.30.1 while `eggsec-daemon`'s `rusqlite`
+0.31 needed ^0.28. Both crates claim the same native link, so cargo refused to
+resolve both. Resolved by moving `rusqlite` 0.31 → 0.32, which uses
+`libsqlite3-sys` ^0.30.0 — the same line sqlx needs. `rusqlite` 0.32 is an
+adjacent-minor bump over the `Connection` / `execute` / `prepare` / `query_map`
+/ `params!` surface `eggsec-daemon` uses; `SqliteStore` had no test coverage, so
+one was added to `crates/eggsec-daemon/src/store/sqlite.rs` to verify the
+upgrade rather than assume it.
 
 Genuinely resolved and not in any closure (verified 2026-09-13 via
 `cargo deny --workspace --all-features check` passing with only the active

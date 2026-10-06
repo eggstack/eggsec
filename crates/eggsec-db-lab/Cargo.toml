@@ -42,7 +42,7 @@ tracing.workspace = true
 rustc-hash.workspace = true
 
 # Database drivers (optional, behind feature flags)
-sqlx = { version = "0.8", optional = true, features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"] }
+sqlx = { version = "0.8.1", optional = true, features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"] }
 tiberius = { version = "0.12", optional = true, default-features = false, features = ["tokio", "rustls"] }
 mongodb = { version = "3.1", optional = true }
 redis = { version = "1", optional = true, features = ["tokio-comp", "connection-manager"] }
