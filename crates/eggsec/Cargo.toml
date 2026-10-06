@@ -238,7 +238,7 @@ optional = true
 features = ["v1_36"]
 
 [dependencies.printpdf]
-version = "0.7"
+version = "0.12"
 optional = true
 
 # tiberius (pure-Rust TDS for MSSQL). Activated by db-pentest-mssql-tiberius marker.
