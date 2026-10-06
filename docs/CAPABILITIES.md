@@ -28,7 +28,9 @@ All tool execution passes through scope validation and policy enforcement:
 
 ## Reconnaissance Modules
 
-Eggsec includes 28 reconnaissance modules for comprehensive target intelligence gathering:
+Eggsec includes 23 reconnaissance modules for target intelligence gathering:
+22 declared as `pub mod` in `crates/eggsec/src/recon/mod.rs:78-109`, plus the
+`secrets` knowledge-corpus facade.
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -37,77 +39,88 @@ Eggsec includes 28 reconnaissance modules for comprehensive target intelligence 
 | **DNS Records** | `crates/eggsec/src/recon/dns_records.rs` | Retrieves A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records |
 | **SSL/TLS Analysis** | `crates/eggsec/src/recon/ssl.rs` | Analyzes certificates, supported TLS versions, cipher suites, checks for vulnerabilities (expired certs, weak signatures, deprecated protocols like SSLv3, TLSv1.0/1.1) |
 | **Reverse DNS** | `crates/eggsec/src/recon/reverse_dns.rs` | Resolves IP addresses to hostnames |
-| **Geolocation** | `crates/eggsec/src/recon/geolocation.rs` | Identifies geographic location of IP addresses (country, city, ISP, coordinates) using IPAPI and MaxMind databases |
+| **Geolocation** | `crates/eggsec/src/recon/geolocation.rs` | Identifies geographic location of IP addresses (country, city, ISP, coordinates) via a local CIDR table then MaxMind DB, geoip.vuiz.net, ipapi.co, ip-api.com, ipwho.is, ip2c.org |
 | **WHOIS Lookup** | `crates/eggsec/src/recon/whois.rs` | Retrieves domain registration info (registrar, creation/expiration dates, nameservers, registrant info) with TLD-specific server routing |
 | **ASN Lookup** | `crates/eggsec/src/recon/asn.rs` | Retrieves Autonomous System Number info (ASN, prefix, organization details, abuse contacts) via ARIN RDAP |
-| **CVE Mapping** | `crates/eggsec/src/recon/cve.rs` | Maps detected technologies to known CVEs with severity ratings (CRITICAL, HIGH, MEDIUM), queries NVD API with optional API key |
+| **CVE Mapping** | `crates/eggsec/src/recon/cve.rs` | Maps detected technologies to known CVEs with severity ratings, queries NVD API with optional API key |
+| **CVE Lookup** | `crates/eggsec/src/recon/cve_lookup.rs` | Enhanced CVE lookup with detailed vulnerability information |
 | **CORS Analysis** | `crates/eggsec/src/recon/cors.rs` | Tests for CORS misconfigurations including wildcard with credentials, null origin reflection, arbitrary origin acceptance |
-| **Cloud Asset Discovery** | `crates/eggsec/src/recon/cloud/mod.rs` | Enumerates AWS S3 buckets, Azure Blob Storage, GCP Storage, Firebase projects, Heroku apps, and GitHub repositories |
-| **Sensitive Content** | `crates/eggsec/src/recon/content.rs` | Scans for 100+ sensitive paths including .env files, Git config, credentials, backups, admin panels, API endpoints, database dumps, logs |
+| **Cloud Asset Discovery** | `crates/eggsec/src/recon/cloud/mod.rs` | Enumerates cloud assets (feature `cloud`) |
+| **Sensitive Content** | `crates/eggsec/src/recon/content.rs` | Scans for sensitive paths including .env files, Git config, credentials, backups, admin panels, API endpoints, database dumps, logs |
 | **JavaScript Analysis** | `crates/eggsec/src/recon/js.rs` | Extracts JavaScript files, finds endpoints, secrets (API keys, passwords, tokens, JWTs), and URLs from JS files |
 | **Wayback Machine** | `crates/eggsec/src/recon/wayback.rs` | Retrieves historical snapshots, discovers old endpoints/paths from archive.org |
-| **Contact Discovery** | `crates/eggsec/src/recon/email.rs` | Extracts emails, phone numbers, social media handles (Facebook, Twitter/X, Instagram, LinkedIn, GitHub, YouTube, TikTok), and physical addresses |
+| **Contact Discovery** | `crates/eggsec/src/recon/email.rs` | Extracts emails, phone numbers, social media handles, and physical addresses |
+| **Email Security** | `crates/eggsec/src/recon/email_security.rs` | SPF, DKIM, DMARC policy analysis plus MX and STARTTLS checks |
 | **Threat Intelligence** | `crates/eggsec/src/recon/threatintel.rs` | Checks VirusTotal, Shodan, and AlienVault OTX for IP/domain reputation, vulnerabilities, and passive DNS |
 | **DNS Enhanced** | `crates/eggsec/src/recon/dns_enhanced.rs` | Advanced DNS enumeration with additional record types and resolution techniques |
 | **API Schema Discovery** | `crates/eggsec/src/recon/api_schema.rs` | Discovers exposed OpenAPI/schema documents at common paths (`/openapi.json`, etc.) |
 | **Container Recon** | `crates/eggsec/src/recon/containers.rs` | Docker/Kubernetes container and cluster security scanning |
-| **Email Security** | `crates/eggsec/src/recon/email_security.rs` | SPF, DKIM, DMARC policy analysis plus MX and STARTTLS checks |
 | **FTP Auth Testing** | `crates/eggsec/src/recon/ftp_auth.rs` | FTP server banner grabbing and authentication testing |
-| **Git Secrets** | `crates/eggsec/src/recon/git_secrets.rs` | Scans Git repository history and files for committed secrets |
-| **Secret Scanning** | `crates/eggsec/src/recon/secrets.rs` | Pattern-based secret detection (API keys, tokens, credentials) |
 | **SMTP Auth Testing** | `crates/eggsec/src/recon/smtp_auth.rs` | SMTP server banner grabbing and authentication testing |
 | **SSH Auth Testing** | `crates/eggsec/src/recon/ssh_auth.rs` | SSH server banner grabbing and limited authentication probing |
 | **SSL Audit** | `crates/eggsec/src/recon/ssl_audit.rs` | TestSSL-style comprehensive TLS/SSL security auditing |
 | **Subdomain Takeover** | `crates/eggsec/src/recon/takeover.rs` | Detects dangling DNS records vulnerable to subdomain takeover |
-| **CVE Lookup** | `crates/eggsec/src/recon/cve_lookup.rs` | Enhanced CVE lookup with detailed vulnerability information |
+| **Git Secrets** | `crates/eggsec/src/recon/git_secrets.rs` | Scans Git repository history and files for committed secrets |
+| **Secret Scanning** | `crates/eggsec-secrets/` (facade `eggsec::recon::secrets`) | Pattern-based secret detection. The engine holds no `recon/secrets.rs`; the data lives in the `eggsec-secrets` knowledge-corpus leaf, re-exported at `crates/eggsec/src/recon/mod.rs:101`. See `architecture/knowledge_corpus.md`. |
+
+The recon module also exposes the non-capability helpers `runner` (scan
+orchestration) and `spinner` (progress display), and an engine-level `api_schema`
+module at `crates/eggsec/src/api_schema.rs`.
 
 ---
 
 ## Fuzzing Payload Types
 
-Eggsec supports 40 security fuzzing payload types:
+Eggsec supports 40 security fuzzing payload types. All payload **data** lives in
+the `eggsec-payloads` knowledge-corpus leaf (`crates/eggsec-payloads/src/<name>.rs`),
+re-exported through the engine facade `eggsec::fuzzer::payloads`; the engine owns
+the probers. See `architecture/knowledge_corpus.md`.
 
-| Type | Alias | File | Tests For |
+| Type | CLI alias(es) | File | Tests For |
 |------|-------|------|-----------|
-| **SQL Injection** | sqli, sql | `crates/eggsec/src/fuzzer/payloads/sqli.rs` | SQL Injection - 100+ payloads including error-based, UNION-based, time-based (blind), stacked queries, WAF bypasses, encoded variants, DB-specific (MySQL, PostgreSQL, SQL Server, Oracle) |
-| **Cross-Site Scripting** | xss | `crates/eggsec/src/fuzzer/payloads/xss.rs` | XSS - 100+ payloads including basic script tags, event handlers (onerror, onload, onfocus), encoded variants, WAF bypasses, polyglots, template injection |
-| **Path Traversal** | traversal, lfi, path | `crates/eggsec/src/fuzzer/payloads/traversal.rs` | Path Traversal / Local File Inclusion |
-| **Server-Side Request Forgery** | ssrf | `crates/eggsec/src/fuzzer/payloads/ssrf.rs` | SSRF - payloads for internal service access, cloud metadata endpoints |
-| **Open Redirect** | redirect, open-redirect | `crates/eggsec/src/fuzzer/payloads/redirect.rs` | Open Redirect - various redirect bypass techniques |
-| **Regular Expression DoS** | redos, regex | `crates/eggsec/src/fuzzer/payloads/redos.rs` | ReDoS - ReDoS pattern payloads for regex engine exhaustion |
-| **HTTP Header Injection** | headers | `crates/eggsec/src/fuzzer/payloads/headers.rs` | HTTP Header Injection - header manipulation payloads |
-| **Compression Bomb** | compression, gzip | `crates/eggsec/src/fuzzer/payloads/compression.rs` | Compression Bomb - ZIP/gzip bombs for DoS via decompression |
-| **GraphQL** | graphql | `crates/eggsec/src/fuzzer/payloads/graphql.rs` | GraphQL-specific - introspection, query injection, depth limit bypass, alias overload |
-| **OAuth/OIDC** | oauth | `crates/eggsec/src/fuzzer/payloads/oauth.rs` | OAuth/OIDC Testing - redirect URI bypass, scope escalation, state parameter bypass, grant type mixing |
-| **JWT** | jwt | `crates/eggsec/src/fuzzer/payloads/jwt.rs` | JWT Testing - algorithm confusion, weak secrets, null signature bypass |
-| **IDOR** | idor | `crates/eggsec/src/fuzzer/payloads/idor.rs` | Insecure Direct Object Reference - ID enumeration payloads |
-| **Server-Side Template Injection** | ssti | `crates/eggsec/src/fuzzer/payloads/ssti.rs` | SSTI - Jinja2, Twig, ERB, FreeMarker payloads |
-| **gRPC** | grpc | `crates/eggsec/src/fuzzer/payloads/grpc.rs` | gRPC Fuzzing - protobuf manipulation and gRPC-specific attacks |
-| **XML External Entity** | xxe | `crates/eggsec/src/fuzzer/payloads/xxe.rs` | XXE injection payloads |
-| **LDAP Injection** | ldap | `crates/eggsec/src/fuzzer/payloads/ldap.rs` | LDAP-specific payloads |
-| **Command Injection** | cmd | `crates/eggsec/src/fuzzer/payloads/cmd.rs` | OS command execution payloads |
-| **Deserialization** | deser | `crates/eggsec/src/fuzzer/payloads/deser.rs` | Deserialization vulnerabilities |
-| **Host Header Injection** | host | `crates/eggsec/src/fuzzer/payloads/host.rs` | Host manipulation payloads |
-| **Cache Poisoning** | cache | `crates/eggsec/src/fuzzer/payloads/cache.rs` | HTTP cache manipulation payloads |
-| **CSV Injection** | csv | `crates/eggsec/src/fuzzer/payloads/csv.rs` | Formula injection payloads |
-| **SOAP Injection** | soap | `crates/eggsec/src/fuzzer/payloads/soap.rs` | SOAP/XML Injection |
-| **WebSocket** | websocket | `crates/eggsec/src/fuzzer/payloads/websocket.rs` | WebSocket Fuzzing |
-| **NoSQL Injection** | nosql | `crates/eggsec/src/fuzzer/payloads/nosql.rs` | NoSQL injection payloads |
-| **XPath Injection** | xpath | `crates/eggsec/src/fuzzer/payloads/xpath.rs` | XPath injection payloads |
-| **Expression Language Injection** | expression | `crates/eggsec/src/fuzzer/payloads/expression.rs` | Expression language injection |
-| **Prototype Pollution** | prototype | `crates/eggsec/src/fuzzer/payloads/prototype.rs` | Prototype pollution payloads |
-| **Race Condition** | race | `crates/eggsec/src/fuzzer/payloads/race.rs` | Race condition testing |
-| **Mass Assignment** | massassign | `crates/eggsec/src/fuzzer/payloads/mass_assign.rs` | Mass assignment testing |
-| **Out-of-Band Testing** | oast | `crates/eggsec/src/fuzzer/payloads/oast.rs` | Out-of-band application security testing |
-| **SAML** | — | `crates/eggsec/src/fuzzer/payloads/saml.rs` | SAML assertion manipulation, signature wrapping, XML injection |
+| **SQL Injection** | sqli, sql | `sqli.rs` | SQL Injection - error-based, UNION-based, time-based (blind), stacked queries, WAF bypasses, encoded variants, DB-specific (MySQL, PostgreSQL, SQL Server, Oracle) |
+| **Cross-Site Scripting** | xss | `xss.rs` | XSS - basic script tags, event handlers (onerror, onload, onfocus), encoded variants, WAF bypasses, polyglots, template injection |
+| **Path Traversal** | traversal, lfi, path | `traversal.rs` | Path Traversal / Local File Inclusion |
+| **Server-Side Request Forgery** | ssrf | `ssrf.rs` | SSRF - payloads for internal service access, cloud metadata endpoints |
+| **Open Redirect** | redirect, open-redirect | `redirect.rs` | Open Redirect - various redirect bypass techniques |
+| **Regular Expression DoS** | redos, regex | `redos.rs` | ReDoS - ReDoS pattern payloads for regex engine exhaustion |
+| **HTTP Header Injection** | headers, header | `headers.rs` | HTTP Header Injection - header manipulation payloads |
+| **Compression Bomb** | compression, gzip, zip-bomb | `compression.rs` | Compression Bomb - ZIP/gzip bombs for DoS via decompression |
+| **GraphQL** | graphql, gql | `graphql.rs` | GraphQL-specific - introspection, query injection, depth limit bypass, alias overload |
+| **OAuth/OIDC** | oauth, oidc | `oauth.rs` | OAuth/OIDC Testing - redirect URI bypass, scope escalation, state parameter bypass, grant type mixing |
+| **JWT** | jwt | `jwt.rs` | JWT Testing - algorithm confusion, weak secrets, null signature bypass |
+| **IDOR** | idor, auth | `idor.rs` | Insecure Direct Object Reference - ID enumeration payloads |
+| **Server-Side Template Injection** | ssti, template | `ssti.rs` | SSTI - Jinja2, Twig, ERB, FreeMarker payloads |
+| **gRPC** | grpc, protobuf | `grpc.rs` | gRPC Fuzzing - protobuf manipulation and gRPC-specific attacks |
+| **XML External Entity** | xxe, xml | `xxe.rs` | XXE injection payloads |
+| **LDAP Injection** | ldap | `ldap.rs` | LDAP-specific payloads |
+| **Command Injection** | cmd, command, rce | `cmd.rs` | OS command execution payloads |
+| **Deserialization** | deser, deserialization | `deser.rs` | Deserialization vulnerabilities |
+| **Host Header Injection** | host, host-header | `host.rs` | Host manipulation payloads |
+| **Cache Poisoning** | cache, cache-poisoning | `cache.rs` | HTTP cache manipulation payloads |
+| **CSV Injection** | csv, formula | `csv.rs` | Formula injection payloads |
+| **SOAP Injection** | soap | `soap.rs` | SOAP/XML Injection |
+| **WebSocket** | websocket, ws | `websocket.rs` | WebSocket Fuzzing |
+| **NoSQL Injection** | nosql | `nosql.rs` | NoSQL injection payloads |
+| **XPath Injection** | xpath | `xpath.rs` | XPath injection payloads |
+| **Expression Language Injection** | expression, el | `expression.rs` | Expression language injection |
+| **Prototype Pollution** | prototype | `prototype.rs` | Prototype pollution payloads |
+| **Race Condition** | race, race-condition | `race.rs` | Race condition testing |
+| **Mass Assignment** | mass-assign, mass-assignment | `mass_assign.rs` | Mass assignment testing |
+| **Out-of-Band Testing** | oast | `oast.rs` | Out-of-band application security testing |
+| **SAML** | — | `saml.rs` | SAML assertion manipulation, signature wrapping, XML injection |
 
-The remaining 10 payload types (`HtmlInject`, `CssInject`, `Ssi`, `DomClobber`,
-`Xslt`, `Viewstate`, `DepConfusion`, `XsLeak`, `Latex`) live in
-`crates/eggsec/src/fuzzer/payloads/<name>.rs` and cover HTML/CSS/SSI injection,
-DOM clobbering, XSLT injection, ViewState deserialization, dependency
-confusion, XS-Leaks, and LaTeX injection. They are selectable programmatically;
-the CLI payload-type parser in `fuzzer/engine/advanced.rs` currently recognizes
-the first 30 types by alias.
+The remaining 9 payload types (`HtmlInject`, `CssInject`, `Ssi`, `DomClobber`,
+`Xslt`, `Viewstate`, `DepConfusion`, `XsLeak`, `Latex`) live alongside the above
+in `crates/eggsec-payloads/src/<name>.rs` and cover HTML/CSS/SSI injection, DOM
+clobbering, XSLT injection, ViewState deserialization, dependency confusion,
+XS-Leaks, and LaTeX injection.
+
+The CLI parser in `crates/eggsec/src/fuzzer/engine/advanced.rs:115` recognizes
+**30 of the 40** types by the aliases above; `all` selects all 40. Unrecognized
+tokens are filtered out silently, and the command errors only if nothing valid
+remains. The other 10 are reachable programmatically through the
+`eggsec::fuzzer::payloads` facade.
 
 ---
 
@@ -167,8 +180,12 @@ Dynamic mobile (Android ADB + logcat + Frida instrumentation + behavioral correl
 | **REST API** | `crates/eggsec/src/tool/protocol/rest.rs` | REST API server - exposes eggsec tools via HTTP (requires rest-api feature) |
 | **gRPC API** | `crates/eggsec/src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
 | **MCP Server** | `crates/eggsec/src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (built-in) |
-| **Web Proxy** | `crates/eggsec/src/proxy/intercept/` | Interactive HTTP/HTTPS MITM proxy with protocol interception, rule engine, session management, and MCP integration (requires web-proxy feature) |
+| **Web Proxy** | `crates/eggsec-web-proxy/src/intercept/` (engine facade `eggsec::proxy::intercept`) | Interactive HTTP/HTTPS MITM proxy with protocol interception, rule engine, session management, and MCP integration (requires web-proxy feature) |
 | **Plugin System** | `crates/eggsec-web-proxy/src/intercept/plugins.rs` | Extensible protocol handler plugin system with capability-based sandboxing (requires dynamic-plugins feature) |
+
+There is no `crates/eggsec/src/proxy/intercept/` directory -- the engine's
+`proxy` module re-exports the `eggsec-web-proxy` domain crate
+(`crates/eggsec/src/proxy/mod.rs:9-11`).
 
 ---
 
@@ -209,7 +226,7 @@ Full security testing toolkit for AI agents. All tools are available.
 
 | Capability | Available | Notes |
 |------------|-----------|-------|
-| Recon | Yes | All 21+ modules |
+| Recon | Yes | All 23 recon modules |
 | Port scanning | Yes | |
 | Fingerprinting | Yes | |
 | Fuzzing (all types) | Yes | 40 payload types |
@@ -365,4 +382,8 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `wireless-advanced` | Active WiFi attacks (deauth/disassoc frame injection) for authorized lab testing. Subcommand: `eggsec wireless <iface> deauth`. Policy: `OperationRisk::Intrusive` + `wireless-advanced` feature + `--allow-active-wireless` flag. Requires `wireless` feature. **Phase 1 (deauth/disassoc) complete**. |
 | `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only). Dynamic mobile under `mobile-dynamic` feature (ADB + Frida + behavioral correlation; see docs/MOBILE.md). |
 | `db-pentest` | Standalone defense-lab direct Postgres/MySQL/MSSQL/MongoDB/Redis security assessment (Phases 1-6 complete: postgres/mysql/mssql/mongodb/redis checks + manifest + bridge + real MSSQL tiberius + TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks + correlation engine + compliance mapping + baseline capture/regression comparison + MCP deepening). Requires `--allow-db-pentest` for non-dry runs; dry-run always safe. See docs/DATABASE_PENTEST.md and architecture/database_pentest.md. |
-| `full` | All features combined |
+| `full` | Curated aggregate of 27 features (CLI, stress-testing, packet-inspection, rest-api, nse, ai-integration, websocket, headless-browser, database, container, sbom, advanced-hunting, compliance, external-integrations, finding-workflow, vuln-management, wireless, wireless-advanced, mobile, mobile-dynamic, db-pentest, web-proxy, evasion, postex, c2, email-notifications, logging-subscriber, config-watch). **Not exhaustive** -- `nse-ssh2`, `nse-sandbox`, `udp-scan`, `git-secrets`, `pdf`, `api-schema`, `transparent-proxy`, `dynamic-plugins`, `grpc-api`, the `db-pentest-*` markers and the MCP markers are omitted. The oracle is `make check-features-individual`; the full inventory is `docs/FEATURE_MATRIX.md`. |
+
+The engine declares 51 features in `crates/eggsec/Cargo.toml`; the table above is
+a summary, not the full list. Note that `http-api` is an `eggsec-daemon`
+feature, **not** an engine feature.
