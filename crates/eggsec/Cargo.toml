@@ -451,7 +451,7 @@ daemon-client = []
 [dev-dependencies]
 wiremock = "0.6"
 tempfile = "3"
-criterion = "0.5"
+criterion = "0.8"
 proptest = "1"
 eggsec-transport = { workspace = true, features = ["test-util"] }
 eggsec-transport-eggfetch = { workspace = true }
